@@ -65,7 +65,7 @@ Recent FAA research catalogued the KSAOs UAS crews need—airspace knowledge, mi
 | **Multi-UAV Mission Director** | Allocate automation resources across up to four simulated aircraft, forcing prioritisation of “launch, surveillance, divert, recover” chains. | Extend `plugins/scheduling.py` to render column-per-aircraft timelines with automation takeover toggles. Add events like `missiondirector;assign;uav2,surveillance,03:00`. |
 | **Sense-and-Avoid & Geofence Monitor** | Train sense-and-avoid reasoning (declare traffic conflicts, select maneuvers within timeouts). | New plugin `senseandavoid.py` using text/gauge overlays and flashing alerts. Parameters: conflict rate, separation minima, allowable maneuvers. Scenario events drive intruder azimuth and altitude bands. |
 | **Payload & Sensor Management** | Practice simultaneous sensor slewing, target confirmation, and bandwidth rationing. | Derive from `AbstractPlugin` to manage a grid of “sensor pods” with energy budgets. Each task update adjusts signal fidelity; operator must queue shots while respecting downlink capacity. |
-| **Datalink & Crew Coordination** | Recreate high-volume chat/datalink message parsing plus crew callouts. | Build on `plugins/communications.py` but add multi-channel text/datalink cues, requiring classification (priority, action required). Combine keyboard shortcuts and joystick hats for acknowledgement. |
+| **Datalink & Crew Coordination** | Recreate high-volume chat/datalink message parsing plus crew callouts. | Build on `plugins/datalink.py` to stream controller–pilot data link (CPDLC) style prompts with prioritisation (aligned with NASA CPDLC workload findings [NASA TM–2020-0010384](https://ntrs.nasa.gov/api/citations/20200010384/downloads/20200010384.pdf); [NTRS 1989-0002355](https://ntrs.nasa.gov/citations/19890002355)). Keyboard shortcuts (UP/DOWN/ENTER) support queue triage, while scenario hooks drive message mixes. |
 
 ### Scenarios & Metrics
 
@@ -116,6 +116,20 @@ Log lines of type `state`/`performance` already capture widget values. Add domai
   ```
 
 - Logged metrics include `payload_activate`, `payload_priority`, `payload_overbandwidth`, `payload_depleted`, and `payload_overdue`, enabling post-run analysis of resource strategy versus mission outcomes.
+
+### Datalink & Crew Coordination Implementation Status
+
+- Added `plugins/datalink.py`, echoing NASA CPDLC evaluations showing reduced taxi time and voice congestion when digital messaging is available, yet highlighting situations that still demand rapid response ([NASA TM–2020-0010384](https://ntrs.nasa.gov/api/citations/20200010384/downloads/20200010384.pdf); [NTRS 19890002355](https://ntrs.nasa.gov/citations/19890002355)). The plugin displays an ordered queue (ID, channel, priority, remaining time, text) with keyboard navigation (UP/DOWN) and acknowledgement (ENTER) plus scenario hooks:
+
+  ```text
+  0:00:05;datalink;start
+  0:00:07;datalink;message;MSG1,ATC,PRIO,HOLD SHORT RWY 28,25
+  0:00:20;datalink;message;MSG2,UAVOPS,NORM,Update LL track,40
+  0:00:35;datalink;forceack;MSG1
+  0:01:00;datalink;clear;*
+  ```
+
+- Automatically logs `datalink_receive`, `datalink_ack` (with response time), `datalink_miss`, `datalink_drop`, and `datalink_clear`. Overdue feedback flashes when time-to-impact expires, enabling researchers to correlate message density against NASA-TLX/RSME scores in complex crew simulations.
 
 ## 3. Use Case 2 – High-Performance Aircraft Crews
 
