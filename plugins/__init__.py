@@ -19,3 +19,4 @@ from .missiondirector import Missiondirector
 from .senseandavoid import Senseandavoid
 from .payloadmanager import Payloadmanager
 from .datalink import Datalink
+from .energymanager import Energymanager

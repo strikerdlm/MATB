@@ -136,10 +136,17 @@ class Datalink(AbstractPlugin):
             due_seconds=max(1.0, due),
         )
         self.messages.append(message)
+        overflowed = False
         if len(self.messages) > int(self.parameters['maxqueue']):
+            overflowed = True
             overflow = self.messages.pop(0)
             self.log_performance('datalink_drop', overflow.msg_id)
-        self.selection_index = len(self.messages) - 1
+        if overflowed:
+            if self.selection_index > 0:
+                self.selection_index -= 1
+            self.selection_index = min(self.selection_index, len(self.messages) - 1) if self.messages else 0
+        else:
+            self.selection_index = len(self.messages) - 1
         self.log_performance('datalink_receive', f'{message.msg_id}:{message.channel}:{message.priority}')
 
     def forceack(self, payload: str) -> None:
