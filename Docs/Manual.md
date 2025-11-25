@@ -144,6 +144,15 @@ Log lines of type `state`/`performance` already capture widget values. Add domai
   - `energymanager;energy;85`
 - Logged metrics include `energy_event_schedule`, `energy_event_start`, `energy_event_complete`, `energy_overg`, and `energy_alert` so researchers can align physiological overlays (HRV, visual occlusion) with G-onset profiles.
 
+### Threat Prioritisation & Weapons Timeline Implementation Status
+
+- Added `plugins/threatboard.py`, which lists each airborne threat with its sector, range, weapon hint, and time-to-impact. Scenario commands:
+  - `threatboard;spawn;TH1,035,14,R73,45`
+  - `threatboard;engage;TH1,FOX3`
+  - `threatboard;reprioritize;TH1,010,10`
+  - `threatboard;resolve;TH1,SPLASH`
+- Metrics emitted (`threat_spawn`, `threat_engage`, `threat_resolve`, `threat_overdue`, `threat_drop`) allow researchers to correlate FOX timing with workload measures. Overdue flashing warns when any threat’s TTI expires unresolved, mirroring cockpit threat board urgency.
+
 ## 3. Use Case 2 – High-Performance Aircraft Crews
 
 Fighter and aerobatic pilots juggle extreme G-management, rapid sensor/weapon reconfiguration, and threat triage while coping with physiological load ([Cognitive Workload Analysis of Fighter Aircraft Pilots](https://www.researchgate.net/publication/339905636_Cognitive_Workload_Analysis_of_Fighter_Aircraft_Pilots_in_Flight_Simulator_Environment); [Frontiers review on MATB & pilot workload](https://www.frontiersin.org/journals/physiology/articles/10.3389/fphys.2024.1408242/full)). To reflect that:
@@ -151,13 +160,13 @@ Fighter and aerobatic pilots juggle extreme G-management, rapid sensor/weapon re
 | Module | Goal | Implementation Notes |
 | --- | --- | --- |
 | **Energy & G-Envelope Manager** | Enforce coordinated G-onset schedules, fuel/energy balance, and heat management. | Plugin visualises energy-maneuverability diagrams; joystick input or keyboard commands select bank/pitch rates. Over-G events trigger penalties and overdue alarms. |
-| **Threat Prioritisation & Weapons Timeline** | Train rapid reprioritisation of radar/IRS threats, weapon pairing, and “Fox” timelines. | Extend `plugins/scheduling.py` or introduce `threatboard.py` to show sector timelines, requiring manual sequencing (e.g., assign HOBS missile within 12 s). |
+| **Threat Prioritisation & Weapons Timeline** | Train rapid reprioritisation of radar/IRS threats, weapon pairing, and “Fox” timelines. | Implemented via `plugins/threatboard.py`, which displays sector, range, weapon hint, and time-to-impact so operators can call FOX within deadlines. |
 | **Emergency Stack & Failure Cascades** | Drill hydraulic/electrical failures during high workload. | Scenario engine injects failure events that pause other tasks until a checklist widget (HTML instructions plugin) is satisfied. Track compliance time and residual risk. |
 | **Physiological Stress Overlays** | Combine MATB load with hypoxia or high-G cues (e.g., blurred widgets, delayed inputs). | Use scenario parameters to degrade widget brightness or inject lag to emulate tunnel vision; pair with `labstreaminglayer` to tag when overlays are active for neuro/biometric research. |
 
 ### HPA Reference Scenario
 
-- Added `includes/scenarios/hpa_overlay.txt`, a three-minute sortie that runs Energy Manager, Datalink, Physio Monitor, and the legacy MATB tasks. It schedules a BFM-like sequence (ENTRY/SETUP/ENGAGE/DEFENSIVE/Egress), injects an over-G excursion, and interleaves CPDLC prompts so researchers can test how fast pilots recover from successive high-G events.
+- Added `includes/scenarios/hpa_overlay.txt`, a three-minute sortie that runs Energy Manager, Threat Board, Datalink, Physio Monitor, and the legacy MATB tasks. It schedules a BFM-like sequence (ENTRY/SETUP/ENGAGE/DEFENSIVE/Egress), injects an over-G excursion, and interleaves CPDLC prompts plus two scripted threats (`TH1`, `TH2`) so researchers can test how fast pilots recover from successive high-G events.
 
 ### Testing Flow
 
