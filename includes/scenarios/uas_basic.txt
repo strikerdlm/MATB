@@ -1,0 +1,51 @@
+0:00:00;sysmon;start
+0:00:00;track;start
+0:00:00;resman;start
+0:00:00;communications;start
+0:00:02;missiondirector;start
+0:00:02;senseandavoid;start
+0:00:02;payloadmanager;start
+0:00:02;datalink;start
+0:00:02;physiomonitor;start
+
+0:00:05;missiondirector;assign;UAV1,Launch,300
+0:00:15;missiondirector;automation;UAV1,AUTO
+0:00:25;missiondirector;assign;UAV2,Surveillance,240
+
+0:00:30;senseandavoid;spawn;INTR1,045,2.5,300,45
+0:00:45;senseandavoid;resolve;INTR1,Turn right 20
+0:01:00;senseandavoid;clear;INTR1
+
+0:00:35;payloadmanager;activate;CamA,Target-Alpha,15
+0:01:10;payloadmanager;activate;IRST,Target-Bravo,20
+0:02:30;payloadmanager;priority;CamA,18
+0:03:30;payloadmanager;standby;CamA
+0:03:50;payloadmanager;recharge;CamA
+
+0:00:40;datalink;message;MSG1,ATC,PRIO,HOLD SHORT RWY 28,25
+0:01:05;datalink;message;MSG2,UAVOPS,NORM,Update LL track,40
+0:01:50;datalink;forceack;MSG1
+0:02:30;datalink;message;MSG3,ATC,PRIO,Line up and wait,25
+
+0:02:00;missiondirector;conflict;UAV2,geofence
+0:02:15;missiondirector;clearconflict;UAV2
+0:02:45;missiondirector;complete;UAV1
+0:03:10;missiondirector;assign;UAV1,Recover,180
+
+0:03:40;senseandavoid;spawn;INTR2,315,1.2,-200,30
+0:04:05;senseandavoid;resolve;INTR2,Climb 200 ft
+0:04:20;senseandavoid;clear;INTR2
+
+0:04:50;payloadmanager;capacity;55
+0:04:55;datalink;clear;*
+
+0:05:00;physiomonitor;stop
+0:05:00;datalink;stop
+0:05:00;payloadmanager;stop
+0:05:00;senseandavoid;stop
+0:05:00;missiondirector;stop
+0:05:00;communications;stop
+0:05:00;resman;stop
+0:05:00;track;stop
+0:05:00;sysmon;stop
+

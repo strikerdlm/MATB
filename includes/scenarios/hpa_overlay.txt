@@ -1,0 +1,35 @@
+0:00:00;sysmon;start
+0:00:00;track;start
+0:00:00;resman;start
+0:00:00;communications;start
+0:00:02;energymanager;start
+0:00:02;datalink;start
+0:00:02;physiomonitor;start
+
+# Baseline BFM sequence
+0:00:05;energymanager;event;ENTRY,3.5,30
+0:00:40;energymanager;event;SETUP,4.2,25
+0:01:10;energymanager;event;ENGAGE,5.5,35
+0:01:50;energymanager;event;REPOSITION,2.8,20
+
+# Datalink and ATC calls
+0:00:30;datalink;message;HPA1,ATC,PRIO,Climb FL250,20
+0:00:55;datalink;message;HPA2,AWACS,NORM,Bandit 2 o clock 15nm,25
+0:01:30;datalink;forceack;HPA1
+0:02:00;datalink;message;HPA3,ATC,PRIO,Descend FL220,30
+
+# Stress overlay
+0:01:20;energymanager;overg;6.3
+0:01:25;energymanager;event;DEFENSIVE,6.0,30
+0:02:10;energymanager;event;Egress,3.0,40
+
+0:02:30;datalink;clear;*
+
+0:03:00;physiomonitor;stop
+0:03:00;datalink;stop
+0:03:00;energymanager;stop
+0:03:00;communications;stop
+0:03:00;resman;stop
+0:03:00;track;stop
+0:03:00;sysmon;stop
+

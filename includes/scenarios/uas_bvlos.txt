@@ -1,0 +1,64 @@
+0:00:00;sysmon;start
+0:00:00;track;start
+0:00:00;resman;start
+0:00:00;communications;start
+0:00:01;missiondirector;start
+0:00:01;senseandavoid;start
+0:00:01;payloadmanager;start
+0:00:01;datalink;start
+0:00:01;physiomonitor;start
+
+# Launch staggered BVLOS assets
+0:00:05;missiondirector;assign;UAV1,Pipe-Survey,480
+0:00:20;missiondirector;assign;UAV2,C2-Relay,420
+0:00:35;missiondirector;assign;UAV3,Perimeter,360
+0:00:50;missiondirector;automation;UAV2,AUTO
+
+# Sense-and-avoid storms
+0:01:00;senseandavoid;spawn;INTA,015,3.5,450,70
+0:01:30;senseandavoid;resolve;INTA,Turn left 25
+0:01:32;senseandavoid;clear;INTA
+0:01:40;senseandavoid;spawn;INTB,275,1.3,-350,40
+0:01:55;senseandavoid;thresholds;1.2,300
+0:02:05;senseandavoid;resolve;INTB,Climb 300
+0:02:07;senseandavoid;clear;INTB
+0:02:15;senseandavoid;spawn;INTC,090,2.0,150,35
+
+# Payload juggling
+0:01:10;payloadmanager;activate;CamA,Kiln-Alpha,18
+0:01:40;payloadmanager;activate;IRST,LL-Route,22
+0:02:20;payloadmanager;priority;CamA,20
+0:02:50;payloadmanager;activate;Lidar,Bridge,25
+0:03:10;payloadmanager;capacity;70
+0:03:35;payloadmanager;standby;IRST
+0:03:50;payloadmanager;recharge;IRST
+
+# Datalink traffic
+0:01:05;datalink;message;BL1,C2,PRIO,Switch to SATCOM B,20
+0:01:25;datalink;message;BL2,UAVOPS,NORM,Update LL track,35
+0:01:55;datalink;message;BL3,ATC,PRIO,Hold west of fix,30
+0:02:25;datalink;forceack;BL1
+0:02:40;datalink;message;BL4,SECURE,PRIO,Investigate heat source,45
+
+# Mission dynamics
+0:02:55;missiondirector;conflict;UAV3,no-link corridor
+0:03:05;missiondirector;clearconflict;UAV3
+0:03:15;missiondirector;automation;UAV1,MANUAL
+0:03:45;missiondirector;complete;UAV2
+0:03:55;missiondirector;assign;UAV2,Emergency-Relay,240
+
+# Final cleanup
+0:04:10;senseandavoid;resolve;INTC,Descend 200
+0:04:15;senseandavoid;clear;INTC
+0:04:45;datalink;clear;*
+
+0:05:00;physiomonitor;stop
+0:05:00;datalink;stop
+0:05:00;payloadmanager;stop
+0:05:00;senseandavoid;stop
+0:05:00;missiondirector;stop
+0:05:00;communications;stop
+0:05:00;resman;stop
+0:05:00;track;stop
+0:05:00;sysmon;stop
+
