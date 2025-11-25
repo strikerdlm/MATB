@@ -16,3 +16,4 @@ from .performance import Performance
 from .generictrigger import Generictrigger
 from .physiomonitor import Physiomonitor
 from .missiondirector import Missiondirector
+from .senseandavoid import Senseandavoid
