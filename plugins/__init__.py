@@ -14,3 +14,4 @@ from .labstreaminglayer import Labstreaminglayer
 from .parallelport import Parallelport
 from .performance import Performance
 from .generictrigger import Generictrigger
+from .physiomonitor import Physiomonitor
