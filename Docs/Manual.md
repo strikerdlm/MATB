@@ -100,6 +100,23 @@ Log lines of type `state`/`performance` already capture widget values. Add domai
   - `senseandavoid;thresholds;1.0,400`
 - Metrics logged: `saa_spawn`, `saa_resolve` (with resolution time), `saa_overdue`, and `saa_thresholds`, enabling comparisons against NASA asymptotic workload measures and FAA detect-and-avoid timing guidance.
 
+### Payload & Sensor Management Implementation Status
+
+- Added `plugins/payloadmanager.py`, which tracks sensor pods (energy %, assigned target, bandwidth) against total link capacity. Automatic depletion/recharge behaviour simulates power/bandwidth constraints; overdue alarms fire if total Mbps exceed the configured capacity or a pod goes fully depleted.
+- Scenario hooks:
+
+  ```text
+  0:00:05;payloadmanager;start
+  0:00:10;payloadmanager;activate;CamA,Target-Alpha,12
+  0:00:20;payloadmanager;priority;CamA,18
+  0:00:30;payloadmanager;activate;IRST,Target-Bravo,22
+  0:02:00;payloadmanager;standby;CamA
+  0:02:10;payloadmanager;recharge;CamA
+  0:03:00;payloadmanager;capacity;60
+  ```
+
+- Logged metrics include `payload_activate`, `payload_priority`, `payload_overbandwidth`, `payload_depleted`, and `payload_overdue`, enabling post-run analysis of resource strategy versus mission outcomes.
+
 ## 3. Use Case 2 – High-Performance Aircraft Crews
 
 Fighter and aerobatic pilots juggle extreme G-management, rapid sensor/weapon reconfiguration, and threat triage while coping with physiological load ([Cognitive Workload Analysis of Fighter Aircraft Pilots](https://www.researchgate.net/publication/339905636_Cognitive_Workload_Analysis_of_Fighter_Aircraft_Pilots_in_Flight_Simulator_Environment); [Frontiers review on MATB & pilot workload](https://www.frontiersin.org/journals/physiology/articles/10.3389/fphys.2024.1408242/full)). To reflect that:
