@@ -161,6 +161,22 @@ Log lines of type `state`/`performance` already capture widget values. Add domai
   - `threatboard;resolve;TH1,SPLASH`
 - Metrics emitted (`threat_spawn`, `threat_engage`, `threat_resolve`, `threat_overdue`, `threat_drop`) allow researchers to correlate FOX timing with workload measures. Overdue flashing warns when any threat’s TTI expires unresolved, mirroring cockpit threat board urgency.
 
+### Automation Hooks Implementation Status
+
+- Added `plugins/automationhooks.py`, which provides a central place to flip other modules between manual and auto modes. Scenario rule syntax:
+  - `automationhooks;rule;missiondirector,mission_alert,0,AUTO`
+  - `automationhooks;enable;1`
+  - `automationhooks;disable;1`
+- Each rule logs `automation_rule` for traceability; when enabled, the plugin can be extended to bind thresholds to key metrics (e.g., autopiloting Mission Director when Sense-and-Avoid overdue alarms accumulate).
+
+### Failure Injection Module
+
+- Added `plugins/failureinjector.py`, which schedules downstream plugin calls at future times, enabling automated cascade drills without hardcoding timestamps. Example:
+  - `failureinjector;schedule;emergencystack,trigger,HYD1|HYD PRESS LOW|Switch pumps|Check breakers|Monitor temps,40`
+  - `failureinjector;schedule;physiooverlay,apply,#000000AA|8,40`
+  - `failureinjector;schedule;emergencystack,resolve,HYD1,80`
+- The injector calls the target plugin’s method when the delay expires and emits `failure_schedule`, `failure_execute`, and `failure_error` metrics so analysts can validate automation logic.
+
 ## 3. Use Case 2 – High-Performance Aircraft Crews
 
 Fighter and aerobatic pilots juggle extreme G-management, rapid sensor/weapon reconfiguration, and threat triage while coping with physiological load ([Cognitive Workload Analysis of Fighter Aircraft Pilots](https://www.researchgate.net/publication/339905636_Cognitive_Workload_Analysis_of_Fighter_Aircraft_Pilots_in_Flight_Simulator_Environment); [Frontiers review on MATB & pilot workload](https://www.frontiersin.org/journals/physiology/articles/10.3389/fphys.2024.1408242/full)). To reflect that:
@@ -174,7 +190,7 @@ Fighter and aerobatic pilots juggle extreme G-management, rapid sensor/weapon re
 
 ### HPA Reference Scenario
 
-- Added `includes/scenarios/hpa_overlay.txt`, a three-minute sortie that runs Energy Manager, Threat Board, Datalink, Physio Monitor, and the legacy MATB tasks. It schedules a BFM-like sequence (ENTRY/SETUP/ENGAGE/DEFENSIVE/Egress), injects an over-G excursion, and interleaves CPDLC prompts plus two scripted threats (`TH1`, `TH2`) so researchers can test how fast pilots recover from successive high-G events.
+- Added `includes/scenarios/hpa_overlay.txt`, a three-minute sortie that runs Energy Manager, Threat Board, Datalink, Physio Monitor, Physio Overlay, Emergency Stack, Failure Injector, and the legacy MATB tasks. It schedules a BFM-like sequence (ENTRY/SETUP/ENGAGE/DEFENSIVE/Egress), injects an over-G excursion, launches two threat timelines (`TH1`, `TH2`), and lets the Failure Injector automatically trigger and resolve hydraulic failures while dimming the display.
 
 ### Testing Flow
 
@@ -222,6 +238,16 @@ This modular approach keeps acquisition (via LSL) decoupled from visualisation, 
 
 - Added `plugins/physiooverlay.py`, which can tint the entire display (e.g., tunnel vision, high-G blackout) for scripted durations. Scenario example: `physiooverlay;apply;#000000AA,8`.
 - Added `plugins/polarrlink.py`, an optional bridge that listens to a Polar H10 belt (via the official Polar BLE SDK characteristics) and emits raw RR intervals onto an LSL stream. This plugin relies on Polar’s published SDK that exposes live RR in milliseconds over Bluetooth ([Polar SDK release](https://www.polar.com/en/about_polar/press_room/polar_releases_polar_sdk_and_team_pro_api_allowing_developers_to_tap_into_its_proprietary_heart_rate); [Polar research tools](https://www.polar.com/en/science/research-tools/)). Configure it with the device’s MAC/UUID: `polarrlink;set;deviceid,XX:XX:XX:XX:XX:XX`, then `polarrlink;start`. The feature is optional—if `bleak` or an H10 sensor are unavailable, the plugin simply warns and leaves the existing Physio Monitor untouched.
+
+### 4.3 Scenario Template CLI
+
+- Added `tools/scenario_templates.py`, a lightweight CLI that emits pre-built `uas_bvlos` and `hpa_overlay` scenarios with adjustable duration. Example:
+
+  ```bash
+  python tools/scenario_templates.py --template uas_bvlos --duration 480 --output includes/scenarios/custom_bvlos.txt
+  ```
+
+- The templates automatically include the Polar link, Failure Injector schedules, and key UAS/HPA modules so research teams can bootstrap experiments before hand-tuning via `scenario_generator.py`.
 
 ## 5. Step-by-Step Approach
 
