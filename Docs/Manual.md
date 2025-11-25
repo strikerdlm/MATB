@@ -101,6 +101,33 @@ Instrumentation focus: measure time to correct weapon–threat pairing, number o
 3. **Performance Analytics** – Expand `core/logger.py` to summarise mission-level KPIs (mission success %, violation counts) immediately after each scenario and optionally publish over LSL for synchronising with EEG/fNIRS streams.
 4. **Human–Machine Interface Fit** – Document joystick and HOTAS bindings for the new plugins (axis reversal already supported in `track` plugin). For UAS payload work, allow mouse + keyboard fallback to keep the software accessible.
 
+## 4.1 Acute HRV Workload Feature
+
+Recent pilot studies show that heart-rate-variability (HRV) indices react fast enough to track workload spikes during flight segments. Increased sympathetic dominance (rising LF power, LF/HF ratio) plus depressed parasympathetic markers (falling RMSSD) aligned with high mental demands in an A320 traffic-pattern experiment, while SDNN captured global variability shifts ([Frontiers Neuroergonomics 2025](https://www.frontiersin.org/journals/neuroergonomics/articles/10.3389/fnrgo.2025.1672492/pdf)). A systematic review focused on pilots found RMSSD, SDNN, LF, HF, LF/HF, and pNN50 to be the most frequently reported acute markers in MATB-style paradigms when paired with NASA-TLX or RSME scores ([Detecting and Predicting Pilot Mental Workload Using HRV](https://pmc.ncbi.nlm.nih.gov/articles/PMC11207491/)).
+
+**Feature Goals**
+
+1. Stream ECG-derived R–R intervals into OpenMATB in real time (preferred: `labstreaminglayer` plugin) and compute metrics on rolling windows (e.g., 30 s, 60 s).
+2. Surface a compact workload bar that combines z-scored RMSSD (parasympathetic), LF/HF (sympathetic balance), and SDNN (overall variability). Highlight “acute” shifts when consecutive windows breach configurable deltas (e.g., RMSSD drop >15% from personal baseline).
+3. Log per-window metrics to `performance` entries so HRV signatures can be replayed alongside MATB task outcomes.
+
+**Implementation Sketch**
+
+| Component | Notes |
+| --- | --- |
+| `plugins/physiomonitor.py` | Derive from `AbstractPlugin`. Accept stream metadata (`lsl_stream`, `window_seconds`, `baseline_seconds`). Maintain a deque of NN intervals, compute time-domain (RMSSD, SDNN, pNN50) and frequency-domain metrics (LF, HF, LF/HF) using Welch or Lomb–Scargle. |
+| Visualization | Use stacked spark-lines + gauge: RMSSD line (green), LF/HF bar (red if > threshold), textual SDNN. Reuse `taskfeedback` to flash when thresholds exceed “acute” levels. |
+| Baseline calibration | At scenario start, collect `baseline_seconds` of data while workload is low; store means to normalise subsequent z-scores. |
+| Alerts & Logging | When `rmssd_delta < -delta_rmssd` or `lfhf_delta > delta_lfhf`, emit `performance,hrv,acute_event=1` rows. Provide optional hook to pause or annotate other tasks. |
+
+**Display/Analysis Suggestions**
+
+- Overlay HRV panel above Mission Director or Energy Manager widgets so trainees see physiological consequences alongside task load.
+- Offer “HRV trend” timeline in debrief: aggregate window metrics, mark MATB events (e.g., COMM prompt) to spot causality.
+- Allow export of per-window metrics via CSV or LSL for external analytics (EEG co-analysis, adaptive automation research).
+
+This modular approach keeps acquisition (via LSL) decoupled from visualisation, while aligning with validated HRV markers for acute workload detection.
+
 ## 5. Step-by-Step Approach
 
 | Phase | Activities | Deliverables |
