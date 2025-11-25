@@ -19,6 +19,7 @@ class AbstractPlugin:
         self.widgets = dict()                           #   To store the widget objects of a plugin
         self.container = None                           #   The visual area of the plugin (object)
         self.logger = logger
+        self.scheduler = None
 
         self.can_receive_keys = False
         self.can_execute_keys = False
