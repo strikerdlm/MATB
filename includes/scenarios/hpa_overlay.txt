@@ -6,6 +6,15 @@
 0:00:02;threatboard;start
 0:00:02;datalink;start
 0:00:02;physiomonitor;start
+0:00:02;physiooverlay;start
+0:00:02;emergencystack;start
+# Emergency stack and overlay
+0:00:45;emergencystack;trigger;HYD1,HYD PRESS LOW,Switch pumps|Check breakers|Monitor temps
+0:00:55;physiooverlay;apply;#000000AA,8
+0:01:05;emergencystack;stepdone;HYD1,0
+0:01:15;emergencystack;stepdone;HYD1,1
+0:01:25;emergencystack;resolve;HYD1
+
 
 # Baseline BFM sequence
 0:00:05;energymanager;event;ENTRY,3.5,30
@@ -34,11 +43,15 @@
 0:02:10;energymanager;event;Egress,3.0,40
 
 0:02:30;datalink;clear;*
+0:02:30;physiooverlay;clear;*
+0:02:30;emergencystack;clear;*
 0:02:30;threatboard;clear;*
 
 0:03:00;physiomonitor;stop
 0:03:00;datalink;stop
 0:03:00;threatboard;stop
+0:03:00;physiooverlay;stop
+0:03:00;emergencystack;stop
 0:03:00;energymanager;stop
 0:03:00;communications;stop
 0:03:00;resman;stop

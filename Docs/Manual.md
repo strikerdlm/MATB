@@ -58,7 +58,7 @@ The plan below assumes we keep leveraging those extension seams.
 
 ## 2. Use Case 1 – UAS Operator Workflows
 
-Recent FAA research catalogued the KSAOs UAS crews need—airspace knowledge, mission planning, multi-sensor prioritisation, crew resource management, and stress tolerance—highlighting gaps in standardized training for BVLOS, multi-ship, and payload-intensive ops ([FAA UAS KSA study](https://www.faa.gov/sites/faa.gov/files/data_research/research/med_humanfacs/oamtechreports/202114.pdf)). The MATB paradigm already trains multitasking, so the following modules map UAS-specific demands onto OpenMATB plugins:
+Recent FAA research catalogued the KSAOs UAS crews need—airspace knowledge, mission planning, multi-sensor prioritisation, crew resource management, and stress tolerance—highlighting gaps in standardized training for BVLOS, multi-ship, and payload-intensive ops ([FAA UAS KSA study](https://www.faa.gov/sites/faa.gov/files/data_research/research/med_humanfacs/oamtechreports/202114.pdf)). Colombian deployments add further constraints: the national power grid uses UAS to inspect mountainous transmission lines, but fragmented regulation and limited certified BVLOS corridors complicate scaling ([Unmanned Aircraft Systems: A Latin American Review and Analysis from the Colombian Context](https://www.mdpi.com/2076-3417/13/3/1801)). Medellín’s proposed BVLOS corridors demand risk-aware routing to avoid dense urban terrain, implying the need for high-fidelity scheduling and sense-and-avoid tasks as we model in OpenMATB ([Risk-Based Design of Urban UAS Corridors](https://www.mdpi.com/2504-446X/9/12/815)).
 
 | Module | Goal | Implementation Notes |
 | --- | --- | --- |
@@ -144,6 +144,14 @@ Log lines of type `state`/`performance` already capture widget values. Add domai
   - `energymanager;energy;85`
 - Logged metrics include `energy_event_schedule`, `energy_event_start`, `energy_event_complete`, `energy_overg`, and `energy_alert` so researchers can align physiological overlays (HRV, visual occlusion) with G-onset profiles.
 
+### Emergency Stack & Failure Cascades Implementation Status
+
+- Added `plugins/emergencystack.py`, which lists cascading failures plus step-by-step checklists so pilots can drill “hydraulic pressure low” or “GEN BUS OFF” sequences during heavy workload. Scenario commands:
+  - `emergencystack;trigger;HYD1,HYD PRESS LOW,Switch pumps|Check breakers|Monitor temps`
+  - `emergencystack;stepdone;HYD1,0`
+  - `emergencystack;resolve;HYD1`
+- Metrics (`emergency_trigger`, `emergency_step`, `emergency_resolve`) let researchers quantify compliance time and residual risk, while overdue cues flash until every emergency is resolved or cleared.
+
 ### Threat Prioritisation & Weapons Timeline Implementation Status
 
 - Added `plugins/threatboard.py`, which lists each airborne threat with its sector, range, weapon hint, and time-to-impact. Scenario commands:
@@ -209,6 +217,11 @@ Recent pilot studies show that heart-rate-variability (HRV) indices react fast e
 - Allow export of per-window metrics via CSV or LSL for external analytics (EEG co-analysis, adaptive automation research).
 
 This modular approach keeps acquisition (via LSL) decoupled from visualisation, while aligning with validated HRV markers for acute workload detection.
+
+### 4.2 Physiological Overlays & Polar RR Link
+
+- Added `plugins/physiooverlay.py`, which can tint the entire display (e.g., tunnel vision, high-G blackout) for scripted durations. Scenario example: `physiooverlay;apply;#000000AA,8`.
+- Added `plugins/polarrlink.py`, an optional bridge that listens to a Polar H10 belt (via the official Polar BLE SDK characteristics) and emits raw RR intervals onto an LSL stream. This plugin relies on Polar’s published SDK that exposes live RR in milliseconds over Bluetooth ([Polar SDK release](https://www.polar.com/en/about_polar/press_room/polar_releases_polar_sdk_and_team_pro_api_allowing_developers_to_tap_into_its_proprietary_heart_rate); [Polar research tools](https://www.polar.com/en/science/research-tools/)). Configure it with the device’s MAC/UUID: `polarrlink;set;deviceid,XX:XX:XX:XX:XX:XX`, then `polarrlink;start`. The feature is optional—if `bleak` or an H10 sensor are unavailable, the plugin simply warns and leaves the existing Physio Monitor untouched.
 
 ## 5. Step-by-Step Approach
 
