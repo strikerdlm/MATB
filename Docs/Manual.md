@@ -63,7 +63,7 @@ Recent FAA research catalogued the KSAOs UAS crews need—airspace knowledge, mi
 | Module | Goal | Implementation Notes |
 | --- | --- | --- |
 | **Multi-UAV Mission Director** | Allocate automation resources across up to four simulated aircraft, forcing prioritisation of “launch, surveillance, divert, recover” chains. | Extend `plugins/scheduling.py` to render column-per-aircraft timelines with automation takeover toggles. Add events like `missiondirector;assign;uav2,surveillance,03:00`. |
-| **Sense-and-Avoid & Geofence Monitor** | Train sense-and-avoid reasoning (declare traffic conflicts, select maneuvers within timeouts). | New plugin `senseandavoid.py` using gauges + auditory alerts. Parameters: conflict rate, separation minima, allowable maneuvers. Hook overdue alarms via `taskfeedback`. Scenario events drive intruder azimuth and altitude bands. |
+| **Sense-and-Avoid & Geofence Monitor** | Train sense-and-avoid reasoning (declare traffic conflicts, select maneuvers within timeouts). | New plugin `senseandavoid.py` using text/gauge overlays and flashing alerts. Parameters: conflict rate, separation minima, allowable maneuvers. Scenario events drive intruder azimuth and altitude bands. |
 | **Payload & Sensor Management** | Practice simultaneous sensor slewing, target confirmation, and bandwidth rationing. | Derive from `AbstractPlugin` to manage a grid of “sensor pods” with energy budgets. Each task update adjusts signal fidelity; operator must queue shots while respecting downlink capacity. |
 | **Datalink & Crew Coordination** | Recreate high-volume chat/datalink message parsing plus crew callouts. | Build on `plugins/communications.py` but add multi-channel text/datalink cues, requiring classification (priority, action required). Combine keyboard shortcuts and joystick hats for acknowledgement. |
 
@@ -90,6 +90,15 @@ Log lines of type `state`/`performance` already capture widget values. Add domai
   ```
 
 - Performance metrics emitted: `mission_assign`, `mission_mode`, `mission_alert`, enabling correlation with other MATB workloads.
+
+### Sense-and-Avoid Implementation Status
+
+- Added `plugins/senseandavoid.py`, which displays a live intruder table (bearing, range, altitude delta, time-to-impact, status) and drives overdue feedback whenever conflicts exceed prescribed TTI or remain unresolved. Scenario commands include:
+  - `senseandavoid;spawn;INTR1,090,2.0,300,45` (bearing 090°, 2nm, +300 ft, 45 s to conflict)
+  - `senseandavoid;resolve;INTR1,turn right 20°`
+  - `senseandavoid;clear;INTR1`
+  - `senseandavoid;thresholds;1.0,400`
+- Metrics logged: `saa_spawn`, `saa_resolve` (with resolution time), `saa_overdue`, and `saa_thresholds`, enabling comparisons against NASA asymptotic workload measures and FAA detect-and-avoid timing guidance.
 
 ## 3. Use Case 2 – High-Performance Aircraft Crews
 
