@@ -3,6 +3,7 @@
 0:00:00;resman;start
 0:00:00;communications;start
 0:00:02;energymanager;start
+0:00:02;threatboard;start
 0:00:02;datalink;start
 0:00:02;physiomonitor;start
 
@@ -12,7 +13,13 @@
 0:01:10;energymanager;event;ENGAGE,5.5,35
 0:01:50;energymanager;event;REPOSITION,2.8,20
 
-# Datalink and ATC calls
+# Threat picture and Datalink calls
+0:00:25;threatboard;spawn;TH1,035,14,R73,45
+0:00:30;datalink;message;HPA1,ATC,PRIO,Climb FL250,20
+0:00:40;threatboard;engage;TH1,FOX3
+0:00:55;datalink;message;HPA2,AWACS,NORM,Bandit 2 o clock 15nm,25
+0:01:05;threatboard;resolve;TH1,SPLASH
+0:01:10;threatboard;spawn;TH2,270,11,GUN,35
 0:00:30;datalink;message;HPA1,ATC,PRIO,Climb FL250,20
 0:00:55;datalink;message;HPA2,AWACS,NORM,Bandit 2 o clock 15nm,25
 0:01:30;datalink;forceack;HPA1
@@ -21,12 +28,17 @@
 # Stress overlay
 0:01:20;energymanager;overg;6.3
 0:01:25;energymanager;event;DEFENSIVE,6.0,30
+0:01:30;threatboard;reprioritize;TH2,255,9
+0:01:45;threatboard;engage;TH2,FOX2
+0:01:55;threatboard;resolve;TH2,SPLASH
 0:02:10;energymanager;event;Egress,3.0,40
 
 0:02:30;datalink;clear;*
+0:02:30;threatboard;clear;*
 
 0:03:00;physiomonitor;stop
 0:03:00;datalink;stop
+0:03:00;threatboard;stop
 0:03:00;energymanager;stop
 0:03:00;communications;stop
 0:03:00;resman;stop
