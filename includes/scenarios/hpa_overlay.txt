@@ -29,8 +29,6 @@
 0:00:55;datalink;message;HPA2,AWACS,NORM,Bandit 2 o clock 15nm,25
 0:01:05;threatboard;resolve;TH1,SPLASH
 0:01:10;threatboard;spawn;TH2,270,11,GUN,35
-0:00:30;datalink;message;HPA1,ATC,PRIO,Climb FL250,20
-0:00:55;datalink;message;HPA2,AWACS,NORM,Bandit 2 o clock 15nm,25
 0:01:30;datalink;forceack;HPA1
 0:02:00;datalink;message;HPA3,ATC,PRIO,Descend FL220,30
 
