@@ -1,6 +1,6 @@
 # OpenMATB Mission Expansion Manual
 
-This manual captures a concrete plan for extending OpenMATB to cover two high-value aviation contexts—Unmanned Aircraft Systems (UAS) operators and high-performance aircraft crews—using the existing plugin-driven architecture.
+This manual captures a concrete plan for extending OpenMATB to cover two high-value aviation contexts—Unmanned Aircraft Systems (UAS) operators and high-performance aircraft crews—using the existing plugin-driven architecture. The current implementation work is attributed to **Dr Diego Malpica, Aerospace Medicine**, who is curating these enhancements for translational research use.
 
 ## 1. Architecture Reference Points
 
@@ -67,6 +67,11 @@ Recent FAA research catalogued the KSAOs UAS crews need—airspace knowledge, mi
 | **Payload & Sensor Management** | Practice simultaneous sensor slewing, target confirmation, and bandwidth rationing. | Derive from `AbstractPlugin` to manage a grid of “sensor pods” with energy budgets. Each task update adjusts signal fidelity; operator must queue shots while respecting downlink capacity. |
 | **Datalink & Crew Coordination** | Recreate high-volume chat/datalink message parsing plus crew callouts. | Build on `plugins/datalink.py` to stream controller–pilot data link (CPDLC) style prompts with prioritisation (aligned with NASA CPDLC workload findings [NASA TM–2020-0010384](https://ntrs.nasa.gov/api/citations/20200010384/downloads/20200010384.pdf); [NTRS 1989-0002355](https://ntrs.nasa.gov/citations/19890002355)). Keyboard shortcuts (UP/DOWN/ENTER) support queue triage, while scenario hooks drive message mixes. |
 
+### UAS Reference Scenarios
+
+- Added `includes/scenarios/uas_basic.txt`, a five-minute demonstration scenario that starts the legacy MATB tasks plus Mission Director, Sense-and-Avoid, Payload Manager, Datalink, and Physio Monitor. It scripts UAV assignments, two deconfliction events, multi-sensor load juggling, and CPDLC-style prompts so research teams can evaluate the modules together or reuse it as a template when generating progressive difficulty ramps via `scenario_generator.py`.
+- Added `includes/scenarios/uas_bvlos.txt`, a BVLOS stress drill with three simultaneous aircraft, persistent datalink traffic, repeated sense-and-avoid conflicts, and payload juggling. This scenario is useful for benchmarking automation assistance or experimenting with adaptive autonomy toggles.
+
 ### Scenarios & Metrics
 
 1. **Mission build-up** – start with two aircraft and low conflict density, add additional UAVs plus payload events every 90 s.
@@ -131,6 +136,14 @@ Log lines of type `state`/`performance` already capture widget values. Add domai
 
 - Automatically logs `datalink_receive`, `datalink_ack` (with response time), `datalink_miss`, `datalink_drop`, and `datalink_clear`. Overdue feedback flashes when time-to-impact expires, enabling researchers to correlate message density against NASA-TLX/RSME scores in complex crew simulations.
 
+### Energy & G-Envelope Implementation Status
+
+- Added `plugins/energymanager.py`, which sequences high-G events (name, target G, duration), tracks cumulative G-seconds, and decrements an energy reserve to simulate pilot fatigue during high-performance sorties. Scenario commands:
+  - `energymanager;event;ENGAGE,5.5,35`
+  - `energymanager;overg;6.3`
+  - `energymanager;energy;85`
+- Logged metrics include `energy_event_schedule`, `energy_event_start`, `energy_event_complete`, `energy_overg`, and `energy_alert` so researchers can align physiological overlays (HRV, visual occlusion) with G-onset profiles.
+
 ## 3. Use Case 2 – High-Performance Aircraft Crews
 
 Fighter and aerobatic pilots juggle extreme G-management, rapid sensor/weapon reconfiguration, and threat triage while coping with physiological load ([Cognitive Workload Analysis of Fighter Aircraft Pilots](https://www.researchgate.net/publication/339905636_Cognitive_Workload_Analysis_of_Fighter_Aircraft_Pilots_in_Flight_Simulator_Environment); [Frontiers review on MATB & pilot workload](https://www.frontiersin.org/journals/physiology/articles/10.3389/fphys.2024.1408242/full)). To reflect that:
@@ -141,6 +154,10 @@ Fighter and aerobatic pilots juggle extreme G-management, rapid sensor/weapon re
 | **Threat Prioritisation & Weapons Timeline** | Train rapid reprioritisation of radar/IRS threats, weapon pairing, and “Fox” timelines. | Extend `plugins/scheduling.py` or introduce `threatboard.py` to show sector timelines, requiring manual sequencing (e.g., assign HOBS missile within 12 s). |
 | **Emergency Stack & Failure Cascades** | Drill hydraulic/electrical failures during high workload. | Scenario engine injects failure events that pause other tasks until a checklist widget (HTML instructions plugin) is satisfied. Track compliance time and residual risk. |
 | **Physiological Stress Overlays** | Combine MATB load with hypoxia or high-G cues (e.g., blurred widgets, delayed inputs). | Use scenario parameters to degrade widget brightness or inject lag to emulate tunnel vision; pair with `labstreaminglayer` to tag when overlays are active for neuro/biometric research. |
+
+### HPA Reference Scenario
+
+- Added `includes/scenarios/hpa_overlay.txt`, a three-minute sortie that runs Energy Manager, Datalink, Physio Monitor, and the legacy MATB tasks. It schedules a BFM-like sequence (ENTRY/SETUP/ENGAGE/DEFENSIVE/Egress), injects an over-G excursion, and interleaves CPDLC prompts so researchers can test how fast pilots recover from successive high-G events.
 
 ### Testing Flow
 
@@ -201,4 +218,4 @@ This modular approach keeps acquisition (via LSL) decoupled from visualisation, 
 3. **Prototype UI wireframes** – Rough out widget layouts for Mission Director, Sense-and-Avoid, and Energy Manager to surface any container limitations early.
 4. **Plan physiological overlays** – If hypoxia/high-G effects are required, align with hardware (e.g., dimming filters, input lag) so scenario designers can flip them via config only.
 
-This plan keeps documentation centralised, ties new features to existing extension seams, and aligns with published research so the new modules remain defensible for both experimental and training communities.
+This plan keeps documentation centralised, ties new features to existing extension seams, and aligns with published research so the new modules remain defensible for both experimental and training communities. Implementation credit: **Dr Diego Malpica, Aerospace Medicine**.
