@@ -78,6 +78,18 @@ class Logger:
         slot = [perf_counter(), self.scenario_time, 'parameter', plugin, address, value]
         self.write_single_slot(slot)
 
+    def record_scenario_version(self, scenario_path: str, version_hash: str) -> None:
+        """Record scenario file version for experiment reproducibility."""
+        slot = [perf_counter(), self.scenario_time, 'version', 'scenario', scenario_path, version_hash]
+        self.write_single_slot(slot)
+
+    def record_config_snapshot(self, plugin: str, config: Dict[str, Any]) -> None:
+        """Record a plugin's full configuration snapshot."""
+        import json
+        config_str = json.dumps(config, default=str, sort_keys=True)
+        slot = [perf_counter(), self.scenario_time, 'config', plugin, 'snapshot', config_str]
+        self.write_single_slot(slot)
+
 
     def log_performance(self, module, metric, value):
         slot = [perf_counter(), self.scenario_time, 'performance', module, metric, value]
@@ -165,10 +177,26 @@ class Logger:
         self.performance_summary.update_scenario_time(scenario_time)
 
 
-    def start_performance_summary(self, scenario_label: Optional[str] = None) -> None:
+    def start_performance_summary(
+        self,
+        scenario_label: Optional[str] = None,
+        scenario_version: Optional[str] = None,
+        config_snapshot: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Initialise performance summary with optional versioning and config snapshot.
+
+        Args:
+            scenario_label: Human-readable scenario name.
+            scenario_version: Semantic version or hash of the scenario file.
+            config_snapshot: Dictionary of plugin configurations for reproducibility.
+        """
         metadata: Dict[str, Any] = {'session_id': self.session_id}
         if scenario_label:
             metadata['scenario'] = scenario_label
+        if scenario_version:
+            metadata['scenario_version'] = scenario_version
+        if config_snapshot:
+            metadata['config_snapshot'] = config_snapshot
         if self.path is not None:
             metadata['log_path'] = str(self.path)
         self.performance_summary.reset(metadata)
