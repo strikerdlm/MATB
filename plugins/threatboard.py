@@ -46,6 +46,8 @@ class Threatboard(AbstractPlugin):
         self.parameters.update({
             'defaulttti': 30,
             'maxthreats': 5,
+            'chaffcapacity': 6,
+            'flarecapacity': 6,
         })
 
         self.parameters['taskfeedback']['overdue'].update({
@@ -57,10 +59,18 @@ class Threatboard(AbstractPlugin):
 
         self.threats: List[ThreatContact] = []
         self._widget: Optional[Simpletext] = None
+        self.countermeasure_stock = {
+            'chaff': int(self.parameters['chaffcapacity']),
+            'flare': int(self.parameters['flarecapacity']),
+        }
 
     # Lifecycle ---------------------------------------------------------
     def start(self) -> None:
         self.threats = []
+        self.countermeasure_stock = {
+            'chaff': int(self.parameters['chaffcapacity']),
+            'flare': int(self.parameters['flarecapacity']),
+        }
         super().start()
 
     def create_widgets(self) -> None:
@@ -176,6 +186,31 @@ class Threatboard(AbstractPlugin):
         self.threats = []
         self.log_performance('threat_clear', 'all')
 
+    def countermeasure(self, payload: str) -> None:
+        """
+        payload: type,count
+        """
+        parts = self._split(payload, 2)
+        if not parts:
+            return
+        c_type = parts[0].strip().lower()
+        try:
+            count = int(float(parts[1]))
+        except (TypeError, ValueError):
+            return
+        count = max(1, count)
+        if c_type not in ('chaff', 'flare'):
+            return
+        remaining_before = self.countermeasure_stock[c_type]
+        spent = min(remaining_before, count)
+        self.countermeasure_stock[c_type] = max(0, remaining_before - spent)
+        target = self._nearest_active_threat()
+        target_id = target.threat_id if target else 'none'
+        self.log_performance('countermeasure_deploy', f'{c_type}:{spent}:{target_id}')
+        if spent == 0:
+            self.log_performance('countermeasure_empty', c_type)
+        self._update_overdue()
+
     # Helpers -----------------------------------------------------------
     def _split(self, payload: str, min_parts: int) -> Optional[List[str]]:
         if not payload:
@@ -211,16 +246,44 @@ class Threatboard(AbstractPlugin):
                 f"{remaining:5.1f} | {status}"
             )
             lines.append(line)
+        lines.append('')
+        lines.append(
+            _('Chaff {0}/{1} | Flare {2}/{3}').format(
+                self.countermeasure_stock['chaff'],
+                int(self.parameters['chaffcapacity']),
+                self.countermeasure_stock['flare'],
+                int(self.parameters['flarecapacity']),
+            )
+        )
         self._widget.set_text('\n'.join(lines))
 
     def _update_overdue(self) -> None:
         now = self.scenario_time
         overdue = self.parameters['taskfeedback']['overdue']
         overdue_active = any(threat.is_overdue(now) for threat in self.threats)
+        cm_low = self._countermeasure_low()
         overdue['active'] = True
-        overdue['_is_visible'] = overdue_active
+        overdue['_is_visible'] = overdue_active or cm_low
         if overdue_active:
             for threat in self.threats:
                 if threat.is_overdue(now):
                     self.log_performance('threat_overdue', threat.threat_id)
+        if cm_low:
+            self.log_performance(
+                'countermeasure_low',
+                f"{self.countermeasure_stock['chaff']}:{self.countermeasure_stock['flare']}",
+            )
+
+    def _nearest_active_threat(self) -> Optional[ThreatContact]:
+        active = [threat for threat in self.threats if threat.status != 'RESOLVED']
+        if not active:
+            return None
+        return min(active, key=lambda threat: threat.remaining(self.scenario_time))
+
+    def _countermeasure_low(self) -> bool:
+        chaff_capacity = max(1, int(self.parameters['chaffcapacity']))
+        flare_capacity = max(1, int(self.parameters['flarecapacity']))
+        ratio_chaff = self.countermeasure_stock['chaff'] / chaff_capacity
+        ratio_flare = self.countermeasure_stock['flare'] / flare_capacity
+        return ratio_chaff <= 0.2 or ratio_flare <= 0.2
 
