@@ -142,6 +142,10 @@ To align with the reliability guidance from [Docs/Manual.md](Docs/Manual.md) and
 
 These summaries make it easier to reproduce the standardized workload bands described in the military MATB literature while keeping the raw CSV pipeline unchanged.
 
+### Operator capacity monitor
+
+Section 14.1 of [Docs/Manual.md](Docs/Manual.md) is now backed by an `operatorcapacity` plugin that enforces the validated “2–3 active / up to 6 supervisory” crew bands from the multi-UAV workload studies. Scenario designers can inject commands such as `operatorcapacity;set;active,2` or `operatorcapacity;set;supervisory,uav1|uav2|uav3|uav4|uav5` to log the live portfolio, while `operatorcapacity;overlap;uav1,uav2,0.65` feeds the overlap-driven supervisory limit described in the manual. The plugin widget flashes when limits are exceeded and the logger emits `operator_capacity_*` metrics so the mission summary can quantify average load, breach rate, and overlap trends alongside the rest of the MATB instrumentation.
+
 ## Tutorials
 
 For more information about how to use OpenMATB, please refers to [our wiki](https://github.com/juliencegarra/OpenMATB/wiki).
