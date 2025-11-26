@@ -95,6 +95,8 @@ Log lines of type `state`/`performance` already capture widget values. Add domai
   ```
 
 - Performance metrics emitted: `mission_assign`, `mission_mode`, `mission_alert`, enabling correlation with other MATB workloads.
+- Multi-ship endurance tracker: `missiondirector;endurance;UAV1,2700,600` starts a 45-minute endurance clock (optional warning threshold in seconds). The table now shows both task time and remaining endurance, emitting `mission_endurance_set` and `mission_endurance_low` as timers cross thresholds.
+- Automated handover protocol: `missiondirector;handover;UAV1,GCS-Bravo,start` and `missiondirector;handover;UAV1,GCS-Bravo,complete` document custody changes, logging `mission_handover_initiate` / `mission_handover_complete` and surfacing “Handover→GCS-Bravo” in the alert column.
 
 ### Sense-and-Avoid Implementation Status
 
@@ -104,6 +106,7 @@ Log lines of type `state`/`performance` already capture widget values. Add domai
   - `senseandavoid;clear;INTR1`
   - `senseandavoid;thresholds;1.0,400`
 - Metrics logged: `saa_spawn`, `saa_resolve` (with resolution time), `saa_overdue`, and `saa_thresholds`, enabling comparisons against NASA asymptotic workload measures and FAA detect-and-avoid timing guidance.
+- Geofence overlay: use `senseandavoid;geofence;0.1|0.1,0.9|0.1,0.9|0.8,0.1|0.8` to define a no-fly polygon (normalized coordinates) or `senseandavoid;geofence;clear` to remove it. `senseandavoid;position;UAV1,0.45,0.35` updates aircraft positions, drives the ASCII map overlay, and emits `geofence_breach` / `geofence_recover` whenever a platform crosses the boundary.
 
 ### Payload & Sensor Management Implementation Status
 
@@ -139,10 +142,20 @@ Log lines of type `state`/`performance` already capture widget values. Add domai
 ### Energy & G-Envelope Implementation Status
 
 - Added `plugins/energymanager.py`, which sequences high-G events (name, target G, duration), tracks cumulative G-seconds, and decrements an energy reserve to simulate pilot fatigue during high-performance sorties. Scenario commands:
-  - `energymanager;event;ENGAGE,5.5,35`
+  - `energymanager;event;ENGAGE,5.5,35,5` (optional fourth field delays the start by 5 s so crews can rehearse ramps before they hit)
+  - `energymanager;warning;5.0,4` (set G-onset warning threshold and lead time)
   - `energymanager;overg;6.3`
   - `energymanager;energy;85`
-- Logged metrics include `energy_event_schedule`, `energy_event_start`, `energy_event_complete`, `energy_overg`, and `energy_alert` so researchers can align physiological overlays (HRV, visual occlusion) with G-onset profiles.
+- The widget now includes a predictive G-meter that plots the warning threshold (`W`), structural limit (`L`), and the upcoming/active target (`T`). When an event whose `target_g` exceeds the configured warning threshold enters the lead window, the plugin emits `g_onset_warning` and highlights the gauge so pilots can brief the pull before it begins.
+- Logged metrics cover the additional behaviors: `energy_event_schedule` now includes the queued delay, `energy_warning_config` records threshold changes for provenance, and `g_onset_warning` timestamps each scripted ramp alert alongside the existing `energy_event_start`, `energy_event_complete`, `energy_overg`, and `energy_alert` series.
+
+### Weapons Inventory & Loadout Implementation Status
+
+- Added `plugins/weaponsinventory.py`, which keeps a running tally of missiles, bombs, and expendables per weapon type. Scenario commands:
+  - `weaponsinventory;load;AIM9,4` – initialises the loadout with the specified capacity (also used to reset a store mid-run).
+  - `weaponsinventory;expend;AIM9,1` – decrements the remaining count, emitting `weapon_expended` (with remaining rounds) and `weapon_empty` when a store hits zero.
+  - `weaponsinventory;reload;AIM9,2` – tops up the selected store without exceeding its configured capacity; omit the amount to backfill to 100%.
+- The widget lists each weapon as `NAME | remaining/capacity` and flashes overdue feedback when any store drops below the configured `lowwarnratio` (default 25%). Use this to cue threat/crew coordination scripts (e.g., “switch to FOX-3 only”).
 
 ### Emergency Stack & Failure Cascades Implementation Status
 
@@ -159,7 +172,17 @@ Log lines of type `state`/`performance` already capture widget values. Add domai
   - `threatboard;engage;TH1,FOX3`
   - `threatboard;reprioritize;TH1,010,10`
   - `threatboard;resolve;TH1,SPLASH`
-- Metrics emitted (`threat_spawn`, `threat_engage`, `threat_resolve`, `threat_overdue`, `threat_drop`) allow researchers to correlate FOX timing with workload measures. Overdue flashing warns when any threat’s TTI expires unresolved, mirroring cockpit threat board urgency.
+  - `threatboard;countermeasure;chaff,2` (deploy two rounds of the named expendable; `flare` is also supported)
+- The widget now reserves a footer row for expendable stocks (`Chaff x/x | Flare y/y`), and the plugin logs `countermeasure_deploy`, `countermeasure_empty`, and `countermeasure_low` so mission directors can correlate threat pressure with remaining defensive options. Metrics emitted (`threat_spawn`, `threat_engage`, `threat_resolve`, `threat_overdue`, `threat_drop`) still allow researchers to correlate FOX timing with workload measures, while the countermeasure traces expose how often crews resort to chaff/flare in QRA-style drills.
+
+### Cockpit Audio Warnings Implementation Status
+
+- Added `plugins/audioalerts.py`, an invisible helper that plays WAV cues when scenario commands fire. Typical flow:
+  - `audioalerts;register;overg,includes/sounds/overg.wav`
+  - `audioalerts;play;overg`
+  - `audioalerts;stopcue;overg`
+  - `audioalerts;volume;0.75` (sets default playback volume for all cues)
+- The plugin caches registered files, degrades gracefully if `pyglet`/audio hardware are missing, and logs `audio_register`, `audio_play`, `audio_stop`, `audio_volume`, and `audio_error` events so researchers can align auditory prompts with workload spikes. Pair this with Energy Manager or Threat Board rules to mimic ALR/voice callouts without hardcoding audio playback in every plugin.
 
 ### Automation Hooks Implementation Status
 
@@ -417,8 +440,8 @@ Based on the systematic review of HRV for pilot MWL (Wang, Houghton & Majumdar 2
 
 | Component | Status | Plugin File | Key Scenario Commands |
 | --- | --- | --- | --- |
-| Mission Director | ✅ Implemented | `plugins/missiondirector.py` | `assign`, `complete`, `automation`, `conflict`, `clearconflict` |
-| Sense-and-Avoid | ✅ Implemented | `plugins/senseandavoid.py` | `spawn`, `resolve`, `clear`, `thresholds` |
+| Mission Director | ✅ Implemented | `plugins/missiondirector.py` | `assign`, `complete`, `automation`, `conflict`, `clearconflict`, `endurance`, `handover` |
+| Sense-and-Avoid | ✅ Implemented | `plugins/senseandavoid.py` | `spawn`, `resolve`, `clear`, `thresholds`, `geofence`, `position` |
 | Payload Manager | ✅ Implemented | `plugins/payloadmanager.py` | `activate`, `priority`, `standby`, `recharge`, `capacity` |
 | Datalink & CPDLC | ✅ Implemented | `plugins/datalink.py` | `message`, `forceack`, `clear` |
 | Physio Monitor | ✅ Implemented | `plugins/physiomonitor.py` | LSL stream, HRV computation, acute alerts |
@@ -430,9 +453,6 @@ Based on the systematic review of HRV for pilot MWL (Wang, Houghton & Majumdar 2
 
 | Enhancement | Priority | Rationale | Implementation Notes |
 | --- | --- | --- | --- |
-| **Geofence Polygon Visualisation** | High | Current SAA shows intruder table only; visual map aids spatial awareness | Add optional canvas overlay showing UAV positions relative to no-fly zones; emit `geofence_breach` metric |
-| **Multi-Ship Fuel/Endurance Tracker** | Medium | BVLOS missions require endurance monitoring per aircraft | Extend Mission Director rows to show remaining flight time; emit `endurance_low` alerts |
-| **Automated Handover Protocol** | Medium | Lost-link requires scripted handover to backup GCS | New scenario command `missiondirector;handover;uav2,GCS2`; log `handover_initiate`, `handover_complete` |
 | **Weather/Visibility Layer** | Low | Environmental factors affect UAS ops | Overlay weather icons; scenario command `environment;weather;IMC` |
 | **Voice Synthesis for Datalink** | Low | Auditory channel reduces visual overload | Use TTS for high-priority messages; configurable via `datalink;voice;True` |
 
@@ -446,12 +466,18 @@ performance,missiondirector,mission_assign,uav=uav1,mission=surveillance,duratio
 performance,missiondirector,mission_mode,uav=uav1,mode=auto
 performance,missiondirector,mission_alert,uav=uav1,alert=geofence
 performance,missiondirector,mission_complete,uav=uav1,elapsed=298
+performance,missiondirector,mission_endurance_set,uav=uav1,duration_s=2700,threshold_s=600
+performance,missiondirector,mission_endurance_low,uav=uav1,remaining_s=540
+performance,missiondirector,mission_handover_initiate,uav=uav1,target=GCS-Bravo
+performance,missiondirector,mission_handover_complete,uav=uav1,target=GCS-Bravo
 
 # Sense-and-Avoid
 performance,senseandavoid,saa_spawn,id=INTR1,bearing=090,range=2.0,alt_delta=300,tti=45
 performance,senseandavoid,saa_resolve,id=INTR1,resolution=turn_right_20,response_time_ms=3200
 performance,senseandavoid,saa_overdue,id=INTR1
 performance,senseandavoid,saa_clear,id=INTR1
+performance,senseandavoid,geofence_breach,uav=UAV1,x=0.92,y=0.88
+performance,senseandavoid,geofence_recover,uav=UAV1,x=0.45,y=0.35
 
 # Payload Manager
 performance,payloadmanager,payload_activate,pod=CamA,target=Alpha,bandwidth=12
@@ -472,8 +498,11 @@ performance,datalink,datalink_miss,id=MSG1
 
 | Component | Status | Plugin File | Key Scenario Commands |
 | --- | --- | --- | --- |
-| Energy & G-Envelope Manager | ✅ Implemented | `plugins/energymanager.py` | `event`, `overg`, `energy` |
-| Threat Board | ✅ Implemented | `plugins/threatboard.py` | `spawn`, `engage`, `reprioritize`, `resolve` |
+| Energy & G-Envelope Manager | ✅ Implemented | `plugins/energymanager.py` | `event`, `overg`, `energy`, `warning` |
+| Weapons Inventory & Loadout | ✅ Implemented | `plugins/weaponsinventory.py` | `load`, `expend`, `reload` |
+| Threat Board | ✅ Implemented | `plugins/threatboard.py` | `spawn`, `engage`, `reprioritize`, `resolve`, `countermeasure` |
+| Weather/Visibility Layer | ✅ Implemented | `plugins/weatheroverlay.py` | `set`, `clear` |
+| Cockpit Audio Warnings | ✅ Implemented | `plugins/audioalerts.py` | `register`, `play`, `stopcue`, `volume` |
 | Emergency Stack | ✅ Implemented | `plugins/emergencystack.py` | `trigger`, `stepdone`, `resolve` |
 | Physio Overlay | ✅ Implemented | `plugins/physiooverlay.py` | `apply` (tint, duration) |
 | Automation Hooks | ✅ Implemented | `plugins/automationhooks.py` | Shared with UAS |
@@ -483,21 +512,19 @@ performance,datalink,datalink_miss,id=MSG1
 
 | Enhancement | Priority | Rationale | Implementation Notes |
 | --- | --- | --- | --- |
-| **G-Onset Ramp Visualisation** | High | Pilots need to anticipate G build-up; current plugin shows events only | Add graphical G-meter with predictive arc; emit `g_onset_warning` at configurable threshold |
-| **Weapons Inventory & Loadout** | High | Threat Board hints at weapon type but doesn't track inventory | New plugin `plugins/weaponsinventory.py` with `load`, `expend`, `reload` commands; emit `weapon_expended`, `weapon_empty` |
-| **Defensive Countermeasures** | Medium | Chaff/flare deployment under threat | Extend Threat Board or new plugin; scenario command `countermeasures;deploy;chaff,3` |
-| **Cockpit Audio Warnings** | Medium | Auditory alerts for over-G, threat proximity, emergency | Use WAV files triggered by plugin events; configurable via `audio;warning;overg.wav` |
 | **Helmet-Mounted Display (HMD) Mode** | Low | Simulate off-boresight cueing | Overlay target designator on tracking task; scenario command `hmd;cue;TH1` |
 
 ### 10.3 HPA Metrics Logging Requirements
 
 ```text
 # Energy Manager
-performance,energymanager,energy_event_schedule,name=ENGAGE,target_g=5.5,duration=35
+performance,energymanager,energy_event_schedule,name=ENGAGE,target_g=5.5,duration=35,delay=5
 performance,energymanager,energy_event_start,name=ENGAGE
 performance,energymanager,energy_event_complete,name=ENGAGE,cumulative_g_seconds=192
 performance,energymanager,energy_overg,g=6.3
 performance,energymanager,energy_alert,reserve=15
+performance,energymanager,energy_warning_config,threshold_g=5.0,lead_s=4.0
+performance,energymanager,g_onset_warning,name=ENGAGE,target_g=5.5,lead_s=3.0
 
 # Threat Board
 performance,threatboard,threat_spawn,id=TH1,sector=035,range=14,weapon=R73,tti=45
@@ -505,6 +532,20 @@ performance,threatboard,threat_engage,id=TH1,weapon=FOX3,latency_ms=2800
 performance,threatboard,threat_resolve,id=TH1,outcome=SPLASH
 performance,threatboard,threat_overdue,id=TH1
 performance,threatboard,threat_drop,id=TH1
+performance,threatboard,countermeasure_deploy,type=chaff,count=2,target=TH1
+performance,threatboard,countermeasure_low,chaff=1,flare=1
+
+# Audio Alerts
+performance,audioalerts,audio_register,cue=overg,path=includes/sounds/overg.wav
+performance,audioalerts,audio_play,cue=overg
+performance,audioalerts,audio_volume,value=0.75
+performance,audioalerts,audio_error,cue=overg,reason=pyglet_missing
+
+# Weapons Inventory
+performance,weaponsinventory,weapon_load,name=AIM9,count=4
+performance,weaponsinventory,weapon_expended,name=AIM9,count=1,remaining=3
+performance,weaponsinventory,weapon_reload,name=AIM9,count=2,remaining=5
+performance,weaponsinventory,weapon_empty,name=AIM9
 
 # Emergency Stack
 performance,emergencystack,emergency_trigger,id=HYD1,label=HYD_PRESS_LOW
