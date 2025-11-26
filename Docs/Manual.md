@@ -453,7 +453,6 @@ Based on the systematic review of HRV for pilot MWL (Wang, Houghton & Majumdar 2
 
 | Enhancement | Priority | Rationale | Implementation Notes |
 | --- | --- | --- | --- |
-| **Weather/Visibility Layer** | Low | Environmental factors affect UAS ops | Overlay weather icons; scenario command `environment;weather;IMC` |
 | **Voice Synthesis for Datalink** | Low | Auditory channel reduces visual overload | Use TTS for high-priority messages; configurable via `datalink;voice;True` |
 
 ### 9.3 UAS Metrics Logging Requirements
@@ -534,6 +533,10 @@ performance,threatboard,threat_overdue,id=TH1
 performance,threatboard,threat_drop,id=TH1
 performance,threatboard,countermeasure_deploy,type=chaff,count=2,target=TH1
 performance,threatboard,countermeasure_low,chaff=1,flare=1
+
+# Weather Overlay
+performance,weatheroverlay,weather_set,description=IMC ceiling 800ft
+performance,weatheroverlay,weather_clear,description=IMC ceiling 800ft
 
 # Audio Alerts
 performance,audioalerts,audio_register,cue=overg,path=includes/sounds/overg.wav
