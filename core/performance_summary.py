@@ -221,6 +221,7 @@ class PerformanceAggregator:
             'threatboard': self._threatboard_kpis,
             'energymanager': self._energymanager_kpis,
             'operatorcapacity': self._operatorcapacity_kpis,
+            'platformprofile': self._platformprofile_kpis,
         }
         builder = builders.get(module_name)
         return builder(metrics) if builder else {}
@@ -298,6 +299,29 @@ class PerformanceAggregator:
                 payload['breach_active_rate'] = active_rate
             if supervisory_rate is not None:
                 payload['breach_supervisory_rate'] = supervisory_rate
+        return payload
+
+    def _platformprofile_kpis(self, metrics: Mapping[str, MetricSummary]) -> Dict[str, Any]:
+        assignments = metrics.get('platform_profile_set')
+        endurance = metrics.get('platform_endurance_hours')
+        payload_capacity = metrics.get('platform_payload_capacity')
+        bandwidth = metrics.get('platform_bandwidth_limit')
+
+        payload: Dict[str, Any] = {}
+        if assignments and assignments.categorical.total:
+            payload['platform_counts'] = dict(assignments.categorical.counts)
+        if endurance and endurance.numeric.count:
+            payload['mean_endurance_hours'] = round(
+                endurance.numeric.sum_value / endurance.numeric.count, 3
+            )
+        if payload_capacity and payload_capacity.numeric.count:
+            payload['mean_payload_capacity'] = round(
+                payload_capacity.numeric.sum_value / payload_capacity.numeric.count, 3
+            )
+        if bandwidth and bandwidth.numeric.count:
+            payload['mean_bandwidth_limit'] = round(
+                bandwidth.numeric.sum_value / bandwidth.numeric.count, 3
+            )
         return payload
 
     @staticmethod
