@@ -197,6 +197,16 @@ class PerformanceAggregator:
             json.dump(summary, handle, indent=2, sort_keys=True)
         return path
 
+    def export_markdown(self, path: Path) -> Path:
+        """Render the summary as a Markdown report."""
+        summary = self.build_summary()
+        if not summary['modules']:
+            return path
+        lines: List[str] = self._build_markdown_lines(summary)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+        return path
+
     # ------------------------------------------------------------------
     def _build_domain_metrics(
         self,
@@ -283,3 +293,60 @@ class PerformanceAggregator:
             'violations': negatives,
         }
         return payload
+
+    # ------------------------------------------------------------------
+    def _build_markdown_lines(self, summary: Dict[str, Any]) -> List[str]:
+        lines = ['# Performance Summary',
+                 '',
+                 f"- Generated at: {summary.get('generated_at', 'n/a')}",
+                 f"- Scenario seconds: {summary.get('scenario_seconds', 0)}",
+                 f"- Started at: {summary.get('started_at', 'n/a')}"]
+        metadata = summary.get('metadata') or {}
+        if metadata:
+            lines.append('- Metadata:')
+            for key, value in sorted(metadata.items()):
+                lines.append(f"  - {key}: {value}")
+        lines.append('')
+
+        modules = summary.get('modules', {})
+        for module_name, payload in modules.items():
+            lines.append(f"## {module_name}")
+            derived = payload.get('derived')
+            if derived:
+                lines.append('')
+                lines.append('### Derived KPIs')
+                lines.append('| Metric | Value |')
+                lines.append('| --- | --- |')
+                for key, value in sorted(derived.items()):
+                    lines.append(f'| {key} | {value} |')
+            metrics = payload.get('metrics', {})
+            if metrics:
+                lines.append('')
+                lines.append('### Raw Metrics')
+                lines.append('| Metric | Count | Numeric | Categorical |')
+                lines.append('| --- | --- | --- | --- |')
+                for metric_name, report in sorted(metrics.items()):
+                    num_str = self._format_numeric(report.get('numeric'))
+                    cat_str = self._format_categorical(report.get('categorical'))
+                    lines.append(
+                        f'| {metric_name} | {report.get("count", 0)} | {num_str} | {cat_str} |'
+                    )
+            lines.append('')
+        return lines
+
+    @staticmethod
+    def _format_numeric(numeric: Optional[Mapping[str, Any]]) -> str:
+        if not numeric:
+            return ''
+        ordered = [f'{key}={numeric[key]}' for key in ('mean', 'min', 'max', 'last') if key in numeric]
+        if 'count' in numeric:
+            ordered.append(f"count={numeric['count']}")
+        return ', '.join(ordered)
+
+    @staticmethod
+    def _format_categorical(categorical: Optional[Mapping[str, Any]]) -> str:
+        if not categorical:
+            return ''
+        values = categorical.get('values', [])
+        formatted = [f"{entry['value']}({entry['count']})" for entry in values]
+        return ', '.join(formatted)
