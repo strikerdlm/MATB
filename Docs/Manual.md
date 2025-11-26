@@ -184,6 +184,14 @@ Log lines of type `state`/`performance` already capture widget values. Add domai
   - `audioalerts;volume;0.75` (sets default playback volume for all cues)
 - The plugin caches registered files, degrades gracefully if `pyglet`/audio hardware are missing, and logs `audio_register`, `audio_play`, `audio_stop`, `audio_volume`, and `audio_error` events so researchers can align auditory prompts with workload spikes. Pair this with Energy Manager or Threat Board rules to mimic ALR/voice callouts without hardcoding audio playback in every plugin.
 
+### Helmet-Mounted Display Cueing Implementation Status
+
+- Added `plugins/hmdoverlay.py`, which renders simplified off-boresight cues (label, azimuth, elevation, optional timeout) so experiments can script “look high-right” or “threat 20° low” prompts. Scenario commands:
+  - `hmdoverlay;cue;TH1,15,-5,3` – shows TH1 at +15° azimuth, -5° elevation for 3 seconds.
+  - `hmdoverlay;cue;LEAD,0,10` – persistent cue (no timeout) until `hmdoverlay;clear;`.
+  - `hmdoverlay;clear;` – removes the current cue immediately.
+- Metrics logged: `hmd_cue` (with label/angles/duration) and `hmd_clear` so analysts can sync gaze/head movement data with scripted cueing events. The widget defaults to “No HMD cue” when no overlay is active and automatically clears timed prompts when the duration elapses.
+
 ### Automation Hooks Implementation Status
 
 - Added `plugins/automationhooks.py`, which provides a central place to flip other modules between manual and auto modes. Scenario rule syntax:
@@ -502,6 +510,7 @@ performance,datalink,datalink_miss,id=MSG1
 | Threat Board | ✅ Implemented | `plugins/threatboard.py` | `spawn`, `engage`, `reprioritize`, `resolve`, `countermeasure` |
 | Weather/Visibility Layer | ✅ Implemented | `plugins/weatheroverlay.py` | `set`, `clear` |
 | Cockpit Audio Warnings | ✅ Implemented | `plugins/audioalerts.py` | `register`, `play`, `stopcue`, `volume` |
+| Helmet-Mounted Display (HMD) Cueing | ✅ Implemented | `plugins/hmdoverlay.py` | `cue`, `clear` |
 | Composite Scoring | ✅ Implemented | `plugins/compositescore.py` | `baseline`, `weights`, `ingest`, `reset` |
 | Emergency Stack | ✅ Implemented | `plugins/emergencystack.py` | `trigger`, `stepdone`, `resolve` |
 | Physio Overlay | ✅ Implemented | `plugins/physiooverlay.py` | `apply` (tint, duration) |
@@ -512,7 +521,6 @@ performance,datalink,datalink_miss,id=MSG1
 
 | Enhancement | Priority | Rationale | Implementation Notes |
 | --- | --- | --- | --- |
-| **Helmet-Mounted Display (HMD) Mode** | Low | Simulate off-boresight cueing | Overlay target designator on tracking task; scenario command `hmd;cue;TH1` |
 
 ### 10.3 HPA Metrics Logging Requirements
 
@@ -544,6 +552,9 @@ performance,audioalerts,audio_register,cue=overg,path=includes/sounds/overg.wav
 performance,audioalerts,audio_play,cue=overg
 performance,audioalerts,audio_volume,value=0.75
 performance,audioalerts,audio_error,cue=overg,reason=pyglet_missing
+# HMD Overlay
+performance,hmdoverlay,hmd_cue,label=TH1,az=15,el=-5,duration=3
+performance,hmdoverlay,hmd_clear,label=TH1
 # Composite Score
 performance,compositescore,composite_baseline,start
 performance,compositescore,composite_baseline,stop
