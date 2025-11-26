@@ -2,6 +2,10 @@
 # Institut National Universitaire Champollion (Albi, France).
 # License : CeCILL, version 2.1 (see the LICENSE file)
 
+import hashlib
+import json
+import shutil
+import subprocess
 from collections import namedtuple
 from time import perf_counter
 from datetime import datetime
@@ -31,15 +35,22 @@ class Logger:
         self.queue = list()
         self.path: Optional[Path] = None
         self.summary_path: Optional[Path] = None
+        self.markdown_path: Optional[Path] = None
+        self.session_dir: Optional[Path] = None
         self.performance_summary = PerformanceAggregator()
+        self._artifacts_captured = False
+        self.provenance_info: Dict[str, Optional[str]] = {}
+        self._provenance_version = 0
 
         if not REPLAY_MODE:
-            self.path = PATHS['SESSIONS'].joinpath(
+            self.session_dir = PATHS['SESSIONS'].joinpath(
                 self.datetime.strftime("%Y-%m-%d"),
-                f'{self.session_id}_{self.datetime.strftime("%y%m%d_%H%M%S")}.csv',
+                f'{self.session_id}_{self.datetime.strftime("%y%m%d_%H%M%S")}',
             )
-            self.summary_path = self.path.with_suffix('.summary.json')
-            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.session_dir.mkdir(parents=True, exist_ok=True)
+            self.path = self.session_dir / 'events.csv'
+            self.summary_path = self.session_dir / 'summary.json'
+            self.markdown_path = self.session_dir / 'summary.md'
             self.open()
 
     # TODO: see if we can/should merge record_* methods into one
@@ -85,10 +96,48 @@ class Logger:
 
     def record_config_snapshot(self, plugin: str, config: Dict[str, Any]) -> None:
         """Record a plugin's full configuration snapshot."""
-        import json
         config_str = json.dumps(config, default=str, sort_keys=True)
         slot = [perf_counter(), self.scenario_time, 'config', plugin, 'snapshot', config_str]
         self.write_single_slot(slot)
+
+    def capture_run_artifacts(self, scenario_path: Optional[Path]) -> None:
+        """Persist scenario/config snapshots and plugin versions for reproducibility."""
+        if self.session_dir is None or self._artifacts_captured:
+            return
+
+        scenario_hash_value: Optional[str] = None
+        scenario_name = 'n/a'
+        scenario_path_obj = Path(scenario_path) if scenario_path is not None else None
+
+        if scenario_path_obj is not None and scenario_path_obj.exists():
+            dest = self.session_dir.joinpath('scenario_snapshot.txt')
+            shutil.copy2(scenario_path_obj, dest)
+            scenario_hash_value = self._hash_file(scenario_path_obj)
+            hash_path = self.session_dir.joinpath('scenario_hash.txt')
+            hash_path.write_text(f'{scenario_hash_value}\n', encoding='utf-8')
+            self.record_scenario_version(str(scenario_path_obj), scenario_hash_value)
+            scenario_name = scenario_path_obj.name
+
+        config_path = PATHS['PLUGINS'].parent.joinpath('config.ini')
+        config_snapshot_path: Optional[Path] = None
+        if config_path.exists():
+            config_snapshot_path = self.session_dir.joinpath('config_snapshot.ini')
+            shutil.copy2(config_path, config_snapshot_path)
+
+        plugin_versions_path = self.session_dir.joinpath('plugin_versions.json')
+        self._write_plugin_versions(plugin_versions_path)
+        self._artifacts_captured = True
+
+        self.provenance_info = {
+            'scenario': scenario_name,
+            'scenario_hash': scenario_hash_value,
+            'session_dir': str(self.session_dir) if self.session_dir else None,
+            'config_snapshot': str(config_snapshot_path) if config_snapshot_path else None,
+            'plugin_versions': str(plugin_versions_path),
+            'summary_json': str(self.summary_path) if self.summary_path else None,
+            'summary_markdown': str(self.markdown_path) if self.markdown_path else None,
+        }
+        self._provenance_version += 1
 
 
     def log_performance(self, module, metric, value):
@@ -207,8 +256,58 @@ class Logger:
             return
         try:
             self.performance_summary.export(self.summary_path)
+            if self.markdown_path is not None:
+                self.performance_summary.export_markdown(self.markdown_path)
         except OSError as exc:
             self.log_manual_entry(f'Unable to write performance summary: {exc}', key='error')
+
+    def persist_scenario_contents(self, contents) -> Optional[Path]:
+        """Persist inline scenario contents so artifacts can be captured."""
+        if self.session_dir is None or contents is None:
+            return None
+        scenario_file = self.session_dir.joinpath('scenario_inline.txt')
+        if isinstance(contents, str):
+            text = contents
+        else:
+            text = ''.join(contents)
+        scenario_file.write_text(text, encoding='utf-8')
+        return scenario_file
+
+    def get_provenance_snapshot(self) -> tuple[Dict[str, Optional[str]], int]:
+        """Expose current provenance info and version counter."""
+        return dict(self.provenance_info), self._provenance_version
+
+    def _write_plugin_versions(self, target: Path) -> None:
+        versions: Dict[str, str] = {}
+        plugins_dir = PATHS.get('PLUGINS')
+        if plugins_dir and plugins_dir.exists():
+            for plugin_file in sorted(plugins_dir.glob('*.py')):
+                if plugin_file.name.startswith('__'):
+                    continue
+                versions[plugin_file.stem] = self._git_revision_for(plugin_file)
+        target.write_text(json.dumps(versions, indent=2, sort_keys=True), encoding='utf-8')
+
+    @staticmethod
+    def _hash_file(source: Path) -> str:
+        digest = hashlib.sha256()
+        with source.open('rb') as handle:
+            for chunk in iter(lambda: handle.read(65536), b''):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    @staticmethod
+    def _git_revision_for(path: Path) -> str:
+        try:
+            result = subprocess.run(
+                ['git', 'log', '-1', '--pretty=%H', '--', str(path)],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            revision = result.stdout.strip()
+            return revision or 'unknown'
+        except (subprocess.SubprocessError, FileNotFoundError):
+            return 'unknown'
 
 
 logger = Logger()
