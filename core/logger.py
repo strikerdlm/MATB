@@ -380,6 +380,15 @@ class Logger:
         digits = ''.join(ch for ch in value if ch.isdigit())
         return digits.zfill(4) if digits else '0000'
 
+    def get_session_directory(self) -> Optional[Path]:
+        return self.session_dir
+
+    def get_summary_markdown_path(self) -> Optional[Path]:
+        return self.markdown_path
+
+    def get_summary_json_path(self) -> Optional[Path]:
+        return self.summary_path
+
     def _write_plugin_versions(self, target: Path) -> None:
         versions: Dict[str, str] = {}
         plugins_dir = PATHS.get('PLUGINS')
