@@ -457,6 +457,27 @@ class TestWeaponsInventory:
         assert plugin.stocks['AIM9'].remaining == 3
 
 
+class TestAudioAlerts:
+    """Tests for the Audio Alerts plugin."""
+
+    def setup_method(self) -> None:
+        self.module = _load_plugin('audioalerts')
+        self.Audioalerts = self.module.Audioalerts
+
+    def test_register_and_widget_state(self) -> None:
+        plugin = self.Audioalerts()
+        plugin.logger = MockLogger()
+        plugin.register('warning,dummy.wav')
+        assert 'warning' in plugin.registry
+        assert plugin.registry['warning'].name == 'dummy.wav'
+
+    def test_play_without_pyglet_logs_error(self) -> None:
+        plugin = self.Audioalerts()
+        plugin.logger = MockLogger()
+        plugin.register('warning,dummy.wav')
+        self.module.pyglet = None  # type: ignore[attr-defined]
+        plugin.play('warning')
+        assert any(record['name'] == 'audio_error' for record in plugin.logger.records)
 class TestEmergencyStack:
     """Tests for the Emergency Stack plugin."""
 
