@@ -146,6 +146,10 @@ These summaries make it easier to reproduce the standardized workload bands desc
 
 Section 14.1 of [Docs/Manual.md](Docs/Manual.md) is now backed by an `operatorcapacity` plugin that enforces the validated “2–3 active / up to 6 supervisory” crew bands from the multi-UAV workload studies. Scenario designers can inject commands such as `operatorcapacity;set;active,2` or `operatorcapacity;set;supervisory,uav1|uav2|uav3|uav4|uav5` to log the live portfolio, while `operatorcapacity;overlap;uav1,uav2,0.65` feeds the overlap-driven supervisory limit described in the manual. The plugin widget flashes when limits are exceeded and the logger emits `operator_capacity_*` metrics so the mission summary can quantify average load, breach rate, and overlap trends alongside the rest of the MATB instrumentation.
 
+### Platform profile orchestration
+
+To satisfy the Section 14.2 ScanEagle/NightEagle requirements, the new `platformprofile` plugin keeps a per-UAV capability table (endurance, payload, launch/recovery method, datalink capacity, and sensor presets). Commands like `platformprofile;set;uav1,scaneagle,endurance=20h|sensors=EO/IR` instantly update the on-screen profile sheet, push endurance timers into `missiondirector`, and retune `payloadmanager` capacity/sensor lists via the shared plugin bridge. Key events (`platform_profile_set`, `platform_endurance_push`, `platform_payload_push`) are logged so performance summaries can trace when a scenario switched platforms or triggered custom overrides.
+
 ### Platform profile synchronization
 
 Section 14.2’s ScanEagle/NightEagle guidance now ships as `platformprofile`. Use `platformprofile;set;uav1,scaneagle` (optionally followed by overrides such as `payload=4.1`) to associate mission assets with their endurance/payload/launch constraints. The plugin displays the active mapping, logs `platform_profile_*` metrics, and feeds the mission summary with mean endurance/payload/bandwidth values so downstream analytics or automation hooks can tailor Mission Director and Payload Manager parameters to each airframe.
