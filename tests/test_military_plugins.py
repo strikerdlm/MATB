@@ -9,6 +9,10 @@ from types import ModuleType
 from typing import Any, Dict, List, Optional
 from unittest.mock import MagicMock
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 # Mock gettext for testing
 import builtins
 if not hasattr(builtins, '_'):
@@ -158,6 +162,30 @@ class TestMissionDirector:
         plugin.conflict('UAV1,geofence')
         assert 'geofence' in plugin.uav_state['UAV1']['alert']
 
+    def test_endurance_tracking_triggers_alert(self) -> None:
+        plugin = self.Missiondirector()
+        plugin.logger = MockLogger()
+        plugin.scenario_time = 0.0
+        plugin._initialise_uavs()
+        plugin.endurance('UAV1,30,10')
+        plugin.scenario_time = 15.0
+        plugin._update_endurance_alerts()
+        assert plugin.uav_state['UAV1']['endurance_alerted'] is False
+        plugin.scenario_time = 25.0
+        plugin._update_endurance_alerts()
+        assert plugin.uav_state['UAV1']['endurance_alerted'] is True
+        assert any(r['name'] == 'mission_endurance_low' for r in plugin.logger.records)
+
+    def test_handover_logging(self) -> None:
+        plugin = self.Missiondirector()
+        plugin.logger = MockLogger()
+        plugin._initialise_uavs()
+        plugin.handover('UAV1,GCS2,start')
+        plugin.handover('UAV1,GCS2,complete')
+        names = [record['name'] for record in plugin.logger.records]
+        assert 'mission_handover_initiate' in names
+        assert 'mission_handover_complete' in names
+
 
 class TestSenseAndAvoid:
     """Tests for the Sense and Avoid plugin."""
@@ -204,6 +232,16 @@ class TestSenseAndAvoid:
         plugin.spawn('INT1,090,2.5,300,45')
         plugin.clear('INT1')
         assert 'INT1' not in plugin.intruders
+
+    def test_geofence_breach_and_recover(self) -> None:
+        plugin = self.Senseandavoid()
+        plugin.logger = MockLogger()
+        plugin.geofence('0|0,1|0,1|1,0|1')
+        plugin.position('UAV1,0.2,0.2')
+        plugin.position('UAV1,1.2,1.2')
+        assert any(r['name'] == 'geofence_breach' for r in plugin.logger.records)
+        plugin.position('UAV1,0.5,0.5')
+        assert any(r['name'] == 'geofence_recover' for r in plugin.logger.records)
 
 
 class TestPayloadManager:
