@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from core import validation
 from core.constants import COLORS as C, FONT_SIZES as F
@@ -20,14 +20,16 @@ class Missiondirector(AbstractPlugin):
         self.validation_dict = {
             'maxuavs': validation.is_positive_integer,
             'uavlabels': validation.is_string,
+            'defaultendurancewarningsec': validation.is_positive_integer,
         }
 
         self.parameters.update({
             'maxuavs': 4,
             'uavlabels': 'UAV1,UAV2,UAV3,UAV4',
+            'defaultendurancewarningsec': 300,
         })
 
-        self.uav_state: Dict[str, Dict[str, Optional[str]]] = {}
+        self.uav_state: Dict[str, Dict[str, Any]] = {}
         self._widgets: Dict[str, Simpletext] = {}
 
     def start(self) -> None:
@@ -36,7 +38,7 @@ class Missiondirector(AbstractPlugin):
 
     def create_widgets(self) -> None:
         super().create_widgets()
-        header = _('UAV | Mission | Mode | Remaining | Alert')
+        header = _('UAV | Mission | Mode | Task | Endurance | Alert')
         self.add_widget(
             'header',
             Simpletext,
@@ -66,6 +68,7 @@ class Missiondirector(AbstractPlugin):
             return False
         for name in self.uav_state.keys():
             self._widgets[name].set_text(self._format_status(name))
+        self._update_endurance_alerts()
         return True
 
     # Scenario commands -------------------------------------------------
@@ -121,15 +124,51 @@ class Missiondirector(AbstractPlugin):
         alert = _('Conflict: {}').format(parts[1])
         self.uav_state[label]['alert'] = alert
         self.log_performance('mission_alert', f'{label}:{alert}')
-        self._set_overdue(True)
+        self._refresh_overdue_indicator()
 
     def clearconflict(self, payload: str) -> None:
         label = self._canonical_label(payload)
         if label not in self.uav_state:
             return
         self.uav_state[label]['alert'] = ''
-        any_alerts = any(uav.get('alert') for uav in self.uav_state.values())
-        self._set_overdue(any_alerts)
+        self._refresh_overdue_indicator()
+
+    def endurance(self, payload: str) -> None:
+        parts = self._split_payload(payload, expected_min=2)
+        if not parts:
+            return
+        label = self._canonical_label(parts[0])
+        if label not in self.uav_state:
+            return
+        duration_sec = self._parse_duration(parts[1])
+        threshold_sec = self._parse_duration(parts[2]) if len(parts) > 2 else int(
+            self.parameters.get('defaultendurancewarningsec', 300)
+        )
+        state = self.uav_state[label]
+        state['endurance_start'] = self.scenario_time
+        state['endurance_duration'] = max(0, duration_sec)
+        state['endurance_threshold'] = max(0, threshold_sec)
+        state['endurance_alerted'] = False
+        self.log_performance('mission_endurance_set', f'{label}:{duration_sec}:{threshold_sec}')
+        self._refresh_overdue_indicator()
+
+    def handover(self, payload: str) -> None:
+        parts = self._split_payload(payload, expected_min=2)
+        if not parts:
+            return
+        label = self._canonical_label(parts[0])
+        if label not in self.uav_state:
+            return
+        target = parts[1]
+        status = parts[2].lower() if len(parts) > 2 else 'start'
+        state = self.uav_state[label]
+        if status in ('start', 'init', 'initiate', 'begin'):
+            state['handover_active'] = True
+            state['handover_target'] = target
+            self.log_performance('mission_handover_initiate', f'{label}:{target}')
+        elif status in ('complete', 'end', 'stop'):
+            state['handover_active'] = False
+            self.log_performance('mission_handover_complete', f'{label}:{target}')
 
     # Helpers -----------------------------------------------------------
     def _initialise_uavs(self) -> None:
@@ -143,6 +182,12 @@ class Missiondirector(AbstractPlugin):
                 'start': None,
                 'duration': 0,
                 'alert': '',
+                'endurance_start': None,
+                'endurance_duration': 0,
+                'endurance_threshold': int(self.parameters.get('defaultendurancewarningsec', 300)),
+                'endurance_alerted': False,
+                'handover_active': False,
+                'handover_target': '',
             }
             for label in labels
         }
@@ -171,11 +216,12 @@ class Missiondirector(AbstractPlugin):
 
     def _format_status(self, label: str) -> str:
         state = self.uav_state[label]
-        remaining = self._remaining_time(state)
-        alert = state.get('alert') or ''
-        return f"{label} | {state['mission']} | {state['mode']} | {remaining} | {alert}"
+        task_remaining = self._remaining_time(state)
+        endurance = self._format_endurance(state)
+        alert = self._format_alert(state)
+        return f"{label} | {state['mission']} | {state['mode']} | {task_remaining} | {endurance} | {alert}"
 
-    def _remaining_time(self, state: Dict[str, Optional[str]]) -> str:
+    def _remaining_time(self, state: Dict[str, Any]) -> str:
         start = state.get('start')
         duration = state.get('duration') or 0
         if start is None or duration <= 0:
@@ -185,6 +231,60 @@ class Missiondirector(AbstractPlugin):
         minutes = int(remaining // 60)
         seconds = int(remaining % 60)
         return f'{minutes:02d}:{seconds:02d}'
+
+    def _format_endurance(self, state: Dict[str, Any]) -> str:
+        remaining = self._remaining_endurance(state)
+        if remaining is None:
+            return _('N/A')
+        minutes = int(remaining // 60)
+        seconds = int(remaining % 60)
+        return f'{minutes:02d}:{seconds:02d}'
+
+    def _remaining_endurance(self, state: Dict[str, Any]) -> Optional[float]:
+        start = state.get('endurance_start')
+        duration = float(state.get('endurance_duration') or 0)
+        if start is None or duration <= 0:
+            return None
+        elapsed = max(0.0, self.scenario_time - float(start))
+        return max(0.0, duration - elapsed)
+
+    def _format_alert(self, state: Dict[str, Any]) -> str:
+        segments = []
+        alert_text = state.get('alert')
+        if alert_text:
+            segments.append(str(alert_text))
+        if state.get('handover_active'):
+            target = state.get('handover_target') or _('Unknown')
+            segments.append(_('Handover→{}').format(target))
+        if state.get('endurance_alerted'):
+            segments.append(_('Endurance Low'))
+        return ' '.join(segments).strip()
+
+    def _update_endurance_alerts(self) -> None:
+        updated = False
+        for label, state in self.uav_state.items():
+            remaining = self._remaining_endurance(state)
+            threshold = float(state.get('endurance_threshold') or 0)
+            if remaining is None or threshold <= 0:
+                if state.get('endurance_alerted'):
+                    state['endurance_alerted'] = False
+                    updated = True
+                continue
+            if remaining <= threshold:
+                if not state.get('endurance_alerted'):
+                    state['endurance_alerted'] = True
+                    self.log_performance('mission_endurance_low', f'{label}:{remaining:.1f}')
+                    updated = True
+            elif state.get('endurance_alerted'):
+                state['endurance_alerted'] = False
+                updated = True
+        if updated:
+            self._refresh_overdue_indicator()
+
+    def _refresh_overdue_indicator(self) -> None:
+        has_conflict = any(bool(state.get('alert')) for state in self.uav_state.values())
+        has_endurance_issue = any(state.get('endurance_alerted') for state in self.uav_state.values())
+        self._set_overdue(has_conflict or has_endurance_issue)
 
     def _set_overdue(self, active: bool) -> None:
         overdue = self.parameters['taskfeedback']['overdue']
