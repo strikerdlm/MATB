@@ -483,7 +483,7 @@ Based on the systematic review of HRV for pilot MWL (Wang, Houghton & Majumdar 2
 | Failure Injector | ✅ Implemented | `plugins/failureinjector.py` | `schedule` |
 | Automation Hooks | ✅ Implemented | `plugins/automationhooks.py` | `rule`, `enable`, `disable` |
 | Operator Capacity Monitor | ✅ Implemented | `plugins/operatorcapacity.py` | `set`, `overlap` |
-| Platform Profiles | ✅ Implemented | `plugins/platformprofile.py` | `set`, `define`, `clear` |
+| Platform Profiles | ✅ Implemented | `plugins/platformprofile.py` | `set`, `clear`, `catalog` |
 
 ### 9.2 Pending UAS Enhancements
 
@@ -525,10 +525,10 @@ performance,datalink,datalink_ack,id=MSG1,response_time_ms=4500
 performance,datalink,datalink_miss,id=MSG1
 
 # Platform Profiles
-performance,platformprofile,platform_profile_set,uav1|identifier=ScanEagle
-performance,platformprofile,platform_endurance_hours,24.0
-performance,platformprofile,platform_payload_capacity,3.4
-performance,platformprofile,platform_bandwidth_limit,18.0
+performance,platformprofile,platform_profile_set,uav=UAV1,id=scaneagle,endurance_s=86400
+performance,platformprofile,platform_profile_override,uav=UAV1,key=endurance_sec,value=72000
+performance,platformprofile,platform_endurance_push,uav=UAV1,duration_s=86400,warning_s=900
+performance,platformprofile,platform_payload_push,name=ScanEagle,capacity_mbps=45.0
 
 # Operator Capacity
 performance,operatorcapacity,operator_capacity_active,2
@@ -770,6 +770,8 @@ This section synthesizes findings from systematic reviews, military UAS operator
    - Scenario commands: `platformprofile;set;uav1,scaneagle`, `platformprofile;set;uav2,nighteagle`
    - Automatically adjust Mission Director endurance limits, payload manager capacity, and sensor options based on platform type
    - Log `platform_profile_set` with platform identifier and parameter snapshot
+
+   **Implementation note:** The shipping plugin keeps a live table of every assigned UAV, pushes endurance timers into `missiondirector`, retunes `payloadmanager` bandwidth/sensor presets via `apply_platform_profile`, and logs `platform_profile_*` plus `platform_endurance_push`/`platform_payload_push` events so summaries can correlate capability switches with downstream workload metrics.
 
    **Implementation note:** The production plugin ships with ScanEagle, NightEagle, VTOL-45, and Generic profiles baked in; assignments immediately log `platform_endurance_hours`, `platform_payload_capacity`, and `platform_bandwidth_limit` so Performance Summary computes average endurance/payload bands per sortie. Overrides (e.g., `platformprofile;set;uav3,vtol45,endurance=1.2`) let researchers tweak endurance or payload without editing code, and `platformprofile;define;...` registers entirely new airframes for classified fleets.
 
