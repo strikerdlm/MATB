@@ -6,7 +6,18 @@ import random
 from core.constants import REPLAY_MODE
 from core.utils import find_the_last_session_number
 from core.logger import logger
-from rstr import xeger as rstrxeger
+
+try:
+	from rstr import xeger as rstrxeger
+except ImportError:
+	def _missing_rstr(pattern: str) -> str:
+		"""Fallback when optional rstr dependency is unavailable."""
+		raise ImportError(
+			'rstr is required for regex-based pseudorandom generation; '
+			'install the optional dependency or disable calls to core.pseudorandom.xeger'
+		)
+
+	rstrxeger = _missing_rstr
 
 
 SESSION_ID = logger.session_id if REPLAY_MODE == False else find_the_last_session_number()
