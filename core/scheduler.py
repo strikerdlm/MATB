@@ -37,6 +37,12 @@ class Scheduler:
 
     def set_scenario(self, events = None):
         self.scenario = Scenario(events)
+        scenario_label = None
+        if self.scenario.source_path is not None:
+            scenario_label = str(self.scenario.source_path)
+        elif events is not None:
+            scenario_label = 'inline-scenario'
+        logger.start_performance_summary(scenario_label)
 
         self.events = self.scenario.events
         self.plugins = self.scenario.plugins
@@ -261,6 +267,7 @@ class Scheduler:
 
 
     def exit(self):
+        logger.finalize_performance_summary()
         logger.log_manual_entry('end')
         self.event_loop.exit()
         Window.MainWindow.close() # needed for windows clean exit

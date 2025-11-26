@@ -6,8 +6,11 @@ from collections import namedtuple
 from time import perf_counter
 from datetime import datetime
 from csv import DictWriter
+from pathlib import Path
+from typing import Any, Dict, Optional
 from core.constants import PATHS, REPLAY_MODE
-from core.utils import find_the_first_available_session_number, find_the_last_session_number
+from core.utils import find_the_first_available_session_number
+from core.performance_summary import PerformanceAggregator
 
 class Logger:
     def __init__(self):
@@ -26,10 +29,16 @@ class Logger:
         self.file = None
         self.writer = None
         self.queue = list()
+        self.path: Optional[Path] = None
+        self.summary_path: Optional[Path] = None
+        self.performance_summary = PerformanceAggregator()
 
         if not REPLAY_MODE:
-            self.path = PATHS['SESSIONS'].joinpath(self.datetime.strftime("%Y-%m-%d"),
-                                f'{self.session_id}_{self.datetime.strftime("%y%m%d_%H%M%S")}.csv')
+            self.path = PATHS['SESSIONS'].joinpath(
+                self.datetime.strftime("%Y-%m-%d"),
+                f'{self.session_id}_{self.datetime.strftime("%y%m%d_%H%M%S")}.csv',
+            )
+            self.summary_path = self.path.with_suffix('.summary.json')
             self.path.parent.mkdir(parents=True, exist_ok=True)
             self.open()
 
@@ -73,6 +82,7 @@ class Logger:
     def log_performance(self, module, metric, value):
         slot = [perf_counter(), self.scenario_time, 'performance', module, metric, value]
         self.write_single_slot(slot)
+        self.performance_summary.record(module, metric, value)
 
 
     def record_a_pseudorandom_value(self, module, seed, output):
@@ -152,6 +162,25 @@ class Logger:
 
     def set_scenario_time(self, scenario_time):
         self.scenario_time = scenario_time
+        self.performance_summary.update_scenario_time(scenario_time)
+
+
+    def start_performance_summary(self, scenario_label: Optional[str] = None) -> None:
+        metadata: Dict[str, Any] = {'session_id': self.session_id}
+        if scenario_label:
+            metadata['scenario'] = scenario_label
+        if self.path is not None:
+            metadata['log_path'] = str(self.path)
+        self.performance_summary.reset(metadata)
+
+
+    def finalize_performance_summary(self) -> None:
+        if self.summary_path is None:
+            return
+        try:
+            self.performance_summary.export(self.summary_path)
+        except OSError as exc:
+            self.log_manual_entry(f'Unable to write performance summary: {exc}', key='error')
 
 
 logger = Logger()

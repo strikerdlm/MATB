@@ -22,12 +22,14 @@ class Scenario:
     def __init__(self, contents=None):
         self.events = list()
         self.plugins = dict()
+        self.source_path = None
 
         if contents is None:
             scenario_path = P['SCENARIOS'].joinpath(get_conf_value('Openmatb', 'scenario_path'))
             if scenario_path.exists():
                 contents = open(scenario_path, 'r').readlines()
                 logger.log_manual_entry(scenario_path, key='scenario_path')
+                self.source_path = scenario_path
             else:
                 errors.add_error(_('%s was not found') % str(scenario_path), fatal = True)
 

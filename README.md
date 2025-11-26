@@ -132,6 +132,16 @@ logtime,totaltime,scenario_time,type,module,address,value
 
 Details about how each module log information are available [here](the log file).
 
+### Mission-level KPI summaries
+
+To align with the reliability guidance from [Docs/Manual.md](Docs/Manual.md) and the USAARL/USAF research corpus (e.g., [Multi Attribute Task Battery for Military Aircrew Assessment A Comprehensive Research Report](research/Multi Attribute Task Battery for Military Aircrew Assessment A Comprehensive Research Report.md)), OpenMATB now emits an automatic mission-level summary alongside the raw CSV logs. After every run, a JSON file named like `sessions/YYYY-MM-DD/<session>_summary.json` lists:
+
+- Count/mean/max/min snapshots for every metric recorded via `log_performance`.
+- Derived KPIs for new science-driven plugins (`missiondirector`, `senseandavoid`, `payloadmanager`, `datalink`, `threatboard`, `energymanager`) such as mission completion rate, conflict resolution rate, datalink acknowledgement rate, and over-G incidence.
+- Scenario metadata (session id, scenario file, run duration) so researchers can trace summaries back to raw logs or physiological streams.
+
+These summaries make it easier to reproduce the standardized workload bands described in the military MATB literature while keeping the raw CSV pipeline unchanged.
+
 ## Tutorials
 
 For more information about how to use OpenMATB, please refers to [our wiki](https://github.com/juliencegarra/OpenMATB/wiki).
