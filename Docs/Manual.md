@@ -593,4 +593,25 @@ Before any scenario is declared "assessment-ready", verify:
 
 ---
 
+## 14. Documentation Alignment Plan
+
+To keep the shipped application, the wiki (`Docs/OpenMATB.wiki`), and this manual in sync, execute the following loop every release:
+
+1. **Baseline Audit (Week 1)**  
+   - Review `Home.md`, `How-to-install-OpenMATB.md`, and `The-configuration-file-(config.ini).md` to ensure they reference the `[User]` section, per-user session folders, and the new provenance banner.  
+   - Verify that every link under “Basic features” points to current plugin behaviour (compare against `plugins/*.py` commits referenced in `plugin_versions.json`).
+
+2. **Advanced Module Update (Week 2)**  
+   - Author new wiki pages for the UAS/HPA plugins (`missiondirector`, `senseandavoid`, `payloadmanager`, `datalink`, `energymanager`, `threatboard`, `emergencystack`, `automationhooks`, `failureinjector`, `physiomonitor`, `polarrlink`, `physiooverlay`).  
+   - Cross-link these pages from `Home.md` and `Main-differences-between-the-published-implementations...md`.
+
+3. **Analytics & Export Guidance (Week 3)**  
+   - Expand `Sample-script-Replication...md` and `How-to-modify-automatic-performance-computation.md` with instructions on consuming `summary.json`, `summary.md`, and `history.json`.  
+   - Add a “Data management” page explaining `sessions/users_index.json`, per-user `history.json`, hotkeys (F6/F7), and integration tips for neurophysiology teams.
+
+4. **Verification & Sign-off (Week 4)**  
+   - Run the regression suite plus a documentation lint (check for stale links).  
+   - Capture screenshots of the provenance banner and attach them to `Internationalization.md` to confirm translations.  
+   - Record outcomes in `Docs/OpenMATB.wiki/How-to-build-a-scenario-file.md` (append “Release QA” section) and log the doc version in `Docs/Manual.md`.
+
 Implementation credit: **Dr Diego Malpica, Aerospace Medicine**.
