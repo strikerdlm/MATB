@@ -201,3 +201,15 @@ def is_available_text_file(x):
         return x, None
     else:
         return None, _('should be available either in the Instruction or Questionnaire folder (not %s)') % x
+
+
+def is_difficulty_level(x):
+    """Validate difficulty level (1-10 scale)."""
+    msg = _('should be an integer between 1 and 10 (not %s)') % x
+    try:
+        x = int(eval(x))
+    except (ValueError, SyntaxError, NameError):
+        return None, msg
+    if 1 <= x <= 10:
+        return x, None
+    return None, msg
