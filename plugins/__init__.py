@@ -27,3 +27,4 @@ from .physiooverlay import Physiooverlay
 from .automationhooks import Automationhooks
 from .failureinjector import Failureinjector
 from .operatorcapacity import Operatorcapacity
+from .platformprofile import Platformprofile
