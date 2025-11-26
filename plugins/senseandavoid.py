@@ -3,8 +3,9 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Set, Tuple
 
 from core import validation
 from core.constants import COLORS as C, FONT_SIZES as F
@@ -30,6 +31,9 @@ class Intruder:
         return max(0.0, self.time_to_conflict - (now - self.created_at))
 
 
+GRID_SIZE = 12
+
+
 class Senseandavoid(AbstractPlugin):
     """Provides intruder tracking and sense-and-avoid prompts."""
 
@@ -47,7 +51,11 @@ class Senseandavoid(AbstractPlugin):
         })
 
         self.intruders: Dict[str, Intruder] = {}
-        self._widget: Optional[Simpletext] = None
+        self._intruder_widget: Optional[Simpletext] = None
+        self._geofence_widget: Optional[Simpletext] = None
+        self.geofence_polygon: List[Tuple[float, float]] = []
+        self.uav_positions: Dict[str, Tuple[float, float]] = {}
+        self._breach_flags: Set[str] = set()
 
         self.parameters['taskfeedback']['overdue'].update({
             'active': True,
@@ -69,7 +77,7 @@ class Senseandavoid(AbstractPlugin):
             color=C['WHITE'],
             bold=True,
         )
-        self._widget = self.add_widget(
+        self._intruder_widget = self.add_widget(
             'intruders',
             Simpletext,
             container=self.task_container,
@@ -79,12 +87,23 @@ class Senseandavoid(AbstractPlugin):
             wrap_width=0.95,
             color=C['WHITE'],
         )
+        self._geofence_widget = self.add_widget(
+            'geofence_overlay',
+            Simpletext,
+            container=self.task_container,
+            text=_('Geofence overlay inactive.'),
+            font_size=F['SMALL'],
+            y=0.3,
+            wrap_width=0.95,
+            color=C['GREEN'],
+        )
 
     def refresh_widgets(self) -> bool:
         if not super().refresh_widgets():
             return False
-        self._update_widget_text()
+        self._update_intruder_widget()
         self._update_overdue_state()
+        self._update_geofence_widget()
         return True
 
     # Scenario commands -------------------------------------------------
@@ -148,6 +167,47 @@ class Senseandavoid(AbstractPlugin):
             return
         self.log_performance('saa_thresholds', f"{self.parameters['horizontalthresholdnm']}:{self.parameters['verticalthresholdft']}")
 
+    def geofence(self, payload: str) -> None:
+        """
+        Define or clear the geofence polygon.
+        Payload: list of x|y coordinate pairs in [0,1] (e.g., 0.1|0.1,0.9|0.1,...)
+        Pass 'clear' to remove the geofence.
+        """
+        if not payload:
+            return
+        if payload.strip().lower() == 'clear':
+            self.geofence_polygon = []
+            if self._breach_flags:
+                for label in list(self._breach_flags):
+                    self.log_performance('geofence_recover', f'{label}:clear')
+                self._breach_flags.clear()
+            self.log_performance('geofence_config', 'cleared')
+            return
+        vertices = self._parse_geofence_vertices(payload)
+        if len(vertices) < 3:
+            return
+        self.geofence_polygon = vertices
+        self._breach_flags.clear()
+        summary = ';'.join(f'{x:.2f}|{y:.2f}' for x, y in vertices)
+        self.log_performance('geofence_config', summary)
+
+    def position(self, payload: str) -> None:
+        """
+        Update a UAV position relative to the geofence overlay.
+        Payload: label,x,y with coordinates normalized to [0,1].
+        """
+        parts = self._split_payload(payload, min_parts=3)
+        if not parts:
+            return
+        label = parts[0].strip()
+        try:
+            x = self._clamp_unit(float(parts[1]))
+            y = self._clamp_unit(float(parts[2]))
+        except ValueError:
+            return
+        self.uav_positions[label] = (x, y)
+        self._evaluate_geofence_state(label, (x, y))
+
     # Helpers -----------------------------------------------------------
     def _split_payload(self, payload: str, min_parts: int) -> Optional[list]:
         if not payload:
@@ -157,11 +217,32 @@ class Senseandavoid(AbstractPlugin):
             return None
         return parts
 
-    def _update_widget_text(self) -> None:
-        if self._widget is None:
+    def _parse_geofence_vertices(self, payload: str) -> List[Tuple[float, float]]:
+        vertices: List[Tuple[float, float]] = []
+        for token in payload.split(','):
+            token = token.strip()
+            if not token or '|' not in token:
+                continue
+            x_str, y_str = token.split('|', 1)
+            try:
+                x = float(x_str)
+                y = float(y_str)
+            except ValueError:
+                continue
+            vertices.append((self._clamp_unit(x), self._clamp_unit(y)))
+        return vertices
+
+    @staticmethod
+    def _clamp_unit(value: float) -> float:
+        if not math.isfinite(value):
+            return 0.0
+        return max(0.0, min(1.0, value))
+
+    def _update_intruder_widget(self) -> None:
+        if self._intruder_widget is None:
             return
         if not self.intruders:
-            self._widget.set_text(_('No intruders.'))
+            self._intruder_widget.set_text(_('No intruders.'))
             return
         lines = []
         now = self.scenario_time
@@ -176,17 +257,92 @@ class Senseandavoid(AbstractPlugin):
                 f"{remaining:5.1f} | {status}"
             )
             lines.append(line)
-        self._widget.set_text('\n'.join(lines))
+        self._intruder_widget.set_text('\n'.join(lines))
+
+    def _evaluate_geofence_state(self, label: str, point: Tuple[float, float]) -> None:
+        if not self.geofence_polygon:
+            if label in self._breach_flags:
+                self._breach_flags.discard(label)
+                self.log_performance('geofence_recover', f'{label}:{point[0]:.3f}:{point[1]:.3f}')
+            return
+        inside = self._point_in_polygon(point)
+        if inside:
+            if label in self._breach_flags:
+                self._breach_flags.discard(label)
+                self.log_performance('geofence_recover', f'{label}:{point[0]:.3f}:{point[1]:.3f}')
+        else:
+            if label not in self._breach_flags:
+                self._breach_flags.add(label)
+                self.log_performance('geofence_breach', f'{label}:{point[0]:.3f}:{point[1]:.3f}')
+
+    def _point_in_polygon(self, point: Tuple[float, float]) -> bool:
+        if not self.geofence_polygon:
+            return False
+        x, y = point
+        inside = False
+        j = len(self.geofence_polygon) - 1
+        for i, (xi, yi) in enumerate(self.geofence_polygon):
+            xj, yj = self.geofence_polygon[j]
+            intersects = (yi > y) != (yj > y)
+            if intersects:
+                denom = yj - yi
+                if denom == 0:
+                    denom = 1e-9
+                x_intersect = (xj - xi) * (y - yi) / denom + xi
+                if x < x_intersect:
+                    inside = not inside
+            j = i
+        return inside
+
+    def _update_geofence_widget(self) -> None:
+        if self._geofence_widget is None:
+            return
+        if not self.geofence_polygon:
+            self._geofence_widget.set_text(_('Geofence overlay inactive.'))
+            return
+        grid = self._build_geofence_grid()
+        legend = self._build_uav_legend()
+        if legend:
+            self._geofence_widget.set_text(f'{grid}\n{legend}')
+        else:
+            self._geofence_widget.set_text(grid)
+
+    def _build_geofence_grid(self) -> str:
+        rows = [[' ' for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
+        if self.geofence_polygon:
+            for gy in range(GRID_SIZE):
+                for gx in range(GRID_SIZE):
+                    px = (gx + 0.5) / GRID_SIZE
+                    py = 1.0 - ((gy + 0.5) / GRID_SIZE)
+                    if self._point_in_polygon((px, py)):
+                        rows[gy][gx] = '.'
+        for idx, (label, (x, y)) in enumerate(sorted(self.uav_positions.items())):
+            symbol = str(idx % 10)
+            col = min(GRID_SIZE - 1, max(0, int(x * GRID_SIZE)))
+            row = min(GRID_SIZE - 1, max(0, int((1.0 - y) * GRID_SIZE)))
+            rows[row][col] = symbol
+        return '\n'.join(''.join(row) for row in rows)
+
+    def _build_uav_legend(self) -> str:
+        if not self.uav_positions:
+            return ''
+        entries: List[str] = []
+        for idx, (label, (x, y)) in enumerate(sorted(self.uav_positions.items())):
+            symbol = str(idx % 10)
+            status = 'BRCH' if label in self._breach_flags else 'OK'
+            entries.append(f"{symbol}={label}({x:.2f},{y:.2f})[{status}]")
+        return ' '.join(entries)
 
     def _update_overdue_state(self) -> None:
         now = self.scenario_time
-        overdue_active = any(
+        conflict_overdue = any(
             intr.status == 'ACTIVE' and intr.remaining(now) <= 0 for intr in self.intruders.values()
         )
+        overdue_active = conflict_overdue or bool(self._breach_flags)
         overdue = self.parameters['taskfeedback']['overdue']
         overdue['active'] = True
         overdue['_is_visible'] = overdue_active
-        if overdue_active:
+        if conflict_overdue:
             for intr in self.intruders.values():
                 if intr.status == 'ACTIVE' and intr.remaining(now) <= 0:
                     self.log_performance('saa_overdue', intr.identifier)
