@@ -502,6 +502,7 @@ performance,datalink,datalink_miss,id=MSG1
 | Threat Board | ✅ Implemented | `plugins/threatboard.py` | `spawn`, `engage`, `reprioritize`, `resolve`, `countermeasure` |
 | Weather/Visibility Layer | ✅ Implemented | `plugins/weatheroverlay.py` | `set`, `clear` |
 | Cockpit Audio Warnings | ✅ Implemented | `plugins/audioalerts.py` | `register`, `play`, `stopcue`, `volume` |
+| Composite Scoring | ✅ Implemented | `plugins/compositescore.py` | `baseline`, `weights`, `ingest`, `reset` |
 | Emergency Stack | ✅ Implemented | `plugins/emergencystack.py` | `trigger`, `stepdone`, `resolve` |
 | Physio Overlay | ✅ Implemented | `plugins/physiooverlay.py` | `apply` (tint, duration) |
 | Automation Hooks | ✅ Implemented | `plugins/automationhooks.py` | Shared with UAS |
@@ -543,6 +544,12 @@ performance,audioalerts,audio_register,cue=overg,path=includes/sounds/overg.wav
 performance,audioalerts,audio_play,cue=overg
 performance,audioalerts,audio_volume,value=0.75
 performance,audioalerts,audio_error,cue=overg,reason=pyglet_missing
+# Composite Score
+performance,compositescore,composite_baseline,start
+performance,compositescore,composite_baseline,stop
+performance,compositescore,composite_weights,track=0.40;sysmon=0.30;communications=0.20;resman=0.10
+performance,compositescore,composite_ingest,task=track,value=0.82
+performance,compositescore,composite_score,value=0.56
 
 # Weapons Inventory
 performance,weaponsinventory,weapon_load,name=AIM9,count=4
@@ -584,13 +591,12 @@ Implement a `plugins/autotraining.py` that:
 
 ### 11.3 Composite Scoring Module
 
-Implement a `plugins/compositescore.py` that:
+Implemented via `plugins/compositescore.py`, which:
 
-1. Subscribes to performance events from all active plugins.
-2. Computes per-subtask z-scores relative to baseline or population norms.
-3. Weights subtasks by task load history (higher weight for periods of high demand).
-4. Emits a single `composite_efficiency` metric per run.
-5. Optionally factors in automation usage (penalty for excessive auto reliance).
+1. Accepts scenario commands to start/stop baseline collection (`compositescore;baseline;start/stop`), adjust weights (`compositescore;weights;track=0.4,sysmon=0.3,...`), ingest task scores (`compositescore;ingest;track,0.82`), and reset the aggregator (`compositescore;reset`).
+2. Computes per-task z-scores relative to recorded baselines and combines them into a running composite metric logged as `composite_score`.
+3. Records configuration changes (`composite_baseline`, `composite_weights`, `composite_ingest`, `composite_reset`) so runs remain auditable.
+4. Displays the current composite value plus task-level means/weights in a dedicated widget, giving researchers immediate feedback on mixed-task efficiency.
 
 ### 11.4 Adaptive Automation Policy Engine
 
