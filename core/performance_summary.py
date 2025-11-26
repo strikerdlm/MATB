@@ -220,6 +220,7 @@ class PerformanceAggregator:
             'datalink': self._datalink_kpis,
             'threatboard': self._threatboard_kpis,
             'energymanager': self._energymanager_kpis,
+            'operatorcapacity': self._operatorcapacity_kpis,
         }
         builder = builders.get(module_name)
         return builder(metrics) if builder else {}
@@ -274,6 +275,31 @@ class PerformanceAggregator:
             'alert_rate': round(alerts / events, 3),
         }
 
+    def _operatorcapacity_kpis(self, metrics: Mapping[str, MetricSummary]) -> Dict[str, Any]:
+        active = metrics.get('operator_capacity_active')
+        supervisory = metrics.get('operator_capacity_supervisory')
+        breaches = metrics.get('operator_capacity_breach')
+        overlap = metrics.get('operator_overlap')
+
+        payload: Dict[str, Any] = {}
+        if active and active.numeric.count:
+            payload['active_mean'] = round(active.numeric.sum_value / active.numeric.count, 3)
+        if supervisory and supervisory.numeric.count:
+            payload['supervisory_mean'] = round(
+                supervisory.numeric.sum_value / supervisory.numeric.count, 3
+            )
+        if overlap and overlap.numeric.count:
+            payload['overlap_mean'] = round(overlap.numeric.sum_value / overlap.numeric.count, 3)
+        if breaches and breaches.categorical.total:
+            payload['breach_total'] = breaches.categorical.total
+            active_rate = self._breach_rate(breaches, 'active', active)
+            supervisory_rate = self._breach_rate(breaches, 'supervisory', supervisory)
+            if active_rate is not None:
+                payload['breach_active_rate'] = active_rate
+            if supervisory_rate is not None:
+                payload['breach_supervisory_rate'] = supervisory_rate
+        return payload
+
     @staticmethod
     def _count(summary: Optional[MetricSummary]) -> int:
         return summary.total_count() if summary and summary.has_data() else 0
@@ -293,6 +319,17 @@ class PerformanceAggregator:
             'violations': negatives,
         }
         return payload
+
+    @staticmethod
+    def _breach_rate(
+        breaches: Optional[MetricSummary],
+        label: str,
+        baseline: Optional[MetricSummary],
+    ) -> Optional[float]:
+        if not breaches or not baseline or baseline.numeric.count == 0:
+            return None
+        count = breaches.categorical.counts.get(label, 0)
+        return round(count / baseline.numeric.count, 3)
 
     # ------------------------------------------------------------------
     def _build_markdown_lines(self, summary: Dict[str, Any]) -> List[str]:
