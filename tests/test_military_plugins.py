@@ -497,6 +497,30 @@ class TestWeatherOverlay:
         names = [record['name'] for record in plugin.logger.records]
         assert 'weather_set' in names
         assert 'weather_clear' in names
+
+
+class TestHmdOverlay:
+    """Tests for the HMD overlay plugin."""
+
+    def setup_method(self) -> None:
+        self.module = _load_plugin('hmdoverlay')
+        self.Hmdoverlay = self.module.Hmdoverlay
+
+    def test_hmd_cue_and_clear(self) -> None:
+        plugin = self.Hmdoverlay()
+        plugin.logger = MockLogger()
+        plugin.scenario_time = 10.0
+        plugin.cue('TH1,15,-5,2')
+        assert plugin.active_cue is not None
+        plugin.scenario_time = 13.0
+        plugin.refresh_widgets()
+        assert plugin.active_cue is None
+        plugin.cue('TH2,5,3')
+        plugin.clear('')
+        assert plugin.active_cue is None
+        names = [record['name'] for record in plugin.logger.records]
+        assert 'hmd_cue' in names
+        assert 'hmd_clear' in names
 class TestEmergencyStack:
     """Tests for the Emergency Stack plugin."""
 
