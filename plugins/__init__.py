@@ -26,3 +26,4 @@ from .polarrlink import Polarrlink
 from .physiooverlay import Physiooverlay
 from .automationhooks import Automationhooks
 from .failureinjector import Failureinjector
+from .operatorcapacity import Operatorcapacity
