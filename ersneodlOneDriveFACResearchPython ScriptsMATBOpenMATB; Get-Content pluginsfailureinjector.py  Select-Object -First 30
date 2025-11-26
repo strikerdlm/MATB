@@ -1,0 +1,26 @@
+[1mdiff --git a/plugins/failureinjector.py b/plugins/failureinjector.py[m
+[1mindex 2d2234b..3f5fa50 100644[m
+[1m--- a/plugins/failureinjector.py[m
+[1m+++ b/plugins/failureinjector.py[m
+[36m@@ -3,6 +3,7 @@[m
+ [m
+ from __future__ import annotations[m
+ [m
+[32m+[m[32mimport random[m
+ from dataclasses import dataclass[m
+ from typing import Optional[m
+ [m
+[36m@@ -24,7 +25,7 @@[m [mclass Failureinjector(AbstractPlugin):[m
+     """Automatically injects failures or automation commands into other plugins."""[m
+ [m
+     def __init__(self, label: str = '', taskplacement: str = 'invisible', taskupdatetime: int = 250) -> None:[m
+[31m-        super().__init__(label or _('Failure Injector'), taskplacement, taskupdatetime)[m
+[32m+[m[32m        super().__init__(label or 'Failure Injector', taskplacement, taskupdatetime)[m
+ [m
+         self.validation_dict = {[m
+             'enablelogging': validation.is_boolean,[m
+[36m@@ -100,4 +101,3 @@[m [mclass Failureinjector(AbstractPlugin):[m
+             if self.parameters['enablelogging']:[m
+                 self.log_performance('failure_error', str(exc))[m
+ [m
+[31m-[m

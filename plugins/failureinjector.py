@@ -100,4 +100,3 @@ class Failureinjector(AbstractPlugin):
             if self.parameters['enablelogging']:
                 self.log_performance('failure_error', str(exc))
 
-
