@@ -74,3 +74,17 @@ def test_performance_aggregator_emits_domain_kpis() -> None:
     assert datalink['ack_rate'] == 1.0
     assert datalink['drop_rate'] == 1.0
     assert summary['scenario_seconds'] == 30.5
+
+
+def test_performance_aggregator_exports_markdown(tmp_path: Path) -> None:
+    agg = PerformanceAggregator()
+    agg.reset({'scenario': 'markdown-test'})
+    agg.update_scenario_time(12.0)
+    agg.record('MissionDirector', 'mission_assign', 'uav1')
+    agg.record('MissionDirector', 'mission_complete', 'uav1')
+    path = tmp_path / 'summary.md'
+    agg.export_markdown(path)
+    content = path.read_text(encoding='utf-8')
+    assert '# Performance Summary' in content
+    assert 'missiondirector' in content
+    assert 'Derived KPIs' in content
