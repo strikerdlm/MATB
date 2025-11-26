@@ -330,6 +330,42 @@ class TestEnergyManager:
         plugin.overg('7.0')
         assert any(r['name'] == 'energy_overg' for r in plugin.logger.records)
 
+    def test_event_delay_and_start(self) -> None:
+        plugin = self.Energymanager()
+        plugin.logger = MockLogger()
+        plugin.events = []
+        plugin.scenario_time = 0.0
+        plugin.event('ENTRY,4.0,10,5')
+        plugin.paused = False
+        plugin.compute_next_plugin_state()
+        assert plugin.events[0].started_at is None
+        plugin.scenario_time = 6.0
+        plugin.compute_next_plugin_state()
+        assert plugin.events[0].started_at == 6.0
+
+    def test_g_onset_warning_emitted(self) -> None:
+        plugin = self.Energymanager()
+        plugin.logger = MockLogger()
+        plugin.events = []
+        plugin.scenario_time = 0.0
+        plugin.event('ENTRY,6.0,12,5')
+        plugin.parameters['gwarningthreshold'] = 5.5
+        plugin.parameters['gwarningleadtime'] = 4.0
+        plugin.paused = False
+        plugin.compute_next_plugin_state()
+        assert not any(r['name'] == 'g_onset_warning' for r in plugin.logger.records)
+        plugin.scenario_time = 2.0
+        plugin.compute_next_plugin_state()
+        assert any(r['name'] == 'g_onset_warning' for r in plugin.logger.records)
+
+    def test_warning_command_updates_parameters(self) -> None:
+        plugin = self.Energymanager()
+        plugin.logger = MockLogger()
+        plugin.warning('6.5,3')
+        assert plugin.parameters['gwarningthreshold'] == 6.5
+        assert plugin.parameters['gwarningleadtime'] == 3.0
+        assert any(r['name'] == 'energy_warning_config' for r in plugin.logger.records)
+
 
 class TestThreatboard:
     """Tests for the Threat Board plugin."""
@@ -367,6 +403,58 @@ class TestThreatboard:
         plugin.scenario_time = 20.0
         plugin.resolve('TH1,SPLASH')
         assert plugin.threats[0].status == 'RESOLVED'
+
+    def test_countermeasure_deployment_logs(self) -> None:
+        plugin = self.Threatboard()
+        plugin.logger = MockLogger()
+        plugin.scenario_time = 0.0
+        plugin.spawn('TH1,035,14,R73,45')
+        plugin.countermeasure('chaff,2')
+        names = [record['name'] for record in plugin.logger.records]
+        assert 'countermeasure_deploy' in names
+
+    def test_countermeasure_low_alert(self) -> None:
+        plugin = self.Threatboard()
+        plugin.logger = MockLogger()
+        plugin.countermeasure_stock['chaff'] = 1
+        plugin.countermeasure_stock['flare'] = 1
+        plugin.parameters['chaffcapacity'] = 5
+        plugin.parameters['flarecapacity'] = 5
+        plugin.threats = []
+        plugin._update_overdue()
+        assert any(record['name'] == 'countermeasure_low' for record in plugin.logger.records)
+
+
+class TestWeaponsInventory:
+    """Tests for the Weapons Inventory plugin."""
+
+    def setup_method(self) -> None:
+        self.module = _load_plugin('weaponsinventory')
+        self.Weaponsinventory = self.module.Weaponsinventory
+
+    def test_load_initialises_stock(self) -> None:
+        plugin = self.Weaponsinventory()
+        plugin.logger = MockLogger()
+        plugin.load('AIM9,4')
+        assert 'AIM9' in plugin.stocks
+        assert plugin.stocks['AIM9'].remaining == 4
+
+    def test_expend_and_empty_logging(self) -> None:
+        plugin = self.Weaponsinventory()
+        plugin.logger = MockLogger()
+        plugin.load('AIM9,2')
+        plugin.expend('AIM9,1')
+        assert plugin.stocks['AIM9'].remaining == 1
+        plugin.expend('AIM9,1')
+        assert any(r['name'] == 'weapon_empty' for r in plugin.logger.records)
+
+    def test_reload_adds_rounds(self) -> None:
+        plugin = self.Weaponsinventory()
+        plugin.logger = MockLogger()
+        plugin.load('AIM9,4')
+        plugin.expend('AIM9,3')
+        plugin.reload('AIM9,2')
+        assert plugin.stocks['AIM9'].remaining == 3
 
 
 class TestEmergencyStack:
