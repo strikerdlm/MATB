@@ -234,14 +234,21 @@ class Window(Window):
     def _format_provenance_text(info):
         if not info:
             return _('Scenario: pending')
+        user_id = info.get('user_id') or _('n/a')
+        user_name = info.get('user_name') or _('n/a')
         scenario = info.get('scenario') or _('n/a')
         scenario_hash = info.get('scenario_hash')
         hash_str = scenario_hash[:10] if scenario_hash else _('n/a')
         config_snapshot = info.get('config_snapshot') or _('n/a')
         plugin_versions = info.get('plugin_versions') or _('n/a')
+        summary_md = info.get('summary_markdown') or _('n/a')
+        history_path = info.get('user_history') or _('n/a')
         return '\n'.join([
+            _('User %s (%s)') % (user_id, user_name),
             _('Scenario: %s') % scenario,
             _('Hash: %s') % hash_str,
             _('Config: %s') % config_snapshot,
             _('Plugins: %s') % plugin_versions,
+            _('Summary: %s') % summary_md,
+            _('History: %s') % history_path,
         ])
