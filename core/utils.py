@@ -1,6 +1,8 @@
 # Copyright 2023, by Julien Cegarra & Benoît Valéry. All rights reserved.
 # Institut National Universitaire Champollion (Albi, France).
 # License : CeCILL, version 2.1 (see the LICENSE file)
+import os
+import subprocess
 from pathlib import Path
 from typing import Optional
 from pyglet import font
@@ -127,3 +129,22 @@ def get_replay_session_id()->int:
         return int(get_conf_value('Replay', 'replay_session_id'))
     else:
         return int(find_the_last_session_number())
+
+
+def open_path(target: Optional[Path]) -> bool:
+    """Open a file or directory with the host OS. Returns True on success."""
+    if target is None:
+        return False
+    resolved = Path(target)
+    if not resolved.exists():
+        return False
+    try:
+        if sys.platform.startswith('win'):
+            os.startfile(str(resolved))  # type: ignore[attr-defined]
+        elif sys.platform == 'darwin':
+            subprocess.run(['open', str(resolved)], check=True)
+        else:
+            subprocess.run(['xdg-open', str(resolved)], check=True)
+        return True
+    except (OSError, subprocess.SubprocessError):
+        return False
