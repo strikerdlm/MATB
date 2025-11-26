@@ -482,6 +482,7 @@ Based on the systematic review of HRV for pilot MWL (Wang, Houghton & Majumdar 2
 | Polar RR Link | ✅ Implemented | `plugins/polarrlink.py` | `set`, `start` (optional H10 bridge) |
 | Failure Injector | ✅ Implemented | `plugins/failureinjector.py` | `schedule` |
 | Automation Hooks | ✅ Implemented | `plugins/automationhooks.py` | `rule`, `enable`, `disable` |
+| Operator Capacity Monitor | ✅ Implemented | `plugins/operatorcapacity.py` | `set`, `overlap` |
 
 ### 9.2 Pending UAS Enhancements
 
@@ -521,6 +522,12 @@ performance,payloadmanager,payload_depleted,pod=CamA
 performance,datalink,datalink_receive,id=MSG1,channel=ATC,priority=PRIO
 performance,datalink,datalink_ack,id=MSG1,response_time_ms=4500
 performance,datalink,datalink_miss,id=MSG1
+
+# Operator Capacity
+performance,operatorcapacity,operator_capacity_active,2
+performance,operatorcapacity,operator_capacity_supervisory,5
+performance,operatorcapacity,operator_capacity_breach,supervisory
+performance,operatorcapacity,operator_overlap,0.65
 ```
 
 ---
@@ -723,6 +730,8 @@ This section synthesizes findings from systematic reviews, military UAS operator
    - Log `operator_capacity_active` (2–3) and `operator_capacity_supervisory` (up to 6) based on mission overlap
    - Emit warnings when assignments exceed validated capacity thresholds
    - Scenario commands: `operatorcapacity;set;active,2`, `operatorcapacity;set;supervisory,5`, `operatorcapacity;overlap;uav1,uav2,0.65` (65% coverage overlap)
+
+   **Implementation note:** The shipping plugin enforces these behaviours by flashing the overdue overlay whenever limits are violated, re-scaling the supervisory cap as soon as new overlap ratios arrive, and logging `operator_capacity_breach` so the mission-level summary can report breach rates.
 
 2. **Vigilance Monitoring**:
    - Extend `physiomonitor.py` to detect vigilance decrement patterns (declining response times, increasing false alarms) during sustained surveillance
