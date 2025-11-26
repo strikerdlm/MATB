@@ -17,7 +17,7 @@ from core.constants import REPLAY_MODE, REPLAY_STRIP_PROPORTION
 from core.modaldialog import ModalDialog
 from core.logger import logger
 import core.error
-from core.utils import get_conf_value
+from core.utils import get_conf_value, open_path
 
 class Window(Window):
 
@@ -155,6 +155,10 @@ class Window(Window):
                 self.exit_prompt()
             elif keystr == 'P':
                 self.pause_prompt()
+            elif keystr == 'F6':
+                self._open_summary_report()
+            elif keystr == 'F7':
+                self._open_session_folder()
 
             logger.record_input('keyboard', keystr, 'press')
 
@@ -252,3 +256,17 @@ class Window(Window):
             _('Summary: %s') % summary_md,
             _('History: %s') % history_path,
         ])
+
+    def _open_summary_report(self):
+        if self.modal_dialog is not None:
+            return
+        if open_path(logger.get_summary_markdown_path()):
+            return
+        self.modal_dialog = ModalDialog(self, _('Summary report is not available yet.'), title=_('Export unavailable'))
+
+    def _open_session_folder(self):
+        if self.modal_dialog is not None:
+            return
+        if open_path(logger.get_session_directory()):
+            return
+        self.modal_dialog = ModalDialog(self, _('Session folder is not available yet.'), title=_('Export unavailable'))
