@@ -319,3 +319,271 @@ This plan keeps documentation centralised, ties new features to existing extensi
   - Formalise **release criteria** for “research‑ready” and “assessment‑ready” builds: zero linter errors, deterministic outputs for canned scenarios, documented hardware assumptions, and a changelog entry summarising any behaviour that could affect experimental comparability.
 
 Together, these requirements and iterations aim to move OpenMATB from a flexible research platform toward a military-grade assessment tool: reproducible workloads, traceable configurations, validated metrics, and explicit support for adaptive automation and physiological monitoring, all curated under the leadership of **Dr Diego Malpica, Aerospace Medicine**.
+
+## 8. Scientifically Validated Metrics Catalog
+
+This section consolidates the metrics identified from systematic reviews and military MATB research. Metrics are organised by domain (UAS vs HPA) and measurement modality (performance, physiological, subjective). All metrics align with published findings from USAARL MATB, AF-MATB, NASA MATB-II, and peer-reviewed workload studies.
+
+### 8.1 Core Performance Metrics (Both Modules)
+
+| Metric | Unit | Description | Source/Validation |
+| --- | --- | --- | --- |
+| **Tracking RMSD** | pixels or mm | Root mean square deviation of cursor from target centre; primary manual control index | Comstock & Arnegard 1992; Parasuraman et al. 1993; test–retest r > 0.80 |
+| **System Monitoring Detection Rate** | % | Proportion of abnormal events (lights, gauges) correctly detected within timeout | MATB-II User Guide; Cronbach α 0.70–0.85 |
+| **System Monitoring Response Time** | ms | Latency from event onset to correct response | Molloy & Parasuraman 1996 |
+| **System Monitoring False Alarms** | count | Incorrect responses to non-events; vigilance decrement marker | Parasuraman et al. 1993 |
+| **Communications Accuracy** | % | Proportion of correctly tuned radio frequencies following relevant call signs | Santiago-Espada et al. 2011 |
+| **Communications Response Time** | ms | Latency from message end to validated frequency change | MATB-II standard |
+| **Resource Management Deviation** | units | RMS deviation from target fuel level (2500 units) in tanks A and B | Comstock & Arnegard 1992 |
+| **Resource Management Time-in-Range** | % | Proportion of time fuel level within ±500 units of target | Santiago-Espada et al. 2011 |
+| **Multitasking Efficiency Score** | composite | Normalised weighted sum of subtask scores adjusted for task load history; USAARL composite model | Vogl et al. 2024; McCurry et al. (in press) |
+| **Baud Rate (Human Output)** | bps | Information throughput per Shannon's theory; B_H(i) = RR(i) × B(i) | Liu & Nam 2018 |
+
+### 8.2 UAS-Specific Performance Metrics
+
+| Metric | Unit | Description | Validation Context |
+| --- | --- | --- | --- |
+| **Mission Assignment Latency** | s | Time from UAV assignment event to operator acknowledgement | Mission Director plugin; aligns with FAA UAS KSA study |
+| **Conflict Resolution Time** | s | Time from sense-and-avoid conflict spawn to resolution action | SAA plugin; FAA detect-and-avoid timing guidance |
+| **Geofence Breach Duration** | s | Cumulative time any UAV position violates no-fly polygon | BVLOS corridor risk models (Medellín study) |
+| **Payload Bandwidth Utilisation** | % | Ratio of active sensor Mbps to total link capacity | Payload Manager plugin |
+| **Payload Energy Depletion Events** | count | Instances where sensor pod reaches 0% energy | Resource constraint simulation |
+| **Datalink Acknowledgement Rate** | % | Proportion of CPDLC-style messages acknowledged before timeout | NASA TM–2020-0010384 CPDLC workload findings |
+| **Datalink Response Latency** | ms | Time from message display to ENTER acknowledgement | Datalink plugin |
+| **Lost-Link Recovery Time** | s | Duration from radio-fail event to scripted recovery completion | Failure Injector plugin |
+| **Multi-UAV Switching Frequency** | count/min | Rate of attention shifts between UAV rows in Mission Director | Multi-ship workload research |
+
+### 8.3 High-Performance Aircraft (HPA) Specific Metrics
+
+| Metric | Unit | Description | Validation Context |
+| --- | --- | --- | --- |
+| **Over-G Event Count** | count | Instances where G exceeds aircraft or physiological limit | Energy Manager plugin; fighter workload studies |
+| **Cumulative G-Seconds** | G·s | Integral of G-load over time; fatigue proxy | Frontiers review on pilot workload |
+| **Energy Reserve Remaining** | % | Simulated pilot energy after G-onset sequence | Energy Manager plugin |
+| **Threat Engagement Latency** | s | Time from threat spawn to FOX call | Threat Board plugin |
+| **Threat Prioritisation Accuracy** | % | Proportion of highest-TTI threats engaged first | Tactical decision-making research |
+| **Weapons–Threat Pairing Errors** | count | Mismatches between selected weapon and threat type | Threat Board plugin |
+| **Emergency Checklist Compliance Time** | s | Duration from failure trigger to all checklist steps complete | Emergency Stack plugin |
+| **Residual Risk Score** | index | Unresolved emergency steps × severity weight | Emergency Stack plugin |
+| **Visual Occlusion Duration** | s | Cumulative time physio overlay dims display (tunnel vision, blackout) | Physio Overlay plugin |
+
+### 8.4 Physiological Metrics (Cross-Cutting)
+
+Based on the systematic review of HRV for pilot MWL (Wang, Houghton & Majumdar 2024) and the Frontiers Neuroergonomics 2025 A320 study, the following indices are recommended:
+
+| Metric | Unit | Domain | Description | MWL Association |
+| --- | --- | --- | --- | --- |
+| **HR** | bpm | Time | Mean heart rate over window | ↑ with high MWL |
+| **SDNN** | ms | Time | Standard deviation of NN intervals; overall ANS variability | ↓ with high MWL |
+| **RMSSD** | ms | Time | Root mean square of successive differences; parasympathetic marker | ↓ with high MWL |
+| **pNN50** | % | Time | Percentage of successive NN intervals differing >50 ms | ↓ with high MWL |
+| **LF Power** | ms² | Frequency | Low-frequency band (0.04–0.15 Hz); mixed sympathetic/parasympathetic | Variable |
+| **HF Power** | ms² | Frequency | High-frequency band (0.15–0.40 Hz); parasympathetic | ↓ with high MWL |
+| **LF/HF Ratio** | ratio | Frequency | Sympathovagal balance index | ↑ with high MWL |
+| **Acute HRV Delta** | z-score | Derived | Window-to-baseline change in RMSSD or LF/HF exceeding threshold | Acute workload spike flag |
+| **PFC Activation (fNIRS)** | β-coeff | Neuroimaging | Oxygenated haemoglobin change in prefrontal cortex | ↑ with high MWL (Li et al. 2022) |
+| **Pupil Dilation** | mm or index | Ocular | Mean pupil diameter normalised to baseline | ↑ with high MWL |
+| **EDA Sympathetic Index** | index | Electrodermal | Time-frequency power in 0.08–0.24 Hz band | ↑ with high MWL (Daviaux et al. 2019) |
+
+### 8.5 Subjective Metrics
+
+| Scale | Dimensions | Administration | Notes |
+| --- | --- | --- | --- |
+| **NASA-TLX** | Mental Demand, Physical Demand, Temporal Demand, Performance, Effort, Frustration | Post-block or continuous (RSME variant) | Most validated; weighted or raw scores |
+| **RSME** | Single dimension (0–150) | During or post-block | Simpler; sensitive to gradual MWL changes |
+| **SART** | Situational Awareness (Demand, Supply, Understanding) | Post-block | Recommended for UAS supervisory control |
+| **Trust Checklist / TAST** | Trust in Automated Systems | Post-block | Required for adaptive automation studies |
+| **Karolinska Sleepiness Scale (KSS)** | Fatigue (1–9) | Pre/post session | Fatigue confound control |
+
+---
+
+## 9. UAS Module Implementation Plan
+
+### 9.1 Current Implementation Status
+
+| Component | Status | Plugin File | Key Scenario Commands |
+| --- | --- | --- | --- |
+| Mission Director | ✅ Implemented | `plugins/missiondirector.py` | `assign`, `complete`, `automation`, `conflict`, `clearconflict` |
+| Sense-and-Avoid | ✅ Implemented | `plugins/senseandavoid.py` | `spawn`, `resolve`, `clear`, `thresholds` |
+| Payload Manager | ✅ Implemented | `plugins/payloadmanager.py` | `activate`, `priority`, `standby`, `recharge`, `capacity` |
+| Datalink & CPDLC | ✅ Implemented | `plugins/datalink.py` | `message`, `forceack`, `clear` |
+| Physio Monitor | ✅ Implemented | `plugins/physiomonitor.py` | LSL stream, HRV computation, acute alerts |
+| Polar RR Link | ✅ Implemented | `plugins/polarrlink.py` | `set`, `start` (optional H10 bridge) |
+| Failure Injector | ✅ Implemented | `plugins/failureinjector.py` | `schedule` |
+| Automation Hooks | ✅ Implemented | `plugins/automationhooks.py` | `rule`, `enable`, `disable` |
+
+### 9.2 Pending UAS Enhancements
+
+| Enhancement | Priority | Rationale | Implementation Notes |
+| --- | --- | --- | --- |
+| **Geofence Polygon Visualisation** | High | Current SAA shows intruder table only; visual map aids spatial awareness | Add optional canvas overlay showing UAV positions relative to no-fly zones; emit `geofence_breach` metric |
+| **Multi-Ship Fuel/Endurance Tracker** | Medium | BVLOS missions require endurance monitoring per aircraft | Extend Mission Director rows to show remaining flight time; emit `endurance_low` alerts |
+| **Automated Handover Protocol** | Medium | Lost-link requires scripted handover to backup GCS | New scenario command `missiondirector;handover;uav2,GCS2`; log `handover_initiate`, `handover_complete` |
+| **Weather/Visibility Layer** | Low | Environmental factors affect UAS ops | Overlay weather icons; scenario command `environment;weather;IMC` |
+| **Voice Synthesis for Datalink** | Low | Auditory channel reduces visual overload | Use TTS for high-priority messages; configurable via `datalink;voice;True` |
+
+### 9.3 UAS Metrics Logging Requirements
+
+All UAS plugins must emit the following log entry types to enable post-run analysis:
+
+```text
+# Mission Director
+performance,missiondirector,mission_assign,uav=uav1,mission=surveillance,duration=300
+performance,missiondirector,mission_mode,uav=uav1,mode=auto
+performance,missiondirector,mission_alert,uav=uav1,alert=geofence
+performance,missiondirector,mission_complete,uav=uav1,elapsed=298
+
+# Sense-and-Avoid
+performance,senseandavoid,saa_spawn,id=INTR1,bearing=090,range=2.0,alt_delta=300,tti=45
+performance,senseandavoid,saa_resolve,id=INTR1,resolution=turn_right_20,response_time_ms=3200
+performance,senseandavoid,saa_overdue,id=INTR1
+performance,senseandavoid,saa_clear,id=INTR1
+
+# Payload Manager
+performance,payloadmanager,payload_activate,pod=CamA,target=Alpha,bandwidth=12
+performance,payloadmanager,payload_overbandwidth,total_mbps=65,capacity=60
+performance,payloadmanager,payload_depleted,pod=CamA
+
+# Datalink
+performance,datalink,datalink_receive,id=MSG1,channel=ATC,priority=PRIO
+performance,datalink,datalink_ack,id=MSG1,response_time_ms=4500
+performance,datalink,datalink_miss,id=MSG1
+```
+
+---
+
+## 10. High-Performance Aircraft (HPA) Module Implementation Plan
+
+### 10.1 Current Implementation Status
+
+| Component | Status | Plugin File | Key Scenario Commands |
+| --- | --- | --- | --- |
+| Energy & G-Envelope Manager | ✅ Implemented | `plugins/energymanager.py` | `event`, `overg`, `energy` |
+| Threat Board | ✅ Implemented | `plugins/threatboard.py` | `spawn`, `engage`, `reprioritize`, `resolve` |
+| Emergency Stack | ✅ Implemented | `plugins/emergencystack.py` | `trigger`, `stepdone`, `resolve` |
+| Physio Overlay | ✅ Implemented | `plugins/physiooverlay.py` | `apply` (tint, duration) |
+| Automation Hooks | ✅ Implemented | `plugins/automationhooks.py` | Shared with UAS |
+| Failure Injector | ✅ Implemented | `plugins/failureinjector.py` | Shared with UAS |
+
+### 10.2 Pending HPA Enhancements
+
+| Enhancement | Priority | Rationale | Implementation Notes |
+| --- | --- | --- | --- |
+| **G-Onset Ramp Visualisation** | High | Pilots need to anticipate G build-up; current plugin shows events only | Add graphical G-meter with predictive arc; emit `g_onset_warning` at configurable threshold |
+| **Weapons Inventory & Loadout** | High | Threat Board hints at weapon type but doesn't track inventory | New plugin `plugins/weaponsinventory.py` with `load`, `expend`, `reload` commands; emit `weapon_expended`, `weapon_empty` |
+| **Defensive Countermeasures** | Medium | Chaff/flare deployment under threat | Extend Threat Board or new plugin; scenario command `countermeasures;deploy;chaff,3` |
+| **Cockpit Audio Warnings** | Medium | Auditory alerts for over-G, threat proximity, emergency | Use WAV files triggered by plugin events; configurable via `audio;warning;overg.wav` |
+| **Helmet-Mounted Display (HMD) Mode** | Low | Simulate off-boresight cueing | Overlay target designator on tracking task; scenario command `hmd;cue;TH1` |
+
+### 10.3 HPA Metrics Logging Requirements
+
+```text
+# Energy Manager
+performance,energymanager,energy_event_schedule,name=ENGAGE,target_g=5.5,duration=35
+performance,energymanager,energy_event_start,name=ENGAGE
+performance,energymanager,energy_event_complete,name=ENGAGE,cumulative_g_seconds=192
+performance,energymanager,energy_overg,g=6.3
+performance,energymanager,energy_alert,reserve=15
+
+# Threat Board
+performance,threatboard,threat_spawn,id=TH1,sector=035,range=14,weapon=R73,tti=45
+performance,threatboard,threat_engage,id=TH1,weapon=FOX3,latency_ms=2800
+performance,threatboard,threat_resolve,id=TH1,outcome=SPLASH
+performance,threatboard,threat_overdue,id=TH1
+performance,threatboard,threat_drop,id=TH1
+
+# Emergency Stack
+performance,emergencystack,emergency_trigger,id=HYD1,label=HYD_PRESS_LOW
+performance,emergencystack,emergency_step,id=HYD1,step=0,label=Switch_pumps,time_ms=4200
+performance,emergencystack,emergency_resolve,id=HYD1,total_time_ms=18500
+```
+
+---
+
+## 11. Cross-Cutting Implementation Requirements
+
+### 11.1 Difficulty Presets & IMPRINT Integration
+
+Per USAARL MATB v2.5, each plugin should expose a `difficulty` parameter (1–10) that internally maps to event rates, thresholds, and automation availability. The mapping must be documented so scenarios can be described in terms of difficulty indices rather than raw event counts.
+
+| Difficulty | Event Rate Multiplier | Automation Availability | Expected NASA-TLX Range |
+| --- | --- | --- | --- |
+| 1–3 | 0.5× baseline | Full auto available | 20–40 |
+| 4–6 | 1.0× baseline | Partial auto | 40–60 |
+| 7–10 | 1.5–2.0× baseline | Manual only | 60–90 |
+
+The `tools/scenario_templates.py` CLI should accept `--difficulty` to generate scenarios at the specified band.
+
+### 11.2 Automated Training Module
+
+Implement a `plugins/autotraining.py` that:
+1. Reads a scripted instruction file (audio + text prompts).
+2. Orchestrates single-subtask familiarisation runs (tracking only, SYSMON only, etc.).
+3. Culminates in a combined 5-min run.
+4. Logs comprehension checks and completion status.
+5. Total duration ~7 min, matching USAARL protocol.
+
+### 11.3 Composite Scoring Module
+
+Implement a `plugins/compositescore.py` that:
+1. Subscribes to performance events from all active plugins.
+2. Computes per-subtask z-scores relative to baseline or population norms.
+3. Weights subtasks by task load history (higher weight for periods of high demand).
+4. Emits a single `composite_efficiency` metric per run.
+5. Optionally factors in automation usage (penalty for excessive auto reliance).
+
+### 11.4 Adaptive Automation Policy Engine
+
+Extend `plugins/automationhooks.py` to:
+1. Accept threshold rules based on observed metrics (e.g., `if saa_overdue_count > 2 AND hrv_acute_flag == 1 THEN enable tracking_auto`).
+2. Log all automation state changes with triggering metric values.
+3. Support manual override by operator (toggle key).
+
+### 11.5 Scenario & Config Versioning
+
+Every log folder must contain:
+- `scenario_snapshot.txt` – exact copy of scenario file.
+- `config_snapshot.ini` – exact copy of config.ini.
+- `plugin_versions.json` – map of plugin name → git commit hash or version string.
+- `scenario_hash` – SHA-256 of scenario file for audit.
+
+### 11.6 Regression Test Suite
+
+Establish `tests/regression/` with:
+- `test_uas_basic.py` – runs `uas_basic.txt`, asserts key log metrics within expected ranges.
+- `test_hpa_overlay.py` – runs `hpa_overlay.txt`, asserts G-event count and threat timing.
+- `test_baseline_matb.py` – runs legacy MATB scenario, asserts SYSMON/TRACK/COMM/RESMAN metrics.
+
+CI must execute these on every commit; failures block merge.
+
+---
+
+## 12. Validation & Reliability Checklist
+
+Before any scenario is declared "assessment-ready", verify:
+
+| Criterion | Method | Threshold |
+| --- | --- | --- |
+| **Timing Accuracy** | Compare log timestamps to external stopwatch | ≤ 50 ms drift over 10 min |
+| **Event Ordering** | Audit log for out-of-order events | 0 violations |
+| **Deterministic Output** | Run same scenario twice, compare logs | Identical event sequence |
+| **Subjective Scale Integration** | Verify NASA-TLX/RSME logs linked to scenario ID | 100% linkage |
+| **Physiological Sync** | Compare LSL timestamps to log timestamps | ≤ 100 ms offset |
+| **Practice Effect Control** | 2–3 familiarisation runs before data collection | Documented in protocol |
+| **Difficulty Calibration** | Pilot data confirms expected NASA-TLX range | ±10 points of target |
+
+---
+
+## 13. Research-Backed Recommendations
+
+1. **Sample Size**: Target n ≥ 20 for workload studies to achieve power ≥ 0.80 (per Liu & Nam 2018 pilot study guidance).
+2. **Session Duration**: 15–30 min for assessment; 45–60 min for training (per MATB-II User Guide).
+3. **Rest Intervals**: Minimum 3 min between blocks to allow HRV recovery.
+4. **Environmental Controls**: Document lighting (lux), temperature (°C), and ambient noise (dB) in logs.
+5. **Exclusion Criteria**: Sleep < 6 h, caffeine within 4 h, energy drinks within 6 h (per Daviaux et al. 2019 protocol).
+6. **HRV Window Length**: 5 min for frequency-domain metrics; 30–60 s rolling windows for acute detection (per Task Force 1996 guidelines).
+7. **Baseline Calibration**: Collect 5 min resting baseline before first task block for HRV normalisation.
+
+---
+
+Implementation credit: **Dr Diego Malpica, Aerospace Medicine**.
