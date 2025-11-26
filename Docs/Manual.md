@@ -202,7 +202,7 @@ Instrumentation focus: measure time to correct weapon–threat pairing, number o
 
 ## 4. Cross-Cutting Enhancements
 
-1. **Scenario Templates & Difficulty Ramps** – Create YAML/CSV templates for “UAS basic,” “UAS BVLOS,” “HPA BFM,” etc., plus a generator that tweaks event rates so researchers can reproduce workloads consistently (aligns with recent MATB standardisation recommendations).
+1. **Scenario Templates & Difficulty Ramps** – Use the shipped `tools/scenario_templates.py` CLI to emit reproducible “UAS BVLOS,” “HPA overlay,” and automated training scenarios with a single command. Difficulty (1–10) now scales event spacing, deadlines, and failure rate through `DifficultyProfile`, so labs can hand out level-tagged workloads that map to NASA‑TLX/HRV expectations without editing raw scenario text.
 2. **Automation & Solver Hooks** – Extend plugin parameters to expose per-task automation states (e.g., `automaticsolver=True` for autopilot hold, or AI radio assistance) so experiments can toggle mixed-initiative strategies.
 3. **Performance Analytics** – Expand `core/logger.py` to summarise mission-level KPIs (mission success %, violation counts) immediately after each scenario and optionally publish over LSL for synchronising with EEG/fNIRS streams.
 4. **Human–Machine Interface Fit** – Document joystick and HOTAS bindings for the new plugins (axis reversal already supported in `track` plugin). For UAS payload work, allow mouse + keyboard fallback to keep the software accessible.
@@ -241,13 +241,27 @@ This modular approach keeps acquisition (via LSL) decoupled from visualisation, 
 
 ### 4.3 Scenario Template CLI
 
-- Added `tools/scenario_templates.py`, a lightweight CLI that emits pre-built `uas_bvlos` and `hpa_overlay` scenarios with adjustable duration. Example:
+- `tools/scenario_templates.py` now exposes three templates: `uas_bvlos`, `hpa_overlay`, and `training`. All accept `--duration`, `--difficulty` (1–10), and `--output`, letting scenario designers materialise level-tagged drills directly under `includes/scenarios/` without copying boilerplate.
+- Difficulty is enforced through `DifficultyProfile.from_level()`, which binds event spacing, deadline multipliers, concurrency caps, and failure injection rate so that level numbers translate to repeatable workload bands. The generated files annotate those parameters at the top for audit.
+- The UAS and HPA templates inject plugin start/stop rows (Mission Director, Sense-and-Avoid, Payload Manager, Datalink, Physio Monitor/Overlay, Threat Board, Emergency Stack, Failure Injector, Composite Score) plus Polar link hooks, keeping instrumentation consistent with the metrics catalog.
+- The new `training` template scaffolds a seven-minute automated familiarisation block that sequences TRACK → SYSMON → COMM → RESMAN → combined phases, matching the USAARL learning-control guidance and the pending `autotraining` plugin spec in §11.2.
+- Examples:
 
   ```bash
-  python tools/scenario_templates.py --template uas_bvlos --duration 480 --output includes/scenarios/custom_bvlos.txt
+  python tools/scenario_templates.py --template uas_bvlos --difficulty 6 --duration 480 --output includes/scenarios/uas_lvl6.txt
+  python tools/scenario_templates.py --template hpa_overlay --difficulty 8 --duration 240 --output includes/scenarios/hpa_lvl8.txt
+  python tools/scenario_templates.py --template training --duration 420 --output includes/scenarios/autotraining_lvl3.txt
   ```
 
-- The templates automatically include the Polar link, Failure Injector schedules, and key UAS/HPA modules so research teams can bootstrap experiments before hand-tuning via `scenario_generator.py`.
+- The emitted scenarios can be fed directly into `scenario_generator.py` for additional stochasticity, or versioned as-is to provide deterministic regression fixtures for the CI suite described in §11.6.
+
+### 4.4 Mission-Level Performance Summary & Session Outputs
+
+- `core/performance_summary.py` introduces `PerformanceAggregator`, the canonical sink for every `log_performance` event. It normalises module names/metric keys, tracks numeric vs categorical payloads, and emits derived KPIs for Mission Director, Sense-and-Avoid, Payload Manager, Datalink, Threat Board, and Energy Manager (completion/resolution/over-bandwidth/over-G rates). The contract mirrors the metric tables in §8 so downstream analytics always receive the same fields.
+- At run teardown the logger calls `export()` and `export_markdown()` to write `summary.json` and `summary.md` inside each `sessions/user_<id>/<date>/session_*` folder, alongside the scenario/config snapshots described in §11.5–11.7. Both files include metadata (scenario ID, participant info, git hash), scenario duration, derived KPIs, and raw counts, simplifying external ingestion (e.g., lab notebooks, LIMS uploads).
+- Researchers can regenerate the summaries offline by replaying log CSVs and piping the events back into `PerformanceAggregator.record()`; the module is pure-Python and deterministic, making it suitable for CI assertions and airworthiness audits.
+- `tests/test_performance_summary.py` guards this pipeline: it loads the module dynamically, exercises mixed numeric/categorical aggregation, validates domain KPIs, and ensures Markdown exports render the derived/ raw metric tables the docs promise. Add new metrics/tests in lockstep to keep the documentation, aggregator, and regression suite synchronised.
+- Recommended workflow: (1) ensure every plugin emits meaningful `performance,<plugin>,<metric>` rows, (2) run `pytest tests/test_performance_summary.py` plus the broader regression suite, (3) verify the resulting `summary.md` links back to the scenario hash before distributing data outside the lab.
 
 ## 5. Step-by-Step Approach
 
@@ -517,6 +531,7 @@ The `tools/scenario_templates.py` CLI should accept `--difficulty` to generate s
 ### 11.2 Automated Training Module
 
 Implement a `plugins/autotraining.py` that:
+
 1. Reads a scripted instruction file (audio + text prompts).
 2. Orchestrates single-subtask familiarisation runs (tracking only, SYSMON only, etc.).
 3. Culminates in a combined 5-min run.
@@ -526,6 +541,7 @@ Implement a `plugins/autotraining.py` that:
 ### 11.3 Composite Scoring Module
 
 Implement a `plugins/compositescore.py` that:
+
 1. Subscribes to performance events from all active plugins.
 2. Computes per-subtask z-scores relative to baseline or population norms.
 3. Weights subtasks by task load history (higher weight for periods of high demand).
@@ -535,6 +551,7 @@ Implement a `plugins/compositescore.py` that:
 ### 11.4 Adaptive Automation Policy Engine
 
 Extend `plugins/automationhooks.py` to:
+
 1. Accept threshold rules based on observed metrics (e.g., `if saa_overdue_count > 2 AND hrv_acute_flag == 1 THEN enable tracking_auto`).
 2. Log all automation state changes with triggering metric values.
 3. Support manual override by operator (toggle key).
@@ -542,6 +559,7 @@ Extend `plugins/automationhooks.py` to:
 ### 11.5 Scenario & Config Versioning
 
 Every log folder must contain:
+
 - `scenario_snapshot.txt` – exact copy of scenario file.
 - `config_snapshot.ini` – exact copy of config.ini.
 - `plugin_versions.json` – map of plugin name → git commit hash or version string.
@@ -550,6 +568,7 @@ Every log folder must contain:
 ### 11.6 Regression Test Suite
 
 Establish `tests/regression/` with:
+
 - `test_uas_basic.py` – runs `uas_basic.txt`, asserts key log metrics within expected ranges.
 - `test_hpa_overlay.py` – runs `hpa_overlay.txt`, asserts G-event count and threat timing.
 - `test_baseline_matb.py` – runs legacy MATB scenario, asserts SYSMON/TRACK/COMM/RESMAN metrics.
@@ -557,6 +576,8 @@ Establish `tests/regression/` with:
 CI must execute these on every commit; failures block merge.
 
 ### 11.7 User Identification & Session History
+
+- **Configuration**: set the active participant in `config.ini` under `[User]` with numeric `id`, plus optional `name`, `cohort`, and `notes`. The UI banner echoes these fields at runtime.
 
 - **Configuration**: set the active participant in `config.ini` under `[User]` with numeric `id`, plus optional `name`, `cohort`, and `notes`. The UI banner echoes these fields at runtime.
 - **Session storage**: every run is saved under `sessions/user_<id>/<YYYY-MM-DD>/session_<id>_<timestamp>/` so longitudinal datasets stay partitioned per subject.
