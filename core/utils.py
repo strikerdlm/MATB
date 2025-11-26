@@ -1,6 +1,8 @@
 # Copyright 2023, by Julien Cegarra & Benoît Valéry. All rights reserved.
 # Institut National Universitaire Champollion (Albi, France).
 # License : CeCILL, version 2.1 (see the LICENSE file)
+from pathlib import Path
+from typing import Optional
 from pyglet import font
 from core.constants import PATHS as P, CONFIG
 import sys
@@ -14,13 +16,28 @@ def clamp(x, val_min, val_max):
 
 
 def get_session_numbers():
+    session_numbers = list()
     try:
-        session_numbers = [int(s.name.split('_')[0])
-                           for s in P['SESSIONS'].glob('**/*.csv')]
-    except:
-        session_numbers = [0]
+        for csv_file in P['SESSIONS'].glob('**/*.csv'):
+            number = _extract_session_number(csv_file)
+            if number is not None:
+                session_numbers.append(number)
+    except FileNotFoundError:
+        pass
 
+    if len(session_numbers) == 0:
+        return [0]
     return session_numbers
+
+
+def _extract_session_number(path: Path) -> Optional[int]:
+    stem = path.stem
+    if '_' in stem and stem.split('_')[0].isdigit():
+        return int(stem.split('_')[0])
+    parent_name = path.parent.name
+    if '_' in parent_name and parent_name.split('_')[0].isdigit():
+        return int(parent_name.split('_')[0])
+    return None
 
 
 def find_the_first_available_session_number():
