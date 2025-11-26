@@ -18,8 +18,10 @@ class EnergyEvent:
     target_g: float
     duration: float
     scheduled_at: float
+    delay: float = 0.0
     started_at: Optional[float] = None
     completed_at: Optional[float] = None
+    warning_emitted: bool = False
 
     def is_active(self) -> bool:
         return self.started_at is not None and self.completed_at is None
@@ -33,6 +35,12 @@ class EnergyEvent:
         elapsed = now - self.started_at
         return max(0.0, self.duration - elapsed)
 
+    def time_to_start(self, now: float) -> float:
+        if self.started_at is not None:
+            return 0.0
+        ready_at = self.scheduled_at + self.delay
+        return max(0.0, ready_at - now)
+
 
 class Energymanager(AbstractPlugin):
     """Monitors energy/g-envelope events for high-performance aircraft."""
@@ -44,12 +52,16 @@ class Energymanager(AbstractPlugin):
             'glimit': validation.is_positive_float,
             'energylimit': validation.is_positive_float,
             'energyreserve': validation.is_positive_float,
+            'gwarningthreshold': validation.is_positive_float,
+            'gwarningleadtime': validation.is_positive_float,
         }
 
         self.parameters.update({
             'glimit': 7.5,
             'energylimit': 120.0,   # cumulative g-seconds before fatigue
             'energyreserve': 100.0, # percent
+            'gwarningthreshold': 5.0,
+            'gwarningleadtime': 4.0,
         })
 
         self.parameters['taskfeedback']['overdue'].update({
@@ -63,6 +75,7 @@ class Energymanager(AbstractPlugin):
         self.energy_reserve: float = float(self.parameters['energyreserve'])
         self.cumulative_g_seconds: float = 0.0
         self._widget: Optional[Simpletext] = None
+        self._gauge_widget: Optional[Simpletext] = None
 
     # Lifecycle ---------------------------------------------------------
     def start(self) -> None:
@@ -94,15 +107,27 @@ class Energymanager(AbstractPlugin):
             wrap_width=0.95,
             color=C['WHITE'],
         )
+        self._gauge_widget = self.add_widget(
+            'gauge',
+            Simpletext,
+            container=self.task_container,
+            text=_('G-meter idle.'),
+            font_size=F['SMALL'],
+            y=0.25,
+            wrap_width=0.95,
+            color=C['WHITE'],
+        )
 
     def compute_next_plugin_state(self) -> bool:
         self._advance_events()
+        self._maybe_emit_g_warning()
         return super().compute_next_plugin_state()
 
     def refresh_widgets(self) -> bool:
         if not super().refresh_widgets():
             return False
         self._update_widget()
+        self._update_gauge()
         self._update_overdue()
         return True
 
@@ -120,11 +145,15 @@ class Energymanager(AbstractPlugin):
                 target_g=float(parts[1]),
                 duration=float(parts[2]),
                 scheduled_at=self.scenario_time,
+                delay=float(parts[3]) if len(parts) > 3 else 0.0,
             )
         except ValueError:
             return
         self.events.append(event)
-        self.log_performance('energy_event_schedule', f'{event.name}:{event.target_g}:{event.duration}')
+        self.log_performance(
+            'energy_event_schedule',
+            f'{event.name}:{event.target_g}:{event.duration}:{event.delay}',
+        )
 
     def overg(self, payload: str) -> None:
         try:
@@ -148,6 +177,26 @@ class Energymanager(AbstractPlugin):
         self.energy_reserve = max(0.0, min(100.0, reserve))
         self.log_performance('energy_set_reserve', self.energy_reserve)
 
+    def warning(self, payload: str) -> None:
+        """
+        Configure g-onset warning threshold and lead time (seconds before start).
+        payload: threshold_g,lead_time_sec
+        """
+        parts = self._split(payload, 2)
+        if not parts:
+            return
+        try:
+            threshold = float(parts[0])
+            lead_time = float(parts[1])
+        except (TypeError, ValueError):
+            return
+        self.parameters['gwarningthreshold'] = max(0.1, threshold)
+        self.parameters['gwarningleadtime'] = max(0.5, lead_time)
+        self.log_performance(
+            'energy_warning_config',
+            f"{self.parameters['gwarningthreshold']}:{self.parameters['gwarningleadtime']}",
+        )
+
     # Helpers -----------------------------------------------------------
     def _split(self, payload: str, min_parts: int) -> Optional[List[str]]:
         if not payload:
@@ -160,9 +209,18 @@ class Energymanager(AbstractPlugin):
     def _advance_events(self) -> None:
         now = self.scenario_time
         # Start the first queued event if none active
-        active = next((event for event in self.events if event.is_active()), None)
+        active = self._get_active_event()
         if active is None:
-            next_event = next((event for event in self.events if not event.is_complete() and not event.is_active()), None)
+            next_event = next(
+                (
+                    event
+                    for event in self.events
+                    if not event.is_complete()
+                    and event.started_at is None
+                    and now >= event.scheduled_at + event.delay
+                ),
+                None,
+            )
             if next_event is not None:
                 next_event.started_at = now
                 self.log_performance('energy_event_start', next_event.name)
@@ -207,6 +265,45 @@ class Energymanager(AbstractPlugin):
 
         self._widget.set_text('\n'.join(lines))
 
+    def _update_gauge(self) -> None:
+        if self._gauge_widget is None:
+            return
+        limit = float(self.parameters['glimit'])
+        threshold = float(self.parameters['gwarningthreshold'])
+        active = self._get_active_event()
+        upcoming = self._get_next_event()
+        target = None
+        context_line = ''
+        now = self.scenario_time
+        if active is not None:
+            target = active.target_g
+            context_line = _('Active {0} ({1:.1f}s remaining)').format(active.name, active.remaining(now))
+        elif upcoming is not None:
+            target = upcoming.target_g
+            context_line = _('Next {0} in {1:.1f}s').format(upcoming.name, upcoming.time_to_start(now))
+        else:
+            self._gauge_widget.set_text(_('G-meter idle.'))
+            return
+        bar = self._build_gauge_bar(target, limit, threshold)
+        metrics_line = _('Target {0:.1f}G | Limit {1:.1f}G | Warn {2:.1f}G').format(target, limit, threshold)
+        self._gauge_widget.set_text('\n'.join([bar, context_line, metrics_line]))
+
+    def _build_gauge_bar(self, target: float, limit: float, threshold: float) -> str:
+        width = 24
+        scale_max = max(limit, threshold, target, 0.1) * 1.1
+        step = scale_max / (width - 1)
+        bar = ['-' for _ in range(width)]
+
+        def _mark(value: float, symbol: str) -> None:
+            idx = int(round(value / step))
+            idx = max(0, min(width - 1, idx))
+            bar[idx] = symbol
+
+        _mark(limit, 'L')
+        _mark(threshold, 'W')
+        _mark(target, 'T')
+        return '[' + ''.join(bar) + ']'
+
     def _update_overdue(self) -> None:
         overdue = self.parameters['taskfeedback']['overdue']
         limit = float(self.parameters['energylimit'])
@@ -218,4 +315,32 @@ class Energymanager(AbstractPlugin):
             self.log_performance('energy_alert', 'reserve_low')
         if g_limit:
             self.log_performance('energy_alert', 'cumulative_limit')
+
+    def _maybe_emit_g_warning(self) -> None:
+        threshold = float(self.parameters['gwarningthreshold'])
+        lead_time = float(self.parameters['gwarningleadtime'])
+        now = self.scenario_time
+        for event in self.events:
+            if event.warning_emitted:
+                continue
+            if event.target_g < threshold:
+                continue
+            if event.started_at is not None:
+                continue
+            if event.time_to_start(now) <= lead_time:
+                event.warning_emitted = True
+                self.log_performance('g_onset_warning', f'{event.name}:{event.target_g}:{event.time_to_start(now):.1f}')
+
+    def _get_active_event(self) -> Optional[EnergyEvent]:
+        return next((event for event in self.events if event.is_active()), None)
+
+    def _get_next_event(self) -> Optional[EnergyEvent]:
+        candidates = [
+            event
+            for event in self.events
+            if event.started_at is None and not event.is_complete()
+        ]
+        if not candidates:
+            return None
+        return min(candidates, key=lambda event: event.scheduled_at + event.delay)
 
