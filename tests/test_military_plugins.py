@@ -478,6 +478,25 @@ class TestAudioAlerts:
         self.module.pyglet = None  # type: ignore[attr-defined]
         plugin.play('warning')
         assert any(record['name'] == 'audio_error' for record in plugin.logger.records)
+
+
+class TestWeatherOverlay:
+    """Tests for the Weather Overlay plugin."""
+
+    def setup_method(self) -> None:
+        self.module = _load_plugin('weatheroverlay')
+        self.Weatheroverlay = self.module.Weatheroverlay
+
+    def test_set_and_clear_weather(self) -> None:
+        plugin = self.Weatheroverlay()
+        plugin.logger = MockLogger()
+        plugin.set('IMC: ceiling 800 ft, vis 2 nm')
+        assert plugin.active_weather == 'IMC: ceiling 800 ft, vis 2 nm'
+        plugin.clear('')
+        assert plugin.active_weather is None
+        names = [record['name'] for record in plugin.logger.records]
+        assert 'weather_set' in names
+        assert 'weather_clear' in names
 class TestEmergencyStack:
     """Tests for the Emergency Stack plugin."""
 
@@ -566,7 +585,7 @@ class TestCompositeScore:
         plugin.logger = MockLogger()
         plugin._initialise_metrics()
         plugin.weights('track=0.4,sysmon=0.3,communications=0.2,resman=0.1')
-        total = sum(m.weight for m in plugin.task_metrics.values())
+        total = sum(m.weight for m in plugin.metrics.values())
         assert abs(total - 1.0) < 0.01
 
     def test_baseline_collection(self) -> None:
@@ -574,9 +593,17 @@ class TestCompositeScore:
         plugin.logger = MockLogger()
         plugin._initialise_metrics()
         plugin.baseline('start')
-        assert plugin._baseline_active is True
+        assert plugin.baseline_active is True
         plugin.baseline('stop')
-        assert plugin._baseline_active is False
+        assert plugin.baseline_active is False
+
+    def test_ingest_updates_score(self) -> None:
+        plugin = self.Compositescore()
+        plugin.logger = MockLogger()
+        plugin._initialise_metrics()
+        plugin.ingest('track,0.8')
+        plugin.ingest('sysmon,0.6')
+        assert plugin.composite_score != 0.0
 
 
 class TestAutotraining:
