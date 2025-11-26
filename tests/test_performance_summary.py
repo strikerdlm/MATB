@@ -61,6 +61,15 @@ def test_performance_aggregator_emits_domain_kpis() -> None:
     agg.record('Datalink', 'datalink_receive', 'msg1')
     agg.record('Datalink', 'datalink_ack', 'msg1:ATC:1.2')
     agg.record('Datalink', 'datalink_drop', 'msg2')
+    agg.record('OperatorCapacity', 'operator_capacity_active', 4)
+    agg.record('OperatorCapacity', 'operator_capacity_active', 2)
+    agg.record('OperatorCapacity', 'operator_capacity_supervisory', 5)
+    agg.record('OperatorCapacity', 'operator_capacity_breach', 'active')
+    agg.record('OperatorCapacity', 'operator_overlap', 0.7)
+    agg.record('PlatformProfile', 'platform_profile_set', 'uav1|identifier=ScanEagle')
+    agg.record('PlatformProfile', 'platform_endurance_hours', 24)
+    agg.record('PlatformProfile', 'platform_payload_capacity', 3.4)
+    agg.record('PlatformProfile', 'platform_bandwidth_limit', 18)
 
     summary = agg.build_summary()
     mission = summary['modules']['missiondirector']['derived']
@@ -73,6 +82,13 @@ def test_performance_aggregator_emits_domain_kpis() -> None:
     assert datalink['baseline'] == 1
     assert datalink['ack_rate'] == 1.0
     assert datalink['drop_rate'] == 1.0
+    operator = summary['modules']['operatorcapacity']['derived']
+    assert operator['active_mean'] == 3.0
+    assert operator['breach_active_rate'] == 0.5
+    assert operator['overlap_mean'] == 0.7
+    platform = summary['modules']['platformprofile']['derived']
+    assert platform['mean_endurance_hours'] == 24
+    assert platform['platform_counts']['uav1|identifier=ScanEagle'] == 1
     assert summary['scenario_seconds'] == 30.5
 
 
