@@ -28,3 +28,4 @@ from .automationhooks import Automationhooks
 from .failureinjector import Failureinjector
 from .operatorcapacity import Operatorcapacity
 from .platformprofile import Platformprofile
+from .platformprofile import Platformprofile
