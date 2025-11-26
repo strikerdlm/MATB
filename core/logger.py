@@ -11,8 +11,8 @@ from time import perf_counter
 from datetime import datetime
 from csv import DictWriter
 from pathlib import Path
-from typing import Any, Dict, Optional
-from core.constants import PATHS, REPLAY_MODE
+from typing import Any, Dict, List, Optional, Tuple
+from core.constants import PATHS, REPLAY_MODE, CONFIG
 from core.utils import find_the_first_available_session_number
 from core.performance_summary import PerformanceAggregator
 
@@ -37,21 +37,35 @@ class Logger:
         self.summary_path: Optional[Path] = None
         self.markdown_path: Optional[Path] = None
         self.session_dir: Optional[Path] = None
+        self.user_root: Optional[Path] = None
         self.performance_summary = PerformanceAggregator()
         self._artifacts_captured = False
         self.provenance_info: Dict[str, Optional[str]] = {}
         self._provenance_version = 0
+        self._current_scenario_label: Optional[str] = None
+        self._current_scenario_version: Optional[str] = None
+        self._last_summary_payload: Optional[Dict[str, Any]] = None
+
+        self.user_profile = self._load_user_profile()
+        self.provenance_info.update({
+            'user_id': self.user_profile['id'],
+            'user_name': self.user_profile['name'],
+            'user_cohort': self.user_profile.get('cohort'),
+        })
+        self._provenance_version = 1
 
         if not REPLAY_MODE:
-            self.session_dir = PATHS['SESSIONS'].joinpath(
-                self.datetime.strftime("%Y-%m-%d"),
-                f'{self.session_id}_{self.datetime.strftime("%y%m%d_%H%M%S")}',
-            )
+            self.user_root = self._ensure_user_root()
+            dated_dir = self.user_root.joinpath(self.datetime.strftime("%Y-%m-%d"))
+            session_folder = f'session_{self.session_id:04d}_{self.datetime.strftime("%H%M%S")}'
+            self.session_dir = dated_dir.joinpath(session_folder)
             self.session_dir.mkdir(parents=True, exist_ok=True)
-            self.path = self.session_dir / 'events.csv'
-            self.summary_path = self.session_dir / 'summary.json'
-            self.markdown_path = self.session_dir / 'summary.md'
+            file_stem = f'user{self.user_profile["id"]}_session{self.session_id:04d}'
+            self.path = self.session_dir.joinpath(f'{file_stem}_events.csv')
+            self.summary_path = self.session_dir.joinpath(f'{file_stem}_summary.json')
+            self.markdown_path = self.session_dir.joinpath(f'{file_stem}_summary.md')
             self.open()
+            self._update_user_registry()
 
     # TODO: see if we can/should merge record_* methods into one
     def record_event(self, event):
@@ -128,7 +142,7 @@ class Logger:
         self._write_plugin_versions(plugin_versions_path)
         self._artifacts_captured = True
 
-        self.provenance_info = {
+        self.provenance_info.update({
             'scenario': scenario_name,
             'scenario_hash': scenario_hash_value,
             'session_dir': str(self.session_dir) if self.session_dir else None,
@@ -136,7 +150,7 @@ class Logger:
             'plugin_versions': str(plugin_versions_path),
             'summary_json': str(self.summary_path) if self.summary_path else None,
             'summary_markdown': str(self.markdown_path) if self.markdown_path else None,
-        }
+        })
         self._provenance_version += 1
 
 
@@ -239,7 +253,13 @@ class Logger:
             scenario_version: Semantic version or hash of the scenario file.
             config_snapshot: Dictionary of plugin configurations for reproducibility.
         """
-        metadata: Dict[str, Any] = {'session_id': self.session_id}
+        metadata: Dict[str, Any] = {
+            'session_id': self.session_id,
+            'user_id': self.user_profile['id'],
+            'user_name': self.user_profile['name'],
+            'user_cohort': self.user_profile.get('cohort'),
+            'user_notes': self.user_profile.get('notes'),
+        }
         if scenario_label:
             metadata['scenario'] = scenario_label
         if scenario_version:
@@ -248,17 +268,24 @@ class Logger:
             metadata['config_snapshot'] = config_snapshot
         if self.path is not None:
             metadata['log_path'] = str(self.path)
+        if self.session_dir is not None:
+            metadata['session_dir'] = str(self.session_dir)
         self.performance_summary.reset(metadata)
+        self._current_scenario_label = scenario_label or metadata.get('scenario')
+        self._current_scenario_version = scenario_version
 
 
     def finalize_performance_summary(self) -> None:
         if self.summary_path is None:
             return
+        summary_payload: Optional[Dict[str, Any]] = None
         try:
             self.performance_summary.export(self.summary_path)
+            summary_payload = json.loads(self.summary_path.read_text(encoding='utf-8'))
             if self.markdown_path is not None:
                 self.performance_summary.export_markdown(self.markdown_path)
-        except OSError as exc:
+            self._update_user_history(summary_payload)
+        except (OSError, json.JSONDecodeError) as exc:
             self.log_manual_entry(f'Unable to write performance summary: {exc}', key='error')
 
     def persist_scenario_contents(self, contents) -> Optional[Path]:
@@ -273,9 +300,85 @@ class Logger:
         scenario_file.write_text(text, encoding='utf-8')
         return scenario_file
 
-    def get_provenance_snapshot(self) -> tuple[Dict[str, Optional[str]], int]:
+    def get_provenance_snapshot(self) -> Tuple[Dict[str, Optional[str]], int]:
         """Expose current provenance info and version counter."""
         return dict(self.provenance_info), self._provenance_version
+
+    # ------------------------------------------------------------------
+    def _load_user_profile(self) -> Dict[str, str]:
+        profile = {
+            'id': '0000',
+            'name': 'UNASSIGNED',
+            'cohort': '',
+            'notes': '',
+        }
+        if CONFIG.has_section('User'):
+            section = CONFIG['User']
+            profile['id'] = self._sanitize_user_id(section.get('id', profile['id']))
+            profile['name'] = section.get('name', profile['name']).strip() or profile['name']
+            profile['cohort'] = section.get('cohort', '').strip()
+            profile['notes'] = section.get('notes', '').strip()
+        return profile
+
+    def _ensure_user_root(self) -> Path:
+        user_folder = PATHS['SESSIONS'].joinpath(f"user_{self.user_profile['id']}")
+        user_folder.mkdir(parents=True, exist_ok=True)
+        return user_folder
+
+    def _update_user_registry(self) -> None:
+        registry_path = PATHS['SESSIONS'].joinpath('users_index.json')
+        registry: Dict[str, Any] = {}
+        if registry_path.exists():
+            try:
+                registry = json.loads(registry_path.read_text(encoding='utf-8'))
+            except json.JSONDecodeError:
+                registry = {}
+        registry[self.user_profile['id']] = {
+            'name': self.user_profile['name'],
+            'cohort': self.user_profile.get('cohort'),
+            'notes': self.user_profile.get('notes'),
+            'last_session_id': self.session_id,
+            'last_updated': self.datetime.isoformat(),
+        }
+        registry_path.write_text(json.dumps(registry, indent=2, sort_keys=True), encoding='utf-8')
+        self.provenance_info['users_index'] = str(registry_path)
+        self._provenance_version += 1
+
+    def _update_user_history(self, summary: Optional[Dict[str, Any]]) -> None:
+        if self.user_root is None or self.session_dir is None:
+            return
+        history_path = self.user_root.joinpath('history.json')
+        history: List[Dict[str, Any]]
+        try:
+            history = json.loads(history_path.read_text(encoding='utf-8'))
+        except (FileNotFoundError, json.JSONDecodeError):
+            history = []
+
+        record = {
+            'session_id': self.session_id,
+            'session_dir': str(self.session_dir),
+            'user_id': self.user_profile['id'],
+            'user_name': self.user_profile['name'],
+            'scenario': self._current_scenario_label,
+            'scenario_version': self._current_scenario_version,
+            'summary_json': str(self.summary_path) if self.summary_path else None,
+            'summary_markdown': str(self.markdown_path) if self.markdown_path else None,
+            'scenario_hash': self.provenance_info.get('scenario_hash'),
+            'timestamp': self.datetime.isoformat(),
+        }
+        if summary:
+            record['generated_at'] = summary.get('generated_at')
+            record['scenario_seconds'] = summary.get('scenario_seconds')
+            record['metadata'] = summary.get('metadata')
+        history.append(record)
+        history_path.write_text(json.dumps(history, indent=2, sort_keys=False), encoding='utf-8')
+        self.provenance_info['user_history'] = str(history_path)
+        self._provenance_version += 1
+
+    @staticmethod
+    def _sanitize_user_id(value: str) -> str:
+        digits = ''.join(ch for ch in value if ch.isdigit())
+        return digits.zfill(4) if digits else '0000'
 
     def _write_plugin_versions(self, target: Path) -> None:
         versions: Dict[str, str] = {}
