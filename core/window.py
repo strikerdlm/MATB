@@ -56,6 +56,7 @@ class Window(Window):
         self.on_key_press_replay = None # used by the replay
 
         self.display_session_id()
+        self._init_status_banner()
 
 
     def display_session_id(self):
@@ -65,6 +66,22 @@ class Window(Window):
             title='OpenMATB'
 
             self.modal_dialog = ModalDialog(self, msg, title)
+
+    def _init_status_banner(self):
+        self._provenance_version_displayed = -1
+        font_name = get_conf_value('Openmatb', 'font_name') or 'Arial'
+        self._provenance_label = Label(
+            _('Scenario: pending'),
+            x=20,
+            y=self.height - 10,
+            anchor_x='left',
+            anchor_y='top',
+            font_name=font_name,
+            font_size=F['SMALL'],
+            color=C['WHITE'],
+            batch=self.batch,
+            group=G(5),
+        )
 
 
     def get_screen(self):
@@ -116,6 +133,7 @@ class Window(Window):
     def on_draw(self):
         self.set_mouse_visible(self.is_mouse_necessary())
         self.clear()
+        self._update_provenance_label()
         self.batch.draw()
 
 
@@ -204,3 +222,26 @@ class Window(Window):
         # for example to close
         self.modal_dialog = ModalDialog(self, pass_list, title=title,
                                                       continue_key=continue_key, exit_key='Q')
+
+    def _update_provenance_label(self):
+        info, version = logger.get_provenance_snapshot()
+        if version == self._provenance_version_displayed:
+            return
+        self._provenance_label.text = self._format_provenance_text(info)
+        self._provenance_version_displayed = version
+
+    @staticmethod
+    def _format_provenance_text(info):
+        if not info:
+            return _('Scenario: pending')
+        scenario = info.get('scenario') or _('n/a')
+        scenario_hash = info.get('scenario_hash')
+        hash_str = scenario_hash[:10] if scenario_hash else _('n/a')
+        config_snapshot = info.get('config_snapshot') or _('n/a')
+        plugin_versions = info.get('plugin_versions') or _('n/a')
+        return '\n'.join([
+            _('Scenario: %s') % scenario,
+            _('Hash: %s') % hash_str,
+            _('Config: %s') % config_snapshot,
+            _('Plugins: %s') % plugin_versions,
+        ])
