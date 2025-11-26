@@ -1,38 +1,43 @@
-"""Platform profile synchronization plugin."""
+"""Platform profile management plugin."""
 
 from __future__ import annotations
 
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 
-from core import validation
 from core.constants import COLORS as C, FONT_SIZES as F
 from core.widgets import Simpletext
 from plugins.abstractplugin import AbstractPlugin
-from plugins.platformregistry import PlatformDefinition, PlatformRegistry, format_assignment
+from plugins.platformprofile_data import (
+    build_profile,
+    canonical_platform_id,
+    parse_override_block,
+    list_supported_platforms,
+)
 
 
 class Platformprofile(AbstractPlugin):
-    """Keeps UAV platform assignments aligned with the mission plan."""
+    """Tracks UAV platform assignments and propagates capabilities to other plugins."""
 
-    def __init__(self, label: str = '', taskplacement: str = 'bottomleft', taskupdatetime: int = 1000) -> None:
+    def __init__(self, label: str = '', taskplacement: str = 'bottommid', taskupdatetime: int = 750) -> None:
         super().__init__(label or _('Platform Profiles'), taskplacement, taskupdatetime)
+        self.parameters['taskfeedback']['overdue'].update({
+            'active': True,
+            'color': C['ORANGE'],
+            'delayms': 0,
+            'blinkdurationms': 500,
+        })
+        self._profiles: Dict[str, Dict[str, object]] = {}
+        self._widget: Optional[Simpletext] = None
 
-        self.validation_dict = {
-            'defaultprofile': validation.is_string,
-        }
-        self.parameters.update({'defaultprofile': 'generic'})
-        self.registry = PlatformRegistry()
-        self.assignments: Dict[str, PlatformDefinition] = {}
-        self._widgets: Dict[str, Simpletext] = {}
-
+    # Lifecycle ----------------------------------------------------------
     def start(self) -> None:
-        self.assignments.clear()
+        self._profiles = {}
         super().start()
 
     def create_widgets(self) -> None:
         super().create_widgets()
-        header = _('UAV | Platform | Endurance | Payload | Launch/Recovery')
-        self._widgets['header'] = self.add_widget(
+        header = _('UAV | Platform | Endurance | Payload | Link | Launch/Recovery')
+        self.add_widget(
             'header',
             Simpletext,
             container=self.task_container,
@@ -42,121 +47,127 @@ class Platformprofile(AbstractPlugin):
             color=C['WHITE'],
             bold=True,
         )
-        for idx in range(4):
-            self._widgets[f'row_{idx}'] = self.add_widget(
-                f'row_{idx}',
-                Simpletext,
-                container=self.task_container,
-                text='',
-                font_size=F['SMALL'],
-                y=0.75 - idx * 0.2,
-                color=C['WHITE'],
-                wrap_width=0.98,
-            )
+        self._widget = self.add_widget(
+            'summary',
+            Simpletext,
+            container=self.task_container,
+            text=self._empty_summary_text(),
+            font_size=F['SMALL'],
+            y=0.65,
+            wrap_width=0.97,
+            color=C['WHITE'],
+        )
 
     def refresh_widgets(self) -> bool:
         if not super().refresh_widgets():
             return False
-        for idx, (asset, definition) in enumerate(self.assignments.items()):
-            if idx >= 4:
-                break
-            self._widgets[f'row_{idx}'].set_text(self._format_row(asset, definition))
+        if self._widget is not None:
+            self._widget.set_text(self._build_summary_text())
+        self._update_overdue_state()
         return True
 
     # Scenario commands --------------------------------------------------
     def set(self, payload: str) -> None:
-        """Associate a UAV with a predefined platform profile."""
-        parts = [part.strip() for part in payload.split(',') if part.strip()]
+        """Assign a platform: ``platformprofile;set;uav1,scaneagle,endurance=20h|sensors=EO/IR``."""
+        parts = [part.strip() for part in payload.split(',', 2) if part.strip()]
         if len(parts) < 2:
             return
-        asset_id = parts[0]
-        profile_name = parts[1]
-        overrides = self._parse_overrides(parts[2:])
-        definition = self.registry.get(profile_name)
-        if definition is None:
-            default_name = self.parameters['defaultprofile']
-            definition = self.registry.get(default_name)
-            if definition is None:
-                return
-        if overrides:
-            definition = PlatformRegistry.apply_overrides(definition, overrides)
-        self.registry.assign(asset_id, definition)
-        self.assignments[asset_id] = definition
-        self._log_assignment(asset_id, definition, overrides)
-        self.refresh_widgets()
-
-    def define(self, payload: str) -> None:
-        """
-        Register a new platform profile.
-
-        payload syntax: name,display,endurance_hours,payload_kg,bandwidth_mbps,launch,recovery,sensors
-        """
-        parts = [part.strip() for part in payload.split(',')]
-        if len(parts) < 8:
-            return
-        try:
-            endurance = float(parts[2])
-            payload_mass = float(parts[3])
-            bandwidth = float(parts[4])
-        except ValueError:
-            return
-        sensors = tuple(sensor.strip() for sensor in parts[7].split('|') if sensor.strip())
-        definition = PlatformDefinition(
-            identifier=parts[0],
-            display_name=parts[1],
-            endurance_hours=endurance,
-            payload_capacity_kg=payload_mass,
-            bandwidth_limit_mbps=bandwidth,
-            launch_method=parts[5],
-            recovery_method=parts[6],
-            sensors=sensors,
-        )
-        self.registry.register(parts[0], definition)
-        self.log_performance('platform_profile_defined', definition.identifier)
+        uav_label = self._canonical_uav(parts[0])
+        platform_id = canonical_platform_id(parts[1])
+        overrides = parse_override_block(parts[2]) if len(parts) == 3 else {}
+        profile = build_profile(platform_id, overrides or None)
+        profile['uav'] = uav_label
+        profile['overrides'] = tuple(sorted(overrides.keys()))
+        self._profiles[uav_label] = profile
+        self.log_performance('platform_profile_set', self._format_log_payload(uav_label, profile))
+        for key, value in overrides.items():
+            self.log_performance('platform_profile_override', f'{uav_label}:{key}={value}')
+        self._push_endurance_update(uav_label, profile)
+        self._push_payload_update(profile)
 
     def clear(self, payload: str) -> None:
-        """Remove an assignment for a UAV."""
-        asset_id = payload.strip()
-        if not asset_id:
+        """Clear a platform assignment: ``platformprofile;clear;uav1``."""
+        key = self._canonical_uav(payload)
+        if key in self._profiles:
+            del self._profiles[key]
+            self.log_performance('platform_profile_clear', key)
+
+    def catalog(self, _payload: str = '') -> None:
+        """Log the supported platform identifiers (diagnostic aid)."""
+        platforms = ','.join(list_supported_platforms())
+        self.log_performance('platform_catalog', platforms)
+
+    # Helpers -------------------------------------------------------------
+    def _canonical_uav(self, label: str) -> str:
+        return label.strip().upper()
+
+    def _empty_summary_text(self) -> str:
+        return _('Awaiting platform assignments…')
+
+    def _build_summary_text(self) -> str:
+        if not self._profiles:
+            return self._empty_summary_text()
+        lines = []
+        for uav in sorted(self._profiles.keys()):
+            profile = self._profiles[uav]
+            line = self._format_summary_line(uav, profile)
+            lines.append(line)
+        return '\n'.join(lines)
+
+    def _format_summary_line(self, uav: str, profile: Dict[str, object]) -> str:
+        name = profile.get('name', 'N/A')
+        endurance = profile.get('endurance_hours', 0)
+        payload = profile.get('payload_capacity_kg', 0.0)
+        datalink = profile.get('datalink_mbps', 0.0)
+        launch = profile.get('launch_method', 'n/a')
+        recovery = profile.get('recovery_method', 'n/a')
+        sensors = profile.get('sensors', ())
+        sensor_str = f" | Sensors: {', '.join(sensors)}" if sensors else ''
+        notes = profile.get('notes') or ''
+        notes_str = f" | {notes}" if notes else ''
+        return (
+            f"{uav} | {name} | {endurance}h | {payload:.1f} kg | "
+            f"{datalink:.0f} Mbps | {launch}/{recovery}{sensor_str}{notes_str}"
+        )
+
+    def _format_log_payload(self, uav: str, profile: Dict[str, object]) -> str:
+        return (
+            f"{uav}:{profile.get('id')}:{int(profile.get('endurance_sec', 0))}:"
+            f"{profile.get('payload_capacity_kg')}"
+        )
+
+    def _get_plugin(self, alias: str) -> Optional[AbstractPlugin]:
+        if self.scheduler is None:
+            return None
+        return self.scheduler.plugins.get(alias)
+
+    def _push_endurance_update(self, uav: str, profile: Dict[str, object]) -> None:
+        mission = self._get_plugin('missiondirector')
+        if mission is None:
             return
-        if asset_id in self.assignments:
-            del self.assignments[asset_id]
-            self.log_performance('platform_profile_clear', asset_id)
-        self.refresh_widgets()
+        duration = int(profile.get('endurance_sec', 0))
+        warn = int(profile.get('warning_buffer_sec', max(600, duration // 10 or 600)))
+        try:
+            mission.endurance(f'{uav},{duration},{warn}')
+            self.log_performance('platform_endurance_push', f'{uav}:{duration}:{warn}')
+        except Exception:  # pragma: no cover - defensive integration
+            pass
 
-    # Helpers ------------------------------------------------------------
-    def _format_row(self, asset_id: str, definition: PlatformDefinition) -> str:
-        endurance = f"{definition.endurance_hours:.1f}h"
-        payload = f"{definition.payload_capacity_kg:.1f}kg"
-        launch = definition.launch_method
-        recovery = definition.recovery_method
-        return f"{asset_id} | {definition.identifier} | {endurance} | {payload} | {launch}/{recovery}"
+    def _push_payload_update(self, profile: Dict[str, object]) -> None:
+        payload_mgr = self._get_plugin('payloadmanager')
+        if payload_mgr is None or not hasattr(payload_mgr, 'apply_platform_profile'):
+            return
+        try:
+            payload_mgr.apply_platform_profile(profile.get('name', 'platform'), profile)
+            self.log_performance(
+                'platform_payload_push',
+                f"{profile.get('name')}:{profile.get('datalink_mbps', 0)}",
+            )
+        except Exception:  # pragma: no cover - defensive integration
+            pass
 
-    def _parse_overrides(self, tokens: Tuple[str, ...]) -> Dict[str, str]:
-        overrides: Dict[str, str] = {}
-        for token in tokens:
-            if '=' not in token:
-                continue
-            key, value = token.split('=', 1)
-            key = key.strip()
-            value = value.strip()
-            if not key or not value:
-                continue
-            overrides[key] = value
-        return overrides
-
-    def _log_assignment(
-        self,
-        asset_id: str,
-        definition: PlatformDefinition,
-        overrides: Optional[Dict[str, str]],
-    ) -> None:
-        payload = format_assignment(asset_id, definition)
-        if overrides:
-            override_str = ','.join(f'{k}={v}' for k, v in overrides.items())
-            payload = f'{payload}|overrides:{override_str}'
-        self.log_performance('platform_profile_set', payload)
-        self.log_performance('platform_endurance_hours', definition.endurance_hours)
-        self.log_performance('platform_payload_capacity', definition.payload_capacity_kg)
-        self.log_performance('platform_bandwidth_limit', definition.bandwidth_limit_mbps)
+    def _update_overdue_state(self) -> None:
+        overdue = self.parameters['taskfeedback']['overdue']
+        overdue['active'] = True
+        overdue['_is_visible'] = len(self._profiles) == 0
 
