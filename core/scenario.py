@@ -30,8 +30,12 @@ class Scenario:
                 contents = open(scenario_path, 'r').readlines()
                 logger.log_manual_entry(scenario_path, key='scenario_path')
                 self.source_path = scenario_path
+                logger.capture_run_artifacts(self.source_path)
             else:
                 errors.add_error(_('%s was not found') % str(scenario_path), fatal = True)
+        else:
+            self.source_path = logger.persist_scenario_contents(contents)
+            logger.capture_run_artifacts(self.source_path)
 
         # Convert the scenario content into a list of events #
         # (Squeeze empty and commented [#] lines)
