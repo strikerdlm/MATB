@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, Mapping, Optional, Sequence
 
 from core import validation
 from core.constants import COLORS as C, FONT_SIZES as F
@@ -159,6 +159,30 @@ class Payloadmanager(AbstractPlugin):
         self.parameters['capacitymbps'] = capacity
         self.log_performance('payload_capacity', capacity)
 
+    def apply_platform_profile(self, platform_name: str, config: Mapping[str, object]) -> None:
+        """Allow other plugins to push platform-specific constraints."""
+        sensors = config.get('sensors')
+        capacity = config.get('datalink_mbps')
+        updated = False
+        if sensors:
+            sensor_labels = self._normalise_sensor_list(sensors)
+            if sensor_labels:
+                self.parameters['sensors'] = ','.join(sensor_labels)
+                self.sensors = {label: SensorState(label) for label in sensor_labels}
+                updated = True
+        if capacity is not None:
+            try:
+                numeric = max(1.0, float(capacity))
+            except (TypeError, ValueError):
+                numeric = None
+            if numeric is not None:
+                self.parameters['capacitymbps'] = numeric
+                updated = True
+        if updated and self._widget is not None:
+            self._update_widget()
+        if updated:
+            self.log_performance('payload_platform_profile', platform_name)
+
     # Helpers -----------------------------------------------------------
     def _initialise_sensors(self) -> None:
         labels = [name.strip() for name in self.parameters['sensors'].split(',') if name.strip()]
@@ -178,6 +202,15 @@ class Payloadmanager(AbstractPlugin):
         if len(parts) < expected:
             return None
         return parts
+
+    def _normalise_sensor_list(self, sensors: object) -> Sequence[str]:
+        if isinstance(sensors, str):
+            tokens = [token.strip() for token in sensors.replace('/', ',').split(',')]
+        elif isinstance(sensors, Sequence):
+            tokens = [str(token).strip() for token in sensors]
+        else:
+            tokens = []
+        return [token for token in tokens if token]
 
     def _tick_energy_budget(self) -> None:
         now = self.scenario_time
