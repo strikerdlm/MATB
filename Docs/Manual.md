@@ -556,6 +556,13 @@ Establish `tests/regression/` with:
 
 CI must execute these on every commit; failures block merge.
 
+### 11.7 User Identification & Session History
+
+- **Configuration**: set the active participant in `config.ini` under `[User]` with numeric `id`, plus optional `name`, `cohort`, and `notes`. The UI banner echoes these fields at runtime.
+- **Session storage**: every run is saved under `sessions/user_<id>/<YYYY-MM-DD>/session_<id>_<timestamp>/` so longitudinal datasets stay partitioned per subject.
+- **Artifacts per user**: the app now maintains `sessions/user_<id>/history.json` (chronological list of runs with scenario labels, hashes, summary paths, and durations) and a global `sessions/users_index.json` registry so labs can query multi-user datasets quickly.
+- **Exports**: both `summary.json` and `summary.md` include the user metadata, and file names incorporate the user ID to simplify downstream analysis scripts.
+
 ---
 
 ## 12. Validation & Reliability Checklist
