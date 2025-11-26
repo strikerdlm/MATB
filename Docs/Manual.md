@@ -267,3 +267,55 @@ This modular approach keeps acquisition (via LSL) decoupled from visualisation, 
 4. **Plan physiological overlays** – If hypoxia/high-G effects are required, align with hardware (e.g., dimming filters, input lag) so scenario designers can flip them via config only.
 
 This plan keeps documentation centralised, ties new features to existing extension seams, and aligns with published research so the new modules remain defensible for both experimental and training communities. Implementation credit: **Dr Diego Malpica, Aerospace Medicine**.
+
+## 7. Military Implementation Roadmap & Reliability Requirements
+
+### 7.1 Alignment with Military MATB Variants
+
+- **Reference platforms**:
+  - The recent comprehensive review of MATB for military aircrew assessment highlights its psychometric robustness (construct validity, internal consistency, test–retest reliability) and sensitivity to training effects when standardised protocols are followed ([Multi-Attribute Task Battery for Military Aircrew Assessment](research/Multi Attribute Task Battery for Military Aircrew Assessment A Comprehensive Research Report.md)).
+  - USAARL MATB v2.5 and AF-MATB add pre-validated demand levels, script-generation tools, automated training, adaptive automation, and detailed performance logs ([USAARL MATB – Recent Developments](research/The United States Army Aeromedical Research Laboratory Multi-Attribute Task Battery- Recent Developments.md); [AF-MATB adaptation](research/THE USAF ADAPTATION OF THE MAT-B FOR THE ASSESSMENT OF HUMAN OPERATOR WORKLOAD AND STRATEGIC BEHAVIOR.md)).
+  - Cognitive-control and biosignal work (HRV, EDA, pupil) using MATB-II shows that physiological signals can distinguish expertise and control levels if task difficulty and confounders are tightly controlled ([MATB-II cognitive control and biosignals](research/Feedback on the Use of Matb-Ii Task for Modeling of Cognitive Control Levels Through PsychoPhysiological Biosignals.md)).
+- **Implications for OpenMATB**:
+  - OpenMATB must provide: (1) reproducible demand levels, (2) standardised training and familiarisation, (3) integrated subjective scales, and (4) composite multitasking scores that can generalise to higher-fidelity simulators.
+
+### 7.2 Software, Hardware, and Data Requirements
+
+- **Software stack**:
+  - **Python environment**: Pin Python and dependency versions (e.g., via `requirements.txt` and a lockfile) and require code to pass `ruff`, `black`, `isort`, `mypy` (strict), and `bandit` before release builds.
+  - **Platform**: Support current 64-bit Windows systems for operational use (as in AF-MATB), with testing on at least one Linux environment for research clusters. Require a minimum 60 Hz monitor at 1920×1080 or higher resolution for timing and layout stability.
+  - **Timing & logging**: Use `time.monotonic()` for durations, and keep all scenario timing in seconds with explicit conversions. Confirm log timestamps and scenario times are monotonic and synchronised with LSL streams.
+- **Hardware assumptions**:
+  - **Primary controls**: USB joystick/HOTAS recommended for tracking and HPA modules; keyboard/mouse fallback supported but documented as a secondary modality.
+  - **Physiological sensors**: Polar H10 (via `polarrlink.py`) or equivalent ECG/HRV acquisition; EEG/fNIRS/EDA/pupil systems optional but supported via LSL. No physiological data is ever simulated; plugins only consume real sensor streams.
+  - **Audio**: Headphones or dedicated speakers for COMM/datalink clarity in shared lab environments.
+- **Data management**:
+  - Require per-run log folders containing scenario file snapshot, configuration (`config.ini`), plugin parameter dumps, and raw logs. Encourage hashed scenario IDs so that aircrew assessments can be repeated or audited later.
+
+### 7.3 Experimental Protocol Requirements
+
+- **Standardised training and learning control**:
+  - Adopt a USAARL-style automated training script (~7 min) that walks subjects through each subtask, input device, and scoring rule and culminates in a short combined run. Provide at least 2–3 practice runs before any data-collection session to control learning effects (as recommended in the aircrew assessment review).
+  - Maintain a library of **pre-validated difficulty levels** (e.g., 10 levels as in USAARL MATB) per module (SYSMon, TRACK, COMM, RESMAN, and new UAS/HPA tasks) so scenarios can be described in terms of difficulty indices rather than only event rates.
+- **Subjective and objective measures**:
+  - Integrate standard scales—NASA‑TLX, RSME, situation awareness and trust scales—as optional questionnaires before/after MATB runs, with their timing stored in logs and linked to scenario IDs.
+  - Require physiological sessions (HRV, EDA, pupil, etc.) to log raw data at known sampling rates, with preprocessing pipelines (e.g., Pan–Tompkins for ECG, standard LF/HF bands) documented and versioned outside OpenMATB.
+- **Session protocol**:
+  - Specify minimum rest intervals between blocks, environmental conditions (lighting, temperature, noise), and exclusion criteria (sleep, substance use) in study documentation, mirroring protocols used in MATB‑II biosignal and military workload studies.
+
+### 7.4 Development Iteration Plan for Military Reliability
+
+- **Iteration 1 – Baseline parity with USAARL/AF-MATB**:
+  - Implement an **Automated Training plugin/scenario** that reads a scripted instruction file and orchestrates single-subtask then multi-subtask runs, logging completion and comprehension checks.
+  - Introduce **difficulty presets** for each core and new plugin (e.g., `difficulty=1–10`) that internally map to event rates, failure probabilities, and target thresholds, with documentation tying levels to observed NASA‑TLX/HRV ranges in pilot data.
+  - Extend `tools/scenario_templates.py` and/or `scenario_generator.py` to generate scenarios “by workload band” (e.g., 60–90 IMPRINT-equivalent units), even if initially approximated using event density heuristics.
+- **Iteration 2 – Adaptive automation and composite scoring**:
+  - Build on `automationhooks.py` and `failureinjector.py` to create **adaptive automation policies** driven by observed workload and performance (e.g., if SAA overdue events and HRV acute flags co-occur, temporarily offload tracking or resman subtasks).
+  - Implement a **multitasking efficiency score** similar to USAARL’s composite metric: combine normalised subtask performance, task load history, and automation usage into a single index per run for easier comparison across scenarios and simulators.
+  - Validate composite scores and automation policies on small cohorts, comparing against subjective scales and operational benchmarks from the military MATB literature.
+- **Iteration 3 – Validation, QA, and release discipline**:
+  - Establish a **regression test suite**: a fixed set of scenarios (UAS basic/BVLOS, HPA overlay, baseline MATB) that run automatically in CI to verify timing, event ordering, and key log metrics whenever the code changes.
+  - Add **scenario and config versioning** in logs (scenario hash, plugin version map, config checksum) to guarantee that any published result can be re-run with identical conditions.
+  - Formalise **release criteria** for “research‑ready” and “assessment‑ready” builds: zero linter errors, deterministic outputs for canned scenarios, documented hardware assumptions, and a changelog entry summarising any behaviour that could affect experimental comparability.
+
+Together, these requirements and iterations aim to move OpenMATB from a flexible research platform toward a military-grade assessment tool: reproducible workloads, traceable configurations, validated metrics, and explicit support for adaptive automation and physiological monitoring, all curated under the leadership of **Dr Diego Malpica, Aerospace Medicine**.
