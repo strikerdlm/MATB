@@ -222,6 +222,7 @@ class PerformanceAggregator:
             'energymanager': self._energymanager_kpis,
             'operatorcapacity': self._operatorcapacity_kpis,
             'platformprofile': self._platformprofile_kpis,
+            'vtolmanager': self._vtolmanager_kpis,
         }
         builder = builders.get(module_name)
         return builder(metrics) if builder else {}
@@ -322,6 +323,25 @@ class PerformanceAggregator:
             payload['mean_bandwidth_limit'] = round(
                 bandwidth.numeric.sum_value / bandwidth.numeric.count, 3
             )
+        return payload
+
+    def _vtolmanager_kpis(self, metrics: Mapping[str, MetricSummary]) -> Dict[str, Any]:
+        phases = self._count(metrics.get('vtol_phase_change'))
+        warnings = self._count(metrics.get('vtol_power_warning'))
+        critical = self._count(metrics.get('vtol_power_critical'))
+        overdue = self._count(metrics.get('vtol_transition_overdue'))
+        confirms = self._count(metrics.get('vtol_transition_confirm'))
+        payload: Dict[str, Any] = {}
+        if phases:
+            payload['phase_changes'] = phases
+        if warnings:
+            payload['power_warnings'] = warnings
+        if critical:
+            payload['power_critical'] = critical
+        if overdue:
+            payload['transition_overdue'] = overdue
+        if confirms:
+            payload['transition_confirms'] = confirms
         return payload
 
     @staticmethod
