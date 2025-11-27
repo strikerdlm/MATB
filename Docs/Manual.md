@@ -1029,6 +1029,17 @@ This section synthesizes findings from systematic reviews, military UAS operator
    - Log `transfer_positive` (successful transfer) vs. `transfer_negative` (performance degradation) events
    - Integrate with `compositescore.py` to weight transfer performance in training assessments
 
+#### 14.7.1 Implementation Status – Advanced Training Orchestrator
+
+- **Plugin:** `advancedtraining.py`
+- **Commands:**
+  - `advancedtraining;start;SEQ1` resets the canonical Easy→Hard order (single-easy → dual-easy → single-hard → dual-hard), logs `training_sequence_start`, and automatically begins the first phase. `advancedtraining;next;` advances to the next predefined entry.
+  - `advancedtraining;phase;Custom Phase,single,hard` lets scenarios override the active phase details at any time, logging `training_phase_start`.
+  - `advancedtraining;metric;0.82` streams per-phase performance samples; the plugin computes mean, standard deviation, and rMSSD when the phase concludes.
+  - `advancedtraining;complete;note=dual_easy` closes the active phase and emits `training_phase_complete` with the computed statistics.
+  - `advancedtraining;transfer;0.12` (or the keywords `positive`/`negative`) records `skill_transfer_detected` verdicts using the configurable `transferthreshold`.
+- **Outputs:** Besides the phase start/complete events, every measurement is logged via `training_metric`, providing a traceable bridge between sensor performance, fNIRS variability, and sequence metadata.
+
 ### 14.8 Manned-Unmanned Teaming (MUM-T) Integration
 
 **Research Foundation**: MUM-T operations involve manned aircraft pilots coordinating with UAS operators, with back-seater operators managing unmanned fleet to reduce pilot workload. Primary sources: [Wikipedia: Manned-unmanned teaming](https://en.wikipedia.org/wiki/Manned-unmanned_teaming) (general overview); For detailed research, see: Cummings, M. L., & Guerlain, S. (2007). "Developing operator capacity estimates for supervisory control of autonomous vehicles." Human Factors, 49(1), 1-15 (DOI: 10.1518/001872007779598088); [NASA Research on MUM-T](https://ntrs.nasa.gov/api/citations/20220010137/downloads/hfes_v3.pdf).
