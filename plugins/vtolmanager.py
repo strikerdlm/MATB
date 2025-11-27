@@ -8,6 +8,11 @@ from core import validation
 from core.constants import COLORS as C, FONT_SIZES as F
 from core.widgets import Simpletext
 from plugins.abstractplugin import AbstractPlugin
+
+try:
+    _
+except NameError:  # pragma: no cover - fallback when gettext not injected
+    from builtins import _  # type: ignore[misc]
 from plugins.vtolmanager_model import VtolModel
 
 
@@ -273,4 +278,3 @@ class Vtolmanager(AbstractPlugin):
     @staticmethod
     def _clamp(value: float, low: float, high: float) -> float:
         return max(low, min(high, value))
-
