@@ -150,9 +150,15 @@ Section 14.1 of [Docs/Manual.md](Docs/Manual.md) is now backed by an `operatorca
 
 To satisfy the Section 14.2 ScanEagle/NightEagle requirements, the new `platformprofile` plugin keeps a per-UAV capability table (endurance, payload, launch/recovery method, datalink capacity, and sensor presets). Commands like `platformprofile;set;uav1,scaneagle,endurance=20h|sensors=EO/IR` instantly update the on-screen profile sheet, push endurance timers into `missiondirector`, and retune `payloadmanager` capacity/sensor lists via the shared plugin bridge. Key events (`platform_profile_set`, `platform_endurance_push`, `platform_payload_push`) are logged so performance summaries can trace when a scenario switched platforms or triggered custom overrides.
 
-### Platform profile synchronization
+### VTOL flight manager
 
-Section 14.2’s ScanEagle/NightEagle guidance now ships as `platformprofile`. Use `platformprofile;set;uav1,scaneagle` (optionally followed by overrides such as `payload=4.1`) to associate mission assets with their endurance/payload/launch constraints. The plugin displays the active mapping, logs `platform_profile_*` metrics, and feeds the mission summary with mean endurance/payload/bandwidth values so downstream analytics or automation hooks can tailor Mission Director and Payload Manager parameters to each airframe.
+The new `vtolmanager` plugin implements the VTOL phase tracker described in §14.3 of [Docs/Manual.md](Docs/Manual.md). Scenario commands such as `vtolmanager;phase;vtol1,takeoff` and `vtolmanager;phase;vtol1,transition` update a live status table, drain the scripted power budget using per-phase multipliers, and require `vtolmanager;confirm;vtol1` acknowledgements whenever a transition phase starts. The logger emits `vtol_phase_change`, `vtol_transition_pending/confirm/overdue`, and `vtol_power_warning/critical` so the performance summary can quantify how often trainees respected confirmation windows and how close each sortie ran to the VTOL endurance margins.
+
+### Scenario coverage & metrics
+
+- **Reference scenarios**: `includes/scenarios/uas_basic.txt` and `uas_bvlos.txt` spin up the UAS stack (Mission Director, Sense-and-Avoid, Payload Manager, Datalink, Operator Capacity, Platform Profiles, VTOL Manager), while `includes/scenarios/hpa_overlay.txt` layers the high-performance aircraft plugins (Energy Manager, Threat Board, Emergency Stack, Physio Overlay). The `tools/scenario_templates.py` CLI can regenerate these studies with custom durations/difficulty codes so labs can hand out consistent workloads.
+- **Mission metrics**: Every plugin writes structured `performance,<module>,<metric>` rows which the post-run summary converts into KPIs (mission completion rate, conflict resolution rate, payload over-bandwidth exposure, datalink acknowledgement rate, VTOL power warnings, etc.). Reviewing `sessions/.../*_summary.json` gives a concise single-file overview, whereas the CSV log retains the raw timeline for deeper analytics.
+- **Physio/automation alignment**: Because Mission Director, Operator Capacity, Platform Profile, and VTOL Manager all log derived metrics, researchers can correlate them with HRV/LSL streams, automation hook toggles, or adaptive scenarios without reverse-engineering ad-hoc strings.
 
 ## Tutorials
 
