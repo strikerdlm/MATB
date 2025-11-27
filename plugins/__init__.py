@@ -39,3 +39,5 @@ from .swarmformation import Swarmformation
 from .sensorresource import Sensorresource
 from .targetuncertainty import Targetuncertainty
 from .dualtasksensor import Dualtasksensor
+from .launchrecovery import Launchrecovery
+from .vtolpower import Vtolpower
