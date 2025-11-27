@@ -302,6 +302,16 @@ class TestDatalink:
         plugin.forceack('MSG1')
         assert len(plugin.messages) == 0
 
+    def test_voice_toggle(self) -> None:
+        plugin = self.Datalink()
+        plugin.logger = MockLogger()
+        plugin.voice('True,PRIO|CRIT')
+        names = [record['name'] for record in plugin.logger.records]
+        assert 'datalink_voice' in names or 'datalink_voice_error' in names
+        plugin.voice('False')
+        names = [record['name'] for record in plugin.logger.records]
+        assert 'datalink_voice' in names
+
 
 # =============================================================================
 # HPA Module Tests
