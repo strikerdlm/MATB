@@ -85,6 +85,11 @@ def _load_plugin(name: str) -> ModuleType:
     return module
 
 
+import plugins
+from core.event import Event
+from core.logger import logger as core_logger
+
+
 class MockLogger:
     """Mock logger for capturing performance records."""
 
@@ -158,6 +163,16 @@ class MockWindow:
 MockWindow.MainWindow = MockWindow()
 from core.window import Window  # type: ignore
 Window.MainWindow = MockWindow.MainWindow  # type: ignore
+    
+
+class MockScheduler:
+    """Scheduler stub capturing executed events."""
+
+    def __init__(self) -> None:
+        self.events: List[Event] = []
+
+    def execute_one_event(self, event: Event) -> None:
+        self.events.append(event)
 
 
 # =============================================================================
@@ -652,6 +667,7 @@ class TestAutomationHooks:
     """Tests for the Automation Hooks plugin."""
 
     def setup_method(self) -> None:
+        core_logger.clear_metric_listeners()
         self.module = _load_plugin('automationhooks')
         self.Automationhooks = self.module.Automationhooks
 
@@ -661,7 +677,51 @@ class TestAutomationHooks:
         plugin.rules = []
         plugin.rule('payloadmanager,payload_overbandwidth,0,AUTO')
         assert len(plugin.rules) == 1
-        assert plugin.rules[0] == ('payloadmanager', 'payload_overbandwidth', 0.0, 'AUTO')
+        rule = plugin.rules[0]
+        assert rule.source_plugin == 'payloadmanager'
+        assert rule.metric == 'payload_overbandwidth'
+        assert rule.threshold == 0.0
+        assert rule.mode == 'AUTO'
+
+    def test_metric_rule_triggers_action(self) -> None:
+        plugin = self.Automationhooks()
+        plugin.logger = MockLogger()
+        plugin.scheduler = MockScheduler()
+        plugin.start()
+        plugin.scenario_time = 0.0
+        plugin.enable('1')
+        plugin.rule(
+            'missiondirector,mission_alert,0,AUTO,'
+            'target=missiondirector,command=automation,payload=UAV1,{mode}'
+        )
+        core_logger.set_scenario_time(1.0)
+        core_logger.log_performance('missiondirector', 'mission_alert', 'Conflict')
+        assert plugin.scheduler.events
+        event = plugin.scheduler.events[-1]
+        assert event.plugin == 'missiondirector'
+        assert event.command[0] == 'automation'
+        assert event.command[1] == 'UAV1,AUTO'
+        plugin.stop()
+
+    def test_numeric_rule_with_operator(self) -> None:
+        plugin = self.Automationhooks()
+        plugin.logger = MockLogger()
+        plugin.scheduler = MockScheduler()
+        plugin.start()
+        plugin.scenario_time = 0.0
+        plugin.enable('1')
+        plugin.rule(
+            'vtolpower,vtol_power_change,gt,50,AUTO,'
+            'target=missiondirector,command=automation,payload=UAV2,{mode}'
+        )
+        core_logger.set_scenario_time(2.0)
+        core_logger.log_performance('vtolpower', 'vtol_power_change', 40.0)
+        assert not plugin.scheduler.events
+        plugin.scenario_time = 5.0
+        core_logger.set_scenario_time(5.0)
+        core_logger.log_performance('vtolpower', 'vtol_power_change', 55.0)
+        assert plugin.scheduler.events
+        plugin.stop()
 
 
 class TestCompositeScore:
