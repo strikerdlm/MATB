@@ -70,6 +70,9 @@ def test_performance_aggregator_emits_domain_kpis() -> None:
     agg.record('PlatformProfile', 'platform_endurance_hours', 24)
     agg.record('PlatformProfile', 'platform_payload_capacity', 3.4)
     agg.record('PlatformProfile', 'platform_bandwidth_limit', 18)
+    agg.record('VtolManager', 'vtol_phase_change', 'VTOL1:transition:1.2:5.0')
+    agg.record('VtolManager', 'vtol_power_warning', 'VTOL1')
+    agg.record('VtolManager', 'vtol_transition_confirm', 'VTOL1')
 
     summary = agg.build_summary()
     mission = summary['modules']['missiondirector']['derived']
@@ -89,6 +92,10 @@ def test_performance_aggregator_emits_domain_kpis() -> None:
     platform = summary['modules']['platformprofile']['derived']
     assert platform['mean_endurance_hours'] == 24
     assert platform['platform_counts']['uav1|identifier=ScanEagle'] == 1
+    vtol = summary['modules']['vtolmanager']['derived']
+    assert vtol['phase_changes'] == 1
+    assert vtol['power_warnings'] == 1
+    assert vtol['transition_confirms'] == 1
     assert summary['scenario_seconds'] == 30.5
 
 
