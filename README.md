@@ -173,6 +173,16 @@ Section 14.6–14.8 of [Docs/Manual.md](Docs/Manual.md) is now fully implemented
 
 All six plugins inherit the standard MATB scenario syntax, respect the deterministic logging contract, and are covered by the regression tests in `tests/test_military_plugins.py`.
 
+### Swarm formations, sensor resource manager, and target uncertainty
+
+- `swarmformation` keeps swarm-level context visible: `swarmformation;set;formation,line,drone1|drone2|drone3` establishes the active geometry, while `swarmformation;override;drone2,manual` / `...,auto` toggles per-vehicle overrides. The widget lists each member plus its AUTO/MANUAL state, and the logger emits `swarm_formation_set`, `swarm_formation_break`, and `swarm_formation_rejoin` so analysts can quantify when crews depart from doctrinal formations.
+- `sensorresource` extends payload management with multi-sensor bandwidth tracking. Use `sensorresource;activate;UAV1,EO,Target-Alpha,12`, `sensorresource;switch;UAV1,EO_to_IR`, `sensorresource;fusion;UAV1,EO_IR`, and `sensorresource;capacity;80` to model simultaneous feeds, priorities, and link capacity. The plugin continuously sums active Mbps, flashes overdue overlays when the configured limit is exceeded, and logs `sensor_activate`, `sensor_switch`, `sensor_fusion_enable`, `sensor_priority`, and `sensor_bandwidth_exceeded`.
+- `targetuncertainty` provides the ambiguous identification drills from §14.5. Scenario commands such as `targetuncertainty;spawn;TGT1,LOW,15` start a timed window, and operators answer through `targetuncertainty;identify;TGT1,Vehicle,0.65`. Metrics (`target_spawn`, `target_identified`, `target_confidence`, `target_identification_time`, `target_timeout`) capture both accuracy and latency so scenario designers can correlate them with workload or trust scores.
+- `weatheroverlay` now accepts visibility penalties: `weatheroverlay;set;Fog band,0.4,eo|ir` or `weatheroverlay;impact;0.2,radar` attaches %-basis detection penalties to specific sensors and logs `visibility_impact` / `visibility_impact_clear`, making it easy to correlate degraded sensor performance with the meteorological cues described in §14.5.
+- `dualtasksensor` orchestrates the dual-task training protocol from §14.5. Use `dualtasksensor;start;PhaseA,sensorresource,track`, sprinkle `dualtasksensor;switch;` and `dualtasksensor;metric;sensorresource,0.8` events during the phase, then finish with `dualtasksensor;complete;note=baseline` to emit `dual_task_performance` metrics (sensor vs. secondary task accuracy, attention switches, delta/ratio).
+
+These additions round out the research backlog in Docs/Manual.md §14.4–14.5, and like the other modules they are documented by regression tests for deterministic behavior.
+
 ## Tutorials
 
 For more information about how to use OpenMATB, please refers to [our wiki](https://github.com/juliencegarra/OpenMATB/wiki).
