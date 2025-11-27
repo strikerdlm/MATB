@@ -46,12 +46,16 @@ class Vtolmanager(AbstractPlugin):
             'criticalratio': 0.1,
             'confirmationtimeout': 8.0,
             'phasepower': 'vertical_takeoff=1.4;transition=1.2;cruise=0.8;transition_return=1.1;vertical_landing=1.5',
+            'stabilitywarn': 0.6,
+            'stabilitycritical': 0.85,
         })
 
         self._widget: Optional[Simpletext] = None
         self._model = self._build_model()
         self._pending_started: Dict[str, float] = {}
         self._pending_overdue: Dict[str, bool] = {}
+        self._stability_values: Dict[str, float] = {}
+        self._stability_status: Dict[str, str] = {}
 
         overdue = self.parameters['taskfeedback']['overdue']
         overdue.update({'active': True, 'color': C['ORANGE'], 'delayms': 0, 'blinkdurationms': 400})
@@ -138,6 +142,35 @@ class Vtolmanager(AbstractPlugin):
         capacity = self._model.set_battery(uav, seconds, self.scenario_time)
         self.log_performance('vtol_battery_set', f'{uav}:{capacity}')
 
+    def stability(self, payload: str) -> None:
+        parts = [part.strip() for part in payload.split(',') if part.strip()]
+        if len(parts) != 2:
+            return
+        uav = parts[0].upper()
+        try:
+            value = self._clamp(float(parts[1]), 0.0, 1.0)
+        except ValueError:
+            return
+        self._stability_values[uav] = value
+        self._evaluate_stability(uav, value)
+
+    def stabilitythresholds(self, payload: str) -> None:
+        parts = [part.strip() for part in payload.split(',') if part.strip()]
+        if len(parts) != 2:
+            return
+        try:
+            warn = self._clamp(float(parts[0]), 0.0, 1.0)
+            critical = self._clamp(float(parts[1]), 0.0, 1.0)
+        except ValueError:
+            return
+        if warn >= critical:
+            return
+        self.parameters['stabilitywarn'] = warn
+        self.parameters['stabilitycritical'] = critical
+        self.log_performance('stability_thresholds', f'{warn:.2f}:{critical:.2f}')
+        for uav, value in self._stability_values.items():
+            self._evaluate_stability(uav, value, force=True)
+
     # Internal -----------------------------------------------------------
     def update(self, scenario_time: float) -> None:
         super().update(scenario_time)
@@ -169,9 +202,12 @@ class Vtolmanager(AbstractPlugin):
             status = state.warning_level.upper()
             if state.pending_confirmation:
                 status += ' | PENDING'
+            stability_note = ''
+            if uav in self._stability_values:
+                stability_note = f" | STB {self._stability_values[uav]:.2f}"
             lines.append(
                 f"{uav} | {state.phase or 'idle'} | {battery_minutes:5.1f} | "
-                f"{state.power_multiplier:3.1f} | {status}"
+                f"{state.power_multiplier:3.1f} | {status}{stability_note}"
             )
         return '\n'.join(lines) if lines else _('Awaiting VTOL assignments…')
 
@@ -218,4 +254,23 @@ class Vtolmanager(AbstractPlugin):
             warning_ratio=float(self.parameters['warningratio']),
             critical_ratio=float(self.parameters['criticalratio']),
         )
+
+    def _evaluate_stability(self, uav: str, value: float, force: bool = False) -> None:
+        warn = float(self.parameters['stabilitywarn'])
+        critical = float(self.parameters['stabilitycritical'])
+        new_state = 'critical' if value >= critical else 'warning' if value >= warn else 'normal'
+        current = self._stability_status.get(uav)
+        if new_state == current and not force:
+            return
+        self._stability_status[uav] = new_state
+        if new_state == 'critical':
+            self.log_performance('stability_critical', f'{uav}:{value:.2f}')
+        elif new_state == 'warning':
+            self.log_performance('stability_warning', f'{uav}:{value:.2f}')
+        elif current in ('warning', 'critical'):
+            self.log_performance('stability_recover', f'{uav}:{value:.2f}')
+
+    @staticmethod
+    def _clamp(value: float, low: float, high: float) -> float:
+        return max(low, min(high, value))
 
