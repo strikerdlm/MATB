@@ -913,6 +913,53 @@ class TestDualTaskSensor:
         assert 'dual_task_performance' in names
 
 
+class TestLaunchRecovery:
+    """Tests for the Launch/Recovery plugin."""
+
+    def setup_method(self) -> None:
+        self.module = _load_plugin('launchrecovery')
+        self.Launchrecovery = self.module.Launchrecovery
+
+    def test_launch_and_recovery_flow(self) -> None:
+        plugin = self.Launchrecovery()
+        plugin.logger = MockLogger()
+        plugin.scenario_time = 0.0
+        plugin.launch('UAV1,catapult,1')
+        plugin.recovery('UAV1,skyhook,1')
+        plugin.complete('UAV1,launch')
+        plugin.complete('UAV1,recovery')
+        plugin.scenario_time = 2.0
+        plugin.compute_next_plugin_state()
+        names = [record['name'] for record in plugin.logger.records]
+        assert 'launch_initiate' in names
+        assert 'recovery_initiate' in names
+        assert 'launch_complete' in names
+        assert 'recovery_complete' in names
+
+
+class TestVtolPower:
+    """Tests for the VTOL Power Monitor plugin."""
+
+    def setup_method(self) -> None:
+        self.module = _load_plugin('vtolpower')
+        self.Vtolpower = self.module.Vtolpower
+
+    def test_configure_draw_and_warnings(self) -> None:
+        plugin = self.Vtolpower()
+        plugin.logger = MockLogger()
+        plugin.configure('UAV1,100,40,20,1.5')
+        plugin.draw('UAV1,30,1')
+        plugin.draw('UAV1,20,1')
+        plugin.draw('UAV1,20,1')
+        plugin.recharge('UAV1,10')
+        plugin.set('UAV1,15')
+        names = [record['name'] for record in plugin.logger.records]
+        assert 'power_profile_set' in names
+        assert 'vtol_power_change' in names
+        assert 'power_warning' in names
+        assert 'power_critical' in names
+
+
 # =============================================================================
 # Scenario Template Tests
 # =============================================================================
