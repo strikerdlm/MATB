@@ -677,6 +677,14 @@ class TestBvlosSensory:
         assert 'sensory_cue_removed' in names
         assert 'sensory_cue_restore' in names
 
+    def test_rejects_malformed_payload(self) -> None:
+        plugin = self.Bvlossensory()
+        plugin.logger = MockLogger()
+        plugin.scenario_time = 5.0
+        plugin.apply('visual,,15')
+        assert plugin.visual_level == 0.0
+        assert plugin.logger.records == []
+
 
 class TestControlTransfer:
     """Tests for the control transfer monitor."""
