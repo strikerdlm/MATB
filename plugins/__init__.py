@@ -35,3 +35,7 @@ from .flighttermination import Flighttermination
 from .utmintegration import Utmintegration
 from .mumtcoordination import Mumtcoordination
 from .dataoverload import Dataoverload
+from .swarmformation import Swarmformation
+from .sensorresource import Sensorresource
+from .targetuncertainty import Targetuncertainty
+from .dualtasksensor import Dualtasksensor
