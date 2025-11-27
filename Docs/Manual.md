@@ -277,7 +277,7 @@ This modular approach keeps acquisition (via LSL) decoupled from visualisation, 
 - `tools/scenario_templates.py` now exposes three templates: `uas_bvlos`, `hpa_overlay`, and `training`. All accept `--duration`, `--difficulty` (1–10), and `--output`, letting scenario designers materialise level-tagged drills directly under `includes/scenarios/` without copying boilerplate.
 - Difficulty is enforced through `DifficultyProfile.from_level()`, which binds event spacing, deadline multipliers, concurrency caps, and failure injection rate so that level numbers translate to repeatable workload bands. The generated files annotate those parameters at the top for audit.
 - The UAS and HPA templates inject plugin start/stop rows (Mission Director, Sense-and-Avoid, Payload Manager, Datalink, Physio Monitor/Overlay, Threat Board, Emergency Stack, Failure Injector, Composite Score) plus Polar link hooks, keeping instrumentation consistent with the metrics catalog.
-- The new `training` template scaffolds a seven-minute automated familiarisation block that sequences TRACK → SYSMON → COMM → RESMAN → combined phases, matching the USAARL learning-control guidance and the pending `autotraining` plugin spec in §11.2.
+- The new `training` template scaffolds a seven-minute automated familiarisation block that sequences TRACK → SYSMON → COMM → RESMAN → combined phases, matching the USAARL learning-control guidance and the `autotraining` plugin described in §11.2.
 - Examples:
 
   ```bash
@@ -487,6 +487,7 @@ Based on the systematic review of HRV for pilot MWL (Wang, Houghton & Majumdar 2
 | Operator Capacity Monitor | ✅ Implemented | `plugins/operatorcapacity.py` | `set`, `overlap` |
 | Platform Profiles | ✅ Implemented | `plugins/platformprofile.py` | `set`, `clear`, `catalog` |
 | VTOL Flight Phase Manager | ✅ Implemented | `plugins/vtolmanager.py` | `phase`, `confirm`, `battery` |
+| Automated Training | ✅ Implemented | `plugins/autotraining.py` | `start`, `phase`, `comprehension`, `stop` |
 
 ### 9.2 Pending UAS Enhancements
 
@@ -642,13 +643,14 @@ The `tools/scenario_templates.py` CLI should accept `--difficulty` to generate s
 
 ### 11.2 Automated Training Module
 
-Implement a `plugins/autotraining.py` that:
+Implemented via `plugins/autotraining.py`:
 
-1. Reads a scripted instruction file (audio + text prompts).
-2. Orchestrates single-subtask familiarisation runs (tracking only, SYSMON only, etc.).
-3. Culminates in a combined 5-min run.
-4. Logs comprehension checks and completion status.
-5. Total duration ~7 min, matching USAARL protocol.
+1. `autotraining;start` kicks off the standard TRACK → SYSMON → COMM → RESMAN → combined sequence (durations configurable via `phaseduration` / `combinedduration`).
+2. `autotraining;phase;tracking|sysmon|communications|resman|combined` lets instructors jump to any module mid-run.
+3. `autotraining;comprehension;phase,1` logs comprehension checks (`training_comprehension`) tied to each phase, enabling immediate validation before advancing.
+4. `autotraining;stop` ends the familiarisation block; completing all phases emits `training_complete`.
+
+During each phase the plugin displays on-screen instructions, a countdown timer, and automatically logs `training_phase_start` / `training_phase_complete`, giving researchers a deterministic record of the USAARL-style familiarisation workflow (~7 minutes by default).
 
 ### 11.3 Composite Scoring Module
 
