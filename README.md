@@ -160,6 +160,19 @@ The new `vtolmanager` plugin implements the VTOL phase tracker described in §14
 - **Mission metrics**: Every plugin writes structured `performance,<module>,<metric>` rows which the post-run summary converts into KPIs (mission completion rate, conflict resolution rate, payload over-bandwidth exposure, datalink acknowledgement rate, VTOL power warnings, etc.). Reviewing `sessions/.../*_summary.json` gives a concise single-file overview, whereas the CSV log retains the raw timeline for deeper analytics.
 - **Physio/automation alignment**: Because Mission Director, Operator Capacity, Platform Profile, and VTOL Manager all log derived metrics, researchers can correlate them with HRV/LSL streams, automation hook toggles, or adaptive scenarios without reverse-engineering ad-hoc strings.
 
+### BVLOS / UTM / MUM-T extensions
+
+Section 14.6–14.8 of [Docs/Manual.md](Docs/Manual.md) is now fully implemented through six dedicated plugins designed for BVLOS certification studies and manned–unmanned teaming drills:
+
+- `bvlossensory` — Uses `bvlossensory;apply;visual,0.7,15` or `...;both,1.0,10` to dim the interface and mute cues, plus `...;clear;visual` to restore. Every event logs `sensory_cue_removed` / `sensory_cue_restore` so researchers can align workload spikes with the cue deprivation windows documented by the FAA BVLOS ARC.
+- `controltransfer` — Tracks custody swaps via `controltransfer;initiate;TX1,UAV1,GCS-A,GCS-B,Lost link,30`, `...;acknowledge;TX1,GCS-B`, `...;complete;TX1`, or `...;fail;TX1,radio`. It emits `control_transfer_*` metrics and flags timeouts automatically when acknowledgements miss the scripted deadline.
+- `flighttermination` — Injects termination decisions with `flighttermination;prompt;FT1,Engine fire,CRITICAL,5` and captures operator intent through `flighttermination;decide;FT1,TERMINATE,0.9`. Timeouts and responses are logged as `termination_*` rows for replay against mission outcomes or subjective data.
+- `utmintegration` — Simulates UTM/TFR updates (`utmintegration;restriction;R1,TFR Sector 3,HIGH,90`), reroutes (`...;replan;R1`), and violations (`...;violation;R1,late turn`). Each state change logs `utm_restriction_received`, `route_replan`, `restriction_violation`, `restriction_clear`, and automatic expirations so BVLOS corridor experiments can quantify compliance.
+- `mumtcoordination` — Represents manned pilot vs. UAS operator coordination: `mumtcoordination;role;pilot,Lead`, `...;request;REQ1,Engage bandit,20,pilot,operator`, `...;ack;REQ1,operator`, `...;decision;REQ1,APPROVED`. Logged metrics (`mumt_coordination_request/ack`, `mumt_decision_made`, timeouts) make it easy to evaluate latency and agreement quality during teaming drills.
+- `dataoverload` — Recreates high-volume sensor storms through `dataoverload;storm;3,20,EO|IR`, with operator responses captured via `dataoverload;filter;EO` and `dataoverload;miss;IR,priority target lost`. The plugin renders a lightweight HUD overlay and raises `data_overload_detected`, `information_filter_applied`, and `critical_data_missed` markers for dual-task interference studies.
+
+All six plugins inherit the standard MATB scenario syntax, respect the deterministic logging contract, and are covered by the regression tests in `tests/test_military_plugins.py`.
+
 ## Tutorials
 
 For more information about how to use OpenMATB, please refers to [our wiki](https://github.com/juliencegarra/OpenMATB/wiki).
