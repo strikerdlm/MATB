@@ -484,6 +484,7 @@ Based on the systematic review of HRV for pilot MWL (Wang, Houghton & Majumdar 2
 | Automation Hooks | ✅ Implemented | `plugins/automationhooks.py` | `rule`, `enable`, `disable` |
 | Operator Capacity Monitor | ✅ Implemented | `plugins/operatorcapacity.py` | `set`, `overlap` |
 | Platform Profiles | ✅ Implemented | `plugins/platformprofile.py` | `set`, `clear`, `catalog` |
+| VTOL Flight Phase Manager | ✅ Implemented | `plugins/vtolmanager.py` | `phase`, `confirm`, `battery` |
 
 ### 9.2 Pending UAS Enhancements
 
@@ -535,6 +536,13 @@ performance,operatorcapacity,operator_capacity_active,2
 performance,operatorcapacity,operator_capacity_supervisory,5
 performance,operatorcapacity,operator_capacity_breach,supervisory
 performance,operatorcapacity,operator_overlap,0.65
+
+# VTOL Manager
+performance,vtolmanager,vtol_phase_change,uav=VTOL1,phase=transition,power=1.2,duration=4.8
+performance,vtolmanager,vtol_transition_pending,VTOL1
+performance,vtolmanager,vtol_transition_confirm,VTOL1
+performance,vtolmanager,vtol_power_warning,VTOL1
+performance,vtolmanager,vtol_power_critical,VTOL1
 ```
 
 ---
@@ -812,6 +820,8 @@ This section synthesizes findings from systematic reviews, military UAS operator
    - Require operator confirmation during transition phases (critical safety windows)
    - Log `vtol_phase_change` with phase name, power consumption, and transition duration
    - Scenario commands: `vtolmanager;phase;uav1,takeoff`, `vtolmanager;phase;uav1,transition`, `vtolmanager;phase;uav1,cruise`
+
+   **Implementation note:** The live plugin enforces confirmation on transition legs (`vtolmanager;confirm;UAV1`), drives power draw via per-phase multipliers, and emits `vtol_power_warning` / `vtol_power_critical` once battery ratios cross the 25%/10% bands so Performance Summary can report VTOL endurance margins next to Mission Director KPIs.
 
 2. **Power Budget Constraints**:
    - Extend `energymanager.py` (or create `vtolpower.py`) to model VTOL-specific power profiles
