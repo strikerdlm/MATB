@@ -132,7 +132,7 @@ class Bvlossensory(AbstractPlugin):
     def _split(self, payload: str, expected: int) -> Optional[list[str]]:
         if not payload:
             return None
-        parts = [part.strip() for part in payload.split(',')]
+        parts = [part.strip() for part in payload.split(',') if part.strip()]
         if len(parts) < expected:
             return None
         return parts
