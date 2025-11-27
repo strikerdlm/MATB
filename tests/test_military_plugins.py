@@ -48,7 +48,29 @@ for mod_name in _MOCK_MODULES:
         # Add get_display for window.py
         if mod_name == 'pyglet.canvas':
             mock_module.get_display = MagicMock(return_value=MagicMock())
+        if mod_name == 'pyglet.gl':
+            mock_module.glLineWidth = MagicMock()
+        if mod_name == 'pyglet.text':
+            class _MockLabel:
+                def __init__(self, *args: Any, **kwargs: Any) -> None:
+                    pass
+
+            class _MockHTMLLabel:
+                def __init__(self, *args: Any, **kwargs: Any) -> None:
+                    pass
+
+            mock_module.Label = _MockLabel
+            mock_module.HTMLLabel = _MockHTMLLabel
+        if mod_name == 'pyglet.sprite':
+            class _MockSprite:
+                def __init__(self, *args: Any, **kwargs: Any) -> None:
+                    pass
+
+            mock_module.Sprite = _MockSprite
         sys.modules[mod_name] = mock_module
+
+sys.modules['pyglet'].sprite = sys.modules['pyglet.sprite']
+sys.modules['pyglet'].text = sys.modules['pyglet.text']
 
 
 def _load_plugin(name: str) -> ModuleType:
@@ -84,8 +106,40 @@ class MockLogger:
 class MockContainer:
     """Mock container for widget placement."""
 
-    def reduce_and_translate(self, **kwargs: Any) -> 'MockContainer':
-        return MockContainer()
+    def __init__(self, name: str = 'mock') -> None:
+        self.name = name
+        self.l = 0.0
+        self.b = 0.0
+        self.w = 1.0
+        self.h = 1.0
+        self.x1 = self.l
+        self.y1 = self.b + self.h
+        self.x2 = self.l + self.w
+        self.y2 = self.b
+
+    def reduce_and_translate(self, *args: Any, **kwargs: Any) -> 'MockContainer':
+        return MockContainer(self.name)
+
+    def get_reduced(self, *args: Any, **kwargs: Any) -> 'MockContainer':
+        return MockContainer(self.name)
+
+    def get_translated(self, *args: Any, **kwargs: Any) -> 'MockContainer':
+        return MockContainer(self.name)
+
+    def get_lbwh(self) -> tuple[float, float, float, float]:
+        return self.l, self.b, self.w, self.h
+
+
+class _MockBatch:
+    def add(self, *args: Any, **kwargs: Any) -> Any:
+        class _Item:
+            def __init__(self) -> None:
+                self.colors = [(255, 255, 255, 255)]
+
+            def delete(self) -> None:
+                pass
+
+        return _Item()
 
 
 class MockWindow:
@@ -94,13 +148,16 @@ class MockWindow:
     MainWindow: Optional['MockWindow'] = None
     keyboard: Dict[str, bool] = {}
     modal_dialog: Optional[Any] = None
+    batch = _MockBatch()
 
     def get_container(self, placement: str) -> MockContainer:
-        return MockContainer()
+        return MockContainer(placement)
 
 
 # Set up mock window
 MockWindow.MainWindow = MockWindow()
+from core.window import Window  # type: ignore
+Window.MainWindow = MockWindow.MainWindow  # type: ignore
 
 
 # =============================================================================
@@ -1024,6 +1081,30 @@ class TestAdvancedTraining:
         plugin.transfer('positive')
         names = [record['name'] for record in plugin.logger.records]
         assert names.count('skill_transfer_detected') == 3
+
+
+class TestAutotraining:
+    """Tests for the Automated Training module."""
+
+    def setup_method(self) -> None:
+        self.module = _load_plugin('autotraining')
+        self.Autotraining = self.module.Autotraining
+
+    def test_start_and_comprehension(self) -> None:
+        plugin = self.Autotraining()
+        plugin.logger = MockLogger()
+        plugin.start()
+        names = [record['name'] for record in plugin.logger.records]
+        assert 'training_phase_start' in names
+        plugin.comprehension('tracking,1')
+        assert any(record['name'] == 'training_comprehension' for record in plugin.logger.records)
+
+    def test_phase_override(self) -> None:
+        plugin = self.Autotraining()
+        plugin.logger = MockLogger()
+        plugin.start()
+        plugin.phase('resman')
+        assert plugin.phases[plugin.current_phase_index].name.lower() == 'resman'
 
 
 # =============================================================================
