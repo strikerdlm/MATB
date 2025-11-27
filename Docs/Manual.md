@@ -663,11 +663,13 @@ Implemented via `plugins/compositescore.py`, which:
 
 ### 11.4 Adaptive Automation Policy Engine
 
-Extend `plugins/automationhooks.py` to:
+Implemented via `plugins/automationhooks.py`:
 
-1. Accept threshold rules based on observed metrics (e.g., `if saa_overdue_count > 2 AND hrv_acute_flag == 1 THEN enable tracking_auto`).
-2. Log all automation state changes with triggering metric values.
-3. Support manual override by operator (toggle key).
+1. `automationhooks;rule;plugin,metric,threshold,mode[,key=value...]` registers metric-driven policies. Use either the legacy four-field syntax (counting occurrences) or the extended form `plugin,metric,operator,threshold,mode` where `operator ∈ {gt, ge, lt, le, eq, ne, count}`. Optional `key=value` pairs configure the action: `target=<plugin>` (default `missiondirector`), `command=<method>` (default `automation`), `payload=<template>` (supports `{mode}`, `{value}`, `{metric}`, `{time}` tokens), plus `window=<seconds>` for count-based rolling windows and `cooldown=<seconds>` to de-bounce rapid triggers.
+2. `automationhooks;enable;1` arms every declared rule, `automationhooks;disable;1` freezes them without clearing, and `automationhooks;clear;all` removes the rulebook and detaches the metric taps.
+3. Whenever a rule fires, the plugin synthesizes a scenario event (via the scheduler) targeting the requested plugin/method/payload, effectively flipping automation modes in-line without extra scenario rows.
+
+**Telemetry:** Rules emit `automation_rule`, `automation_enable/disable/clear`, and `automation_action` metrics including the triggering value so analysts can reconstruct every adaptive decision alongside the originating workload cues.
 
 ### 11.5 Scenario & Config Versioning
 
