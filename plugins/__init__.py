@@ -29,4 +29,9 @@ from .failureinjector import Failureinjector
 from .operatorcapacity import Operatorcapacity
 from .platformprofile import Platformprofile
 from .vtolmanager import Vtolmanager
-from .platformprofile import Platformprofile
+from .bvlossensory import Bvlossensory
+from .controltransfer import Controltransfer
+from .flighttermination import Flighttermination
+from .utmintegration import Utmintegration
+from .mumtcoordination import Mumtcoordination
+from .dataoverload import Dataoverload
