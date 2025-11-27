@@ -992,6 +992,40 @@ class TestVtolManager:
         assert 'stability_recover' in names
 
 
+class TestAdvancedTraining:
+    """Tests for the Advanced Training orchestrator."""
+
+    def setup_method(self) -> None:
+        self.module = _load_plugin('advancedtraining')
+        self.Advancedtraining = self.module.Advancedtraining
+
+    def test_sequence_metrics_and_completion(self) -> None:
+        plugin = self.Advancedtraining()
+        plugin.logger = MockLogger()
+        plugin.start('SeqA')
+        plugin.metric('0.8')
+        plugin.metric('0.6')
+        plugin.complete('note=easy')
+        plugin.next('')
+        names = [record['name'] for record in plugin.logger.records]
+        assert 'training_sequence_start' in names
+        assert 'training_phase_start' in names
+        phase_records = [record for record in plugin.logger.records if record['name'] == 'training_phase_complete']
+        assert phase_records
+        assert 'note=easy' in phase_records[-1]['value']
+        assert 'note=note=' not in phase_records[-1]['value']
+
+    def test_transfer_detection(self) -> None:
+        plugin = self.Advancedtraining()
+        plugin.logger = MockLogger()
+        plugin.parameters['transferthreshold'] = 0.1
+        plugin.transfer('0.2')
+        plugin.transfer('0.05')
+        plugin.transfer('positive')
+        names = [record['name'] for record in plugin.logger.records]
+        assert names.count('skill_transfer_detected') == 3
+
+
 # =============================================================================
 # Scenario Template Tests
 # =============================================================================
