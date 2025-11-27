@@ -6,12 +6,12 @@ import hashlib
 import json
 import shutil
 import subprocess
-from collections import namedtuple
+from collections import defaultdict, namedtuple
 from time import perf_counter
 from datetime import datetime
 from csv import DictWriter
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from core.constants import PATHS, REPLAY_MODE, CONFIG
 from core.utils import find_the_first_available_session_number
 from core.performance_summary import PerformanceAggregator
@@ -45,6 +45,7 @@ class Logger:
         self._current_scenario_label: Optional[str] = None
         self._current_scenario_version: Optional[str] = None
         self._last_summary_payload: Optional[Dict[str, Any]] = None
+        self._metric_listeners: Dict[Tuple[str, str], List[Callable[[str, str, Any, float], None]]] = defaultdict(list)
 
         self.user_profile = self._load_user_profile()
         self.provenance_info.update({
@@ -158,6 +159,7 @@ class Logger:
         slot = [perf_counter(), self.scenario_time, 'performance', module, metric, value]
         self.write_single_slot(slot)
         self.performance_summary.record(module, metric, value)
+        self._notify_metric_listeners(module, metric, value)
 
 
     def record_a_pseudorandom_value(self, module, seed, output):
@@ -238,6 +240,56 @@ class Logger:
     def set_scenario_time(self, scenario_time):
         self.scenario_time = scenario_time
         self.performance_summary.update_scenario_time(scenario_time)
+
+    def register_metric_listener(
+        self,
+        module: str,
+        metric: str,
+        callback: Callable[[str, str, Any, float], None],
+    ) -> None:
+        """Register a callback for specific performance metric emissions."""
+        if not module or not metric:
+            return
+        key = (module.lower(), metric.lower())
+        listeners = self._metric_listeners[key]
+        if callback not in listeners:
+            listeners.append(callback)
+
+    def unregister_metric_listener(
+        self,
+        module: str,
+        metric: str,
+        callback: Callable[[str, str, Any, float], None],
+    ) -> None:
+        """Remove a previously registered metric listener."""
+        key = (module.lower(), metric.lower())
+        listeners = self._metric_listeners.get(key)
+        if not listeners:
+            return
+        try:
+            listeners.remove(callback)
+        except ValueError:
+            return
+        if not listeners:
+            self._metric_listeners.pop(key, None)
+
+    def clear_metric_listeners(self) -> None:
+        """Remove all metric listeners (primarily for testing)."""
+        self._metric_listeners.clear()
+
+    def _notify_metric_listeners(self, module: str, metric: str, value: Any) -> None:
+        """Dispatch metric events to registered listeners."""
+        if not self._metric_listeners:
+            return
+        key = (module.lower(), metric.lower())
+        listeners = list(self._metric_listeners.get(key, ()))
+        if not listeners:
+            return
+        for callback in listeners:
+            try:
+                callback(module, metric, value, self.scenario_time)
+            except Exception:
+                continue
 
 
     def start_performance_summary(
