@@ -492,7 +492,7 @@ Based on the systematic review of HRV for pilot MWL (Wang, Houghton & Majumdar 2
 
 | Enhancement | Priority | Rationale | Implementation Notes |
 | --- | --- | --- | --- |
-| **Voice Synthesis for Datalink** | Low | Auditory channel reduces visual overload | Use TTS for high-priority messages; configurable via `datalink;voice;True` |
+| **Voice Synthesis for Datalink** | Low | Auditory channel reduces visual overload | Implemented via `datalink;voice;True,PRIO\|CRIT`. When enabled the plugin plays TTS for the listed priorities, logs `datalink_voice`, `datalink_voice_play`, and gracefully disables itself (logging `datalink_voice_error`) if `pyttsx3` or audio hardware is unavailable. |
 
 ### 9.3 UAS Metrics Logging Requirements
 
@@ -803,6 +803,16 @@ This section synthesizes findings from systematic reviews, military UAS operator
    - Track bandwidth allocation per sensor type (EO vs. IR data rates differ)
    - Log `sensor_switch` events with transition time and bandwidth impact
 
+#### 14.2.1 Implementation Status – Launch & Recovery Sequences
+
+- **Plugin:** `launchrecovery.py`
+- **Core workflow:**
+  - `launchrecovery;launch;UAV1,catapult,15` starts a catapult run with a 15 s deadline and logs `launch_initiate`.
+  - `launchrecovery;recovery;UAV1,skyhook,20` primes the matching skyhook capture, logging `recovery_initiate`.
+  - `launchrecovery;complete;UAV1,launch` / `recovery` closes each leg and emits `launch_complete` / `recovery_complete`.
+  - `launchrecovery;abort;UAV1,reason` records aborts (logging `launch_abort`) while overdue legs automatically emit `launch_timeout` or `recovery_fail`.
+- **Widget & metrics:** The widget lists every active sequence with remaining time so instructors can script cascades (e.g., failure injector). Metrics cover initiation, completion, abort, and timeout states, enabling auditable ScanEagle-style launch windows inside mission summaries.
+
 ### 14.3 VTOL-Specific Challenges & Human Factors
 
 **Research Foundation**: VTOL UAS face unique design challenges affecting operator workload and mission planning. Primary sources: Misra, S., et al. (2022). "A Review on Vertical Take‐Off and Landing (VTOL) Tilt‐Rotor and Tilt Wing Unmanned Aerial Vehicles (UAVs)." [Journal of Engineering, Wiley Online Library](https://onlinelibrary.wiley.com/doi/10.1155/2022/1803638) (DOI: 10.1155/2022/1803638); An evaluative review of VTOL technologies ([ScienceDirect 2019](https://www.sciencedirect.com/science/article/abs/pii/S014036641930996X), DOI: 10.1016/j.ast.2019.105507).
@@ -835,6 +845,16 @@ This section synthesizes findings from systematic reviews, military UAS operator
    - Add stability indicators during transition phases
    - Require operator intervention if stability metrics exceed thresholds
    - Log `stability_warning` events for post-run analysis of transition performance
+
+#### 14.3.1 Implementation Status – VTOL Power Budget Monitoring
+
+- **Plugin:** `vtolpower.py`
+- **Scenario commands:**
+  - `vtolpower;configure;VTOL1,100,40,20,1.5` sets capacity (100 units), warning/critical thresholds (40/20), and a base consumption rate (1.5 units per simulated second).
+  - `vtolpower;draw;VTOL1,30,1.2` subtracts energy for a 30 s hover at 1.2× the configured rate, logging `vtol_power_change`.
+  - `vtolpower;recharge;VTOL1,15` / `vtolpower;set;VTOL1,60` top off or force-set the remaining reserve.
+- **Metrics:** Continuous `vtol_power_change` plus `power_warning` and `power_critical` when thresholds are crossed, complementing the phase-level alerts already emitted by `vtolmanager`.
+- **Still pending:** The stability monitor described above (visual indicators + `stability_warning`) remains unimplemented and is the next priority for VTOL research parity.
 
 ### 14.4 Drone Swarm Control & Cognitive Load Management
 
@@ -872,6 +892,16 @@ This section synthesizes findings from systematic reviews, military UAS operator
    - Allow scenario designers to specify control paradigm (direct individual, indirect swarm, hybrid)
    - Log `control_mode_switch` events to compare workload across paradigms
    - Support research on optimal control method selection based on mission type
+
+#### 14.4.1 Implementation Status – Swarmformation Plugin
+
+- **Scenario commands:**
+  - `swarmformation;set;formation,line,drone1|drone2|drone3` configures the geometry and resets overrides, logging `swarm_formation_set`.
+  - `swarmformation;memberscmd;drone1|drone2|drone3|drone4` updates the roster and logs `swarm_size_change`.
+  - `swarmformation;override;drone2,manual` / `...,auto` toggles per-drone status, generating `swarm_formation_break` / `swarm_formation_rejoin`.
+  - `swarmformation;mode;indirect` records indirect-control phases via `control_mode_switch`.
+- **Metrics:** In addition to the formation/override events, the plugin now emits `swarm_cognitive_overload` when manual overrides exceed the `maxmanualoverrides` parameter (default 2), giving a quantitative signal for cognitive-load breaches.
+- **Visualization:** The widget lists the active formation, control mode, and each member’s AUTO/MANUAL state so instructors can verify that scripted automation cues match the research design.
 
 ### 14.5 Advanced Payload & Sensor Management
 
@@ -911,6 +941,25 @@ This section synthesizes findings from systematic reviews, military UAS operator
    - Track fNIRS-relevant metrics (task switching frequency, attention allocation)
    - Log `dual_task_performance` events comparing sensor task accuracy vs. concurrent task (tracking, comms) performance
    - Support research on brain activity variability during skill acquisition
+
+#### 14.5.1 Implementation Status – Advanced Sensor Modules
+
+- **Sensor Resource Manager (`sensorresource.py`):**  
+  - Commands: `activate`, `standby`, `priority`, `switch`, `fusion`, `capacity`. Example:  
+    `sensorresource;activate;UAV1,EO,Target-Alpha,12`, `sensorresource;fusion;UAV1,EO_IR`, `sensorresource;capacity;80`.  
+  - Metrics: `sensor_activate`, `sensor_priority`, `sensor_switch`, `sensor_fusion_enable`, `sensor_bandwidth_exceeded`, enabling precise link-capacity accounting.
+
+- **Target Uncertainty (`targetuncertainty.py`):**  
+  - Commands: `targetuncertainty;spawn;TGT1,LOW,15`, `targetuncertainty;identify;TGT1,Vehicle,0.65`, `targetuncertainty;clear;*`.  
+  - Metrics: `target_spawn`, `target_identified`, `target_confidence`, `target_identification_time`, `target_timeout` for latency/accuracy benchmarking.
+
+- **Dual-Task Sensor Trainer (`dualtasksensor.py`):**  
+  - Commands: `dualtasksensor;start;PhaseA,sensorresource,track`, `...;switch;`, `...;metric;sensorresource,0.82`, `...;complete;note=baseline`.  
+  - Metrics: `dual_task_phase_start`, `dual_task_switch`, `dual_task_metric`, `dual_task_performance` summarising sensor vs. secondary task deltas and attention switches.
+
+- **Weather Overlay visibility penalties:**  
+  - Commands: `weatheroverlay;set;Fog layer,0.4,eo|ir` (description + severity + affected sensors) and `weatheroverlay;impact;0.2,radar`.  
+  - Metrics: `visibility_impact` and `visibility_impact_clear`, ensuring low-visibility penalties are traceable alongside sensor workload.
 
 ### 14.6 BVLOS-Specific Human Factors & Airspace Integration
 
