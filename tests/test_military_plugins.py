@@ -803,6 +803,116 @@ class TestDataoverload:
         assert 'critical_data_missed' in names
 
 
+class TestSwarmFormation:
+    """Tests for the Swarm Formation plugin."""
+
+    def setup_method(self) -> None:
+        self.module = _load_plugin('swarmformation')
+        self.Swarmformation = self.module.Swarmformation
+
+    def test_set_and_override(self) -> None:
+        plugin = self.Swarmformation()
+        plugin.logger = MockLogger()
+        plugin.set('line,drone1|drone2')
+        assert plugin.members == ['drone1', 'drone2']
+        plugin.override('drone1,manual')
+        assert 'drone1' in plugin.manual_overrides
+        plugin.override('drone1,auto')
+        assert 'drone1' not in plugin.manual_overrides
+        names = [record['name'] for record in plugin.logger.records]
+        assert 'swarm_formation_set' in names
+        assert 'swarm_formation_break' in names
+        assert 'swarm_formation_rejoin' in names
+        plugin.mode('indirect')
+        assert plugin.control_mode == 'indirect'
+        plugin.override('drone1,manual')
+        plugin.override('drone2,manual')
+        plugin.override('drone3,manual')
+        assert any(r['name'] == 'swarm_cognitive_overload' for r in plugin.logger.records)
+        assert any(r['name'] == 'swarm_size_change' for r in plugin.logger.records)
+
+
+class TestSensorResource:
+    """Tests for the Sensor Resource Manager plugin."""
+
+    def setup_method(self) -> None:
+        self.module = _load_plugin('sensorresource')
+        self.Sensorresource = self.module.Sensorresource
+
+    def test_activate_and_capacity_warning(self) -> None:
+        plugin = self.Sensorresource()
+        plugin.logger = MockLogger()
+        plugin.capacity('20')
+        plugin.activate('U1,EO,Target-1,15')
+        plugin.activate('U1,IR,Target-2,15')
+        assert any(r['name'] == 'sensor_bandwidth_exceeded' for r in plugin.logger.records)
+        plugin.priority('U1,IR,high')
+        assert plugin.pods[('U1', 'ir')].priority == 'high'
+
+
+class TestTargetUncertainty:
+    """Tests for the Target Uncertainty plugin."""
+
+    def setup_method(self) -> None:
+        self.module = _load_plugin('targetuncertainty')
+        self.Targetuncertainty = self.module.Targetuncertainty
+
+    def test_identification_logging(self) -> None:
+        plugin = self.Targetuncertainty()
+        plugin.logger = MockLogger()
+        plugin.scenario_time = 0.0
+        plugin.spawn('T1,LOW,5')
+        plugin.scenario_time = 2.0
+        plugin.identify('T1,Vehicle,0.8')
+        names = [record['name'] for record in plugin.logger.records]
+        assert 'target_identified' in names
+        assert 'target_confidence' in names
+        assert 'target_identification_time' in names
+
+
+class TestWeatherOverlayExtended:
+    """Tests for the extended weather overlay plugin."""
+
+    def setup_method(self) -> None:
+        self.module = _load_plugin('weatheroverlay')
+        self.Weatheroverlay = self.module.Weatheroverlay
+
+    def test_visibility_impact_logging(self) -> None:
+        plugin = self.Weatheroverlay()
+        plugin.logger = MockLogger()
+        plugin.set('Fog layer,0.4,eo|ir')
+        assert plugin.visibility_penalty == 0.4
+        assert plugin.affected_sensors == ('eo', 'ir')
+        plugin.impact('0.2')
+        assert plugin.visibility_penalty == 0.2
+        plugin.clear('')
+        names = [record['name'] for record in plugin.logger.records]
+        assert 'visibility_impact' in names
+        assert 'visibility_impact_clear' in names
+
+
+class TestDualTaskSensor:
+    """Tests for the Dual-Task Sensor Trainer plugin."""
+
+    def setup_method(self) -> None:
+        self.module = _load_plugin('dualtasksensor')
+        self.Dualtasksensor = self.module.Dualtasksensor
+
+    def test_phase_flow_and_metrics(self) -> None:
+        plugin = self.Dualtasksensor()
+        plugin.logger = MockLogger()
+        plugin.start('PhaseA,sensorresource,track')
+        plugin.switch('sensorresource')
+        plugin.metric('sensorresource,0.8')
+        plugin.metric('track,0.6')
+        plugin.complete('note=baseline')
+        names = [record['name'] for record in plugin.logger.records]
+        assert 'dual_task_phase_start' in names
+        assert 'dual_task_switch' in names
+        assert 'dual_task_metric' in names
+        assert 'dual_task_performance' in names
+
+
 # =============================================================================
 # Scenario Template Tests
 # =============================================================================
