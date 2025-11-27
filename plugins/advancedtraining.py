@@ -79,7 +79,8 @@ class Advancedtraining(AbstractPlugin):
 
     def complete(self, payload: str) -> None:
         """payload: optional note/outcome string."""
-        self._close_current_phase(note=payload.strip())
+        note = self._extract_note(payload)
+        self._close_current_phase(note=note)
 
     def transfer(self, payload: str) -> None:
         """
@@ -169,4 +170,17 @@ class Advancedtraining(AbstractPlugin):
         if len(parts) < expected:
             return None
         return parts
+
+    @staticmethod
+    def _extract_note(payload: Optional[str]) -> Optional[str]:
+        if payload is None:
+            return None
+        text = payload.strip()
+        if not text:
+            return None
+        if '=' in text:
+            key, value = text.split('=', 1)
+            if key.strip().lower() == 'note':
+                return value.strip()
+        return text
 
