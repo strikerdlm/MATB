@@ -657,6 +657,144 @@ class TestAutotraining:
         assert plugin.phases[0].started_at == 0.0
 
 
+class TestBvlosSensory:
+    """Tests for the BVLOS sensory deprivation plugin."""
+
+    def setup_method(self) -> None:
+        self.module = _load_plugin('bvlossensory')
+        self.Bvlossensory = self.module.Bvlossensory
+
+    def test_apply_and_auto_restore(self) -> None:
+        plugin = self.Bvlossensory()
+        plugin.logger = MockLogger()
+        plugin.scenario_time = 10.0
+        plugin.apply('visual,0.8,2')
+        assert plugin.visual_level == 0.8
+        plugin.scenario_time = 13.0
+        plugin.compute_next_plugin_state()
+        assert plugin.visual_level == 0.0
+        names = [record['name'] for record in plugin.logger.records]
+        assert 'sensory_cue_removed' in names
+        assert 'sensory_cue_restore' in names
+
+
+class TestControlTransfer:
+    """Tests for the control transfer monitor."""
+
+    def setup_method(self) -> None:
+        self.module = _load_plugin('controltransfer')
+        self.Controltransfer = self.module.Controltransfer
+
+    def test_transfer_lifecycle(self) -> None:
+        plugin = self.Controltransfer()
+        plugin.logger = MockLogger()
+        plugin.scenario_time = 0.0
+        plugin.initiate('TX1,UAV1,GCS-A,GCS-B,Lost link,5')
+        plugin.scenario_time = 1.0
+        plugin.acknowledge('TX1,GCS-B')
+        plugin.scenario_time = 2.0
+        plugin.complete('TX1')
+        assert plugin.transfers['TX1'].status == 'COMPLETED'
+        names = [record['name'] for record in plugin.logger.records]
+        assert 'control_transfer_initiate' in names
+        assert 'control_transfer_acknowledge' in names
+        assert 'control_transfer_complete' in names
+
+
+class TestFlightTermination:
+    """Tests for the flight termination decision plugin."""
+
+    def setup_method(self) -> None:
+        self.module = _load_plugin('flighttermination')
+        self.Flighttermination = self.module.Flighttermination
+
+    def test_prompt_decision_and_timeout(self) -> None:
+        plugin = self.Flighttermination()
+        plugin.logger = MockLogger()
+        plugin.scenario_time = 0.0
+        plugin.prompt('FT1,Engine fire,CRITICAL,2')
+        plugin.scenario_time = 1.0
+        plugin.decide('FT1,TERMINATE,0.9')
+        assert plugin.prompts['FT1'].status == 'DECIDED'
+        plugin.prompt('FT2,Lost link,HIGH,1')
+        plugin.scenario_time = 5.0
+        plugin.compute_next_plugin_state()
+        assert plugin.prompts['FT2'].status == 'TIMEOUT'
+        names = [record['name'] for record in plugin.logger.records]
+        assert 'termination_prompt' in names
+        assert 'termination_decision' in names
+        assert 'termination_timeout' in names
+
+
+class TestUtmintegration:
+    """Tests for the UTM integration plugin."""
+
+    def setup_method(self) -> None:
+        self.module = _load_plugin('utmintegration')
+        self.Utmintegration = self.module.Utmintegration
+
+    def test_restriction_flow(self) -> None:
+        plugin = self.Utmintegration()
+        plugin.logger = MockLogger()
+        plugin.scenario_time = 0.0
+        plugin.restriction('R1,TFR Sector 3,HIGH,1')
+        plugin.replan('R1')
+        plugin.violation('R1,late turn')
+        plugin.clear('R1')
+        names = [record['name'] for record in plugin.logger.records]
+        assert 'utm_restriction_received' in names
+        assert 'route_replan' in names
+        assert 'restriction_violation' in names
+        assert 'restriction_clear' in names
+
+
+class TestMumtcoordination:
+    """Tests for the MUM-T coordination plugin."""
+
+    def setup_method(self) -> None:
+        self.module = _load_plugin('mumtcoordination')
+        self.Mumtcoordination = self.module.Mumtcoordination
+
+    def test_request_ack_and_decision(self) -> None:
+        plugin = self.Mumtcoordination()
+        plugin.logger = MockLogger()
+        plugin.scenario_time = 0.0
+        plugin.role('pilot,Lead')
+        plugin.request('REQ1,Engage bandit,10,pilot,operator')
+        plugin.scenario_time = 1.0
+        plugin.ack('REQ1,operator')
+        plugin.scenario_time = 2.0
+        plugin.decision('REQ1,APPROVED')
+        assert plugin.requests['REQ1'].status == 'DECIDED'
+        names = [record['name'] for record in plugin.logger.records]
+        assert 'mumt_coordination_request' in names
+        assert 'mumt_coordination_ack' in names
+        assert 'mumt_decision_made' in names
+
+
+class TestDataoverload:
+    """Tests for the data overload simulator."""
+
+    def setup_method(self) -> None:
+        self.module = _load_plugin('dataoverload')
+        self.Dataoverload = self.module.Dataoverload
+
+    def test_storm_and_filters(self) -> None:
+        plugin = self.Dataoverload()
+        plugin.logger = MockLogger()
+        plugin.scenario_time = 0.0
+        plugin.storm('3,1,EO|IR')
+        plugin.filter('EO')
+        plugin.miss('IR,priority target lost')
+        plugin.scenario_time = 5.0
+        plugin.compute_next_plugin_state()
+        assert not plugin.storms
+        names = [record['name'] for record in plugin.logger.records]
+        assert 'data_overload_detected' in names
+        assert 'information_filter_applied' in names
+        assert 'critical_data_missed' in names
+
+
 # =============================================================================
 # Scenario Template Tests
 # =============================================================================
