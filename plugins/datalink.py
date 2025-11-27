@@ -4,12 +4,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Set
 
 from core import validation
 from core.constants import COLORS as C, FONT_SIZES as F
 from core.widgets import Simpletext
 from plugins.abstractplugin import AbstractPlugin
+
+try:  # pragma: no cover - optional dependency
+    import pyttsx3  # type: ignore
+except Exception:  # pragma: no cover
+    pyttsx3 = None  # type: ignore
 
 
 @dataclass
@@ -54,6 +59,9 @@ class Datalink(AbstractPlugin):
         self.messages: List[DatalinkMessage] = []
         self.selection_index: int = 0
         self._widget: Optional[Simpletext] = None
+        self.voice_enabled: bool = False
+        self.voice_priorities: Set[str] = {'PRIO'}
+        self._tts_engine: Optional['pyttsx3.Engine'] = None
 
     # UI -----------------------------------------------------------------
     def create_widgets(self) -> None:
@@ -148,6 +156,7 @@ class Datalink(AbstractPlugin):
         else:
             self.selection_index = len(self.messages) - 1
         self.log_performance('datalink_receive', f'{message.msg_id}:{message.channel}:{message.priority}')
+        self._maybe_voice(message)
 
     def forceack(self, payload: str) -> None:
         """
@@ -166,6 +175,37 @@ class Datalink(AbstractPlugin):
         self.messages = []
         self.selection_index = 0
         self.log_performance('datalink_clear', 'all')
+
+    def voice(self, payload: str) -> None:
+        """
+        payload: bool[,priority_list]
+        Example: datalink;voice;True,PRIO|CRIT
+        """
+        parts = self._split(payload, 1)
+        if parts is None:
+            return
+        flag = parts[0].lower()
+        enable = flag in {'true', '1', 'on', 'yes'}
+        if not enable:
+            self.voice_enabled = False
+            self.log_performance('datalink_voice', 'disabled')
+            return
+        if len(parts) > 1:
+            priorities = [p.strip().upper() for p in parts[1].split('|') if p.strip()]
+            if priorities:
+                self.voice_priorities = set(priorities)
+        if pyttsx3 is None:  # pragma: no cover - depends on optional lib
+            self.voice_enabled = False
+            self.log_performance('datalink_voice_error', 'pyttsx3_missing')
+            return
+        try:  # pragma: no cover
+            if self._tts_engine is None:
+                self._tts_engine = pyttsx3.init()
+            self.voice_enabled = True
+            self.log_performance('datalink_voice', f'enabled:{"/".join(sorted(self.voice_priorities))}')
+        except Exception as exc:
+            self.voice_enabled = False
+            self.log_performance('datalink_voice_error', str(exc))
 
     # Helpers -------------------------------------------------------------
     def _split(self, payload: str, min_parts: int) -> Optional[list]:
@@ -203,6 +243,32 @@ class Datalink(AbstractPlugin):
             for message in self.messages:
                 if message.time_remaining(now) <= 0:
                     self.log_performance('datalink_miss', message.msg_id)
+
+    def _maybe_voice(self, message: DatalinkMessage) -> None:
+        if not self.voice_enabled:
+            return
+        if message.priority.upper() not in self.voice_priorities:
+            return
+        if self._tts_engine is None:
+            if pyttsx3 is None:  # pragma: no cover
+                self.voice_enabled = False
+                self.log_performance('datalink_voice_error', 'pyttsx3_missing')
+                return
+            try:  # pragma: no cover
+                self._tts_engine = pyttsx3.init()
+            except Exception as exc:
+                self.voice_enabled = False
+                self.log_performance('datalink_voice_error', str(exc))
+                return
+        utterance = f"{message.channel}. {message.priority}. {message.text}"
+        try:  # pragma: no cover
+            assert self._tts_engine is not None
+            self._tts_engine.say(utterance)
+            self._tts_engine.runAndWait()
+            self.log_performance('datalink_voice_play', message.msg_id)
+        except Exception as exc:
+            self.voice_enabled = False
+            self.log_performance('datalink_voice_error', str(exc))
 
     def _response_time(self, message: DatalinkMessage) -> float:
         if message.ack_time is None:
