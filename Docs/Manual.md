@@ -854,7 +854,7 @@ This section synthesizes findings from systematic reviews, military UAS operator
   - `vtolpower;draw;VTOL1,30,1.2` subtracts energy for a 30 s hover at 1.2× the configured rate, logging `vtol_power_change`.
   - `vtolpower;recharge;VTOL1,15` / `vtolpower;set;VTOL1,60` top off or force-set the remaining reserve.
 - **Metrics:** Continuous `vtol_power_change` plus `power_warning` and `power_critical` when thresholds are crossed, complementing the phase-level alerts already emitted by `vtolmanager`.
-- **Still pending:** The stability monitor described above (visual indicators + `stability_warning`) remains unimplemented and is the next priority for VTOL research parity.
+- **Transition stability instrumentation:** `vtolmanager;stability;VTOL1,0.7` ingests real-time deviation scores (0–1), while `vtolmanager;stabilitythresholds;0.5,0.8` tunes the warning/critical bands. Every threshold crossing logs `stability_warning`, `stability_critical`, or `stability_recover`, and the widget surfaces the latest stability score per VTOL to highlight high-workload transitions.
 
 ### 14.4 Drone Swarm Control & Cognitive Load Management
 
