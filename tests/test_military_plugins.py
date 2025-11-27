@@ -970,6 +970,28 @@ class TestVtolPower:
         assert 'power_critical' in names
 
 
+class TestVtolManager:
+    """Tests for VTOL manager stability monitoring."""
+
+    def setup_method(self) -> None:
+        self.module = _load_plugin('vtolmanager')
+        self.Vtolmanager = self.module.Vtolmanager
+
+    def test_stability_commands_emit_metrics(self) -> None:
+        plugin = self.Vtolmanager()
+        plugin.logger = MockLogger()
+        plugin.stabilitythresholds('0.4,0.7')
+        plugin.scenario_time = 0.0
+        plugin.stability('VTOL1,0.5')
+        plugin.stability('VTOL1,0.8')
+        plugin.stability('VTOL1,0.2')
+        names = [record['name'] for record in plugin.logger.records]
+        assert 'stability_thresholds' in names
+        assert 'stability_warning' in names
+        assert 'stability_critical' in names
+        assert 'stability_recover' in names
+
+
 # =============================================================================
 # Scenario Template Tests
 # =============================================================================
