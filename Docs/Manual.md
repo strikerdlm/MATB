@@ -71,6 +71,7 @@ Recent FAA research catalogued the KSAOs UAS crews need—airspace knowledge, mi
 
 - Added `includes/scenarios/uas_basic.txt`, a five-minute demonstration scenario that starts the legacy MATB tasks plus Mission Director, Sense-and-Avoid, Payload Manager, Datalink, and Physio Monitor. It scripts UAV assignments, two deconfliction events, multi-sensor load juggling, and CPDLC-style prompts so research teams can evaluate the modules together or reuse it as a template when generating progressive difficulty ramps via `scenario_generator.py`.
 - Added `includes/scenarios/uas_bvlos.txt`, a BVLOS stress drill with three simultaneous aircraft, persistent datalink traffic, repeated sense-and-avoid conflicts, and payload juggling. This scenario is useful for benchmarking automation assistance or experimenting with adaptive autonomy toggles.
+- Added `includes/scenarios/uas_military_ex.txt`, a seven-minute patrol meant for ScanEagle/NightEagle detachments. It boots `platformprofile`, `operatorcapacity`, and `vtolmanager`, spins up three UAV timelines, injects Sense-and-Avoid conflicts plus VTOL transition confirmations, and uses `failureinjector` to drive scripted datalink bursts and geofence violations. The scenario logs `platform_profile_*`, `operator_capacity_*`, and `vtol_*` metrics in the same run so mission summaries can quantify how well crews stayed inside validated workload bands while handling BVLOS traffic.
 
 ### Scenarios & Metrics
 
@@ -222,6 +223,7 @@ Fighter and aerobatic pilots juggle extreme G-management, rapid sensor/weapon re
 ### HPA Reference Scenario
 
 - Added `includes/scenarios/hpa_overlay.txt`, a three-minute sortie that runs Energy Manager, Threat Board, Datalink, Physio Monitor, Physio Overlay, Emergency Stack, Failure Injector, and the legacy MATB tasks. It schedules a BFM-like sequence (ENTRY/SETUP/ENGAGE/DEFENSIVE/Egress), injects an over-G excursion, launches two threat timelines (`TH1`, `TH2`), and lets the Failure Injector automatically trigger and resolve hydraulic failures while dimming the display.
+- Added `includes/scenarios/hpa_qra_ex.txt`, a four-and-a-half-minute Quick Reaction Alert drill that combines `energymanager`, `threatboard`, `weaponsinventory`, `platformprofile`, `datalink`, and `emergencystack`. The sortie walks through ENTRY/SETUP/ENGAGE/DEFENSIVE energy segments, launches sequential TH1–TH3 tracks, forces AIM-9/AIM-120 expenditure decisions, and scripts a hydraulic failure via `failureinjector` so researchers can correlate threat pressure, weapon usage, and emergency compliance times inside one canned scenario.
 
 ### Testing Flow
 
