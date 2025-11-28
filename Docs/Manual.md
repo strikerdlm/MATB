@@ -1215,3 +1215,522 @@ This section provides a comprehensive bibliography of all research sources cited
 **Note**: All URLs and DOIs were verified as of document creation. If a link becomes inaccessible, use the DOI or search for the paper title in academic databases (Google Scholar, Semantic Scholar, ResearchGate, or publisher websites).
 
 Implementation credit: **Dr Diego Malpica, Aerospace Medicine**.
+
+## 17. Combat Scenario HRV Integration Roadmap
+
+### 17.1 Research Signals Informing the Roadmap
+
+1. **Simulated-flight multitasking and HRV drop** – workload increases during combined MATB-style subtasks drove heart-rate rises plus RMSSD/pNN50 decreases, confirming HRV as an acute workload proxy in cockpit-like environments ([Evaluating mental workload during multitasking in simulated flight](https://pmc.ncbi.nlm.nih.gov/articles/PMC9014989/)).
+2. **Fighter instrument approaches** – escalating task demand by tightening approach gate distances reduced time-domain HRV metrics while degrading precision, demonstrating that fighter pilots’ cardiovascular responses track cognitive saturation ([Fighter pilots’ heart rate, heart rate variation and performance during instrument approaches](https://pubmed.ncbi.nlm.nih.gov/26942339/)).
+3. **Combat simulator workload studies** – high-fidelity fighter simulator experiments blending MATB-inspired tasks with weapons employment confirmed that HR/HRV are viable real-time cues for adaptive scenario control ([Cognitive Workload Analysis of Fighter Aircraft Pilots in Flight Simulator Environment](https://www.academia.edu/118422983/Cognitive_Workload_Analysis_of_Fighter_Aircraft_Pilots_in_Flight_Simulator_Environment)).
+4. **Dynamic cognitive workload assessment** – EEG/HRV fusion research emphasises uninterrupted physiological streaming during attack profiles, motivating an architecture that keeps ECG acquisition decoupled from scenario timing ([Dynamic cognitive workload assessment for fighter pilots in simulated fighter aircraft environment using EEG](https://www.sciencedirect.com/science/article/abs/pii/S1746809420301749)).
+5. **Polar H10 + Python streaming feasibility** – Polar’s BLE SDK and open-source LSL restreamers (e.g., [polar-ble-sdk](https://github.com/polarofficial/polar-ble-sdk), [Polar-Recorder-and-LSL-Restream](https://github.com/TomH1004/Polar-Recorder-and-LSL-Restream), [polarpy](https://github.com/wideopensource/polarpy)) deliver low-latency RR intervals suitable for in-app HRV computation and synchronized export.
+
+These sources collectively justify integrating real-time HRV analytics into MATB-derived combat scenarios to quantify sustained cognitive demand, capture overload onset, and validate adaptive automation policies for both fighter and multi-UAV crews.
+
+### 17.2 Capability Objectives
+
+1. **Real-time HRV analytics** – ingest Polar H10 RR intervals via BLE/LSL, compute rolling RMSSD, SDNN, LF/HF, pNN50, and z-scored deltas against personal baselines at 5–60 s windows.
+2. **Dynamic workload coupling** – bind HRV trend alerts to scenario difficulty knobs (Mission Director deadlines, Threat Board density, VTOL transition pacing) to drive adaptive combat drills.
+3. **Unified visualization** – render an on-screen “Combat Physiology” widget combining gauges, spark-lines, and alert banners so instructors/pilots see physiological state next to mission widgets.
+4. **Full data export** – log synchronized RR intervals, per-window HRV metrics, alert flags, and scenario difficulty states to `performance` rows plus standalone CSV/JSON for downstream analysis.
+5. **Bidirectional automation hooks** – allow HRV-triggered automation policies (e.g., temporarily autopilot Mission Director when RMSSD drops >15%) and record every intervention for reproducibility.
+
+### 17.3 Data Architecture & Pipeline
+
+| Layer | Responsibilities | Implementation Notes |
+| --- | --- | --- |
+| **Sensor Ingestion** | Connect to Polar H10 via BLE, stream RR intervals + signal quality. | Extend `plugins/polarrlink.py` with Python BLE pipeline (Bleak) plus optional LSL fallback. Add reconnection logic, battery telemetry, and monotonic-timestamped packets. |
+| **HRV Engine** | Maintain rolling buffers, clean artefacts, compute metrics. | New `physiomonitor.HRVPipeline` with configurable windows (30 s acute, 300 s baseline), artefact rejection (Kubios-style thresholds), Lomb–Scargle for LF/HF when sample spacing varies, and gradient-based “acute shift” detection (ΔRMSSD %, ΔLF/HF). |
+| **Scenario Coupling** | Subscribe to HRV events, adjust plugin parameters. | Emit `performance,physiomonitor,hrv_window,...` plus `performance,automationhooks,hrv_trigger,...`. Provide API `PhysioMonitor.get_latest_snapshot()` so Mission Director, Energy Manager, or Automation Hooks query current state without tight coupling. |
+| **Visualization Layer** | Composite widget showing fighter/UAV workload plus physiology. | Update `plugins/physiomonitor.py` to render dual gauges (RMSSD z-score, LF/HF), a mini timeline (last 3 min RMSSD), alert stack (“Acute sympathetic spike”), and per-mode thresholds (fighter vs UAV). Support screenshot capture for debrief. |
+| **Data Export** | Persist streams for offline modeling. | Extend `core/performance_summary.py` to include HRV aggregates, plus drop `sessions/.../hrv_stream.csv` (timestamp, RR_ms, RMSSD, SDNN, LF, HF, LF_HF, workload_level, scenario_event). Publish simultaneous LSL outlet for neuro stacks. |
+
+### 17.4 Scenario & Difficulty Design
+
+1. **Fighter-only ladder** – 3-level sortie (Baseline, BFM merge, Defensive) manipulating Threat Board density, Energy Manager G-events, and Emergency Stack triggers. HRV expectation: progressive RMSSD suppression, LF/HF rise. Couple to automation toggles (e.g., autop-run RESMAN when LF/HF > 3).
+2. **UAV-only ladder** – BVLOS patrol with Mission Director + Sense-and-Avoid + Payload Manager. Increase UAV count (2→4), conflict rate, datalink tempo; track sustained workload via HRV plus Operator Capacity metrics.
+3. **Hybrid MUM-T** – Pilot handles fighter tasks while supervising 2 UAVs via Mission Director. Difficulty knobs adjust cross-domain handovers and failure injector cascades. HRV events flag when dual-role becomes unsustainable.
+
+Scenario templates (`tools/scenario_templates.py`) should expose these ladders with metadata: target NASA-TLX band, expected HRV deltas, automation policy toggles, and instrumentation requirements (Polar device ID, baseline length).
+
+### 17.5 Development Plan & Milestones
+
+| Phase | Duration | Deliverables |
+| --- | --- | --- |
+| **P0 – Research & Prototyping** | 2 weeks | Validate Polar H10 streaming on Windows, prototype HRV computation notebooks, document artefact rejection thresholds. |
+| **P1 – Core Pipeline** | 3 weeks | Harden `polarrlink` (auto-reconnect, logging), implement `HRVPipeline`, unit tests with synthetic RR data, integrate with `physiomonitor` logging/export. |
+| **P2 – Visualization & Scenario Hooks** | 3 weeks | New Physio widget, Mission Director/Energy Manager overlays showing HRV state, automation rules triggered by HRV thresholds, scenario template updates. |
+| **P3 – Combat Scenario Authoring** | 2 weeks | Ship fighter, UAV, and hybrid scenarios with HRV instrumentation, update Docs and README usage guides. |
+| **P4 – Validation & Tooling** | 2 weeks | Regression scripts replaying log files to confirm deterministic HRV metrics, export verification, documentation of analysis workflow (e.g., Jupyter + pandas). |
+
+Each phase ends with README/Manual updates, new regression fixtures, and changelog entries.
+
+### 17.6 Visualization & Operator Feedback Requirements
+
+- **On-screen cues**: integrate HRV widget next to Mission Director/Energy Manager, add color-coded workload bars (green/amber/red) keyed to RMSSD z-score and LF/HF ratio, and textual callouts (“Acute sympathetic surge detected”).
+- **Instructor console overlays**: optional second window summarizing HRV trends per participant to support remote monitoring during multi-seat studies.
+- **After-action debrief**: extend `summary.md` to reference HRV trend plots and CSV paths, marking detected overload intervals aligned with scenario timestamps.
+
+### 17.7 Data Export & Analysis Workflow
+
+1. **Real-time logging** – every HRV window emits `performance,physiomonitor,hrv_window` entries (timestamped metrics + workload tag) and acute alerts log `performance,physiomonitor,hrv_alert`.
+2. **Structured files** – `sessions/.../hrv_stream.csv` (RR intervals), `hrv_windows.parquet` (aggregated metrics), `hrv_alerts.json` (event list). Include scenario hash, participant ID, Polar device metadata.
+3. **Python analysis toolkit** – provide sample notebook (future work) that loads exports, recomputes metrics, and correlates with performance summary. Encourage pandas + neurokit2 for verification.
+
+### 17.8 Validation & QA Checklist
+
+- **Sensor verification**: compare Polar RR intervals vs medical-grade ECG on 5 participants; require <5 ms mean absolute deviation.
+- **Pipeline determinism**: replay recorded RR streams to ensure identical HRV outputs; add pytest fixtures with saved RR traces.
+- **Scenario stress tests**: run fighter/UAV/hybrid ladders at low/high difficulty to confirm HRV deltas align with published ranges (e.g., ≥15% RMSSD drop for heavy workload per PMC study).
+- **Export integrity**: validate CSV/JSON schemas, ensure timestamps align with log file and LSL within 50 ms.
+- **User guidance**: update Docs/README with setup steps (Polar pairing, BLE permissions, baseline collection) and troubleshooting tips (signal quality, electrode contact, BLE interference).
+
+This roadmap grounds the RT-HRV combat capability in published evidence, clarifies engineering scope, and keeps OpenMATB's fighter/UAV extensions aligned with research-grade physiological instrumentation.
+
+---
+
+## 18. Comprehensive Real-Time HRV Combat Scenario Integration – Research & Development Plan
+
+This section consolidates peer-reviewed evidence, technical specifications, and implementation guidance for integrating real-time heart rate variability (HRV) analysis with variable-difficulty combat scenarios in OpenMATB. The goal is to enable physiological monitoring during sustained fighter aircraft and UAV operator tasks, supporting both research and operational training applications.
+
+### 18.1 Scientific Foundation – Key Research Findings
+
+#### 18.1.1 MATB & Mental Workload Assessment
+
+| Source | Key Finding | Relevance to OpenMATB |
+| --- | --- | --- |
+| **Pontiggia et al. 2024** – "MATB for assessing different mental workload levels" (Frontiers in Physiology, DOI: 10.3389/fphys.2024.1408242) | Systematic review of 19 MATB studies: increased event rates, multitasking, and overlap correlate with higher NASA-TLX scores and decreased tracking performance. Median test duration 20 min; median stimuli for high workload 23.5 events/min. | Establishes baseline MATB difficulty parameters; confirms MATB's sensitivity to workload manipulation for physiological studies. |
+| **Fan et al. 2022** – "Effects of Noise Exposure and Mental Workload on Physiological Responses" (IJERPH, DOI: 10.3390/ijerph191912434) | MATB tasks with varying workload showed significant HRV changes; elevated mental demands increased theta EEG power and pupil diameter. Inverted U-shaped performance curve observed. | Validates HRV + pupillometry as complementary workload markers in MATB paradigms. |
+| **Tiwari et al. 2019** – "Multi-Scale Heart Beat Entropy Measures for Mental Workload Assessment of Ambulant Users" (Entropy, DOI: 10.3390/e21080783) | Novel HRV features outperformed benchmark measures by 24.41% accuracy even during physical activity while performing MATB-II tasks. | Demonstrates HRV robustness for ambulatory/operational contexts; applicable to cockpit movement scenarios. |
+| **Festa et al. 2025** – "Physiological measurement of situation awareness: EEG and fNIRS during MATB" (Ergonomics, DOI: 10.1080/00140139.2025.2553130) | EEG Engagement Index predicted situation awareness independently of workload; fNIRS less correlated with SA. EEG differentiated active performance vs. vigilance with 76% accuracy. | Supports multimodal physiological integration (EEG + HRV) for comprehensive operator state assessment. |
+| **Di Cesare et al. 2024** – "AeroStim: A NASA MATB-II Evolution" (IEEE TechDefense, DOI: 10.1109/TechDefense63521.2024.10863481) | Added Stroop and N-Back tasks to MATB-II for more balanced cognitive workload distribution; validated with Bedford Workload Rating Scale. | Demonstrates MATB extensibility for cognitive task integration; relevant for combat scenario complexity. |
+
+#### 18.1.2 Fighter Pilot & Combat Simulation Studies
+
+| Source | Key Finding | Application |
+| --- | --- | --- |
+| **Koskelo et al. 2024** – "Cardiac autonomic responses in relation to cognitive workload during simulated military flight" (Applied Ergonomics, DOI: 10.1016/j.apergo.2024.104370) | Military student pilots in Hawk simulator: HRV differentiated flight phases with varying cognitive workload; increased workload caused significant decreases in HRV variables reflecting parasympathetic deactivation. | Direct validation of HRV for military flight training assessment; provides benchmark HRV ranges for combat scenarios. |
+| **Hidalgo-Muñoz et al. 2018** – "Cardiovascular correlates of emotional state, cognitive workload and time-on-task during realistic flight simulation" (Int J Psychophysiology, DOI: 10.1016/j.ijpsycho.2018.04.002) | HR sensitive to cognitive demand and training effects; HRV increased with training (time-on-task effect). Social stressor enhanced motivation without cardiovascular impact. | Informs baseline calibration protocols; suggests training effects must be controlled in experimental designs. |
+| **Wanyan et al. 2014** – "Improving pilot mental workload evaluation with combined measures" (Bio-Medical Materials and Engineering, DOI: 10.3233/BME-141041) | Combined behavioral, NASA-TLX, ECG (HRV), ERP, and eye tracking for flight task MW assessment. HRV, P3a, pupil diameter, and eyelid opening sensitive to MW changes. | Validates multimodal approach; identifies specific HRV indices (time-domain) as reliable for flight tasks. |
+| **Durantin et al. 2014** – "Using near infrared spectroscopy and heart rate variability to detect mental overload" (Behavioural Brain Research, DOI: 10.1016/j.bbr.2013.10.042) | fNIRS + HRV predicted mental workload in simulated piloting; lower LF/HF ratio at highest difficulty suggests mental overload detection capability. Quadratic model of mental workload proposed. | Critical finding: LF/HF ratio may decrease (not increase) at overload threshold; informs adaptive automation trigger logic. |
+| **van Weelden et al. 2025** – "Assessment of individual and dyadic workload of student and instructor pilots" (Applied Ergonomics, DOI: 10.1016/j.apergo.2025.104606) | ECG-based measures assessed student-instructor coordination during real and simulated flight. Interpersonal coordination increased with student mental workload. | Extends HRV application to team/dyadic scenarios; relevant for MUM-T and crew coordination research. |
+
+#### 18.1.3 UAV Operator Workload & Physiological Monitoring
+
+| Source | Key Finding | Application |
+| --- | --- | --- |
+| **Alharasees & Kale 2024** – "Human Factors and AI in UAV Systems: Enhancing Operational Efficiency Through AHP and Real-Time Physiological Monitoring" (J Intell Robot Syst, DOI: 10.1007/s10846-024-02188-y) | Real-time HR, HRV, and respiratory rate monitoring during UAV operations at various automation levels. Significant differences in operator prioritization and stress across automation levels. | Directly validates HRV for UAV operator assessment; provides framework for automation-level comparisons. |
+| **Yu et al. 2019** – "Multi-modal physiological sensing approach for distinguishing high workload events in remotely piloted aircraft simulation" (Human-Intelligent Systems Integration, DOI: 10.1007/s42454-020-00016-w) | Multi-modal approach (ECG, EEG, eye tracking) distinguished high workload events in RPA simulation. | Confirms multimodal sensing value for UAS; supports integration of HRV with other physiological measures. |
+| **Hajra et al. 2020** – "A comparison of ECG and EEG metrics for in-flight monitoring of helicopter pilot workload" (IEEE SMC, DOI: 10.1109/SMC42975.2020.9283499) | ECG-based SVM regressor (MSE=0.17) outperformed EEG-based regressor (MSE=0.29) for workload differentiation during helicopter flight. | Establishes ECG/HRV as primary modality for in-flight monitoring; provides ML benchmark for workload classification. |
+| **Wilson & Russell 2007** – "Performance Enhancement in an Uninhabited Air Vehicle Task Using Psychophysiologically Determined Adaptive Aiding" (Human Factors, DOI: 10.1518/001872007X249875) | Landmark study: adaptive aiding triggered by psychophysiological state (EEG, ECG, EOG) improved UAV task performance. 287 citations. | Gold-standard reference for closed-loop adaptive systems; validates physiologically-driven automation. |
+
+#### 18.1.4 Adaptive Workload Systems & Closed-Loop Control
+
+| Source | Key Finding | Application |
+| --- | --- | --- |
+| **John et al. 2022** – "Unraveling the Physiological Correlates of Mental Workload Variations in Tracking and Collision Prediction Tasks" (IEEE TNSRE, DOI: 10.1109/TNSRE.2022.3157446) | EEG, eye activity, and HRV data from 24 participants in ATC-like tasks. Performance predicted from physiological data; brain dynamics estimated from eye activity + HRV. Distinct neurometrics for different task types. | Supports task-specific workload signatures; informs "what to adapt" not just "when to adapt" in adaptive systems. |
+| **Bian et al. 2019** – "Design of a Physiology-based Adaptive Virtual Reality Driving Platform" (ACM TACCESS, DOI: 10.1145/3301498) | Closed-loop VR simulator adapted task difficulty based on physiological engagement (HR, skin conductance). Participants found engagement-sensitive system more engaging than performance-only system. | Validates physiologically-adaptive difficulty adjustment; applicable to combat scenario difficulty ramping. |
+| **Xu et al. 2020** – "Task-irrelevant Auditory Event-related Potentials as Mental Workload Indicators" (IEEE EMBC, DOI: 10.1109/EMBC44109.2020.9175957) | Task-irrelevant auditory ERPs (N1, eP3a, RON) decreased with increasing MWL in both n-back and MATB tasks; more constant across task types than other EEG features. | Suggests auditory probes as robust workload markers; could complement HRV for multimodal assessment. |
+
+### 18.2 Technical Implementation – Python Polar H10 Integration
+
+#### 18.2.1 Polar H10 Capabilities & SDK Resources
+
+| Resource | Description | URL |
+| --- | --- | --- |
+| **Polar Official BLE SDK** | Official SDK supporting HR, RR intervals, ECG streaming, accelerometer. Android/iOS focus but BLE protocol documented. | https://github.com/polarofficial/polar-ble-sdk |
+| **Polar Research Tools** | Polar's research-grade validation documentation; H10 designed for harsh conditions (sweat, motion artifacts). | https://www.polar.com/en/science/research-tools/ |
+| **Polar-Recorder-and-LSL-Restream** | Python application for direct Polar H10 connection via BLE; records HR and RR intervals; streams to LSL. | https://github.com/TomH1004/Polar-Recorder-and-LSL-Restream |
+| **polarpy** | Python tools for reading/fusing live data from Polar OH1 (PPG) and H10 (ECG). pip installable. | https://github.com/wideopensource/polarpy |
+| **LSL-Polar H10 (Mark Span)** | MATLAB/Python integration for Polar H10 → LSL streaming with signal processing examples. | https://markspan.github.io/Polar/ |
+
+#### 18.2.2 Python Libraries for HRV Analysis
+
+| Library | Capabilities | Notes |
+| --- | --- | --- |
+| **NeuroKit2** | Comprehensive neurophysiological signal processing (ECG, PPG, EDA, EMG, RSP). HRV time-domain, frequency-domain, nonlinear metrics. R-peak detection, artifact correction. | DOI: 10.3758/s13428-020-01516-y. Recommended primary library. |
+| **HeartPy** | Lightweight HR/HRV analysis from PPG and ECG. Good for real-time applications. | Validated for cognitive workload research. |
+| **pyHRV** | Dedicated HRV analysis toolkit; time-domain, frequency-domain, nonlinear analysis. | Good for batch processing and detailed HRV reports. |
+| **Bleak** | Cross-platform Python BLE library for connecting to Polar H10 directly. | Essential for Windows/Linux/macOS BLE connectivity. |
+| **pylsl** | Python bindings for Lab Streaming Layer; enables synchronized multimodal data collection. | Required for LSL integration with existing OpenMATB `labstreaminglayer` plugin. |
+
+#### 18.2.3 Recommended Pipeline Architecture
+
+```
+┌─────────────────┐    BLE/GATT     ┌──────────────────┐
+│   Polar H10     │ ──────────────► │  bleak + pylsl   │
+│   (ECG/RR)      │                 │  (polarrlink.py) │
+└─────────────────┘                 └────────┬─────────┘
+                                             │
+                                             ▼ RR intervals (ms)
+                                    ┌──────────────────┐
+                                    │   HRV Pipeline   │
+                                    │  (NeuroKit2 +    │
+                                    │   custom engine) │
+                                    └────────┬─────────┘
+                                             │
+                    ┌────────────────────────┼────────────────────────┐
+                    │                        │                        │
+                    ▼                        ▼                        ▼
+           ┌──────────────┐         ┌──────────────┐         ┌──────────────┐
+           │ Real-Time    │         │ Scenario     │         │ Data Export  │
+           │ Visualization│         │ Coupling     │         │ (CSV/JSON/   │
+           │ (Physio      │         │ (Automation  │         │  LSL/Parquet)│
+           │  Widget)     │         │  Hooks)      │         │              │
+           └──────────────┘         └──────────────┘         └──────────────┘
+```
+
+#### 18.2.4 HRV Metrics Implementation Specification
+
+| Metric | Formula/Method | Window | Threshold for Workload Detection |
+| --- | --- | --- | --- |
+| **HR** | Mean of 60000/RR_ms | 30s rolling | ↑ >10 bpm from baseline |
+| **SDNN** | SD of NN intervals | 300s (5 min) for frequency; 30s for acute | ↓ >15% from baseline |
+| **RMSSD** | √(mean(ΔNN²)) | 30-60s rolling | ↓ >15% indicates sympathetic dominance |
+| **pNN50** | % of ΔNN > 50ms | 60s rolling | ↓ >20% from baseline |
+| **LF Power** | Welch/Lomb-Scargle 0.04-0.15 Hz | 300s | Variable; context-dependent |
+| **HF Power** | Welch/Lomb-Scargle 0.15-0.40 Hz | 300s | ↓ indicates reduced parasympathetic |
+| **LF/HF Ratio** | LF_power / HF_power | 300s | ↑ >2.0 suggests sympathetic dominance; **↓ at extreme overload** (Durantin 2014) |
+| **Acute Delta** | z-score vs. baseline | 30s vs. 300s baseline | |z| > 1.5 triggers alert |
+
+**Critical Implementation Note**: Research by Durantin et al. (2014) found that LF/HF ratio may **decrease** at the highest workload levels (mental overload), suggesting a quadratic rather than linear relationship. The adaptive automation system should account for this non-monotonic pattern.
+
+### 18.3 Combat Scenario Design for HRV Integration
+
+#### 18.3.1 Fighter Aircraft Scenarios
+
+| Scenario | Duration | Difficulty Ramp | Expected HRV Pattern | Plugins Active |
+| --- | --- | --- | --- | --- |
+| **HPA-Basic** | 5 min | Single G-event sequence, 2 threats | Moderate RMSSD drop (10-15%) | energymanager, threatboard, datalink |
+| **HPA-BFM** | 8 min | Progressive: ENTRY→SETUP→ENGAGE→DEFENSIVE→EGRESS | Progressive RMSSD suppression, LF/HF rise to ~2.5 | energymanager, threatboard, weaponsinventory, emergencystack |
+| **HPA-Overload** | 10 min | Simultaneous: 4 threats + G-event + hydraulic failure + datalink flood | RMSSD drop >25%, potential LF/HF plateau/reversal at peak | All HPA plugins + failureinjector + physiooverlay |
+| **HPA-Sustained** | 20 min | Moderate baseline with periodic spikes every 3-4 min | Vigilance decrement pattern; gradual SDNN decline | energymanager, threatboard, datalink, compositescore |
+
+#### 18.3.2 UAV Operator Scenarios
+
+| Scenario | Duration | Difficulty Ramp | Expected HRV Pattern | Plugins Active |
+| --- | --- | --- | --- | --- |
+| **UAS-Basic** | 5 min | 2 UAVs, low conflict rate, single payload | Minimal HRV change from baseline | missiondirector, senseandavoid, payloadmanager |
+| **UAS-BVLOS** | 10 min | 3 UAVs, BVLOS corridor, geofence events | Moderate RMSSD drop (15-20%) | missiondirector, senseandavoid, payloadmanager, datalink, operatorcapacity |
+| **UAS-Swarm** | 12 min | 6+ UAVs, formation control, sensor juggling | Sustained sympathetic activation; SDNN decline | missiondirector, swarmformation, sensorresource, operatorcapacity |
+| **UAS-Emergency** | 8 min | Lost link + handover + flight termination decision | Acute RMSSD drop at decision points | missiondirector, failureinjector, emergencystack, controltransfer |
+
+#### 18.3.3 Hybrid MUM-T Scenarios
+
+| Scenario | Duration | Complexity | Expected HRV Pattern | Plugins Active |
+| --- | --- | --- | --- | --- |
+| **MUM-T Basic** | 10 min | Fighter pilot + 2 UAV supervision | Dual-task interference; RMSSD 20-25% below baseline | energymanager, threatboard, missiondirector (UAV mode), datalink |
+| **MUM-T Combat** | 15 min | Fighter engagement + UAV sensor coordination + datalink | High sympathetic load; LF/HF >3.0 during peak | All fighter + missiondirector, payloadmanager, sensorresource |
+| **MUM-T Overload** | 12 min | Fighter defensive + 3 UAV failures + crew coordination | Potential overload detection; watch for LF/HF reversal | All plugins + mumtcoordination (future) |
+
+### 18.4 Adaptive Automation Integration
+
+#### 18.4.1 HRV-Triggered Automation Rules
+
+Building on the existing `automationhooks.py` framework, the following HRV-based rules should be implemented:
+
+```text
+# Example scenario commands for HRV-driven automation
+
+# Rule 1: Autopilot Mission Director when RMSSD drops significantly
+automationhooks;rule;physiomonitor,rmssd_zscore,lt,-1.5,AUTO,target=missiondirector,command=automation,payload=uav1,auto
+
+# Rule 2: Reduce threat spawn rate when LF/HF exceeds threshold
+automationhooks;rule;physiomonitor,lf_hf_ratio,gt,3.0,REDUCE,target=threatboard,command=rate,payload=0.5
+
+# Rule 3: Extend deadlines when acute HRV alert fires
+automationhooks;rule;physiomonitor,hrv_acute_alert,eq,1,EXTEND,target=datalink,command=deadline_multiplier,payload=1.5
+
+# Rule 4: Detect overload (LF/HF reversal) and pause non-critical tasks
+automationhooks;rule;physiomonitor,overload_detected,eq,1,PAUSE,target=payloadmanager,command=standby,payload=all
+```
+
+#### 18.4.2 Closed-Loop Difficulty Adjustment Algorithm
+
+```python
+# Pseudocode for adaptive difficulty controller
+
+class AdaptiveDifficultyController:
+    def __init__(self, target_workload_band: tuple = (0.4, 0.7)):
+        """
+        target_workload_band: (min_zscore, max_zscore) for RMSSD
+        Values outside this band trigger difficulty adjustment.
+        """
+        self.target_min, self.target_max = target_workload_band
+        self.current_difficulty = 5  # 1-10 scale
+        self.adjustment_cooldown = 60  # seconds between adjustments
+        
+    def update(self, hrv_snapshot: dict) -> Optional[int]:
+        """
+        Returns new difficulty level if adjustment needed, None otherwise.
+        """
+        rmssd_z = hrv_snapshot['rmssd_zscore']
+        lf_hf = hrv_snapshot['lf_hf_ratio']
+        
+        # Check for overload (non-monotonic LF/HF pattern)
+        if self._detect_overload(hrv_snapshot):
+            return max(1, self.current_difficulty - 2)  # Emergency reduction
+        
+        # Normal adaptive adjustment
+        if rmssd_z < -self.target_max:  # Too high workload
+            return max(1, self.current_difficulty - 1)
+        elif rmssd_z > -self.target_min:  # Too low workload
+            return min(10, self.current_difficulty + 1)
+        
+        return None  # Within target band
+    
+    def _detect_overload(self, snapshot: dict) -> bool:
+        """
+        Detect mental overload using Durantin's quadratic model:
+        LF/HF may decrease at extreme overload despite high workload.
+        """
+        # Implementation: track LF/HF trend; if decreasing while
+        # other workload indicators (HR, performance) suggest high load,
+        # flag overload condition.
+        pass
+```
+
+### 18.5 Data Export & Analysis Specifications
+
+#### 18.5.1 Real-Time Log Format
+
+All HRV data logged via `core/logger.py` using existing `performance` entry type:
+
+```text
+# Per-window HRV metrics (every 30s)
+performance,physiomonitor,hrv_window,timestamp=1732800000.123,hr=78.5,rmssd=42.3,sdnn=58.1,pnn50=18.2,lf=1250.5,hf=890.2,lf_hf=1.40,rmssd_zscore=-0.82,workload_level=medium,scenario_event=threatboard_spawn
+
+# Acute HRV alert
+performance,physiomonitor,hrv_acute_alert,timestamp=1732800060.456,type=rmssd_drop,value=-1.8,baseline_rmssd=52.1,current_rmssd=38.2
+
+# Overload detection
+performance,physiomonitor,hrv_overload,timestamp=1732800120.789,lf_hf_trend=decreasing,hr_trend=increasing,confidence=0.85
+```
+
+#### 18.5.2 Export File Structure
+
+```
+sessions/user_<id>/<date>/session_<id>_<timestamp>/
+├── scenario_snapshot.txt
+├── config_snapshot.ini
+├── plugin_versions.json
+├── performance_log.csv
+├── summary.json
+├── summary.md
+├── hrv/
+│   ├── rr_intervals.csv          # Raw RR data: timestamp_ms, rr_ms, quality
+│   ├── hrv_windows.csv           # Per-window metrics
+│   ├── hrv_windows.parquet       # Efficient format for large datasets
+│   ├── hrv_alerts.json           # Alert events with context
+│   ├── hrv_baseline.json         # Baseline calibration data
+│   └── polar_metadata.json       # Device info, battery, signal quality
+└── lsl/
+    └── streams_manifest.json     # LSL stream identifiers for sync
+```
+
+#### 18.5.3 Analysis Notebook Template (Future Deliverable)
+
+```python
+# Example analysis workflow (to be provided as Jupyter notebook)
+
+import pandas as pd
+import neurokit2 as nk
+from pathlib import Path
+
+def load_session(session_path: Path) -> dict:
+    """Load all HRV data from a session."""
+    return {
+        'rr': pd.read_csv(session_path / 'hrv' / 'rr_intervals.csv'),
+        'windows': pd.read_csv(session_path / 'hrv' / 'hrv_windows.csv'),
+        'alerts': json.load(open(session_path / 'hrv' / 'hrv_alerts.json')),
+        'summary': json.load(open(session_path / 'summary.json'))
+    }
+
+def validate_hrv_metrics(rr_df: pd.DataFrame, windows_df: pd.DataFrame) -> dict:
+    """Recompute HRV metrics from raw RR and compare to logged values."""
+    # Use NeuroKit2 for validation
+    hrv_recomputed = nk.hrv_time(rr_df['rr_ms'].values, sampling_rate=None)
+    # Compare and return discrepancy report
+    pass
+
+def correlate_with_performance(windows_df: pd.DataFrame, perf_df: pd.DataFrame) -> pd.DataFrame:
+    """Align HRV windows with performance metrics for correlation analysis."""
+    pass
+```
+
+### 18.6 Validation Protocol
+
+#### 18.6.1 Sensor Validation
+
+| Test | Method | Acceptance Criteria |
+| --- | --- | --- |
+| **RR Interval Accuracy** | Compare Polar H10 vs. medical-grade ECG (e.g., BIOPAC) on 5 participants during rest and MATB tasks | Mean absolute deviation < 5 ms; correlation r > 0.99 |
+| **Signal Quality** | Assess artifact rate during movement (reaching, button pressing) | < 5% artifacts requiring interpolation |
+| **Latency** | Measure BLE transmission delay from heartbeat to software timestamp | < 100 ms end-to-end |
+| **Reconnection** | Simulate BLE disconnection; verify auto-reconnect and data continuity | Reconnect within 10s; no data loss during brief disconnects |
+
+#### 18.6.2 Pipeline Validation
+
+| Test | Method | Acceptance Criteria |
+| --- | --- | --- |
+| **Determinism** | Replay saved RR streams through HRV pipeline | Identical output metrics (within floating-point tolerance) |
+| **Window Alignment** | Verify window boundaries align with scenario timestamps | < 50 ms offset between HRV window and scenario event |
+| **Baseline Stability** | Compute baseline metrics from 5-min rest; verify stability | Coefficient of variation < 10% for RMSSD, SDNN |
+| **Acute Detection** | Inject synthetic RR patterns with known RMSSD drops | Alert triggered within 1 window (30s) of threshold crossing |
+
+#### 18.6.3 Scenario Validation
+
+| Test | Method | Acceptance Criteria |
+| --- | --- | --- |
+| **Workload Differentiation** | Run low/medium/high difficulty scenarios; compare HRV metrics | Significant difference (p < 0.05) in RMSSD between difficulty levels |
+| **NASA-TLX Correlation** | Collect subjective ratings post-scenario; correlate with HRV | r > 0.5 between NASA-TLX mental demand and RMSSD drop |
+| **Overload Detection** | Run overload scenario; verify LF/HF pattern matches Durantin model | Overload flag triggered when LF/HF decreases despite high HR |
+| **Adaptive Response** | Enable HRV-driven automation; verify difficulty adjustment | Difficulty reduced within 2 windows of sustained overload |
+
+### 18.7 Implementation Milestones (Detailed)
+
+| Phase | Week | Deliverables | Acceptance Criteria |
+| --- | --- | --- | --- |
+| **P0.1** | 1 | Polar H10 BLE connection prototype (Windows) | Stable RR streaming for 10 min |
+| **P0.2** | 2 | NeuroKit2 HRV computation notebook; artifact rejection tuning | Validated against published HRV ranges |
+| **P1.1** | 3 | `polarrlink.py` hardening: auto-reconnect, battery monitoring, logging | Passes reconnection test |
+| **P1.2** | 4 | `HRVPipeline` class: rolling buffers, metric computation, baseline calibration | Unit tests with synthetic RR data pass |
+| **P1.3** | 5 | Integration with `physiomonitor.py`: logging, export, LSL outlet | End-to-end data flow verified |
+| **P2.1** | 6 | Physio widget: gauges, spark-lines, alert banners | UI renders correctly during scenario |
+| **P2.2** | 7 | Mission Director/Energy Manager HRV overlays | HRV state visible alongside task widgets |
+| **P2.3** | 8 | `automationhooks.py` HRV rules: threshold triggers, difficulty adjustment | Automation rules fire correctly |
+| **P3.1** | 9 | Fighter scenarios: HPA-Basic, HPA-BFM, HPA-Overload | Scenarios run without errors |
+| **P3.2** | 10 | UAV scenarios: UAS-Basic, UAS-BVLOS, UAS-Swarm | Scenarios run without errors |
+| **P3.3** | 11 | Hybrid MUM-T scenarios | Scenarios run without errors |
+| **P4.1** | 12 | Regression scripts: replay logs, verify determinism | All regression tests pass |
+| **P4.2** | 13 | Analysis notebook template; documentation updates | Notebook runs on exported data |
+| **P4.3** | 14 | Final validation: sensor, pipeline, scenario tests | All acceptance criteria met |
+
+### 18.8 References – HRV Combat Scenario Integration
+
+#### 18.8.1 MATB & Workload Assessment
+
+1. **Pontiggia et al. 2024**: "MATB for assessing different mental workload levels"
+   - Journal: Frontiers in Physiology
+   - DOI: 10.3389/fphys.2024.1408242
+   - PDF: https://www.frontiersin.org/journals/physiology/articles/10.3389/fphys.2024.1408242/pdf
+
+2. **Fan et al. 2022**: "Effects of Noise Exposure and Mental Workload on Physiological Responses during Task Execution"
+   - Journal: International Journal of Environmental Research and Public Health
+   - DOI: 10.3390/ijerph191912434
+
+3. **Tiwari et al. 2019**: "Multi-Scale Heart Beat Entropy Measures for Mental Workload Assessment of Ambulant Users"
+   - Journal: Entropy
+   - DOI: 10.3390/e21080783
+
+4. **Festa et al. 2025**: "Physiological measurement of situation awareness: A study of the validity of EEG and fNIRS during performance and automation monitoring in a complex task"
+   - Journal: Ergonomics
+   - DOI: 10.1080/00140139.2025.2553130
+
+5. **Di Cesare et al. 2024**: "AeroStim: A NASA MATB-II Evolution"
+   - Conference: IEEE TechDefense
+   - DOI: 10.1109/TechDefense63521.2024.10863481
+
+#### 18.8.2 Fighter Pilot & Military Aviation
+
+6. **Koskelo et al. 2024**: "Cardiac autonomic responses in relation to cognitive workload during simulated military flight"
+   - Journal: Applied Ergonomics
+   - DOI: 10.1016/j.apergo.2024.104370
+   - PubMed: 39186837
+
+7. **Hidalgo-Muñoz et al. 2018**: "Cardiovascular correlates of emotional state, cognitive workload and time-on-task effect during a realistic flight simulation"
+   - Journal: International Journal of Psychophysiology
+   - DOI: 10.1016/j.ijpsycho.2018.04.002
+   - PubMed: 29627585
+
+8. **Wanyan et al. 2014**: "Improving pilot mental workload evaluation with combined measures"
+   - Journal: Bio-Medical Materials and Engineering
+   - DOI: 10.3233/BME-141041
+   - PubMed: 25226928
+
+9. **Durantin et al. 2014**: "Using near infrared spectroscopy and heart rate variability to detect mental overload"
+   - Journal: Behavioural Brain Research
+   - DOI: 10.1016/j.bbr.2013.10.042
+   - PubMed: 24184083
+
+10. **van Weelden et al. 2025**: "Assessment of individual and dyadic workload of student and instructor pilots in real and simulated flight"
+    - Journal: Applied Ergonomics
+    - DOI: 10.1016/j.apergo.2025.104606
+    - PubMed: 40819550
+
+#### 18.8.3 UAV & Remote Piloting
+
+11. **Alharasees & Kale 2024**: "Human Factors and AI in UAV Systems: Enhancing Operational Efficiency Through AHP and Real-Time Physiological Monitoring"
+    - Journal: Journal of Intelligent & Robotic Systems
+    - DOI: 10.1007/s10846-024-02188-y
+
+12. **Yu et al. 2019**: "Multi-modal physiological sensing approach for distinguishing high workload events in remotely piloted aircraft simulation"
+    - Journal: Human-Intelligent Systems Integration
+    - DOI: 10.1007/s42454-020-00016-w
+
+13. **Hajra et al. 2020**: "A comparison of ECG and EEG metrics for in-flight monitoring of helicopter pilot workload"
+    - Conference: IEEE SMC
+    - DOI: 10.1109/SMC42975.2020.9283499
+
+14. **Wilson & Russell 2007**: "Performance Enhancement in an Uninhabited Air Vehicle Task Using Psychophysiologically Determined Adaptive Aiding"
+    - Journal: Human Factors
+    - DOI: 10.1518/001872007X249875
+
+#### 18.8.4 Adaptive Systems & Closed-Loop Control
+
+15. **John et al. 2022**: "Unraveling the Physiological Correlates of Mental Workload Variations in Tracking and Collision Prediction Tasks"
+    - Journal: IEEE Transactions on Neural Systems and Rehabilitation Engineering
+    - DOI: 10.1109/TNSRE.2022.3157446
+
+16. **Bian et al. 2019**: "Design of a Physiology-based Adaptive Virtual Reality Driving Platform for Individuals with ASD"
+    - Journal: ACM Transactions on Accessible Computing
+    - DOI: 10.1145/3301498
+
+17. **Xu et al. 2020**: "Task-irrelevant Auditory Event-related Potentials as Mental Workload Indicators: A Between-task Comparison Study"
+    - Conference: IEEE EMBC
+    - DOI: 10.1109/EMBC44109.2020.9175957
+
+#### 18.8.5 Python Tools & Technical Resources
+
+18. **Makowski et al. 2021**: "NeuroKit2: A Python toolbox for neurophysiological signal processing"
+    - Journal: Behavior Research Methods
+    - DOI: 10.3758/s13428-020-01516-y
+    - URL: https://neuropsychology.github.io/NeuroKit/
+
+19. **Frasch 2022**: "Comprehensive HRV estimation pipeline in Python using NeuroKit2: Application to sleep physiology"
+    - Journal: MethodsX
+    - DOI: 10.1016/j.mex.2022.101782
+
+20. **Polar BLE SDK**
+    - URL: https://github.com/polarofficial/polar-ble-sdk
+
+21. **Polar-Recorder-and-LSL-Restream**
+    - URL: https://github.com/TomH1004/Polar-Recorder-and-LSL-Restream
+
+22. **CogWatch Platform** (Dankovich et al. 2024)
+    - Journal: HardwareX
+    - URL: https://www.hardware-x.com/article/S2468-0672(24)00032-4/fulltext
+
+#### 18.8.6 Workload Classification & Machine Learning
+
+23. **Johnston 2025**: "Predicting Cognitive State and Workload of Aviators With Machine Learning of Physiological Data"
+    - Type: Dissertation
+    - Note: Used Polar H10 for ECG recording in aviator workload prediction
+    - URL: https://search.proquest.com/openview/16a03d0edd61105cab42d696fbb099fa/1
+
+24. **Ding et al. 2022**: "A machine learning approach to reduce mental fatigue risk of pilots based on HRV data"
+    - Conference: IEEE
+    - DOI: 10.1109/ICCAIS56082.2022.10110400
+    - Note: Used Polar H10 for HRV measurement in pilot fatigue study
+
+25. **Villani et al. 2020**: "Wearable devices for the assessment of cognitive effort for human–robot interaction"
+    - Journal: IEEE Access
+    - DOI: 10.1109/ACCESS.2020.3001355
+    - Note: Validated Polar H10 HRV metrics for cognitive effort assessment
+
+---
+
+**Implementation Credit**: Research compilation and development plan by **Dr Diego Malpica, Aerospace Medicine**.
+
+**Document Version**: 2.0 – Comprehensive RT-HRV Combat Integration Roadmap
