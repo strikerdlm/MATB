@@ -56,6 +56,7 @@ Implementation of Manual.md Section 17-18 roadmap for physiological monitoring d
 - Scenario templates now include Polar RR Link and Physio Monitor by default for physiological instrumentation
 - Physio Monitor baseline exports now log `hrv_export` entries for provenance
 - Polar RR Link now validates dependencies before setting the plugin alive state, preventing inconsistent starts
+- requirements now include `pandas` + `pyarrow` so HRV parquet exports and validators install cleanly
 
 ### Research References
 
