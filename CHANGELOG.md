@@ -48,6 +48,8 @@ Implementation of Manual.md Section 17-18 roadmap for physiological monitoring d
 - **Session HRV exports**:
   - Physio Monitor now auto-writes `rr_intervals.csv`, `hrv_windows.csv`, `hrv_windows.parquet`, `hrv_alerts.json`, and `hrv_baseline.json` inside each session's `hrv/` directory
   - Polar RR Link emits `polar_metadata.json` with device, battery, and provenance fields for every run
+- **New tooling**:
+  - `tools/hrv_validate.py` CLI validates HRV export folders (RR stats, window CSV/parquet consistency, alerts, baseline, Polar metadata)
 
 ### Changed
 
