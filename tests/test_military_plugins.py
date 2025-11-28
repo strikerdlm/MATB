@@ -1108,6 +1108,55 @@ class TestVtolManager:
         assert 'stability_critical' in names
         assert 'stability_recover' in names
 
+    def test_phase_logging_uses_key_value_payload(self) -> None:
+        plugin = self.Vtolmanager()
+        plugin.logger = MockLogger()
+        plugin.scenario_time = 0.0
+        plugin.phase('VTOL1,transition')
+        phase_entries = [record for record in plugin.logger.records if record['name'] == 'vtol_phase_change']
+        assert phase_entries
+        value = phase_entries[-1]['value']
+        assert 'uav=VTOL1' in value
+        assert 'phase=transition' in value
+        pending_entries = [
+            record for record in plugin.logger.records if record['name'] == 'vtol_transition_pending'
+        ]
+        assert pending_entries
+        assert 'timeout_s=' in pending_entries[-1]['value']
+
+    def test_battery_and_overdue_logs_include_context(self) -> None:
+        plugin = self.Vtolmanager()
+        plugin.logger = MockLogger()
+        plugin.scenario_time = 0.0
+        plugin.phase('VTOL1,transition')
+        timeout = float(plugin.parameters['confirmationtimeout'])
+        plugin._maybe_mark_overdue('VTOL1', timeout + 1.0)
+        overdue_entries = [
+            record for record in plugin.logger.records if record['name'] == 'vtol_transition_overdue'
+        ]
+        assert overdue_entries
+        assert 'elapsed_s=' in overdue_entries[-1]['value']
+        plugin.battery('VTOL1,180')
+        battery_entries = [
+            record for record in plugin.logger.records if record['name'] == 'vtol_battery_set'
+        ]
+        assert battery_entries
+        assert 'capacity_s=180.0' in battery_entries[-1]['value']
+
+    def test_power_warning_payload_contains_remaining_energy(self) -> None:
+        plugin = self.Vtolmanager()
+        plugin.logger = MockLogger()
+        plugin.parameters['batteryseconds'] = 100
+        plugin._model = plugin._build_model()
+        plugin.scenario_time = 0.0
+        plugin.phase('VTOL1,cruise')
+        plugin.update(94.0)
+        warning_entries = [
+            record for record in plugin.logger.records if record['name'] == 'vtol_power_warning'
+        ]
+        assert warning_entries
+        assert 'remaining_s=' in warning_entries[-1]['value']
+
 
 class TestAdvancedTraining:
     """Tests for the Advanced Training orchestrator."""
