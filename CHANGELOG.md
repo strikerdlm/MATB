@@ -45,6 +45,9 @@ Implementation of Manual.md Section 17-18 roadmap for physiological monitoring d
 - **Enhanced `core/performance_summary.py`**:
   - Adds Physio Monitor KPI block summarising RMSSD/SDNN/LF-HF stats
   - Reports HRV workload distributions, alert totals, and overload counts in JSON/Markdown summaries
+- **Session HRV exports**:
+  - Physio Monitor now auto-writes `rr_intervals.csv`, `hrv_windows.csv`, `hrv_windows.parquet`, `hrv_alerts.json`, and `hrv_baseline.json` inside each session's `hrv/` directory
+  - Polar RR Link emits `polar_metadata.json` with device, battery, and provenance fields for every run
 
 ### Changed
 
