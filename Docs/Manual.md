@@ -1529,7 +1529,7 @@ sessions/user_<id>/<date>/session_<id>_<timestamp>/
     └── streams_manifest.json     # LSL stream identifiers for sync
 ```
 
-#### 18.5.3 Analysis Notebook Template (Future Deliverable)
+#### 18.5.3 Analysis Notebook Template / CLI Validator
 
 ```python
 # Example analysis workflow (to be provided as Jupyter notebook)
@@ -1558,6 +1558,8 @@ def correlate_with_performance(windows_df: pd.DataFrame, perf_df: pd.DataFrame) 
     """Align HRV windows with performance metrics for correlation analysis."""
     pass
 ```
+
+> Quick validation CLI: `python tools/hrv_validate.py --session sessions/user_0001/2025-11-28/session_0001_120000`
 
 ### 18.6 Validation Protocol
 
