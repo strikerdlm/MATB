@@ -15,11 +15,14 @@ Research Reference:
 from __future__ import annotations
 
 import asyncio
+import json
 import threading
 import time
 from collections import deque
 from dataclasses import dataclass
-from typing import Deque, Optional
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Deque, Dict, List, Optional
 
 from plugins.abstractplugin import AbstractPlugin
 from core import validation
@@ -130,6 +133,7 @@ class Polarrlink(AbstractPlugin):
         self._battery_level: int = -1
         self._last_battery_check: float = 0.0
         self._battery_check_interval: float = 60.0  # Check every 60 seconds
+        self._battery_history: List[Dict[str, Any]] = []
         
         # Signal quality tracking
         self._recent_rr: Deque[RRPacket] = deque(maxlen=100)
@@ -141,6 +145,8 @@ class Polarrlink(AbstractPlugin):
         self._start_time_mono: float = 0.0
         self._last_log_time: float = 0.0
         self._log_interval: float = 30.0  # Log status every 30 seconds
+        self._start_time_epoch: Optional[float] = None
+        self._stop_time_epoch: Optional[float] = None
 
     def start(self) -> None:
         """Start the Polar H10 connection and LSL streaming."""
@@ -167,9 +173,12 @@ class Polarrlink(AbstractPlugin):
         self._total_count = 0
         self._last_valid_rr = None
         self._recent_rr.clear()
+        self._battery_history.clear()
         current_time = time.monotonic()
         self._last_battery_check = current_time - self._battery_check_interval
         self._last_log_time = current_time - self._log_interval
+        self._start_time_epoch = time.time()
+        self._stop_time_epoch = None
         
         # Create LSL stream
         self._create_lsl_stream()
@@ -198,6 +207,11 @@ class Polarrlink(AbstractPlugin):
         self._stream_outlet = None
         self._stream_info = None
         self._connected = False
+        self._stop_time_epoch = time.time()
+        try:
+            self._write_metadata(self._default_export_dir())
+        except OSError as exc:  # pragma: no cover - filesystem errors
+            self.log_performance('polar_error', f'metadata_error={type(exc).__name__}')
         
         # Log final statistics
         if self._total_count > 0:
@@ -355,6 +369,10 @@ class Polarrlink(AbstractPlugin):
                 self._battery_level = int(battery_data[0])
                 self.log_performance('polar_battery', self._battery_level)
                 self._last_battery_check = time.monotonic()
+                self._battery_history.append({
+                    'timestamp': datetime.now(timezone.utc).isoformat(),
+                    'battery_percent': self._battery_level,
+                })
         except asyncio.TimeoutError:
             self.log_performance('polar_warning', 'battery_read_timeout')
         except Exception as exc:
@@ -484,6 +502,61 @@ class Polarrlink(AbstractPlugin):
             
         valid_count = sum(1 for p in self._recent_rr if p.quality > 0)
         return valid_count / len(self._recent_rr)
+
+    def _default_export_dir(self) -> Path:
+        """Resolve default HRV export directory."""
+        path_param = self.parameters.get('exportpath')
+        if path_param:
+            return Path(path_param).expanduser()
+        session_dir = getattr(self.logger, 'session_dir', None)
+        if session_dir:
+            return Path(session_dir) / 'hrv'
+        return Path('sessions') / 'hrv_export'
+
+    def _write_metadata(self, export_dir: Path) -> None:
+        """Persist Polar device metadata for the session."""
+        export_dir.mkdir(parents=True, exist_ok=True)
+        start_iso = (
+            datetime.fromtimestamp(self._start_time_epoch, tz=timezone.utc).isoformat()
+            if self._start_time_epoch
+            else None
+        )
+        stop_iso = (
+            datetime.fromtimestamp(self._stop_time_epoch, tz=timezone.utc).isoformat()
+            if self._stop_time_epoch
+            else None
+        )
+        duration = None
+        if self._start_time_epoch and self._stop_time_epoch:
+            duration = max(0.0, self._stop_time_epoch - self._start_time_epoch)
+
+        artifact_rate = None
+        if self._total_count > 0:
+            artifact_rate = (self._artifact_count / self._total_count) * 100.0
+
+        provenance, _ = self.logger.get_provenance_snapshot()
+        metadata = {
+            'device_id': self.parameters.get('deviceid'),
+            'lsl_stream': self.parameters.get('lslstreamname'),
+            'start_time': start_iso,
+            'stop_time': stop_iso,
+            'duration_seconds': duration,
+            'total_rr_samples': self._total_count,
+            'artifact_rate_percent': artifact_rate,
+            'mean_quality': round(self._compute_signal_quality(), 4),
+            'reconnect_attempts': self._reconnect_count,
+            'battery_samples': self._battery_history,
+            'last_battery_percent': self._battery_level,
+            'provenance': {
+                'user_id': provenance.get('user_id'),
+                'session_dir': provenance.get('session_dir'),
+                'scenario_hash': provenance.get('scenario_hash'),
+            },
+            'exported_at': datetime.now(timezone.utc).isoformat(),
+        }
+        metadata_path = export_dir / 'polar_metadata.json'
+        metadata_path.write_text(json.dumps(metadata, indent=2), encoding='utf-8')
+        self.log_performance('polar_metadata', str(metadata_path))
 
     def _start_scan(self) -> None:
         """Start a BLE scan for Polar devices (runs in background)."""
