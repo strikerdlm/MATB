@@ -116,12 +116,19 @@ class Vtolmanager(AbstractPlugin):
         info = self._model.set_phase(uav, phase, self.scenario_time)
         self.log_performance(
             'vtol_phase_change',
-            f'{uav}:{phase}:{info["power"]}:{info["duration"]:.2f}',
+            (
+                f'uav={uav},phase={phase},power={info["power"]:.2f},'
+                f'duration_s={info["duration"]:.2f}'
+            ),
         )
         if info['pending_confirmation']:
             self._pending_started[uav] = self.scenario_time
             self._pending_overdue[uav] = False
-            self.log_performance('vtol_transition_pending', uav)
+            timeout = float(self.parameters['confirmationtimeout'])
+            self.log_performance(
+                'vtol_transition_pending',
+                f'uav={uav},phase={phase},timeout_s={timeout:.1f}',
+            )
         else:
             self._pending_started.pop(uav, None)
             self._pending_overdue.pop(uav, None)
@@ -131,7 +138,8 @@ class Vtolmanager(AbstractPlugin):
         if not uav:
             return
         if self._model.confirm(uav):
-            self.log_performance('vtol_transition_confirm', uav)
+            phase = self._model.ensure(uav, self.scenario_time).phase or 'idle'
+            self.log_performance('vtol_transition_confirm', f'uav={uav},phase={phase}')
             self._pending_started.pop(uav, None)
             self._pending_overdue.pop(uav, None)
 
@@ -145,7 +153,7 @@ class Vtolmanager(AbstractPlugin):
         except ValueError:
             return
         capacity = self._model.set_battery(uav, seconds, self.scenario_time)
-        self.log_performance('vtol_battery_set', f'{uav}:{capacity}')
+        self.log_performance('vtol_battery_set', f'uav={uav},capacity_s={capacity:.1f}')
 
     def stability(self, payload: str) -> None:
         parts = [part.strip() for part in payload.split(',') if part.strip()]
@@ -172,7 +180,7 @@ class Vtolmanager(AbstractPlugin):
             return
         self.parameters['stabilitywarn'] = warn
         self.parameters['stabilitycritical'] = critical
-        self.log_performance('stability_thresholds', f'{warn:.2f}:{critical:.2f}')
+        self.log_performance('stability_thresholds', f'warning={warn:.2f},critical={critical:.2f}')
         for uav, value in self._stability_values.items():
             self._evaluate_stability(uav, value, force=True)
 
@@ -180,13 +188,9 @@ class Vtolmanager(AbstractPlugin):
     def update(self, scenario_time: float) -> None:
         super().update(scenario_time)
         for uav in self._uav_list():
-            _, changed_level = self._model.update_energy(uav, scenario_time)
-            if changed_level == 'warning':
-                self.log_performance('vtol_power_warning', uav)
-            elif changed_level == 'critical':
-                self.log_performance('vtol_power_critical', uav)
-            elif changed_level == 'empty':
-                self.log_performance('vtol_power_empty', uav)
+            remaining, changed_level = self._model.update_energy(uav, scenario_time)
+            if changed_level is not None:
+                self._log_energy_level(changed_level, uav, remaining)
             self._maybe_mark_overdue(uav, scenario_time)
 
     def _maybe_mark_overdue(self, uav: str, now: float) -> None:
@@ -194,10 +198,23 @@ class Vtolmanager(AbstractPlugin):
         if start is None:
             return
         timeout = float(self.parameters['confirmationtimeout'])
-        if now - start >= timeout and not self._pending_overdue.get(uav):
+        elapsed = now - start
+        if elapsed >= timeout and not self._pending_overdue.get(uav):
             if self._model.mark_overdue(uav):
                 self._pending_overdue[uav] = True
-                self.log_performance('vtol_transition_overdue', uav)
+                self.log_performance(
+                    'vtol_transition_overdue',
+                    f'uav={uav},elapsed_s={elapsed:.2f},timeout_s={timeout:.2f}',
+                )
+
+    def _log_energy_level(self, level: str, uav: str, remaining: float) -> None:
+        payload = f'uav={uav},remaining_s={remaining:.1f}'
+        if level == 'warning':
+            self.log_performance('vtol_power_warning', payload)
+        elif level == 'critical':
+            self.log_performance('vtol_power_critical', payload)
+        elif level == 'empty':
+            self.log_performance('vtol_power_empty', payload)
 
     def _format_summary(self) -> str:
         lines = []
@@ -269,11 +286,11 @@ class Vtolmanager(AbstractPlugin):
             return
         self._stability_status[uav] = new_state
         if new_state == 'critical':
-            self.log_performance('stability_critical', f'{uav}:{value:.2f}')
+            self.log_performance('stability_critical', f'uav={uav},value={value:.2f}')
         elif new_state == 'warning':
-            self.log_performance('stability_warning', f'{uav}:{value:.2f}')
+            self.log_performance('stability_warning', f'uav={uav},value={value:.2f}')
         elif current in ('warning', 'critical'):
-            self.log_performance('stability_recover', f'{uav}:{value:.2f}')
+            self.log_performance('stability_recover', f'uav={uav},value={value:.2f}')
 
     @staticmethod
     def _clamp(value: float, low: float, high: float) -> float:
