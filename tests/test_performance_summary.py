@@ -111,3 +111,28 @@ def test_performance_aggregator_exports_markdown(tmp_path: Path) -> None:
     assert '# Performance Summary' in content
     assert 'missiondirector' in content
     assert 'Derived KPIs' in content
+
+
+def test_performance_aggregator_physio_monitor_kpis() -> None:
+    agg = PerformanceAggregator()
+    agg.reset({'scenario': 'physio-test'})
+    agg.record('PhysioMonitor', 'hrv_rmssd', 42.0)
+    agg.record('PhysioMonitor', 'hrv_rmssd', 48.0)
+    agg.record('PhysioMonitor', 'hrv_sdnn', 60.0)
+    agg.record('PhysioMonitor', 'hrv_lf_hf', 1.8)
+    agg.record('PhysioMonitor', 'hrv_rmssd_zscore', -0.5)
+    agg.record('PhysioMonitor', 'hrv_lf_hf_zscore', 0.9)
+    agg.record('PhysioMonitor', 'hrv_workload', 'high')
+    agg.record('PhysioMonitor', 'hrv_workload', 'medium')
+    agg.record('PhysioMonitor', 'hrv_alert', 'RMSSD drop')
+    agg.record('PhysioMonitor', 'hrv_alert', 'Overload')
+    agg.record('PhysioMonitor', 'hrv_overload', 'LF/HF reversal')
+
+    summary = agg.build_summary()
+    physio = summary['modules']['physiomonitor']['derived']
+    assert 'rmssd_ms' in physio
+    assert physio['rmssd_ms']['count'] == 2
+    assert physio['lf_hf_ratio']['last'] == 1.8
+    assert physio['workload_distribution'][0]['value'] in {'high', 'medium'}
+    assert physio['alert_total'] == 2
+    assert physio['overload_events'] == 1
