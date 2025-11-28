@@ -542,11 +542,20 @@ performance,operatorcapacity,operator_overlap,0.65
 
 # VTOL Manager
 performance,vtolmanager,vtol_phase_change,uav=VTOL1,phase=transition,power=1.2,duration=4.8
-performance,vtolmanager,vtol_transition_pending,VTOL1
-performance,vtolmanager,vtol_transition_confirm,VTOL1
-performance,vtolmanager,vtol_power_warning,VTOL1
-performance,vtolmanager,vtol_power_critical,VTOL1
+performance,vtolmanager,vtol_transition_pending,uav=VTOL1,phase=transition,timeout_s=8.0
+performance,vtolmanager,vtol_transition_confirm,uav=VTOL1,phase=transition
+performance,vtolmanager,vtol_power_warning,uav=VTOL1,remaining_s=540
+performance,vtolmanager,vtol_power_critical,uav=VTOL1,remaining_s=270
 ```
+
+The VTOL telemetry stream now mirrors the research data schema with explicit key–value
+payloads. `vtol_phase_change` records `uav`, `phase`, `power`, and `duration_s`, while the
+transition metrics (`vtol_transition_pending`, `..._confirm`, `..._overdue`) add the active
+phase plus `timeout_s`/`elapsed_s` fields for auditability. Energy alerts (`vtol_power_warning`,
+`vtol_power_critical`, `vtol_power_empty`) include `remaining_s`, and every `vtol_battery_set`
+entry carries the updated `capacity_s`. Stability logs (`stability_warning`, `stability_critical`,
+`stability_recover`) now echo `uav` and the normalised `value`, ensuring downstream analytics and
+the session exports stay self-describing without extra parsing.
 
 ---
 
