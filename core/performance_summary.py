@@ -223,6 +223,7 @@ class PerformanceAggregator:
             'operatorcapacity': self._operatorcapacity_kpis,
             'platformprofile': self._platformprofile_kpis,
             'vtolmanager': self._vtolmanager_kpis,
+            'physiomonitor': self._physiomonitor_kpis,
         }
         builder = builders.get(module_name)
         return builder(metrics) if builder else {}
@@ -344,6 +345,35 @@ class PerformanceAggregator:
             payload['transition_confirms'] = confirms
         return payload
 
+    def _physiomonitor_kpis(self, metrics: Mapping[str, MetricSummary]) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {}
+
+        stat_map = {
+            'rmssd_ms': self._metric_stats(metrics.get('hrv_rmssd')),
+            'sdnn_ms': self._metric_stats(metrics.get('hrv_sdnn')),
+            'lf_hf_ratio': self._metric_stats(metrics.get('hrv_lf_hf')),
+            'rmssd_zscore': self._metric_stats(metrics.get('hrv_rmssd_zscore')),
+            'lf_hf_zscore': self._metric_stats(metrics.get('hrv_lf_hf_zscore')),
+        }
+        for key, stats in stat_map.items():
+            if stats:
+                payload[key] = stats
+
+        workload = metrics.get('hrv_workload')
+        if workload and workload.categorical.total:
+            payload['workload_distribution'] = workload.categorical.as_list()
+
+        alerts = metrics.get('hrv_alert')
+        if alerts and alerts.categorical.total:
+            payload['alert_total'] = alerts.categorical.total
+            payload['alert_breakdown'] = alerts.categorical.as_list()
+
+        overload_events = self._count(metrics.get('hrv_overload'))
+        if overload_events:
+            payload['overload_events'] = overload_events
+
+        return payload
+
     @staticmethod
     def _count(summary: Optional[MetricSummary]) -> int:
         return summary.total_count() if summary and summary.has_data() else 0
@@ -374,6 +404,12 @@ class PerformanceAggregator:
             return None
         count = breaches.categorical.counts.get(label, 0)
         return round(count / baseline.numeric.count, 3)
+
+    @staticmethod
+    def _metric_stats(summary: Optional[MetricSummary]) -> Optional[Dict[str, float]]:
+        if summary and summary.numeric.count:
+            return summary.numeric.as_dict()
+        return None
 
     # ------------------------------------------------------------------
     def _build_markdown_lines(self, summary: Dict[str, Any]) -> List[str]:
