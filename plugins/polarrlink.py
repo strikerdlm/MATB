@@ -144,8 +144,6 @@ class Polarrlink(AbstractPlugin):
 
     def start(self) -> None:
         """Start the Polar H10 connection and LSL streaming."""
-        super().start()
-        
         if BleakClient is None:
             self.log_performance('polar_error', 'bleak_not_installed')
             print(_('Polar RR link requires the bleak package. Install with: pip install bleak'))
@@ -161,6 +159,7 @@ class Polarrlink(AbstractPlugin):
             print(_('Polar RR link requires a deviceid (MAC address or UUID). Use scan command to find devices.'))
             return
         
+        super().start()
         self._stop_event.clear()
         self._start_time_mono = time.monotonic()
         self._reconnect_count = 0
