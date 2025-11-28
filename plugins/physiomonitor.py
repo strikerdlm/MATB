@@ -26,7 +26,7 @@ import time
 from collections import deque
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Deque, Dict, List, Optional, Tuple
+from typing import Any, Deque, Dict, List, Optional, Tuple
 
 from core import validation
 from core.constants import COLORS as C, FONT_SIZES as F
@@ -37,6 +37,11 @@ try:  # pragma: no cover - pylsl availability depends on runtime environment
     import pylsl
 except ImportError:  # pragma: no cover
     pylsl = None
+
+try:  # pragma: no cover - optional dependency
+    import pandas as pd
+except ImportError:  # pragma: no cover
+    pd = None
 
 
 # Type aliases
@@ -216,11 +221,18 @@ class Physiomonitor(AbstractPlugin):
         self._inlet: Optional['pylsl.StreamInlet'] = None
         
         # Data export
-        self._export_rr: List[Dict] = []
-        self._export_windows: List[Dict] = []
-        self._export_alerts: List[Dict] = []
+        self._export_rr: List[Dict[str, Any]] = []
+        self._export_windows: List[Dict[str, Any]] = []
+        self._export_alerts: List[Dict[str, Any]] = []
         self._artifact_count: int = 0
         self._total_count: int = 0
+        self._auto_exported: bool = False
+
+    def start(self) -> None:
+        """Start the plugin and reset export buffers."""
+        self._reset_export_buffers()
+        self._auto_exported = False
+        super().start()
 
     def create_widgets(self) -> None:
         """Create display widgets for HRV metrics."""
@@ -369,26 +381,25 @@ class Physiomonitor(AbstractPlugin):
                 if self._is_artifact(interval):
                     self._artifact_count += 1
                     # Log artifact but don't add to history
-                    self._export_rr.append({
-                        'timestamp': timestamp,
-                        'rr_sec': interval,
-                        'quality': 0.0,
-                        'artifact': True
-                    })
+                    self._record_rr_sample(timestamp, interval, 0.0, True)
                     continue
                     
             self._last_valid_rr = interval
             self._nn_history.append((timestamp, interval))
             
             # Store for export
-            self._export_rr.append({
-                'timestamp': timestamp,
-                'rr_sec': interval,
-                'quality': quality,
-                'artifact': False
-            })
+            self._record_rr_sample(timestamp, interval, quality, False)
 
         self._trim_history()
+
+    def _record_rr_sample(self, timestamp: float, interval_sec: float, quality: float, artifact: bool) -> None:
+        """Record a single RR sample for export."""
+        self._export_rr.append({
+            'timestamp_ms': int(timestamp * 1000),
+            'rr_ms': int(interval_sec * 1000),
+            'quality': round(max(0.0, quality), 4),
+            'artifact': artifact,
+        })
 
     def _extract_interval(self, sample: List[float]) -> Optional[float]:
         """Extract RR interval from LSL sample.
@@ -1072,19 +1083,48 @@ class Physiomonitor(AbstractPlugin):
         self.log_performance('hrv_lf_hf_zscore', round(snapshot.lf_hf_zscore, 4))
         self.log_performance('hrv_workload', snapshot.workload_level)
 
-    def _export_data(self, path: Optional[str]) -> None:
+    def _default_export_dir(self) -> Path:
+        """Resolve the default HRV export directory."""
+        path_param = self.parameters.get('exportpath')
+        if path_param:
+            return Path(path_param).expanduser()
+        session_dir = getattr(self.logger, 'session_dir', None)
+        if session_dir:
+            return Path(session_dir) / 'hrv'
+        return Path('sessions') / 'hrv_export'
+
+    def _reset_export_buffers(self) -> None:
+        """Clear export buffers after writing to disk."""
+        self._export_rr.clear()
+        self._export_windows.clear()
+        self._export_alerts.clear()
+        self._artifact_count = 0
+        self._total_count = 0
+
+    def _auto_export_if_needed(self) -> None:
+        """Export HRV data once per run."""
+        if self._auto_exported:
+            return
+        export_dir = self._default_export_dir()
+        try:
+            self._export_data(export_dir)
+        except OSError as exc:  # pragma: no cover - file system errors
+            self.log_performance('hrv_export', f'error={type(exc).__name__}')
+        self._auto_exported = True
+        self._reset_export_buffers()
+
+    def stop(self) -> None:
+        """Ensure HRV data is exported on stop."""
+        self._auto_export_if_needed()
+        super().stop()
+
+    def _export_data(self, path: Optional[Path]) -> None:
         """Export HRV data to files.
         
         Args:
             path: Export directory path, or None to use default.
         """
-        if path:
-            export_dir = Path(path)
-        elif self.parameters['exportpath']:
-            export_dir = Path(self.parameters['exportpath'])
-        else:
-            export_dir = Path('sessions') / 'hrv_export'
-            
+        export_dir = Path(path) if path else self._default_export_dir()
         export_dir.mkdir(parents=True, exist_ok=True)
         timestamp = time.strftime('%Y%m%d_%H%M%S')
         
@@ -1092,7 +1132,10 @@ class Physiomonitor(AbstractPlugin):
         rr_path = export_dir / f'rr_intervals_{timestamp}.csv'
         if self._export_rr:
             with open(rr_path, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.DictWriter(f, fieldnames=['timestamp', 'rr_sec', 'quality', 'artifact'])
+                writer = csv.DictWriter(
+                    f,
+                    fieldnames=['timestamp_ms', 'rr_ms', 'quality', 'artifact'],
+                )
                 writer.writeheader()
                 writer.writerows(self._export_rr)
             self.log_performance('hrv_export', f'rr_intervals={rr_path}')
@@ -1106,6 +1149,17 @@ class Physiomonitor(AbstractPlugin):
                 writer.writeheader()
                 writer.writerows(self._export_windows)
             self.log_performance('hrv_export', f'hrv_windows={windows_path}')
+            if pd is not None:
+                parquet_path = export_dir / f'hrv_windows_{timestamp}.parquet'
+                try:
+                    df = pd.DataFrame(self._export_windows)
+                    df.to_parquet(parquet_path, index=False)
+                    self.log_performance('hrv_export', f'hrv_windows_parquet={parquet_path}')
+                except Exception as exc:  # pragma: no cover - optional dependency
+                    self.log_performance(
+                        'hrv_export',
+                        f'hrv_windows_parquet_error={type(exc).__name__}',
+                    )
             
         # Export alerts
         alerts_path = export_dir / f'hrv_alerts_{timestamp}.json'
