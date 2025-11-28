@@ -6,3 +6,5 @@ capture.sublime-workspace
 audio_matb
 *.odt
 Docs/OpenMATB_wiki
+.cursorrules
+.cursor/rules/matb.mdc
