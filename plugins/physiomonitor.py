@@ -1129,6 +1129,7 @@ class Physiomonitor(AbstractPlugin):
             }
             with open(baseline_path, 'w', encoding='utf-8') as f:
                 json.dump(baseline_data, f, indent=2)
+            self.log_performance('hrv_export', f'hrv_baseline={baseline_path}')
 
     def _now(self) -> float:
         """Get current timestamp.
