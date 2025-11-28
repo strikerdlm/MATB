@@ -1,0 +1,165 @@
+# HRV Combat Integration Scenario
+# Difficulty Level: 6/10
+# Duration: 600s (includes 120s baseline)
+# Event Interval: 48s
+# Deadline Factor: 0.9
+#
+# Research Reference: Manual.md Section 18
+# - Durantin et al. 2014: Overload detection via LF/HF reversal
+# - Koskelo et al. 2024: Military flight HRV patterns
+
+# ============================================
+# PHASE 1: BASELINE CALIBRATION (0-2 min)
+# ============================================
+# Low workload period for HRV baseline collection
+
+# Start physiological monitoring first
+0:00:00;polarrlink;start
+0:00:01;physiomonitor;start
+0:00:02;physiomonitor;baseline;start
+
+# Start basic MATB tasks at low difficulty
+0:00:05;sysmon;start
+0:00:05;track;start
+0:00:05;resman;start
+0:00:05;communications;start
+
+# Minimal events during baseline
+0:00:30;communications;radioprompt;OWN,118.0,1
+0:01:00;sysmon;automaticsolver;True
+0:01:30;communications;radioprompt;OWN,124.5,1
+
+# End baseline collection
+0:02:00;physiomonitor;baseline;stop
+
+# ============================================
+# PHASE 2: COMBAT SYSTEMS ACTIVATION
+# ============================================
+
+0:02:05;sysmon;automaticsolver;False
+0:02:05;energymanager;start
+0:02:05;threatboard;start
+0:02:05;weaponsinventory;start
+0:02:05;missiondirector;start
+0:02:05;senseandavoid;start
+0:02:05;datalink;start
+0:02:05;emergencystack;start
+0:02:05;compositescore;start
+0:02:05;automationhooks;start
+
+# Initialize weapons loadout
+0:02:10;weaponsinventory;load;AIM9,4
+0:02:10;weaponsinventory;load;AIM120,6
+0:02:10;threatboard;countermeasure;chaff,20
+0:02:10;threatboard;countermeasure;flare,20
+
+# ============================================
+# HRV-TRIGGERED AUTOMATION RULES
+# ============================================
+# These rules implement adaptive automation based on physiological state
+
+# Rule 1: When RMSSD z-score drops below -1.5 (high workload)
+# -> Enable Mission Director auto mode to reduce cognitive load
+0:02:15;automationhooks;rule;physiomonitor,hrv_rmssd_zscore,lt,-1.5,AUTO,target=missiondirector,command=automation,payload=uav1,auto,cooldown=30
+
+# Rule 2: When LF/HF ratio exceeds baseline + 50%
+# -> Extend datalink deadlines
+0:02:15;automationhooks;rule;physiomonitor,hrv_lf_hf,gt,2.5,EXTEND,target=datalink,command=deadline_multiplier,payload=1.5,cooldown=60
+
+# Rule 3: When overload is detected (LF/HF reversal pattern)
+# -> Pause non-critical tasks
+0:02:15;automationhooks;rule;physiomonitor,hrv_workload,eq,overload,PAUSE,target=payloadmanager,command=standby,payload=all,cooldown=45
+
+# Enable automation hooks
+0:02:20;automationhooks;enable;1
+
+# ============================================
+# PHASE 3: LOW WORKLOAD (0:02:30 - 0:04:15)
+# Expected HRV: RMSSD stable, LF/HF ~1.0
+# ============================================
+
+0:02:30;energymanager;event;PATROL,3.6,30
+0:02:45;missiondirector;assign;UAV1,Surveillance,180
+0:03:00;datalink;message;MSG1,ATC,NORM,Radar contact 12 o clock,45
+
+# ============================================
+# PHASE 4: MEDIUM WORKLOAD (0:04:15 - 0:06:00)
+# Expected HRV: RMSSD -10-15%, LF/HF ~1.5
+# ============================================
+
+0:04:15;energymanager;event;INTERCEPT,5.4,35
+0:04:25;threatboard;spawn;TH1,045,12,R73,36
+0:04:30;missiondirector;assign;UAV2,Strike,120
+0:04:35;datalink;message;MSG2,AWACS,PRIO,Bandit 2 o clock high,30
+0:04:40;senseandavoid;spawn;INT1,090,1.5,200,35
+0:04:50;threatboard;engage;TH1,FOX3
+0:05:00;threatboard;resolve;TH1,SPLASH
+0:05:05;senseandavoid;resolve;INT1,turn right 15
+
+# ============================================
+# PHASE 5: HIGH WORKLOAD (0:06:00 - 0:07:45)
+# Expected HRV: RMSSD -20-25%, LF/HF ~2.5
+# ============================================
+
+0:06:00;energymanager;event;ENGAGE,6.7,40
+0:06:05;threatboard;spawn;TH2,315,8,AIM9,31
+0:06:08;threatboard;spawn;TH3,045,10,R77,36
+0:06:10;missiondirector;conflict;UAV1,airspace
+0:06:12;datalink;message;MSG3,AWACS,CRIT,Multiple contacts,20
+0:06:15;senseandavoid;spawn;INT2,270,1.0,100,25
+0:06:18;weaponsinventory;expend;AIM120,1
+0:06:20;threatboard;engage;TH2,FOX2
+0:06:22;threatboard;countermeasure;chaff,2
+0:06:25;missiondirector;assign;UAV3,CSAR,90
+0:06:28;threatboard;engage;TH3,FOX3
+0:06:30;emergencystack;trigger;WARN1,FUEL LOW,Check tanks|Transfer fuel
+0:06:35;threatboard;resolve;TH2,SPLASH
+0:06:40;threatboard;resolve;TH3,MISS
+0:06:45;missiondirector;clearconflict;UAV1
+0:06:50;emergencystack;resolve;WARN1
+
+# ============================================
+# PHASE 6: OVERLOAD INDUCTION (0:07:45 - 0:09:30)
+# Expected HRV: RMSSD -30%+, LF/HF may DECREASE (Durantin overload)
+# ============================================
+
+0:07:45;energymanager;event;DEFENSIVE,7.7,45
+0:07:47;energymanager;overg;8.2
+0:07:50;threatboard;spawn;TH4,180,5,GUN,20
+0:07:52;threatboard;spawn;TH5,200,6,R73,22
+0:07:55;emergencystack;trigger;HYD1,HYD PRESS LOW,Switch pumps|Check breakers|Monitor temps
+0:07:57;missiondirector;conflict;UAV2,lost_link
+0:08:00;datalink;message;MSG4,AWACS,CRIT,SAM LAUNCH,15
+0:08:02;threatboard;countermeasure;flare,4
+0:08:05;senseandavoid;spawn;INT3,045,0.5,50,15
+0:08:07;weaponsinventory;expend;AIM9,2
+0:08:10;threatboard;engage;TH4,GUN
+0:08:13;threatboard;engage;TH5,FOX2
+0:08:15;physiooverlay;apply;#000000AA,5
+0:08:20;threatboard;resolve;TH4,SPLASH
+0:08:23;threatboard;resolve;TH5,SPLASH
+0:08:25;emergencystack;resolve;HYD1
+0:08:30;missiondirector;clearconflict;UAV2
+
+# ============================================
+# SCENARIO END
+# ============================================
+
+0:09:50;automationhooks;disable;1
+0:09:55;physiomonitor;export;
+
+0:10:00;compositescore;stop
+0:10:00;automationhooks;stop
+0:10:00;emergencystack;stop
+0:10:00;senseandavoid;stop
+0:10:00;missiondirector;stop
+0:10:00;weaponsinventory;stop
+0:10:00;threatboard;stop
+0:10:00;energymanager;stop
+0:10:00;datalink;stop
+0:10:00;communications;stop
+0:10:00;resman;stop
+0:10:00;track;stop
+0:10:00;sysmon;stop
+0:10:00;physiomonitor;stop
+0:10:00;polarrlink;stop
