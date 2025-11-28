@@ -57,6 +57,7 @@ Implementation of Manual.md Section 17-18 roadmap for physiological monitoring d
 - Physio Monitor baseline exports now log `hrv_export` entries for provenance
 - Polar RR Link now validates dependencies before setting the plugin alive state, preventing inconsistent starts
 - requirements now include `pandas` + `pyarrow` so HRV parquet exports and validators install cleanly
+- VTOL Manager performance events now emit key–value payloads (`vtol_phase_change`, transition states, power alerts, battery/stability metrics) so logs, summaries, and downstream analytics stay self-describing
 
 ### Research References
 
