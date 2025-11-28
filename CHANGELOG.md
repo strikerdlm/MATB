@@ -42,10 +42,15 @@ Implementation of Manual.md Section 17-18 roadmap for physiological monitoring d
   - Progressive workload phases: Low → Medium → High → Overload
   - HRV-triggered automation rules for adaptive workload management
   - Fighter and UAV task integration
+- **Enhanced `core/performance_summary.py`**:
+  - Adds Physio Monitor KPI block summarising RMSSD/SDNN/LF-HF stats
+  - Reports HRV workload distributions, alert totals, and overload counts in JSON/Markdown summaries
 
 ### Changed
 
 - Scenario templates now include Polar RR Link and Physio Monitor by default for physiological instrumentation
+- Physio Monitor baseline exports now log `hrv_export` entries for provenance
+- Polar RR Link now validates dependencies before setting the plugin alive state, preventing inconsistent starts
 
 ### Research References
 
