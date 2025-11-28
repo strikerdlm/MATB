@@ -168,6 +168,9 @@ class Polarrlink(AbstractPlugin):
         self._total_count = 0
         self._last_valid_rr = None
         self._recent_rr.clear()
+        current_time = time.monotonic()
+        self._last_battery_check = current_time - self._battery_check_interval
+        self._last_log_time = current_time - self._log_interval
         
         # Create LSL stream
         self._create_lsl_stream()
