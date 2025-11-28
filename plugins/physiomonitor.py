@@ -1110,6 +1110,7 @@ class Physiomonitor(AbstractPlugin):
             self._export_data(export_dir)
         except OSError as exc:  # pragma: no cover - file system errors
             self.log_performance('hrv_export', f'error={type(exc).__name__}')
+            return
         self._auto_exported = True
         self._reset_export_buffers()
 
