@@ -1136,6 +1136,131 @@ To keep the shipped application, the wiki (`Docs/OpenMATB.wiki`), and this manua
 
 ---
 
+## 15.1 Spanish Instructions System
+
+OpenMATB includes comprehensive Spanish-language instructions for all scenario types. These instructions are designed to be displayed before test execution to ensure participants fully understand the tasks.
+
+### 15.1.1 Instruction File Structure
+
+Spanish instructions are organized under `includes/instructions/spanish/` with the following structure:
+
+```
+includes/instructions/spanish/
+├── default/                    # Core MATB task instructions
+│   ├── bienvenida.txt         # Welcome screen
+│   ├── sysmon.txt             # System monitoring task
+│   ├── track.txt              # Tracking task
+│   ├── communications.txt     # Communications task
+│   ├── resman.txt             # Resource management task
+│   └── completo.txt           # Combined tasks overview
+├── uas/                        # UAS operator instructions
+│   ├── uas_bienvenida.txt     # UAS scenario welcome
+│   ├── missiondirector.txt    # Mission Director task
+│   ├── senseandavoid.txt      # Sense-and-Avoid task
+│   ├── payloadmanager.txt     # Payload Manager task
+│   ├── datalink.txt           # Datalink task
+│   ├── uas_basic_intro.txt    # UAS Basic scenario intro
+│   ├── uas_bvlos_intro.txt    # UAS BVLOS scenario intro
+│   └── uas_military_intro.txt # UAS Military scenario intro
+├── hpa/                        # High-Performance Aircraft instructions
+│   ├── hpa_bienvenida.txt     # HPA scenario welcome
+│   ├── energymanager.txt      # Energy & G-Envelope task
+│   ├── threatboard.txt        # Threat Board task
+│   ├── weaponsinventory.txt   # Weapons Inventory task
+│   ├── emergencystack.txt     # Emergency Stack task
+│   ├── hpa_overlay_intro.txt  # HPA Overlay scenario intro
+│   └── hpa_qra_intro.txt      # HPA QRA scenario intro
+└── mumt/                       # MUM-T hybrid instructions
+    ├── mumt_bienvenida.txt    # MUM-T welcome
+    ├── operatorcapacity.txt   # Operator Capacity monitor
+    ├── vtolmanager.txt        # VTOL Manager task
+    ├── physiomonitor.txt      # Physio Monitor (HRV)
+    ├── mumt_lvl1_intro.txt    # MUM-T Level 1 intro
+    ├── mumt_lvl2_intro.txt    # MUM-T Level 2 intro
+    └── mumt_lvl3_intro.txt    # MUM-T Level 3 intro
+```
+
+### 15.1.2 Instruction File Format
+
+Instructions use simple HTML tags for formatting:
+
+```html
+<h1>Título Principal</h1>
+
+<center>
+<p>Texto del párrafo con <strong>énfasis</strong> y <em>cursiva</em>.</p>
+
+<p><strong>Subtítulo:</strong></p>
+<p>• Punto de lista uno</p>
+<p>• Punto de lista dos</p>
+</center>
+```
+
+Supported HTML tags: `H1-H6`, `P`, `CENTER`, `STRONG`, `EM`, `B`, `I`, `UL`, `LI`, `IMG`, `BR`, `HR`.
+
+### 15.1.3 Streamlit Configuration Portal
+
+The Streamlit configuration portal (`tools/config_portal.py`) includes a dedicated **📖 Instrucciones** tab that:
+
+1. **Displays instructions page by page** with navigation controls
+2. **Maps scenarios to instruction sets** automatically
+3. **Provides quick navigation** to specific instruction sections
+4. **Offers downloadable versions** (HTML and plain text)
+5. **Shows a pre-test checklist** for participant preparation
+
+To launch the portal:
+
+```bash
+streamlit run tools/config_portal.py
+```
+
+### 15.1.4 Scenario-to-Instructions Mapping
+
+| Scenario | Instruction Set |
+|----------|-----------------|
+| `default.txt`, `basic.txt` | Default MATB instructions |
+| `uas_basic.txt` | UAS welcome + core MATB + UAS modules + basic intro |
+| `uas_bvlos.txt` | UAS welcome + core MATB + UAS modules + BVLOS intro |
+| `uas_military_ex.txt` | UAS welcome + core MATB + UAS modules + operator capacity + VTOL + military intro |
+| `hpa_overlay.txt` | HPA welcome + core MATB + HPA modules + overlay intro |
+| `hpa_qra_ex.txt` | HPA welcome + core MATB + HPA modules + weapons + QRA intro |
+| `mumt_ramp_lvl1.txt` | MUM-T welcome + core MATB + HPA + UAS modules + level 1 intro |
+| `mumt_ramp_lvl2.txt` | MUM-T welcome + core MATB + HPA + UAS modules + level 2 intro |
+| `mumt_ramp_lvl3.txt` | MUM-T welcome + core MATB + HPA + UAS + physio + level 3 intro |
+
+### 15.1.5 Pre-Test Protocol (Spanish)
+
+The recommended pre-test protocol in Spanish:
+
+1. **Lectura de Instrucciones** (5-10 min): El participante lee todas las páginas de instrucciones
+2. **Verificación de Comprensión**: El investigador confirma que el participante entiende cada tarea
+3. **Verificación de Equipo**: Joystick, audio, sensor Polar H10 (si aplica)
+4. **Condiciones Ambientales**: Iluminación, temperatura, ruido documentados
+5. **Criterios de Exclusión**: Sueño mínimo 6h, sin cafeína 4h, sin bebidas energéticas 6h
+6. **Práctica de Familiarización**: 2-3 ensayos de práctica antes de la sesión de datos
+
+### 15.1.6 Adding New Instruction Files
+
+To add instructions for a new scenario:
+
+1. Create instruction files in the appropriate `includes/instructions/spanish/` subdirectory
+2. Update the `SCENARIO_INSTRUCTIONS` dictionary in `tools/config_portal.py`
+3. Test the instructions display in the Streamlit portal
+
+Example for a new scenario `my_scenario.txt`:
+
+```python
+# In tools/config_portal.py, add to SCENARIO_INSTRUCTIONS:
+"my_scenario.txt": [
+    "spanish/default/bienvenida.txt",
+    "spanish/default/sysmon.txt",
+    # ... other relevant instruction files
+    "spanish/uas/my_scenario_intro.txt",  # Create this file
+],
+```
+
+---
+
 ## 16. References & Verifiable Sources
 
 This section provides a comprehensive bibliography of all research sources cited in this manual, organized by topic area. All URLs and DOIs have been verified for accessibility.
