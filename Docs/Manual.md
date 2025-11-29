@@ -296,6 +296,25 @@ This modular approach keeps acquisition (via LSL) decoupled from visualisation, 
 - `tests/test_performance_summary.py` guards this pipeline: it loads the module dynamically, exercises mixed numeric/categorical aggregation, validates domain KPIs, and ensures Markdown exports render the derived/ raw metric tables the docs promise. Add new metrics/tests in lockstep to keep the documentation, aggregator, and regression suite synchronised.
 - Recommended workflow: (1) ensure every plugin emits meaningful `performance,<plugin>,<metric>` rows, (2) run `pytest tests/test_performance_summary.py` plus the broader regression suite, (3) verify the resulting `summary.md` links back to the scenario hash before distributing data outside the lab.
 
+### 4.5 MUM-T Scenario Ladder (Hybrid Fighter + UAS)
+
+To exercise the full set of fighter and UAS plugins in a single progression, three new scenarios ship under `includes/scenarios/`. They follow the workload ladder recommended in the FAA BVLOS ARC report (2022), NASA’s recent sUAS crew-role guidance (NASA/TM–20250002531), Airbus’s 2024 MUM-T demonstrations, and the swarm workload findings reported by Kostenko et al. (2022, Frontiers in Psychology). Each file scales event density, automation availability, and physiological stressors so labs can step participants from introductory coordination drills to overload conditions without editing raw scenario text.
+
+| Scenario file | Duration | Difficulty | Primary goals | Key plugins / features |
+| --- | --- | --- | --- | --- |
+| `mumt_ramp_lvl1.txt` | 7 min | 3/10 | Two-UAV launch + fighter support with basic deconfliction | `missiondirector`, `senseandavoid`, `payloadmanager`, `datalink`, `operatorcapacity`, `platformprofile`, `energymanager`, `threatboard`, `weaponsinventory`, `vtolmanager`, `launchrecovery`, `mumtcoordination` |
+| `mumt_ramp_lvl2.txt` | 9 min | 6/10 | Tri-ship coordination, VTOL relay, adaptive automation, emergency drills | Level 1 set + `sensorresource`, `targetuncertainty`, `controltransfer`, `automationhooks`, `failureinjector`, `audioalerts`, `hmdoverlay`, `physiooverlay`, `datalink` TTS |
+| `mumt_ramp_lvl3.txt` | 12 min | 9/10 | Full-spectrum fighter + UAS teaming with HRV-triggered automation, swarm control, BVLOS sensory loss, UTM restrictions, and flight termination decisions | Level 2 set + `polarrlink`/`physiomonitor` baseline collection, `bvlossensory`, `utmintegration`, `flighttermination`, `swarmformation`, `vtolpower`, `dualtasksensor` |
+
+Implementation notes:
+
+1. **Progressive mission design** – Level 1 mirrors ScanEagle/NightEagle style sorties (USAARL MATB references) by pairing simple launch/recovery with single-threat energy events and a single MUM-T coordination request. Level 2 adds VTOL relay timelines, adaptive automation rules tied to mission alerts, datalink voice synthesis (pyttsx3) for PRIO/CRIT messages, and scripted handovers (`controltransfer`) so teams rehearse NASA’s mixed-role procedures. Level 3 introduces all remaining combat extensions: HRV-driven automation (Durantin et al. 2014 LF/HF model), swarm overrides, BVLOS sensory deprivation, UTM replan drills, flight-termination prompts, VTOL power budgeting, and dual-task sensor training overlaying MATB track performance.
+2. **Physiological instrumentation** – Level 3 begins with a two-minute baseline (`polarrlink;start` + `physiomonitor;baseline;start`) before spinning up combat plugins, enabling live RMSSD/LF/HF z-score tracking. Automation hooks export `physiomonitor` metrics so adaptive policies can pause payload tasks or extend deadlines when overload signatures appear.
+3. **Scenario hooks** – All files log the newer domain metrics (`control_transfer_*`, `swarm_*`, `vtol_power_*`, `termination_*`, `sensory_cue_*`, etc.) and exercise the voice-enabled datalink path (`datalink;voice;True,PRIO|CRIT`), fulfilling the instrumentation requirements outlined in §§9–14. Researchers can launch the ladder sequentially during familiarisation (Level 1), training (Level 2), and evaluation (Level 3) or select a specific rung via `python openmatb.py --scenario includes/scenarios/mumt_ramp_lvlX.txt`.
+4. **Research traceability** – Inline comments in each file cite the supporting sources (FAA BVLOS ARC 2022; NASA/TM–20250002531; Airbus 2024 MUM-T story; Kostenko et al. 2022). This keeps the provenance of workload levels and coordination tactics explicit for IRB packages and military QA audits.
+
+The ladder dovetails with the existing scenario template CLI: pass `--template hpa_overlay` or `uas_bvlos` for legacy cases, then run the MUM-T ramp to measure transfer and dual-task interference under tightly controlled, reference-backed workloads.
+
 ## 5. Step-by-Step Approach
 
 | Phase | Activities | Deliverables |
