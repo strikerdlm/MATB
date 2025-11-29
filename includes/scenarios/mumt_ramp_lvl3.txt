@@ -1,0 +1,228 @@
+# MUM-T Ramp Level 3 – Hybrid Combat Overload
+# Duration: 720s (12 min) | Difficulty: 9/10
+# Focus: Full-spectrum fighter + multi-UAV coordination with BVLOS stressors,
+# adaptive automation tied to HRV, UTM restrictions, and swarm control.
+#
+# Research References:
+# - FAA BVLOS ARC Report (2022) – control transfer, termination, sensory loss
+# - NASA/TM–20250002531 sUAS Roles & Training (2025) – high-ratio supervision
+# - Kostenko et al. 2022 (Frontiers in Psychology) – swarm cognitive load
+# - Durantin et al. 2014 – LF/HF overload reversal for HRV-based automation
+
+# =========================
+# PHASE 0 – HRV BASELINE
+# =========================
+0:00:00;polarrlink;start
+0:00:01;physiomonitor;start
+0:00:02;physiomonitor;baseline;start
+0:00:05;sysmon;start
+0:00:05;track;start
+0:00:05;resman;start
+0:00:05;communications;start
+0:01:20;communications;radioprompt;OWN,118.200,1
+0:01:30;physiomonitor;baseline;stop
+
+# =========================
+# PHASE 1 – SYSTEM SPIN-UP
+# =========================
+0:01:32;missiondirector;start
+0:01:32;senseandavoid;start
+0:01:32;payloadmanager;start
+0:01:32;sensorresource;start
+0:01:32;targetuncertainty;start
+0:01:32;datalink;start
+0:01:32;operatorcapacity;start
+0:01:32;platformprofile;start
+0:01:32;energymanager;start
+0:01:32;threatboard;start
+0:01:32;weaponsinventory;start
+0:01:32;vtolmanager;start
+0:01:32;vtolpower;start
+0:01:32;launchrecovery;start
+0:01:32;controltransfer;start
+0:01:32;automationhooks;start
+0:01:32;failureinjector;start
+0:01:32;audioalerts;start
+0:01:32;hmdoverlay;start
+0:01:32;emergencystack;start
+0:01:32;physiooverlay;start
+0:01:32;bvlossensory;start
+0:01:32;utmintegration;start
+0:01:32;flighttermination;start
+0:01:32;swarmformation;start
+0:01:32;dualtasksensor;start
+0:01:32;mumtcoordination;start
+
+0:01:40;datalink;voice;True,PRIO|CRIT
+0:01:42;audioalerts;register;overg,includes/sounds/overg.wav
+
+0:01:45;platformprofile;set;UAV1,scaneagle
+0:01:46;platformprofile;set;UAV2,nighteagle
+0:01:47;platformprofile;set;UAV3,vtol45,endurance=2100
+0:01:48;platformprofile;set;UAV4,scaneagle
+0:01:50;operatorcapacity;set;active,3
+0:01:52;operatorcapacity;set;supervisory,6
+
+0:01:55;weaponsinventory;load;AIM9,4
+0:01:55;weaponsinventory;load;AIM120,6
+0:01:57;missiondirector;assign;UAV1,Launch,210
+0:01:58;missiondirector;assign;UAV2,BVLOS patrol,240
+0:01:59;missiondirector;assign;UAV3,VTOL relay,300
+0:02:00;missiondirector;assign;UAV4,Swarm escort,260
+
+0:02:05;launchrecovery;launch;UAV1,catapult,20
+0:02:05;launchrecovery;launch;UAV3,vtol,25
+0:02:08;vtolmanager;phase;VTOL3,takeoff
+0:02:15;vtolmanager;confirm;VTOL3
+
+0:02:18;vtolpower;configure;VTOL3,100,30,15,1.4
+0:02:22;vtolpower;draw;VTOL3,20,1.2
+
+# Swarm configuration for escort UAVs
+0:02:25;swarmformation;set;line,UAV1|UAV2|UAV4
+0:02:30;swarmformation;mode;indirect
+
+# UTM restriction enters airspace
+0:02:35;utmintegration;restriction;R1,TFR North Valley,ORANGE,180
+0:02:45;utmintegration;replan;R1
+
+# Dual-task training overlay during mission
+0:02:50;dualtasksensor;start;DualEasy,sensorresource,track
+0:02:55;dualtasksensor;switch;sensorresource
+
+0:03:00;sensorresource;capacity;80
+0:03:02;sensorresource;activate;UAV1,EO,Convoy-Alpha,12
+0:03:04;sensorresource;activate;UAV2,IR,Village,18
+0:03:06;sensorresource;activate;UAV4,RADAR,AirCorridor,22
+0:03:10;sensorresource;fusion;UAV2,EO_IR,Village
+0:03:15;targetuncertainty;spawn;TGT1,MED,35
+
+0:03:20;datalink;message;MSG1,AWACS,NORM,Confirm fused video link,30
+0:03:30;senseandavoid;geofence;0.05|0.05,0.95|0.05,0.95|0.9,0.05|0.9
+0:03:35;senseandavoid;spawn;INTR1,070,1.8,200,35
+0:03:50;senseandavoid;resolve;INTR1,Turn left 15
+0:03:55;senseandavoid;clear;INTR1
+
+0:04:00;missiondirector;automation;UAV1,AUTO
+0:04:05;missiondirector;conflict;UAV2,geofence
+0:04:15;missiondirector;clearconflict;UAV2
+
+0:04:20;dualtasksensor;metric;sensorresource,0.81
+0:04:25;dualtasksensor;metric;track,0.74
+0:04:28;dualtasksensor;complete;baseline
+
+# HRV-driven automation hooks (Durantin overload model)
+0:04:30;automationhooks;rule;physiomonitor,hrv_rmssd_zscore,lt,-1.6,AUTO,target=missiondirector,command=automation,payload=UAV4,AUTO,cooldown=40
+0:04:32;automationhooks;rule;physiomonitor,hrv_lf_hf,gt,2.8,EXTEND,target=datalink,command=deadline_multiplier,payload=1.5,cooldown=60
+0:04:34;automationhooks;rule;physiomonitor,hrv_workload,eq,overload,PAUSE,target=payloadmanager,command=standby,payload=ALL,cooldown=90
+0:04:36;automationhooks;enable;1
+
+0:04:40;energymanager;event;PATROL,4.5,35
+0:04:50;threatboard;spawn;TH1,030,12,R77,40
+0:04:55;hmdoverlay;cue;TH1,25,-10,6
+0:05:00;datalink;message;MSG2,AWACS,PRIO,Threat TH1 inbound,25
+0:05:05;threatboard;engage;TH1,FOX3
+0:05:08;weaponsinventory;expend;AIM120,1
+0:05:15;threatboard;resolve;TH1,SPLASH
+
+0:05:20;targetuncertainty;identify;TGT1,Vehicle,0.69
+0:05:25;payloadmanager;activate;CamC,Target-Delta,20
+0:05:30;payloadmanager;capacity;65
+
+0:05:35;missiondirector;conflict;UAV3,lost_link
+0:05:40;controltransfer;initiate;XFER2,UAV3,GCS-Alpha,GCS-Bravo,Lost link assist,35
+0:05:55;controltransfer;acknowledge;XFER2,GCS-Bravo
+0:06:05;controltransfer;complete;XFER2
+0:06:10;missiondirector;clearconflict;UAV3
+
+0:06:15;utmintegration;violation;R1,late_replan
+0:06:20;utmintegration;clear;R1
+
+# BVLOS sensory deprivation & flight termination drill
+0:06:25;bvlossensory;apply;both,0.75,18
+0:06:30;flighttermination;prompt;TERM1,Engine fire UAV2,HIGH,25
+0:06:40;missiondirector;conflict;UAV2,engine
+0:06:50;flighttermination;decide;TERM1,ABORT,0.82
+0:06:55;missiondirector;complete;UAV2
+0:07:00;bvlossensory;clear;both
+
+0:07:05;failureinjector;schedule;emergencystack,trigger,HYD2|HYD PRESS LOW|Switch pumps|Check breakers|Monitor temps,120
+0:07:05;failureinjector;schedule;physiooverlay,apply,#000000CC|8,125
+
+0:07:10;vtolpower;draw;VTOL3,40,1.3
+0:07:20;vtolpower;draw;VTOL3,25,1.0
+0:07:30;vtolpower;recharge;VTOL3,20
+
+0:07:40;swarmformation;override;UAV4,manual
+0:07:45;swarmformation;override;UAV4,auto
+
+0:07:50;datalink;message;MSG3,AWACS,CRIT,Multiple SAM launches,20
+0:07:55;missiondirector;conflict;UAV1,sam_ring
+0:08:00;senseandavoid;spawn;INTR2,310,1.0,120,25
+0:08:05;energymanager;event;DEFENSIVE,6.4,40
+0:08:08;audioalerts;play;overg
+0:08:10;energymanager;overg;7.2
+0:08:12;hmdoverlay;cue;DEFEND,-20,-5,5
+0:08:18;senseandavoid;resolve;INTR2,Climb 200
+0:08:22;senseandavoid;clear;INTR2
+0:08:25;missiondirector;clearconflict;UAV1
+
+0:08:30;targetuncertainty;spawn;TGT2,HIGH,30
+0:08:40;sensorresource;switch;UAV1,EO_to_IR
+0:08:45;targetuncertainty;identify;TGT2,Unknown,0.42
+
+# MUM-T coordination for strike deconfliction
+0:08:50;mumtcoordination;request;REQ3,Authorize dual strike,25,pilot,operator
+0:09:05;mumtcoordination;ack;REQ3,operator
+0:09:10;mumtcoordination;decision;REQ3,DECLINED
+
+0:09:20;datalink;message;MSG4,UAVOPS,NORM,Dump mission log,35
+0:09:30;missiondirector;complete;UAV1
+0:09:35;missiondirector;complete;UAV3
+0:09:40;missiondirector;complete;UAV4
+
+# Clean-up sensory overlays & automation
+0:09:45;automationhooks;disable;1
+0:09:50;hmdoverlay;clear;
+0:09:55;audioalerts;stopcue;overg
+0:10:00;flighttermination;clear;TERM1
+
+0:10:10;datalink;clear;*
+0:10:20;payloadmanager;standby;CamC
+0:10:30;sensorresource;standby;UAV2,IR
+
+# Shut down plugins
+0:11:30;missiondirector;stop
+0:11:30;senseandavoid;stop
+0:11:30;payloadmanager;stop
+0:11:30;sensorresource;stop
+0:11:30;targetuncertainty;stop
+0:11:30;datalink;stop
+0:11:30;operatorcapacity;stop
+0:11:30;platformprofile;stop
+0:11:30;energymanager;stop
+0:11:30;threatboard;stop
+0:11:30;weaponsinventory;stop
+0:11:30;vtolmanager;stop
+0:11:30;vtolpower;stop
+0:11:30;launchrecovery;stop
+0:11:30;controltransfer;stop
+0:11:30;automationhooks;stop
+0:11:30;failureinjector;stop
+0:11:30;audioalerts;stop
+0:11:30;hmdoverlay;stop
+0:11:30;emergencystack;stop
+0:11:30;physiooverlay;stop
+0:11:30;bvlossensory;stop
+0:11:30;utmintegration;stop
+0:11:30;flighttermination;stop
+0:11:30;swarmformation;stop
+0:11:30;dualtasksensor;stop
+0:11:30;mumtcoordination;stop
+0:11:30;physiomonitor;stop
+0:11:32;polarrlink;stop
+0:11:35;communications;stop
+0:11:35;resman;stop
+0:11:35;track;stop
+0:11:35;sysmon;stop
+

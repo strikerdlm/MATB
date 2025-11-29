@@ -1,0 +1,170 @@
+# MUM-T Ramp Level 2 – Coordinated Strike & Adaptive Automation
+# Duration: 540s (9 min) | Difficulty: 6/10
+# Focus: Expand to tri-ship control, adaptive automation, and shared emergencies.
+#
+# Research References:
+# - NASA/TM–20250002531 Personnel Selection, Roles, and Training for sUAS (2025)
+# - FAA BVLOS ARC Final Report (2022) – transfer-of-control & termination guidance
+# - Airbus (2024). Intelligent collaboration: the future of manned-unmanned teaming.
+
+0:00:00;sysmon;start
+0:00:00;track;start
+0:00:00;resman;start
+0:00:00;communications;start
+
+0:00:01;physiomonitor;start
+0:00:01;missiondirector;start
+0:00:01;senseandavoid;start
+0:00:01;payloadmanager;start
+0:00:01;sensorresource;start
+0:00:01;targetuncertainty;start
+0:00:01;datalink;start
+0:00:01;operatorcapacity;start
+0:00:01;platformprofile;start
+0:00:01;energymanager;start
+0:00:01;threatboard;start
+0:00:01;weaponsinventory;start
+0:00:01;vtolmanager;start
+0:00:01;launchrecovery;start
+0:00:01;controltransfer;start
+0:00:01;automationhooks;start
+0:00:01;failureinjector;start
+0:00:01;audioalerts;start
+0:00:01;hmdoverlay;start
+0:00:01;emergencystack;start
+0:00:01;physiooverlay;start
+0:00:01;mumtcoordination;start
+
+0:00:05;platformprofile;set;UAV1,scaneagle
+0:00:06;platformprofile;set;UAV2,nighteagle
+0:00:07;platformprofile;set;UAV3,vtol45,endurance=1800
+0:00:08;operatorcapacity;set;active,3
+0:00:09;operatorcapacity;set;supervisory,5
+
+0:00:10;datalink;voice;True,PRIO|CRIT
+0:00:12;audioalerts;register;overg,includes/sounds/overg.wav
+
+0:00:15;missiondirector;assign;UAV1,Launch,180
+0:00:17;missiondirector;assign;UAV2,Loiter,240
+0:00:19;missiondirector;assign;UAV3,VTOL-relay,300
+0:00:22;launchrecovery;launch;UAV1,catapult,25
+0:00:24;launchrecovery;launch;UAV3,vtol,20
+
+0:00:28;sensorresource;capacity;70
+0:00:30;sensorresource;activate;UAV1,EO,Target-Alpha,12
+0:00:32;sensorresource;activate;UAV2,IR,Target-Bravo,18
+0:00:34;sensorresource;activate;UAV3,RADAR,Convoy,20
+0:00:37;targetuncertainty;spawn;TGT1,LOW,30
+0:00:40;payloadmanager;activate;CamB,Target-Alpha,15
+0:00:42;payloadmanager;priority;CamB,HIGH
+0:00:45;datalink;message;MSG1,AWACS,NORM,Verify relay timeline,35
+
+0:00:55;senseandavoid;geofence;0.1|0.1,0.9|0.1,0.9|0.8,0.1|0.8
+0:01:00;senseandavoid;spawn;INTR1,090,2.0,150,40
+0:01:15;senseandavoid;resolve;INTR1,Descend 150
+0:01:20;senseandavoid;clear;INTR1
+0:01:25;missiondirector;assign;UAV1,Surveillance,240
+0:01:30;missiondirector;automation;UAV1,AUTO
+
+0:01:35;automationhooks;rule;missiondirector,mission_alert,1,AUTO,target=missiondirector,command=automation,payload=UAV3,AUTO,cooldown=45
+0:01:37;automationhooks;rule;senseandavoid,saa_overdue,1,PAUSE,target=payloadmanager,command=standby,payload=ALL,cooldown=30
+0:01:40;automationhooks;enable;1
+
+0:01:45;energymanager;event;PATROL,4.2,35
+0:01:55;threatboard;spawn;TH1,040,13,R73,38
+0:02:00;hmdoverlay;cue;TH1,20,-5,6
+0:02:05;datalink;message;MSG2,AWACS,PRIO,Threat TH1 inbound,25
+0:02:08;threatboard;engage;TH1,FOX3
+0:02:10;weaponsinventory;expend;AIM120,1
+0:02:18;threatboard;resolve;TH1,SPLASH
+
+0:02:25;targetuncertainty;identify;TGT1,Vehicle,0.72
+0:02:30;sensorresource;fusion;UAV2,EO_IR,Target-Charlie
+0:02:40;datalink;message;MSG3,UAVOPS,NORM,Send fused feed,30
+
+0:02:55;launchrecovery;complete;UAV3,launch
+0:03:00;vtolmanager;phase;VTOL3,takeoff
+0:03:10;vtolmanager;confirm;VTOL3
+0:03:15;vtolmanager;phase;VTOL3,transition
+0:03:25;vtolmanager;phase;VTOL3,cruise
+0:03:35;vtolmanager;stabilitythresholds;0.5,0.8
+0:03:40;vtolmanager;stability;VTOL3,0.62
+
+0:03:45;controltransfer;initiate;XFER1,UAV2,GCS-A,GCS-B,Training handover,40
+0:04:05;controltransfer;acknowledge;XFER1,GCS-B
+0:04:20;controltransfer;complete;XFER1
+
+0:04:10;mumtcoordination;request;REQ2,Authorize strike window,30,pilot,operator
+0:04:25;mumtcoordination;ack;REQ2,operator
+0:04:30;mumtcoordination;decision;REQ2,APPROVED
+
+0:04:35;datalink;message;MSG4,AWACS,CRIT,Pop-up SAM east ridge,20
+0:04:40;missiondirector;conflict;UAV1,sam_ring
+0:04:55;missiondirector;clearconflict;UAV1
+
+0:05:00;failureinjector;schedule;emergencystack,trigger,HYD1|HYD PRESS LOW|Switch pumps|Check breakers|Monitor temps,200
+0:05:00;failureinjector;schedule;physiooverlay,apply,#000000AA|6,210
+
+0:05:05;energymanager;event;INTERCEPT,5.5,40
+0:05:15;audioalerts;play;overg
+0:05:18;energymanager;overg;6.1
+0:05:20;hmdoverlay;cue;BANDIT,15,10,5
+
+0:05:30;senseandavoid;spawn;INTR2,270,1.0,100,25
+0:05:40;missiondirector;conflict;UAV3,geofence
+0:05:45;senseandavoid;resolve;INTR2,Turn left 20
+0:05:50;missiondirector;clearconflict;UAV3
+0:05:55;senseandavoid;clear;INTR2
+
+0:06:05;targetuncertainty;spawn;TGT2,HIGH,25
+0:06:15;sensorresource;switch;UAV1,EO_to_IR
+0:06:25;payloadmanager;activate;CamC,Target-Delta,20
+
+0:06:40;datalink;message;MSG5,PILOT,PRIO,Confirm VTOL recovery,25
+0:06:45;launchrecovery;recovery;UAV3,skyhook,35
+0:07:10;launchrecovery;complete;UAV3,recovery
+
+0:07:20;targetuncertainty;identify;TGT2,Unknown,0.38
+0:07:25;sensorresource;standby;UAV2,IR
+0:07:30;sensorresource;fusion;UAV1,EO_IR,Target-Delta
+
+0:07:40;missiondirector;complete;UAV1
+0:07:45;missiondirector;complete;UAV2
+0:07:50;missiondirector;complete;UAV3
+
+0:08:00;automationhooks;disable;1
+0:08:10;datalink;clear;*
+
+0:08:20;physiooverlay;apply;#202020AA,6
+0:08:30;physiooverlay;clear;
+
+0:08:40;hmdoverlay;clear;
+0:08:45;audioalerts;stopcue;overg
+
+0:08:50;missiondirector;stop
+0:08:50;senseandavoid;stop
+0:08:50;payloadmanager;stop
+0:08:50;sensorresource;stop
+0:08:50;targetuncertainty;stop
+0:08:50;datalink;stop
+0:08:50;operatorcapacity;stop
+0:08:50;platformprofile;stop
+0:08:50;energymanager;stop
+0:08:50;threatboard;stop
+0:08:50;weaponsinventory;stop
+0:08:50;vtolmanager;stop
+0:08:50;launchrecovery;stop
+0:08:50;controltransfer;stop
+0:08:50;automationhooks;stop
+0:08:50;failureinjector;stop
+0:08:50;audioalerts;stop
+0:08:50;hmdoverlay;stop
+0:08:50;emergencystack;stop
+0:08:50;physiooverlay;stop
+0:08:50;mumtcoordination;stop
+0:08:55;physiomonitor;stop
+0:09:00;communications;stop
+0:09:00;resman;stop
+0:09:00;track;stop
+0:09:00;sysmon;stop
+

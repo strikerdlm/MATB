@@ -1,0 +1,103 @@
+# MUM-T Ramp Level 1 – Coordinated Launch & Deconfliction
+# Duration: 420s (7 min) | Difficulty: 3/10
+# Focus: Introduce basic fighter + dual-UAV teaming with light automation.
+#
+# Research References:
+# - research/Multi Attribute Task Battery for Military Aircrew Assessment A Comprehensive Research Report.md
+# - Airbus (2024). Intelligent collaboration: the future of manned-unmanned teaming. https://www.airbus.com/en/newsroom/stories/2024-06-intelligent-collaboration-the-future-of-manned-unmanned-teaming
+
+0:00:00;sysmon;start
+0:00:00;track;start
+0:00:00;resman;start
+0:00:00;communications;start
+
+0:00:01;physiomonitor;start
+0:00:01;missiondirector;start
+0:00:01;senseandavoid;start
+0:00:01;payloadmanager;start
+0:00:01;datalink;start
+0:00:01;operatorcapacity;start
+0:00:01;platformprofile;start
+0:00:01;energymanager;start
+0:00:01;threatboard;start
+0:00:01;weaponsinventory;start
+0:00:01;vtolmanager;start
+0:00:01;launchrecovery;start
+0:00:01;mumtcoordination;start
+
+0:00:05;platformprofile;set;UAV1,scaneagle
+0:00:06;platformprofile;set;UAV2,nighteagle
+0:00:08;operatorcapacity;set;active,2
+0:00:10;operatorcapacity;set;supervisory,4
+
+0:00:12;weaponsinventory;load;AIM9,4
+0:00:12;weaponsinventory;load;AIM120,4
+
+0:00:15;missiondirector;assign;UAV1,Launch,240
+0:00:20;launchrecovery;launch;UAV1,catapult,30
+0:00:25;missiondirector;assign;UAV2,Surveillance,210
+0:00:30;payloadmanager;activate;CamA,Target-Alpha,14
+0:00:36;payloadmanager;activate;IRST,Target-Bravo,16
+0:00:40;datalink;message;MSG1,AWACS,NORM,Confirm data link heartbeat,45
+0:00:55;senseandavoid;spawn;INTR1,060,2.5,250,45
+0:01:10;senseandavoid;resolve;INTR1,Turn right 15
+0:01:15;senseandavoid;clear;INTR1
+0:01:20;missiondirector;automation;UAV1,AUTO
+0:01:25;payloadmanager;priority;CamA,HIGH
+0:01:35;missiondirector;assign;UAV2,Relay,150
+
+0:01:45;energymanager;event;PATROL,3.8,40
+0:01:55;threatboard;spawn;TH1,030,14,R73,40
+0:02:05;threatboard;engage;TH1,FOX3
+0:02:10;weaponsinventory;expend;AIM120,1
+0:02:20;threatboard;resolve;TH1,SPLASH
+
+0:02:30;launchrecovery;complete;UAV1,launch
+0:02:35;missiondirector;complete;UAV1
+0:02:40;missiondirector;assign;UAV1,Survey Ridge,180
+0:02:50;datalink;message;MSG2,UAVOPS,NORM,Update ridge route,40
+0:03:00;senseandavoid;spawn;INTR2,300,1.8,-200,30
+0:03:10;missiondirector;conflict;UAV2,geofence
+0:03:20;senseandavoid;resolve;INTR2,Climb 150
+0:03:25;senseandavoid;clear;INTR2
+0:03:30;missiondirector;clearconflict;UAV2
+
+0:03:35;vtolmanager;phase;VTOL1,takeoff
+0:03:50;vtolmanager;confirm;VTOL1
+0:04:00;vtolmanager;phase;VTOL1,cruise
+
+0:04:05;payloadmanager;standby;CamA
+0:04:10;payloadmanager;recharge;CamA
+0:04:20;datalink;message;MSG3,PILOT,PRIO,Fox timeline synced,30
+0:04:35;missiondirector;automation;UAV2,MANUAL
+
+0:04:40;mumtcoordination;role;pilot,Flight Lead
+0:04:42;mumtcoordination;role;operator,UAS Director
+0:04:45;mumtcoordination;request;REQ1,Hand off UAV2 to fighter,25,pilot,operator
+0:05:05;mumtcoordination;ack;REQ1,operator
+0:05:20;mumtcoordination;decision;REQ1,APPROVED
+0:05:25;missiondirector;handover;UAV2,GCS-Bravo,start
+0:05:40;missiondirector;handover;UAV2,GCS-Bravo,complete
+
+0:05:50;datalink;clear;*
+0:06:20;missiondirector;complete;UAV2
+0:06:30;missiondirector;complete;UAV1
+
+0:06:50;weaponsinventory;stop
+0:06:50;threatboard;stop
+0:06:50;energymanager;stop
+0:06:50;launchrecovery;stop
+0:06:50;vtolmanager;stop
+0:06:50;mumtcoordination;stop
+0:06:50;platformprofile;stop
+0:06:50;operatorcapacity;stop
+0:06:50;datalink;stop
+0:06:50;payloadmanager;stop
+0:06:50;senseandavoid;stop
+0:06:50;missiondirector;stop
+0:06:50;physiomonitor;stop
+0:06:55;communications;stop
+0:06:55;resman;stop
+0:06:55;track;stop
+0:06:55;sysmon;stop
+
