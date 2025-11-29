@@ -1,9 +1,10 @@
-"""Streamlit UI for editing config.ini and plugin parameters.
+"""Streamlit UI for editing config.ini, plugin parameters, and scenarios.
 
 The UI exposes:
 1. [Openmatb] and [User] sections from config.ini
 2. All plugin parameters from parameters.csv with type-aware widgets
-3. Sidebar guidance based on Docs/Manual.md
+3. Scenario Designer for creating/editing/validating scenario files
+4. Sidebar guidance based on Docs/Manual.md
 
 Run with: streamlit run tools/config_portal.py
 """
@@ -15,6 +16,7 @@ import re
 from collections import defaultdict
 from configparser import ConfigParser
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Final
 
@@ -138,6 +140,63 @@ PLUGIN_CATEGORIES: Final[dict[str, tuple[str, ...]]] = {
         "audioalerts",
         "eyetracker",
     ),
+}
+
+# Scenario templates for quick generation
+SCENARIO_TEMPLATES: Final[dict[str, dict[str, str | int | list[str]]]] = {
+    "Basic MATB (5 min)": {
+        "description": "Core MATB tasks only - sysmon, track, resman, communications",
+        "duration": 300,
+        "difficulty": 5,
+        "plugins": ["sysmon", "track", "resman", "communications", "scheduling"],
+    },
+    "UAS Basic (5 min)": {
+        "description": "UAS operator scenario with mission director, sense & avoid, payloads",
+        "duration": 300,
+        "difficulty": 5,
+        "plugins": ["sysmon", "track", "resman", "communications", "missiondirector",
+                    "senseandavoid", "payloadmanager", "datalink", "physiomonitor"],
+    },
+    "Fighter HPA (3 min)": {
+        "description": "Fighter pilot scenario with energy management, threats, weapons",
+        "duration": 180,
+        "difficulty": 6,
+        "plugins": ["sysmon", "track", "resman", "communications", "energymanager",
+                    "threatboard", "weaponsinventory", "datalink", "physiomonitor"],
+    },
+    "HRV Combat (10 min)": {
+        "description": "Full combat scenario with HRV baseline, progressive workload phases",
+        "duration": 600,
+        "difficulty": 7,
+        "plugins": ["polarrlink", "physiomonitor", "sysmon", "track", "resman",
+                    "communications", "energymanager", "threatboard", "weaponsinventory",
+                    "missiondirector", "senseandavoid", "datalink", "emergencystack",
+                    "compositescore", "automationhooks"],
+    },
+    "MUM-T Coordination (7 min)": {
+        "description": "Manned-Unmanned Teaming with fighter + dual-UAV coordination",
+        "duration": 420,
+        "difficulty": 4,
+        "plugins": ["sysmon", "track", "resman", "communications", "physiomonitor",
+                    "missiondirector", "senseandavoid", "payloadmanager", "datalink",
+                    "operatorcapacity", "platformprofile", "energymanager", "threatboard",
+                    "weaponsinventory", "vtolmanager", "launchrecovery", "mumtcoordination"],
+    },
+    "BVLOS Training (5 min)": {
+        "description": "Beyond Visual Line of Sight with control transfer and UTM",
+        "duration": 300,
+        "difficulty": 5,
+        "plugins": ["sysmon", "track", "resman", "communications", "missiondirector",
+                    "senseandavoid", "payloadmanager", "datalink", "bvlossensory",
+                    "controltransfer", "utmintegration", "physiomonitor"],
+    },
+    "Baseline Calibration (5 min)": {
+        "description": "Low-workload baseline for HRV calibration before assessment",
+        "duration": 300,
+        "difficulty": 2,
+        "plugins": ["polarrlink", "physiomonitor", "sysmon", "track", "resman",
+                    "communications"],
+    },
 }
 
 
@@ -661,6 +720,482 @@ def render_plugin_section(
 
 
 # ---------------------------------------------------------------------------
+# Scenario Designer Functions
+# ---------------------------------------------------------------------------
+def format_timestamp(seconds: int) -> str:
+    """Convert seconds to H:MM:SS format."""
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    secs = seconds % 60
+    return f"{hours}:{minutes:02d}:{secs:02d}"
+
+
+def parse_timestamp(ts: str) -> int:
+    """Parse H:MM:SS or M:SS to seconds."""
+    parts = ts.strip().split(":")
+    if len(parts) == 3:
+        return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+    elif len(parts) == 2:
+        return int(parts[0]) * 60 + int(parts[1])
+    return int(parts[0])
+
+
+def validate_scenario(content: str, available_plugins: list[str]) -> list[str]:
+    """Validate scenario content and return list of errors."""
+    errors: list[str] = []
+    lines = content.strip().split("\n")
+
+    for line_num, line in enumerate(lines, 1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        parts = line.split(";")
+        if len(parts) < 3:
+            errors.append(f"Line {line_num}: Invalid format - need at least timestamp;plugin;command")
+            continue
+
+        # Validate timestamp
+        ts = parts[0]
+        if not re.match(r"^\d+:\d{2}:\d{2}$", ts):
+            errors.append(f"Line {line_num}: Invalid timestamp format '{ts}' - use H:MM:SS")
+
+        # Validate plugin
+        plugin = parts[1].lower()
+        if plugin not in available_plugins and plugin not in ("instructions", "genericscales"):
+            errors.append(f"Line {line_num}: Unknown plugin '{plugin}'")
+
+    return errors
+
+
+def generate_scenario_from_template(
+    template_name: str,
+    duration_override: int | None = None,
+    difficulty_override: int | None = None,
+) -> str:
+    """Generate a scenario file from a template."""
+    template = SCENARIO_TEMPLATES.get(template_name)
+    if not template:
+        return ""
+
+    duration = duration_override or int(template["duration"])
+    difficulty = difficulty_override or int(template["difficulty"])
+    plugins = list(template["plugins"])
+    description = str(template["description"])
+
+    lines: list[str] = []
+
+    # Header
+    lines.append(f"# {template_name}")
+    lines.append(f"# {description}")
+    lines.append(f"# Duration: {duration}s | Difficulty: {difficulty}/10")
+    lines.append(f"# Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append("")
+
+    # Determine phases based on difficulty
+    event_interval = max(15, 60 - (difficulty * 5))  # Higher difficulty = more frequent events
+    automation_level = max(0.0, 1.0 - (difficulty * 0.1))  # Higher difficulty = less automation
+
+    # Phase 1: Startup
+    lines.append("# ============================================")
+    lines.append("# PHASE 1: STARTUP")
+    lines.append("# ============================================")
+    lines.append("")
+
+    # Start core MATB tasks
+    core_plugins = ["sysmon", "track", "resman", "communications"]
+    for plugin in core_plugins:
+        if plugin in plugins:
+            lines.append(f"0:00:00;{plugin};start")
+
+    # Start advanced plugins with slight delay
+    advanced_start = 2
+    for plugin in plugins:
+        if plugin not in core_plugins:
+            lines.append(f"0:00:{advanced_start:02d};{plugin};start")
+            advanced_start += 1
+
+    lines.append("")
+
+    # Phase 2: Low workload / Baseline
+    if "physiomonitor" in plugins:
+        lines.append("# ============================================")
+        lines.append("# PHASE 2: BASELINE CALIBRATION")
+        lines.append("# ============================================")
+        lines.append("")
+        lines.append("0:00:10;physiomonitor;baseline;start")
+        baseline_end = min(120, duration // 5)
+        lines.append(f"{format_timestamp(baseline_end)};physiomonitor;baseline;stop")
+        lines.append("")
+
+    # Phase 3: Main workload
+    lines.append("# ============================================")
+    lines.append("# PHASE 3: MAIN WORKLOAD")
+    lines.append("# ============================================")
+    lines.append("")
+
+    # Generate events based on plugins
+    current_time = 30 if "physiomonitor" not in plugins else 130
+    stop_time = duration - 10
+
+    while current_time < stop_time:
+        # Add events based on available plugins
+        if "missiondirector" in plugins and current_time % (event_interval * 2) == 0:
+            uav_id = f"UAV{(current_time // 60) % 3 + 1}"
+            missions = ["Surveillance", "Strike", "Relay", "CSAR", "Patrol"]
+            mission = missions[(current_time // event_interval) % len(missions)]
+            lines.append(f"{format_timestamp(current_time)};missiondirector;assign;{uav_id},{mission},{event_interval * 3}")
+
+        if "senseandavoid" in plugins and (current_time + 15) % (event_interval * 3) == 0:
+            intr_id = f"INTR{(current_time // 60) % 5 + 1}"
+            bearing = ((current_time * 17) % 360)
+            lines.append(f"{format_timestamp(current_time)};senseandavoid;spawn;{intr_id},{bearing:03d},2.0,200,{event_interval}")
+
+        if "threatboard" in plugins and (current_time + 30) % (event_interval * 2) == 0:
+            th_id = f"TH{(current_time // 60) % 4 + 1}"
+            bearing = ((current_time * 23) % 360)
+            weapons = ["R73", "AIM9", "GUN", "R77"]
+            weapon = weapons[(current_time // event_interval) % len(weapons)]
+            lines.append(f"{format_timestamp(current_time)};threatboard;spawn;{th_id},{bearing:03d},{(current_time % 15) + 5},{weapon},{event_interval}")
+
+        if "energymanager" in plugins and current_time % (event_interval * 2) == 0:
+            events = ["PATROL", "INTERCEPT", "ENGAGE", "DEFENSIVE", "EGRESS"]
+            event = events[(current_time // event_interval) % len(events)]
+            g_load = 3.0 + (difficulty * 0.4)
+            lines.append(f"{format_timestamp(current_time)};energymanager;event;{event},{g_load:.1f},{event_interval}")
+
+        if "datalink" in plugins and (current_time + 10) % event_interval == 0:
+            msg_id = f"MSG{(current_time // 30) % 10 + 1}"
+            senders = ["ATC", "AWACS", "UAVOPS", "PILOT"]
+            sender = senders[(current_time // event_interval) % len(senders)]
+            priorities = ["NORM", "PRIO", "CRIT"]
+            priority = priorities[min(2, difficulty // 4)]
+            lines.append(f"{format_timestamp(current_time)};datalink;message;{msg_id},{sender},{priority},Update received,{event_interval}")
+
+        if "payloadmanager" in plugins and (current_time + 20) % (event_interval * 2) == 0:
+            sensors = ["CamA", "IRST", "Radar", "EO"]
+            sensor = sensors[(current_time // event_interval) % len(sensors)]
+            target = f"Target-{chr(65 + (current_time // 60) % 5)}"
+            lines.append(f"{format_timestamp(current_time)};payloadmanager;activate;{sensor},{target},{event_interval}")
+
+        if "communications" in plugins and current_time % (event_interval * 2) == 0:
+            prompt_type = "own" if (current_time // event_interval) % 3 != 0 else "other"
+            lines.append(f"{format_timestamp(current_time)};communications;radioprompt;{prompt_type}")
+
+        if "sysmon" in plugins and (current_time + 5) % event_interval == 0:
+            scale = ((current_time // 15) % 4) + 1
+            side = [-1, 0, 1][(current_time // event_interval) % 3]
+            lines.append(f"{format_timestamp(current_time)};sysmon;scales-{scale}-failure;True")
+
+        current_time += event_interval
+
+    lines.append("")
+
+    # Phase 4: Shutdown
+    lines.append("# ============================================")
+    lines.append("# PHASE 4: SHUTDOWN")
+    lines.append("# ============================================")
+    lines.append("")
+
+    # Clear active elements
+    if "datalink" in plugins:
+        lines.append(f"{format_timestamp(duration - 15)};datalink;clear;*")
+    if "threatboard" in plugins:
+        lines.append(f"{format_timestamp(duration - 15)};threatboard;clear;*")
+
+    # Stop all plugins in reverse order
+    lines.append("")
+    for plugin in reversed(plugins):
+        lines.append(f"{format_timestamp(duration)};{plugin};stop")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_scenario_editor(scenario_options: list[str], available_plugins: list[str]) -> None:
+    """Render the scenario editor interface."""
+    st.subheader("Edit Existing Scenario")
+
+    selected_scenario = st.selectbox(
+        "Select scenario to edit",
+        options=scenario_options,
+        key="edit_scenario_select",
+    )
+
+    if selected_scenario:
+        scenario_path = SCENARIO_DIR / selected_scenario
+        if scenario_path.exists():
+            content = scenario_path.read_text(encoding="utf-8")
+
+            edited_content = st.text_area(
+                "Scenario content",
+                value=content,
+                height=400,
+                key="scenario_editor",
+            )
+
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.button("✅ Validate"):
+                    errors = validate_scenario(edited_content, available_plugins)
+                    if errors:
+                        for error in errors:
+                            st.error(error)
+                    else:
+                        st.success("✅ Scenario is valid!")
+
+            with col2:
+                if st.button("💾 Save Changes"):
+                    # Backup first
+                    backup_path = scenario_path.with_suffix(".txt.bak")
+                    backup_path.write_text(content, encoding="utf-8")
+                    # Write new content
+                    scenario_path.write_text(edited_content, encoding="utf-8")
+                    st.success(f"Saved! Backup at {backup_path.name}")
+
+            with col3:
+                st.download_button(
+                    "📥 Download",
+                    data=edited_content,
+                    file_name=selected_scenario.replace("/", "_"),
+                    mime="text/plain",
+                )
+
+            # Show scenario stats
+            with st.expander("📊 Scenario Statistics"):
+                lines = [l for l in edited_content.split("\n") if l.strip() and not l.strip().startswith("#")]
+                plugins_used = set()
+                timestamps: list[int] = []
+                for line in lines:
+                    parts = line.split(";")
+                    if len(parts) >= 2:
+                        plugins_used.add(parts[1])
+                        try:
+                            timestamps.append(parse_timestamp(parts[0]))
+                        except (ValueError, IndexError):
+                            pass
+
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Commands", len(lines))
+                with col2:
+                    st.metric("Plugins", len(plugins_used))
+                with col3:
+                    if timestamps:
+                        duration = max(timestamps)
+                        st.metric("Duration", f"{duration // 60}m {duration % 60}s")
+
+                st.write("**Plugins used:**", ", ".join(sorted(plugins_used)))
+
+
+def render_template_generator(available_plugins: list[str]) -> None:
+    """Render the template-based scenario generator."""
+    st.subheader("Create from Template")
+
+    template_name = st.selectbox(
+        "Select template",
+        options=list(SCENARIO_TEMPLATES.keys()),
+        key="template_select",
+    )
+
+    if template_name:
+        template = SCENARIO_TEMPLATES[template_name]
+        st.info(f"**{template_name}**: {template['description']}")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            duration = st.number_input(
+                "Duration (seconds)",
+                min_value=60,
+                max_value=3600,
+                value=int(template["duration"]),
+                step=30,
+            )
+        with col2:
+            difficulty = st.slider(
+                "Difficulty (1-10)",
+                min_value=1,
+                max_value=10,
+                value=int(template["difficulty"]),
+            )
+
+        st.write("**Plugins included:**")
+        plugins_list = list(template["plugins"])
+        cols = st.columns(4)
+        for idx, plugin in enumerate(plugins_list):
+            with cols[idx % 4]:
+                st.write(f"• {plugin}")
+
+        if st.button("🎲 Generate Scenario"):
+            generated = generate_scenario_from_template(template_name, duration, difficulty)
+            st.session_state["generated_scenario"] = generated
+            st.session_state["generated_template"] = template_name
+
+        if "generated_scenario" in st.session_state:
+            st.text_area(
+                "Generated scenario",
+                value=st.session_state["generated_scenario"],
+                height=400,
+                key="generated_preview",
+            )
+
+            col1, col2 = st.columns(2)
+            with col1:
+                filename = st.text_input(
+                    "Filename",
+                    value=f"{template_name.lower().replace(' ', '_')}_{datetime.now().strftime('%d%m%Y_%H%M%S')}.txt",
+                )
+            with col2:
+                if st.button("💾 Save to scenarios/"):
+                    save_path = SCENARIO_DIR / filename
+                    save_path.write_text(st.session_state["generated_scenario"], encoding="utf-8")
+                    st.success(f"Saved to includes/scenarios/{filename}")
+
+            st.download_button(
+                "📥 Download",
+                data=st.session_state["generated_scenario"],
+                file_name=filename,
+                mime="text/plain",
+            )
+
+
+def render_custom_builder(
+    available_plugins: list[str],
+    plugin_params: dict[str, list[PluginParameter]],
+) -> None:
+    """Render the custom scenario builder."""
+    st.subheader("Build Custom Scenario")
+
+    # Initialize session state
+    if "custom_events" not in st.session_state:
+        st.session_state["custom_events"] = []
+
+    col1, col2 = st.columns(2)
+    with col1:
+        scenario_name = st.text_input("Scenario name", value="custom_scenario")
+        scenario_duration = st.number_input("Duration (seconds)", min_value=60, max_value=3600, value=300, step=30)
+    with col2:
+        scenario_difficulty = st.slider("Difficulty", min_value=1, max_value=10, value=5)
+        scenario_description = st.text_input("Description", value="Custom scenario")
+
+    st.markdown("---")
+
+    # Plugin selection
+    st.subheader("1. Select Plugins")
+    selected_plugins: list[str] = []
+
+    for category, plugins in PLUGIN_CATEGORIES.items():
+        with st.expander(category, expanded=category == "Core MATB Tasks"):
+            cols = st.columns(3)
+            for idx, plugin in enumerate(plugins):
+                if plugin in available_plugins:
+                    with cols[idx % 3]:
+                        if st.checkbox(plugin, key=f"plugin_{plugin}"):
+                            selected_plugins.append(plugin)
+
+    st.markdown("---")
+
+    # Event builder
+    st.subheader("2. Add Events")
+
+    col1, col2, col3, col4 = st.columns([1, 2, 2, 1])
+    with col1:
+        event_time = st.number_input("Time (s)", min_value=0, max_value=3600, value=0, step=5, key="event_time")
+    with col2:
+        event_plugin = st.selectbox("Plugin", options=selected_plugins or ["(select plugins first)"], key="event_plugin")
+    with col3:
+        common_commands = ["start", "stop", "show", "hide", "pause", "resume", "automaticsolver;True", "automaticsolver;False"]
+        event_command = st.selectbox("Command", options=common_commands + ["(custom)"], key="event_command")
+        if event_command == "(custom)":
+            event_command = st.text_input("Custom command", key="custom_command")
+    with col4:
+        event_value = st.text_input("Value", key="event_value")
+
+    if st.button("➕ Add Event"):
+        if event_plugin and event_plugin != "(select plugins first)" and event_command:
+            cmd = f"{event_command};{event_value}" if event_value else event_command
+            st.session_state["custom_events"].append({
+                "time": event_time,
+                "plugin": event_plugin,
+                "command": cmd,
+            })
+            st.rerun()
+
+    # Show current events
+    if st.session_state["custom_events"]:
+        st.markdown("**Current Events:**")
+        events_sorted = sorted(st.session_state["custom_events"], key=lambda x: x["time"])
+        for idx, event in enumerate(events_sorted):
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                st.code(f"{format_timestamp(event['time'])};{event['plugin']};{event['command']}")
+            with col2:
+                if st.button("🗑️", key=f"del_{idx}"):
+                    st.session_state["custom_events"].remove(event)
+                    st.rerun()
+
+    st.markdown("---")
+
+    # Generate and preview
+    st.subheader("3. Generate Scenario")
+
+    if st.button("🔨 Build Scenario"):
+        lines = [
+            f"# {scenario_name}",
+            f"# {scenario_description}",
+            f"# Duration: {scenario_duration}s | Difficulty: {scenario_difficulty}/10",
+            f"# Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            "",
+            "# Start plugins",
+        ]
+
+        # Add start commands
+        for plugin in selected_plugins:
+            lines.append(f"0:00:00;{plugin};start")
+
+        lines.append("")
+        lines.append("# Events")
+
+        # Add custom events
+        for event in sorted(st.session_state["custom_events"], key=lambda x: x["time"]):
+            lines.append(f"{format_timestamp(event['time'])};{event['plugin']};{event['command']}")
+
+        lines.append("")
+        lines.append("# Stop plugins")
+
+        # Add stop commands
+        for plugin in reversed(selected_plugins):
+            lines.append(f"{format_timestamp(scenario_duration)};{plugin};stop")
+
+        st.session_state["built_scenario"] = "\n".join(lines)
+
+    if "built_scenario" in st.session_state:
+        st.text_area("Preview", value=st.session_state["built_scenario"], height=300)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            filename = f"{scenario_name}_{datetime.now().strftime('%d%m%Y_%H%M%S')}.txt"
+            if st.button("💾 Save"):
+                save_path = SCENARIO_DIR / filename
+                save_path.write_text(st.session_state["built_scenario"], encoding="utf-8")
+                st.success(f"Saved to includes/scenarios/{filename}")
+        with col2:
+            st.download_button(
+                "📥 Download",
+                data=st.session_state["built_scenario"],
+                file_name=filename,
+                mime="text/plain",
+            )
+
+    # Clear button
+    if st.button("🧹 Clear All Events"):
+        st.session_state["custom_events"] = []
+        if "built_scenario" in st.session_state:
+            del st.session_state["built_scenario"]
+        st.rerun()
+
+
+# ---------------------------------------------------------------------------
 # Main Application
 # ---------------------------------------------------------------------------
 def main() -> None:
@@ -729,8 +1264,9 @@ def main() -> None:
     )
 
     # Tabs for different sections
-    tab_core, tab_plugins, tab_preview, tab_scenario = st.tabs(
-        ["⚙️ Core Settings", "🔌 Plugin Parameters", "📄 Config Preview", "📋 Scenario Helper"]
+    tab_core, tab_plugins, tab_designer, tab_preview, tab_scenario = st.tabs(
+        ["⚙️ Core Settings", "🔌 Plugin Parameters", "🎬 Scenario Designer",
+         "📄 Config Preview", "📋 Scenario Helper"]
     )
 
     # ---------------------------------------------------------------------------
@@ -1003,7 +1539,32 @@ def main() -> None:
                 render_plugin_section(plugin_alias, params)
 
     # ---------------------------------------------------------------------------
-    # Tab 3: Config Preview
+    # Tab 3: Scenario Designer
+    # ---------------------------------------------------------------------------
+    with tab_designer:
+        st.header("🎬 Scenario Designer")
+        st.markdown(
+            "Create, edit, and validate scenario files. Use templates for quick starts "
+            "or build custom scenarios from scratch."
+        )
+
+        designer_mode = st.radio(
+            "Mode",
+            options=["📝 Edit Existing", "✨ Create from Template", "🔧 Build Custom"],
+            horizontal=True,
+        )
+
+        if designer_mode == "📝 Edit Existing":
+            render_scenario_editor(scenario_options, available_plugins)
+
+        elif designer_mode == "✨ Create from Template":
+            render_template_generator(available_plugins)
+
+        else:  # Build Custom
+            render_custom_builder(available_plugins, plugin_params)
+
+    # ---------------------------------------------------------------------------
+    # Tab 4: Config Preview
     # ---------------------------------------------------------------------------
     with tab_preview:
         st.header("Current config.ini")
