@@ -1886,6 +1886,253 @@ def correlate_with_performance(windows_df: pd.DataFrame, perf_df: pd.DataFrame) 
 
 ---
 
+## 19. Voice Generation System (OpenAI TTS Integration)
+
+This section documents the integration of OpenAI's gpt-4o-mini-tts model for generating Air Traffic Controller style voice communications and spoken instructions for OpenMATB scenarios.
+
+### 19.1 Overview
+
+The voice generation system (`tools/voice_generator.py`) provides:
+
+1. **ATC-Style Communications**: Generate realistic Air Traffic Controller voice following ICAO/FAA radio communication standards
+2. **Spoken Instructions**: Convert scenario instructions to audio for participant briefings
+3. **MATB Voice Packs**: Generate complete voice file sets compatible with the communications plugin
+4. **Customizable Voice Parameters**: Control accent, tone, speed, emotional range, and intonation
+
+### 19.2 Voice Characteristics (ATC Standard)
+
+The system generates voices with the following characteristics following ICAO/FAA standards:
+
+| Characteristic | Setting | Description |
+|----------------|---------|-------------|
+| Accent | Neutral International | Clear aviation English per ICAO standards |
+| Emotional Range | Calm-Professional | Authoritative but not aggressive |
+| Intonation | Measured | Slight emphasis on callsigns, frequencies, altitudes |
+| Speed | 140-160 WPM | Moderate pace, slower for critical information |
+| Tone | Professional-Confident | Reassuring, consistent volume |
+
+### 19.3 Available Voices
+
+The system supports 11 OpenAI TTS voices:
+
+| Voice | Recommended Use | Description |
+|-------|-----------------|-------------|
+| `coral` | ATC Female | Clear and professional |
+| `onyx` | ATC Male | Deep and resonant |
+| `shimmer` | Instructions Female | Bright and clear |
+| `sage` | Instructions Male | Calm and measured |
+| `echo` | Military Tactical | Authoritative and commanding |
+| `ballad` | Urgent Alerts | Expressive and dramatic |
+| `alloy` | General Purpose | Neutral and balanced |
+| `nova` | Urgent Communications | Energetic and dynamic |
+| `ash` | Friendly Briefings | Warm and conversational |
+| `fable` | Detailed Instructions | Engaging storyteller |
+| `verse` | Versatile | Adaptable for various uses |
+
+### 19.4 Voice Presets
+
+Pre-configured voice presets for common scenarios:
+
+```python
+VOICE_PRESETS = {
+    "atc_male_en": VoicePreset(voice="onyx", speed=1.0, language="en"),
+    "atc_female_en": VoicePreset(voice="shimmer", speed=1.0, language="en"),
+    "atc_male_es": VoicePreset(voice="onyx", speed=0.95, language="es"),
+    "atc_female_es": VoicePreset(voice="shimmer", speed=0.95, language="es"),
+    "military_tactical": VoicePreset(voice="echo", speed=1.1, language="en"),
+    "briefing_instructor_en": VoicePreset(voice="sage", speed=0.9, language="en"),
+    "briefing_instructor_es": VoicePreset(voice="sage", speed=0.85, language="es"),
+    "urgent_alert": VoicePreset(voice="ballad", speed=1.15, language="en"),
+}
+```
+
+### 19.5 Usage Examples
+
+#### Command Line Interface
+
+```bash
+# Generate single communication
+python tools/voice_generator.py "November One Two Three, contact tower 118.5"
+
+# Generate with specific voice and speed
+python tools/voice_generator.py -v onyx -s 1.0 "Cleared for takeoff runway 27"
+
+# Generate full phonetic alphabet
+python tools/voice_generator.py --phonetic
+
+# Generate MATB voice pack (English male)
+python tools/voice_generator.py --matb-pack --idiom english --gender male
+
+# Generate MATB voice pack (Spanish female)
+python tools/voice_generator.py --matb-pack --idiom spanish --gender female
+```
+
+#### Python API
+
+```python
+from tools.voice_generator import ATCVoiceGenerator, VoiceConfig
+
+# Basic usage
+generator = ATCVoiceGenerator()
+result = generator.generate_communication("November One Two Three, contact tower 118.5")
+
+# Custom configuration
+config = VoiceConfig(
+    voice="onyx",
+    speed=1.0,
+    accent="neutral",
+    emotional_range="moderate",
+    intonation="measured",
+    language="en",
+)
+generator = ATCVoiceGenerator(config=config)
+
+# Generate callsign audio
+result = generator.generate_callsign_audio("ABC123")
+
+# Generate frequency audio
+result = generator.generate_frequency_audio(118.5)
+
+# Generate instruction audio
+result = generator.generate_instruction_audio(
+    instruction_text="Welcome to the Multi-Attribute Task Battery...",
+    scenario_name="uas_basic",
+    language="es",
+)
+```
+
+### 19.6 Streamlit Integration
+
+The voice generator is integrated into the Configuration Portal (`tools/config_portal.py`) with a dedicated tab:
+
+1. **🎙️ Voice Generator Tab**: Full voice generation interface
+   - Single text generation
+   - Callsign generation
+   - Frequency generation
+   - Instruction script generation
+   - Phonetic alphabet generation
+   - MATB voice pack generation
+
+2. **📖 Instrucciones Tab**: Generate spoken instructions
+   - Select scenario
+   - Choose voice language (Spanish/English)
+   - Select voice preset
+   - Generate and play audio
+
+### 19.7 MATB Communications Plugin Integration
+
+Generated voice files are compatible with the existing communications plugin structure:
+
+```
+includes/sounds/
+├── english/
+│   ├── male/
+│   │   ├── 0.wav through 9.wav (digits)
+│   │   ├── a.wav through z.wav (letters)
+│   │   ├── nav_1.wav, nav_2.wav, com_1.wav, com_2.wav
+│   │   ├── radio.wav, frequency.wav, point.wav
+│   │   └── empty.wav
+│   └── female/
+│       └── (same structure)
+├── spanish/
+│   ├── male/
+│   └── female/
+└── generated/
+    ├── phonetic/
+    ├── phrases/
+    ├── callsigns/
+    ├── frequencies/
+    └── instructions/
+```
+
+### 19.8 API Key Configuration
+
+The system requires an OpenAI API key. Configure using one of these methods:
+
+1. **Environment Variable**:
+   ```bash
+   export OPENAI_API_KEY=sk-your-key-here
+   ```
+
+2. **.env File** (in project root):
+   ```
+   OPENAI_API_KEY=sk-your-key-here
+   ```
+
+⚠️ **Security Note**: Never commit API keys to version control. The `.env` file should be in `.gitignore`.
+
+### 19.9 Voice Instruction Templates
+
+The system includes specialized instruction templates for ATC communications:
+
+#### English ATC Template
+```
+You are a professional Air Traffic Controller.
+
+Voice Characteristics:
+- Accent: Clear, neutral international aviation English (ICAO standard)
+- Emotional range: Calm, professional, authoritative but not aggressive
+- Intonation: Measured, with slight emphasis on key words
+- Speed: Moderate pace (~140-160 words per minute)
+- Tone: Professional, confident, reassuring
+
+Radio Communication Standards (ICAO/FAA):
+- Use standard aviation phraseology
+- Pronounce numbers clearly (niner for 9, tree for 3, fife for 5)
+- Pause briefly between key elements
+- Maintain consistent rhythm and cadence
+```
+
+#### Spanish ATC Template
+```
+Eres un Controlador de Tráfico Aéreo profesional.
+
+Características de Voz:
+- Acento: Español claro y neutro con terminología aeronáutica internacional
+- Rango emocional: Calmado, profesional, autoritario pero no agresivo
+- Entonación: Medida, con ligero énfasis en palabras clave
+- Velocidad: Ritmo moderado (~140-160 palabras por minuto)
+- Tono: Profesional, confiado, tranquilizador
+```
+
+### 19.10 Caching System
+
+The voice generator includes an intelligent caching system:
+
+- Generated audio files are cached based on text + configuration hash
+- Cache location: `.voice_cache/` in project root
+- Cache management via `clear_cache()` and `get_cache_size()` methods
+- Streamlit UI includes cache management controls
+
+### 19.11 Performance Metrics
+
+| Metric | Value |
+|--------|-------|
+| Model | gpt-4o-mini-tts |
+| Latency | ~1-3 seconds per generation |
+| Max Input | 4096 characters |
+| Output Formats | mp3, wav, opus, aac, flac, pcm |
+| Speed Range | 0.25x to 4.0x |
+
+### 19.12 Research Applications
+
+The voice generation system supports several research applications:
+
+1. **Standardized Communications**: Ensure consistent voice quality across all participants
+2. **Multilingual Studies**: Generate identical communications in multiple languages
+3. **Workload Manipulation**: Vary speech rate and complexity to modulate workload
+4. **Accessibility**: Provide audio instructions for participants with reading difficulties
+5. **Replication**: Generate identical voice stimuli for study replication
+
+### 19.13 References
+
+1. **OpenAI TTS Documentation**: https://platform.openai.com/docs/models/gpt-4o-mini-tts
+2. **ICAO Radiotelephony Standards**: Doc 9432 - Manual of Radiotelephony
+3. **FAA Phraseology**: AIM Chapter 4, Section 2 - Radio Communications Phraseology
+4. **NATO Phonetic Alphabet**: ICAO/ITU phonetic alphabet standard
+
+---
+
 **Implementation Credit**: Research compilation and development plan by **Dr Diego Malpica, Aerospace Medicine**.
 
-**Document Version**: 2.0 – Comprehensive RT-HRV Combat Integration Roadmap
+**Document Version**: 2.1 – Added Voice Generation System (OpenAI TTS Integration)
