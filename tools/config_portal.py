@@ -36,8 +36,159 @@ SCENARIO_DIR: Final[Path] = PROJECT_ROOT / "includes" / "scenarios"
 LOCALE_DIR: Final[Path] = PROJECT_ROOT / "locales"
 PLUGINS_DIR: Final[Path] = PROJECT_ROOT / "plugins"
 INSTRUCTIONS_DIR: Final[Path] = PROJECT_ROOT / "includes" / "instructions"
+SPANISH_INSTRUCTIONS_DIR: Final[Path] = PROJECT_ROOT / "includes" / "instructions" / "spanish"
 QUESTIONNAIRES_DIR: Final[Path] = PROJECT_ROOT / "includes" / "questionnaires"
 MANUAL_REF: Final[str] = "Docs/Manual.md"
+
+# Scenario to Spanish instructions mapping
+SCENARIO_INSTRUCTIONS: Final[dict[str, list[str]]] = {
+    # UAS Scenarios
+    "uas_basic.txt": [
+        "spanish/uas/uas_bienvenida.txt",
+        "spanish/default/sysmon.txt",
+        "spanish/default/track.txt",
+        "spanish/default/communications.txt",
+        "spanish/default/resman.txt",
+        "spanish/uas/missiondirector.txt",
+        "spanish/uas/senseandavoid.txt",
+        "spanish/uas/payloadmanager.txt",
+        "spanish/uas/datalink.txt",
+        "spanish/uas/uas_basic_intro.txt",
+    ],
+    "uas_bvlos.txt": [
+        "spanish/uas/uas_bienvenida.txt",
+        "spanish/default/sysmon.txt",
+        "spanish/default/track.txt",
+        "spanish/default/communications.txt",
+        "spanish/default/resman.txt",
+        "spanish/uas/missiondirector.txt",
+        "spanish/uas/senseandavoid.txt",
+        "spanish/uas/payloadmanager.txt",
+        "spanish/uas/datalink.txt",
+        "spanish/uas/uas_bvlos_intro.txt",
+    ],
+    "uas_military_ex.txt": [
+        "spanish/uas/uas_bienvenida.txt",
+        "spanish/default/sysmon.txt",
+        "spanish/default/track.txt",
+        "spanish/default/communications.txt",
+        "spanish/default/resman.txt",
+        "spanish/uas/missiondirector.txt",
+        "spanish/uas/senseandavoid.txt",
+        "spanish/uas/payloadmanager.txt",
+        "spanish/uas/datalink.txt",
+        "spanish/mumt/operatorcapacity.txt",
+        "spanish/mumt/vtolmanager.txt",
+        "spanish/uas/uas_military_intro.txt",
+    ],
+    # HPA Scenarios
+    "hpa_overlay.txt": [
+        "spanish/hpa/hpa_bienvenida.txt",
+        "spanish/default/sysmon.txt",
+        "spanish/default/track.txt",
+        "spanish/default/communications.txt",
+        "spanish/default/resman.txt",
+        "spanish/hpa/energymanager.txt",
+        "spanish/hpa/threatboard.txt",
+        "spanish/hpa/emergencystack.txt",
+        "spanish/uas/datalink.txt",
+        "spanish/hpa/hpa_overlay_intro.txt",
+    ],
+    "hpa_qra_ex.txt": [
+        "spanish/hpa/hpa_bienvenida.txt",
+        "spanish/default/sysmon.txt",
+        "spanish/default/track.txt",
+        "spanish/default/communications.txt",
+        "spanish/default/resman.txt",
+        "spanish/hpa/energymanager.txt",
+        "spanish/hpa/threatboard.txt",
+        "spanish/hpa/weaponsinventory.txt",
+        "spanish/hpa/emergencystack.txt",
+        "spanish/uas/datalink.txt",
+        "spanish/hpa/hpa_qra_intro.txt",
+    ],
+    # MUM-T Scenarios
+    "mumt_ramp_lvl1.txt": [
+        "spanish/mumt/mumt_bienvenida.txt",
+        "spanish/default/sysmon.txt",
+        "spanish/default/track.txt",
+        "spanish/default/communications.txt",
+        "spanish/default/resman.txt",
+        "spanish/hpa/energymanager.txt",
+        "spanish/hpa/threatboard.txt",
+        "spanish/hpa/weaponsinventory.txt",
+        "spanish/uas/missiondirector.txt",
+        "spanish/uas/senseandavoid.txt",
+        "spanish/uas/payloadmanager.txt",
+        "spanish/uas/datalink.txt",
+        "spanish/mumt/operatorcapacity.txt",
+        "spanish/mumt/vtolmanager.txt",
+        "spanish/mumt/mumt_lvl1_intro.txt",
+    ],
+    "mumt_ramp_lvl2.txt": [
+        "spanish/mumt/mumt_bienvenida.txt",
+        "spanish/default/sysmon.txt",
+        "spanish/default/track.txt",
+        "spanish/default/communications.txt",
+        "spanish/default/resman.txt",
+        "spanish/hpa/energymanager.txt",
+        "spanish/hpa/threatboard.txt",
+        "spanish/hpa/weaponsinventory.txt",
+        "spanish/uas/missiondirector.txt",
+        "spanish/uas/senseandavoid.txt",
+        "spanish/uas/payloadmanager.txt",
+        "spanish/uas/datalink.txt",
+        "spanish/mumt/operatorcapacity.txt",
+        "spanish/mumt/vtolmanager.txt",
+        "spanish/mumt/mumt_lvl2_intro.txt",
+    ],
+    "mumt_ramp_lvl3.txt": [
+        "spanish/mumt/mumt_bienvenida.txt",
+        "spanish/default/sysmon.txt",
+        "spanish/default/track.txt",
+        "spanish/default/communications.txt",
+        "spanish/default/resman.txt",
+        "spanish/hpa/energymanager.txt",
+        "spanish/hpa/threatboard.txt",
+        "spanish/hpa/weaponsinventory.txt",
+        "spanish/uas/missiondirector.txt",
+        "spanish/uas/senseandavoid.txt",
+        "spanish/uas/payloadmanager.txt",
+        "spanish/uas/datalink.txt",
+        "spanish/mumt/operatorcapacity.txt",
+        "spanish/mumt/vtolmanager.txt",
+        "spanish/mumt/physiomonitor.txt",
+        "spanish/mumt/mumt_lvl3_intro.txt",
+    ],
+    # Default/Basic Scenarios
+    "default.txt": [
+        "spanish/default/bienvenida.txt",
+        "spanish/default/sysmon.txt",
+        "spanish/default/track.txt",
+        "spanish/default/communications.txt",
+        "spanish/default/resman.txt",
+        "spanish/default/completo.txt",
+    ],
+    "basic.txt": [
+        "spanish/default/bienvenida.txt",
+        "spanish/default/sysmon.txt",
+        "spanish/default/track.txt",
+        "spanish/default/communications.txt",
+        "spanish/default/resman.txt",
+        "spanish/default/completo.txt",
+    ],
+    "hrv_combat_demo.txt": [
+        "spanish/mumt/mumt_bienvenida.txt",
+        "spanish/default/sysmon.txt",
+        "spanish/default/track.txt",
+        "spanish/default/communications.txt",
+        "spanish/default/resman.txt",
+        "spanish/hpa/energymanager.txt",
+        "spanish/hpa/threatboard.txt",
+        "spanish/mumt/physiomonitor.txt",
+        "spanish/default/completo.txt",
+    ],
+}
 
 COLORS: Final[tuple[str, ...]] = (
     "white",
@@ -451,6 +602,122 @@ def discover_questionnaire_files() -> list[str]:
         for entry in QUESTIONNAIRES_DIR.rglob("*.txt"):
             files.append(str(entry.relative_to(QUESTIONNAIRES_DIR).as_posix()))
     return sorted(files) or ["(empty)"]
+
+
+def load_instruction_content(instruction_path: str) -> str:
+    """Load instruction file content from the instructions directory."""
+    full_path = INSTRUCTIONS_DIR / instruction_path
+    if full_path.exists():
+        return full_path.read_text(encoding="utf-8")
+    return f"<p><em>Archivo no encontrado: {instruction_path}</em></p>"
+
+
+def get_instructions_for_scenario(scenario_name: str) -> list[str]:
+    """Get the list of Spanish instruction files for a given scenario."""
+    # Extract just the filename from the path
+    scenario_file = Path(scenario_name).name
+    
+    # Check if we have specific instructions for this scenario
+    if scenario_file in SCENARIO_INSTRUCTIONS:
+        return SCENARIO_INSTRUCTIONS[scenario_file]
+    
+    # Default fallback for unknown scenarios
+    return [
+        "spanish/default/bienvenida.txt",
+        "spanish/default/sysmon.txt",
+        "spanish/default/track.txt",
+        "spanish/default/communications.txt",
+        "spanish/default/resman.txt",
+        "spanish/default/completo.txt",
+    ]
+
+
+def render_spanish_instructions(scenario_path: str) -> None:
+    """Render all Spanish instructions for a scenario."""
+    instruction_files = get_instructions_for_scenario(scenario_path)
+    
+    st.markdown("### 📖 Instrucciones del Escenario en Español")
+    st.markdown(f"**Escenario seleccionado:** `{scenario_path}`")
+    st.markdown("---")
+    
+    # Progress tracking
+    total_pages = len(instruction_files)
+    
+    # Initialize page state
+    if "instruction_page" not in st.session_state:
+        st.session_state["instruction_page"] = 0
+    
+    current_page = st.session_state["instruction_page"]
+    
+    # Navigation
+    col1, col2, col3 = st.columns([1, 3, 1])
+    with col1:
+        if st.button("⬅️ Anterior", disabled=current_page == 0):
+            st.session_state["instruction_page"] = max(0, current_page - 1)
+            st.rerun()
+    with col2:
+        st.progress((current_page + 1) / total_pages)
+        st.caption(f"Página {current_page + 1} de {total_pages}")
+    with col3:
+        if st.button("Siguiente ➡️", disabled=current_page >= total_pages - 1):
+            st.session_state["instruction_page"] = min(total_pages - 1, current_page + 1)
+            st.rerun()
+    
+    st.markdown("---")
+    
+    # Display current instruction page
+    if current_page < len(instruction_files):
+        instruction_file = instruction_files[current_page]
+        content = load_instruction_content(instruction_file)
+        
+        # Render HTML content
+        st.markdown(content, unsafe_allow_html=True)
+        
+        # Show file info
+        with st.expander("ℹ️ Información del archivo"):
+            st.caption(f"Archivo: `{instruction_file}`")
+    
+    st.markdown("---")
+    
+    # Quick navigation
+    st.markdown("### 📑 Navegación Rápida")
+    cols = st.columns(4)
+    for idx, instr_file in enumerate(instruction_files):
+        col_idx = idx % 4
+        with cols[col_idx]:
+            # Extract a short name from the file path
+            short_name = Path(instr_file).stem.replace("_", " ").title()
+            is_current = idx == current_page
+            if st.button(
+                f"{'→ ' if is_current else ''}{short_name}",
+                key=f"nav_{idx}",
+                use_container_width=True,
+            ):
+                st.session_state["instruction_page"] = idx
+                st.rerun()
+    
+    # Reset button
+    st.markdown("---")
+    if st.button("🔄 Reiniciar a la primera página"):
+        st.session_state["instruction_page"] = 0
+        st.rerun()
+
+
+def render_all_instructions_printable(scenario_path: str) -> str:
+    """Generate a printable version of all instructions."""
+    instruction_files = get_instructions_for_scenario(scenario_path)
+    
+    all_content = []
+    all_content.append(f"<h1>Instrucciones: {scenario_path}</h1>")
+    all_content.append("<hr>")
+    
+    for idx, instr_file in enumerate(instruction_files, 1):
+        content = load_instruction_content(instr_file)
+        all_content.append(f"<h2>Sección {idx}</h2>")
+        all_content.append(content)
+        all_content.append("<hr>")
+    
+    return "\n".join(all_content)
 
 
 # ---------------------------------------------------------------------------
@@ -1270,9 +1537,9 @@ def main() -> None:
     )
 
     # Tabs for different sections
-    tab_core, tab_plugins, tab_designer, tab_launch, tab_preview, tab_scenario = st.tabs(
-        ["⚙️ Core Settings", "🔌 Plugin Parameters", "🎬 Scenario Designer",
-         "🚀 Launch", "📄 Config Preview", "📋 Scenario Helper"]
+    tab_core, tab_plugins, tab_instructions, tab_designer, tab_launch, tab_preview, tab_scenario = st.tabs(
+        ["⚙️ Core Settings", "🔌 Plugin Parameters", "📖 Instrucciones",
+         "🎬 Scenario Designer", "🚀 Launch", "📄 Config Preview", "📋 Scenario Helper"]
     )
 
     # ---------------------------------------------------------------------------
@@ -1545,7 +1812,107 @@ def main() -> None:
                 render_plugin_section(plugin_alias, params)
 
     # ---------------------------------------------------------------------------
-    # Tab 3: Scenario Designer
+    # Tab 3: Spanish Instructions
+    # ---------------------------------------------------------------------------
+    with tab_instructions:
+        st.header("📖 Instrucciones del Escenario")
+        st.markdown(
+            "Lea las instrucciones en español antes de iniciar el escenario. "
+            "Estas instrucciones explican paso a paso cada tarea del test."
+        )
+        st.markdown("---")
+        
+        # Scenario selection for instructions
+        st.subheader("Seleccione el Escenario")
+        
+        # Get current scenario from config
+        current_scenario = openmatb.scenario_path
+        
+        # Allow selecting a different scenario for instructions
+        instruction_scenario = st.selectbox(
+            "Escenario para ver instrucciones",
+            options=scenario_options,
+            index=scenario_options.index(current_scenario) if current_scenario in scenario_options else 0,
+            key="instruction_scenario_select",
+            help="Seleccione el escenario para ver sus instrucciones en español",
+        )
+        
+        # Check if instructions exist for this scenario
+        scenario_file = Path(instruction_scenario).name
+        has_instructions = scenario_file in SCENARIO_INSTRUCTIONS
+        
+        if not has_instructions:
+            st.warning(
+                f"⚠️ No hay instrucciones específicas para `{instruction_scenario}`. "
+                "Se mostrarán las instrucciones predeterminadas del MATB básico."
+            )
+        else:
+            st.success(f"✅ Instrucciones disponibles para `{instruction_scenario}`")
+        
+        st.markdown("---")
+        
+        # Display instructions
+        render_spanish_instructions(instruction_scenario)
+        
+        # Printable version
+        st.markdown("---")
+        st.subheader("📄 Versión para Imprimir")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            printable_content = render_all_instructions_printable(instruction_scenario)
+            st.download_button(
+                "📥 Descargar Instrucciones (HTML)",
+                data=printable_content,
+                file_name=f"instrucciones_{scenario_file.replace('.txt', '')}.html",
+                mime="text/html",
+                use_container_width=True,
+            )
+        with col2:
+            # Generate plain text version
+            instruction_files = get_instructions_for_scenario(instruction_scenario)
+            plain_text = []
+            plain_text.append(f"INSTRUCCIONES: {instruction_scenario}")
+            plain_text.append("=" * 50)
+            plain_text.append("")
+            for idx, instr_file in enumerate(instruction_files, 1):
+                content = load_instruction_content(instr_file)
+                # Strip HTML tags for plain text
+                text_only = re.sub(r'<[^>]+>', '', content)
+                text_only = re.sub(r'\s+', ' ', text_only).strip()
+                plain_text.append(f"SECCIÓN {idx}")
+                plain_text.append("-" * 30)
+                plain_text.append(text_only)
+                plain_text.append("")
+            
+            st.download_button(
+                "📥 Descargar Instrucciones (TXT)",
+                data="\n".join(plain_text),
+                file_name=f"instrucciones_{scenario_file.replace('.txt', '')}.txt",
+                mime="text/plain",
+                use_container_width=True,
+            )
+        
+        # Instructions checklist
+        st.markdown("---")
+        st.subheader("✅ Lista de Verificación Pre-Test")
+        st.markdown(
+            """
+            Antes de iniciar el test, asegúrese de:
+            
+            1. ☐ **Leer todas las instrucciones** - Use las flechas para navegar por todas las páginas
+            2. ☐ **Entender cada tarea** - Pregunte si tiene dudas sobre alguna tarea
+            3. ☐ **Verificar el equipo** - Joystick conectado (si aplica), audio funcionando
+            4. ☐ **Sensor Polar H10** - Si el escenario incluye HRV, verificar conexión Bluetooth
+            5. ☐ **Ambiente adecuado** - Iluminación, temperatura, ruido controlados
+            6. ☐ **Descanso previo** - Mínimo 6 horas de sueño, sin cafeína reciente
+            
+            Cuando esté listo, vaya a la pestaña **🚀 Launch** para iniciar el escenario.
+            """
+        )
+
+    # ---------------------------------------------------------------------------
+    # Tab 4: Scenario Designer
     # ---------------------------------------------------------------------------
     with tab_designer:
         st.header("🎬 Scenario Designer")
@@ -1570,7 +1937,7 @@ def main() -> None:
             render_custom_builder(available_plugins, plugin_params)
 
     # ---------------------------------------------------------------------------
-    # Tab 4: Launch OpenMATB
+    # Tab 5: Launch OpenMATB
     # ---------------------------------------------------------------------------
     with tab_launch:
         st.header("🚀 Launch OpenMATB")
@@ -1772,7 +2139,7 @@ def main() -> None:
                     subprocess.run(["xdg-open", str(PROJECT_ROOT)], check=False, timeout=5)
 
     # ---------------------------------------------------------------------------
-    # Tab 5: Config Preview
+    # Tab 6: Config Preview
     # ---------------------------------------------------------------------------
     with tab_preview:
         st.header("Current config.ini")
@@ -1791,7 +2158,7 @@ def main() -> None:
             )
 
     # ---------------------------------------------------------------------------
-    # Tab 6: Scenario Helper
+    # Tab 7: Scenario Helper
     # ---------------------------------------------------------------------------
     with tab_scenario:
         st.header("Scenario Command Helper")
