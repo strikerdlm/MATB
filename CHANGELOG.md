@@ -54,6 +54,25 @@ Implementation of Manual.md Section 17-18 roadmap for physiological monitoring d
   - `tools/config_portal.py` Streamlit front-end edits `config.ini`, enforces the MATB-required fields (language, screen index, fullscreen, `clock_speed`, scenario path, session numbering), and shows Manual §11 guidance alongside the form.
   - Adds `streamlit` to `requirements.txt`.
 
+- **Voice Generation System (OpenAI TTS)**:
+  - New `tools/voice_generator.py` module for ATC-style voice generation using OpenAI's gpt-4o-mini-tts model
+  - Air Traffic Controller voice characteristics following ICAO/FAA radio communication standards
+  - 11 voice options: alloy, ash, ballad, coral, echo, fable, nova, onyx, sage, shimmer, verse
+  - Configurable voice parameters: accent, emotional range, intonation, speed (0.25x-4.0x), tone
+  - Voice presets for common scenarios: ATC male/female (EN/ES), military tactical, briefing instructor, urgent alerts
+  - Features:
+    - Single text-to-speech generation
+    - Callsign audio generation with NATO phonetic alphabet
+    - Frequency audio generation
+    - Instruction script audio generation
+    - Full phonetic alphabet pack generation
+    - MATB voice pack generation (compatible with communications plugin)
+  - Intelligent caching system with hash-based deduplication
+  - CLI interface for batch generation
+  - Streamlit integration with dedicated 🎙️ Voice Generator tab
+  - Spoken instructions generation in 📖 Instrucciones tab
+  - Adds `openai>=1.40.0` to `requirements.txt`
+
 ### Changed
 
 - Scenario templates now include Polar RR Link and Physio Monitor by default for physiological instrumentation
