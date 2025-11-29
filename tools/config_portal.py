@@ -58,8 +58,9 @@ SPANISH_INSTRUCTIONS_DIR: Final[Path] = PROJECT_ROOT / "includes" / "instruction
 QUESTIONNAIRES_DIR: Final[Path] = PROJECT_ROOT / "includes" / "questionnaires"
 MANUAL_REF: Final[str] = "Docs/Manual.md"
 
-# Scenario to Spanish instructions mapping
-SCENARIO_INSTRUCTIONS: Final[dict[str, list[str]]] = {
+# Scenario to instructions mapping by language
+# Spanish instructions
+SCENARIO_INSTRUCTIONS_ES: Final[dict[str, list[str]]] = {
     # UAS Scenarios
     "uas_basic.txt": [
         "spanish/uas/uas_bienvenida.txt",
@@ -207,6 +208,33 @@ SCENARIO_INSTRUCTIONS: Final[dict[str, list[str]]] = {
         "spanish/default/completo.txt",
     ],
 }
+
+# English instructions (using default/ folder)
+SCENARIO_INSTRUCTIONS_EN: Final[dict[str, list[str]]] = {
+    # Default/Basic Scenarios - English
+    "default.txt": [
+        "default/welcome_screen.txt",
+        "default/sysmon.txt",
+        "default/track.txt",
+        "default/communications.txt",
+        "default/resman.txt",
+        "default/full.txt",
+    ],
+    "basic.txt": [
+        "default/welcome_screen.txt",
+        "default/sysmon.txt",
+        "default/track.txt",
+        "default/communications.txt",
+        "default/resman.txt",
+        "default/full.txt",
+    ],
+}
+
+# Combined mapping for backwards compatibility
+SCENARIO_INSTRUCTIONS: Final[dict[str, list[str]]] = SCENARIO_INSTRUCTIONS_ES
+
+# Generated audio cache directory
+GENERATED_AUDIO_DIR: Final[Path] = PROJECT_ROOT / "includes" / "sounds" / "generated" / "instructions"
 
 COLORS: Final[tuple[str, ...]] = (
     "white",
@@ -630,24 +658,87 @@ def load_instruction_content(instruction_path: str) -> str:
     return f"<p><em>Archivo no encontrado: {instruction_path}</em></p>"
 
 
-def get_instructions_for_scenario(scenario_name: str) -> list[str]:
-    """Get the list of Spanish instruction files for a given scenario."""
+def get_instructions_for_scenario(scenario_name: str, language: str = "es") -> list[str]:
+    """Get the list of instruction files for a given scenario and language.
+    
+    Args:
+        scenario_name: Name of the scenario file
+        language: Language code ('es' for Spanish, 'en' for English)
+        
+    Returns:
+        List of instruction file paths relative to INSTRUCTIONS_DIR
+    """
     # Extract just the filename from the path
     scenario_file = Path(scenario_name).name
     
-    # Check if we have specific instructions for this scenario
-    if scenario_file in SCENARIO_INSTRUCTIONS:
-        return SCENARIO_INSTRUCTIONS[scenario_file]
+    # Select appropriate mapping based on language
+    if language == "en":
+        instructions_map = SCENARIO_INSTRUCTIONS_EN
+        default_instructions = [
+            "default/welcome_screen.txt",
+            "default/sysmon.txt",
+            "default/track.txt",
+            "default/communications.txt",
+            "default/resman.txt",
+            "default/full.txt",
+        ]
+    else:  # Default to Spanish
+        instructions_map = SCENARIO_INSTRUCTIONS_ES
+        default_instructions = [
+            "spanish/default/bienvenida.txt",
+            "spanish/default/sysmon.txt",
+            "spanish/default/track.txt",
+            "spanish/default/communications.txt",
+            "spanish/default/resman.txt",
+            "spanish/default/completo.txt",
+        ]
     
-    # Default fallback for unknown scenarios
-    return [
-        "spanish/default/bienvenida.txt",
-        "spanish/default/sysmon.txt",
-        "spanish/default/track.txt",
-        "spanish/default/communications.txt",
-        "spanish/default/resman.txt",
-        "spanish/default/completo.txt",
-    ]
+    # Check if we have specific instructions for this scenario
+    if scenario_file in instructions_map:
+        return instructions_map[scenario_file]
+    
+    # For English, if no specific mapping, fall back to Spanish with a note
+    # (Spanish instructions are more complete)
+    if language == "en" and scenario_file in SCENARIO_INSTRUCTIONS_ES:
+        # Return Spanish instructions as fallback (better than nothing)
+        return SCENARIO_INSTRUCTIONS_ES[scenario_file]
+    
+    # Default fallback
+    return default_instructions
+
+
+def get_cached_audio_path(scenario_name: str, language: str, voice_preset: str) -> Path:
+    """Get the path for cached audio file.
+    
+    Args:
+        scenario_name: Name of the scenario
+        language: Language code ('es' or 'en')
+        voice_preset: Voice preset name
+        
+    Returns:
+        Path to the cached audio file
+    """
+    GENERATED_AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+    scenario_base = Path(scenario_name).stem
+    filename = f"{scenario_base}_{language}_{voice_preset}.mp3"
+    return GENERATED_AUDIO_DIR / filename
+
+
+def check_cached_audio(scenario_name: str, language: str, voice_preset: str) -> Path | None:
+    """Check if cached audio exists for the given parameters.
+    
+    Args:
+        scenario_name: Name of the scenario
+        language: Language code ('es' or 'en')
+        voice_preset: Voice preset name
+        
+    Returns:
+        Path to cached audio if exists, None otherwise
+    """
+    cache_path = get_cached_audio_path(scenario_name, language, voice_preset)
+    if cache_path.exists():
+        return cache_path
+    return None
 
 
 def render_spanish_instructions(scenario_path: str) -> None:
@@ -1938,74 +2029,135 @@ def main() -> None:
                 "Esto es útil para participantes que prefieren escuchar las instrucciones."
             )
             
-            col1, col2 = st.columns(2)
-            with col1:
-                voice_lang = st.selectbox(
-                    "Idioma de Voz",
-                    options=["es", "en"],
-                    format_func=lambda x: "Español" if x == "es" else "English",
-                    key="instruction_voice_lang",
-                )
-            with col2:
-                voice_preset = st.selectbox(
-                    "Preset de Voz",
-                    options=["briefing_instructor_es", "briefing_instructor_en", "atc_male_es", "atc_female_es"],
-                    format_func=lambda x: x.replace("_", " ").title(),
-                    key="instruction_voice_preset",
-                )
+            # Language selection - this determines BOTH text and voice language
+            voice_lang = st.selectbox(
+                "Idioma de las Instrucciones",
+                options=["es", "en"],
+                format_func=lambda x: "Español" if x == "es" else "English",
+                key="instruction_voice_lang",
+                help="Selecciona el idioma del texto y la voz. El texto y la voz siempre coinciden.",
+            )
             
-            if st.button("🎤 Generar Audio de Instrucciones", key="gen_instruction_audio"):
-                api_key = load_api_key()
-                if not api_key:
-                    st.error(
-                        "⚠️ Se requiere una clave API de OpenAI. "
-                        "Configure la variable de entorno `OPENAI_API_KEY` o agréguela a `.env`."
+            # Voice presets filtered by language
+            if voice_lang == "es":
+                preset_options = [
+                    "briefing_instructor_es",
+                    "atc_male_es",
+                    "atc_female_es",
+                ]
+                preset_labels = {
+                    "briefing_instructor_es": "🎓 Instructor (Español)",
+                    "atc_male_es": "👨‍✈️ ATC Masculino (Español)",
+                    "atc_female_es": "👩‍✈️ ATC Femenino (Español)",
+                }
+            else:
+                preset_options = [
+                    "briefing_instructor_en",
+                    "atc_male_en",
+                    "atc_female_en",
+                ]
+                preset_labels = {
+                    "briefing_instructor_en": "🎓 Instructor (English)",
+                    "atc_male_en": "👨‍✈️ ATC Male (English)",
+                    "atc_female_en": "👩‍✈️ ATC Female (English)",
+                }
+            
+            voice_preset = st.selectbox(
+                "Preset de Voz",
+                options=preset_options,
+                format_func=lambda x: preset_labels.get(x, x.replace("_", " ").title()),
+                key=f"instruction_voice_preset_{voice_lang}",
+                help="Selecciona el estilo de voz para las instrucciones.",
+            )
+            
+            # Check for cached audio
+            cached_audio = check_cached_audio(instruction_scenario, voice_lang, voice_preset)
+            
+            if cached_audio:
+                st.success(f"✅ Audio en caché disponible")
+                st.audio(str(cached_audio))
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("🔄 Regenerar Audio", key="regenerate_audio"):
+                        # Delete cached file and regenerate
+                        cached_audio.unlink(missing_ok=True)
+                        st.rerun()
+                with col2:
+                    st.download_button(
+                        "📥 Descargar Audio",
+                        data=cached_audio.read_bytes(),
+                        file_name=cached_audio.name,
+                        mime="audio/mpeg",
                     )
-                else:
-                    with st.spinner("Generando audio de instrucciones..."):
-                        # Collect all instruction text
-                        instruction_files = get_instructions_for_scenario(instruction_scenario)
-                        all_text = []
-                        for instr_file in instruction_files:
-                            content = load_instruction_content(instr_file)
-                            # Strip HTML tags
-                            text_only = re.sub(r'<[^>]+>', '', content)
-                            text_only = re.sub(r'\s+', ' ', text_only).strip()
-                            all_text.append(text_only)
-                        
-                        full_text = " ... ".join(all_text)
-                        
-                        # Limit text length for API
-                        if len(full_text) > 4000:
-                            full_text = full_text[:4000] + "..."
-                        
-                        try:
-                            preset = VOICE_PRESETS.get(voice_preset)
-                            if preset:
-                                config = VoiceConfig(
-                                    voice=preset.voice,
-                                    speed=preset.speed,
-                                    instructions=preset.instructions,
-                                    language=voice_lang,
-                                )
-                            else:
-                                config = VoiceConfig(language=voice_lang)
-                            
-                            generator = ATCVoiceGenerator(config=config, api_key=api_key)
-                            scenario_base = Path(instruction_scenario).stem
-                            result = generator.generate_instruction_audio(
-                                full_text,
-                                scenario_base,
-                                voice_lang,
+            else:
+                # Check for English instructions availability
+                if voice_lang == "en":
+                    scenario_file = Path(instruction_scenario).name
+                    if scenario_file not in SCENARIO_INSTRUCTIONS_EN:
+                        st.warning(
+                            "⚠️ No hay instrucciones en inglés para este escenario. "
+                            "Se usarán las instrucciones en español con voz en inglés."
+                        )
+                
+                if st.button("🎤 Generar Audio de Instrucciones", key="gen_instruction_audio"):
+                    api_key = load_api_key()
+                    if not api_key:
+                        st.error(
+                            "⚠️ Se requiere una clave API de OpenAI. "
+                            "Configure la variable de entorno `OPENAI_API_KEY` o agréguela a `.env`."
+                        )
+                    else:
+                        with st.spinner("Generando audio de instrucciones..."):
+                            # Collect all instruction text in the selected language
+                            instruction_files = get_instructions_for_scenario(
+                                instruction_scenario, voice_lang
                             )
+                            all_text = []
+                            for instr_file in instruction_files:
+                                content = load_instruction_content(instr_file)
+                                # Strip HTML tags
+                                text_only = re.sub(r'<[^>]+>', '', content)
+                                text_only = re.sub(r'\s+', ' ', text_only).strip()
+                                all_text.append(text_only)
                             
-                            if result.success:
-                                st.success(f"✅ Audio generado: {result.file_path}")
-                                st.audio(str(result.file_path))
-                            else:
-                                st.error(f"❌ Error: {result.error_message}")
-                        except Exception as exc:
-                            st.error(f"❌ Error al generar audio: {exc}")
+                            full_text = " ... ".join(all_text)
+                            
+                            # Limit text length for API
+                            if len(full_text) > 4000:
+                                full_text = full_text[:4000] + "..."
+                            
+                            try:
+                                preset = VOICE_PRESETS.get(voice_preset)
+                                if preset:
+                                    config = VoiceConfig(
+                                        voice=preset.voice,
+                                        speed=preset.speed,
+                                        instructions=preset.instructions,
+                                        language=voice_lang,
+                                    )
+                                else:
+                                    config = VoiceConfig(language=voice_lang)
+                                
+                                generator = ATCVoiceGenerator(config=config, api_key=api_key)
+                                
+                                # Use cached path for output
+                                output_path = get_cached_audio_path(
+                                    instruction_scenario, voice_lang, voice_preset
+                                )
+                                
+                                result = generator.generate_communication(
+                                    full_text, output_path, config
+                                )
+                                
+                                if result.success:
+                                    st.success(f"✅ Audio generado y guardado en caché")
+                                    st.audio(str(result.file_path))
+                                    st.rerun()  # Refresh to show cached audio UI
+                                else:
+                                    st.error(f"❌ Error: {result.error_message}")
+                            except Exception as exc:
+                                st.error(f"❌ Error al generar audio: {exc}")
 
         # Instructions checklist
         st.markdown("---")
