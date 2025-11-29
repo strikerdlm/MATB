@@ -1,0 +1,20 @@
+<h1>Tarea de Seguimiento (TRACKING)</h1>
+
+<center>
+<p>En esta tarea, debe mantener un cursor dentro de una zona objetivo usando el joystick o las teclas del teclado.</p>
+
+<p><strong>Objetivo:</strong></p>
+<p>• Mantener el cursor (cruz) dentro del círculo central</p>
+<p>• Compensar las perturbaciones automáticas del sistema</p>
+
+<p><strong>Controles:</strong></p>
+<p>• JOYSTICK: Mueva el joystick para corregir la posición</p>
+<p>• TECLADO: Use las teclas de flecha (↑↓←→) si no hay joystick</p>
+
+<p><strong>Indicadores de Rendimiento:</strong></p>
+<p>• RMSD (Desviación cuadrática media): menor es mejor</p>
+<p>• Tiempo dentro de la zona objetivo</p>
+
+<p><strong>Consejo:</strong> Realice correcciones suaves y continuas, evite movimientos bruscos.</p>
+</center>
+
