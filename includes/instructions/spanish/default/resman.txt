@@ -1,0 +1,24 @@
+<h1>Tarea de Gestión de Recursos (RESMAN)</h1>
+
+<center>
+<p>En esta tarea, debe mantener los niveles de combustible en los tanques principales A y B.</p>
+
+<p><strong>Objetivo:</strong></p>
+<p>• Mantener los tanques A y B cerca de 2500 unidades</p>
+<p>• Usar los tanques auxiliares C, D, E, F para transferir combustible</p>
+<p>• Gestionar las bombas para controlar el flujo</p>
+
+<p><strong>Controles:</strong></p>
+<p>• Haga CLIC en los números de las bombas (1-8) para encender/apagar</p>
+<p>• Las bombas tienen diferentes capacidades de flujo</p>
+
+<p><strong>Estados de las Bombas:</strong></p>
+<p>• VERDE: Bomba funcionando</p>
+<p>• GRIS: Bomba apagada</p>
+<p>• ROJO: Bomba en fallo (no disponible)</p>
+
+<p><strong>Indicadores de Rendimiento:</strong></p>
+<p>• Desviación del nivel objetivo (2500)</p>
+<p>• Tiempo con niveles dentro del rango aceptable</p>
+</center>
+
