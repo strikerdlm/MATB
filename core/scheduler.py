@@ -206,9 +206,16 @@ class Scheduler:
         if len(event.command) == 1:
             getattr(plugin, event.command[0])()
 
-        # If two arguments in the 'command' field, suppose a (parameter, value) to update
+        # If two arguments in the 'command' field, check if it's a method or parameter
         elif len(event.command) == 2:
-            getattr(plugin, 'set_parameter')(event.command[0], event.command[1])
+            method_name = event.command[0]
+            # Check if this is a callable method on the plugin (e.g., assign, spawn, message)
+            if hasattr(plugin, method_name) and callable(getattr(plugin, method_name)):
+                # Call the method directly with the payload
+                getattr(plugin, method_name)(event.command[1])
+            else:
+                # Fall back to set_parameter for actual parameters
+                getattr(plugin, 'set_parameter')(event.command[0], event.command[1])
 
         event.done = 1
 
