@@ -1,0 +1,20 @@
+<h1>Presentación de Todas las Tareas</h1>
+
+<center>
+<p>El desafío principal consiste en realizar <strong>todas las tareas simultáneamente</strong>.</p>
+
+<p><strong>Estrategia Recomendada:</strong></p>
+<p>• Distribuya su atención entre todas las pantallas</p>
+<p>• Priorice las tareas que requieren respuesta inmediata</p>
+<p>• Mantenga el seguimiento (tracking) de forma continua</p>
+<p>• Responda rápidamente a las alertas del sistema</p>
+
+<p><strong>Tareas Activas:</strong></p>
+<p>1. <strong>SYSMON</strong> - Monitoreo del sistema (arriba izquierda)</p>
+<p>2. <strong>TRACK</strong> - Seguimiento (arriba centro)</p>
+<p>3. <strong>COMM</strong> - Comunicaciones (arriba derecha)</p>
+<p>4. <strong>RESMAN</strong> - Gestión de recursos (abajo)</p>
+
+<p><strong>¡Buena suerte!</strong></p>
+</center>
+
