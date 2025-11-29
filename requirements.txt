@@ -4,3 +4,4 @@ pyparallel==0.2.2
 pylsl==1.16.1
 pandas==2.2.3
 pyarrow==17.0.0
+streamlit==1.39.0
