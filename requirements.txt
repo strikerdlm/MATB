@@ -5,3 +5,4 @@ pylsl==1.16.1
 pandas==2.2.3
 pyarrow==17.0.0
 streamlit==1.39.0
+openai>=1.40.0
