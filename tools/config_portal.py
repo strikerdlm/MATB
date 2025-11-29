@@ -233,10 +233,12 @@ class PluginParameter:
             return "key"
         if "(list of string)" in pv or "(list of" in pv:
             return "list"
-        if "`on` or `off`" in pv:
-            return "on_off"
+        # Check pump_state BEFORE on_off since "`on` or `off`" is a substring of
+        # "`on` or `off` or `failure`" - checking on_off first would misclassify pumps
         if "`on` or `off` or `failure`" in pv:
             return "pump_state"
+        if "`on` or `off`" in pv:
+            return "on_off"
         if "topleft" in pv and "fullscreen" in pv:
             return "placement"
         if "white" in pv and "black" in pv and "green" in pv:
