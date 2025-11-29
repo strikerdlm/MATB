@@ -1,0 +1,30 @@
+<h1>Escenario UAS Militar</h1>
+
+<center>
+<p><strong>Duración: 7 minutos</strong></p>
+<p><strong>Dificultad: Alta</strong></p>
+
+<p>Este escenario simula operaciones de patrulla militar tipo <strong>ScanEagle/NightEagle</strong>.</p>
+
+<p><strong>Plataformas Simuladas:</strong></p>
+<p>• Perfiles de plataforma específicos (endurance, sensores)</p>
+<p>• Capacidad de operador limitada</p>
+<p>• Gestión VTOL (despegue/aterrizaje vertical)</p>
+
+<p><strong>Tareas Adicionales:</strong></p>
+<p>• <strong>Platform Profile</strong>: Configuración de aeronaves</p>
+<p>• <strong>Operator Capacity</strong>: Límites de supervisión</p>
+<p>• <strong>VTOL Manager</strong>: Transiciones de vuelo</p>
+<p>• <strong>Failure Injector</strong>: Fallos inyectados</p>
+
+<p><strong>Eventos de Alto Estrés:</strong></p>
+<p>• Conflictos SAA durante transiciones VTOL</p>
+<p>• Ráfagas de mensajes de datalink</p>
+<p>• Violaciones de geofence</p>
+<p>• Fallos de sistemas</p>
+
+<p><strong>Objetivo:</strong> Completar la patrulla dentro de límites de carga de trabajo validados.</p>
+
+<p>Presione ESPACIO para comenzar...</p>
+</center>
+

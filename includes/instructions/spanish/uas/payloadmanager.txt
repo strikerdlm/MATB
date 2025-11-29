@@ -1,0 +1,25 @@
+<h1>Gestor de Carga Útil (Payload Manager)</h1>
+
+<center>
+<p>Esta tarea le permite gestionar los sensores y cargas útiles de los UAVs.</p>
+
+<p><strong>Panel de Sensores:</strong></p>
+<p>• <strong>Sensor</strong>: Nombre del sensor (CamA, CamB, IRST, Lidar)</p>
+<p>• <strong>Objetivo</strong>: Target asignado actualmente</p>
+<p>• <strong>Ancho Banda</strong>: Mbps consumidos</p>
+<p>• <strong>Energía</strong>: Porcentaje de batería restante</p>
+<p>• <strong>Estado</strong>: IDLE, ACTIVE, o DEPLETED</p>
+
+<p><strong>Estados de Sensores:</strong></p>
+<p>• <strong>IDLE</strong>: Sensor en espera, recargando energía</p>
+<p>• <strong>ACTIVE</strong>: Sensor operando, consumiendo energía</p>
+<p>• <strong>DEPLETED</strong>: Sensor agotado, requiere recarga</p>
+
+<p><strong>Restricciones:</strong></p>
+<p>• <strong>Capacidad de Enlace</strong>: Ancho de banda total limitado</p>
+<p>• Si el total de Mbps excede la capacidad, se activa alerta</p>
+
+<p><strong>Indicadores de Alerta:</strong></p>
+<p>• <strong style="color:orange;">NARANJA PARPADEANTE</strong>: Sobrecapacidad o sensor agotado</p>
+</center>
+

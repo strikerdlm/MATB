@@ -1,0 +1,25 @@
+<h1>Detección y Evasión (Sense-and-Avoid)</h1>
+
+<center>
+<p>Esta tarea simula el sistema de detección y evasión de conflictos de tráfico aéreo.</p>
+
+<p><strong>Panel de Intrusos:</strong></p>
+<p>• <strong>ID</strong>: Identificador del intruso</p>
+<p>• <strong>Rumbo</strong>: Dirección del intruso (grados)</p>
+<p>• <strong>Distancia</strong>: Rango en millas náuticas (nm)</p>
+<p>• <strong>Altitud</strong>: Diferencia de altitud (ft)</p>
+<p>• <strong>TTI</strong>: Tiempo hasta el conflicto (segundos)</p>
+<p>• <strong>Estado</strong>: ACTIVE (activo) o RESOLVED (resuelto)</p>
+
+<p><strong>Umbrales de Separación:</strong></p>
+<p>• Horizontal: 1.5 nm mínimo</p>
+<p>• Vertical: 500 ft mínimo</p>
+
+<p><strong>Indicadores de Alerta:</strong></p>
+<p>• <strong style="color:red;">ROJO PARPADEANTE</strong>: Conflicto no resuelto con TTI agotado</p>
+
+<p><strong>Geofence (Cerca Virtual):</strong></p>
+<p>• Monitorea posiciones de UAVs dentro de zonas permitidas</p>
+<p>• Alerta cuando un UAV sale de la zona de operación</p>
+</center>
+

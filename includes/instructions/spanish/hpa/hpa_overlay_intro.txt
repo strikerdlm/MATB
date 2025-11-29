@@ -1,0 +1,30 @@
+<h1>Escenario HPA Overlay</h1>
+
+<center>
+<p><strong>Duración: 3 minutos</strong></p>
+<p><strong>Dificultad: Media</strong></p>
+
+<p>Este escenario simula una salida de combate con múltiples fases de maniobra.</p>
+
+<p><strong>Secuencia de Combate (BFM):</strong></p>
+<p>1. <strong>ENTRY</strong>: Entrada al área de combate</p>
+<p>2. <strong>SETUP</strong>: Posicionamiento táctico</p>
+<p>3. <strong>ENGAGE</strong>: Engagement activo</p>
+<p>4. <strong>DEFENSIVE</strong>: Maniobras defensivas</p>
+<p>5. <strong>EGRESS</strong>: Salida del área</p>
+
+<p><strong>Tareas Activas:</strong></p>
+<p>• Energy Manager: Eventos de alta G</p>
+<p>• Threat Board: 2 amenazas (TH1, TH2)</p>
+<p>• Datalink: Mensajes tácticos</p>
+<p>• Emergency Stack: Fallo hidráulico inyectado</p>
+<p>• Physio Overlay: Efectos visuales de G</p>
+
+<p><strong>Eventos Especiales:</strong></p>
+<p>• Excursión de Over-G</p>
+<p>• Oscurecimiento visual (tunnel vision)</p>
+<p>• Fallo de sistemas durante alta carga</p>
+
+<p>Presione ESPACIO para comenzar...</p>
+</center>
+

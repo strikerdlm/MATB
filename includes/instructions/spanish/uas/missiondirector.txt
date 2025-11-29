@@ -1,0 +1,24 @@
+<h1>Director de Misiones (Mission Director)</h1>
+
+<center>
+<p>Esta tarea le permite supervisar y gestionar múltiples UAVs simultáneamente.</p>
+
+<p><strong>Panel de Información por UAV:</strong></p>
+<p>• <strong>UAV</strong>: Identificador del vehículo</p>
+<p>• <strong>Misión</strong>: Tarea actual asignada (Launch, Surveillance, Recover, etc.)</p>
+<p>• <strong>Modo</strong>: Manual o Automático (AUTO)</p>
+<p>• <strong>Tiempo</strong>: Tiempo restante de la misión</p>
+<p>• <strong>Autonomía</strong>: Combustible/batería restante</p>
+<p>• <strong>Alertas</strong>: Conflictos o advertencias activas</p>
+
+<p><strong>Indicadores de Alerta:</strong></p>
+<p>• <strong style="color:red;">ROJO PARPADEANTE</strong>: Conflicto activo que requiere atención</p>
+<p>• <strong style="color:orange;">NARANJA</strong>: Autonomía baja</p>
+
+<p><strong>Acciones Registradas:</strong></p>
+<p>• Asignación de misiones</p>
+<p>• Cambios de modo (Manual/Auto)</p>
+<p>• Resolución de conflictos</p>
+<p>• Transferencias de control</p>
+</center>
+

@@ -1,0 +1,30 @@
+<h1>Escenario HPA QRA (Quick Reaction Alert)</h1>
+
+<center>
+<p><strong>Duración: 4.5 minutos</strong></p>
+<p><strong>Dificultad: Alta</strong></p>
+
+<p>Este escenario simula una alerta de reacción rápida con engagement de múltiples amenazas.</p>
+
+<p><strong>Secuencia de la Misión:</strong></p>
+<p>1. <strong>SCRAMBLE</strong>: Despegue de alerta</p>
+<p>2. <strong>INTERCEPT</strong>: Aproximación a amenazas</p>
+<p>3. <strong>ENGAGE</strong>: Combate secuencial (TH1→TH2→TH3)</p>
+<p>4. <strong>DEFENSIVE</strong>: Respuesta a contraataques</p>
+<p>5. <strong>RTB</strong>: Retorno a base</p>
+
+<p><strong>Tareas Activas:</strong></p>
+<p>• Energy Manager: Segmentos de energía ENTRY/SETUP/ENGAGE/DEFENSIVE</p>
+<p>• Threat Board: 3 amenazas secuenciales</p>
+<p>• Weapons Inventory: Decisiones AIM-9/AIM-120</p>
+<p>• Platform Profile: Configuración de aeronave</p>
+<p>• Emergency Stack: Fallo hidráulico scripted</p>
+
+<p><strong>Desafíos:</strong></p>
+<p>• Gestión de armamento limitado</p>
+<p>• Priorización de amenazas bajo presión</p>
+<p>• Ejecución de emergencias durante combate</p>
+
+<p>Presione ESPACIO para comenzar...</p>
+</center>
+

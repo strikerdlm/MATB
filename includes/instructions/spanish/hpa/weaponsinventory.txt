@@ -1,0 +1,28 @@
+<h1>Inventario de Armamento (Weapons Inventory)</h1>
+
+<center>
+<p>Esta tarea muestra el estado de su carga de armamento.</p>
+
+<p><strong>Panel de Armamento:</strong></p>
+<p>• <strong>Tipo</strong>: Nombre del arma (AIM-9, AIM-120, etc.)</p>
+<p>• <strong>Restantes/Capacidad</strong>: Unidades disponibles</p>
+
+<p><strong>Tipos de Armamento Comunes:</strong></p>
+<p>• <strong>AIM-9</strong>: Misil aire-aire infrarrojo (FOX-2)</p>
+<p>• <strong>AIM-120</strong>: Misil aire-aire activo (FOX-3)</p>
+<p>• <strong>GBU</strong>: Bombas guiadas</p>
+<p>• <strong>Chaff/Flare</strong>: Contramedidas</p>
+
+<p><strong>Indicadores de Estado:</strong></p>
+<p>• <strong style="color:green;">VERDE</strong>: Inventario adecuado</p>
+<p>• <strong style="color:orange;">NARANJA PARPADEANTE</strong>: Inventario bajo (&lt;25%)</p>
+<p>• <strong style="color:red;">ROJO</strong>: Arma agotada</p>
+
+<p><strong>Acciones Registradas:</strong></p>
+<p>• Disparos (weapon_expended)</p>
+<p>• Recargas (weapon_reload)</p>
+<p>• Agotamiento (weapon_empty)</p>
+
+<p><strong>Estrategia:</strong> Conserve armamento para amenazas prioritarias.</p>
+</center>
+

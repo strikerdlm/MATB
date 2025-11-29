@@ -1,0 +1,27 @@
+<h1>Monitor de Capacidad del Operador</h1>
+
+<center>
+<p>Esta tarea monitorea los límites validados de supervisión de múltiples UAVs.</p>
+
+<p><strong>Límites de Capacidad (Investigación Validada):</strong></p>
+<p>• <strong>Control Activo</strong>: 2-3 UAVs máximo</p>
+<p>• <strong>Supervisión</strong>: Hasta 6 UAVs (con >50% superposición de payload)</p>
+
+<p><strong>Panel de Estado:</strong></p>
+<p>• <strong>UAVs Activos</strong>: Número bajo control directo</p>
+<p>• <strong>UAVs Supervisados</strong>: Número en modo supervisión</p>
+<p>• <strong>Superposición</strong>: Ratio de cobertura geográfica</p>
+
+<p><strong>Indicadores de Alerta:</strong></p>
+<p>• <strong style="color:orange;">NARANJA</strong>: Cerca del límite de capacidad</p>
+<p>• <strong style="color:red;">ROJO PARPADEANTE</strong>: Límite excedido (breach)</p>
+
+<p><strong>Métricas Registradas:</strong></p>
+<p>• operator_capacity_active</p>
+<p>• operator_capacity_supervisory</p>
+<p>• operator_capacity_breach</p>
+<p>• operator_overlap</p>
+
+<p><strong>Fuente:</strong> Frontiers Psychology 2016, PMC 2016</p>
+</center>
+

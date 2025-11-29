@@ -1,0 +1,25 @@
+<h1>Escenario de Aeronave de Alto Rendimiento (HPA)</h1>
+
+<center>
+<p><strong>High-Performance Aircraft Operations</strong></p>
+
+<p>En este escenario, usted asumirá el rol de piloto de una aeronave de combate de alto rendimiento.</p>
+
+<p><strong>Objetivos del Escenario:</strong></p>
+<p>• Gestionar eventos de alta G y envolvente de energía</p>
+<p>• Priorizar y neutralizar amenazas</p>
+<p>• Administrar inventario de armamento</p>
+<p>• Ejecutar procedimientos de emergencia</p>
+<p>• Responder a mensajes de enlace de datos</p>
+
+<p><strong>Además de las tareas MATB tradicionales:</strong></p>
+<p>• Monitoreo del Sistema (SYSMON)</p>
+<p>• Seguimiento (TRACKING)</p>
+<p>• Comunicaciones (COMM)</p>
+<p>• Gestión de Recursos (RESMAN)</p>
+
+<p><strong>Nota:</strong> Este escenario simula condiciones de alto estrés fisiológico.</p>
+
+<p>Presione ESPACIO para continuar...</p>
+</center>
+

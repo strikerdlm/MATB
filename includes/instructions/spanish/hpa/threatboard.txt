@@ -1,0 +1,29 @@
+<h1>Tablero de Amenazas (Threat Board)</h1>
+
+<center>
+<p>Esta tarea le permite priorizar y neutralizar amenazas aéreas.</p>
+
+<p><strong>Panel de Amenazas:</strong></p>
+<p>• <strong>ID</strong>: Identificador de la amenaza</p>
+<p>• <strong>Sector</strong>: Dirección (grados)</p>
+<p>• <strong>Rango</strong>: Distancia en millas náuticas</p>
+<p>• <strong>Arma</strong>: Tipo de armamento sugerido</p>
+<p>• <strong>TTI</strong>: Tiempo hasta impacto (segundos)</p>
+<p>• <strong>Estado</strong>: ACTIVE, ENGAGED, SPLASH</p>
+
+<p><strong>Contramedidas Disponibles:</strong></p>
+<p>• <strong>Chaff</strong>: Contra radar</p>
+<p>• <strong>Flare</strong>: Contra infrarrojos</p>
+
+<p><strong>Llamadas de Combate (FOX):</strong></p>
+<p>• <strong>FOX-1</strong>: Misil semi-activo</p>
+<p>• <strong>FOX-2</strong>: Misil infrarrojo</p>
+<p>• <strong>FOX-3</strong>: Misil activo (fire-and-forget)</p>
+
+<p><strong>Indicadores de Alerta:</strong></p>
+<p>• <strong style="color:red;">ROJO PARPADEANTE</strong>: Amenaza con TTI crítico</p>
+<p>• <strong style="color:orange;">NARANJA</strong>: Contramedidas bajas</p>
+
+<p><strong>Métricas:</strong> Latencia de engagement, precisión de priorización</p>
+</center>
+

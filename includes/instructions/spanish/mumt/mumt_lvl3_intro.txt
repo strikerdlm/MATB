@@ -1,0 +1,32 @@
+<h1>MUM-T Nivel 3 - Espectro Completo</h1>
+
+<center>
+<p><strong>Duración: 12 minutos</strong></p>
+<p><strong>Dificultad: 9/10</strong></p>
+
+<p>Escenario de máxima complejidad con todas las extensiones de combate activas.</p>
+
+<p><strong>Características Únicas:</strong></p>
+<p>• <strong>HRV-Driven Automation</strong>: Automatización basada en variabilidad cardíaca</p>
+<p>• <strong>Swarm Control</strong>: Gestión de formación de enjambre</p>
+<p>• <strong>BVLOS Sensory</strong>: Deprivación sensorial simulada</p>
+<p>• <strong>UTM Integration</strong>: Restricciones de espacio aéreo dinámicas</p>
+<p>• <strong>Flight Termination</strong>: Decisiones de terminación de vuelo</p>
+
+<p><strong>Calibración Fisiológica:</strong></p>
+<p>Los primeros 2 minutos incluyen recolección de línea base HRV (Polar H10).</p>
+<p>• RMSSD, LF/HF, z-scores en tiempo real</p>
+<p>• Automatización adaptativa basada en sobrecarga detectada</p>
+
+<p><strong>Tareas Adicionales:</strong></p>
+<p>• VTOL Power: Presupuesto de energía</p>
+<p>• Dual-Task Sensor: Entrenamiento de doble tarea</p>
+<p>• Swarm Formation: Control de geometría</p>
+
+<p><strong>Objetivo:</strong> Evaluar límites de capacidad bajo carga máxima.</p>
+
+<p><strong>ADVERTENCIA:</strong> Este nivel puede inducir sobrecarga cognitiva.</p>
+
+<p>Presione ESPACIO para comenzar...</p>
+</center>
+

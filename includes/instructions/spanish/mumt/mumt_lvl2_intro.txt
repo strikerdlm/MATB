@@ -1,0 +1,32 @@
+<h1>MUM-T Nivel 2 - Coordinación Avanzada</h1>
+
+<center>
+<p><strong>Duración: 9 minutos</strong></p>
+<p><strong>Dificultad: 6/10</strong></p>
+
+<p>Este escenario añade coordinación tri-ship, relevo VTOL y automatización adaptativa.</p>
+
+<p><strong>Tareas Adicionales (sobre Nivel 1):</strong></p>
+<p>• <strong>Sensor Resource</strong>: Gestión multi-sensor avanzada</p>
+<p>• <strong>Target Uncertainty</strong>: Identificación bajo incertidumbre</p>
+<p>• <strong>Control Transfer</strong>: Transferencias de control entre operadores</p>
+<p>• <strong>Automation Hooks</strong>: Reglas de automatización adaptativa</p>
+
+<p><strong>Características Especiales:</strong></p>
+<p>• 3 UAVs simultáneos</p>
+<p>• Relevo VTOL con confirmación requerida</p>
+<p>• Automatización activada por alertas de misión</p>
+<p>• Síntesis de voz para mensajes PRIO/CRIT</p>
+<p>• Handovers programados</p>
+
+<p><strong>Eventos de Estrés:</strong></p>
+<p>• Conflictos SAA durante transiciones</p>
+<p>• Ráfagas de datalink</p>
+<p>• Fallos inyectados</p>
+<p>• Cueing HMD</p>
+
+<p><strong>Objetivo:</strong> Practicar procedimientos NASA de roles mixtos.</p>
+
+<p>Presione ESPACIO para comenzar...</p>
+</center>
+

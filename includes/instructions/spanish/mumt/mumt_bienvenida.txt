@@ -1,0 +1,28 @@
+<h1>Escenario MUM-T (Manned-Unmanned Teaming)</h1>
+
+<center>
+<p><strong>Operaciones Combinadas Tripulado-No Tripulado</strong></p>
+
+<p>En estos escenarios, usted coordinará operaciones de aeronaves tripuladas y no tripuladas simultáneamente.</p>
+
+<p><strong>Concepto MUM-T:</strong></p>
+<p>• Piloto de caza + Supervisión de flota UAV</p>
+<p>• Coordinación de sensores y armamento</p>
+<p>• Gestión de transferencia de control</p>
+<p>• Integración de datos multi-plataforma</p>
+
+<p><strong>Desafíos Únicos:</strong></p>
+<p>• Atención dividida entre tareas de vuelo y supervisión</p>
+<p>• Priorización dinámica de recursos</p>
+<p>• Coordinación de equipo virtual</p>
+<p>• Sobrecarga de información potencial</p>
+
+<p><strong>Basado en Investigación:</strong></p>
+<p>• FAA BVLOS ARC Report 2022</p>
+<p>• NASA sUAS Crew-Role Guidance</p>
+<p>• Airbus MUM-T Demonstrations 2024</p>
+<p>• Kostenko et al. 2022 (Swarm Workload)</p>
+
+<p>Presione ESPACIO para continuar...</p>
+</center>
+

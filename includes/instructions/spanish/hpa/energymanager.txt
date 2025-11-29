@@ -1,0 +1,28 @@
+<h1>Gestor de Energía y Envolvente G (Energy Manager)</h1>
+
+<center>
+<p>Esta tarea simula la gestión del estado fisiológico del piloto durante maniobras de alta G.</p>
+
+<p><strong>Panel de Información:</strong></p>
+<p>• <strong>Evento Actual</strong>: Nombre de la maniobra (ENTRY, ENGAGE, DEFENSIVE, etc.)</p>
+<p>• <strong>G Objetivo</strong>: Carga G requerida</p>
+<p>• <strong>Tiempo Restante</strong>: Duración del evento</p>
+<p>• <strong>G Acumulados</strong>: Total de G-segundos</p>
+<p>• <strong>Reserva de Energía</strong>: Capacidad fisiológica restante (%)</p>
+
+<p><strong>Indicadores del Medidor G:</strong></p>
+<p>• <strong>W</strong>: Umbral de advertencia</p>
+<p>• <strong>L</strong>: Límite estructural</p>
+<p>• <strong>T</strong>: G objetivo actual/próximo</p>
+
+<p><strong>Alertas:</strong></p>
+<p>• <strong style="color:orange;">NARANJA</strong>: Advertencia de G inminente</p>
+<p>• <strong style="color:red;">ROJO</strong>: Exceso de G (Over-G)</p>
+<p>• <strong style="color:red;">ROJO PARPADEANTE</strong>: Reserva de energía crítica</p>
+
+<p><strong>Métricas Registradas:</strong></p>
+<p>• Eventos de Over-G</p>
+<p>• G-segundos acumulados</p>
+<p>• Alertas de reserva baja</p>
+</center>
+

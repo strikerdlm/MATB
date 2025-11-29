@@ -1,0 +1,27 @@
+<h1>Monitor Fisiológico (Physio Monitor)</h1>
+
+<center>
+<p>Esta tarea muestra métricas de variabilidad de frecuencia cardíaca (HRV) en tiempo real.</p>
+
+<p><strong>Métricas HRV Mostradas:</strong></p>
+<p>• <strong>HR</strong>: Frecuencia cardíaca (bpm)</p>
+<p>• <strong>RMSSD</strong>: Marcador parasimpático (ms)</p>
+<p>• <strong>SDNN</strong>: Variabilidad global (ms)</p>
+<p>• <strong>LF/HF</strong>: Balance simpático-vagal</p>
+<p>• <strong>pNN50</strong>: Porcentaje de intervalos >50ms</p>
+
+<p><strong>Interpretación de Carga Mental:</strong></p>
+<p>• <strong>RMSSD ↓</strong>: Mayor carga mental (dominancia simpática)</p>
+<p>• <strong>LF/HF ↑</strong>: Mayor activación simpática</p>
+<p>• <strong>SDNN ↓</strong>: Reducción de variabilidad global</p>
+
+<p><strong>Alertas de Sobrecarga:</strong></p>
+<p>• <strong style="color:orange;">NARANJA</strong>: RMSSD z-score < -1.0</p>
+<p>• <strong style="color:red;">ROJO</strong>: RMSSD z-score < -1.5 (agudo)</p>
+<p>• <strong style="color:purple;">MORADO</strong>: Posible sobrecarga (LF/HF reversal)</p>
+
+<p><strong>Nota:</strong> Requiere Polar H10 conectado para datos reales.</p>
+
+<p><strong>Fuente:</strong> Durantin et al. 2014, Koskelo et al. 2024</p>
+</center>
+

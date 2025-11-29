@@ -1,0 +1,27 @@
+<h1>Escenario UAS Básico</h1>
+
+<center>
+<p><strong>Duración: 5 minutos</strong></p>
+<p><strong>Dificultad: Básica</strong></p>
+
+<p>Este escenario de introducción le familiarizará con las operaciones UAS básicas.</p>
+
+<p><strong>Tareas Activas:</strong></p>
+<p>1. <strong>MATB Tradicional</strong>: SYSMON, TRACK, COMM, RESMAN</p>
+<p>2. <strong>Mission Director</strong>: 2 UAVs (UAV1, UAV2)</p>
+<p>3. <strong>Sense-and-Avoid</strong>: 2 conflictos de tráfico</p>
+<p>4. <strong>Payload Manager</strong>: Gestión de sensores</p>
+<p>5. <strong>Datalink</strong>: Mensajes CPDLC</p>
+
+<p><strong>Eventos Principales:</strong></p>
+<p>• Asignación de misiones de lanzamiento y vigilancia</p>
+<p>• Conflictos de tráfico con intrusos</p>
+<p>• Activación y gestión de sensores</p>
+<p>• Mensajes de ATC y operaciones</p>
+<p>• Alertas de geofence</p>
+
+<p><strong>Objetivo:</strong> Completar todas las tareas manteniendo un rendimiento óptimo.</p>
+
+<p>Presione ESPACIO para comenzar...</p>
+</center>
+

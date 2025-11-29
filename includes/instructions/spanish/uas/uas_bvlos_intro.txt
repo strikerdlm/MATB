@@ -1,0 +1,30 @@
+<h1>Escenario UAS BVLOS</h1>
+
+<center>
+<p><strong>Duración: 10 minutos</strong></p>
+<p><strong>Dificultad: Media-Alta</strong></p>
+
+<p>Este escenario simula operaciones <strong>Beyond Visual Line of Sight (BVLOS)</strong> - Más Allá de la Línea Visual.</p>
+
+<p><strong>Características Especiales BVLOS:</strong></p>
+<p>• Operación sin contacto visual directo con los UAVs</p>
+<p>• Mayor dependencia de instrumentos y telemetría</p>
+<p>• Coordinación con corredores aéreos UTM</p>
+
+<p><strong>Tareas Activas:</strong></p>
+<p>• 3 UAVs simultáneos</p>
+<p>• Tráfico de datalink persistente</p>
+<p>• Conflictos de Sense-and-Avoid repetidos</p>
+<p>• Gestión intensiva de cargas útiles</p>
+
+<p><strong>Desafíos Adicionales:</strong></p>
+<p>• Mayor volumen de mensajes</p>
+<p>• Conflictos de tráfico más frecuentes</p>
+<p>• Gestión de múltiples sensores simultáneos</p>
+<p>• Decisiones de automatización</p>
+
+<p><strong>Objetivo:</strong> Mantener operaciones seguras sin contacto visual.</p>
+
+<p>Presione ESPACIO para comenzar...</p>
+</center>
+

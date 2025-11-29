@@ -1,0 +1,27 @@
+<h1>Enlace de Datos (Datalink)</h1>
+
+<center>
+<p>Esta tarea simula el sistema de comunicaciones digitales tipo CPDLC.</p>
+
+<p><strong>Panel de Mensajes:</strong></p>
+<p>• <strong>ID</strong>: Identificador del mensaje</p>
+<p>• <strong>Canal</strong>: Origen (ATC, UAVOPS, etc.)</p>
+<p>• <strong>Prioridad</strong>: PRIO (alta) o NORM (normal)</p>
+<p>• <strong>Tiempo</strong>: Segundos restantes para responder</p>
+<p>• <strong>Texto</strong>: Contenido del mensaje</p>
+
+<p><strong>Controles:</strong></p>
+<p>• <strong>↑/↓</strong>: Navegar entre mensajes</p>
+<p>• <strong>ENTER</strong>: Confirmar/Acusar recibo del mensaje seleccionado</p>
+
+<p><strong>Indicador de Selección:</strong></p>
+<p>• El símbolo <strong>&gt;</strong> indica el mensaje actualmente seleccionado</p>
+
+<p><strong>Indicadores de Alerta:</strong></p>
+<p>• <strong style="color:red;">ROJO PARPADEANTE</strong>: Mensaje con tiempo agotado</p>
+
+<p><strong>Métricas Registradas:</strong></p>
+<p>• Tiempo de respuesta a mensajes</p>
+<p>• Mensajes perdidos (no respondidos a tiempo)</p>
+</center>
+

@@ -1,0 +1,22 @@
+<h1>Escenario de Operador UAS</h1>
+
+<center>
+<p><strong>Sistema de Aeronaves No Tripuladas (UAS)</strong></p>
+
+<p>En este escenario, usted asumirá el rol de un operador de múltiples UAVs (Vehículos Aéreos No Tripulados).</p>
+
+<p><strong>Objetivos del Escenario:</strong></p>
+<p>• Gestionar misiones de múltiples aeronaves</p>
+<p>• Resolver conflictos de tráfico aéreo (Sense-and-Avoid)</p>
+<p>• Administrar sensores y cargas útiles</p>
+<p>• Responder a mensajes de enlace de datos</p>
+
+<p><strong>Además de las tareas MATB tradicionales:</strong></p>
+<p>• Monitoreo del Sistema (SYSMON)</p>
+<p>• Seguimiento (TRACKING)</p>
+<p>• Comunicaciones (COMM)</p>
+<p>• Gestión de Recursos (RESMAN)</p>
+
+<p>Presione ESPACIO para continuar...</p>
+</center>
+

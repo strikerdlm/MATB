@@ -1,0 +1,28 @@
+<h1>Gestor VTOL (Despegue/Aterrizaje Vertical)</h1>
+
+<center>
+<p>Esta tarea gestiona las fases de vuelo de aeronaves VTOL.</p>
+
+<p><strong>Fases de Vuelo VTOL:</strong></p>
+<p>• <strong>VERTICAL_TAKEOFF</strong>: Despegue vertical</p>
+<p>• <strong>TRANSITION</strong>: Transición a vuelo horizontal</p>
+<p>• <strong>CRUISE</strong>: Vuelo de crucero</p>
+<p>• <strong>TRANSITION_RETURN</strong>: Transición a vertical</p>
+<p>• <strong>VERTICAL_LANDING</strong>: Aterrizaje vertical</p>
+
+<p><strong>Consumo de Energía por Fase:</strong></p>
+<p>• Hover/Vertical: ALTO (1.5-2x)</p>
+<p>• Transición: MEDIO-ALTO (1.2x)</p>
+<p>• Crucero: BAJO (1.0x)</p>
+
+<p><strong>Confirmación Requerida:</strong></p>
+<p>Las transiciones requieren confirmación del operador dentro del timeout.</p>
+
+<p><strong>Indicadores de Alerta:</strong></p>
+<p>• <strong style="color:orange;">NARANJA</strong>: Batería baja (25%)</p>
+<p>• <strong style="color:red;">ROJO</strong>: Batería crítica (10%)</p>
+<p>• <strong style="color:red;">PARPADEANTE</strong>: Transición pendiente sin confirmar</p>
+
+<p><strong>Métricas:</strong> vtol_phase_change, vtol_power_warning, vtol_transition_confirm</p>
+</center>
+

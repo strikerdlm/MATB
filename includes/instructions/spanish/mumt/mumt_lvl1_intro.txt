@@ -1,0 +1,30 @@
+<h1>MUM-T Nivel 1 - Introducción</h1>
+
+<center>
+<p><strong>Duración: 7 minutos</strong></p>
+<p><strong>Dificultad: 3/10</strong></p>
+
+<p>Este escenario de introducción combina operaciones básicas de caza con supervisión de 2 UAVs.</p>
+
+<p><strong>Tareas de Aeronave Tripulada:</strong></p>
+<p>• Energy Manager: Eventos G básicos</p>
+<p>• Threat Board: Amenazas simples</p>
+<p>• Weapons Inventory: Gestión de armamento</p>
+
+<p><strong>Tareas UAS:</strong></p>
+<p>• Mission Director: 2 UAVs (lanzamiento + soporte)</p>
+<p>• Sense-and-Avoid: Deconflicción básica</p>
+<p>• Payload Manager: Sensores activos</p>
+<p>• Datalink: Mensajes de coordinación</p>
+
+<p><strong>Tareas de Coordinación:</strong></p>
+<p>• Operator Capacity: Monitoreo de límites</p>
+<p>• Platform Profile: Configuración de aeronaves</p>
+<p>• VTOL Manager: Transiciones de vuelo</p>
+<p>• MUM-T Coordination: Solicitudes de coordinación</p>
+
+<p><strong>Objetivo:</strong> Familiarizarse con operaciones duales sin sobrecarga.</p>
+
+<p>Presione ESPACIO para comenzar...</p>
+</center>
+
