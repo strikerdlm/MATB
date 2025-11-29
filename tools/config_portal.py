@@ -6,6 +6,7 @@ The UI exposes:
 3. Scenario Designer for creating/editing/validating scenario files
 4. Launch control for running OpenMATB scenarios
 5. Sidebar guidance based on Docs/Manual.md
+6. Voice Generator for ATC-style communications using OpenAI TTS
 
 Run with: streamlit run tools/config_portal.py
 """
@@ -25,6 +26,23 @@ from pathlib import Path
 from typing import Final
 
 import streamlit as st
+
+# Import voice generator (optional - may not be available if openai not installed)
+try:
+    from tools.voice_generator import (
+        ATCVoiceGenerator,
+        VoiceConfig,
+        AVAILABLE_VOICES,
+        VOICE_DESCRIPTIONS,
+        VOICE_PRESETS,
+        AUDIO_FORMATS,
+        load_api_key,
+        generate_matb_voice_files,
+        render_voice_generator_tab,
+    )
+    VOICE_GENERATOR_AVAILABLE = True
+except ImportError:
+    VOICE_GENERATOR_AVAILABLE = False
 
 # ---------------------------------------------------------------------------
 # Paths & Constants
@@ -1537,10 +1555,17 @@ def main() -> None:
     )
 
     # Tabs for different sections
-    tab_core, tab_plugins, tab_instructions, tab_designer, tab_launch, tab_preview, tab_scenario = st.tabs(
-        ["⚙️ Core Settings", "🔌 Plugin Parameters", "📖 Instrucciones",
-         "🎬 Scenario Designer", "🚀 Launch", "📄 Config Preview", "📋 Scenario Helper"]
-    )
+    if VOICE_GENERATOR_AVAILABLE:
+        tab_core, tab_plugins, tab_instructions, tab_voice, tab_designer, tab_launch, tab_preview, tab_scenario = st.tabs(
+            ["⚙️ Core Settings", "🔌 Plugin Parameters", "📖 Instrucciones", "🎙️ Voice Generator",
+             "🎬 Scenario Designer", "🚀 Launch", "📄 Config Preview", "📋 Scenario Helper"]
+        )
+    else:
+        tab_core, tab_plugins, tab_instructions, tab_designer, tab_launch, tab_preview, tab_scenario = st.tabs(
+            ["⚙️ Core Settings", "🔌 Plugin Parameters", "📖 Instrucciones",
+             "🎬 Scenario Designer", "🚀 Launch", "📄 Config Preview", "📋 Scenario Helper"]
+        )
+        tab_voice = None
 
     # ---------------------------------------------------------------------------
     # Tab 1: Core Settings (config.ini)
@@ -1893,6 +1918,84 @@ def main() -> None:
                 use_container_width=True,
             )
         
+        # Generate spoken instructions (if voice generator available)
+        if VOICE_GENERATOR_AVAILABLE:
+            st.markdown("---")
+            st.subheader("🎙️ Instrucciones Habladas")
+            st.markdown(
+                "Genere una versión de audio de las instrucciones usando OpenAI TTS. "
+                "Esto es útil para participantes que prefieren escuchar las instrucciones."
+            )
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                voice_lang = st.selectbox(
+                    "Idioma de Voz",
+                    options=["es", "en"],
+                    format_func=lambda x: "Español" if x == "es" else "English",
+                    key="instruction_voice_lang",
+                )
+            with col2:
+                voice_preset = st.selectbox(
+                    "Preset de Voz",
+                    options=["briefing_instructor_es", "briefing_instructor_en", "atc_male_es", "atc_female_es"],
+                    format_func=lambda x: x.replace("_", " ").title(),
+                    key="instruction_voice_preset",
+                )
+            
+            if st.button("🎤 Generar Audio de Instrucciones", key="gen_instruction_audio"):
+                api_key = load_api_key()
+                if not api_key:
+                    st.error(
+                        "⚠️ Se requiere una clave API de OpenAI. "
+                        "Configure la variable de entorno `OPENAI_API_KEY` o agréguela a `.env`."
+                    )
+                else:
+                    with st.spinner("Generando audio de instrucciones..."):
+                        # Collect all instruction text
+                        instruction_files = get_instructions_for_scenario(instruction_scenario)
+                        all_text = []
+                        for instr_file in instruction_files:
+                            content = load_instruction_content(instr_file)
+                            # Strip HTML tags
+                            text_only = re.sub(r'<[^>]+>', '', content)
+                            text_only = re.sub(r'\s+', ' ', text_only).strip()
+                            all_text.append(text_only)
+                        
+                        full_text = " ... ".join(all_text)
+                        
+                        # Limit text length for API
+                        if len(full_text) > 4000:
+                            full_text = full_text[:4000] + "..."
+                        
+                        try:
+                            preset = VOICE_PRESETS.get(voice_preset)
+                            if preset:
+                                config = VoiceConfig(
+                                    voice=preset.voice,
+                                    speed=preset.speed,
+                                    instructions=preset.instructions,
+                                    language=voice_lang,
+                                )
+                            else:
+                                config = VoiceConfig(language=voice_lang)
+                            
+                            generator = ATCVoiceGenerator(config=config, api_key=api_key)
+                            scenario_base = Path(instruction_scenario).stem
+                            result = generator.generate_instruction_audio(
+                                full_text,
+                                scenario_base,
+                                voice_lang,
+                            )
+                            
+                            if result.success:
+                                st.success(f"✅ Audio generado: {result.file_path}")
+                                st.audio(str(result.file_path))
+                            else:
+                                st.error(f"❌ Error: {result.error_message}")
+                        except Exception as exc:
+                            st.error(f"❌ Error al generar audio: {exc}")
+
         # Instructions checklist
         st.markdown("---")
         st.subheader("✅ Lista de Verificación Pre-Test")
@@ -1912,7 +2015,14 @@ def main() -> None:
         )
 
     # ---------------------------------------------------------------------------
-    # Tab 4: Scenario Designer
+    # Tab 4: Voice Generator (if available)
+    # ---------------------------------------------------------------------------
+    if VOICE_GENERATOR_AVAILABLE and tab_voice is not None:
+        with tab_voice:
+            render_voice_generator_tab()
+
+    # ---------------------------------------------------------------------------
+    # Tab 5: Scenario Designer
     # ---------------------------------------------------------------------------
     with tab_designer:
         st.header("🎬 Scenario Designer")
