@@ -19,11 +19,11 @@ font_name=
 fullscreen=False
 
 # Clock speed multiplier (keep at 1.0 for nominal MATB timing)
-clock_speed=1
+clock_speed=1.0
 
 # Scenario choice
 # Example  : scenario_path=Parasuraman_et_al_1993/high_reliability_block.txt
-scenario_path=uas_basic.txt
+scenario_path=default.txt
 
 # Display the session number at start
 display_session_number=True
@@ -39,12 +39,12 @@ highlight_aoi=False
 # (Warning: modify only if you need to change plugins from their initial default location)
 # Default values: top_bounds=[0.35, 0.85] | bottom_bounds=[0.30, 0.85]
 top_bounds=[0.35, 0.85]
-bottom_bounds=[0.3, 0.85]
+bottom_bounds=[0.30, 0.85]
 
 [User]
 # Numerical identifier assigned to the current participant (required)
 id=0001
 # Optional descriptive fields
-name=Diego Malpica
+name=Test Pilot
 cohort=baseline
 notes=
