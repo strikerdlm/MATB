@@ -50,6 +50,9 @@ Implementation of Manual.md Section 17-18 roadmap for physiological monitoring d
   - Polar RR Link emits `polar_metadata.json` with device, battery, and provenance fields for every run
 - **New tooling**:
   - `tools/hrv_validate.py` CLI validates HRV export folders (RR stats, window CSV/parquet consistency, alerts, baseline, Polar metadata)
+- **Config programming UI**:
+  - `tools/config_portal.py` Streamlit front-end edits `config.ini`, enforces the MATB-required fields (language, screen index, fullscreen, `clock_speed`, scenario path, session numbering), and shows Manual §11 guidance alongside the form.
+  - Adds `streamlit` to `requirements.txt`.
 
 ### Changed
 
