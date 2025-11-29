@@ -132,6 +132,16 @@ logtime,totaltime,scenario_time,type,module,address,value
 
 Details about how each module log information are available [here](the log file).
 
+## Streamlit config studio
+
+To help instructors and engineers keep the MATB configuration consistent with the provenance and timing guidance from [Docs/Manual.md](Docs/Manual.md), the repository now ships with a Streamlit front-end that edits `config.ini`, documents every field, and validates the parameters required for MATB computations (locale, monitor, fullscreen flag, `clock_speed`, scenario path, and session numbering).
+
+```bash
+streamlit run tools/config_portal.py
+```
+
+The UI reads the existing `config.ini`, lists all discoverable scenarios under `includes/scenarios/`, and shows the `[User]` provenance block highlighted in §11.7 of the manual. Saving the form writes a backup (`config.ini.bak`) and guarantees that `clock_speed` stays within the supported range so KPI timing remains valid. Use the sidebar instructions as a quick reference while programming new experiment runs.
+
 ### Mission-level KPI summaries
 
 To align with the reliability guidance from [Docs/Manual.md](Docs/Manual.md) and the USAARL/USAF research corpus (e.g., [Multi Attribute Task Battery for Military Aircrew Assessment A Comprehensive Research Report](research/Multi Attribute Task Battery for Military Aircrew Assessment A Comprehensive Research Report.md)), OpenMATB now emits an automatic mission-level summary alongside the raw CSV logs. After every run, a JSON file named like `sessions/YYYY-MM-DD/<session>_summary.json` lists:
