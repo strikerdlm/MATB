@@ -4,7 +4,8 @@ The UI exposes:
 1. [Openmatb] and [User] sections from config.ini
 2. All plugin parameters from parameters.csv with type-aware widgets
 3. Scenario Designer for creating/editing/validating scenario files
-4. Sidebar guidance based on Docs/Manual.md
+4. Launch control for running OpenMATB scenarios
+5. Sidebar guidance based on Docs/Manual.md
 
 Run with: streamlit run tools/config_portal.py
 """
@@ -12,7 +13,10 @@ Run with: streamlit run tools/config_portal.py
 from __future__ import annotations
 
 import csv
+import os
 import re
+import subprocess
+import sys
 from collections import defaultdict
 from configparser import ConfigParser
 from dataclasses import dataclass, field
@@ -1266,9 +1270,9 @@ def main() -> None:
     )
 
     # Tabs for different sections
-    tab_core, tab_plugins, tab_designer, tab_preview, tab_scenario = st.tabs(
+    tab_core, tab_plugins, tab_designer, tab_launch, tab_preview, tab_scenario = st.tabs(
         ["⚙️ Core Settings", "🔌 Plugin Parameters", "🎬 Scenario Designer",
-         "📄 Config Preview", "📋 Scenario Helper"]
+         "🚀 Launch", "📄 Config Preview", "📋 Scenario Helper"]
     )
 
     # ---------------------------------------------------------------------------
@@ -1566,7 +1570,209 @@ def main() -> None:
             render_custom_builder(available_plugins, plugin_params)
 
     # ---------------------------------------------------------------------------
-    # Tab 4: Config Preview
+    # Tab 4: Launch OpenMATB
+    # ---------------------------------------------------------------------------
+    with tab_launch:
+        st.header("🚀 Launch OpenMATB")
+        st.markdown(
+            "Launch the OpenMATB application with your current configuration. "
+            "Make sure to save your config.ini changes before launching."
+        )
+
+        # Display current configuration summary
+        st.subheader("📋 Current Configuration Summary")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Scenario", openmatb.scenario_path)
+        with col2:
+            st.metric("Language", openmatb.language)
+        with col3:
+            st.metric("Participant", user.participant_id)
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Fullscreen", "Yes" if openmatb.fullscreen else "No")
+        with col2:
+            st.metric("Screen Index", openmatb.screen_index)
+        with col3:
+            st.metric("Clock Speed", f"{openmatb.clock_speed}x")
+
+        # Check scenario validity
+        scenario_file = SCENARIO_DIR / openmatb.scenario_path
+        scenario_valid = scenario_file.exists()
+
+        st.markdown("---")
+
+        if not scenario_valid:
+            st.error(
+                f"⚠️ **Scenario file not found**: `{openmatb.scenario_path}`\n\n"
+                "Please select a valid scenario in the Core Settings tab or create one in the Scenario Designer."
+            )
+
+        # Scenario preview
+        if scenario_valid:
+            with st.expander("📄 Preview Scenario", expanded=False):
+                scenario_content = scenario_file.read_text(encoding="utf-8")
+                lines = [l for l in scenario_content.split("\n") if l.strip() and not l.strip().startswith("#")]
+                st.caption(f"{len(lines)} commands in scenario")
+                st.code(scenario_content[:2000] + ("..." if len(scenario_content) > 2000 else ""), language="text")
+
+        st.markdown("---")
+        st.subheader("🎮 Launch Controls")
+
+        # Initialize session state for process tracking
+        if "matb_process" not in st.session_state:
+            st.session_state["matb_process"] = None
+        if "launch_log" not in st.session_state:
+            st.session_state["launch_log"] = []
+
+        # Check if process is running
+        process_running = False
+        if st.session_state["matb_process"] is not None:
+            poll_result = st.session_state["matb_process"].poll()
+            if poll_result is None:
+                process_running = True
+            else:
+                # Process finished
+                st.session_state["launch_log"].append(
+                    f"[{datetime.now().strftime('%H:%M:%S')}] OpenMATB exited with code {poll_result}"
+                )
+                st.session_state["matb_process"] = None
+
+        if process_running:
+            st.warning("⏳ **OpenMATB is currently running**")
+            if st.button("🛑 Stop OpenMATB", type="secondary", use_container_width=True):
+                if st.session_state["matb_process"]:
+                    st.session_state["matb_process"].terminate()
+                    st.session_state["launch_log"].append(
+                        f"[{datetime.now().strftime('%H:%M:%S')}] OpenMATB terminated by user"
+                    )
+                    st.session_state["matb_process"] = None
+                    st.rerun()
+        else:
+            # Launch button
+            col1, col2 = st.columns(2)
+            with col1:
+                launch_btn = st.button(
+                    "🚀 Launch OpenMATB",
+                    type="primary",
+                    use_container_width=True,
+                    disabled=not scenario_valid,
+                    help="Start the OpenMATB application with current config.ini settings",
+                )
+            with col2:
+                launch_windowed = st.checkbox(
+                    "Override fullscreen (launch windowed)",
+                    value=False,
+                    help="Temporarily launch in windowed mode for testing",
+                )
+
+            if launch_btn:
+                try:
+                    # Determine Python executable
+                    python_exe = sys.executable
+                    # On Windows, check for Python313 as fallback
+                    if sys.platform == "win32" and not Path(python_exe).exists():
+                        for py_path in [r"C:\Python313\python.exe", r"C:\Python312\python.exe", r"C:\Python311\python.exe"]:
+                            if Path(py_path).exists():
+                                python_exe = py_path
+                                break
+
+                    # Prepare environment
+                    env = os.environ.copy()
+
+                    # If windowed override, temporarily modify config
+                    if launch_windowed and openmatb.fullscreen:
+                        # Read current config
+                        temp_config = CONFIG_PATH.read_text(encoding="utf-8")
+                        # Replace fullscreen=True with fullscreen=False
+                        temp_config = re.sub(
+                            r"fullscreen\s*=\s*True",
+                            "fullscreen=False",
+                            temp_config,
+                            flags=re.IGNORECASE,
+                        )
+                        CONFIG_PATH.write_text(temp_config, encoding="utf-8")
+                        st.session_state["launch_log"].append(
+                            f"[{datetime.now().strftime('%H:%M:%S')}] Temporarily set fullscreen=False"
+                        )
+
+                    # Launch OpenMATB
+                    main_py = PROJECT_ROOT / "main.py"
+                    st.session_state["launch_log"].append(
+                        f"[{datetime.now().strftime('%H:%M:%S')}] Launching: {python_exe} {main_py}"
+                    )
+
+                    process = subprocess.Popen(
+                        [python_exe, str(main_py)],
+                        cwd=str(PROJECT_ROOT),
+                        env=env,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0,
+                    )
+
+                    st.session_state["matb_process"] = process
+                    st.session_state["launch_log"].append(
+                        f"[{datetime.now().strftime('%H:%M:%S')}] OpenMATB started (PID: {process.pid})"
+                    )
+
+                    st.success(f"✅ OpenMATB launched! (PID: {process.pid})")
+                    st.rerun()
+
+                except FileNotFoundError as e:
+                    st.error(f"❌ Failed to launch: {e}")
+                    st.session_state["launch_log"].append(
+                        f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: {e}"
+                    )
+                except OSError as e:
+                    st.error(f"❌ OS Error: {e}")
+                    st.session_state["launch_log"].append(
+                        f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: {e}"
+                    )
+
+        # Launch log
+        if st.session_state["launch_log"]:
+            with st.expander("📜 Launch Log", expanded=True):
+                for entry in st.session_state["launch_log"][-10:]:  # Show last 10 entries
+                    st.text(entry)
+                if st.button("🧹 Clear Log"):
+                    st.session_state["launch_log"] = []
+                    st.rerun()
+
+        # Quick actions
+        st.markdown("---")
+        st.subheader("⚡ Quick Actions")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.button("📂 Open Sessions Folder", use_container_width=True):
+                sessions_dir = PROJECT_ROOT / "sessions"
+                sessions_dir.mkdir(exist_ok=True)
+                if sys.platform == "win32":
+                    os.startfile(str(sessions_dir))  # type: ignore[attr-defined]
+                elif sys.platform == "darwin":
+                    subprocess.run(["open", str(sessions_dir)], check=False, timeout=5)
+                else:
+                    subprocess.run(["xdg-open", str(sessions_dir)], check=False, timeout=5)
+        with col2:
+            if st.button("📂 Open Scenarios Folder", use_container_width=True):
+                if sys.platform == "win32":
+                    os.startfile(str(SCENARIO_DIR))  # type: ignore[attr-defined]
+                elif sys.platform == "darwin":
+                    subprocess.run(["open", str(SCENARIO_DIR)], check=False, timeout=5)
+                else:
+                    subprocess.run(["xdg-open", str(SCENARIO_DIR)], check=False, timeout=5)
+        with col3:
+            if st.button("📂 Open Project Folder", use_container_width=True):
+                if sys.platform == "win32":
+                    os.startfile(str(PROJECT_ROOT))  # type: ignore[attr-defined]
+                elif sys.platform == "darwin":
+                    subprocess.run(["open", str(PROJECT_ROOT)], check=False, timeout=5)
+                else:
+                    subprocess.run(["xdg-open", str(PROJECT_ROOT)], check=False, timeout=5)
+
+    # ---------------------------------------------------------------------------
+    # Tab 5: Config Preview
     # ---------------------------------------------------------------------------
     with tab_preview:
         st.header("Current config.ini")
@@ -1585,7 +1791,7 @@ def main() -> None:
             )
 
     # ---------------------------------------------------------------------------
-    # Tab 4: Scenario Helper
+    # Tab 6: Scenario Helper
     # ---------------------------------------------------------------------------
     with tab_scenario:
         st.header("Scenario Command Helper")
