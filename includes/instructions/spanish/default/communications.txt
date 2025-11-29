@@ -1,0 +1,23 @@
+<h1>Tarea de Comunicaciones (COMM)</h1>
+
+<center>
+<p>En esta tarea, debe responder a instrucciones de audio sobre las frecuencias de radio.</p>
+
+<p><strong>Objetivo:</strong></p>
+<p>• Escuchar los mensajes de radio</p>
+<p>• Responder SOLO a los mensajes dirigidos a SU indicativo</p>
+<p>• Ignorar mensajes para otros indicativos</p>
+
+<p><strong>Controles:</strong></p>
+<p>• Use las teclas de flecha (↑↓) para ajustar los dígitos de frecuencia</p>
+<p>• Presione ENTER para confirmar el cambio de frecuencia</p>
+
+<p><strong>Formato del Mensaje:</strong></p>
+<p>"[Indicativo], ajuste radio [NAV/COM] [1/2] a frecuencia [XXX.XX]"</p>
+
+<p><strong>Indicadores de Rendimiento:</strong></p>
+<p>• Precisión: frecuencias correctamente ajustadas</p>
+<p>• Tiempo de respuesta</p>
+<p>• Errores: respuestas a indicativos incorrectos</p>
+</center>
+
