@@ -1,0 +1,31 @@
+<h1>Pila de Emergencias (Emergency Stack)</h1>
+
+<center>
+<p>Esta tarea presenta fallos de sistemas que requieren ejecución de checklists.</p>
+
+<p><strong>Panel de Emergencias:</strong></p>
+<p>• <strong>ID</strong>: Identificador de la emergencia</p>
+<p>• <strong>Tipo</strong>: Descripción del fallo</p>
+<p>• <strong>Pasos</strong>: Lista de acciones requeridas</p>
+<p>• <strong>Estado</strong>: Pendiente, En Progreso, Resuelto</p>
+
+<p><strong>Tipos de Emergencias:</strong></p>
+<p>• <strong>HYD</strong>: Fallo hidráulico</p>
+<p>• <strong>GEN</strong>: Fallo de generador</p>
+<p>• <strong>ENG</strong>: Fallo de motor</p>
+<p>• <strong>FUEL</strong>: Problema de combustible</p>
+
+<p><strong>Procedimiento:</strong></p>
+<p>1. Identificar la emergencia activa</p>
+<p>2. Ejecutar cada paso del checklist en orden</p>
+<p>3. Confirmar resolución</p>
+
+<p><strong>Indicadores de Alerta:</strong></p>
+<p>• <strong style="color:red;">ROJO PARPADEANTE</strong>: Emergencia activa no resuelta</p>
+
+<p><strong>Métricas:</strong></p>
+<p>• Tiempo de cumplimiento del checklist</p>
+<p>• Pasos completados correctamente</p>
+<p>• Riesgo residual</p>
+</center>
+
