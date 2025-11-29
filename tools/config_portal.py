@@ -661,11 +661,22 @@ def render_spanish_instructions(scenario_path: str) -> None:
     # Progress tracking
     total_pages = len(instruction_files)
     
-    # Initialize page state
+    # Initialize page state and track scenario changes
     if "instruction_page" not in st.session_state:
         st.session_state["instruction_page"] = 0
+    if "instruction_scenario_last" not in st.session_state:
+        st.session_state["instruction_scenario_last"] = ""
     
+    # Reset page to 0 when scenario changes
+    if st.session_state["instruction_scenario_last"] != scenario_path:
+        st.session_state["instruction_page"] = 0
+        st.session_state["instruction_scenario_last"] = scenario_path
+    
+    # Clamp current page to valid bounds (safety check)
     current_page = st.session_state["instruction_page"]
+    if current_page >= total_pages:
+        current_page = max(0, total_pages - 1)
+        st.session_state["instruction_page"] = current_page
     
     # Navigation
     col1, col2, col3 = st.columns([1, 3, 1])
