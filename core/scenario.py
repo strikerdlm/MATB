@@ -181,50 +181,60 @@ class Scenario:
                     errors.append(_('Error on line %s. Method (%s) is not available for the plugin'
                                     ' (%s)') % (e.line, e.command[0], e.plugin))
 
-            elif len(e) == 2:  # Parameter expected
-                new_value = None
-                current_value, exists = self.get_parameters_value(e.plugin, e.command)
-
-                # If the current parameter exists in the plugin
-                if exists == True:
-                    method_args = None
-
-                    # Check that the parameter has a verification method
-                    # either globally or in the plugins itself
-                    # Else trigger a warning (should not happen)
-                    validation_dict = self.get_validation_dict(e.plugin)
-
-                    if e.command[0] in validation_dict:
-                        eval_method = validation_dict[e.command[0]]
-                    else:
-                        eval_method = None
-                        errors.append(_('Warning on line %s. Parameter (%s) has no verification'
-                                        ' method') % (e.line, e.command[0]))
-
-                    if eval_method is not None:
-                        if isinstance(eval_method, tuple):
-                            # Method-args will receive extra arguments
-                            eval_method, *method_args = eval_method
-
-                        # Remove potential blank spaces in the command argument
-                        # (except is the eval_method is waiting for a string, like title)
-                        if eval_method.__name__ != 'is_string':
-                            e.command[1] = e.command[1].replace(' ', '')
-
-                        # ...extra arguments are unpacked here if present
-                        method_args = (e.command[1], *method_args) if method_args is not None else (e.command[1],)
-                        eval_value, error = eval_method(*method_args)
-
-                        if error is not None:
-                            preamble = _('Error on line %s. %s ') % (e.line, e.command[0])
-                            error_msg = preamble + error
-                            errors.append(error_msg)
-                        else:
-                            # If no error, replace the event value by its evaluated version
-                            e.command[1] = eval_value
+            elif len(e) == 2:  # Parameter OR method with argument expected
+                # First check if this is a callable method on the plugin
+                # (methods like assign, spawn, message take payload arguments)
+                plugin_methods = self.get_plugin_methods(e.plugin)
+                if e.command[0] in plugin_methods:
+                    # This is a method call with an argument (e.g., assign;UAV1,Launch,300)
+                    # The scheduler will call plugin.method(payload) via set_parameter
+                    # which delegates to the method if it exists
+                    pass  # Valid method with argument, no validation needed here
                 else:
-                    errors.append(_('Error on line %s. The %s plugin does not have a %s parameter')
-                                    % (e.line, e.plugin, e.command[-2]))
+                    # Not a method, check if it's a parameter
+                    new_value = None
+                    current_value, exists = self.get_parameters_value(e.plugin, e.command)
+
+                    # If the current parameter exists in the plugin
+                    if exists == True:
+                        method_args = None
+
+                        # Check that the parameter has a verification method
+                        # either globally or in the plugins itself
+                        # Else trigger a warning (should not happen)
+                        validation_dict = self.get_validation_dict(e.plugin)
+
+                        if e.command[0] in validation_dict:
+                            eval_method = validation_dict[e.command[0]]
+                        else:
+                            eval_method = None
+                            errors.append(_('Warning on line %s. Parameter (%s) has no verification'
+                                            ' method') % (e.line, e.command[0]))
+
+                        if eval_method is not None:
+                            if isinstance(eval_method, tuple):
+                                # Method-args will receive extra arguments
+                                eval_method, *method_args = eval_method
+
+                            # Remove potential blank spaces in the command argument
+                            # (except is the eval_method is waiting for a string, like title)
+                            if eval_method.__name__ != 'is_string':
+                                e.command[1] = e.command[1].replace(' ', '')
+
+                            # ...extra arguments are unpacked here if present
+                            method_args = (e.command[1], *method_args) if method_args is not None else (e.command[1],)
+                            eval_value, error = eval_method(*method_args)
+
+                            if error is not None:
+                                preamble = _('Error on line %s. %s ') % (e.line, e.command[0])
+                                error_msg = preamble + error
+                                errors.append(error_msg)
+                            else:
+                                # If no error, replace the event value by its evaluated version
+                                e.command[1] = eval_value
+                    else:
+                        errors.append(_('Error on line %s. The %s plugin does not have a %s parameter')
+                                        % (e.line, e.plugin, e.command[-2]))
         return errors
 
     def get_validation_dict(self, pluginname):
