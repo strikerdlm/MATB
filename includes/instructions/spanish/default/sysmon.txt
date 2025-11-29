@@ -1,0 +1,20 @@
+<h1>Tarea de Monitoreo del Sistema (SYSMON)</h1>
+
+<center>
+<p>En esta tarea, usted debe monitorear un conjunto de <strong>seis indicadores</strong> y dos luces.</p>
+
+<p><strong>Objetivos:</strong></p>
+<p>• Detectar cuando la luz VERDE se apaga (debe estar encendida)</p>
+<p>• Detectar cuando la luz ROJA se enciende (debe estar apagada)</p>
+<p>• Detectar cuando las flechas móviles se desplazan hacia los extremos de las escalas</p>
+
+<p><strong>Controles:</strong></p>
+<p>• Use el RATÓN para hacer clic en las luces o escalas anómalas</p>
+<p>• Responda rápidamente para mantener el sistema en estado normal</p>
+
+<p><strong>Indicadores de Rendimiento:</strong></p>
+<p>• Tiempo de respuesta a anomalías</p>
+<p>• Precisión en la detección</p>
+<p>• Falsas alarmas (respuestas incorrectas)</p>
+</center>
+
