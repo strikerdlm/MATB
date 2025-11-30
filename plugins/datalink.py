@@ -35,7 +35,7 @@ class DatalinkMessage:
 class Datalink(AbstractPlugin):
     """Displays datalink messages and supports keyboard acknowledgement."""
 
-    def __init__(self, label: str = '', taskplacement: str = 'topmid', taskupdatetime: int = 300) -> None:
+    def __init__(self, label: str = '', taskplacement: str = 'bottomright', taskupdatetime: int = 300) -> None:
         super().__init__(label or _('Datalink'), taskplacement, taskupdatetime)
 
         self.validation_dict = {
