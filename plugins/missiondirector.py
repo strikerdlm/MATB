@@ -6,15 +6,23 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from core import validation
-from core.constants import COLORS as C, FONT_SIZES as F
+from core.constants import COLORS as C, FONT_SIZES as F, STATUS_COLORS
 from core.widgets import Simpletext
 from plugins.abstractplugin import AbstractPlugin
 
 
 class Missiondirector(AbstractPlugin):
-    """Supervises multiple UAV timelines and automation states."""
+    """Supervises multiple UAV timelines and automation states.
 
-    def __init__(self, label: str = '', taskplacement: str = 'bottommid', taskupdatetime: int = 1000) -> None:
+    Per update_plan.md Section 3.1:
+    - Fixed column headers: UAV | Mission | Mode | Task | Endurance | Alert
+    - Monospaced font for column alignment
+    - Progress bars for mission and endurance time remaining
+    - Mode highlighted (AUTO in distinct color)
+    - Alert fields in WARNING/CRITICAL colors
+    """
+
+    def __init__(self, label: str = '', taskplacement: str = 'bottommid', taskupdatetime: int = 500) -> None:
         super().__init__(label or _('Mission Director'), taskplacement, taskupdatetime)
 
         self.validation_dict = {
@@ -45,7 +53,8 @@ class Missiondirector(AbstractPlugin):
         summary strips (UAV, mission, mode, task and endurance times, alerts).
         """
         super().create_widgets()
-        header = _('UAV  | MISSION      | MODE | TASK  | ENDUR | ALERTS')
+        # Header with progress bar columns (per update_plan.md 3.1)
+        header = _('UAV | MISSION  | MODE | TASK   [PROG] | ENDUR  [PROG] | ALERTS')
         self.add_widget(
             'header',
             Simpletext,
@@ -223,37 +232,41 @@ class Missiondirector(AbstractPlugin):
         return max(0, duration)
 
     def _format_status(self, label: str) -> str:
-        """Format a single UAV status line using fixed-width columns.
+        """Format a single UAV status line with progress bars.
 
-        This representation is intentionally text-only, but columns and
-        abbreviations follow aeronautical conventions so that crews can scan
-        multiple aircraft quickly (UAV id, mission mnemonic, mode, task
-        countdown, endurance countdown, alert tags).
+        Per update_plan.md Section 3.1:
+        - Fixed-width columns for scan efficiency
+        - Progress bars for task and endurance time remaining
+        - Mode highlighted (AUTO vs MAN)
+        - Alert tags appended with visual indicators
         """
         state = self.uav_state[label]
 
         # Callsign / vehicle identifier (left-aligned, 4 chars)
         callsign = f"{label:<4}"
 
-        # Mission name in uppercase, trimmed/padded to 12 chars
+        # Mission name in uppercase, trimmed/padded to 8 chars
         mission_raw = str(state.get('mission', ''))
-        mission = mission_raw.upper()[:12].ljust(12)
+        mission = mission_raw.upper()[:8].ljust(8)
 
         # Mode: AUTO vs MAN (manual) in 4-character field
         mode_raw = str(state.get('mode', ''))
         mode_upper = mode_raw.upper()
         mode_abbrev = 'AUTO' if 'AUTO' in mode_upper else 'MAN '
 
-        # Task timer (time remaining in current scripted mission segment)
-        task_remaining = self._remaining_time(state)
+        # Task timer with progress bar (time remaining in current mission segment)
+        task_time, task_frac = self._remaining_time_with_fraction(state)
+        task_bar = self.format_progress_bar(task_frac, length=6) if task_frac is not None else '------'
 
-        # Endurance timer (time until configured endurance limit)
-        endurance = self._format_endurance(state)
+        # Endurance timer with progress bar
+        endurance_time, endurance_frac = self._remaining_endurance_with_fraction(state)
+        endurance_bar = self.format_progress_bar(endurance_frac, length=6) if endurance_frac is not None else '------'
 
         # Alert field aggregates conflict / handover / endurance tags
         alert = self._format_alert(state)
 
-        return f"{callsign} | {mission} | {mode_abbrev} | {task_remaining:>5} | {endurance:>5} | {alert}"
+        # Format: UAV | MISSION | MODE | TASK mm:ss [bar] | ENDUR mm:ss [bar] | ALERT
+        return f"{callsign}| {mission} | {mode_abbrev} | {task_time:>5} {task_bar} | {endurance_time:>5} {endurance_bar} | {alert}"
 
     def _remaining_time(self, state: Dict[str, Any]) -> str:
         start = state.get('start')
@@ -265,6 +278,19 @@ class Missiondirector(AbstractPlugin):
         minutes = int(remaining // 60)
         seconds = int(remaining % 60)
         return f'{minutes:02d}:{seconds:02d}'
+
+    def _remaining_time_with_fraction(self, state: Dict[str, Any]) -> tuple[str, Optional[float]]:
+        """Return time remaining string and fraction (0.0-1.0) for progress bar."""
+        start = state.get('start')
+        duration = state.get('duration') or 0
+        if start is None or duration <= 0:
+            return _('N/A'), None
+        elapsed = max(0.0, self.scenario_time - start)
+        remaining = max(0.0, duration - elapsed)
+        minutes = int(remaining // 60)
+        seconds = int(remaining % 60)
+        fraction = remaining / duration if duration > 0 else 0.0
+        return f'{minutes:02d}:{seconds:02d}', fraction
 
     def _format_endurance(self, state: Dict[str, Any]) -> str:
         remaining = self._remaining_endurance(state)
@@ -281,6 +307,19 @@ class Missiondirector(AbstractPlugin):
             return None
         elapsed = max(0.0, self.scenario_time - float(start))
         return max(0.0, duration - elapsed)
+
+    def _remaining_endurance_with_fraction(self, state: Dict[str, Any]) -> tuple[str, Optional[float]]:
+        """Return endurance remaining string and fraction (0.0-1.0) for progress bar."""
+        start = state.get('endurance_start')
+        duration = float(state.get('endurance_duration') or 0)
+        if start is None or duration <= 0:
+            return _('N/A'), None
+        elapsed = max(0.0, self.scenario_time - float(start))
+        remaining = max(0.0, duration - elapsed)
+        minutes = int(remaining // 60)
+        seconds = int(remaining % 60)
+        fraction = remaining / duration if duration > 0 else 0.0
+        return f'{minutes:02d}:{seconds:02d}', fraction
 
     def _format_alert(self, state: Dict[str, Any]) -> str:
         segments = []
