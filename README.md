@@ -142,6 +142,11 @@ streamlit run tools/config_portal.py
 
 The UI reads the existing `config.ini`, lists all discoverable scenarios under `includes/scenarios/`, and shows the `[User]` provenance block highlighted in §11.7 of the manual. Saving the form writes a backup (`config.ini.bak`) and guarantees that `clock_speed` stays within the supported range so KPI timing remains valid. Use the sidebar instructions as a quick reference while programming new experiment runs.
 
+The config studio also exposes **UI-only controls** that preserve scientific validity while improving usability:
+
+- `ui_scale` – a global 2D scale factor for fonts and widget spacing (1.0 = nominal, cockpit-like layout).
+- `colorblind_mode` – a colorblind-friendly status palette aligned with aeronautical/military conventions (green/amber/red levels plus inoperative grey), ensuring symbology remains legible without altering any task logic or workload metrics.
+
 ### Mission-level KPI summaries
 
 To align with the reliability guidance from [Docs/Manual.md](Docs/Manual.md) and the USAARL/USAF research corpus (e.g., [Multi Attribute Task Battery for Military Aircrew Assessment A Comprehensive Research Report](research/Multi Attribute Task Battery for Military Aircrew Assessment A Comprehensive Research Report.md)), OpenMATB now emits an automatic mission-level summary alongside the raw CSV logs. After every run, a JSON file named like `sessions/YYYY-MM-DD/<session>_summary.json` lists:
