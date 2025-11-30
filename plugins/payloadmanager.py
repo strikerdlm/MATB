@@ -238,15 +238,37 @@ class Payloadmanager(AbstractPlugin):
     def _update_widget(self) -> None:
         if self._widget is None:
             return
+
+        if not self.sensors:
+            self._widget.set_text(_('Awaiting payload tasks…'))
+            return
+
+        total_bw = self._total_bandwidth()
+        capacity = float(self.parameters['capacitymbps'])
+        if capacity > 0.0:
+            # Show remaining capacity: bar shrinks as bandwidth is consumed
+            cap_fraction = max(0.0, min(1.0, (capacity - total_bw) / capacity))
+        else:
+            cap_fraction = 0.0
+        cap_bar = self.format_progress_bar(cap_fraction, length=10)
+
         lines = []
         for sensor in self.sensors.values():
+            energy_fraction = max(0.0, min(1.0, sensor.energy / 100.0))
+            energy_bar = self.format_progress_bar(energy_fraction, length=8)
             line = (
-                f"{sensor.name} | {sensor.target or '---'} | "
-                f"{sensor.bandwidth:5.1f} | {sensor.energy:6.1f} | {sensor.status}"
+                f"{sensor.name:>6} | {sensor.target or '---':<12} | "
+                f"{sensor.bandwidth:5.1f} | {sensor.energy:5.1f}% {energy_bar} | {sensor.status}"
             )
             lines.append(line)
-        lines.append(_('Total BW: {0:.1f}/{1:.1f} Mbps').format(
-            self._total_bandwidth(), float(self.parameters['capacitymbps'])))
+
+        lines.append(
+            _('Total BW: {0:.1f}/{1:.1f} Mbps {2}').format(
+                total_bw,
+                capacity,
+                cap_bar,
+            )
+        )
         self._widget.set_text('\n'.join(lines))
 
     def _update_overdue(self) -> None:
