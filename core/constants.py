@@ -68,11 +68,11 @@ def _get_bool_conf(section: str, key: str, default: bool) -> bool:
 UI_SCALE = _get_float_conf('Openmatb', 'ui_scale', 1.0)
 COLORBLIND_MODE = _get_bool_conf('Openmatb', 'colorblind_mode', False)
 
-F = FONT_SIZES = dict(TINY=int(10 * UI_SCALE),
-                      SMALL=int(14 * UI_SCALE),
-                      MEDIUM=int(18 * UI_SCALE),
-                      LARGE=int(22 * UI_SCALE),
-                      XLARGE=int(32 * UI_SCALE))
+F = FONT_SIZES = dict(TINY=int(9 * UI_SCALE),
+                      SMALL=int(12 * UI_SCALE),
+                      MEDIUM=int(16 * UI_SCALE),
+                      LARGE=int(20 * UI_SCALE),
+                      XLARGE=int(30 * UI_SCALE))
 
 # Aeronautical/military-inspired status levels for consistent symbology
 STATUS_LEVELS = ('NORMAL', 'ADVISORY', 'CAUTION', 'WARNING', 'INOPERATIVE')
