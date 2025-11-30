@@ -37,7 +37,7 @@ class EmergencyEvent:
 class Emergencystack(AbstractPlugin):
     """Displays cascading failures and checklists for emergency management."""
 
-    def __init__(self, label: str = '', taskplacement: str = 'topmid', taskupdatetime: int = 400) -> None:
+    def __init__(self, label: str = '', taskplacement: str = 'topright', taskupdatetime: int = 400) -> None:
         super().__init__(label or _('Emergency Stack'), taskplacement, taskupdatetime)
 
         self.validation_dict = {
