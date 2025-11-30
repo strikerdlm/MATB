@@ -18,3 +18,4 @@ from .simplehtml import SimpleHTML
 from .slider import Slider
 from .frame import Frame
 from .performancescale import Performancescale
+from .tacticaldisplay import TacticalDisplay, TacticalEntity
