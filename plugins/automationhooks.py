@@ -3,15 +3,15 @@
 
 from __future__ import annotations
 
-from __future__ import annotations
-
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Deque, Dict, List, Optional, Tuple
 
 from core import validation
+from core.constants import COLORS as C, FONT_SIZES as F, STATUS_COLORS
 from core.event import Event
 from core.logger import logger
+from core.widgets import Simpletext
 from plugins.abstractplugin import AbstractPlugin
 
 
@@ -77,27 +77,142 @@ class Automationhooks(AbstractPlugin):
     """Emits manual/auto switches for other plugins based on threshold triggers."""
 
     _OPERATORS = {'gt', 'ge', 'lt', 'le', 'eq', 'ne', 'count'}
+    # Maximum number of rules to display in the widget (prevent overflow)
+    _MAX_DISPLAY_RULES = 8
+    # Duration in seconds to highlight recently fired rules
+    _FIRE_HIGHLIGHT_DURATION = 3.0
 
     def __init__(
         self,
         label: str = '',
-        taskplacement: str = 'invisible',
-        taskupdatetime: int = 1000,
+        taskplacement: str = 'bottomright',
+        taskupdatetime: int = 500,
     ) -> None:
         super().__init__(label or _('Automation Hooks'), taskplacement, taskupdatetime)
 
         self.validation_dict = {
             'targetplugin': validation.is_string,
+            'showvisualfeedback': validation.is_boolean,
         }
 
         self.parameters.update({
             'targetplugin': 'missiondirector',
+            'showvisualfeedback': True,  # Enable visual feedback by default
         })
 
         self.rules: List[AutomationRule] = []
         self.active = False
         self._rules_by_key: Dict[Tuple[str, str], List[AutomationRule]] = {}
         self._listener_keys: set[Tuple[str, str]] = set()
+        self._status_widget: Optional[Simpletext] = None
+        self._rules_widget: Optional[Simpletext] = None
+
+    def create_widgets(self) -> None:
+        """Create visual feedback widgets for automation hooks."""
+        super().create_widgets()
+
+        if not self.parameters.get('showvisualfeedback', True):
+            return
+
+        # Status header showing active/inactive state
+        self._status_widget = self.add_widget(
+            'status',
+            Simpletext,
+            container=self.task_container,
+            text=_('Automation: INACTIVE'),
+            font_size=F['SMALL'],
+            y=0.9,
+            color=C['GREY'],
+            bold=True,
+        )
+
+        # Rules list showing enabled rules and recently fired ones
+        self._rules_widget = self.add_widget(
+            'rules',
+            Simpletext,
+            container=self.task_container,
+            text=_('No rules defined.'),
+            font_size=F['SMALL'],
+            y=0.65,
+            wrap_width=0.95,
+            color=C['WHITE'],
+        )
+
+    def refresh_widgets(self) -> bool:
+        """Update visual feedback widgets."""
+        if not super().refresh_widgets():
+            return False
+        self._update_visual_feedback()
+        return True
+
+    def _update_visual_feedback(self) -> None:
+        """Update visual feedback widgets with current rule states."""
+        if not self.parameters.get('showvisualfeedback', True):
+            return
+
+        # Update status widget
+        if self._status_widget is not None:
+            if self.active:
+                self._status_widget.set_text(_('Automation: ACTIVE'))
+                self._status_widget.set_color(STATUS_COLORS.get('NORMAL', C['GREEN']))
+            else:
+                self._status_widget.set_text(_('Automation: INACTIVE'))
+                self._status_widget.set_color(C['GREY'])
+
+        # Update rules widget
+        if self._rules_widget is not None:
+            self._update_rules_display()
+
+    def _update_rules_display(self) -> None:
+        """Update the rules list display."""
+        if self._rules_widget is None:
+            return
+
+        if not self.rules:
+            self._rules_widget.set_text(_('No rules defined.'))
+            return
+
+        lines: List[str] = []
+        now = self.scenario_time
+        displayed = 0
+
+        for rule in self.rules:
+            if displayed >= self._MAX_DISPLAY_RULES:
+                remaining = len(self.rules) - displayed
+                lines.append(f'  +{remaining} {_("more rules")}...')
+                break
+
+            # Determine if rule was recently fired
+            recently_fired = (
+                rule.last_fired >= 0
+                and (now - rule.last_fired) < self._FIRE_HIGHLIGHT_DURATION
+            )
+
+            # Build rule summary line
+            indicator = '★' if recently_fired else '•'
+            op_symbol = self._operator_symbol(rule.operator)
+            summary = (
+                f'{indicator} {rule.source_plugin}.{rule.metric} '
+                f'{op_symbol}{rule.raw_threshold} → {rule.mode}'
+            )
+            lines.append(summary)
+            displayed += 1
+
+        self._rules_widget.set_text('\n'.join(lines))
+
+    @staticmethod
+    def _operator_symbol(op: str) -> str:
+        """Convert operator string to display symbol."""
+        symbols = {
+            'gt': '>',
+            'ge': '≥',
+            'lt': '<',
+            'le': '≤',
+            'eq': '=',
+            'ne': '≠',
+            'count': '#',
+        }
+        return symbols.get(op, op)
 
     def start(self) -> None:
         super().start()
