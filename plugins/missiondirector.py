@@ -266,7 +266,7 @@ class Missiondirector(AbstractPlugin):
         alert = self._format_alert(state)
 
         # Format: UAV | MISSION | MODE | TASK mm:ss [bar] | ENDUR mm:ss [bar] | ALERT
-        return f"{callsign}| {mission} | {mode_abbrev} | {task_time:>5} {task_bar} | {endurance_time:>5} {endurance_bar} | {alert}"
+        return f"{callsign} | {mission} | {mode_abbrev} | {task_time:>5} {task_bar} | {endurance_time:>5} {endurance_bar} | {alert}"
 
     def _remaining_time(self, state: Dict[str, Any]) -> str:
         start = state.get('start')
