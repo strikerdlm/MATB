@@ -193,7 +193,8 @@ class Sensorresource(AbstractPlugin):
         load = self._current_load()
         capacity = float(self.parameters['linkcapacity'])
         if capacity > 0.0:
-            link_fraction = max(0.0, min(1.0, load / capacity))
+            # Show remaining capacity: bar shrinks as bandwidth is consumed
+            link_fraction = max(0.0, min(1.0, (capacity - load) / capacity))
         else:
             link_fraction = 0.0
         link_bar = self.format_progress_bar(link_fraction, length=10)
@@ -207,7 +208,8 @@ class Sensorresource(AbstractPlugin):
         ]
         for state in self.pods.values():
             if capacity > 0.0 and state.status != 'IDLE' and state.bandwidth > 0.0:
-                bw_fraction = max(0.0, min(1.0, state.bandwidth / capacity))
+                # Show remaining share: bar shrinks as this sensor consumes more
+                bw_fraction = max(0.0, min(1.0, (capacity - state.bandwidth) / capacity))
                 bw_bar = self.format_progress_bar(bw_fraction, length=8)
                 bar_suffix = f' {bw_bar}'
             else:
@@ -216,7 +218,7 @@ class Sensorresource(AbstractPlugin):
                 f'{state.uav}:{state.sensor} [{state.status}] '
                 f'{state.bandwidth:.1f} Mbps {state.priority}{bar_suffix}'
             )
-        self._widget.set_text('\\n'.join(lines))
+        self._widget.set_text('\n'.join(lines))
 
     def _current_load(self) -> float:
         return sum(state.bandwidth for state in self.pods.values() if state.status != 'IDLE')
