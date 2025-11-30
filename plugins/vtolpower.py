@@ -161,10 +161,33 @@ class Vtolpower(AbstractPlugin):
         if not self.profiles:
             self._widget.set_text(_('No VTOL power profiles configured.'))
             return
-        lines = []
-        for profile in self.profiles.values():
-            percent = (profile.remaining / profile.capacity * 100.0) if profile.capacity > 0 else 0.0
-            lines.append(f'{profile.name}: {profile.remaining:.1f}/{profile.capacity:.1f} ({percent:.0f}%)')
+
+        def _fraction(profile: PowerProfile) -> float:
+            if profile.capacity <= 0.0:
+                return 0.0
+            return max(0.0, min(1.0, profile.remaining / profile.capacity))
+
+        # Order profiles by lowest remaining fraction for quick scan of the
+        # most constrained aircraft. This is a 2D, text-only representation of
+        # the energy state and does not change any underlying power logic.
+        lines = [
+            _('UAV | Remaining / Capacity | %   | Timeline        | Status'),
+        ]
+        for profile in sorted(self.profiles.values(), key=_fraction):
+            frac = _fraction(profile)
+            pct = frac * 100.0
+            bar = self.format_progress_bar(frac, length=10)
+            if profile.remaining <= profile.critical:
+                status = 'CRITICAL'
+            elif profile.remaining <= profile.warning:
+                status = 'WARNING'
+            else:
+                status = 'NORMAL'
+            lines.append(
+                f"{profile.name:>4} | "
+                f"{profile.remaining:6.1f}/{profile.capacity:6.1f} | "
+                f"{pct:3.0f}% {bar} | {status}"
+            )
         self._widget.set_text('\n'.join(lines))
 
     @staticmethod
