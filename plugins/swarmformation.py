@@ -134,16 +134,33 @@ class Swarmformation(AbstractPlugin):
         if not self.members:
             self._widget.set_text(_('No swarm members defined.'))
             return
+
+        max_overrides = int(self.parameters.get('maxmanualoverrides', 2)) or 1
+        current_overrides = len(self.manual_overrides)
+        fraction = max(0.0, min(1.0, current_overrides / float(max_overrides)))
+        bar = self.format_progress_bar(fraction, length=10)
+
         lines = [
             _('Formation: {0} | Mode: {1}').format(
                 self.formation_type.upper(),
                 self.control_mode.upper(),
-            )
+            ),
+            _('Manual overrides {0}/{1} {2}').format(
+                current_overrides,
+                max_overrides,
+                bar,
+            ),
         ]
-        for member in self.members:
+
+        # List members with manual overrides first for quick status scan.
+        ordered_members = sorted(
+            self.members,
+            key=lambda name: (name not in self.manual_overrides, name),
+        )
+        for member in ordered_members:
             status = _('MANUAL') if member in self.manual_overrides else _('AUTO')
             lines.append(f'• {member} [{status}]')
-        self._widget.set_text('\n'.join(lines))
+        self._widget.set_text('\\n'.join(lines))
 
     def _check_overrides(self) -> None:
         max_overrides = int(self.parameters.get('maxmanualoverrides', 2))
