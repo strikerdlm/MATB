@@ -141,10 +141,20 @@ class Launchrecovery(AbstractPlugin):
         if not active:
             self._widget.set_text(_('No active launch/recovery phases.'))
             return
-        lines = []
-        for seq in active:
-            remaining = max(0.0, seq.deadline - self.scenario_time)
-            lines.append(f'{seq.uav} {seq.phase} {seq.method} ({remaining:.1f}s)')
+
+        now = self.scenario_time
+        lines = [
+            _('UAV | Phase   | Method    | TGO (s) | Timeline'),
+        ]
+        for seq in sorted(active, key=lambda s: s.deadline):
+            remaining = max(0.0, seq.deadline - now)
+            total = max(1.0, seq.deadline - seq.started_at)
+            fraction = max(0.0, min(1.0, remaining / total))
+            bar = self.format_progress_bar(fraction, length=10)
+            lines.append(
+                f"{seq.uav:>4} | {seq.phase:<7} | {seq.method:<9} | "
+                f"{remaining:6.1f} | {bar}"
+            )
         self._widget.set_text('\n'.join(lines))
 
     def _get_sequence(self, payload: str, default_phase: str) -> Optional[SequenceState]:
