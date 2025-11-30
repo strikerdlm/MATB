@@ -85,8 +85,15 @@ class Energymanager(AbstractPlugin):
         super().start()
 
     def create_widgets(self) -> None:
+        """Create a 2D energy / G timeline consistent with fighter practice.
+
+        The event list shows scheduled / active / complete G events plus remaining
+        time, and the gauge line shows warning threshold, target G, and limit in
+        an ASCII "tape" metaphor. All timing and scoring are inherited from the
+        underlying event logic; only presentation is enhanced.
+        """
         super().create_widgets()
-        header = _('Event | Target G | Status | Remaining (s)')
+        header = _('EVENT       | TG  | STATUS    | REMAIN')
         self.add_widget(
             'header',
             Simpletext,
@@ -252,7 +259,11 @@ class Energymanager(AbstractPlugin):
             elif event.is_complete():
                 status = _('Complete')
                 remaining = 0.0
-            line = f"{event.name} | {event.target_g:.1f} | {status} | {remaining:5.1f}"
+            # Fraction of time remaining in this event
+            denom = max(0.1, float(event.duration))
+            frac = remaining / denom if denom > 0 else 0.0
+            bar = self.format_progress_bar(frac, length=8)
+            line = f"{event.name:<10} | {event.target_g:3.1f} | {status:<9} | {remaining:5.1f}s {bar}"
             lines.append(line)
 
         if not lines:
@@ -268,6 +279,30 @@ class Energymanager(AbstractPlugin):
     def _update_gauge(self) -> None:
         if self._gauge_widget is None:
             return
+        # ASCII G-tape: [W]arning threshold, target G (T), and structural limit (L)
+        glimit = float(self.parameters['glimit'])
+        gwarn = float(self.parameters['gwarningthreshold'])
+        active = self._get_active_event()
+        target_g = active.target_g if active is not None else 0.0
+        # Map to a 0–1 range over [0, glimit]
+        def _pos(g: float) -> float:
+            return 0.0 if glimit <= 0 else max(0.0, min(1.0, g / glimit))
+        tape_length = 20
+        chars = ['-'] * tape_length
+        # Place limit marker
+        l_idx = min(tape_length - 1, max(0, int(round(_pos(glimit) * (tape_length - 1)))))
+        chars[l_idx] = 'L'
+        # Place warning marker
+        w_idx = min(tape_length - 1, max(0, int(round(_pos(gwarn) * (tape_length - 1)))))
+        chars[w_idx] = 'W'
+        # Place target marker
+        t_idx = min(tape_length - 1, max(0, int(round(_pos(target_g) * (tape_length - 1)))))
+        chars[t_idx] = 'T'
+        tape = ''.join(chars)
+        text = _('G-tape: {0}  (T={1:.1f} W={2:.1f} L={3:.1f})').format(
+            tape, target_g, gwarn, glimit
+        )
+        self._gauge_widget.set_text(text)
         limit = float(self.parameters['glimit'])
         threshold = float(self.parameters['gwarningthreshold'])
         active = self._get_active_event()
