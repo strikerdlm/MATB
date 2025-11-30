@@ -1207,6 +1207,7 @@ The Streamlit configuration portal (`tools/config_portal.py`) includes a dedicat
 3. **Provides quick navigation** to specific instruction sections
 4. **Offers downloadable versions** (HTML and plain text)
 5. **Shows a pre-test checklist** for participant preparation
+6. **Surfaces UI-only controls** (global `ui_scale` and `colorblind_mode`) so labs can tune 2D readability and aeronautical status symbology for specific displays and crews without changing any scenario timing, task logic, or KPI definitions.
 
 To launch the portal:
 
