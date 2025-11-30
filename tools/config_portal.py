@@ -457,7 +457,12 @@ class PluginParameter:
 
 @dataclass(frozen=True, slots=True)
 class OpenMatbSettings:
-    """Settings stored under the [Openmatb] section of config.ini."""
+    """Settings stored under the [Openmatb] section of config.ini.
+
+    The fields here are intentionally limited to configuration values that
+    influence timing, layout, or visual accessibility; workload metrics
+    remain defined entirely by scenarios and plugin logic.
+    """
 
     language: str
     screen_index: int
@@ -470,6 +475,8 @@ class OpenMatbSettings:
     highlight_aoi: bool
     top_bounds: tuple[float, float]
     bottom_bounds: tuple[float, float]
+    ui_scale: float
+    colorblind_mode: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -580,6 +587,8 @@ def read_config(config_path: Path) -> tuple[str, OpenMatbSettings, UserSettings]
         highlight_aoi=openmatb_section.get("highlight_aoi", "False").lower() == "true",
         top_bounds=parse_bounds(openmatb_section.get("top_bounds", "[0.35, 0.85]")),
         bottom_bounds=parse_bounds(openmatb_section.get("bottom_bounds", "[0.30, 0.85]")),
+        ui_scale=float(openmatb_section.get("ui_scale", "1.0")),
+        colorblind_mode=openmatb_section.get("colorblind_mode", "False").lower() == "true",
     )
 
     user = UserSettings(
@@ -1707,6 +1716,18 @@ def main() -> None:
                     help="Optional font family name; leave blank for OS default.",
                 )
 
+                ui_scale = st.slider(
+                    "UI Scale",
+                    min_value=0.5,
+                    max_value=2.0,
+                    value=float(openmatb.ui_scale),
+                    step=0.05,
+                    help=(
+                        "Global scale factor for on-screen fonts and spacing. "
+                        "Use 1.0 for nominal layouts; adjust only for readability on specific displays."
+                    ),
+                )
+
                 fullscreen = st.checkbox(
                     "Fullscreen Mode",
                     value=openmatb.fullscreen,
@@ -1760,6 +1781,15 @@ def main() -> None:
                     "Highlight AOI Frames",
                     value=openmatb.highlight_aoi,
                     help="Debug: draw red frames around widget areas.",
+                )
+
+                colorblind_mode = st.checkbox(
+                    "Colorblind-Friendly Status Palette",
+                    value=openmatb.colorblind_mode,
+                    help=(
+                        "Use aeronautical status colors and symbols that remain legible "
+                        "without relying solely on red/green discrimination."
+                    ),
                 )
 
                 st.markdown("**Layout Bounds**")
@@ -1848,6 +1878,8 @@ def main() -> None:
                     highlight_aoi=highlight_aoi,
                     top_bounds=(float(top_bounds[0]), float(top_bounds[1])),
                     bottom_bounds=(float(bottom_bounds[0]), float(bottom_bounds[1])),
+                    ui_scale=float(ui_scale),
+                    colorblind_mode=colorblind_mode,
                 )
 
                 new_user = UserSettings(
@@ -1870,6 +1902,8 @@ def main() -> None:
                             "display_session_number": str(new_openmatb.display_session_number),
                             "hide_on_pause": str(new_openmatb.hide_on_pause),
                             "highlight_aoi": str(new_openmatb.highlight_aoi),
+                            "ui_scale": _format_float(new_openmatb.ui_scale),
+                            "colorblind_mode": str(new_openmatb.colorblind_mode),
                             "top_bounds": format_bounds(new_openmatb.top_bounds),
                             "bottom_bounds": format_bounds(new_openmatb.bottom_bounds),
                         },
