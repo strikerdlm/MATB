@@ -189,16 +189,34 @@ class Sensorresource(AbstractPlugin):
         if not self.pods:
             self._widget.set_text(_('No sensors active.'))
             return
-        lines = [(_('Capacity {0:.1f} Mbps | Load {1:.1f} Mbps').format(
-            self.parameters['linkcapacity'],
-            self._current_load())),
+
+        load = self._current_load()
+        capacity = float(self.parameters['linkcapacity'])
+        if capacity > 0.0:
+            link_fraction = max(0.0, min(1.0, load / capacity))
+        else:
+            link_fraction = 0.0
+        link_bar = self.format_progress_bar(link_fraction, length=10)
+
+        lines = [
+            _('Capacity {0:.1f} Mbps | Load {1:.1f} Mbps {2}').format(
+                capacity,
+                load,
+                link_bar,
+            )
         ]
         for state in self.pods.values():
+            if capacity > 0.0 and state.status != 'IDLE' and state.bandwidth > 0.0:
+                bw_fraction = max(0.0, min(1.0, state.bandwidth / capacity))
+                bw_bar = self.format_progress_bar(bw_fraction, length=8)
+                bar_suffix = f' {bw_bar}'
+            else:
+                bar_suffix = ''
             lines.append(
                 f'{state.uav}:{state.sensor} [{state.status}] '
-                f'{state.bandwidth:.1f} Mbps {state.priority}'
+                f'{state.bandwidth:.1f} Mbps {state.priority}{bar_suffix}'
             )
-        self._widget.set_text('\n'.join(lines))
+        self._widget.set_text('\\n'.join(lines))
 
     def _current_load(self) -> float:
         return sum(state.bandwidth for state in self.pods.values() if state.status != 'IDLE')
