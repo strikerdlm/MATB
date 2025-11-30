@@ -160,7 +160,7 @@ class Swarmformation(AbstractPlugin):
         for member in ordered_members:
             status = _('MANUAL') if member in self.manual_overrides else _('AUTO')
             lines.append(f'• {member} [{status}]')
-        self._widget.set_text('\\n'.join(lines))
+        self._widget.set_text('\n'.join(lines))
 
     def _check_overrides(self) -> None:
         max_overrides = int(self.parameters.get('maxmanualoverrides', 2))
