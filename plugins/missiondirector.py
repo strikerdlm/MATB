@@ -53,18 +53,6 @@ class Missiondirector(AbstractPlugin):
         summary strips (UAV, mission, mode, task and endurance times, alerts).
         """
         super().create_widgets()
-        # Header with progress bar columns (per update_plan.md 3.1)
-        header = _('UAV | MISSION  | MODE | TASK   [PROG] | ENDUR  [PROG] | ALERTS')
-        self.add_widget(
-            'header',
-            Simpletext,
-            container=self.task_container,
-            text=header,
-            font_size=F['SMALL'],
-            y=0.9,
-            color=C['WHITE'],
-            bold=True,
-        )
 
         # One line per UAV label in a fixed order to aid scan patterns
         for idx, name in enumerate(self.uav_state.keys()):
@@ -74,7 +62,7 @@ class Missiondirector(AbstractPlugin):
                 container=self.task_container,
                 text=self._format_status(name),
                 font_size=F['SMALL'],
-                y=0.75 - idx * 0.2,
+                y=0.80 - idx * 0.18,
                 color=C['WHITE'],
                 wrap_width=0.95,
             )
@@ -232,41 +220,24 @@ class Missiondirector(AbstractPlugin):
         return max(0, duration)
 
     def _format_status(self, label: str) -> str:
-        """Format a single UAV status line with progress bars.
+        """Format a single UAV status line.
 
         Per update_plan.md Section 3.1:
-        - Fixed-width columns for scan efficiency
-        - Progress bars for task and endurance time remaining
+        - Simple readable format
         - Mode highlighted (AUTO vs MAN)
-        - Alert tags appended with visual indicators
+        - Alert tags appended
         """
         state = self.uav_state[label]
 
-        # Callsign / vehicle identifier (left-aligned, 4 chars)
-        callsign = f"{label:<4}"
-
-        # Mission name in uppercase, trimmed/padded to 8 chars
-        mission_raw = str(state.get('mission', ''))
-        mission = mission_raw.upper()[:8].ljust(8)
-
-        # Mode: AUTO vs MAN (manual) in 4-character field
-        mode_raw = str(state.get('mode', ''))
-        mode_upper = mode_raw.upper()
-        mode_abbrev = 'AUTO' if 'AUTO' in mode_upper else 'MAN '
-
-        # Task timer with progress bar (time remaining in current mission segment)
-        task_time, task_frac = self._remaining_time_with_fraction(state)
-        task_bar = self.format_progress_bar(task_frac, length=6) if task_frac is not None else '------'
-
-        # Endurance timer with progress bar
-        endurance_time, endurance_frac = self._remaining_endurance_with_fraction(state)
-        endurance_bar = self.format_progress_bar(endurance_frac, length=6) if endurance_frac is not None else '------'
-
-        # Alert field aggregates conflict / handover / endurance tags
+        mission = str(state.get('mission', 'Idle'))
+        mode = str(state.get('mode', 'Manual'))
+        mode_abbrev = 'AUTO' if 'AUTO' in mode.upper() else 'MAN'
+        
+        task_time, _ = self._remaining_time_with_fraction(state)
         alert = self._format_alert(state)
+        alert_str = f" [{alert}]" if alert else ""
 
-        # Format: UAV | MISSION | MODE | TASK mm:ss [bar] | ENDUR mm:ss [bar] | ALERT
-        return f"{callsign} | {mission} | {mode_abbrev} | {task_time:>5} {task_bar} | {endurance_time:>5} {endurance_bar} | {alert}"
+        return f"{label}: {mission} ({mode_abbrev}) {task_time}{alert_str}"
 
     def _remaining_time(self, state: Dict[str, Any]) -> str:
         start = state.get('start')
