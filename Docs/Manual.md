@@ -315,6 +315,40 @@ Implementation notes:
 
 The ladder dovetails with the existing scenario template CLI: pass `--template hpa_overlay` or `uas_bvlos` for legacy cases, then run the MUM-T ramp to measure transfer and dual-task interference under tightly controlled, reference-backed workloads.
 
+### 4.6 2D Visual Conventions for ASCII Panels
+
+The UAS and HPA modules share a small set of cockpit-inspired 2D conventions so that Mission Director, Sense-and-Avoid, Datalink, Threat Board, Energy Manager, VTOL, payload, and swarm panels can be interpreted consistently while preserving MATB-style psychometric validity.
+
+- **Purely 2D, text-only**  
+  All task widgets remain flat, textual/ASCII panels (no 3D, no perspective views). Changes described here are presentation-only: they do not alter scenario timing, event logic, scoring rules, or log formats.
+
+- **Progress bars (`████░░░░░`)**  
+  All bars are rendered by a shared helper (`AbstractPlugin.format_progress_bar(fraction, length)`), where `fraction` is always clamped to [0, 1]:
+  - **Time-to-go / deadlines** (Sense-and-Avoid intruders, Datalink messages, Threat Board contacts, Launch & Recovery phases, Energy Manager events): `fraction = remaining_time / scripted_duration`. A full bar indicates the start of the window; the bar empties as the deadline approaches.
+  - **Capacity / reserves** (Payload Manager link Mbps, Sensor Resource link capacity, VTOL Manager battery, VTOL Power reserves, Energy Manager energy reserve): `fraction = current_value / maximum_value`. Bars shrink as capacity is consumed.
+  - **Discrete limits** (Swarm manual overrides vs. `maxmanualoverrides`): `fraction = current_count / limit`. Bars make cognitive-load breaches visible at a glance.
+
+- **Sort order / urgency-first lists**  
+  - Intruders and threats are ordered by **increasing time-to-impact (TTI)**.  
+  - Datalink queues retain scenario order but always show remaining time and a bar per message.  
+  - VTOL launch/recovery sequences are ordered by **earliest deadline**.  
+  - Where multiple VTOL power profiles are configured (`vtolpower.py`), rows are ordered by **lowest remaining fraction** first.  
+  These orderings are visual only; underlying metric keys and timestamps are unchanged.
+
+- **Per-plugin strip formats (examples)**  
+  - **VTOL Manager (`vtolmanager.py`)** – `UAV | PHASE | t_phase | Batt% + bar | Power x | Alerts`. Alerts include battery status (NORMAL/WARNING/CRITICAL/EMPTY), pending or overdue transitions, and the latest stability value.  
+  - **VTOL Power (`vtolpower.py`)** – `UAV | remaining/capacity | % + bar | Status`. Complements VTOL Manager by focusing purely on energy reserves.  
+  - **Launch & Recovery (`launchrecovery.py`)** – `UAV | Phase | Method | TGO | bar`, one row per active catapult/skyhook leg.  
+  - **Payload Manager (`payloadmanager.py`)** – one line per sensor with bandwidth, energy %, and an energy bar, plus a final **Total BW** line with a link-capacity bar.  
+  - **Sensor Resource (`sensorresource.py`)** – capacity/load header with bar, followed by per-pod bandwidth rows (and per-sensor bars when active).  
+  - **Swarm Formation (`swarmformation.py`)** – formation + mode header, a **manual overrides / limit** bar, then AUTO/MANUAL status for each member (manual units listed first).
+
+- **Status colour semantics**  
+  - The same aeronautical status levels defined in `core.constants.STATUS_LEVELS` (NORMAL, ADVISORY, CAUTION, WARNING, INOPERATIVE) and their associated palette are reused across plugins.  
+  - When **colorblind mode** is enabled in `config.ini` or the Streamlit portal, these colours map to a palette that remains legible without relying on red/green alone; the text content and ordering described above are identical.
+
+These conventions are shared across current and future UAS/HPA/MUM‑T plugins so that participants can transfer visual search strategies without learning a new legend for each task.
+
 ## 5. Step-by-Step Approach
 
 | Phase | Activities | Deliverables |
