@@ -69,26 +69,15 @@ class Senseandavoid(AbstractPlugin):
 
     def create_widgets(self) -> None:
         super().create_widgets()
-        header = _('ID | Brg | RNG (nm) | ALT (ft) | TTI (s) | Status')
-        self.add_widget(
-            'header',
-            Simpletext,
-            container=self.task_container,
-            text=header,
-            font_size=F['SMALL'],
-            y=0.9,
-            color=C['WHITE'],
-            bold=True,
-        )
         self._intruder_widget = self.add_widget(
             'intruders',
             Simpletext,
             container=self.task_container,
-            text=_('Waiting for intruders…'),
+            text=_('No intruders'),
             font_size=F['SMALL'],
-            y=0.6,
+            y=0.50,
             wrap_width=0.95,
-            color=C['WHITE'],
+            color=C['BLACK'],
         )
 
         # Create tactical display for geofence visualization (2D overlay per update_plan.md 2.5)
