@@ -8,8 +8,9 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 
 from core import validation
-from core.constants import COLORS as C, FONT_SIZES as F
+from core.constants import COLORS as C, FONT_SIZES as F, STATUS_COLORS
 from core.widgets import Simpletext
+from core.widgets.tacticaldisplay import TacticalDisplay, TacticalEntity
 from plugins.abstractplugin import AbstractPlugin
 
 
@@ -53,9 +54,11 @@ class Senseandavoid(AbstractPlugin):
         self.intruders: Dict[str, Intruder] = {}
         self._intruder_widget: Optional[Simpletext] = None
         self._geofence_widget: Optional[Simpletext] = None
+        self._tactical_display: Optional[TacticalDisplay] = None
         self.geofence_polygon: List[Tuple[float, float]] = []
         self.uav_positions: Dict[str, Tuple[float, float]] = {}
         self._breach_flags: Set[str] = set()
+        self._use_tactical_display: bool = True  # Enable 2D tactical overlay
 
         self.parameters['taskfeedback']['overdue'].update({
             'active': True,
@@ -87,14 +90,30 @@ class Senseandavoid(AbstractPlugin):
             wrap_width=0.95,
             color=C['WHITE'],
         )
+
+        # Create tactical display for geofence visualization (2D overlay per update_plan.md 2.5)
+        if self._use_tactical_display and self.task_container is not None:
+            # Create a sub-container for the tactical display in bottom portion
+            tactical_container = self.task_container.reduce_and_translate(0.6, 0.35, 0.35, 0.02)
+            self._tactical_display = TacticalDisplay(
+                name='saa_tactical',
+                container=tactical_container,
+                show_grid=True,
+                icon_size=0.08,
+                title=_('Geofence'),
+                draw_order=5,
+            )
+            self.widgets['tactical'] = self._tactical_display
+
+        # Fallback text-based geofence display (when tactical display unavailable)
         self._geofence_widget = self.add_widget(
             'geofence_overlay',
             Simpletext,
             container=self.task_container,
-            text=_('Geofence overlay inactive.'),
+            text=_('Geofence overlay inactive.') if not self._use_tactical_display else '',
             font_size=F['SMALL'],
-            y=0.3,
-            wrap_width=0.95,
+            y=0.15,
+            wrap_width=0.4,
             color=C['GREEN'],
         )
 
@@ -104,6 +123,7 @@ class Senseandavoid(AbstractPlugin):
         self._update_intruder_widget()
         self._update_overdue_state()
         self._update_geofence_widget()
+        self._update_tactical_display()
         return True
 
     # ------------------------------------------------------------------
@@ -264,27 +284,6 @@ class Senseandavoid(AbstractPlugin):
             return 0.0
         return max(0.0, min(1.0, value))
 
-    def _update_intruder_widget(self) -> None:
-        if self._intruder_widget is None:
-            return
-        if not self.intruders:
-            self._intruder_widget.set_text(_('No intruders.'))
-            return
-        lines = []
-        now = self.scenario_time
-        for intruder in sorted(self.intruders.values(), key=lambda x: x.remaining(now)):
-            remaining = intruder.remaining(now)
-            status = _('ACTIVE') if intruder.status == 'ACTIVE' else _('RESOLVED')
-            if intruder.action:
-                status = f"{status}:{intruder.action}"
-            line = (
-                f"{intruder.identifier} | {intruder.bearing} | "
-                f"{intruder.range_nm:.1f} | {intruder.altitude_ft:.0f} | "
-                f"{remaining:5.1f} | {status}"
-            )
-            lines.append(line)
-        self._intruder_widget.set_text('\n'.join(lines))
-
     def _evaluate_geofence_state(self, label: str, point: Tuple[float, float]) -> None:
         if not self.geofence_polygon:
             if label in self._breach_flags:
@@ -323,6 +322,22 @@ class Senseandavoid(AbstractPlugin):
     def _update_geofence_widget(self) -> None:
         if self._geofence_widget is None:
             return
+        # Skip text widget update if tactical display is active
+        if self._use_tactical_display and self._tactical_display is not None:
+            # Show a brief summary instead of full ASCII grid
+            if self.geofence_polygon and self.uav_positions:
+                breach_count = len(self._breach_flags)
+                status = _('BREACH') if breach_count > 0 else _('CLEAR')
+                self._geofence_widget.set_text(
+                    f"{_('UAVs')}: {len(self.uav_positions)} | {_('Status')}: {status}"
+                )
+            elif self.geofence_polygon:
+                self._geofence_widget.set_text(_('Geofence active.'))
+            else:
+                self._geofence_widget.set_text('')
+            return
+
+        # Fallback: full ASCII grid when tactical display is disabled
         if not self.geofence_polygon:
             self._geofence_widget.set_text(_('Geofence overlay inactive.'))
             return
@@ -332,6 +347,45 @@ class Senseandavoid(AbstractPlugin):
             self._geofence_widget.set_text(f'{grid}\n{legend}')
         else:
             self._geofence_widget.set_text(grid)
+
+    def _update_tactical_display(self) -> None:
+        """Update the 2D tactical display with current geofence and UAV positions."""
+        if self._tactical_display is None:
+            return
+
+        # Update geofence polygon
+        if self.geofence_polygon:
+            self._tactical_display.set_geofence(self.geofence_polygon)
+            # Set geofence color based on breach status
+            if self._breach_flags:
+                self._tactical_display.set_geofence_color(STATUS_COLORS.get('WARNING', C['YELLOW']))
+            else:
+                self._tactical_display.set_geofence_color(STATUS_COLORS.get('NORMAL', C['GREEN']))
+        else:
+            self._tactical_display.set_geofence(None)
+
+        # Update UAV positions
+        current_ids = set(self.uav_positions.keys())
+        display_ids = set(self._tactical_display.get_entities().keys())
+
+        # Remove entities no longer present
+        for entity_id in display_ids - current_ids:
+            self._tactical_display.remove_entity(entity_id)
+
+        # Add or update entities
+        for label, (x, y) in self.uav_positions.items():
+            in_breach = label in self._breach_flags
+            status = 'CRITICAL' if in_breach else 'NORMAL'
+            entity = TacticalEntity(
+                entity_id=label,
+                x_norm=x,
+                y_norm=y,
+                icon_type='diamond',
+                status=status,
+                label=label,
+            )
+            self._tactical_display.set_entity(entity)
+            self._tactical_display.set_breach(label, in_breach)
 
     def _build_geofence_grid(self) -> str:
         rows = [[' ' for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
