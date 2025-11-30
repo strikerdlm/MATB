@@ -66,24 +66,13 @@ class Datalink(AbstractPlugin):
     # UI -----------------------------------------------------------------
     def create_widgets(self) -> None:
         super().create_widgets()
-        header = _('ID | Channel | Priority | Remaining | Text')
-        self.add_widget(
-            'header',
-            Simpletext,
-            container=self.task_container,
-            text=header,
-            font_size=F['SMALL'],
-            y=0.9,
-            color=C['WHITE'],
-            bold=True,
-        )
         self._widget = self.add_widget(
             'messages',
             Simpletext,
             container=self.task_container,
-            text=_('No messages.'),
+            text=_('No messages'),
             font_size=F['SMALL'],
-            y=0.6,
+            y=0.50,
             wrap_width=0.95,
             color=C['WHITE'],
         )
@@ -220,21 +209,15 @@ class Datalink(AbstractPlugin):
         if self._widget is None:
             return
         if not self.messages:
-            self._widget.set_text(_('No messages.'))
+            self._widget.set_text(_('No messages'))
             return
         now = self.scenario_time
         lines = []
         for idx, message in enumerate(self.messages):
             selector = '>' if idx == self.selection_index else ' '
             remaining = message.time_remaining(now)
-            # Deadline bar: 0–1 fraction of time remaining over original due_seconds
-            denom = max(1.0, float(message.due_seconds))
-            frac = remaining / denom
-            bar = self.format_progress_bar(frac, length=8)
-            line = (
-                f"{selector}{message.msg_id:<4} | {message.channel:<6} | "
-                f"{message.priority:<5} | {remaining:5.1f}s {bar} | {message.text}"
-            )
+            txt = message.text[:20]
+            line = f"{selector}{message.msg_id}: {txt} ({remaining:.0f}s)"
             lines.append(line)
         self._widget.set_text('\n'.join(lines))
 
