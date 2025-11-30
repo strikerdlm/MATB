@@ -68,20 +68,9 @@ class Window(Window):
             self.modal_dialog = ModalDialog(self, msg, title)
 
     def _init_status_banner(self):
+        # Debug provenance banner disabled for cleaner UI
         self._provenance_version_displayed = -1
-        font_name = get_conf_value('Openmatb', 'font_name') or 'Arial'
-        self._provenance_label = Label(
-            _('Scenario: pending'),
-            x=20,
-            y=self.height - 10,
-            anchor_x='left',
-            anchor_y='top',
-            font_name=font_name,
-            font_size=F['SMALL'],
-            color=C['WHITE'],
-            batch=self.batch,
-            group=G(5),
-        )
+        self._provenance_label = None
 
 
     def get_screen(self):
@@ -228,6 +217,9 @@ class Window(Window):
                                                       continue_key=continue_key, exit_key='Q')
 
     def _update_provenance_label(self):
+        # Disabled for cleaner UI
+        if self._provenance_label is None:
+            return
         info, version = logger.get_provenance_snapshot()
         if version == self._provenance_version_displayed:
             return
