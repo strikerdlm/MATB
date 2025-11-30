@@ -74,7 +74,11 @@ class Vtolmanager(AbstractPlugin):
 
     def create_widgets(self) -> None:
         super().create_widgets()
-        header = _('UAV | Phase | Battery (min) | Power x | Status')
+        # 2D VTOL status strip: one row per aircraft with phase, time-in-phase,
+        # battery reserve, power multiplier, and alert tags. This remains a
+        # text-only summary; all timing, power, and logging logic lives in
+        # VtolModel and is unchanged.
+        header = _('UAV | Phase        | t_phase | Batt (%)        | Power | Alerts')
         self.add_widget(
             'header',
             Simpletext,
@@ -217,20 +221,48 @@ class Vtolmanager(AbstractPlugin):
             self.log_performance('vtol_power_empty', payload)
 
     def _format_summary(self) -> str:
+        """Render a fixed-width VTOL status line per UAV.
+
+        Each row shows phase, time in phase, remaining battery as a percentage
+        plus a text-only progress bar, power multiplier, and alert tags. This
+        function does not change any VTOL timing, power, or logging logic; it
+        only formats the state tracked by :class:`VtolModel`.
+        """
         lines = []
         for uav in self._uav_list():
             state = self._model.ensure(uav, self.scenario_time)
-            battery_minutes = state.battery_remaining / 60.0
-            status = state.warning_level.upper()
+
+            # Phase and time-in-phase
+            phase_label = (state.phase or 'idle').upper()
+            phase_text = phase_label[:12].ljust(12)
+            elapsed = max(0.0, self.scenario_time - state.phase_started_at)
+            minutes, seconds = divmod(int(elapsed), 60)
+            t_phase = f"{minutes:02d}:{seconds:02d}"
+
+            # Battery reserve as percentage plus ASCII bar
+            if state.battery_capacity > 0.0:
+                ratio = max(0.0, min(1.0, state.battery_remaining / state.battery_capacity))
+            else:
+                ratio = 0.0
+            batt_pct = int(round(ratio * 100.0))
+            batt_bar = self.format_progress_bar(ratio, length=10)
+
+            # Power multiplier and alert tags
+            power = f"{state.power_multiplier:3.1f}x"
+            alerts = state.warning_level.upper()
             if state.pending_confirmation:
-                status += ' | PENDING'
-            stability_note = ''
+                alerts += ' PENDING'
+            if self._pending_overdue.get(uav):
+                alerts += ' OVERDUE'
             if uav in self._stability_values:
-                stability_note = f" | STB {self._stability_values[uav]:.2f}"
-            lines.append(
-                f"{uav} | {state.phase or 'idle'} | {battery_minutes:5.1f} | "
-                f"{state.power_multiplier:3.1f} | {status}{stability_note}"
+                alerts += f" STB {self._stability_values[uav]:.2f}"
+
+            line = (
+                f"{uav:>4} | {phase_text} | {t_phase} | "
+                f"{batt_pct:3d}% {batt_bar} | {power:>5} | {alerts}"
             )
+            lines.append(line)
+
         return '\n'.join(lines) if lines else _('Awaiting VTOL assignments…')
 
     def _update_overdue_state(self) -> None:
