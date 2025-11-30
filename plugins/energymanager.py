@@ -45,7 +45,7 @@ class EnergyEvent:
 class Energymanager(AbstractPlugin):
     """Monitors energy/g-envelope events for high-performance aircraft."""
 
-    def __init__(self, label: str = '', taskplacement: str = 'bottommid', taskupdatetime: int = 250) -> None:
+    def __init__(self, label: str = '', taskplacement: str = 'topright', taskupdatetime: int = 250) -> None:
         super().__init__(label or _('Energy Manager'), taskplacement, taskupdatetime)
 
         self.validation_dict = {
