@@ -1,12 +1,20 @@
 # WARP.md
 
-This file provides guidance to WARP (warp.dev) when working with code in this repository.
+This file provides guidance to WARP (warp.dev) AI agent when working with code in this repository.
 
 ## Project Overview
-OpenMATB is a Python-based Multi-Attribute Task Battery for aviation research (Python 3.9+). It includes fighter aircraft and UAV operator modules, physiological monitoring (HRV via Polar H10), and combat scenarios.
+OpenMATB is a Python-based Multi-Attribute Task Battery (MATB) for aviation research requiring Python 3.9+. The system simulates complex multi-tasking scenarios for fighter aircraft operators and UAV pilots, with integrated physiological monitoring capabilities.
 
-- **Primary Documentation**: `Docs/Manual.md` (consult before new features).
-- **Framework**: `pyglet` for UI/Graphics.
+**Key Features:**
+- Fighter aircraft and UAV operator task modules
+- Real-time physiological monitoring (HRV via Polar H10 BLE sensor)
+- Combat scenario simulation and task automation
+- Comprehensive performance logging and analysis
+
+**Documentation Structure:**
+- **Primary**: `Docs/Manual.md` (MUST consult before implementing new features)
+- **Updates**: `README.md` (project overview) and `CHANGELOG.md` (version history only)
+- **Framework**: `pyglet` for UI/Graphics rendering
 
 ## Development Workflow
 
@@ -14,29 +22,60 @@ OpenMATB is a Python-based Multi-Attribute Task Battery for aviation research (P
 ```bash
 python -m pip install -r requirements.txt
 ```
-*Note: Uses `pylsl`, `pyglet`, `bleak`, `neurokit2`.*
+
+**Key Dependencies:**
+- `pyglet`: Graphics/UI framework
+- `pylsl`: Lab Streaming Layer for data streaming
+- `bleak`: BLE communication (Polar H10)
+- `neurokit2`: HRV analysis
+- `pytest`, `hypothesis`: Testing frameworks
 
 ### Running the Application
 ```bash
 python main.py
 ```
-*Configuration is loaded from `config.ini`.*
+
+**Configuration:**
+- Primary config: `config.ini` (loaded at startup)
+- Scenarios: `includes/scenarios/*.txt`
+- Output: `sessions/user_<id>/<date>/`
 
 ### Testing
+**Coverage Target: ≥90% on critical modules**
+
 Run all tests:
 ```bash
-pytest tests/
+pytest tests/ -v --cov=core --cov=plugins
 ```
-*Uses `hypothesis` for property-based testing.*
 
-### Quality Checks (Mandatory)
-Ensure zero warnings before committing:
+**Test Strategy:**
+- Unit tests for all core components
+- Property-based tests with `hypothesis` for algorithms
+- Integration tests for plugin lifecycle
+- Treat warnings as errors: `pytest -W error`
+
+### Quality Checks (Mandatory — Zero Warnings Policy)
+All checks MUST pass before committing:
+
 ```bash
+# Type checking (strict mode)
+mypy --strict .
+
+# Linting and formatting
 ruff check .
 black --check .
-isort --check .
-mypy --strict .
+isort --check-only .
+
+# Security scanning
 bandit -r plugins/ core/
+pip-audit
+```
+
+**Auto-fix formatting:**
+```bash
+black .
+isort .
+ruff check --fix .
 ```
 
 ## Architecture
@@ -49,45 +88,153 @@ bandit -r plugins/ core/
 
 ### Plugins (`plugins/`)
 All features are implemented as plugins inheriting from `plugins.abstractplugin.AbstractPlugin`.
-- **Structure**: `do_on_command(command, value)` handles scenario events.
-- **UI**: `create_widgets()` creates Qt/Pyglet widgets.
-- **Logging**: Must use `self.log_performance("metric", key=val)`.
+
+**Plugin Lifecycle:**
+1. `__init__()`: Initialize state, validate config
+2. `create_widgets()`: Build UI components (Pyglet)
+3. `do_on_command(command, value)`: Handle scenario events
+4. `log_performance(metric, **kwargs)`: Record performance data
+
+**Critical Plugins:**
+- `physiomonitor.py`: Real-time HRV monitoring
+- `polarrlink.py`: Polar H10 BLE interface
+- `automationhooks.py`: Task automation and MQTT integration
 
 ### Data Flow
-1.  **Input**: Scenario files (`includes/scenarios/*.txt`) define events.
-2.  **Processing**: `main.py` -> `core/` -> `plugins/`.
-3.  **Output**: `sessions/user_<id>/<date>/...` containing:
-    -   `performance_log.csv` (Raw events)
-    -   `summary.json` (Aggregated KPIs)
-    -   `hrv/` (Physiological data)
+```
+Scenario Files → main.py → core.scenario → core.scheduler → plugins
+                                 ↓
+                          core.logger → sessions/
+```
+
+**Input:**
+- Scenario definitions: `includes/scenarios/*.txt`
+- Configuration: `config.ini`
+
+**Processing:**
+1. `main.py`: Entry point, loads config
+2. `core.scenario`: Parses scenario timeline
+3. `core.scheduler`: Dispatches timed events
+4. `plugins`: Execute tasks, log performance
+
+**Output:** `sessions/user_<id>/<date>/`
+- `performance_log.csv`: Raw event stream (timestamp, plugin, metric, value)
+- `summary.json`: Aggregated KPIs and statistics
+- `hrv/`: HRV time-series and analysis (if Polar H10 connected)
 
 ## Coding Standards
 
-### Python Guidelines
--   **Type Hints**: Mandatory for all functions.
--   **Docstrings**: Google-style required.
--   **Function Size**: Max ~60 lines, Cyclomatic complexity ≤10.
--   **Control Flow**: No recursion. Bounded loops only.
--   **Immutability**: Prefer `tuple`, `frozenset`, `dataclasses(frozen=True)`.
--   **Concurrency**: Single model per component. No shared mutables. Use `asyncio.wait_for` for timeouts.
+### Python Guidelines (Strictly Enforced)
 
-### Error Handling
--   **Validation**: Explicit checks raising specific exceptions (e.g., `ValueError`).
--   **Exceptions**: Never use bare `except:`. Use `raise ... from e`.
--   **Safety**: Fail closed on unexpected states.
+**Code Structure:**
+- **Type Hints**: Mandatory for all public functions; strict mypy compliance
+- **Docstrings**: Google-style required (Args, Returns, Raises)
+- **Function Size**: ≤60 executable lines, cyclomatic complexity ≤10
+- **Cohesion**: Pure functions preferred; make side effects explicit
 
-### Security
--   **Deserialization**: No `pickle`. Use JSON with schema validation.
--   **Secrets**: No secrets in code. Use `.env`.
+**Control Flow:**
+- **No recursion** (use iteration with bounded counters)
+- **Bounded loops only**: finite iterables or explicit `max_iterations`
+- **No dynamic control**: no `eval`/`exec`, no dynamic imports
+- All I/O operations must have finite timeouts
 
-## Key Files
+**Memory Safety:**
+- **Immutability**: Prefer `tuple`, `frozenset`, `dataclasses(frozen=True, slots=True)`
+- **Bounded collections**: Use `deque(maxlen=N)`, `lru_cache(maxsize=N)`
+- **Context managers**: Always use for files, sockets, locks
+- No global mutable state (pass state explicitly)
 
-| Purpose | File |
-| :--- | :--- |
-| Project Roadmap | `Docs/Manual.md` |
-| Plugin Base | `plugins/abstractplugin.py` |
-| Scenario Engine | `core/scenario.py` |
-| Logging System | `core/logger.py` |
-| HRV Monitor | `plugins/physiomonitor.py` |
-| Polar H10 Link | `plugins/polarrlink.py` |
-| Automation Hooks | `plugins/automationhooks.py` |
+**Concurrency (when needed):**
+- Single model per component (asyncio OR threads, not mixed)
+- No shared mutable state; use queues/immutable messages
+- All async ops wrapped in `asyncio.wait_for(timeout=N)`
+- Track tasks and propagate exceptions
+
+### Error Handling (Fail-Safe Design)
+
+**Input Validation:**
+- Explicit pre/postcondition checks with precise exceptions
+- Target ~2+ defensive checks per function
+- Use `ValueError`, `TypeError`, `RuntimeError` (never generic `Exception`)
+
+**Exception Handling:**
+- Never use bare `except:` — catch specific exceptions only
+- Preserve context: `raise NewError(...) from original_error`
+- Never ignore return values; use `_ = result  # intentionally unused` if needed
+
+**Assertions:**
+- Use `assert` ONLY for internal invariants (never for validation)
+- Do not rely on asserts in optimized mode (`-O`)
+
+**Failure Mode:**
+- Fail closed: log error + raise on unexpected states
+- Include sufficient context in error messages
+
+### Security (Zero Trust)
+
+**Data Handling:**
+- **No `pickle` or `marshal`** on untrusted data
+- JSON only, with schema validation (e.g., `jsonschema`)
+- `yaml.safe_load()` only (never `yaml.load()`)
+
+**Secrets Management:**
+- No credentials in code or config files
+- Use environment variables (`.env` for local dev)
+- Rotate and audit secrets regularly
+
+**Dependencies:**
+- Run `pip-audit` and `bandit` before every commit
+- Pin versions with hashes in `requirements.txt`
+
+## Key Files Reference
+
+| Purpose | File | Notes |
+| :--- | :--- | :--- |
+| **Documentation** | `Docs/Manual.md` | Primary feature docs — consult before coding |
+| **Entry Point** | `main.py` | Application bootstrap |
+| **Plugin Base** | `plugins/abstractplugin.py` | Abstract class for all plugins |
+| **Scenario Engine** | `core/scenario.py` | Parses and executes scenario timelines |
+| **Logging System** | `core/logger.py` | Centralized CSV logging |
+| **Task Scheduler** | `core/scheduler.py` | Event dispatch system |
+| **Performance KPIs** | `core/performance_summary.py` | Post-run analysis |
+| **HRV Monitor** | `plugins/physiomonitor.py` | Real-time heart rate variability |
+| **Polar H10 BLE** | `plugins/polarrlink.py` | Bluetooth sensor interface |
+| **Automation** | `plugins/automationhooks.py` | MQTT hooks and task automation |
+
+## WARP Agent Guidelines
+
+**Before Starting Work:**
+1. Check `Docs/Manual.md` for existing feature documentation
+2. Review relevant plugin implementations in `plugins/`
+3. Verify current test coverage: `pytest --cov`
+
+**When Adding Features:**
+- Document in `Docs/Manual.md` (never create new markdown files)
+- Update `README.md` only for high-level project changes
+- Update `CHANGELOG.md` with version/date/changes
+- Add tests achieving ≥90% coverage for new code
+- Run full quality checks before committing
+
+**When Fixing Bugs:**
+- Add regression tests first (TDD approach)
+- Document fix in `CHANGELOG.md`
+- Verify no new linter/type warnings introduced
+
+**Code Generation Checklist:**
+- [ ] Full type hints + Google-style docstrings
+- [ ] Explicit input validation with specific exceptions
+- [ ] Bounded loops and finite timeouts on I/O
+- [ ] Context managers for all resources
+- [ ] Immutable data structures where possible
+- [ ] No recursion, eval/exec, or dynamic imports
+- [ ] Tests with pytest + hypothesis (if applicable)
+- [ ] Zero warnings from mypy, ruff, black, bandit
+
+**Forbidden Patterns:**
+- ❌ Recursion or unbounded loops
+- ❌ `eval()`, `exec()`, `compile()` on user input
+- ❌ `pickle` or `marshal` for data persistence
+- ❌ Bare `except:` clauses
+- ❌ Global mutable state
+- ❌ Creating new markdown files (use existing docs only)
+- ❌ Hardcoded secrets or credentials
