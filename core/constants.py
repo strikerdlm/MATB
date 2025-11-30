@@ -22,11 +22,6 @@ C = COLORS = dict(WHITE=(255, 255, 255, 255),
                   GREY=(200, 200, 200, 255),
                   BLUE=(153, 204, 255, 255))
 
-F = FONT_SIZES = dict(SMALL=12,
-                      MEDIUM=16,
-                      LARGE=20,
-                      XLARGE=30)
-
 # Proportion of the plugin title into its container
 PLUGIN_TITLE_HEIGHT_PROPORTION = 0.1
 
@@ -36,8 +31,8 @@ BFLIM = 15
 # Ignore these plugins arguments
 DEPRECATED = ['pumpstatus', 'end', 'cutofffrequency', 'equalproportions']
 
-PATHS = {k.upper():Path('.', k) for k in ['plugins', 'sessions']}
-PATHS.update({k.upper():Path('.', 'includes', k)
+PATHS = {k.upper(): Path('.', k) for k in ['plugins', 'sessions']}
+PATHS.update({k.upper(): Path('.', 'includes', k)
               for k in ['img', 'instructions', 'scenarios', 'sounds', 'questionnaires']})
 
 [path.mkdir(parents=False, exist_ok=True) for p, path in PATHS.items() if path.exists() is False]
@@ -46,3 +41,40 @@ PATHS['SCENARIO_ERRORS'] = Path('.', 'last_scenario_errors.log')
 # Read the configuration file
 CONFIG = configparser.ConfigParser()
 CONFIG.read(PATHS['PLUGINS'].parent.joinpath('config.ini'))
+
+def _get_float_conf(section: str, key: str, default: float) -> float:
+    """Return a float configuration value, falling back to a default on error."""
+    try:
+        raw = CONFIG[section].get(key, str(default))  # type: ignore[index]
+    except Exception:
+        return default
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+def _get_bool_conf(section: str, key: str, default: bool) -> bool:
+    """Return a boolean configuration value, falling back to a default on error."""
+    try:
+        raw = CONFIG[section].get(key, str(default))  # type: ignore[index]
+    except Exception:
+        return default
+    return str(raw).strip().lower() == 'true'
+
+
+UI_SCALE = _get_float_conf('Openmatb', 'ui_scale', 1.0)
+COLORBLIND_MODE = _get_bool_conf('Openmatb', 'colorblind_mode', False)
+
+F = FONT_SIZES = dict(SMALL=int(12 * UI_SCALE),
+                      MEDIUM=int(16 * UI_SCALE),
+                      LARGE=int(20 * UI_SCALE),
+                      XLARGE=int(30 * UI_SCALE))
+
+# Aeronautical/military-inspired status levels for consistent symbology
+STATUS_LEVELS = ('NORMAL', 'ADVISORY', 'CAUTION', 'WARNING', 'INOPERATIVE')
+STATUS_COLORS = dict(NORMAL=C['GREEN'],           # Normal/within limits
+                     ADVISORY=C['BLUE'],          # Advisory/info only
+                     CAUTION=C['ORANGE'],         # Caution/amber-level
+                     WARNING=C['RED'],            # Warning/critical
+                     INOPERATIVE=C['DARKGREY'])   # Inoperative/failed/off
