@@ -381,6 +381,68 @@ This plan keeps documentation centralised, ties new features to existing extensi
 
 ### 7.2 Software, Hardware, and Data Requirements
 
+#### 7.2.1 System Requirements
+
+| Component | Minimum | Recommended | Notes |
+|-----------|---------|-------------|-------|
+| **Operating System** | Windows 10 64-bit | Windows 10/11 64-bit | Linux supported for research clusters |
+| **Python** | 3.10 | 3.11 | 3.12+ untested; pin version via `requirements.txt` |
+| **CPU** | Dual-core 2.0 GHz | Quad-core 3.0 GHz+ | HRV processing benefits from multi-core |
+| **RAM** | 4 GB | 8 GB+ | 16 GB if running LSL + EEG/fNIRS streams |
+| **GPU** | OpenGL 2.1 capable | Dedicated GPU | Integrated graphics acceptable for 2D rendering |
+| **Display** | 1920×1080 @ 60 Hz | 1920×1080 @ 120 Hz+ | Higher refresh reduces input latency |
+| **Storage** | 500 MB + 50 MB/hour sessions | SSD with 2 GB+ free | Session logs grow with scenario complexity |
+| **Bluetooth** | BLE 4.0+ (for Polar H10) | BLE 5.0+ | Only required if using HRV monitoring |
+
+#### 7.2.2 Required Python Dependencies
+
+```bash
+# Core dependencies (from requirements.txt)
+pyglet==1.5.26          # Window and graphics rendering
+rstr==3.1.0             # Random string generation for communications
+pyparallel==0.2.2       # Parallel port I/O (optional, Windows-only)
+pylsl==1.16.1           # Lab Streaming Layer integration
+pandas==2.2.3           # Data analysis and export
+pyarrow==17.0.0         # Parquet export for large datasets
+
+# Optional dependencies
+streamlit>=1.39.0       # Configuration portal UI
+openai>=1.40.0          # Voice generation (requires API key)
+bleak>=0.21.0           # Polar H10 BLE connection
+neurokit2>=0.2.7        # HRV computation pipeline
+pyttsx3>=2.90           # Local TTS for datalink voice
+```
+
+#### 7.2.3 Installation Verification
+
+After installation, verify the environment with:
+
+```bash
+# Check Python version
+python --version  # Should be 3.10 or 3.11
+
+# Verify pyglet can create a window
+python -c "import pyglet; pyglet.window.Window(visible=False).close()"
+
+# Test LSL availability
+python -c "import pylsl; print(f'LSL version: {pylsl.library_version()}')"
+
+# Run a minimal scenario (should complete without errors)
+python main.py  # Press Escape to exit after startup
+```
+
+#### 7.2.4 Performance Tuning
+
+For optimal timing precision and responsiveness:
+
+1. **Disable V-Sync** in GPU driver settings to reduce input latency
+2. **Set power plan** to "High Performance" (Windows) during sessions
+3. **Close background applications** that may interrupt Python's event loop
+4. **Use wired peripherals** (joystick, keyboard) to minimize input jitter
+5. **Disable Windows Game Mode** if present, as it may interfere with timing
+
+#### 7.2.5 Software Stack Details
+
 - **Software stack**:
   - **Python environment**: Pin Python and dependency versions (e.g., via `requirements.txt` and a lockfile) and require code to pass `ruff`, `black`, `isort`, `mypy` (strict), and `bandit` before release builds.
   - **Platform**: Support current 64-bit Windows systems for operational use (as in AF-MATB), with testing on at least one Linux environment for research clusters. Require a minimum 60 Hz monitor at 1920×1080 or higher resolution for timing and layout stability.
