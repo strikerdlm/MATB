@@ -226,9 +226,14 @@ class Datalink(AbstractPlugin):
         lines = []
         for idx, message in enumerate(self.messages):
             selector = '>' if idx == self.selection_index else ' '
+            remaining = message.time_remaining(now)
+            # Deadline bar: 0–1 fraction of time remaining over original due_seconds
+            denom = max(1.0, float(message.due_seconds))
+            frac = remaining / denom
+            bar = self.format_progress_bar(frac, length=8)
             line = (
-                f"{selector}{message.msg_id} | {message.channel} | "
-                f"{message.priority} | {message.time_remaining(now):5.1f} | {message.text}"
+                f"{selector}{message.msg_id:<4} | {message.channel:<6} | "
+                f"{message.priority:<5} | {remaining:5.1f}s {bar} | {message.text}"
             )
             lines.append(line)
         self._widget.set_text('\n'.join(lines))
