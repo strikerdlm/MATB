@@ -12,7 +12,9 @@ from plugins.abstractplugin import AbstractPlugin
 try:
     _
 except NameError:  # pragma: no cover - fallback when gettext not injected
-    from builtins import _  # type: ignore[misc]
+    def _(s: str) -> str:
+        """Identity function when gettext is not available."""
+        return s
 from plugins.vtolmanager_model import VtolModel
 
 
