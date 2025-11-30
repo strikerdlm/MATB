@@ -185,7 +185,7 @@ class Logger:
 
     def open(self):
         create_header = False if self.path.exists() and self.mode == 'a' else True
-        self.file = open(str(self.path), self.mode, newline = '')
+        self.file = open(str(self.path), self.mode, newline='', encoding='utf-8')
         self.writer = DictWriter(self.file, fieldnames=self.fields_list)
         if create_header:
             self.writer.writeheader()
