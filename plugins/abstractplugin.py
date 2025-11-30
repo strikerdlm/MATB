@@ -416,6 +416,32 @@ class AbstractPlugin:
     def grouped(self, iterable, n):
         return zip(*[iter(iterable)]*n)
 
+    # ------------------------------------------------------------------
+    # Text-only progress bar for time-based quantities
+    # ------------------------------------------------------------------
+    def format_progress_bar(self, fraction: float, length: int = 10,
+                            full_char: str = '█', empty_char: str = '░') -> str:
+        """Return a bounded text progress bar for 0.0–1.0 fractions.
+
+        This helper is intentionally 2D and text-only so it can be used in
+        aeronautical/military-style status strips (e.g., time-to-impact,
+        datalink deadlines, endurance) without changing any task timing or
+        scoring logic. Callers are responsible for converting real-world
+        quantities into a 0–1 fraction.
+        """
+        try:
+            f = float(fraction)
+        except (TypeError, ValueError):
+            f = 0.0
+        if f < 0.0:
+            f = 0.0
+        elif f > 1.0:
+            f = 1.0
+        filled = int(round(f * length))
+        if filled > length:
+            filled = length
+        return full_char * filled + empty_char * (length - filled)
+
 
 class BlockingPlugin(AbstractPlugin):
     def __init__(self, taskplacement='fullscreen', taskupdatetime=15):
