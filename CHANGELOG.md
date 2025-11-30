@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Visual & Accessibility Controls
+- Added `ui_scale` and `colorblind_mode` to `config.ini` and surfaced them in the Streamlit config studio.
+- `ui_scale` scales 2D fonts and widget spacing without altering any scenario timing or KPI computations.
+- `colorblind_mode` enforces an aeronautical status palette (normal/advisory/caution/warning/inoperative) that remains legible without relying solely on red/green discrimination.
+
+#### Mission Director 2D Status Strip
+- Refined `plugins/missiondirector.py` to render each UAV on a fixed-width, text-only status line
+  (`UAV | MISSION | MODE | TASK | ENDUR | ALERTS`) consistent with UAS mission summary strips.
+- Representation remains strictly 2D and backwards compatible with existing logs and scenarios; only
+  presentation changed, preserving MATB psychometric validity.
+
 #### Real-Time HRV Combat Scenario Integration
 Implementation of Manual.md Section 17-18 roadmap for physiological monitoring during combat scenarios.
 
