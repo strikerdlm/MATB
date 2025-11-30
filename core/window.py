@@ -144,9 +144,9 @@ class Window(Window):
                 self.exit_prompt()
             elif keystr == 'P':
                 self.pause_prompt()
-            elif keystr == 'F6':
+            elif keystr == 'F11':
                 self._open_summary_report()
-            elif keystr == 'F7':
+            elif keystr == 'F12':
                 self._open_session_folder()
 
             logger.record_input('keyboard', keystr, 'press')

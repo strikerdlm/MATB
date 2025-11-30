@@ -60,15 +60,26 @@ class Payloadmanager(AbstractPlugin):
 
     def create_widgets(self) -> None:
         super().create_widgets()
+        # Instructions at top
+        self.add_widget(
+            'help',
+            Simpletext,
+            container=self.task_container,
+            text=_('SOLO MONITOREO - Estado de sensores'),
+            font_size=F['TINY'],
+            y=0.95,
+            color=C['GREY'],
+            wrap_width=0.95,
+        )
         self._widget = self.add_widget(
             'summary',
             Simpletext,
             container=self.task_container,
-            text=_('No tasks'),
+            text=_('Sin sensores activos'),
             font_size=F['SMALL'],
-            y=0.50,
+            y=0.55,
             wrap_width=0.95,
-            color=C['WHITE'],
+            color=C['BLACK'],
         )
 
     def compute_next_plugin_state(self) -> bool:
@@ -229,7 +240,7 @@ class Payloadmanager(AbstractPlugin):
             return
 
         if not self.sensors:
-            self._widget.set_text(_('No tasks'))
+            self._widget.set_text(_('Sin sensores activos'))
             return
 
         total_bw = self._total_bandwidth()
@@ -237,11 +248,12 @@ class Payloadmanager(AbstractPlugin):
 
         lines = []
         for sensor in self.sensors.values():
-            tgt = sensor.target or '-'
-            line = f"{sensor.name}: {tgt} ({sensor.energy:.0f}%)"
+            target = sensor.target if sensor.target else 'Sin objetivo'
+            status_es = {'IDLE': 'ESPERA', 'ACTIVE': 'ACTIVO', 'DEPLETED': 'AGOTADO'}.get(sensor.status, sensor.status)
+            line = f"{sensor.name}: {target} - Energía: {sensor.energy:.0f}% - {status_es}"
             lines.append(line)
 
-        lines.append(f"BW: {total_bw:.0f}/{capacity:.0f} Mbps")
+        lines.append(f"Ancho banda: {total_bw:.0f}/{capacity:.0f} Mbps")
         self._widget.set_text('\n'.join(lines))
 
     def _update_overdue(self) -> None:

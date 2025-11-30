@@ -1,30 +1,34 @@
-<h1>Escenario UAS Militar</h1>
+<h1>EJERCICIO MILITAR UAS</h1>
 
 <center>
 <p><strong>Duración: 7 minutos</strong></p>
-<p><strong>Dificultad: Alta</strong></p>
 
-<p>Este escenario simula operaciones de patrulla militar tipo <strong>ScanEagle/NightEagle</strong>.</p>
+<p><strong>═══════════════════════════════════════</strong></p>
+<p><strong>SUS TAREAS (requieren acción):</strong></p>
+<p><strong>═══════════════════════════════════════</strong></p>
 
-<p><strong>Plataformas Simuladas:</strong></p>
-<p>• Perfiles de plataforma específicos (endurance, sensores)</p>
-<p>• Capacidad de operador limitada</p>
-<p>• Gestión VTOL (despegue/aterrizaje vertical)</p>
+<p><strong style="color:green;">1. MONITOREO DEL SISTEMA (SYSMON) - Arriba izquierda</strong></p>
+<p>• Cuando la luz VERDE (F5) se APAGUE → Haga CLIC en F5 o presione tecla F5</p>
+<p>• Cuando la luz ROJA (F6) se ENCIENDA → Haga CLIC en F6 o presione tecla F6</p>
+<p>• Cuando una escala (F1-F4) llegue al EXTREMO → Haga CLIC en esa escala</p>
 
-<p><strong>Tareas Adicionales:</strong></p>
-<p>• <strong>Platform Profile</strong>: Configuración de aeronaves</p>
-<p>• <strong>Operator Capacity</strong>: Límites de supervisión</p>
-<p>• <strong>VTOL Manager</strong>: Transiciones de vuelo</p>
-<p>• <strong>Failure Injector</strong>: Fallos inyectados</p>
+<p><strong style="color:green;">2. SEGUIMIENTO (TRACKING) - Arriba centro</strong></p>
+<p>• Mantenga el cursor (cruz roja) dentro del círculo central</p>
+<p>• Use JOYSTICK o teclas de flecha ↑↓←→</p>
 
-<p><strong>Eventos de Alto Estrés:</strong></p>
-<p>• Conflictos SAA durante transiciones VTOL</p>
-<p>• Ráfagas de mensajes de datalink</p>
-<p>• Violaciones de geofence</p>
-<p>• Fallos de sistemas</p>
+<p><strong style="color:blue;">3. DATALINK - Arriba derecha</strong></p>
+<p>• Cuando llegue un mensaje, debe CONFIRMARLO antes que expire</p>
+<p>• ↑/↓ = Navegar entre mensajes</p>
+<p>• ENTER = Confirmar mensaje seleccionado</p>
 
-<p><strong>Objetivo:</strong> Completar la patrulla dentro de límites de carga de trabajo validados.</p>
+<p><strong>═══════════════════════════════════════</strong></p>
+<p><strong>PANELES DE MONITOREO (solo observar):</strong></p>
+<p><strong>═══════════════════════════════════════</strong></p>
 
-<p>Presione ESPACIO para comenzar...</p>
+<p>• <strong>PAYLOAD MANAGER</strong>: Estado de sensores del UAV</p>
+<p>• <strong>MISSION DIRECTOR</strong>: Estado de misiones de los UAVs</p>
+<p>• <strong>SENSE & AVOID</strong>: Alertas de intrusos aéreos</p>
+
+<p><strong>Presione ESPACIO para comenzar...</strong></p>
 </center>
 

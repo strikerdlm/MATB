@@ -66,13 +66,24 @@ class Datalink(AbstractPlugin):
     # UI -----------------------------------------------------------------
     def create_widgets(self) -> None:
         super().create_widgets()
+        # Instructions at top - this one DOES require interaction
+        self.add_widget(
+            'help',
+            Simpletext,
+            container=self.task_container,
+            text=_('INTERACTIVO: ↑↓=Navegar  ENTER=Confirmar'),
+            font_size=F['TINY'],
+            y=0.95,
+            color=C['BLUE'],
+            wrap_width=0.95,
+        )
         self._widget = self.add_widget(
             'messages',
             Simpletext,
             container=self.task_container,
-            text=_('No messages'),
+            text=_('Sin mensajes pendientes'),
             font_size=F['SMALL'],
-            y=0.50,
+            y=0.55,
             wrap_width=0.95,
             color=C['BLACK'],
         )
@@ -209,15 +220,18 @@ class Datalink(AbstractPlugin):
         if self._widget is None:
             return
         if not self.messages:
-            self._widget.set_text(_('No messages'))
+            self._widget.set_text(_('Sin mensajes pendientes'))
             return
         now = self.scenario_time
         lines = []
+        lines.append("↑/↓: Navegar | ENTER: Confirmar")
+        lines.append("")
         for idx, message in enumerate(self.messages):
-            selector = '>' if idx == self.selection_index else ' '
+            selector = '→' if idx == self.selection_index else ' '
             remaining = message.time_remaining(now)
-            txt = message.text[:20]
-            line = f"{selector}{message.msg_id}: {txt} ({remaining:.0f}s)"
+            priority_es = 'URGENTE' if message.priority == 'PRIO' else 'Normal'
+            line = f"{selector} [{message.msg_id}] {priority_es}: {message.text}"
+            line += f"\n   Tiempo restante: {remaining:.0f}s"
             lines.append(line)
         self._widget.set_text('\n'.join(lines))
 

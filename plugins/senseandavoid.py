@@ -69,13 +69,24 @@ class Senseandavoid(AbstractPlugin):
 
     def create_widgets(self) -> None:
         super().create_widgets()
+        # Instructions at top
+        self.add_widget(
+            'help',
+            Simpletext,
+            container=self.task_container,
+            text=_('SOLO MONITOREO - Alerta de intrusos'),
+            font_size=F['TINY'],
+            y=0.95,
+            color=C['GREY'],
+            wrap_width=0.95,
+        )
         self._intruder_widget = self.add_widget(
             'intruders',
             Simpletext,
             container=self.task_container,
-            text=_('No intruders'),
+            text=_('Sin intrusos detectados'),
             font_size=F['SMALL'],
-            y=0.50,
+            y=0.55,
             wrap_width=0.95,
             color=C['BLACK'],
         )
@@ -122,21 +133,18 @@ class Senseandavoid(AbstractPlugin):
         if self._intruder_widget is None:
             return
         if not self.intruders:
-            self._intruder_widget.set_text(_('Waiting for intruders…'))
+            self._intruder_widget.set_text(_('Sin intrusos detectados'))
             return
         now = self.scenario_time
         # Sort by increasing time-to-impact for faster scan
         rows = []
         for intr in sorted(self.intruders.values(), key=lambda i: i.remaining(now)):
             remaining = intr.remaining(now)
-            # 0–1 fraction based on original time_to_conflict (avoid altering logic)
-            denom = max(1.0, float(intr.time_to_conflict))
-            frac = remaining / denom
-            bar = self.format_progress_bar(frac, length=10)
+            status_es = 'ACTIVO' if intr.status == 'ACTIVE' else 'RESUELTO'
             row = (
-                f"{intr.identifier:4} | {intr.bearing:>3} | "
-                f"{intr.range_nm:4.1f} | {intr.altitude_ft:6.0f} | "
-                f"{remaining:5.1f}s {bar} | {intr.status}"
+                f"{intr.identifier}: Rumbo {intr.bearing}° - "
+                f"Dist: {intr.range_nm:.1f}nm - Alt: {intr.altitude_ft:.0f}ft - "
+                f"Tiempo: {remaining:.0f}s - {status_es}"
             )
             rows.append(row)
         self._intruder_widget.set_text('\n'.join(rows))

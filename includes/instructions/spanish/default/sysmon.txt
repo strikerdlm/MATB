@@ -1,20 +1,22 @@
 <h1>Tarea de Monitoreo del Sistema (SYSMON)</h1>
 
 <center>
-<p>En esta tarea, usted debe monitorear un conjunto de <strong>seis indicadores</strong> y dos luces.</p>
+<p>Monitoree las <strong>dos luces</strong> y las <strong>cuatro escalas</strong>.</p>
 
-<p><strong>Objetivos:</strong></p>
-<p>• Detectar cuando la luz VERDE se apaga (debe estar encendida)</p>
-<p>• Detectar cuando la luz ROJA se enciende (debe estar apagada)</p>
-<p>• Detectar cuando las flechas móviles se desplazan hacia los extremos de las escalas</p>
+<p><strong>LUCES (arriba):</strong></p>
+<p>• <strong>F5 (VERDE)</strong>: Debe estar ENCENDIDA. Si se apaga → CLIC en F5</p>
+<p>• <strong>F6 (ROJA)</strong>: Debe estar APAGADA. Si se enciende → CLIC en F6</p>
 
-<p><strong>Controles:</strong></p>
-<p>• Use el RATÓN para hacer clic en las luces o escalas anómalas</p>
-<p>• Responda rápidamente para mantener el sistema en estado normal</p>
+<p><strong>ESCALAS (F1-F4):</strong></p>
+<p>• Cada escala tiene una flecha que se mueve</p>
+<p>• Si la flecha llega al EXTREMO superior o inferior → CLIC en esa escala</p>
 
-<p><strong>Indicadores de Rendimiento:</strong></p>
-<p>• Tiempo de respuesta a anomalías</p>
-<p>• Precisión en la detección</p>
-<p>• Falsas alarmas (respuestas incorrectas)</p>
+<p><strong>CONTROLES:</strong></p>
+<p>• <strong>RATÓN</strong>: Haga clic directamente en el elemento anómalo</p>
+<p>• <strong>TECLADO</strong>: Presione F1, F2, F3, F4, F5 o F6 según corresponda</p>
+
+<p><strong>IMPORTANTE:</strong></p>
+<p>• Responda RÁPIDO cuando detecte una anomalía</p>
+<p>• NO haga clic si todo está normal (evite falsas alarmas)</p>
 </center>
 

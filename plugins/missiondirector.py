@@ -54,6 +54,18 @@ class Missiondirector(AbstractPlugin):
         """
         super().create_widgets()
 
+        # Instructions at top
+        self.add_widget(
+            'help',
+            Simpletext,
+            container=self.task_container,
+            text=_('SOLO MONITOREO - Observe el estado de los UAVs'),
+            font_size=F['TINY'],
+            y=0.95,
+            color=C['GREY'],
+            wrap_width=0.95,
+        )
+
         # One line per UAV label in a fixed order to aid scan patterns
         for idx, name in enumerate(self.uav_state.keys()):
             widget = self.add_widget(
@@ -62,7 +74,7 @@ class Missiondirector(AbstractPlugin):
                 container=self.task_container,
                 text=self._format_status(name),
                 font_size=F['SMALL'],
-                y=0.80 - idx * 0.18,
+                y=0.82 - idx * 0.18,
                 color=C['BLACK'],
                 wrap_width=0.95,
             )
@@ -220,24 +232,24 @@ class Missiondirector(AbstractPlugin):
         return max(0, duration)
 
     def _format_status(self, label: str) -> str:
-        """Format a single UAV status line.
+        """Format a single UAV status line - clear and readable.
 
-        Per update_plan.md Section 3.1:
-        - Simple readable format
-        - Mode highlighted (AUTO vs MAN)
-        - Alert tags appended
+        Format: UAV1 - Misión: Launch - Modo: AUTO - Tiempo: 04:21
         """
         state = self.uav_state[label]
 
-        mission = str(state.get('mission', 'Idle'))
+        mission = str(state.get('mission', 'Inactivo'))
         mode = str(state.get('mode', 'Manual'))
-        mode_abbrev = 'AUTO' if 'AUTO' in mode.upper() else 'MAN'
+        mode_text = 'AUTO' if 'AUTO' in mode.upper() else 'MANUAL'
         
         task_time, _ = self._remaining_time_with_fraction(state)
         alert = self._format_alert(state)
-        alert_str = f" [{alert}]" if alert else ""
+        
+        line = f"{label} - Misión: {mission} - Modo: {mode_text} - Tiempo: {task_time}"
+        if alert:
+            line += f"\n  ⚠ ALERTA: {alert}"
 
-        return f"{label}: {mission} ({mode_abbrev}) {task_time}{alert_str}"
+        return line
 
     def _remaining_time(self, state: Dict[str, Any]) -> str:
         start = state.get('start')
