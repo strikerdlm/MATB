@@ -60,24 +60,13 @@ class Payloadmanager(AbstractPlugin):
 
     def create_widgets(self) -> None:
         super().create_widgets()
-        header = _('Sensor | Target | BW (Mbps) | Energy (%) | Status')
-        self.add_widget(
-            'header',
-            Simpletext,
-            container=self.task_container,
-            text=header,
-            font_size=F['SMALL'],
-            y=0.9,
-            color=C['WHITE'],
-            bold=True,
-        )
         self._widget = self.add_widget(
             'summary',
             Simpletext,
             container=self.task_container,
-            text=_('Awaiting payload tasks…'),
+            text=_('No tasks'),
             font_size=F['SMALL'],
-            y=0.6,
+            y=0.50,
             wrap_width=0.95,
             color=C['WHITE'],
         )
@@ -240,35 +229,19 @@ class Payloadmanager(AbstractPlugin):
             return
 
         if not self.sensors:
-            self._widget.set_text(_('Awaiting payload tasks…'))
+            self._widget.set_text(_('No tasks'))
             return
 
         total_bw = self._total_bandwidth()
         capacity = float(self.parameters['capacitymbps'])
-        if capacity > 0.0:
-            # Show remaining capacity: bar shrinks as bandwidth is consumed
-            cap_fraction = max(0.0, min(1.0, (capacity - total_bw) / capacity))
-        else:
-            cap_fraction = 0.0
-        cap_bar = self.format_progress_bar(cap_fraction, length=10)
 
         lines = []
         for sensor in self.sensors.values():
-            energy_fraction = max(0.0, min(1.0, sensor.energy / 100.0))
-            energy_bar = self.format_progress_bar(energy_fraction, length=8)
-            line = (
-                f"{sensor.name:>6} | {sensor.target or '---':<12} | "
-                f"{sensor.bandwidth:5.1f} | {sensor.energy:5.1f}% {energy_bar} | {sensor.status}"
-            )
+            tgt = sensor.target or '-'
+            line = f"{sensor.name}: {tgt} ({sensor.energy:.0f}%)"
             lines.append(line)
 
-        lines.append(
-            _('Total BW: {0:.1f}/{1:.1f} Mbps {2}').format(
-                total_bw,
-                capacity,
-                cap_bar,
-            )
-        )
+        lines.append(f"BW: {total_bw:.0f}/{capacity:.0f} Mbps")
         self._widget.set_text('\n'.join(lines))
 
     def _update_overdue(self) -> None:
