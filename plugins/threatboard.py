@@ -74,8 +74,14 @@ class Threatboard(AbstractPlugin):
         super().start()
 
     def create_widgets(self) -> None:
+        """Create a 2D text-only threat strip consistent with fighter displays.
+
+        Columns mirror typical situational displays (ID/sector/range/weapon/TTI/status),
+        but remain ASCII-only so that timing and scoring stay identical to legacy
+        MATB-style tasks while giving pilots a familiar scan pattern.
+        """
         super().create_widgets()
-        header = _('ID | Sector | Range (nm) | Weapon | TTI (s) | Status')
+        header = _('ID   | SECTOR | RNG  | WEAPON  | TTI       | STATUS')
         self.add_widget(
             'header',
             Simpletext,
@@ -235,15 +241,20 @@ class Threatboard(AbstractPlugin):
             return
         now = self.scenario_time
         lines: List[str] = []
-        for threat in self.threats:
+        # Sort by time-to-impact so pilots see the most urgent threat first
+        for threat in sorted(self.threats, key=lambda t: t.remaining(now)):
             remaining = threat.remaining(now)
             status = threat.status
             if threat.assigned_weapon:
                 status = f"{status}:{threat.assigned_weapon}"
+            # Fraction of TTI remaining, based on scripted tti_seconds
+            denom = max(1.0, float(threat.tti_seconds))
+            frac = remaining / denom
+            bar = self.format_progress_bar(frac, length=8)
             line = (
-                f"{threat.threat_id} | {threat.sector} | "
-                f"{threat.range_nm:4.1f} | {threat.weapon_hint} | "
-                f"{remaining:5.1f} | {status}"
+                f"{threat.threat_id:<4} | {threat.sector:>3}    | "
+                f"{threat.range_nm:4.1f} | {threat.weapon_hint:<7} | "
+                f"{remaining:5.1f}s {bar} | {status}"
             )
             lines.append(line)
         lines.append('')
