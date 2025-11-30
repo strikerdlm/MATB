@@ -39,7 +39,7 @@ class WeaponStock:
 class Weaponsinventory(AbstractPlugin):
     """Tracks weapons loadouts and expended rounds."""
 
-    def __init__(self, label: str = '', taskplacement: str = 'bottommid', taskupdatetime: int = 500) -> None:
+    def __init__(self, label: str = '', taskplacement: str = 'topright', taskupdatetime: int = 500) -> None:
         super().__init__(label or _('Weapons Inventory'), taskplacement, taskupdatetime)
 
         self.validation_dict = {
