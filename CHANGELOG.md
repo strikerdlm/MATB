@@ -20,6 +20,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Representation remains strictly 2D and backwards compatible with existing logs and scenarios; only
   presentation changed, preserving MATB psychometric validity.
 
+#### VTOL, Payload, and Swarm 2D Strips
+- Updated `plugins/vtolmanager.py` to show each VTOL on a fixed-width line with phase, time in phase,
+  battery percentage plus an ASCII bar, power multiplier, and alert tags, without changing any
+  underlying VTOL timing, power, or logging logic.
+- Updated `plugins/vtolpower.py` to render VTOL energy reserves as remaining/capacity with a
+  percentage bar, ordered from lowest remaining fraction first for quick scan while preserving
+  existing `vtol_power_*` metrics.
+- Updated `plugins/launchrecovery.py` so active launch/recovery legs appear as `UAV | Phase | Method |
+  TGO | bar`, sorted by earliest deadline.
+- Updated `plugins/payloadmanager.py` and `plugins/sensorresource.py` to display per-sensor lines with
+  bandwidth and energy plus ASCII bars and a total link-capacity bar, making over-capacity states more
+  glanceable while keeping all `payload_*` and `sensor_*` metrics unchanged.
+- Updated `plugins/swarmformation.py` to add a manual-overrides-versus-limit bar and to list MANUAL
+  members first, while retaining existing `swarm_*` cognitive-overload metrics.
+
 #### Real-Time HRV Combat Scenario Integration
 Implementation of Manual.md Section 17-18 roadmap for physiological monitoring during combat scenarios.
 
