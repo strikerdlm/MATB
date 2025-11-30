@@ -99,6 +99,44 @@ Implementation of Manual.md Section 17-18 roadmap for physiological monitoring d
   - Spoken instructions generation in 📖 Instrucciones tab
   - Adds `openai>=1.40.0` to `requirements.txt`
 
+#### TacticalDisplay Widget (2D Spatial Overlays)
+- New `core/widgets/tacticaldisplay.py` widget per update_plan.md Section 2.5:
+  - Lightweight 2D tactical overlay using pyglet primitives
+  - Geofence polygon visualization with dynamic color based on breach status
+  - UAV/entity position display with configurable icon types (diamond, circle, triangle, square)
+  - Status-based coloring using STATUS_COLORS palette
+  - Breach highlighting for entities outside geofence
+  - Background grid for spatial reference
+  - Integrated into `plugins/senseandavoid.py` for visual geofence monitoring
+
+#### Automation Hooks Visual Feedback
+- Enhanced `plugins/automationhooks.py` per update_plan.md Section 3.8:
+  - Visual status display showing Automation ACTIVE/INACTIVE state
+  - Rules list widget showing all registered automation rules
+  - Recently fired rule indicators (★) that persist for 3 seconds
+  - Operator symbols for rule conditions (>, ≥, <, ≤, =, ≠, #)
+  - Configurable via `showvisualfeedback` parameter
+
+#### Mission Director Progress Bars
+- Enhanced `plugins/missiondirector.py` per update_plan.md Section 3.1:
+  - Progress bars for mission task time remaining
+  - Progress bars for endurance time remaining
+  - Updated header to show progress bar columns
+  - Faster update rate (500ms) for responsive bars
+
+#### Layout Convention Standardization
+- Updated default `taskplacement` values per update_plan.md Section 2.3:
+  - Fighter/HPA overlays now default to `topright`: `energymanager`, `weaponsinventory`, `emergencystack`
+  - UTM/BVLOS overlays now default to `bottomright`: `datalink`
+  - Layout convention: top-left (MATB core), top-right (HPA), bottom-left (UAS payload), bottom-mid (mission), bottom-right (UTM/SAA)
+
+### Fixed
+
+- **`plugins/senseandavoid.py`**: Removed duplicate `_update_intruder_widget` method that was overwriting the progress-bar implementation with a basic version lacking TTI bars
+- **`plugins/vtolmanager.py`**: Fixed incorrect gettext fallback that attempted to import non-existent `builtins._`; now falls back to identity function when gettext is not available
+- **`plugins/payloadmanager.py`**, **`plugins/sensorresource.py`**: Corrected link capacity bar calculation to show remaining capacity (bar shrinks as bandwidth consumed) per Manual.md section 4.6 conventions
+- **`plugins/launchrecovery.py`**, **`plugins/swarmformation.py`**: Fixed newline escape sequences (`'\\n'` → `'\n'`) that caused literal `\n` to appear in widget text instead of line breaks
+
 ### Changed
 
 - Scenario templates now include Polar RR Link and Physio Monitor by default for physiological instrumentation
