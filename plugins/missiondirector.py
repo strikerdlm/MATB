@@ -63,7 +63,7 @@ class Missiondirector(AbstractPlugin):
                 text=self._format_status(name),
                 font_size=F['SMALL'],
                 y=0.80 - idx * 0.18,
-                color=C['WHITE'],
+                color=C['BLACK'],
                 wrap_width=0.95,
             )
             self._widgets[name] = widget
