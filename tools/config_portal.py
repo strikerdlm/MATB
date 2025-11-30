@@ -1664,6 +1664,11 @@ def main() -> None:
         "Configure all aspects of OpenMATB: core settings, user identification, and plugin parameters. "
         "Changes are saved to `config.ini` with automatic backup."
     )
+    st.info(
+        "Controls such as **UI Scale** and **Colorblind-Friendly Status Palette** affect only the 2D "
+        "presentation (font size, spacing, symbology). Scenario timing, task logic, and workload "
+        "metrics remain unchanged, so MATB / military aircrew assessment validity is preserved."
+    )
 
     # Tabs for different sections
     if VOICE_GENERATOR_AVAILABLE:
