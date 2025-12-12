@@ -31,15 +31,24 @@ class UAVEventGenerator:
     threat encounters, and return to base.
     """
 
-    def __init__(self, uav: UAV) -> None:
+    def __init__(
+        self,
+        uav: UAV,
+        *,
+        seed: int | None = None,
+        rng: random.Random | None = None,
+    ) -> None:
         """
         Initialize event generator for a UAV.
 
         Args:
             uav: The UAV instance to generate events for
+            seed: Optional seed for deterministic event variation
+            rng: Optional RNG to use (overrides seed when provided)
         """
         self._uav = uav
         self._event_counter = 0
+        self._rng = rng if rng is not None else random.Random(seed)
 
     def generate_preflight_sequence(self) -> Generator[Event, None, None]:
         """Generate preflight check events."""
@@ -167,9 +176,9 @@ class UAVEventGenerator:
             self._uav.latitude = wp.latitude
             self._uav.longitude = wp.longitude
             self._uav.altitude_ft = wp.altitude_ft
-            self._uav.heading = (self._uav.heading + random.randint(10, 45)) % 360
-            self._uav.battery_percent = max(10, self._uav.battery_percent - random.randint(3, 8))
-            self._uav.fuel_percent = max(10, self._uav.fuel_percent - random.randint(2, 5))
+            self._uav.heading = (self._uav.heading + self._rng.randint(10, 45)) % 360
+            self._uav.battery_percent = max(10, self._uav.battery_percent - self._rng.randint(3, 8))
+            self._uav.fuel_percent = max(10, self._uav.fuel_percent - self._rng.randint(2, 5))
 
             wp.is_reached = True
             yield create_event(
@@ -341,7 +350,7 @@ class UAVEventGenerator:
             EventSeverity.SUCCESS,
             EventCategory.MISSION,
             "🛬 LANDING COMPLETE",
-            f"Touchdown confirmed | Mission duration: {random.randint(180, 300)} minutes",
+            f"Touchdown confirmed | Mission duration: {self._rng.randint(180, 300)} minutes",
             self._uav.callsign,
         )
 

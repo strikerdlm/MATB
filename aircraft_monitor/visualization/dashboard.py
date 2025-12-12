@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Generator
+from collections.abc import Generator, Iterable, Iterator
 from typing import Final
 
 from rich.console import Console, Group
@@ -12,7 +12,7 @@ from rich.live import Live
 from rich.panel import Panel
 from rich.text import Text
 
-from aircraft_monitor.events.base import Event
+from aircraft_monitor.events.base import Event, EventCategory, EventSeverity, create_event
 from aircraft_monitor.models.fighter import FighterAircraft
 from aircraft_monitor.models.uav import UAV
 from aircraft_monitor.visualization.panels import (
@@ -30,6 +30,7 @@ from aircraft_monitor.visualization.themes import MILITARY_THEME, Theme
 DEFAULT_EVENT_DELAY_SEC: Final[float] = 0.8
 MIN_EVENT_DELAY_SEC: Final[float] = 0.3
 MAX_EVENT_DELAY_SEC: Final[float] = 2.0
+DEFAULT_MAX_EVENTS: Final[int] = 5_000
 
 
 def create_header(title: str, subtitle: str = "") -> Panel:
@@ -73,6 +74,9 @@ class MonitoringDashboard:
         self,
         theme: Theme = MILITARY_THEME,
         event_delay: float = DEFAULT_EVENT_DELAY_SEC,
+        *,
+        max_events: int = DEFAULT_MAX_EVENTS,
+        headless: bool | None = None,
     ) -> None:
         """
         Initialize the monitoring dashboard.
@@ -80,10 +84,14 @@ class MonitoringDashboard:
         Args:
             theme: Color theme for the dashboard
             event_delay: Delay between events in seconds
+            max_events: Hard limit on processed events per run to prevent runaway generators
+            headless: If True, do not use full-screen live UI; if None, auto-detect
         """
         self._console = Console()
         self._theme = theme
         self._event_delay = max(MIN_EVENT_DELAY_SEC, min(MAX_EVENT_DELAY_SEC, event_delay))
+        self._max_events = max(1, max_events)
+        self._headless = (not self._console.is_terminal) if headless is None else headless
 
         # Panels
         self._event_log = EventLogPanel(theme=theme)
@@ -157,6 +165,54 @@ class MonitoringDashboard:
                 self._fighter.engines.afterburner_1_active,
                 self._fighter.engines.afterburner_2_active,
             )
+
+    def _sleep(self, seconds: float) -> None:
+        """Sleep between frames (disabled in headless mode)."""
+        if self._headless:
+            return
+        time.sleep(seconds)
+
+    def _bounded_events(self, events: Iterable[Event], *, source: str) -> Iterator[Event]:
+        """Yield up to max_events, then emit a hard-stop event and terminate."""
+        count = 0
+        for event in events:
+            yield event
+            count += 1
+            if count >= self._max_events:
+                yield create_event(
+                    EventSeverity.CRITICAL,
+                    EventCategory.SYSTEM,
+                    "EVENT LIMIT REACHED",
+                    f"Stopped after {self._max_events} events to prevent runaway simulation.",
+                    source,
+                    {"max_events": self._max_events},
+                )
+                return
+
+    def _interleave_events(
+        self,
+        a_events: Iterable[Event],
+        b_events: Iterable[Event],
+    ) -> Iterator[Event]:
+        """Interleave two finite iterables without materializing them."""
+        a_iter = iter(a_events)
+        b_iter = iter(b_events)
+
+        a_done = False
+        b_done = False
+
+        # Bounded by exhaustion of both iterators.
+        while not (a_done and b_done):
+            if not a_done:
+                try:
+                    yield next(a_iter)
+                except StopIteration:
+                    a_done = True
+            if not b_done:
+                try:
+                    yield next(b_iter)
+                except StopIteration:
+                    b_done = True
 
     def _create_uav_layout(self) -> Layout:
         """Create layout for UAV monitoring."""
@@ -298,11 +354,19 @@ class MonitoringDashboard:
         Args:
             event_generator: Generator yielding UAV events
         """
+        events = self._bounded_events(event_generator, source=(self._uav.callsign if self._uav else "UAV"))
+
+        if self._headless:
+            for event in events:
+                # Keep it readable in non-interactive output
+                self._console.print(f"{event.format_timestamp()} {event.icon} {event.title} - {event.description}")
+            return
+
         layout = self._create_uav_layout()
 
         with Live(layout, console=self._console, refresh_per_second=4, screen=True) as live:
             try:
-                for event in event_generator:
+                for event in events:
                     self._event_log.add_event(event)
                     self._update_radar()
                     self._update_mission()
@@ -310,10 +374,10 @@ class MonitoringDashboard:
                     self._render_uav_layout(layout)
                     live.update(layout)
 
-                    time.sleep(self._event_delay)
+                    self._sleep(self._event_delay)
 
                 # Keep display up after completion
-                time.sleep(3.0)
+                self._sleep(3.0)
 
             except KeyboardInterrupt:
                 pass
@@ -325,13 +389,23 @@ class MonitoringDashboard:
         Args:
             event_generator: Generator yielding fighter events
         """
+        events = self._bounded_events(
+            event_generator,
+            source=(self._fighter.callsign if self._fighter else "FIGHTER"),
+        )
+
+        if self._headless:
+            for event in events:
+                self._console.print(f"{event.format_timestamp()} {event.icon} {event.title} - {event.description}")
+            return
+
         layout = self._create_fighter_layout()
 
         with Live(layout, console=self._console, refresh_per_second=4, screen=True) as live:
             try:
                 mission_start = time.time()
 
-                for event in event_generator:
+                for event in events:
                     self._event_log.add_event(event)
                     self._update_radar()
                     self._update_mission()
@@ -344,10 +418,10 @@ class MonitoringDashboard:
                     self._render_fighter_layout(layout)
                     live.update(layout)
 
-                    time.sleep(self._event_delay)
+                    self._sleep(self._event_delay)
 
                 # Keep display up after completion
-                time.sleep(3.0)
+                self._sleep(3.0)
 
             except KeyboardInterrupt:
                 pass
@@ -364,22 +438,22 @@ class MonitoringDashboard:
             uav_events: Generator yielding UAV events
             fighter_events: Generator yielding fighter events
         """
+        combined_iter = self._interleave_events(uav_events, fighter_events)
+        combined = self._bounded_events(
+            combined_iter,
+            source="JOINT",
+        )
+
+        if self._headless:
+            for event in combined:
+                self._console.print(f"{event.format_timestamp()} {event.icon} {event.title} - {event.description}")
+            return
+
         layout = self._create_combined_layout()
-
-        # Interleave events
-        uav_list = list(uav_events)
-        fighter_list = list(fighter_events)
-        combined: list[Event] = []
-
-        max_len = max(len(uav_list), len(fighter_list))
-        for i in range(max_len):
-            if i < len(uav_list):
-                combined.append(uav_list[i])
-            if i < len(fighter_list):
-                combined.append(fighter_list[i])
 
         with Live(layout, console=self._console, refresh_per_second=4, screen=True) as live:
             try:
+                mission_start = time.time()
                 for event in combined:
                     self._event_log.add_event(event)
                     self._update_radar()
@@ -387,12 +461,15 @@ class MonitoringDashboard:
                     self._update_weapons()
                     self._update_engines()
 
+                    if self._fighter:
+                        self._fighter.mission_time_sec = int(time.time() - mission_start)
+
                     self._render_combined_layout(layout)
                     live.update(layout)
 
-                    time.sleep(self._event_delay * 0.6)
+                    self._sleep(self._event_delay * 0.6)
 
-                time.sleep(3.0)
+                self._sleep(3.0)
 
             except KeyboardInterrupt:
                 pass
