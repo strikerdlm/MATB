@@ -19,6 +19,7 @@ from aircraft_monitor.models.fighter import (
     WeaponSystem,
     WeaponType,
 )
+from aircraft_monitor.simulation.physics import mach_to_knots
 
 if TYPE_CHECKING:
     from aircraft_monitor.models.fighter import FighterAircraft
@@ -33,14 +34,23 @@ class FighterEventGenerator:
     defensive maneuvers, and return to base.
     """
 
-    def __init__(self, fighter: FighterAircraft) -> None:
+    def __init__(
+        self,
+        fighter: FighterAircraft,
+        *,
+        seed: int | None = None,
+        rng: random.Random | None = None,
+    ) -> None:
         """
         Initialize event generator for a fighter aircraft.
 
         Args:
             fighter: The FighterAircraft instance to generate events for
+            seed: Optional seed for deterministic event variation
+            rng: Optional RNG to use (overrides seed when provided)
         """
         self._fighter = fighter
+        self._rng = rng if rng is not None else random.Random(seed)
 
     def generate_startup_sequence(self) -> Generator[Event, None, None]:
         """Generate cockpit startup events."""
@@ -182,8 +192,8 @@ class FighterEventGenerator:
             self._fighter.callsign,
         )
 
-        self._fighter.speed_knots = 165
         self._fighter.speed_mach = 0.25
+        self._fighter.speed_knots = mach_to_knots(self._fighter.speed_mach, self._fighter.altitude_ft)
         yield create_event(
             EventSeverity.INFO,
             EventCategory.NAVIGATION,
@@ -208,7 +218,7 @@ class FighterEventGenerator:
         for alt, mach in [(10000, 0.8), (25000, 0.92), (35000, 0.95)]:
             self._fighter.altitude_ft = alt
             self._fighter.speed_mach = mach
-            self._fighter.speed_knots = int(mach * 600)
+            self._fighter.speed_knots = mach_to_knots(mach, alt)
             yield create_event(
                 EventSeverity.INFO,
                 EventCategory.NAVIGATION,
@@ -300,6 +310,7 @@ class FighterEventGenerator:
         self._fighter.heading = 45
         self._fighter.altitude_ft = 35000
         self._fighter.speed_mach = 1.2
+        self._fighter.speed_knots = mach_to_knots(self._fighter.speed_mach, self._fighter.altitude_ft)
         self._fighter.engines.afterburner_1_active = True
         self._fighter.engines.afterburner_2_active = True
 
@@ -373,6 +384,16 @@ class FighterEventGenerator:
         )
 
         # Lock target
+        if not self._fighter.radar_contacts:
+            yield create_event(
+                EventSeverity.CRITICAL,
+                EventCategory.SENSOR,
+                "NO TARGETS",
+                "No radar contacts available to lock | Aborting engagement sequence",
+                self._fighter.callsign,
+            )
+            return
+
         self._fighter.radar_contacts[0].is_locked = True
         yield create_event(
             EventSeverity.WARNING,
@@ -414,7 +435,8 @@ class FighterEventGenerator:
 
         # First kill
         self._fighter.kills += 1
-        self._fighter.radar_contacts.pop(0)
+        if self._fighter.radar_contacts:
+            _ = self._fighter.radar_contacts.pop(0)  # remove destroyed contact
         yield create_event(
             EventSeverity.SUCCESS,
             EventCategory.WEAPON,
@@ -548,8 +570,9 @@ class FighterEventGenerator:
         )
 
         # Complete objectives
-        self._fighter.mission_objectives[0] = ("Establish air superiority in sector ALPHA", True)
-        self._fighter.mission_objectives[1] = ("Intercept unidentified contacts", True)
+        if len(self._fighter.mission_objectives) >= 2:
+            self._fighter.mission_objectives[0] = ("Establish air superiority in sector ALPHA", True)
+            self._fighter.mission_objectives[1] = ("Intercept unidentified contacts", True)
 
     def generate_rtb_sequence(self) -> Generator[Event, None, None]:
         """Generate return to base events."""
@@ -572,7 +595,7 @@ class FighterEventGenerator:
             self._fighter.callsign,
         )
 
-        self._fighter.fuel_percent = max(25, self._fighter.fuel_percent - random.randint(10, 20))
+        self._fighter.fuel_percent = max(25, self._fighter.fuel_percent - self._rng.randint(10, 20))
 
         yield create_event(
             EventSeverity.INFO,
@@ -584,6 +607,7 @@ class FighterEventGenerator:
 
         self._fighter.altitude_ft = 10000
         self._fighter.speed_mach = 0.6
+        self._fighter.speed_knots = mach_to_knots(self._fighter.speed_mach, self._fighter.altitude_ft)
 
         yield create_event(
             EventSeverity.INFO,
@@ -617,8 +641,9 @@ class FighterEventGenerator:
         )
 
         # Complete remaining objectives
-        self._fighter.mission_objectives[2] = ("Protect high-value assets", True)
-        self._fighter.mission_objectives[3] = ("Maintain patrol for 90 minutes", True)
+        if len(self._fighter.mission_objectives) >= 4:
+            self._fighter.mission_objectives[2] = ("Protect high-value assets", True)
+            self._fighter.mission_objectives[3] = ("Maintain patrol for 90 minutes", True)
 
         yield create_event(
             EventSeverity.SUCCESS,

@@ -27,6 +27,13 @@ python -m aircraft_monitor.demo_fighter  # Fighter aircraft demo
 python -m aircraft_monitor.demo_combined # Combined operations
 ```
 
+## 🧪 Non-interactive / CI usage
+
+When stdout/stderr are not attached to a TTY (for example, in CI logs), the app:
+
+- Runs in **headless mode** (prints a readable event stream instead of a full-screen UI)
+- Avoids blocking on interactive prompts (defaults to `combined` mode when no mode is provided)
+
 ## 📦 Project Structure
 
 ```
@@ -72,6 +79,13 @@ During simulation:
 ## 🔧 Configuration
 
 Customize simulation parameters in the demo files or create your own scenarios.
+
+## 🗺️ Roadmap
+
+- **Determinism**: Optional seeded randomness for reproducible demos and screenshots
+- **Scientific consistency**: Keep key units internally consistent (e.g., Mach ↔ knots conversions)
+- **Reliability**: Bounded event streams, safer defaults in non-interactive environments
+- **Quality**: Add automated smoke tests for the demo entrypoints
 
 ## 📄 License
 

@@ -73,21 +73,29 @@ def main() -> int:
     if len(sys.argv) > 1:
         mode = sys.argv[1].lower()
     else:
-        # Interactive mode selection
-        print_banner(console)
-        print_menu(console)
+        # Non-interactive environments (e.g., redirected stdin) must not block on input().
+        if not sys.stdin.isatty():
+            mode = "combined"
+        else:
+            # Interactive mode selection
+            print_banner(console)
+            print_menu(console)
 
-        try:
-            console.print("\n  Enter mode (uav/fighter/combined) or number: ", style="cyan", end="")
-            user_input = input().strip().lower()
+            try:
+                console.print(
+                    "\n  Enter mode (uav/fighter/combined) or number: ",
+                    style="cyan",
+                    end="",
+                )
+                user_input = input().strip().lower()
 
-            # Map numbers to modes
-            mode_map = {"1": "uav", "2": "fighter", "3": "combined"}
-            mode = mode_map.get(user_input, user_input)
+                # Map numbers to modes
+                mode_map = {"1": "uav", "2": "fighter", "3": "combined"}
+                mode = mode_map.get(user_input, user_input)
 
-        except (KeyboardInterrupt, EOFError):
-            console.print("\n\n  Cancelled.", style="yellow")
-            return 0
+            except (KeyboardInterrupt, EOFError):
+                console.print("\n\n  Cancelled.", style="yellow")
+                return 0
 
     # Validate mode
     if mode not in VALID_MODES:
@@ -103,7 +111,8 @@ def main() -> int:
 
     try:
         import time
-        time.sleep(1.5)  # Brief pause before starting
+        if sys.stdout.isatty():
+            time.sleep(1.5)  # Brief pause before starting
 
         engine = SimulationEngine(event_delay=0.7)
 

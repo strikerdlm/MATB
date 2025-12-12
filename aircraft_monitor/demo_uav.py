@@ -30,7 +30,8 @@ def main() -> int:
 
     try:
         import time
-        time.sleep(2.0)
+        if sys.stdout.isatty():
+            time.sleep(2.0)
 
         # Create UAV
         uav = UAV(
