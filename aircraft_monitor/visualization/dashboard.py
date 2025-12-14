@@ -36,9 +36,9 @@ DEFAULT_MAX_EVENTS: Final[int] = 5_000
 def create_header(title: str, subtitle: str = "") -> Panel:
     """Create the dashboard header."""
     header_text = Text()
-    header_text.append("═" * 20 + " ", style="bright_green")
+    header_text.append("═" * 18 + " ", style="bright_green")
     header_text.append(title, style="bold bright_green")
-    header_text.append(" " + "═" * 20, style="bright_green")
+    header_text.append(" " + "═" * 18, style="bright_green")
     if subtitle:
         header_text.append(f"\n{subtitle}", style="dim cyan")
 
@@ -225,9 +225,14 @@ class MonitoringDashboard:
         )
 
         layout["main"].split_row(
-            Layout(name="left", ratio=1),
-            Layout(name="center", ratio=2),
-            Layout(name="right", ratio=1),
+            Layout(name="left", ratio=2),
+            Layout(name="center", ratio=3),
+            Layout(name="right", ratio=2),
+        )
+
+        layout["right"].split_column(
+            Layout(name="radar", ratio=2),
+            Layout(name="mission", ratio=2),
         )
 
         return layout
@@ -243,14 +248,15 @@ class MonitoringDashboard:
         )
 
         layout["main"].split_row(
-            Layout(name="left", ratio=1),
-            Layout(name="center", ratio=2),
-            Layout(name="right", ratio=1),
+            Layout(name="left", ratio=2),
+            Layout(name="center", ratio=3),
+            Layout(name="right", ratio=2),
         )
 
         layout["right"].split_column(
-            Layout(name="weapons"),
-            Layout(name="engines"),
+            Layout(name="radar", ratio=2),
+            Layout(name="weapons", ratio=2),
+            Layout(name="engines", ratio=1),
         )
 
         return layout
@@ -266,9 +272,9 @@ class MonitoringDashboard:
         )
 
         layout["main"].split_row(
-            Layout(name="left", ratio=1),
-            Layout(name="center", ratio=2),
-            Layout(name="right", ratio=1),
+            Layout(name="left", ratio=2),
+            Layout(name="center", ratio=3),
+            Layout(name="right", ratio=2),
         )
 
         layout["left"].split_column(
@@ -287,7 +293,7 @@ class MonitoringDashboard:
         """Render UAV monitoring layout."""
         layout["header"].update(
             create_header(
-                "🛩️ UAV MONITORING SYSTEM",
+                "🛩️  UAV MONITORING SYSTEM",
                 f"Tracking: {self._uav.callsign if self._uav else 'N/A'}",
             )
         )
@@ -297,12 +303,8 @@ class MonitoringDashboard:
 
         layout["center"].update(self._event_log.render())
 
-        # Right side: radar and mission
-        right_content = Group(
-            self._radar.render(),
-            self._mission.render(),
-        )
-        layout["right"].update(Panel(right_content, border_style="dim", title="TACTICAL"))
+        layout["radar"].update(self._radar.render())
+        layout["mission"].update(self._mission.render())
 
         layout["footer"].update(create_footer())
 
@@ -310,7 +312,7 @@ class MonitoringDashboard:
         """Render fighter monitoring layout."""
         layout["header"].update(
             create_header(
-                "✈️ FIGHTER AIRCRAFT MONITORING",
+                "✈️  FIGHTER AIRCRAFT MONITORING",
                 f"Pilot: {self._fighter.callsign if self._fighter else 'N/A'}",
             )
         )
@@ -320,6 +322,7 @@ class MonitoringDashboard:
 
         layout["center"].update(self._event_log.render())
 
+        layout["radar"].update(self._radar.render())
         layout["weapons"].update(self._weapons.render())
         layout["engines"].update(self._engines.render())
 
