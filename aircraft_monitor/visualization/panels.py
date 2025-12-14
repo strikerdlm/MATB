@@ -1,14 +1,21 @@
-"""Rich UI panel components for aircraft monitoring."""
+"""Rich UI panel components for aircraft monitoring.
+
+This module aims to keep displayed values physically consistent and readable:
+- Every numeric field is presented with units.
+- Derived values (e.g., TAS in knots) are computed from already-simulated fields.
+- Trend visuals are bounded (fixed history window) to avoid unbounded growth.
+"""
 
 from __future__ import annotations
 
 from collections import deque
+from dataclasses import dataclass
 from typing import Final
 
 from rich.align import Align
 from rich.console import Group, RenderableType
 from rich.panel import Panel
-from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
+from rich.table import Table
 from rich.table import Table
 from rich.text import Text
 
@@ -20,6 +27,66 @@ from aircraft_monitor.visualization.themes import MILITARY_THEME, Theme
 # Constants
 MAX_EVENT_LOG_SIZE: Final[int] = 15
 RADAR_DISPLAY_SIZE: Final[int] = 11
+SPARKLINE_HISTORY: Final[int] = 30
+
+
+SPARK_CHARS: Final[tuple[str, ...]] = ("▁", "▂", "▃", "▄", "▅", "▆", "▇", "█")
+
+
+def _clamp_int(value: int, low: int, high: int) -> int:
+    """Clamp value into [low, high]."""
+    if value < low:
+        return low
+    if value > high:
+        return high
+    return value
+
+
+def _format_deg(value: float, *, width: int = 3) -> str:
+    """Format heading/bearing degrees as 000°."""
+    deg = int(round(value)) % 360
+    return f"{deg:0{width}d}°"
+
+
+def _sparkline(values: deque[float], *, low: float | None = None, high: float | None = None) -> Text:
+    """Render a bounded-history sparkline.
+
+    Args:
+        values: Deque of numeric values.
+        low: Optional fixed lower bound for scaling.
+        high: Optional fixed upper bound for scaling.
+
+    Returns:
+        Rich Text sparkline. Empty if no values.
+    """
+    if not values:
+        return Text(" " * 8, style="dim")
+
+    vmin = min(values) if low is None else float(low)
+    vmax = max(values) if high is None else float(high)
+    if vmax <= vmin:
+        # Flat line.
+        return Text(SPARK_CHARS[0] * min(len(values), 16), style="dim")
+
+    chars: list[str] = []
+    # Cap visible width to keep panels stable across terminals.
+    take = min(len(values), 16)
+    start = len(values) - take
+    for i, v in enumerate(values):
+        if i < start:
+            continue
+        t = (float(v) - vmin) / (vmax - vmin)
+        idx = int(round(t * (len(SPARK_CHARS) - 1)))
+        idx = _clamp_int(idx, 0, len(SPARK_CHARS) - 1)
+        chars.append(SPARK_CHARS[idx])
+    return Text("".join(chars), style="bright_green")
+
+
+def _chip(label: str, *, style: str, pad: int = 1) -> Text:
+    """Small status 'chip' with consistent styling."""
+    text = Text(f"{' ' * pad}{label}{' ' * pad}")
+    text.stylize(style)
+    return text
 
 
 def create_gauge(
@@ -82,6 +149,18 @@ def create_heading_indicator(heading: int) -> Text:
     return indicator
 
 
+@dataclass(slots=True)
+class _History:
+    """Bounded metric history for trend visuals."""
+
+    altitude_ft: deque[float]
+    speed: deque[float]
+    fuel_pct: deque[float]
+    battery_pct: deque[float]
+    signal_pct: deque[float]
+    g_force: deque[float]
+
+
 class UAVStatusPanel:
     """UAV status display panel."""
 
@@ -89,81 +168,115 @@ class UAVStatusPanel:
         """Initialize UAV status panel."""
         self._uav = uav
         self._theme = theme
+        self._hist = _History(
+            altitude_ft=deque(maxlen=SPARKLINE_HISTORY),
+            speed=deque(maxlen=SPARKLINE_HISTORY),
+            fuel_pct=deque(maxlen=SPARKLINE_HISTORY),
+            battery_pct=deque(maxlen=SPARKLINE_HISTORY),
+            signal_pct=deque(maxlen=SPARKLINE_HISTORY),
+            g_force=deque(maxlen=SPARKLINE_HISTORY),
+        )
+
+    def _tick(self) -> None:
+        """Update bounded histories from current UAV state."""
+        self._hist.altitude_ft.append(float(self._uav.altitude_ft))
+        self._hist.speed.append(float(self._uav.speed_knots))
+        self._hist.fuel_pct.append(float(self._uav.fuel_percent))
+        self._hist.battery_pct.append(float(self._uav.battery_percent))
+        self._hist.signal_pct.append(float(self._uav.signal_strength))
 
     def render(self) -> Panel:
         """Render the UAV status panel."""
-        table = Table(show_header=False, box=None, padding=(0, 1))
-        table.add_column("Label", style="cyan", width=16)
-        table.add_column("Value", style="white")
+        self._tick()
 
-        # Status with color coding
+        top = Table.grid(padding=(0, 1))
+        top.add_column(justify="left", ratio=1)
+        top.add_column(justify="right")
+
+        # Status chips
         status_colors = {
-            UAVStatus.PREFLIGHT: "yellow",
-            UAVStatus.LAUNCHING: "cyan",
-            UAVStatus.CLIMBING: "green",
-            UAVStatus.CRUISING: "bright_green",
-            UAVStatus.ON_STATION: "bright_green",
-            UAVStatus.EXECUTING: "bright_yellow",
-            UAVStatus.RTB: "yellow",
-            UAVStatus.LANDING: "cyan",
-            UAVStatus.EMERGENCY: "red",
-            UAVStatus.OFFLINE: "red",
+            UAVStatus.PREFLIGHT: "black on yellow",
+            UAVStatus.LAUNCHING: "black on cyan",
+            UAVStatus.CLIMBING: "black on bright_green",
+            UAVStatus.CRUISING: "black on bright_green",
+            UAVStatus.ON_STATION: "black on bright_green",
+            UAVStatus.EXECUTING: "black on bright_yellow",
+            UAVStatus.RTB: "black on yellow",
+            UAVStatus.LANDING: "black on cyan",
+            UAVStatus.EMERGENCY: "bold white on red",
+            UAVStatus.OFFLINE: "bold white on red",
         }
-        status_color = status_colors.get(self._uav.status, "white")
-        status_text = Text(self._uav.status.value, style=f"bold {status_color}")
-        table.add_row("Status", status_text)
+        status_style = status_colors.get(self._uav.status, "bold white")
+        chips = Text()
+        chips.append_text(_chip(self._uav.status.value.upper(), style=status_style))
+        chips.append(" ")
+        chips.append_text(_chip(self._uav.uav_type.value, style="bold black on bright_cyan"))
+        chips.append(" ")
+        chips.append_text(_chip("AP" if self._uav.autopilot_engaged else "MAN", style="black on green" if self._uav.autopilot_engaged else "black on yellow"))
+        top.add_row(chips, Text(self._uav.callsign, style="bold bright_green"))
 
-        table.add_row("Type", Text(self._uav.uav_type.value, style="bright_cyan"))
-        table.add_row("Mission", Text(self._uav.mission.value[:30], style="yellow"))
+        # Primary telemetry strip
+        telem = Table.grid(padding=(0, 1))
+        telem.add_column(ratio=1)
+        telem.add_column(ratio=1)
+        telem.add_column(ratio=1)
+        telem.add_row(
+            Text(f"ALT  {self._uav.altitude_ft:>6,} ft  ({int(round(self._uav.altitude_ft * 0.3048)):>5,} m)", style="white"),
+            Text(f"IAS  {self._uav.speed_knots:>4} kt   ({int(round(self._uav.speed_knots * 0.514444)):>3} m/s)", style="white"),
+            Text(f"HDG  {_format_deg(self._uav.heading)}", style="cyan"),
+        )
 
-        # Altitude and Speed
-        alt_text = Text(f"{self._uav.altitude_ft:,} ft", style="white")
-        table.add_row("Altitude", alt_text)
+        trends = Table.grid(padding=(0, 1))
+        trends.add_column("Metric", style="dim", width=8)
+        trends.add_column("Now", justify="right", width=6)
+        trends.add_column("Trend", justify="left")
+        trends.add_row("ALT", f"{self._uav.altitude_ft:,.0f}", _sparkline(self._hist.altitude_ft))
+        trends.add_row("SPD", f"{self._uav.speed_knots:.0f}", _sparkline(self._hist.speed, low=0.0, high=300.0))
+        trends.add_row("BAT", f"{self._uav.battery_percent:>3d}%", _sparkline(self._hist.battery_pct, low=0.0, high=100.0))
+        trends.add_row("FUEL", f"{self._uav.fuel_percent:>3d}%", _sparkline(self._hist.fuel_pct, low=0.0, high=100.0))
+        trends.add_row("LINK", f"{self._uav.signal_strength:>3d}%", _sparkline(self._hist.signal_pct, low=0.0, high=100.0))
 
-        speed_text = Text(f"{self._uav.speed_knots} kts", style="white")
-        table.add_row("Speed", speed_text)
-
-        table.add_row("Heading", Text(f"{self._uav.heading:03d}°", style="cyan"))
-
-        # Gauges
-        table.add_row("Battery", create_gauge(self._uav.battery_percent, color="green"))
-        table.add_row("Fuel", create_gauge(self._uav.fuel_percent, color="cyan"))
-        table.add_row("Signal", create_gauge(self._uav.signal_strength, color="blue"))
-
-        # GPS
+        # Navigation / mission context
+        nav = Table.grid(padding=(0, 1))
+        nav.add_column("Label", style="cyan", width=10)
+        nav.add_column("Value", style="white")
+        wp = self._uav.get_current_waypoint()
+        reached = sum(1 for w in self._uav.waypoints if w.is_reached)
+        total = len(self._uav.waypoints)
+        wp_text = wp.name if wp else "COMPLETE"
+        nav.add_row("Mission", Text(self._uav.mission.value[:42], style="yellow"))
+        nav.add_row("WP", Text(f"{wp_text}  ({reached}/{total})", style="yellow"))
+        nav.add_row("Pos", Text(f"{self._uav.latitude:.4f}°, {self._uav.longitude:.4f}°", style="dim"))
         gps_style = "green" if self._uav.gps_satellites >= 6 else "yellow"
-        table.add_row("GPS Sats", Text(f"{self._uav.gps_satellites} locked", style=gps_style))
-
-        # Datalink
-        datalink_style = "green" if self._uav.uplink_active else "red"
-        table.add_row("Datalink", Text(self._uav.datalink_status, style=datalink_style))
-
-        # Active sensors
-        sensors = self._uav.sensors.active_sensors()
-        sensor_text = Text(", ".join(sensors[:3]) if sensors else "None", style="cyan")
-        table.add_row("Sensors", sensor_text)
+        nav.add_row("GPS", Text(f"{self._uav.gps_satellites} sats", style=gps_style))
+        dl_style = "green" if self._uav.uplink_active else "bold white on red"
+        nav.add_row("Datalink", Text(self._uav.datalink_status, style=dl_style))
 
         # Threats
         threat_count = len(self._uav.threats)
         if threat_count > 0:
-            threat_style = "bold red"
-            threat_text = f"⚠️ {threat_count} ACTIVE"
+            threat_badge = Text("⚠ THREATS", style="bold white on red")
+            threat_line = Text(f"{threat_count} contact(s)", style="bold red")
         else:
-            threat_style = "green"
-            threat_text = "CLEAR"
-        table.add_row("Threats", Text(threat_text, style=threat_style))
+            threat_badge = Text("THREAT", style="black on green")
+            threat_line = Text("CLEAR", style="green")
 
-        # Waypoint
-        wp = self._uav.get_current_waypoint()
-        wp_text = wp.name if wp else "COMPLETE"
-        reached = sum(1 for w in self._uav.waypoints if w.is_reached)
-        total = len(self._uav.waypoints)
-        table.add_row("Waypoint", Text(f"{wp_text} ({reached}/{total})", style="yellow"))
+        sensors = self._uav.sensors.active_sensors()
+        sensors_text = Text(", ".join(sensors[:4]) if sensors else "None", style="cyan")
+        lower = Group(
+            nav,
+            Text(""),
+            threat_badge,
+            threat_line,
+            Text("Sensors", style="dim"),
+            sensors_text,
+        )
 
-        title = f"🛩️  {self._uav.callsign}"
+        content = Group(top, telem, Text(""), trends, Text(""), lower)
+
         return Panel(
-            table,
-            title=title,
+            content,
+            title="UAV STATUS",
             border_style=self._theme.border,
             padding=(0, 1),
         )
@@ -176,83 +289,159 @@ class FighterStatusPanel:
         """Initialize fighter status panel."""
         self._fighter = fighter
         self._theme = theme
+        self._hist = _History(
+            altitude_ft=deque(maxlen=SPARKLINE_HISTORY),
+            speed=deque(maxlen=SPARKLINE_HISTORY),
+            fuel_pct=deque(maxlen=SPARKLINE_HISTORY),
+            battery_pct=deque(maxlen=SPARKLINE_HISTORY),
+            signal_pct=deque(maxlen=SPARKLINE_HISTORY),
+            g_force=deque(maxlen=SPARKLINE_HISTORY),
+        )
+
+    def _tick(self) -> None:
+        """Update bounded histories from current fighter state."""
+        self._hist.altitude_ft.append(float(self._fighter.altitude_ft))
+        self._hist.speed.append(float(self._fighter.speed_knots))
+        self._hist.fuel_pct.append(float(self._fighter.fuel_percent))
+        self._hist.g_force.append(float(self._fighter.g_force))
 
     def render(self) -> Panel:
         """Render the fighter status panel."""
-        table = Table(show_header=False, box=None, padding=(0, 1))
-        table.add_column("Label", style="cyan", width=14)
-        table.add_column("Value", style="white")
+        self._tick()
 
-        # Status with color coding
+        header = Table.grid(padding=(0, 1))
+        header.add_column(ratio=1)
+        header.add_column(justify="right")
+
+        # Status chips
         status_colors = {
-            FighterStatus.HANGAR: "dim",
-            FighterStatus.PREFLIGHT: "yellow",
-            FighterStatus.TAXIING: "yellow",
-            FighterStatus.TAKEOFF: "cyan",
-            FighterStatus.CLIMBING: "green",
-            FighterStatus.CRUISING: "bright_green",
-            FighterStatus.COMBAT: "bold red",
-            FighterStatus.EVADING: "bold yellow",
-            FighterStatus.ATTACKING: "bold red",
-            FighterStatus.PATROLLING: "bright_green",
-            FighterStatus.REFUELING: "cyan",
-            FighterStatus.RTB: "yellow",
-            FighterStatus.LANDING: "cyan",
-            FighterStatus.EMERGENCY: "bold red",
+            FighterStatus.HANGAR: "black on bright_black",
+            FighterStatus.PREFLIGHT: "black on yellow",
+            FighterStatus.TAXIING: "black on yellow",
+            FighterStatus.TAKEOFF: "black on cyan",
+            FighterStatus.CLIMBING: "black on bright_green",
+            FighterStatus.CRUISING: "black on bright_green",
+            FighterStatus.COMBAT: "bold white on red",
+            FighterStatus.EVADING: "bold black on bright_yellow",
+            FighterStatus.ATTACKING: "bold white on red",
+            FighterStatus.PATROLLING: "black on bright_green",
+            FighterStatus.REFUELING: "black on cyan",
+            FighterStatus.RTB: "black on yellow",
+            FighterStatus.LANDING: "black on cyan",
+            FighterStatus.EMERGENCY: "bold white on red",
         }
-        status_color = status_colors.get(self._fighter.status, "white")
-        status_text = Text(self._fighter.status.value, style=f"bold {status_color}")
-        table.add_row("Status", status_text)
+        status_style = status_colors.get(self._fighter.status, "bold white")
 
-        table.add_row("Aircraft", Text(self._fighter.fighter_type.value, style="bright_cyan"))
-        table.add_row("Tail #", Text(self._fighter.tail_number, style="dim"))
+        chips = Text()
+        chips.append_text(_chip(self._fighter.status.value.upper(), style=status_style))
+        chips.append(" ")
+        chips.append_text(_chip(self._fighter.fighter_type.value, style="bold black on bright_cyan"))
+        chips.append(" ")
+        chips.append_text(_chip("ARM" if self._fighter.master_arm else "SAFE", style="bold white on red" if self._fighter.master_arm else "black on green"))
+        if self._fighter.is_bingo_fuel():
+            chips.append(" ")
+            chips.append_text(_chip("BINGO", style="bold white on red"))
 
-        # Flight data
-        table.add_row("Altitude", Text(f"{self._fighter.altitude_ft:,} ft", style="white"))
-        table.add_row("Speed", Text(f"M {self._fighter.speed_mach:.2f}", style="white"))
-        table.add_row("Heading", Text(f"{self._fighter.heading:03d}°", style="cyan"))
+        right = Text(f"{self._fighter.callsign}  {self._fighter.tail_number}", style="bold bright_green")
+        header.add_row(chips, right)
 
-        # G-Force with warning
-        g_style = "red" if self._fighter.g_force > 7 else "yellow" if self._fighter.g_force > 5 else "green"
-        table.add_row("G-Force", Text(f"{self._fighter.g_force:.1f} G", style=g_style))
+        # Primary flight strip (unit rich)
+        strip = Table.grid(padding=(0, 1))
+        strip.add_column(ratio=1)
+        strip.add_column(ratio=1)
+        strip.add_column(ratio=1)
 
-        # Fuel gauge
-        table.add_row("Fuel", create_gauge(self._fighter.fuel_percent, color="cyan"))
+        alt_m = int(round(self._fighter.altitude_ft * 0.3048))
+        spd_ms = int(round(self._fighter.speed_knots * 0.514444))
+        strip.add_row(
+            Text(f"ALT  {self._fighter.altitude_ft:>6,} ft  ({alt_m:>5,} m)", style="white"),
+            Text(f"TAS  {self._fighter.speed_knots:>4} kt  ({spd_ms:>3} m/s)", style="white"),
+            Text(f"MACH {self._fighter.speed_mach:>4.2f}  HDG {_format_deg(self._fighter.heading)}", style="cyan"),
+        )
 
-        # Master arm
-        arm_style = "bold red" if self._fighter.master_arm else "green"
-        arm_text = "🔴 ARMED" if self._fighter.master_arm else "🟢 SAFE"
-        table.add_row("Master Arm", Text(arm_text, style=arm_style))
+        # Trends / limits
+        trends = Table.grid(padding=(0, 1))
+        trends.add_column("Metric", style="dim", width=8)
+        trends.add_column("Now", justify="right", width=7)
+        trends.add_column("Trend", justify="left")
+        trends.add_row("ALT", f"{self._fighter.altitude_ft:,.0f}", _sparkline(self._hist.altitude_ft))
+        trends.add_row("TAS", f"{self._fighter.speed_knots:.0f}", _sparkline(self._hist.speed, low=0.0, high=900.0))
+        trends.add_row("FUEL", f"{self._fighter.fuel_percent:>3d}%", _sparkline(self._hist.fuel_pct, low=0.0, high=100.0))
+        trends.add_row("G", f"{self._fighter.g_force:>3.1f}", _sparkline(self._hist.g_force, low=0.0, high=9.0))
 
-        # Weapons
-        weapons_ready = self._fighter.get_ready_weapons_count()
-        table.add_row("Weapons", Text(f"{weapons_ready} ready", style="yellow"))
+        # Systems summary
+        sys_tbl = Table.grid(padding=(0, 1))
+        sys_tbl.add_column("Label", style="cyan", width=10)
+        sys_tbl.add_column("Value", style="white")
 
-        # Radar contacts
-        hostile_count = self._fighter.get_hostile_count()
-        contact_style = "red" if hostile_count > 0 else "green"
-        contact_text = f"⚠️ {hostile_count} HOSTILE" if hostile_count > 0 else "CLEAR"
-        table.add_row("Contacts", Text(contact_text, style=contact_style))
+        g_style = "bold white on red" if self._fighter.g_force >= 8.5 else "yellow" if self._fighter.g_force >= 7.0 else "green"
+        sys_tbl.add_row("G-LOAD", Text(f"{self._fighter.g_force:.1f} G", style=g_style))
+        sys_tbl.add_row("OXYGEN", Text(f"{self._fighter.oxygen_percent}%", style="green" if self._fighter.oxygen_percent >= 50 else "bold white on red"))
+        sys_tbl.add_row("GEAR", Text("DOWN" if self._fighter.landing_gear_down else "UP", style="yellow" if self._fighter.landing_gear_down else "green"))
+        sys_tbl.add_row("CANOPY", Text("CLOSED" if self._fighter.canopy_closed else "OPEN", style="green" if self._fighter.canopy_closed else "bold white on red"))
+        sys_tbl.add_row("D/LINK", Text("LINK-16" if self._fighter.avionics.datalink_active else "OFFLINE", style="green" if self._fighter.avionics.datalink_active else "red"))
+        sys_tbl.add_row("RADAR", Text(self._fighter.avionics.radar_mode, style="cyan" if self._fighter.avionics.radar_active else "dim"))
 
-        # Missiles
-        if self._fighter.has_incoming_missiles():
-            missile_text = Text("🚨 INCOMING!", style="bold white on red")
+        # Tactical snapshot: target + missiles
+        tactical = Table.grid(padding=(0, 1))
+        tactical.add_column(ratio=1)
+
+        locked = self._fighter.get_locked_target()
+        if locked is None:
+            tactical.add_row(Text("TARGET: NONE", style="dim"))
         else:
-            missile_text = Text("CLEAR", style="green")
-        table.add_row("Missiles", missile_text)
+            lock_style = "bold white on red" if locked.classification == "HOSTILE" else "yellow"
+            tactical.add_row(
+                Text(
+                    f"TARGET: {locked.contact_id}  {locked.aircraft_type}  {locked.classification}  "
+                    f"BRG {_format_deg(locked.bearing)}  RNG {locked.distance_nm:.1f} nm  ALT {locked.altitude_ft:,} ft",
+                    style=lock_style,
+                )
+            )
 
-        # Kills
-        if self._fighter.kills > 0:
-            table.add_row("Kills", Text(f"💥 {self._fighter.kills}", style="bold yellow"))
+        if self._fighter.missile_warnings:
+            for mw in self._fighter.missile_warnings[:2]:
+                cm = "CM DEPLOYED" if mw.countermeasures_deployed else "NO CM"
+                tactical.add_row(
+                    Text(
+                        f"MISSILE: {mw.missile_type}  BRG {_format_deg(mw.bearing)}  TTI {mw.time_to_impact_sec:0.1f}s  {cm}",
+                        style="bold white on red",
+                    )
+                )
+        else:
+            tactical.add_row(Text("MISSILES: CLEAR", style="green"))
 
-        # Countermeasures
-        cm_text = f"C:{self._fighter.defensive.chaff_count} F:{self._fighter.defensive.flare_count}"
-        table.add_row("CM", Text(cm_text, style="cyan"))
+        kills_line = Text(f"KILLS: {self._fighter.kills}", style="bold yellow") if self._fighter.kills > 0 else Text("KILLS: 0", style="dim")
+        cm_text = Text(
+            f"CM: CHAFF {self._fighter.defensive.chaff_count}  FLARE {self._fighter.defensive.flare_count}  "
+            f"ECM {'ON' if self._fighter.defensive.ecm_active else 'OFF'}",
+            style="cyan" if self._fighter.defensive.ecm_active else "dim",
+        )
 
-        title = f"✈️  {self._fighter.callsign} | {self._fighter.tail_number}"
+        hostile_count = self._fighter.get_hostile_count()
+        contacts = Text(
+            f"RADAR: {len(self._fighter.radar_contacts)} contact(s)  |  HOSTILE: {hostile_count}",
+            style="bold white on red" if hostile_count > 0 else "green",
+        )
+
+        content = Group(
+            header,
+            strip,
+            Text(""),
+            contacts,
+            tactical,
+            Text(""),
+            trends,
+            Text(""),
+            sys_tbl,
+            Text(""),
+            kills_line,
+            cm_text,
+        )
+
         return Panel(
-            table,
-            title=title,
+            content,
+            title="FIGHTER STATUS",
             border_style=self._theme.border,
             padding=(0, 1),
         )
@@ -324,13 +513,20 @@ class RadarPanel:
         # Initialize grid
         grid = [[" " for _ in range(size)] for _ in range(size)]
 
-        # Draw concentric circles (range rings)
-        for r in [2, 4]:
+        import math
+
+        # Determine dynamic range for scientifically meaningful mapping.
+        max_contact_nm = max((d for _, d, _ in self._contacts), default=0.0)
+        # Keep a stable minimum range so empty screens don't collapse.
+        max_range_nm = max(30.0, float(max_contact_nm) + 10.0)
+
+        # Draw concentric circles (range rings) at 1/3 and 2/3 of display radius.
+        ring_radii = [max(1, int(round((center - 1) * (1 / 3)))), max(1, int(round((center - 1) * (2 / 3))))]
+        for r in ring_radii:
             for angle in range(0, 360, 15):
-                import math
                 x = int(center + r * math.cos(math.radians(angle)))
                 y = int(center + r * math.sin(math.radians(angle)))
-                if 0 <= x < size and 0 <= y < size:
+                if 0 <= x < size and 0 <= y < size and grid[y][x] == " ":
                     grid[y][x] = "·"
 
         # Draw cardinal directions
@@ -343,7 +539,6 @@ class RadarPanel:
         grid[center][center] = "◈"
 
         # Draw sweep line
-        import math
         sweep_rad = math.radians(self._sweep_angle)
         for r in range(1, center + 1):
             x = int(center + r * math.cos(sweep_rad))
@@ -354,7 +549,9 @@ class RadarPanel:
         # Draw contacts
         for bearing, distance, classification in self._contacts:
             # Normalize distance to grid
-            r = min(center - 1, int((distance / 100) * center))
+            if max_range_nm <= 0.0:
+                continue
+            r = min(center - 1, int(round((float(distance) / max_range_nm) * (center - 1))))
             rad = math.radians(90 - bearing)  # Convert bearing to math angle
             x = int(center + r * math.cos(rad))
             y = int(center - r * math.sin(rad))
@@ -389,14 +586,15 @@ class RadarPanel:
                     radar_text.append(char, style="dim")
             radar_text.append("\n")
 
-        # Legend
+        # Legend with ring labels
         legend = Text()
         legend.append("\n◈", style="bright_green")
         legend.append(" Own  ", style="dim")
         legend.append("▲", style="red")
         legend.append(" Hostile  ", style="dim")
         legend.append("?", style="yellow")
-        legend.append(" Unknown", style="dim")
+        legend.append(" Unknown  ", style="dim")
+        legend.append(f"RNG {max_range_nm:.0f} nm", style="dim cyan")
 
         content = Group(Align.center(radar_text), Align.center(legend))
 
@@ -567,25 +765,22 @@ class EnginePanel:
 
     def render(self) -> Panel:
         """Render the engine panel."""
-        lines: list[Text] = []
+        grid = Table.grid(padding=(0, 1))
+        grid.add_column("ENG", style="cyan", width=3)
+        grid.add_column("RPM", justify="left")
+        grid.add_column("AB", justify="right", width=3)
 
-        # Engine 1
-        e1_bar = create_gauge(self._engine1_rpm, width=15, color="cyan", warning_threshold=0, critical_threshold=0)
-        ab1_indicator = Text(" 🔥", style="bold orange1") if self._ab1_active else Text("   ", style="dim")
-        e1_line = Text("E1: ", style="cyan")
-        lines.append(Group(e1_line, e1_bar, ab1_indicator))
+        e1_bar = create_gauge(self._engine1_rpm, width=16, color="cyan", warning_threshold=0, critical_threshold=0)
+        e2_bar = create_gauge(self._engine2_rpm, width=16, color="cyan", warning_threshold=0, critical_threshold=0)
+        ab1 = Text("🔥", style="bold orange1") if self._ab1_active else Text(" ", style="dim")
+        ab2 = Text("🔥", style="bold orange1") if self._ab2_active else Text(" ", style="dim")
+        grid.add_row("E1", e1_bar, ab1)
+        grid.add_row("E2", e2_bar, ab2)
 
-        # Engine 2
-        e2_bar = create_gauge(self._engine2_rpm, width=15, color="cyan", warning_threshold=0, critical_threshold=0)
-        ab2_indicator = Text(" 🔥", style="bold orange1") if self._ab2_active else Text("   ", style="dim")
-        e2_line = Text("E2: ", style="cyan")
-        lines.append(Group(e2_line, e2_bar, ab2_indicator))
+        egt_style = "bold white on red" if (self._engine1_temp >= 950 or self._engine2_temp >= 950) else "yellow" if (self._engine1_temp >= 850 or self._engine2_temp >= 850) else "dim"
+        temps = Text(f"EGT  {self._engine1_temp}°C / {self._engine2_temp}°C", style=egt_style)
 
-        # Temps
-        temp_line = Text(f"EGT: {self._engine1_temp}°C / {self._engine2_temp}°C", style="dim")
-        lines.append(temp_line)
-
-        content = Group(*lines)
+        content = Group(grid, Text(""), temps)
 
         return Panel(
             content,
