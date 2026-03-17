@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import sys
 import time
 from collections.abc import Generator, Iterable, Iterator
 from typing import Final
@@ -31,6 +33,9 @@ DEFAULT_EVENT_DELAY_SEC: Final[float] = 0.8
 MIN_EVENT_DELAY_SEC: Final[float] = 0.3
 MAX_EVENT_DELAY_SEC: Final[float] = 2.0
 DEFAULT_MAX_EVENTS: Final[int] = 5_000
+HEADLESS_ENV_VAR: Final[str] = "AIRCRAFT_MONITOR_HEADLESS"
+TRUE_VALUES: Final[frozenset[str]] = frozenset({"1", "true", "yes", "on"})
+FALSE_VALUES: Final[frozenset[str]] = frozenset({"0", "false", "no", "off"})
 
 
 def create_header(title: str, subtitle: str = "") -> Panel:
@@ -62,6 +67,18 @@ def create_footer() -> Panel:
     return Panel(footer_text, style="dim", border_style="dim")
 
 
+def _parse_bool_env(value: str | None) -> bool | None:
+    """Parse flexible bool-like env values; return None for unknown strings."""
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if normalized in TRUE_VALUES:
+        return True
+    if normalized in FALSE_VALUES:
+        return False
+    return None
+
+
 class MonitoringDashboard:
     """
     Main monitoring dashboard with live updates.
@@ -91,7 +108,16 @@ class MonitoringDashboard:
         self._theme = theme
         self._event_delay = max(MIN_EVENT_DELAY_SEC, min(MAX_EVENT_DELAY_SEC, event_delay))
         self._max_events = max(1, max_events)
-        self._headless = (not self._console.is_terminal) if headless is None else headless
+        env_headless = _parse_bool_env(os.getenv(HEADLESS_ENV_VAR))
+        if headless is not None:
+            self._headless = headless
+        elif env_headless is not None:
+            self._headless = env_headless
+        else:
+            self._headless = not (
+                self._console.is_terminal and sys.stdin.isatty() and sys.stdout.isatty()
+            )
+        self._mission_clock_start: float | None = None
 
         # Panels
         self._event_log = EventLogPanel(theme=theme)
@@ -133,17 +159,37 @@ class MonitoringDashboard:
 
     def _update_mission(self) -> None:
         """Update mission panel from current aircraft."""
-        if self._fighter:
+        if self._fighter and self._uav:
+            fighter_done = sum(1 for _, done in self._fighter.mission_objectives if done)
+            fighter_total = len(self._fighter.mission_objectives)
+            uav_done = sum(1 for w in self._uav.waypoints if w.is_reached)
+            uav_total = len(self._uav.waypoints)
+            hostiles = self._fighter.get_hostile_count()
+            uav_threats = len(self._uav.threats)
+            fighter_label = f"Fighter objectives {fighter_done}/{fighter_total}"
+            uav_label = f"UAV waypoints {uav_done}/{uav_total}"
+            threat_label = f"Threat picture clear (hostile={hostiles}, uav_threats={uav_threats})"
+            self._mission.set_mission(
+                "JOINT TASK FORCE",
+                [
+                    (fighter_label, fighter_total > 0 and fighter_done == fighter_total),
+                    (uav_label, uav_total > 0 and uav_done == uav_total),
+                    (threat_label, hostiles == 0 and uav_threats == 0),
+                ],
+            )
+            self._mission.set_time(self._elapsed_mission_seconds())
+        elif self._fighter:
             self._mission.set_mission(
                 "COMBAT AIR PATROL",
                 list(self._fighter.mission_objectives),
             )
-            self._mission.set_time(self._fighter.mission_time_sec)
+            self._mission.set_time(self._elapsed_mission_seconds())
         elif self._uav:
             self._mission.set_mission(
                 self._uav.mission.value,
                 [(f"Waypoint {w.name}", w.is_reached) for w in self._uav.waypoints],
             )
+            self._mission.set_time(self._elapsed_mission_seconds())
 
     def _update_weapons(self) -> None:
         """Update weapons panel from fighter."""
@@ -171,6 +217,19 @@ class MonitoringDashboard:
         if self._headless:
             return
         time.sleep(seconds)
+
+    def _start_mission_clock(self) -> None:
+        """Initialize monotonic mission timer."""
+        self._mission_clock_start = time.monotonic()
+
+    def _elapsed_mission_seconds(self) -> int:
+        """Return elapsed mission time in whole seconds."""
+        if self._mission_clock_start is None:
+            return 0
+        elapsed = time.monotonic() - self._mission_clock_start
+        if elapsed <= 0.0:
+            return 0
+        return int(elapsed)
 
     def _bounded_events(self, events: Iterable[Event], *, source: str) -> Iterator[Event]:
         """Yield up to max_events, then emit a hard-stop event and terminate."""
@@ -358,9 +417,12 @@ class MonitoringDashboard:
             event_generator: Generator yielding UAV events
         """
         events = self._bounded_events(event_generator, source=(self._uav.callsign if self._uav else "UAV"))
+        self._start_mission_clock()
 
         if self._headless:
             for event in events:
+                self._event_log.add_event(event)
+                self._update_mission()
                 # Keep it readable in non-interactive output
                 self._console.print(f"{event.format_timestamp()} {event.icon} {event.title} - {event.description}")
             return
@@ -396,9 +458,14 @@ class MonitoringDashboard:
             event_generator,
             source=(self._fighter.callsign if self._fighter else "FIGHTER"),
         )
+        self._start_mission_clock()
 
         if self._headless:
             for event in events:
+                self._event_log.add_event(event)
+                if self._fighter:
+                    self._fighter.mission_time_sec = self._elapsed_mission_seconds()
+                self._update_mission()
                 self._console.print(f"{event.format_timestamp()} {event.icon} {event.title} - {event.description}")
             return
 
@@ -406,8 +473,6 @@ class MonitoringDashboard:
 
         with Live(layout, console=self._console, refresh_per_second=4, screen=True) as live:
             try:
-                mission_start = time.time()
-
                 for event in events:
                     self._event_log.add_event(event)
                     self._update_radar()
@@ -416,7 +481,7 @@ class MonitoringDashboard:
                     self._update_engines()
 
                     if self._fighter:
-                        self._fighter.mission_time_sec = int(time.time() - mission_start)
+                        self._fighter.mission_time_sec = self._elapsed_mission_seconds()
 
                     self._render_fighter_layout(layout)
                     live.update(layout)
@@ -446,9 +511,14 @@ class MonitoringDashboard:
             combined_iter,
             source="JOINT",
         )
+        self._start_mission_clock()
 
         if self._headless:
             for event in combined:
+                self._event_log.add_event(event)
+                if self._fighter:
+                    self._fighter.mission_time_sec = self._elapsed_mission_seconds()
+                self._update_mission()
                 self._console.print(f"{event.format_timestamp()} {event.icon} {event.title} - {event.description}")
             return
 
@@ -456,7 +526,6 @@ class MonitoringDashboard:
 
         with Live(layout, console=self._console, refresh_per_second=4, screen=True) as live:
             try:
-                mission_start = time.time()
                 for event in combined:
                     self._event_log.add_event(event)
                     self._update_radar()
@@ -465,7 +534,7 @@ class MonitoringDashboard:
                     self._update_engines()
 
                     if self._fighter:
-                        self._fighter.mission_time_sec = int(time.time() - mission_start)
+                        self._fighter.mission_time_sec = self._elapsed_mission_seconds()
 
                     self._render_combined_layout(layout)
                     live.update(layout)

@@ -12,6 +12,8 @@ Modes:
 
 from __future__ import annotations
 
+import argparse
+import math
 import sys
 from typing import Final
 
@@ -22,6 +24,9 @@ from rich.text import Text
 from aircraft_monitor.simulation.engine import SimulationEngine
 
 VALID_MODES: Final[frozenset[str]] = frozenset({"uav", "fighter", "combined"})
+DEFAULT_EVENT_DELAY_SEC: Final[float] = 0.7
+MIN_EVENT_DELAY_SEC: Final[float] = 0.05
+MAX_EVENT_DELAY_SEC: Final[float] = 5.0
 
 
 def print_banner(console: Console) -> None:
@@ -60,6 +65,34 @@ def print_menu(console: Console) -> None:
     console.print(Panel(menu, border_style="cyan"))
 
 
+def build_parser() -> argparse.ArgumentParser:
+    """Build command-line parser for runtime options."""
+    parser = argparse.ArgumentParser(
+        prog="python -m aircraft_monitor",
+        description="UAV and fighter aircraft monitoring simulator",
+    )
+    parser.add_argument(
+        "mode",
+        nargs="?",
+        help="Simulation mode: uav, fighter, combined",
+    )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="Force non-interactive output (no full-screen dashboard)",
+    )
+    parser.add_argument(
+        "--event-delay",
+        type=float,
+        default=DEFAULT_EVENT_DELAY_SEC,
+        help=(
+            "Delay between events in seconds "
+            f"({MIN_EVENT_DELAY_SEC}..{MAX_EVENT_DELAY_SEC})"
+        ),
+    )
+    return parser
+
+
 def main() -> int:
     """
     Main entry point.
@@ -69,9 +102,23 @@ def main() -> int:
     """
     console = Console()
 
-    # Parse command line arguments
-    if len(sys.argv) > 1:
-        mode = sys.argv[1].lower()
+    parser = build_parser()
+    args = parser.parse_args()
+
+    event_delay = args.event_delay
+    if not math.isfinite(event_delay):
+        console.print("\n  [red]Error:[/red] --event-delay must be finite.\n")
+        return 1
+    if event_delay < MIN_EVENT_DELAY_SEC or event_delay > MAX_EVENT_DELAY_SEC:
+        console.print(
+            f"\n  [red]Error:[/red] --event-delay must be between "
+            f"{MIN_EVENT_DELAY_SEC} and {MAX_EVENT_DELAY_SEC} seconds.\n"
+        )
+        return 1
+
+    # Parse mode (positional arg or interactive prompt)
+    if args.mode:
+        mode = args.mode.lower()
     else:
         # Non-interactive environments (e.g., redirected stdin) must not block on input().
         if not sys.stdin.isatty():
@@ -114,7 +161,10 @@ def main() -> int:
         if sys.stdout.isatty():
             time.sleep(1.5)  # Brief pause before starting
 
-        engine = SimulationEngine(event_delay=0.7)
+        engine = SimulationEngine(
+            event_delay=event_delay,
+            headless=True if args.headless else None,
+        )
 
         if mode == "uav":
             engine.run_uav_mission()
