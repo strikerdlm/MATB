@@ -25,6 +25,10 @@ python -m aircraft_monitor
 python -m aircraft_monitor.demo_uav      # UAV operations demo
 python -m aircraft_monitor.demo_fighter  # Fighter aircraft demo
 python -m aircraft_monitor.demo_combined # Combined operations
+
+# Optional runtime flags
+python -m aircraft_monitor fighter --event-delay 0.35
+python -m aircraft_monitor combined --headless
 ```
 
 ## 🧪 Non-interactive / CI usage
@@ -33,6 +37,15 @@ When stdout/stderr are not attached to a TTY (for example, in CI logs), the app:
 
 - Runs in **headless mode** (prints a readable event stream instead of a full-screen UI)
 - Avoids blocking on interactive prompts (defaults to `combined` mode when no mode is provided)
+- Supports explicit override via environment variable:
+  - `AIRCRAFT_MONITOR_HEADLESS=true` forces headless mode
+  - `AIRCRAFT_MONITOR_HEADLESS=false` forces full-screen mode
+
+### CLI Options
+
+- `mode` (optional positional): `uav`, `fighter`, or `combined`
+- `--event-delay <seconds>`: set frame/event pacing (`0.05` to `5.0`)
+- `--headless`: force non-interactive stream output
 
 ## 📦 Project Structure
 

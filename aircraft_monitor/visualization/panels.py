@@ -13,13 +13,12 @@ from dataclasses import dataclass
 from typing import Final
 
 from rich.align import Align
-from rich.console import Group, RenderableType
+from rich.console import Group
 from rich.panel import Panel
-from rich.table import Table
 from rich.table import Table
 from rich.text import Text
 
-from aircraft_monitor.events.base import Event
+from aircraft_monitor.events.base import Event, EventSeverity
 from aircraft_monitor.models.fighter import FighterAircraft, FighterStatus
 from aircraft_monitor.models.uav import UAV, UAVStatus
 from aircraft_monitor.visualization.themes import MILITARY_THEME, Theme
@@ -453,15 +452,48 @@ class EventLogPanel:
     def __init__(self, max_events: int = MAX_EVENT_LOG_SIZE, theme: Theme = MILITARY_THEME) -> None:
         """Initialize event log panel."""
         self._events: deque[Event] = deque(maxlen=max_events)
+        self._severity_counts: dict[EventSeverity, int] = {
+            EventSeverity.INFO: 0,
+            EventSeverity.SUCCESS: 0,
+            EventSeverity.WARNING: 0,
+            EventSeverity.CRITICAL: 0,
+            EventSeverity.EMERGENCY: 0,
+        }
         self._theme = theme
 
     def add_event(self, event: Event) -> None:
         """Add an event to the log."""
         self._events.append(event)
+        if event.severity in self._severity_counts:
+            self._severity_counts[event.severity] += 1
 
     def clear(self) -> None:
         """Clear all events."""
         self._events.clear()
+        for severity in self._severity_counts:
+            self._severity_counts[severity] = 0
+
+    def _build_title(self) -> Text:
+        """Build an event summary title with live severity counters."""
+        title = Text("📋 EVENT LOG", style="bold")
+        title.append(f"  I:{self._severity_counts[EventSeverity.INFO]}", style="cyan")
+        title.append(
+            f"  S:{self._severity_counts[EventSeverity.SUCCESS]}",
+            style="green",
+        )
+        title.append(
+            f"  W:{self._severity_counts[EventSeverity.WARNING]}",
+            style="yellow",
+        )
+        title.append(
+            f"  C:{self._severity_counts[EventSeverity.CRITICAL]}",
+            style="red",
+        )
+        title.append(
+            f"  E:{self._severity_counts[EventSeverity.EMERGENCY]}",
+            style="bold white on red",
+        )
+        return title
 
     def render(self) -> Panel:
         """Render the event log panel."""
@@ -482,7 +514,7 @@ class EventLogPanel:
 
         return Panel(
             content,
-            title="📋 EVENT LOG",
+            title=self._build_title(),
             border_style=self._theme.border,
             padding=(0, 1),
         )

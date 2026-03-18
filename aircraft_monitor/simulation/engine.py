@@ -21,14 +21,21 @@ class SimulationEngine:
     Provides pre-configured scenarios for UAV and fighter operations.
     """
 
-    def __init__(self, event_delay: float = DEFAULT_EVENT_DELAY) -> None:
+    def __init__(
+        self,
+        event_delay: float = DEFAULT_EVENT_DELAY,
+        *,
+        headless: bool | None = None,
+    ) -> None:
         """
         Initialize the simulation engine.
 
         Args:
             event_delay: Delay between events in seconds
+            headless: Force headless mode (True) or fullscreen UI (False); None auto-detects
         """
         self._event_delay = event_delay
+        self._headless = headless
 
     def create_recon_uav(self) -> UAV:
         """Create a reconnaissance UAV configuration."""
@@ -65,7 +72,7 @@ class SimulationEngine:
     def run_uav_mission(self) -> None:
         """Run a complete UAV reconnaissance mission."""
         uav = self.create_recon_uav()
-        dashboard = MonitoringDashboard(event_delay=self._event_delay)
+        dashboard = MonitoringDashboard(event_delay=self._event_delay, headless=self._headless)
         dashboard.set_uav(uav)
 
         event_gen = UAVEventGenerator(uav)
@@ -74,7 +81,7 @@ class SimulationEngine:
     def run_fighter_mission(self) -> None:
         """Run a complete fighter combat mission."""
         fighter = self.create_f22_fighter()
-        dashboard = MonitoringDashboard(event_delay=self._event_delay)
+        dashboard = MonitoringDashboard(event_delay=self._event_delay, headless=self._headless)
         dashboard.set_fighter(fighter)
 
         event_gen = FighterEventGenerator(fighter)
@@ -85,7 +92,7 @@ class SimulationEngine:
         uav = self.create_recon_uav()
         fighter = self.create_f22_fighter()
 
-        dashboard = MonitoringDashboard(event_delay=self._event_delay)
+        dashboard = MonitoringDashboard(event_delay=self._event_delay, headless=self._headless)
         dashboard.set_uav(uav)
         dashboard.set_fighter(fighter)
 
