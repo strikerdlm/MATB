@@ -278,6 +278,19 @@ Use monotonic timing for response latency and wall-clock timing for audit logs. 
 | 6 | Experimental protocol runner | Add scripted blocks, counterbalancing, training trials, practice criteria, CSV/JSONL export, and optional physiological synchronization. |
 | 7 | Optional web UI | Add a TSX/JS front end only after the Python research core is stable; connect through HTTP/WebSocket event streams. |
 
+### Phase 8+ — Research-grade additions for U.S. military aviation parity
+
+A peer-review-grade evidence audit of the platform against the U.S. Air Force AF-MATB (Miller et al., 2014, DTIC ADA611870) and the U.S. Army Aeromedical Research Laboratory (USAARL) MATB (Vogl et al., 2024) is maintained in [`docs/research/military-aviation-platform/research_evidence_review.md`](docs/research/military-aviation-platform/research_evidence_review.md). The headline finding from that document is that the current `experiment` mode emits and logs scenario events but does not yet implement the *inner* MATB loop (operator input, primary-task scoring, validated rating ingestion, objective SA capture). Phases 8–11 below close those gaps and align the platform with operationally relevant U.S. military aviator research populations (tactical fighter aircrew, RPA operators, transport / tanker / MUM-T crews).
+
+| Phase | Goal | Deliverable |
+|---|---|---|
+| 8 | Real MATB inner loop | Operator input thread; the four canonical primary tasks (system monitoring, tracking, communications, resource management) with per-task accuracy and reaction-time scoring; synchronous capture of ISA 1–10 ratings and post-block NASA-TLX / Bedford; SAGAT freeze-probe service. Acceptance: head-to-head with NASA MATB-II within ±5% per-task. |
+| 9 | Multimodal physiology + reproducibility | Lab Streaming Layer (LSL) outlet for events / markers and inlets for EEG, ECG, GSR, eye tracking; Latin-square block ordering; practice block with explicit performance criterion; version-pinned scenario manifests. |
+| 10 | Population-specific stressor packs + community-standard data export | **Fighter:** G-LOC threshold/recovery, AGSM-quality input, hypoxia onset / hypoxia hangover, SD events, ROE ambiguity. **RPA:** 12/24-h shift-work timeline with circadian markers, kill-chain trauma annotations, NtoM multi-aircraft load, audiovisual-feedback condition. **Transport / MUM-T:** sustained-operations fatigue, AAR receiver/boomer states (KC-46 RVS), MUM-T datalink, crew-coordination channel. BIDS-derivative-style data layout (`dataset_description.json`, `participants.tsv`, per-subject `beh/`, `eeg/`, `physio/`). Aeromedical baseline neurocognitive screen (CogScreen-AE / ANAM-style). |
+| 11 | Adaptive automation engine | Performance- and physiology-driven automation handoffs in the spirit of USAARL MATB §3 (Vogl et al., 2024); transparency cues for each handoff; post-handoff trust capture. |
+
+The full gap-analysis table, population-specific evidence (with DOIs for the Chappelle RPA-operator series, the McKendrick / Hebbar / Memar / Haseeb fighter cognitive-workload literature, the Serres / Levulis / Saetti transport-and-MUM-T literature, the Salmon SAGAT meta-analysis, and the Kothe et al. canonical LSL paper), and the proposed-additions rationale are in the linked review document.
+
 ### Parameter Matrix by Modality
 
 | Modality | Highest-value operational parameters | Highest-value human-factors parameters |
