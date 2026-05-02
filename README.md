@@ -29,6 +29,9 @@ python -m aircraft_monitor.demo_combined # Combined operations
 # Optional runtime flags
 python -m aircraft_monitor fighter --event-delay 0.35
 python -m aircraft_monitor combined --headless
+
+# Run a MATB-inspired research protocol
+python -m aircraft_monitor experiment --headless --research-modality uas --seed 42
 ```
 
 ## 🧪 Non-interactive / CI usage
@@ -43,9 +46,26 @@ When stdout/stderr are not attached to a TTY (for example, in CI logs), the app:
 
 ### CLI Options
 
-- `mode` (optional positional): `uav`, `fighter`, or `combined`
+- `mode` (optional positional): `uav`, `fighter`, `combined`, or `experiment`
 - `--event-delay <seconds>`: set frame/event pacing (`0.05` to `5.0`)
 - `--headless`: force non-interactive stream output
+- `--participant-id <id>`: participant identifier for `experiment` mode
+- `--session-id <id>`: session identifier for `experiment` mode
+- `--seed <integer>`: deterministic event seed for `experiment` mode
+- `--research-modality <uas|fighter|combined>`: research scenario family
+- `--research-output-dir <path>`: output directory for JSONL events and summary files
+
+## 🧠 MATB-Inspired Research Mode
+
+`experiment` mode implements the easiest publishable features from the AF-MATB and USAARL MATB lineage:
+
+- **Seeded repeatability**: every protocol run stores the base seed and block metadata.
+- **Demand transitions**: low, medium, and high workload blocks progressively increase event density.
+- **Instantaneous workload probes**: ISA-style 1-10 workload prompt events are injected during each block.
+- **Automation markers**: manual, advisory, and forced-handoff blocks capture automation mode and reliability.
+- **Structured data export**: every emitted event is written to `events.jsonl`, with a compact `summary.json`.
+
+By default, generated research files go to `/root/.openclaw/workspace/exports` unless `AIRCRAFT_MONITOR_OUTPUT_DIR` or `--research-output-dir` overrides the location.
 
 ## 📦 Project Structure
 
@@ -70,6 +90,11 @@ aircraft_monitor/
 ├── simulation/           # Simulation engine
 │   ├── __init__.py
 │   └── engine.py        # Event simulation
+├── research/             # Human-factors protocol and logging
+│   ├── __init__.py
+│   ├── logger.py        # JSONL event and summary logger
+│   ├── protocol.py      # Demand blocks and protocol definitions
+│   └── runner.py        # Research experiment execution
 ├── demo_uav.py          # UAV demo
 ├── demo_fighter.py      # Fighter demo
 └── demo_combined.py     # Combined demo
@@ -119,7 +144,7 @@ Recommended implementation layers:
 | Platform state | `aircraft_monitor/models/uav.py`, `aircraft_monitor/models/fighter.py` | Add typed models for `Swarm`, `MilitaryAircraft`, crew state, automation state, datalink state, task demand, and operator workload probes. |
 | Event generation | `aircraft_monitor/events/base.py`, `aircraft_monitor/events/*_events.py` | Keep all scenario changes as immutable `Event` records with severity, category, source, timestamp, and structured data. |
 | Operator display | `aircraft_monitor/visualization/dashboard.py`, `aircraft_monitor/visualization/panels.py` | Add modality-specific status panels while reusing `EventLogPanel`, `RadarPanel`, and `MissionPanel`. |
-| Research logging | New Python module in a later implementation phase | Record event timestamps, operator inputs, response latency, missed events, false alarms, workload prompts, scenario seeds, and physiological sync markers. |
+| Research logging | `aircraft_monitor/research/logger.py` | Record event timestamps, response latency anchors, workload prompts, scenario seeds, automation settings, and summary counts. |
 
 The research design should follow the MATB tradition: use configurable event rates, concurrent tasks, response windows, and task overlap to produce low, medium, and high workload blocks. MATB research commonly manipulates number of subtasks, event rate, event overlap, and response time; recent reviews report median MATB test duration around 20 min and stimulus rates of roughly 3 events/min for low workload and 23.5 events/min for high workload, with substantial variability across studies [Pontiggia et al., 2024]. The USAARL MATB also supports real-time workload probes every 30 s or 1 min using an instantaneous 1-10 rating rather than pausing the experiment for a full NASA-TLX [Vogl et al., 2024].
 
@@ -245,7 +270,7 @@ Use monotonic timing for response latency and wall-clock timing for audit logs. 
 
 | Phase | Goal | Deliverable |
 |---|---|---|
-| 1 | Research instrumentation | Add a data logger, scenario seed, trial metadata, response latency, and workload prompt events. |
+| 1 | Research instrumentation | Done: JSONL logger, scenario seed, trial metadata, workload prompt events, automation markers, and summary JSON. |
 | 2 | UAS research mode | Extend the existing `UAV` scenario with datalink degradation, lost-link procedures, sensor classification, and BVLOS-like conflicts. |
 | 3 | Fighter research mode | Add tactical workload blocks, ROE ambiguity, radar clutter, automation support levels, and post-block NASA-TLX. |
 | 4 | Swarm s-UAS mode | Add aggregate swarm model, swarm panel, group commands, comms degradation, predictive overlays, and influence-level manipulation. |
