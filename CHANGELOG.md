@@ -4,6 +4,18 @@ All notable changes to the MATB military aviation research platform.
 
 ## [Unreleased] — 2026-05-03
 
+### Smoke test — headless Xvfb, low_workload.txt, 95s run (session 27)
+Confirmed working after three bug fixes below:
+- SYSMON MISS events logged at t=37.8s, 41.9s, 55.8s (3 MISSes in 95s, ~2.9/min rate ✓)
+- ISA genericscales probe fires at t=90.006s (scheduled every 90s ✓)
+- COMM radioprompt events fire at t=53.0s and t=62.0s (own/other ✓)
+- Max scenario_time reached: 90.05s before SIGINT
+- CSV columns confirmed: `logtime, scenario_time, type, module, address, value`
+- Performance rows: `type=performance, module=sysmon, address=signal_detection, value=MISS`
+- ISA rows: `type=event, module=genericscales, address=self, value=start`
+
+### Fixed — three headless bugs in OpenMATB submodule
+
 ### Added
 - `matb_integration/` package: bridge between `aircraft_monitor/` scenario
   generator and OpenMATB engine
@@ -27,6 +39,18 @@ All notable changes to the MATB military aviation research platform.
 ### Changed
 - `requirements.txt`: added `pyglet>=2.1.0,<3.0.0` (OpenMATB engine dep)
 - README: extended Phase 8+ roadmap with OpenMATB integration strategy
+
+### Fixed — three headless bugs in OpenMATB submodule
+1. `openmatb/core/clock.py`: Changed `pyglet.clock.schedule(advance)` to
+   `schedule_interval(advance, 1/60)`. Without vsync on Xvfb, the event
+   loop spins at ~100k fps with dt≈0μs, so scenario_time never advanced past
+   t=0 and no scenario events ever fired.
+2. `openmatb/core/joystick.py`: Demoted `add_error("No joystick found")` to
+   silent pass. The module-level error was added to `get_errors()` at import
+   time; on the first Scheduler.update() call `show_errors()` created a
+   blocking modal that could never be dismissed headless.
+3. `matb_integration/scenario_builder.py`: Fixed `tank-A/B-lossperminute` →
+   `tank-a/b-lossperminute` (OpenMATB parameter validation is case-sensitive).
 
 ### Removed
 - `core`: stray 36 MB `light-locker` ELF crash dump removed from git
