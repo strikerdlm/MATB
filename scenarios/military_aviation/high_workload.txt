@@ -11,8 +11,8 @@
 
 # Workload parameters
 0:00:00;track;targetproportion;0.2
-0:00:00;resman;tank-A-lossperminute;1000
-0:00:00;resman;tank-B-lossperminute;1000
+0:00:00;resman;tank-a-lossperminute;1000
+0:00:00;resman;tank-b-lossperminute;1000
 
 # SYSMON failures — 65 light events + 65 scale events = 130 total
 0:00:12;sysmon;lights-1-failure;True
