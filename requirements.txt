@@ -5,8 +5,13 @@ rich>=13.7.0
 # Type checking and validation
 pydantic>=2.5.0
 
+# OpenMATB engine (task runner — install separately at /root/repos/openmatb)
+# On Linux/headless: requires Xvfb  e.g. `Xvfb :100 -screen 0 1920x1080x24 &`
+pyglet>=2.1.0,<3.0.0
+pylsl>=1.16.1
+
 # Development dependencies (optional)
 # mypy>=1.8.0
 # ruff>=0.1.9
-# pytest>=7.4.0
+pytest>=7.4.0
 # pytest-cov>=4.1.0
