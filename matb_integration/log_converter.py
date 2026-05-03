@@ -38,7 +38,20 @@ NASA_TLX_SUBSCALES: tuple[str, ...] = (
     "Frustration",
 )
 
+# Spanish equivalents (Rolo-González et al., 2010; INSST NTP-544)
+NASA_TLX_SUBSCALES_ES: tuple[str, ...] = (
+    "Demanda mental",
+    "Demanda física",
+    "Demanda temporal",
+    "Rendimiento",
+    "Esfuerzo",
+    "Frustración",
+)
+
+_ALL_NASA_TLX_SUBSCALES: frozenset[str] = frozenset(NASA_TLX_SUBSCALES + NASA_TLX_SUBSCALES_ES)
+
 ISA_TITLE: str = "Workload"
+ISA_TITLE_ES: str = "Carga de trabajo"
 BEDFORD_TITLE: str = "Bedford"
 SYSMON_N_INDICATORS: int = 6   # 2 lights + 4 scales (OpenMATB default)
 SYSMON_ALERTTIMEOUT_SEC: float = 10.0   # OpenMATB default alerttimeout
@@ -159,7 +172,7 @@ def _isa_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
         r for r in rows
         if r.get("type") == "performance"
         and r.get("module") == "genericscales"
-        and r.get("address") == ISA_TITLE
+        and r.get("address") in (ISA_TITLE, ISA_TITLE_ES)
     ]
 
     probes: list[dict[str, Any]] = []
@@ -183,14 +196,18 @@ def _nasatlx_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
         r for r in rows
         if r.get("type") == "performance"
         and r.get("module") == "genericscales"
-        and r.get("address") in NASA_TLX_SUBSCALES
+        and r.get("address") in _ALL_NASA_TLX_SUBSCALES
     ]
 
+    # Accept both English and Spanish titles; normalise to English keys
+    _ES_TO_EN: dict[str, str] = dict(zip(NASA_TLX_SUBSCALES_ES, NASA_TLX_SUBSCALES))
     subscales: dict[str, float | None] = {s: None for s in NASA_TLX_SUBSCALES}
     for r in tlx_rows:
+        addr = r["address"]
+        key = _ES_TO_EN.get(addr, addr)   # pass English through unchanged
         v = _float_or_none(r.get("value", ""))
-        if v is not None:
-            subscales[r["address"]] = round(v, 2)
+        if v is not None and key in subscales:
+            subscales[key] = round(v, 2)
 
     filled = [v for v in subscales.values() if v is not None]
     raw_tlx = round(sum(filled), 4) if filled else None

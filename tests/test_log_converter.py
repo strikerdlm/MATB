@@ -31,6 +31,9 @@ from matb_integration.log_converter import (
     convert_session,
     convert_to_jsonl,
     parse_csv,
+    NASA_TLX_SUBSCALES,
+    NASA_TLX_SUBSCALES_ES,
+    ISA_TITLE_ES,
 )
 
 # ── helpers ────────────────────────────────────────────────────────────────────
@@ -289,3 +292,61 @@ def test_smoke_csv_jsonl_roundtrip(tmp_path):
     # Also verify the written file
     written = out.read_text().strip()
     assert json.loads(written) == data
+
+
+# ── Spanish-language questionnaire support ────────────────────────────────────
+
+def test_nasatlx_es_subscale_count():
+    assert len(NASA_TLX_SUBSCALES_ES) == len(NASA_TLX_SUBSCALES)
+
+
+def test_nasatlx_es_titles_recognised(tmp_path):
+    """log_converter must parse Spanish NASA-TLX rows into English-keyed output."""
+    csv_content = (
+        "logtime,scenario_time,type,module,address,value\n"
+        "1.0,900.0,performance,genericscales,Demanda mental,7.0\n"
+        "1.1,900.0,performance,genericscales,Demanda física,3.0\n"
+        "1.2,900.0,performance,genericscales,Demanda temporal,5.0\n"
+        "1.3,900.0,performance,genericscales,Rendimiento,6.0\n"
+        "1.4,900.0,performance,genericscales,Esfuerzo,8.0\n"
+        "1.5,900.0,performance,genericscales,Frustración,4.0\n"
+    )
+    csv_path = tmp_path / "es_session.csv"
+    csv_path.write_text(csv_content)
+    result = convert_session(csv_path)
+    t = result["nasatlx"]
+    assert t["n_subscales_completed"] == 6
+    assert t["mental_demand"] == pytest.approx(7.0)
+    assert t["effort"] == pytest.approx(8.0)
+    assert t["raw_tlx"] == pytest.approx(33.0)
+
+
+def test_isa_es_title_recognised(tmp_path):
+    """ISA Spanish title 'Carga de trabajo' must be parsed as an ISA probe."""
+    csv_content = (
+        "logtime,scenario_time,type,module,address,value\n"
+        "1.0,90.0,performance,genericscales,Carga de trabajo,3.0\n"
+        "1.1,180.0,performance,genericscales,Carga de trabajo,4.0\n"
+    )
+    csv_path = tmp_path / "es_isa.csv"
+    csv_path.write_text(csv_content)
+    result = convert_session(csv_path)
+    isa = result["isa"]
+    assert isa["n_probes_completed"] == 2
+    assert isa["mean"] == pytest.approx(3.5)
+
+
+def test_mixed_en_es_nasatlx_rows(tmp_path):
+    """Mixed English and Spanish rows in the same session should both be parsed."""
+    csv_content = (
+        "logtime,scenario_time,type,module,address,value\n"
+        "1.0,900.0,performance,genericscales,Mental demand,7.0\n"
+        "1.1,900.0,performance,genericscales,Demanda física,3.0\n"
+    )
+    csv_path = tmp_path / "mixed.csv"
+    csv_path.write_text(csv_content)
+    result = convert_session(csv_path)
+    t = result["nasatlx"]
+    assert t["mental_demand"] == pytest.approx(7.0)
+    assert t["physical_demand"] == pytest.approx(3.0)
+    assert t["n_subscales_completed"] == 2

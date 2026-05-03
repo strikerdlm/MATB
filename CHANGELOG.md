@@ -17,6 +17,26 @@ Confirmed working after three bug fixes below:
 ### Fixed — three headless bugs in OpenMATB submodule
 
 ### Added
+- Spanish questionnaire files for OpenMATB genericscales:
+  - `matb_integration/questionnaires/nasatlx_es.txt`: 6-subscale NASA-TLX in Spanish
+    (Demanda mental, Demanda física, Demanda temporal, Rendimiento, Esfuerzo, Frustración)
+    using the validated translation of Sebastián García & del Hoyo Delgado (2010,
+    *Rev. Psicol. Trabajo Org.* 26(3); N=398) and INSST NTP-544.
+  - `matb_integration/questionnaires/isa_es.txt`: ISA 5-point workload probe in Spanish
+    (title: "Carga de trabajo", anchors: Muy baja — Excesiva). Note: functional-equivalence
+    translation; no formal Spanish psychometric validation exists.
+  - `matb_integration/questionnaires/bedford_es.txt`: Bedford 10-point scale in Spanish
+    (anchors: Capacidad sobrante — Abandonar tarea). Same caveat: no formal validation.
+  - `docs/research/scales/scale_validation_es.md`: peer-reviewer-grade summary of
+    validation evidence for all three scales, recommended Methods-section language, and
+    full APA7 references.
+- `matb_integration/scenario_builder.py`: Spanish questionnaire filename constants
+  (`ISA_QUESTIONNAIRE_ES`, `NASATLX_QUESTIONNAIRE_ES`, `BEDFORD_QUESTIONNAIRE_ES`).
+- `matb_integration/log_converter.py`: bilingual support — Spanish subscale titles
+  (`NASA_TLX_SUBSCALES_ES`, `ISA_TITLE_ES`) are recognised and normalised to English
+  keys in the output dict; Bedford title unchanged ("Bedford" is a proper name).
+- `tests/test_log_converter.py`: 4 new tests for Spanish-title parsing
+  (95 pass, 3 skip total suite).
 - `matb_integration/` package: bridge between `aircraft_monitor/` scenario
   generator and OpenMATB engine
   - `scenario_builder.py`: converts `ResearchProtocol` demand blocks to

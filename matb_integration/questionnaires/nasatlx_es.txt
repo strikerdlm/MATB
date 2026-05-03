@@ -1,0 +1,6 @@
+Demanda mental;¿Cuánta actividad mental y perceptiva requirió la tarea (p.ej.: pensar, decidir, calcular, recordar)? ¿Fue la tarea fácil o difícil, simple o compleja?;Baja/Alta;0/10/5
+Demanda física;¿Cuánta actividad física requirió la tarea (p.ej.: pulsar, empujar, girar, controlar)? ¿Fue la tarea descansada o laboriosa?;Baja/Alta;0/10/5
+Demanda temporal;¿Cuánta presión temporal sintió debido al ritmo o velocidad de la tarea? ¿Fue el ritmo lento y tranquilo o rápido y frenético?;Baja/Alta;0/10/5
+Rendimiento;¿Qué tan satisfecho está con su rendimiento en alcanzar los objetivos de la tarea? ¿Logró lo que se le pedía?;Bueno/Deficiente;0/10/5
+Esfuerzo;¿Cuánto tuvo que esforzarse (mental y físicamente) para alcanzar su nivel de rendimiento en la tarea?;Bajo/Alto;0/10/5
+Frustración;¿Cuánto se sintió inseguro, desalentado, irritado, estresado y molesto durante la tarea?;Baja/Alta;0/10/5

@@ -77,6 +77,11 @@ ISA_QUESTIONNAIRE: Final[str] = "isa_en.txt"
 NASATLX_QUESTIONNAIRE: Final[str] = "nasatlx_en.txt"
 BEDFORD_QUESTIONNAIRE: Final[str] = "bedford_en.txt"
 
+# Spanish equivalents — validated translations (see docs/research/scale_validation_es.md)
+ISA_QUESTIONNAIRE_ES: Final[str] = "isa_es.txt"
+NASATLX_QUESTIONNAIRE_ES: Final[str] = "nasatlx_es.txt"
+BEDFORD_QUESTIONNAIRE_ES: Final[str] = "bedford_es.txt"
+
 # ── Latin-square counterbalancing ─────────────────────────────────────────────
 # All 6 permutations of 3 workload levels. Participant N → row N % 6.
 # Covers up to N=6 orthogonal orderings; groups of 6 are fully balanced.
