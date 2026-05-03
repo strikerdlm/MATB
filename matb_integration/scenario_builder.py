@@ -200,8 +200,8 @@ def build_block_scenario(
     # ── Workload parameters at t=0 ────────────────────────────────────────────
     lines.append("# Workload parameters")
     lines.append(f"0:00:00;track;targetproportion;{track_prop}")
-    lines.append(f"0:00:00;resman;tank-A-lossperminute;{resman_loss}")
-    lines.append(f"0:00:00;resman;tank-B-lossperminute;{resman_loss}")
+    lines.append(f"0:00:00;resman;tank-a-lossperminute;{resman_loss}")
+    lines.append(f"0:00:00;resman;tank-b-lossperminute;{resman_loss}")
     lines.append("")
 
     # ── ISA probe times (reserved — events distributed around probes) ─────────
