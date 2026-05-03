@@ -39,6 +39,7 @@ NASA_TLX_SUBSCALES: tuple[str, ...] = (
 )
 
 ISA_TITLE: str = "Workload"
+BEDFORD_TITLE: str = "Bedford"
 SYSMON_N_INDICATORS: int = 6   # 2 lights + 4 scales (OpenMATB default)
 SYSMON_ALERTTIMEOUT_SEC: float = 10.0   # OpenMATB default alerttimeout
 
@@ -201,6 +202,31 @@ def _nasatlx_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
     }
 
 
+def _bedford_metric(rows: list[dict[str, str]]) -> dict[str, Any]:
+    """Extract Bedford workload rating (1–10, post-block).
+
+    The genericscales slider stores a float in [1, 10]; round to nearest integer
+    for the standard Bedford scale value.
+    """
+    bedford_rows = [
+        r for r in rows
+        if r.get("type") == "performance"
+        and r.get("module") == "genericscales"
+        and r.get("address") == BEDFORD_TITLE
+    ]
+
+    if not bedford_rows:
+        return {"value": None, "value_raw": None}
+
+    # Take the last row if multiple (shouldn't happen, but defensive)
+    r = bedford_rows[-1]
+    raw = _float_or_none(r.get("value", ""))
+    return {
+        "value": round(raw) if raw is not None else None,
+        "value_raw": round(raw, 2) if raw is not None else None,
+    }
+
+
 def _comm_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
     perf = [r for r in rows
             if r.get("type") == "performance" and r.get("module") == "communications"]
@@ -279,6 +305,7 @@ def convert_session(
         "sysmon": _sysmon_metrics(rows, alerttimeout_sec, sysmon_n_indicators, duration),
         "isa": _isa_metrics(rows),
         "nasatlx": _nasatlx_metrics(rows),
+        "bedford": _bedford_metric(rows),
         "comm": _comm_metrics(rows),
     }
 

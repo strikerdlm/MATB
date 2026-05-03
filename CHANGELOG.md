@@ -24,6 +24,15 @@ Confirmed working after three bug fixes below:
     be installed
   - `questionnaires/isa_en.txt`: ISA 5-point rating scale in OpenMATB
     `genericscales` format
+  - `log_converter.py`: parses OpenMATB session CSV → structured JSONL record
+    per block. Extracts SYSMON (n_hits/misses/FA, hit_rate, d' via Hautus
+    log-linear correction, mean RT), ISA probes (per-probe Workload ratings,
+    mean, SD), NASA-TLX (6 subscales + raw_tlx), and COMM (HIT/MISS/FA/CR
+    from `sdt_value` rows, hit_rate, FA_rate, d', RT). Probit implemented
+    with Acklam rational approximation (error < 1.15e-9, stdlib-only,
+    Python 3.12+ compatible). CLI: `python -m matb_integration.log_converter
+    <session.csv> --participant P01 --block low_workload --level LOW -o
+    output.jsonl`
 - `install_to_openmatb.py`: CLI script that copies questionnaire and scenario
   assets into an existing OpenMATB installation tree
 - `scenarios/military_aviation/`: pre-generated Low / Medium / High workload
@@ -31,6 +40,34 @@ Confirmed working after three bug fixes below:
 - `tests/test_scenario_builder.py`: unit + regression tests for the
   scenario builder, including sync-guard assertions that fail loudly if
   OpenMATB changes its default `sysmon` parameters
+- `tests/test_log_converter.py`: 23 tests covering probit accuracy, d-prime
+  edge cases, all four metric functions, and regression against session-27
+  smoke-test CSV (64 pass, 3 skip)
+- `matb_integration/questionnaires/bedford_en.txt`: Bedford 10-point workload
+  scale in OpenMATB `genericscales` format (1=spare capacity, 10=abort task);
+  slider value rounded to nearest integer by the log converter
+- `matb_integration/scenario_builder.py` additions:
+  - `BEDFORD_QUESTIONNAIRE` constant; `include_bedford` flag on
+    `build_block_scenario()` to emit Bedford at block end
+  - `LATIN_SQUARE_3`: all 6 permutations of LOW/MEDIUM/HIGH; groups of 6
+    consecutive participants are fully counterbalanced
+  - `block_order_for_participant(participant_id)`: deterministic Latin-square
+    row from participant numeric suffix
+  - `build_session_files(participant_id, output_dir, ...)`: generates 3
+    named scenario files in counterbalanced order for one participant
+    (`P03_block1_MEDIUM.txt`, `P03_block2_LOW.txt`, `P03_block3_HIGH.txt`)
+- `matb_integration/log_converter.py`: added `_bedford_metric()` and
+  `bedford` key to `convert_session()` output
+- `matb_integration/analysis/descriptive.py`: non-parametric analysis pipeline
+  - Reads JSONL files (file or directory), groups by participant × workload level
+  - Descriptives (n, median, mean, SD) per level per metric
+  - Friedman χ² + Kendall W (within-subject, 3 conditions, N≥3)
+  - Spearman ρ per participant (condition rank vs metric) + sign-test across N
+  - Console summary + optional TSV output
+  - CLI: `python -m matb_integration.analysis.descriptive <source> -o results.tsv`
+- `tests/test_latin_square_and_bedford.py`: 27 tests for Latin-square
+  properties, `build_session_files`, Bedford questionnaire format, Bedford
+  metric parsing, and analysis pipeline (91 pass, 3 skip total suite)
 - `docs/implementation/phase8_feature_spec.md`: Phase 8–11 implementation
   specification (primary tasks, scoring, ISA ingestion, LSL, SAGAT, BIDS)
 - `docs/research/military-aviation-platform/research_evidence_review.md`:
