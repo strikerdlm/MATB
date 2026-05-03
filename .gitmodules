@@ -1,0 +1,3 @@
+[submodule "openmatb"]
+	path = openmatb
+	url = https://github.com/juliencegarra/openmatb
