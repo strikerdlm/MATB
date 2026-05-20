@@ -224,3 +224,14 @@ TIMEOUT_SEC: 99
     path.write_text(bad, encoding="utf-8")
     with pytest.raises(ProbeBankError, match="5-60"):
         load_probes(path)
+
+
+def test_file_not_found_raises(tmp_path: Path) -> None:
+    """load_probes() raises ProbeBankError, not FileNotFoundError, on missing file.
+
+    Reason: callers (Sagat plugin, scenario_builder_ext) expect a single
+    ProbeBankError exception class to handle, not OSError subclasses.
+    """
+    missing = tmp_path / "does_not_exist_en.txt"
+    with pytest.raises(ProbeBankError, match="not found"):
+        load_probes(missing)
