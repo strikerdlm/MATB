@@ -88,7 +88,7 @@ CORRECT: red only
 TIMEOUT_SEC: 15
 ```
 
-Fields are required and **must appear in this order**. Blank lines separate stanzas. Lines starting with `#` are comments and may appear anywhere outside a stanza; they are stripped by the parser.
+All 7 fields are required; order is **not** enforced by the parser (a dict-keyed accumulator is used). The canonical order shown above is what the writer emits and what hand-authored banks should follow, but a reshuffled stanza parses identically as long as the semantic constraints (DOMAIN/SA_LEVEL consistency, CORRECT in OPTIONS, etc.) still hold. Rationale: a value misplaced into the wrong slot whose type happens to be valid (e.g., transposed OPTIONS and CORRECT) is already caught by the semantic checks downstream; strict order enforcement adds no bug-catching power and degrades hand-edit ergonomics. Blank lines separate stanzas. Lines starting with `#` are comments and may appear anywhere outside a stanza; they are stripped by the parser.
 
 Header line at top of file (comment, mandatory):
 ```
@@ -100,7 +100,8 @@ The parser extracts and validates this header against the scenario .txt that poi
 
 | Rule | Action on violation |
 |---|---|
-| All 7 fields present in correct order per stanza | `ProbeBankError` naming the probe_id |
+| All 7 fields present per stanza (order not enforced) | `ProbeBankError` naming the probe_id |
+| Bank file contains at least one probe (zero-probe file is malformed) | `ProbeBankError` |
 | `SA_LEVEL ∈ {1, 2, 3}` | `ProbeBankError` |
 | `DOMAIN ∈ {perception, comprehension, projection}` | `ProbeBankError` |
 | `SA_LEVEL` and `DOMAIN` consistent (1↔perception, 2↔comprehension, 3↔projection) | `ProbeBankError` |
