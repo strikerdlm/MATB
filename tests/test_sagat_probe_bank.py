@@ -277,3 +277,56 @@ def test_validate_bank_accepts_unique_ids() -> None:
     b = Probe(probe_id="y", sa_level=2, domain="comprehension", question="Q2?",
               options=("a", "b", "Unknown"), correct="b", timeout_sec=15)
     validate_bank([a, b])  # no exception
+
+
+from matb_integration.sagat.probe_bank import write_freeze_file
+
+
+def test_write_then_load_round_trip(tmp_path: Path) -> None:
+    src = """\
+PROBE_ID: gen_l1_a
+SA_LEVEL: 1
+DOMAIN: perception
+QUESTION: Q1?
+OPTIONS: yes | no
+CORRECT: yes
+TIMEOUT_SEC: 15
+
+PROBE_ID: gen_l2_b
+SA_LEVEL: 2
+DOMAIN: comprehension
+QUESTION: Q2?
+OPTIONS: a | b | c
+CORRECT: c
+TIMEOUT_SEC: 20
+"""
+    src_path = tmp_path / "src_en.txt"
+    src_path.write_text(src, encoding="utf-8")
+    probes_in = load_probes(src_path)
+
+    out_path = tmp_path / "out_en.txt"
+    write_freeze_file(out_path, probes_in, header={"freeze_id": "P03_b1_f1"})
+
+    probes_out = load_probes(out_path)
+    assert probes_in == probes_out
+
+
+def test_write_preserves_es_anchor_inference(tmp_path: Path) -> None:
+    src = """\
+PROBE_ID: x
+SA_LEVEL: 1
+DOMAIN: perception
+QUESTION: ¿Q?
+OPTIONS: sí | no
+CORRECT: sí
+TIMEOUT_SEC: 15
+"""
+    src_path = tmp_path / "src_es.txt"
+    src_path.write_text(src, encoding="utf-8")
+    probes_in = load_probes(src_path)
+
+    out_path = tmp_path / "out_es.txt"
+    write_freeze_file(out_path, probes_in, header={})
+    probes_out = load_probes(out_path)
+    assert "No sé" in probes_out[0].options
+    assert probes_in == probes_out
