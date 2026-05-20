@@ -330,3 +330,18 @@ TIMEOUT_SEC: 15
     probes_out = load_probes(out_path)
     assert "No sé" in probes_out[0].options
     assert probes_in == probes_out
+
+
+def test_generic_en_bank_loads_and_is_balanced() -> None:
+    """The shipped EN bank parses and has 3 probes at each SA level."""
+    repo_root = Path(__file__).resolve().parents[1]
+    bank = repo_root / "openmatb" / "includes" / "questionnaires" / "sagat_generic_en.txt"
+    probes = load_probes(bank)
+    assert len(probes) == 9
+    levels = [p.sa_level for p in probes]
+    assert levels.count(1) == 3
+    assert levels.count(2) == 3
+    assert levels.count(3) == 3
+    # IDs are namespaced
+    for p in probes:
+        assert p.probe_id.startswith("gen_l")
