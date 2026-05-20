@@ -251,7 +251,8 @@ def emit_freezes_for_block(
     output_dir: Path,
     n_freezes: int = 3,
     probes_per_freeze: int = 3,     # 1 per SA level
-    min_stagger_sec: float = 60.0,
+    min_post_isa_stagger_sec: float = 30.0,
+    min_inter_freeze_sec: float = 120.0,
     seed: int,
 ) -> list[FreezeEvent]: ...
 ```
@@ -260,8 +261,10 @@ def emit_freezes_for_block(
 
 1. Reject the first 60 s and last 60 s of the block (warm-up + block-stop window).
 2. Use `random.Random(seed)` to sample `n_freezes` times uniformly from the remaining window.
-3. Reject the sample if any freeze time is within `min_stagger_sec` of any ISA time, of another freeze time, or of a block-end event.
+3. Reject the sample if any freeze time falls within `min_post_isa_stagger_sec` AFTER any ISA probe (asymmetric — ISA→SAGAT direction only, see rationale below), within `min_inter_freeze_sec` of another freeze time (symmetric), or within `BLOCK_EDGE_BUFFER_SEC` of a block-end event.
 4. Retry up to `MAX_SAMPLER_RETRIES = 200`. If no valid schedule is found → raise `FreezeSchedulingError` (signals: probe budget exceeds block capacity; caller must reduce `n_freezes` or lengthen the block).
+
+**Stagger asymmetry rationale.** The original spec specified a single symmetric ±60 s stagger from every ISA probe. This is infeasible at the workload densities the platform actually targets (ISA every 90 s for LOW, 60 s for MEDIUM, 45 s for HIGH) because symmetric ±60 s exclusion zones overlap entirely. The fix uses an asymmetric rule: cognitive contamination flows ISA→SAGAT (the ISA probe primes workload self-reflection, which can bleed into SAGAT projection answers), not the reverse. SAGAT's own 60–90 s of probes already serves as a purge before any subsequent ISA. A 30 s post-ISA buffer is enough for the operator to re-engage with the primary task before the next freeze.
 
 **Probe sampling (stratified random permutation, not Latin square):**
 

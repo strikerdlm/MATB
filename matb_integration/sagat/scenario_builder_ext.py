@@ -48,7 +48,8 @@ def emit_freezes_for_block(
     output_dir: Path,
     n_freezes: int = 3,
     probes_per_freeze: int = 3,
-    min_stagger_sec: float = 60.0,
+    min_post_isa_stagger_sec: float = 30.0,
+    min_inter_freeze_sec: float = 120.0,
     seed: int,
 ) -> list[FreezeEvent]:
     """Schedule freezes, sample probes, write per-freeze files + manifest.
@@ -67,7 +68,8 @@ def emit_freezes_for_block(
         block_duration_sec=block_duration_sec,
         isa_probe_times_sec=isa_probe_times_sec,
         n_freezes=n_freezes,
-        min_stagger_sec=min_stagger_sec,
+        min_post_isa_stagger_sec=min_post_isa_stagger_sec,
+        min_inter_freeze_sec=min_inter_freeze_sec,
         rng=rng,
     )
 
@@ -130,7 +132,8 @@ def _schedule_freezes(
     block_duration_sec: int,
     isa_probe_times_sec: list[float],
     n_freezes: int,
-    min_stagger_sec: float,
+    min_post_isa_stagger_sec: float,
+    min_inter_freeze_sec: float,
     rng: random.Random,
 ) -> list[float]:
     lo = BLOCK_EDGE_BUFFER_SEC
@@ -142,30 +145,36 @@ def _schedule_freezes(
 
     for _ in range(MAX_SAMPLER_RETRIES):
         candidate = sorted(rng.uniform(lo, hi) for _ in range(n_freezes))
-        if _all_staggered(candidate, isa_probe_times_sec, min_stagger_sec):
+        if _all_staggered(
+            candidate,
+            isa_probe_times_sec,
+            min_post_isa_stagger_sec,
+            min_inter_freeze_sec,
+        ):
             return candidate
 
     raise FreezeSchedulingError(
         f"No valid schedule after {MAX_SAMPLER_RETRIES} retries — "
-        f"likely cause: n_freezes={n_freezes} with ISA every "
-        f"{len(isa_probe_times_sec)} probes leaves no stagger room. "
-        f"Reduce n_freezes or lengthen the block."
+        f"likely cause: n_freezes={n_freezes} with given ISA timing "
+        f"leaves no stagger room. Reduce n_freezes, shorten "
+        f"min_inter_freeze_sec, or lengthen the block."
     )
 
 
 def _all_staggered(
     candidate: list[float],
     isa_times: list[float],
-    min_stagger_sec: float,
+    min_post_isa_stagger_sec: float,
+    min_inter_freeze_sec: float,
 ) -> bool:
-    # Inter-freeze stagger
+    # Inter-freeze stagger (symmetric)
     for i in range(1, len(candidate)):
-        if candidate[i] - candidate[i - 1] < min_stagger_sec:
+        if candidate[i] - candidate[i - 1] < min_inter_freeze_sec:
             return False
-    # Stagger from each ISA probe
+    # Post-ISA stagger (asymmetric — freeze must be ≥ stagger AFTER any ISA)
     for t in candidate:
         for isa_t in isa_times:
-            if abs(t - isa_t) < min_stagger_sec:
+            if isa_t <= t < isa_t + min_post_isa_stagger_sec:
                 return False
     return True
 

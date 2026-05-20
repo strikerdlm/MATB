@@ -31,11 +31,13 @@ def test_scheduling_is_deterministic_from_seed(tmp_path: Path) -> None:
         participant_id="P03",
         block_num=1,
         block_duration_sec=900,
-        isa_probe_times_sec=[450.0],  # single mid-block ISA; plan's [90…810] is infeasible w/ min_stagger=60
+        # Realistic LOW workload: ISA every 90 s
+        isa_probe_times_sec=[90.0 * i for i in range(1, 10)],
         bank_path=EN_BANK,
         n_freezes=3,
         probes_per_freeze=3,
-        min_stagger_sec=60.0,
+        min_post_isa_stagger_sec=30.0,
+        min_inter_freeze_sec=120.0,
         seed=42,
     )
     events1 = emit_freezes_for_block(output_dir=out1, **kwargs)
