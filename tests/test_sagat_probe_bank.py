@@ -235,3 +235,45 @@ def test_file_not_found_raises(tmp_path: Path) -> None:
     missing = tmp_path / "does_not_exist_en.txt"
     with pytest.raises(ProbeBankError, match="not found"):
         load_probes(missing)
+
+
+def test_empty_bank_raises(tmp_path: Path) -> None:
+    """A file containing only comments or whitespace is malformed (zero probes)."""
+    path = tmp_path / "empty_en.txt"
+    path.write_text("# only a comment\n\n# another\n", encoding="utf-8")
+    with pytest.raises(ProbeBankError, match="empty"):
+        load_probes(path)
+
+
+def test_completely_blank_file_raises(tmp_path: Path) -> None:
+    path = tmp_path / "blank_en.txt"
+    path.write_text("\n\n", encoding="utf-8")
+    with pytest.raises(ProbeBankError, match="empty"):
+        load_probes(path)
+
+
+def test_validate_bank_rejects_caller_assembled_duplicates() -> None:
+    """validate_bank guards against duplicate IDs in caller-assembled lists.
+
+    load_probes already catches duplicates during parsing, but validate_bank is
+    exposed publicly for code paths that construct Probe objects directly
+    (e.g., scenario_builder_ext.py merging probes from multiple sources).
+    """
+    from matb_integration.sagat.probe_bank import Probe, validate_bank
+
+    a = Probe(probe_id="x", sa_level=1, domain="perception", question="Q?",
+              options=("a", "b", "Unknown"), correct="a", timeout_sec=15)
+    b = Probe(probe_id="x", sa_level=2, domain="comprehension", question="Q2?",
+              options=("a", "b", "Unknown"), correct="b", timeout_sec=15)
+    with pytest.raises(ProbeBankError, match="Duplicate"):
+        validate_bank([a, b])
+
+
+def test_validate_bank_accepts_unique_ids() -> None:
+    from matb_integration.sagat.probe_bank import Probe, validate_bank
+
+    a = Probe(probe_id="x", sa_level=1, domain="perception", question="Q?",
+              options=("a", "b", "Unknown"), correct="a", timeout_sec=15)
+    b = Probe(probe_id="y", sa_level=2, domain="comprehension", question="Q2?",
+              options=("a", "b", "Unknown"), correct="b", timeout_sec=15)
+    validate_bank([a, b])  # no exception

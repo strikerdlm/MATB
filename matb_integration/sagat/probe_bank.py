@@ -76,6 +76,9 @@ def load_probes(path: Path) -> list[Probe]:
         seen_ids.add(probe.probe_id)
         probes.append(probe)
 
+    if not probes:
+        raise ProbeBankError(f"Probe bank file is empty (no probes found): {path}")
+
     return probes
 
 
