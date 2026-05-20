@@ -17,6 +17,54 @@ Confirmed working after three bug fixes below:
 ### Fixed — three headless bugs in OpenMATB submodule
 
 ### Added
+- SAGAT freeze-probe service (Phase 8 #9):
+  - `openmatb/plugins/sagat.py`: new `Sagat(BlockingPlugin)`. Pauses scenario
+    time and other plugins via OpenMATB's existing blocking semantics; renders
+    5-s blank purge then forced-choice probes via new `MultipleChoice` widget;
+    logs per-probe `probe_id, sa_level, domain, question_text, options_text,
+    given_answer, correct_answer, is_correct, latency_sec, freeze_id` rows
+    plus snapshot of every alive non-blocking plugin's `get_state_snapshot()`
+    at freeze onset. All freeze-internal timing uses `time.monotonic()`
+    because scenario_time is paused.
+  - `openmatb/core/widgets/multiple_choice.py`: new `MultipleChoice` widget —
+    keyboard-only, UP/DOWN/ENTER.
+  - `openmatb/plugins/abstractplugin.py`: additive default
+    `get_state_snapshot() -> {}`. Overridden in `sysmon.py`, `track.py`,
+    `resman.py`, `communications.py` to expose failure flags, cursor position,
+    tank tolerance, and callsign seed respectively.
+  - `openmatb/includes/questionnaires/sagat_generic_en.txt`,
+    `sagat_generic_es.txt`: generic 9-probe bank (3 per SA level) in EN and ES.
+    Spanish is functional-equivalence (no formal psychometric validation);
+    rationale documented in `docs/research/scales/sagat_validation.md`.
+  - `matb_integration/sagat/probe_bank.py`: pyglet-free `Probe` dataclass +
+    parser + validator + writer. `PROBE_BANK_FORMAT_VERSION = 1.0`.
+  - `matb_integration/sagat/scenario_builder_ext.py`: `FreezeEvent`,
+    `emit_freezes_for_block(...)` — schedules freezes with **asymmetric** ISA
+    stagger (≥ 30 s after any ISA only, since cognitive contamination flows
+    ISA→SAGAT not the reverse) and symmetric inter-freeze stagger (≥ 120 s);
+    samples probes stratified 1×L1/1×L2/1×L3 per freeze; writes per-participant
+    per-freeze probe files and per-block manifest JSON. Deterministic from
+    seed.
+  - `matb_integration/scenario_builder.py`: `include_sagat`, `sagat_bank`,
+    `sagat_output_dir`, `sagat_n_freezes`, `participant_id`, `block_num`
+    parameters on `build_block_scenario`.
+  - `matb_integration/log_converter.py`: `_sagat_metric` aggregator producing
+    per-block `sa_score_level_{1,2,3}_pct`, `sa_score_overall_pct`,
+    `mean_latency_sec`, `n_probes_*` counters, plus `freeze_details` array.
+    Cross-checks the per-block manifest to distinguish missing freezes
+    (executed=False) from missing data.
+  - Tests: 23 in `tests/test_sagat_probe_bank.py`, 13 in
+    `tests/test_sagat_scenario_emission.py`, 6 SAGAT additions to
+    `tests/test_log_converter.py`, plus `tests/integration/test_sagat_smoke.py`
+    for build-pipeline integration. Full Xvfb-runtime smoke is skip-marked
+    pending a recorded participant CSV fixture — OpenMATB replay is
+    session-replay, not live key-injection.
+  - Upstream-divergence note: edits the vendored OpenMATB submodule. Additive
+    surface area: `plugins/sagat.py`, `core/widgets/multiple_choice.py`,
+    two questionnaire files, plus one method per `abstractplugin.py /
+    sysmon.py / track.py / resman.py / communications.py`. One-line export
+    edits in `plugins/__init__.py` and `core/widgets/__init__.py`. No
+    semantics of existing OpenMATB code changed.
 - Spanish questionnaire files for OpenMATB genericscales:
   - `matb_integration/questionnaires/nasatlx_es.txt`: 6-subscale NASA-TLX in Spanish
     (Demanda mental, Demanda física, Demanda temporal, Rendimiento, Esfuerzo, Frustración)
