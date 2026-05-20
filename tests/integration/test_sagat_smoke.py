@@ -68,6 +68,7 @@ def test_scenario_emission_with_sagat_end_to_end(tmp_path: Path) -> None:
     assert len(manifest["freezes"]) == 3
 
     # All 3 probe files exist and parse, with 3 probes each (1 per SA level)
+    import re as _re
     for freeze in manifest["freezes"]:
         probe_file = tmp_path / freeze["probe_file"]
         assert probe_file.exists(), f"Probe file missing: {probe_file}"
@@ -75,6 +76,23 @@ def test_scenario_emission_with_sagat_end_to_end(tmp_path: Path) -> None:
         assert len(probes) == 3, f"{probe_file.name}: expected 3 probes, got {len(probes)}"
         levels = sorted(p.sa_level for p in probes)
         assert levels == [1, 2, 3], f"{probe_file.name}: levels {levels}, expected [1,2,3]"
+
+        # Verify the manifest's freeze_id matches the convention the
+        # Sagat plugin will derive from the probe filename. The plugin
+        # reads "{participant}_block{N}_freeze{M}_(en|es).txt" and emits
+        # freeze_id="{participant}_b{N}_f{M}".
+        stem = probe_file.stem
+        for lang in ("_en", "_es"):
+            if stem.endswith(lang):
+                stem = stem[:-len(lang)]
+                break
+        mm = _re.match(r"^(?P<pid>.+)_block(?P<bn>\d+)_freeze(?P<fn>\d+)$", stem)
+        assert mm, f"probe filename doesn't match canonical pattern: {probe_file.name}"
+        expected_freeze_id = f"{mm.group('pid')}_b{mm.group('bn')}_f{mm.group('fn')}"
+        assert freeze["freeze_id"] == expected_freeze_id, (
+            f"manifest freeze_id={freeze['freeze_id']!r} does not match "
+            f"what the Sagat plugin would derive: {expected_freeze_id!r}"
+        )
 
 
 def test_scenario_emission_es_bank(tmp_path: Path) -> None:
