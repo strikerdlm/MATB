@@ -421,6 +421,7 @@ def convert_session(
     alerttimeout_sec: float = SYSMON_ALERTTIMEOUT_SEC,
     sysmon_n_indicators: int = SYSMON_N_INDICATORS,
     extra_metadata: dict[str, Any] | None = None,
+    sagat_manifest_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Convert one OpenMATB session CSV to a structured dict (one JSONL record).
 
@@ -432,6 +433,9 @@ def convert_session(
         alerttimeout_sec: SYSMON alerttimeout in seconds (used for d' estimation).
         sysmon_n_indicators: Number of SYSMON indicators (lights + scales, default 6).
         extra_metadata: Additional fields merged into the top-level output dict.
+        sagat_manifest_dir: Optional directory to search for the SAGAT manifest JSON.
+            When set, searched first. Falls back to csv_path.parent, then to the
+            standard openmatb/includes/questionnaires/ directory.
 
     Returns:
         Dict suitable for json.dumps() as one JSONL line.
@@ -461,12 +465,24 @@ def convert_session(
         "comm": _comm_metrics(rows),
     }
 
-    # Locate optional SAGAT manifest alongside the CSV
+    # Locate optional SAGAT manifest. Search order:
+    #   1. Explicit sagat_manifest_dir parameter, if given.
+    #   2. csv_path.parent (e.g. when manifest is co-located with the CSV).
+    #   3. Standard openmatb questionnaires dir (the runtime default).
     sagat_manifest_path: Path | None = None
+    search_dirs: list[Path] = []
+    if sagat_manifest_dir is not None:
+        search_dirs.append(Path(sagat_manifest_dir))
     if hasattr(csv_path, "parent"):
-        candidates = list(csv_path.parent.glob("*_sagat_manifest.json"))
+        search_dirs.append(csv_path.parent)
+    # Standard runtime dir (relative to the MATB repo root)
+    repo_root = Path(__file__).resolve().parents[1]
+    search_dirs.append(repo_root / "openmatb" / "includes" / "questionnaires")
+    for d in search_dirs:
+        candidates = list(d.glob("*_sagat_manifest.json"))
         if candidates:
             sagat_manifest_path = candidates[0]
+            break
     record["sagat"] = _sagat_metric(rows, manifest_path=sagat_manifest_path)
 
     if extra_metadata:
