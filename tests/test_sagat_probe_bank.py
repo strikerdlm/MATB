@@ -345,3 +345,21 @@ def test_generic_en_bank_loads_and_is_balanced() -> None:
     # IDs are namespaced
     for p in probes:
         assert p.probe_id.startswith("gen_l")
+
+
+def test_generic_es_bank_loads_with_no_se_anchor() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    bank = repo_root / "openmatb" / "includes" / "questionnaires" / "sagat_generic_es.txt"
+    probes = load_probes(bank)
+    assert len(probes) == 9
+    # ES anchor present, EN anchor absent
+    for p in probes:
+        assert "No sé" in p.options
+        assert "Unknown" not in p.options
+
+
+def test_en_and_es_banks_share_probe_ids() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    en = load_probes(repo_root / "openmatb" / "includes" / "questionnaires" / "sagat_generic_en.txt")
+    es = load_probes(repo_root / "openmatb" / "includes" / "questionnaires" / "sagat_generic_es.txt")
+    assert {p.probe_id for p in en} == {p.probe_id for p in es}
