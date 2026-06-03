@@ -33,7 +33,8 @@ def _eq_5_19(g0: float, g1: float, g2: float, g3: float, r12: float, r23: float)
 def solve_g0(levels: list[tuple[float, float]]) -> float:
     """Solve Eq. 5.19 for G0 from three (MWL, time-to-failure) pairs.
 
-    Brackets the root by scanning (0, min(G)] for a sign change, then brentq.
+    Brackets the root by scanning (g1*1e-3, min(G)) for a sign change, then
+    brentq. Raises ValueError if no root is bracketed in that window.
     """
     levels = sorted(levels, key=lambda x: x[0])
     (g1, t1), (g2, t2), (g3, t3) = levels
@@ -42,23 +43,31 @@ def solve_g0(levels: list[tuple[float, float]]) -> float:
     def f(g0: float) -> float:
         return _eq_5_19(g0, g1, g2, g3, r12, r23)
 
-    hi = g1 * 0.999
+    # Search window. hi is just below min(G) (G0 < min(G) physically); lo stays
+    # above the zone where exp(1-(g1/g0)**2) underflows to 0 and masks the root.
+    # Magic constants: 1e-9 keeps hi essentially at min(G) without hitting g0==g1;
+    # 1e-3 floors g0 well above the underflow zone (~g1*0.038); 2000 grid points
+    # give a step proportional to g1, so resolution is scale-invariant.
+    hi = g1 * (1.0 - 1e-9)
     lo = g1 * 1e-3
     n = 2000
     step = (hi - lo) / n
-    # Scan from hi downward: avoids the numerical-underflow pseudo-roots near 0
-    # and finds the physically meaningful root closest to (but below) min(G).
+    # Scan from hi downward and return the first sign change (the physically
+    # meaningful root closest to, but below, min(G)). No special-casing of
+    # f==0.0: if no sign change is found the loop exhausts and we raise, rather
+    # than silently returning an underflow pseudo-root.
     prev_x = hi
     prev_y = f(prev_x)
     for i in range(1, n + 1):
         x = hi - i * step
         y = f(x)
-        if prev_y == 0.0:
-            return prev_x
         if prev_y * y < 0.0:
             return brentq(f, x, prev_x, xtol=1e-9)
         prev_x, prev_y = x, y
-    raise ValueError("no G0 root found in (0, min(G)); check input times-to-failure")
+    raise ValueError(
+        "no G0 root bracketed in (g1*1e-3, g1); G0 may be >= min(G) "
+        "or the three times-to-failure are mutually inconsistent"
+    )
 
 
 def estimate_p0(g1: float, g2: float, t1: float, t2: float, g0: float) -> float:
