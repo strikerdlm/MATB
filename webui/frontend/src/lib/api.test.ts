@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createParticipant, getTracker, ingestCsv, IngestError } from "@/lib/api";
+import { createParticipant, getTracker, ingestCsv, IngestError, getMetricsLong, getFits } from "@/lib/api";
 
 beforeEach(() => { vi.restoreAllMocks(); });
 
@@ -53,5 +53,22 @@ describe("api client", () => {
     expect(form.get("workload_level")).toBe("MEDIUM");
     expect(form.get("overwrite")).toBe("true");
     expect(form.get("file")).toBeInstanceOf(File);
+  });
+
+  it("getMetricsLong hits /metrics/long with optional participant filter", async () => {
+    global.fetch = mockFetch(200, []);
+    await getMetricsLong();
+    expect((global.fetch as any).mock.calls[0][0]).toContain("/metrics/long");
+    global.fetch = mockFetch(200, []);
+    await getMetricsLong("P02");
+    expect((global.fetch as any).mock.calls[0][0]).toContain("participant_id=P02");
+  });
+
+  it("getFits hits /fits", async () => {
+    global.fetch = mockFetch(200, []);
+    await getFits("P01");
+    const url = (global.fetch as any).mock.calls[0][0] as string;
+    expect(url).toContain("/fits");
+    expect(url).toContain("participant_id=P01");
   });
 });
