@@ -6,15 +6,18 @@ Raw rows are dicts as produced by matb_integration.log_converter.parse_csv.
 
 from __future__ import annotations
 
+import math
 import statistics
 from typing import Any
 
 
 def _to_float(s: Any) -> float | None:
+    """Parse a string to float, rejecting non-finite values (nan/inf)."""
     try:
-        return float(s)
+        v = float(s)
     except (TypeError, ValueError):
         return None
+    return v if math.isfinite(v) else None
 
 
 def sysmon_failure_times(rows: list[dict[str, str]]) -> list[float]:
@@ -35,6 +38,15 @@ def threshold_excursions(
     samples: list[tuple[float, float]], lo: float, hi: float, min_dur: float
 ) -> list[float]:
     """Start times of breaches outside [lo, hi] sustained for >= min_dur seconds.
+
+    Breach duration is measured as the span between the FIRST and LAST
+    out-of-band samples of the breach (last_out_of_band - first_out_of_band).
+    Consequence: a breach represented by a single out-of-band sample has
+    duration 0 and is excluded. This is the pre-registered Phase-1 semantic;
+    it never over-counts on sparse/irregular sampling. An alternative
+    "breach_start -> recovery sample" semantic is deferred to Phase 2 when
+    TRACK/RESMAN are wired into the fit pipeline (currently only SYSMON
+    discrete events feed it). See design spec / plan.
 
     Args:
         samples: (time, value) pairs, assumed time-ordered.
@@ -64,7 +76,9 @@ def failure_metrics(failure_times: list[float], duration_s: float) -> dict[str, 
 
     MTTF is the mean inter-failure interval, counting time-to-first-failure
     from t=0. With no failures the block is right-censored: mttf undefined,
-    rate 0.
+    rate 0. `duration_s` is retained for the Phase-2 censoring extension
+    (post-last-failure time is intentionally excluded from the Phase-1
+    inter-failure MTTF).
     """
     times = sorted(failure_times)
     n = len(times)

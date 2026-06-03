@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import math
-
 import pytest
 
 from matb_integration.suhir.failure_events import (
@@ -43,6 +41,19 @@ def test_threshold_excursions_requires_min_duration():
     ]
     out = threshold_excursions(samples, lo=-1.0, hi=1.0, min_dur=0.4)
     assert out == [2.0]  # only the 0.5 s breach; start time reported
+
+
+def test_threshold_excursions_single_sample_excluded_by_design():
+    # Pre-registered Phase-1 semantic: a breach of one out-of-band sample has
+    # span 0 (last_out_of_band == first_out_of_band) and is excluded.
+    samples = [(0.0, 5.0), (1.0, 0.0)]
+    assert threshold_excursions(samples, lo=-1.0, hi=1.0, min_dur=0.5) == []
+
+
+def test_threshold_excursions_open_ended_breach_to_session_end():
+    # A breach that never returns in-band is flushed using the last sample.
+    samples = [(0.0, 0.0), (1.0, 5.0), (2.0, 5.0), (3.0, 5.0)]
+    assert threshold_excursions(samples, lo=-1.0, hi=1.0, min_dur=1.5) == [1.0]
 
 
 def test_failure_metrics_mttf_and_rate():
