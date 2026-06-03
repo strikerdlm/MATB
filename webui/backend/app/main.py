@@ -25,6 +25,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from app.routers import participants  # noqa: E402
+
+app.include_router(participants.router)
+
 
 @app.get("/health")
 def health() -> dict[str, str]:
