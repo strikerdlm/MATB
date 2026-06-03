@@ -37,4 +37,21 @@ describe("api client", () => {
       ingestCsv(file, { participant_id: "P01", visit_ordinal: 1, workload_level: "LOW" })
     ).rejects.toThrow(IngestError);
   });
+
+  it("ingestCsv builds FormData with the exact backend field names", async () => {
+    global.fetch = mockFetch(201, { id: 1, workload_level: "MEDIUM", visit_id: 7 });
+    const file = new File([new Uint8Array([1, 2, 3])], "run.csv", { type: "text/csv" });
+    await ingestCsv(file, {
+      participant_id: "P02", visit_ordinal: 3, workload_level: "MEDIUM", overwrite: true,
+    });
+    const [url, init] = (global.fetch as any).mock.calls[0];
+    expect(url).toContain("/ingest");
+    expect(init.method).toBe("POST");
+    const form = init.body as FormData;
+    expect(form.get("participant_id")).toBe("P02");
+    expect(form.get("visit_ordinal")).toBe("3");
+    expect(form.get("workload_level")).toBe("MEDIUM");
+    expect(form.get("overwrite")).toBe("true");
+    expect(form.get("file")).toBeInstanceOf(File);
+  });
 });
