@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine
@@ -7,6 +10,11 @@ from sqlmodel.pool import StaticPool
 
 from app import db as db_module
 from app.main import app
+
+# Make `matb_integration` importable (repo root is three levels up from this file).
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 
 @pytest.fixture(name="engine")
@@ -32,3 +40,16 @@ def client_fixture(engine):
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def sample_csv_bytes():
+    """Minimal OpenMATB-style CSV with SYSMON rows convert_session can parse."""
+    def _build(misses: tuple[float, ...] = (5.0, 25.0), raw_tlx: float = 60.0) -> bytes:
+        lines = ["scenario_time,type,module,address,value"]
+        lines.append(f"900.0,performance,genericscales,nasatlx,{raw_tlx}")
+        for t in misses:
+            lines.append(f"{t},performance,sysmon,signal_detection,MISS")
+        lines.append("10.0,performance,sysmon,signal_detection,HIT")
+        return ("\n".join(lines) + "\n").encode("utf-8")
+    return _build
