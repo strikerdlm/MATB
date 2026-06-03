@@ -244,6 +244,141 @@ def _bedford_metric(rows: list[dict[str, str]]) -> dict[str, Any]:
     }
 
 
+def _sagat_metric(rows: list[dict], manifest_path: Path | None) -> dict:
+    """Aggregate SAGAT probe rows into per-block JSONL output.
+
+    rows: full row stream from one OpenMATB CSV session (post-block filtering done upstream).
+    manifest_path: optional path to {participant}_block{N}_sagat_manifest.json. When
+        present, freezes listed in the manifest but absent from the CSV are emitted
+        with executed=False.
+    """
+    sagat_rows = [r for r in rows if r.get("module") == "sagat"]
+
+    # Group consecutive 10-row probe blocks by freeze_id then probe order.
+    # Each probe is exactly 10 rows: probe_id, sa_level, domain, question_text,
+    # options_text, given_answer, correct_answer, is_correct, latency_sec, freeze_id.
+    PROBE_FIELDS = (
+        "probe_id", "sa_level", "domain", "question_text", "options_text",
+        "given_answer", "correct_answer", "is_correct", "latency_sec", "freeze_id",
+    )
+
+    # Snapshot rows live alongside probe rows but use addresses starting "snapshot_".
+    snapshot_by_freeze: dict[str, dict[str, str]] = {}
+    pending_snapshot: dict[str, str] = {}
+
+    probes_by_freeze: dict[str, list[dict]] = {}
+    current_probe: dict[str, str] = {}
+    for r in sagat_rows:
+        addr = r["address"]
+        val = r["value"]
+        if addr.startswith("snapshot_"):
+            pending_snapshot[addr[len("snapshot_"):]] = val
+            continue
+        if addr in PROBE_FIELDS:
+            current_probe[addr] = val
+            if addr == "freeze_id":  # last field — stash and reset
+                freeze_id = val
+                probes_by_freeze.setdefault(freeze_id, []).append(current_probe)
+                if pending_snapshot and freeze_id not in snapshot_by_freeze:
+                    snapshot_by_freeze[freeze_id] = pending_snapshot
+                    pending_snapshot = {}
+                current_probe = {}
+
+    # Per-level counters
+    level_counts = {1: [0, 0], 2: [0, 0], 3: [0, 0]}  # [correct, total]
+    latencies: list[float] = []
+    n_answered = 0
+    n_timeout = 0
+    freeze_details: list[dict] = []
+
+    for freeze_id, probes in probes_by_freeze.items():
+        detail_probes: list[dict] = []
+        for p in probes:
+            lvl = int(p["sa_level"])
+            correct = p["is_correct"] == "True"
+            given = p["given_answer"]
+            timed_out = given == "TIMEOUT"
+            try:
+                latency = float(p["latency_sec"])
+            except (KeyError, ValueError):
+                latency = 0.0
+            latencies.append(latency)
+            if lvl not in level_counts:
+                level_counts[lvl] = [0, 0]
+            level_counts[lvl][1] += 1
+            if correct:
+                level_counts[lvl][0] += 1
+            if timed_out:
+                n_timeout += 1
+            else:
+                n_answered += 1
+            detail_probes.append({
+                "probe_id": p["probe_id"],
+                "sa_level": lvl,
+                "domain": p["domain"],
+                "question": p["question_text"],
+                "options": [o.strip() for o in p["options_text"].split("|")],
+                "given_answer": given,
+                "correct_answer": p["correct_answer"],
+                "is_correct": correct,
+                "latency_sec": latency,
+            })
+        freeze_details.append({
+            "freeze_id": freeze_id,
+            "executed": True,
+            "snapshot": snapshot_by_freeze.get(freeze_id, {}),
+            "probes": detail_probes,
+        })
+
+    # Manifest cross-check
+    n_freezes_planned = len(freeze_details)
+    if manifest_path is not None and manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        planned_ids = [f["freeze_id"] for f in manifest["freezes"]]
+        executed_ids = {f["freeze_id"] for f in freeze_details}
+        # Re-emit in manifest order, marking missing ones as executed=False
+        ordered: list[dict] = []
+        executed_lookup = {f["freeze_id"]: f for f in freeze_details}
+        for planned_freeze in manifest["freezes"]:
+            fid = planned_freeze["freeze_id"]
+            if fid in executed_ids:
+                d = executed_lookup[fid]
+                d["scenario_time_sec"] = planned_freeze["scenario_time_sec"]
+                ordered.append(d)
+            else:
+                ordered.append({
+                    "freeze_id": fid,
+                    "scenario_time_sec": planned_freeze["scenario_time_sec"],
+                    "executed": False,
+                    "snapshot": {},
+                    "probes": [],
+                })
+        freeze_details = ordered
+        n_freezes_planned = len(planned_ids)
+    n_freezes_executed = sum(1 for d in freeze_details if d.get("executed"))
+
+    def _pct(lvl: int) -> float:
+        correct, total = level_counts.get(lvl, [0, 0])
+        return round(100.0 * correct / total, 1) if total else 0.0
+
+    n_total = sum(t for c, t in level_counts.values())
+    total_correct = sum(c for c, t in level_counts.values())
+
+    return {
+        "n_freezes_planned": n_freezes_planned,
+        "n_freezes_executed": n_freezes_executed,
+        "n_probes_total": n_total,
+        "n_probes_answered": n_answered,
+        "n_probes_timeout": n_timeout,
+        "sa_score_level_1_pct": _pct(1),
+        "sa_score_level_2_pct": _pct(2),
+        "sa_score_level_3_pct": _pct(3),
+        "sa_score_overall_pct": round(100.0 * total_correct / n_total, 1) if n_total else 0.0,
+        "mean_latency_sec": round(sum(latencies) / len(latencies), 2) if latencies else 0.0,
+        "freeze_details": freeze_details,
+    }
+
+
 def _comm_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
     perf = [r for r in rows
             if r.get("type") == "performance" and r.get("module") == "communications"]
@@ -286,6 +421,7 @@ def convert_session(
     alerttimeout_sec: float = SYSMON_ALERTTIMEOUT_SEC,
     sysmon_n_indicators: int = SYSMON_N_INDICATORS,
     extra_metadata: dict[str, Any] | None = None,
+    sagat_manifest_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Convert one OpenMATB session CSV to a structured dict (one JSONL record).
 
@@ -297,6 +433,9 @@ def convert_session(
         alerttimeout_sec: SYSMON alerttimeout in seconds (used for d' estimation).
         sysmon_n_indicators: Number of SYSMON indicators (lights + scales, default 6).
         extra_metadata: Additional fields merged into the top-level output dict.
+        sagat_manifest_dir: Optional directory to search for the SAGAT manifest JSON.
+            When set, searched first. Falls back to csv_path.parent, then to the
+            standard openmatb/includes/questionnaires/ directory.
 
     Returns:
         Dict suitable for json.dumps() as one JSONL line.
@@ -325,6 +464,26 @@ def convert_session(
         "bedford": _bedford_metric(rows),
         "comm": _comm_metrics(rows),
     }
+
+    # Locate optional SAGAT manifest. Search order:
+    #   1. Explicit sagat_manifest_dir parameter, if given.
+    #   2. csv_path.parent (e.g. when manifest is co-located with the CSV).
+    #   3. Standard openmatb questionnaires dir (the runtime default).
+    sagat_manifest_path: Path | None = None
+    search_dirs: list[Path] = []
+    if sagat_manifest_dir is not None:
+        search_dirs.append(Path(sagat_manifest_dir))
+    if hasattr(csv_path, "parent"):
+        search_dirs.append(csv_path.parent)
+    # Standard runtime dir (relative to the MATB repo root)
+    repo_root = Path(__file__).resolve().parents[1]
+    search_dirs.append(repo_root / "openmatb" / "includes" / "questionnaires")
+    for d in search_dirs:
+        candidates = list(d.glob("*_sagat_manifest.json"))
+        if candidates:
+            sagat_manifest_path = candidates[0]
+            break
+    record["sagat"] = _sagat_metric(rows, manifest_path=sagat_manifest_path)
 
     if extra_metadata:
         record.update(extra_metadata)

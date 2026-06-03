@@ -258,3 +258,28 @@ def test_openmatb_sync_scales():
             delattr(builtins, "_")
         else:
             builtins._ = _orig
+
+
+def test_build_block_scenario_with_sagat_emits_two_lines_per_freeze(tmp_path):
+    from matb_integration.scenario_builder import build_block_scenario
+    from aircraft_monitor.research.protocol import WorkloadLevel
+
+    repo_root = Path(__file__).resolve().parents[1]
+    sagat_bank = repo_root / "openmatb" / "includes" / "questionnaires" / "sagat_generic_en.txt"
+
+    text = build_block_scenario(
+        level=WorkloadLevel.LOW,
+        block_duration_sec=900,
+        seed=42,
+        include_sagat=True,
+        sagat_bank=sagat_bank,
+        sagat_output_dir=tmp_path,
+        sagat_n_freezes=3,
+        participant_id="P03",
+        block_num=1,
+    )
+    # Three freezes → 3 × 2 lines (filename + start)
+    assert text.count("sagat;filename;") == 3
+    assert text.count("sagat;start") == 3
+    # Manifest emitted
+    assert (tmp_path / "P03_block1_sagat_manifest.json").exists()

@@ -31,6 +31,7 @@ from typing import Final
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from aircraft_monitor.research.protocol import ResearchProtocol, WorkloadLevel
+from matb_integration.sagat.scenario_builder_ext import emit_freezes_for_block
 
 # ── OpenMATB sync-guard constants ─────────────────────────────────────────────
 # Mirror openmatb/plugins/sysmon.py defaults — kept in sync by test assertions.
@@ -177,6 +178,13 @@ def build_block_scenario(
     bedford_questionnaire: str = BEDFORD_QUESTIONNAIRE,
     include_nasatlx: bool = True,
     include_bedford: bool = False,
+    # SAGAT freeze-probe params
+    include_sagat: bool = False,
+    sagat_bank: Path | None = None,
+    sagat_output_dir: Path | None = None,
+    sagat_n_freezes: int = 3,
+    participant_id: str = "P00",
+    block_num: int = 1,
 ) -> str:
     """Generate a single-block OpenMATB scenario as a string.
 
@@ -241,6 +249,43 @@ def build_block_scenario(
     # ── ISA probe times (reserved — events distributed around probes) ─────────
     isa_times = [isa_interval * (i + 1) for i in range(n_isa) if isa_interval * (i + 1) < block_duration_sec]
 
+    # ── SAGAT freezes (optional) ─────────────────────────────────────────────
+    sagat_events = []
+    if include_sagat:
+        if sagat_bank is None or sagat_output_dir is None:
+            raise ValueError(
+                "include_sagat=True requires sagat_bank and sagat_output_dir"
+            )
+        # Warn if probe files won't land in the directory the Sagat plugin
+        # searches at runtime. The plugin reads from openmatb/includes/
+        # questionnaires/ relative to OpenMATB's CWD.
+        import warnings
+        _resolved_output_dir = Path(sagat_output_dir).resolve()
+        _expected_dir = (Path(__file__).resolve().parents[1] /
+                         "openmatb" / "includes" / "questionnaires").resolve()
+        if _resolved_output_dir != _expected_dir:
+            warnings.warn(
+                f"sagat_output_dir={_resolved_output_dir} is not the OpenMATB "
+                f"questionnaires directory ({_expected_dir}). The Sagat plugin "
+                f"won't find the probe files at runtime. Either pass "
+                f"sagat_output_dir=<questionnaires dir>, or copy the "
+                f"generated probe .txt files there before launching OpenMATB.",
+                stacklevel=2,
+            )
+        sagat_events = emit_freezes_for_block(
+            participant_id=participant_id,
+            block_num=block_num,
+            block_duration_sec=block_duration_sec,
+            isa_probe_times_sec=isa_times,
+            bank_path=sagat_bank,
+            output_dir=sagat_output_dir,
+            n_freezes=sagat_n_freezes,
+            probes_per_freeze=3,
+            min_post_isa_stagger_sec=30.0,
+            min_inter_freeze_sec=120.0,
+            seed=seed + block_num * 100 + 7,
+        )
+
     # ── SYSMON failure events ─────────────────────────────────────────────────
     lines.append(
         f"# SYSMON failures — {sysmon_n} light events + {sysmon_n} scale events = {sysmon_n * 2} total"
@@ -279,6 +324,15 @@ def build_block_scenario(
         lines.append(f"{ts};genericscales;start")
 
     lines.append("")
+
+    # ── SAGAT freeze triggers ─────────────────────────────────────────────────
+    if sagat_events:
+        lines.append(f"# SAGAT freezes — {len(sagat_events)} total")
+        for ev in sagat_events:
+            ts = _fmt_time(ev.scenario_time_sec)
+            lines.append(f"{ts};sagat;filename;{ev.probe_file_path.name}")
+            lines.append(f"{ts};sagat;start")
+        lines.append("")
 
     # ── Block end ─────────────────────────────────────────────────────────────
     scales_at_end = [q for flag, q in [

@@ -350,3 +350,200 @@ def test_mixed_en_es_nasatlx_rows(tmp_path):
     assert t["mental_demand"] == pytest.approx(7.0)
     assert t["physical_demand"] == pytest.approx(3.0)
     assert t["n_subscales_completed"] == 2
+
+
+# ---------------------------------------------------------------------------
+# SAGAT metric tests
+# ---------------------------------------------------------------------------
+
+def _make_sagat_csv_rows(rows: list[tuple[str, str, str]]) -> list[dict]:
+    """Helper: convert (module, address, value) triples into log_converter row dicts."""
+    out = []
+    for i, (module, address, value) in enumerate(rows):
+        out.append({
+            "logtime": f"2026-05-20 12:00:{i:02d}",
+            "scenario_time": str(i),
+            "type": "performance",
+            "module": module,
+            "address": address,
+            "value": value,
+        })
+    return out
+
+
+def test_sagat_single_freeze_aggregation():
+    from matb_integration.log_converter import _sagat_metric
+
+    rows = _make_sagat_csv_rows([
+        ("sagat", "probe_id", "gen_l1_a"),
+        ("sagat", "sa_level", "1"),
+        ("sagat", "domain", "perception"),
+        ("sagat", "question_text", "Q1?"),
+        ("sagat", "options_text", "a | b | Unknown"),
+        ("sagat", "given_answer", "a"),
+        ("sagat", "correct_answer", "a"),
+        ("sagat", "is_correct", "True"),
+        ("sagat", "latency_sec", "3.2"),
+        ("sagat", "freeze_id", "P03_b1_f1"),
+
+        ("sagat", "probe_id", "gen_l2_a"),
+        ("sagat", "sa_level", "2"),
+        ("sagat", "domain", "comprehension"),
+        ("sagat", "question_text", "Q2?"),
+        ("sagat", "options_text", "yes | no | Unknown"),
+        ("sagat", "given_answer", "no"),
+        ("sagat", "correct_answer", "yes"),
+        ("sagat", "is_correct", "False"),
+        ("sagat", "latency_sec", "5.1"),
+        ("sagat", "freeze_id", "P03_b1_f1"),
+    ])
+    out = _sagat_metric(rows, manifest_path=None)
+    assert out["n_probes_total"] == 2
+    assert out["n_probes_answered"] == 2
+    assert out["n_probes_timeout"] == 0
+    assert out["sa_score_level_1_pct"] == 100.0
+    assert out["sa_score_level_2_pct"] == 0.0
+    assert out["sa_score_overall_pct"] == 50.0
+    assert len(out["freeze_details"]) == 1
+    assert out["freeze_details"][0]["probes"][0]["question"] == "Q1?"
+    assert out["freeze_details"][0]["probes"][0]["options"] == ["a", "b", "Unknown"]
+
+
+def test_sagat_per_level_aggregation():
+    from matb_integration.log_converter import _sagat_metric
+
+    def probe(pid, lvl, dom, given, correct, freeze):
+        return [
+            ("sagat", "probe_id", pid),
+            ("sagat", "sa_level", str(lvl)),
+            ("sagat", "domain", dom),
+            ("sagat", "question_text", "Q?"),
+            ("sagat", "options_text", "a | b"),
+            ("sagat", "given_answer", given),
+            ("sagat", "correct_answer", correct),
+            ("sagat", "is_correct", str(given == correct)),
+            ("sagat", "latency_sec", "1.0"),
+            ("sagat", "freeze_id", freeze),
+        ]
+
+    triples: list[tuple[str, str, str]] = []
+    # 3 L1: 2 correct, 1 wrong -> 66.7
+    for i, ok in enumerate([True, True, False]):
+        triples += probe(f"l1_{i}", 1, "perception", "a", "a" if ok else "b", "P03_b1_f1")
+    # 3 L2: 1 correct, 2 wrong -> 33.3
+    for i, ok in enumerate([True, False, False]):
+        triples += probe(f"l2_{i}", 2, "comprehension", "a", "a" if ok else "b", "P03_b1_f2")
+    # 3 L3: 0 correct -> 0.0
+    for i in range(3):
+        triples += probe(f"l3_{i}", 3, "projection", "a", "b", "P03_b1_f3")
+
+    out = _sagat_metric(_make_sagat_csv_rows(triples), manifest_path=None)
+    assert round(out["sa_score_level_1_pct"], 1) == 66.7
+    assert round(out["sa_score_level_2_pct"], 1) == 33.3
+    assert out["sa_score_level_3_pct"] == 0.0
+    assert round(out["sa_score_overall_pct"], 1) == 33.3
+
+
+def test_sagat_timeout_handling():
+    from matb_integration.log_converter import _sagat_metric
+
+    rows = _make_sagat_csv_rows([
+        ("sagat", "probe_id", "g_a"),
+        ("sagat", "sa_level", "1"),
+        ("sagat", "domain", "perception"),
+        ("sagat", "question_text", "Q?"),
+        ("sagat", "options_text", "a | b"),
+        ("sagat", "given_answer", "TIMEOUT"),
+        ("sagat", "correct_answer", "a"),
+        ("sagat", "is_correct", "False"),
+        ("sagat", "latency_sec", "15.0"),
+        ("sagat", "freeze_id", "P03_b1_f1"),
+    ])
+    out = _sagat_metric(rows, manifest_path=None)
+    assert out["n_probes_total"] == 1
+    assert out["n_probes_answered"] == 0
+    assert out["n_probes_timeout"] == 1
+    assert out["mean_latency_sec"] == 15.0
+
+
+def test_sagat_manifest_cross_check(tmp_path):
+    from matb_integration.log_converter import _sagat_metric
+    import json as _json
+
+    manifest = {
+        "participant_id": "P03",
+        "block_num": 1,
+        "seed": 42,
+        "bank": "sagat_generic_en.txt",
+        "freezes": [
+            {"freeze_id": "P03_b1_f1", "scenario_time_sec": 300.0,
+             "probe_file": "x.txt", "probe_ids": ["g_a"]},
+            {"freeze_id": "P03_b1_f2", "scenario_time_sec": 600.0,
+             "probe_file": "y.txt", "probe_ids": ["g_b"]},
+        ],
+    }
+    manifest_path = tmp_path / "P03_block1_sagat_manifest.json"
+    manifest_path.write_text(_json.dumps(manifest), encoding="utf-8")
+
+    # CSV only includes the FIRST freeze - second one never fired
+    rows = _make_sagat_csv_rows([
+        ("sagat", "probe_id", "g_a"),
+        ("sagat", "sa_level", "1"),
+        ("sagat", "domain", "perception"),
+        ("sagat", "question_text", "Q?"),
+        ("sagat", "options_text", "a | b"),
+        ("sagat", "given_answer", "a"),
+        ("sagat", "correct_answer", "a"),
+        ("sagat", "is_correct", "True"),
+        ("sagat", "latency_sec", "1.0"),
+        ("sagat", "freeze_id", "P03_b1_f1"),
+    ])
+    out = _sagat_metric(rows, manifest_path=manifest_path)
+    assert out["n_freezes_planned"] == 2
+    assert out["n_freezes_executed"] == 1
+    executed_flags = [f["executed"] for f in out["freeze_details"]]
+    assert executed_flags == [True, False]
+
+
+def test_sagat_snapshot_round_trip():
+    from matb_integration.log_converter import _sagat_metric
+
+    rows = _make_sagat_csv_rows([
+        ("sagat", "snapshot_track_cursor_position", "[0.45, 0.51]"),
+        ("sagat", "snapshot_sysmon_lights_failed", "{'1': True, '2': False}"),
+        ("sagat", "probe_id", "g_a"),
+        ("sagat", "sa_level", "1"),
+        ("sagat", "domain", "perception"),
+        ("sagat", "question_text", "Q?"),
+        ("sagat", "options_text", "a | b"),
+        ("sagat", "given_answer", "a"),
+        ("sagat", "correct_answer", "a"),
+        ("sagat", "is_correct", "True"),
+        ("sagat", "latency_sec", "1.0"),
+        ("sagat", "freeze_id", "P03_b1_f1"),
+    ])
+    out = _sagat_metric(rows, manifest_path=None)
+    snap = out["freeze_details"][0]["snapshot"]
+    assert "track_cursor_position" in snap
+    assert "sysmon_lights_failed" in snap
+
+
+def test_sagat_es_text_preserved_through_converter():
+    from matb_integration.log_converter import _sagat_metric
+
+    rows = _make_sagat_csv_rows([
+        ("sagat", "probe_id", "g_a"),
+        ("sagat", "sa_level", "1"),
+        ("sagat", "domain", "perception"),
+        ("sagat", "question_text", "¿Cuántas tareas?"),
+        ("sagat", "options_text", "0 | 1 | No sé"),
+        ("sagat", "given_answer", "1"),
+        ("sagat", "correct_answer", "1"),
+        ("sagat", "is_correct", "True"),
+        ("sagat", "latency_sec", "1.0"),
+        ("sagat", "freeze_id", "P03_b1_f1"),
+    ])
+    out = _sagat_metric(rows, manifest_path=None)
+    p = out["freeze_details"][0]["probes"][0]
+    assert p["question"] == "¿Cuántas tareas?"
+    assert "No sé" in p["options"]
