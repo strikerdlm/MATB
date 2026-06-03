@@ -50,3 +50,24 @@ export interface BlockDetail {
   };
   depdf_fit: { g0: number; p0: number; tau0: number; hcf_source: string; mwl_source: string } | null;
 }
+
+export interface MetricRow {
+  participant_id: string;
+  visit_ordinal: number;
+  workload_level: "LOW" | "MEDIUM" | "HIGH";
+  metric: string;
+  value: number;
+}
+
+export interface CurvePoint { r: number; p: number; }
+
+export interface FitRow {
+  participant_id: string;
+  visit_ordinal: number;
+  g0: number;
+  p0: number;
+  tau0: number;
+  hcf_source: string;
+  mwl_source: string;
+  curve: CurvePoint[];
+}

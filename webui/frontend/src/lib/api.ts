@@ -1,5 +1,5 @@
 import type {
-  BlockDetail, IngestResult, Participant, ParticipantCreate, TrackerCell, Visit,
+  BlockDetail, FitRow, IngestResult, MetricRow, Participant, ParticipantCreate, TrackerCell, Visit,
 } from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -80,6 +80,20 @@ export async function getBlock(
     participant_id: participantId, visit_ordinal: String(visitOrdinal), workload_level: level,
   });
   const res = await fetch(`${API_BASE}/block?${q}`, { method: "GET" });
+  if (!res.ok) throw new ApiError(res.status, await detail(res));
+  return res.json();
+}
+
+export async function getMetricsLong(participantId?: string): Promise<MetricRow[]> {
+  const q = participantId ? `?${new URLSearchParams({ participant_id: participantId })}` : "";
+  const res = await fetch(`${API_BASE}/metrics/long${q}`, { method: "GET" });
+  if (!res.ok) throw new ApiError(res.status, await detail(res));
+  return res.json();
+}
+
+export async function getFits(participantId?: string): Promise<FitRow[]> {
+  const q = participantId ? `?${new URLSearchParams({ participant_id: participantId })}` : "";
+  const res = await fetch(`${API_BASE}/fits${q}`, { method: "GET" });
   if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();
 }
