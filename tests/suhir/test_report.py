@@ -21,6 +21,12 @@ def test_training_target_capped_at_factor_three():
     assert r == pytest.approx(3.0)
 
 
+@pytest.mark.parametrize("threshold", [0.0, -0.1, 1.2])  # not in (0, p0]
+def test_training_target_rejects_out_of_domain_threshold(threshold):
+    with pytest.raises(ValueError):
+        training_target_ratio(p0=0.99, threshold=threshold)
+
+
 def test_rank_participants_orders_by_capacity():
     rows = [
         {"participant_id": "P01", "target_ratio": 1.5},
