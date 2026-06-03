@@ -1,325 +1,232 @@
-# 🛩️ UAV & Fighter Aircraft Monitoring System
+# 🛩️ MATB — Military Aviation Research Platform
 
-A real-time, visually stunning terminal-based monitoring system for UAV (Unmanned Aerial Vehicle) and Fighter Aircraft operations with realistic mission challenges.
+A Python research platform for **multi-attribute task battery (MATB)** human-factors studies in military aviation. It pairs a vendored **OpenMATB** task engine (the four canonical MATB tasks + workload/SA instruments) with a Python bridge that builds counterbalanced scenarios, converts session logs into analysis-ready metrics, and applies a probabilistic mission-outcome model. A FastAPI research console for longitudinal data collection and analysis is in active development.
 
-## ✨ Features
+> **Author:** Dr. Diego Malpica, MD — Aerospace Medicine, Colombian Aerospace Force (FAC).
+> Research targets: *Aerospace Medicine and Human Performance*, *Human Factors*, *Frontiers in Neuroergonomics*.
 
-- **Rich Terminal UI**: Beautiful, modern terminal interface with live updates
-- **UAV Monitoring**: Track drone operations including surveillance, reconnaissance, and delivery missions
-- **Fighter Aircraft Ops**: Monitor combat aircraft with radar, weapons systems, and tactical operations
-- **Real-time Events**: Dynamic event sequences with realistic challenges
-- **Mission Objectives**: Track mission progress with visual indicators
-- **Threat Detection**: Simulated radar and threat warning systems
-- **System Health**: Monitor fuel, battery, weapons, and system status
+---
 
-## 🚀 Quick Start
+## What this is (and what it is not)
+
+This repository has evolved from a terminal aircraft-monitoring demo into a research platform built around **OpenMATB**. The active research surface is OpenMATB + the `matb_integration` bridge, **not** the original Rich dashboard (which is retained as a legacy/secondary tool — see [Legacy dashboard](#legacy-aircraft-monitoring-dashboard)).
+
+It is a **research instrument**, not a clinical or certified safety tool. Statistical and modelling outputs use comparative, evidence-based framing (effect sizes, confidence/credible intervals).
+
+---
+
+## Architecture
+
+```
+MATB/
+├── openmatb/                 # Vendored OpenMATB v1.4.x submodule — the task engine
+│                             #   (SYSMON, TRACK, COMM, RESMAN + ISA / NASA-TLX / Bedford / SAGAT)
+├── matb_integration/         # Python bridge layer (no OpenMATB install needed to use it)
+│   ├── scenario_builder.py   #   ResearchProtocol → OpenMATB .txt; Latin-square counterbalancing
+│   ├── log_converter.py      #   OpenMATB CSV → structured JSONL metrics (d′, TLX, Bedford, ISA, SAGAT)
+│   ├── suhir/                #   Suhir (2018) DEPDF probabilistic mission-outcome model  [PR #5]
+│   ├── questionnaires/       #   EN/ES NASA-TLX, ISA, Bedford scale assets
+│   └── analysis/             #   descriptive analysis helpers
+├── webui/                    # MATB Research Console (FastAPI backend; Next.js UI pending)  [PR #6]
+│   └── backend/              #   ingestion + study-completeness tracker + auto DEPDF fit
+├── scenarios/military_aviation/   # Pre-baked LOW / MEDIUM / HIGH scenarios
+├── aircraft_monitor/         # Legacy Rich terminal dashboard (secondary)
+├── tests/                    # Bridge + protocol + SAGAT + analysis tests
+├── setup.sh                  # One-shot clone-to-running install
+└── docs/                     # Research evidence review, specs, plans
+```
+
+| Component | Role | Status |
+|---|---|---|
+| `openmatb/` submodule | The MATB task runner (operator-in-the-loop) | Built; 3 Diego-authored headless fixes; Xvfb smoke-verified |
+| `matb_integration/scenario_builder.py` | Generate counterbalanced LOW/MED/HIGH scenarios | Built, tested |
+| `matb_integration/log_converter.py` | CSV → JSONL metrics (SDT d′, TLX, Bedford, ISA, SAGAT) | Built, tested |
+| `matb_integration/suhir/` | DEPDF human-nonfailure + mission-outcome model | Built — **PR #5** (not yet on `main`) |
+| `webui/backend/` | FastAPI ingestion + study tracker + auto-fit | Built — **PR #6** (stacked on #5) |
+| `webui/frontend/` | Next.js tracker/analysis UI (HRV design system) | **Phase 1B — in development** |
+| `aircraft_monitor/` | Legacy Rich dashboard | Retained, not the active surface |
+
+**Data flow:** OpenMATB session → CSV logs → `log_converter` → JSONL metrics → (`suhir` DEPDF fit) → analysis / research console.
+
+---
+
+## Step-by-step: how to run it
+
+### 1. Install (engine + assets)
 
 ```bash
-# Install dependencies
+git clone --recurse-submodules https://github.com/strikerdlm/MATB
+cd MATB
+bash setup.sh
+```
+
+`setup.sh` initialises the `openmatb` submodule, creates a venv at `openmatb/.venv`, installs engine deps (pyglet, pylsl, rstr, rich, pydantic, pytest), and copies the military-aviation questionnaires + scenarios into `openmatb/includes/`.
+
+### 2. Build counterbalanced scenarios (optional — pre-baked ones ship in `scenarios/`)
+
+```bash
+python3 -m matb_integration.scenario_builder \
+  --output-dir scenarios/military_aviation \
+  --block-duration 900 --seed 42
+```
+
+Produces `LOW_workload.txt` / `MEDIUM_workload.txt` / `HIGH_workload.txt`
+(≈ 2.9 / 7.5 / 12.1 events·min⁻¹). Per-participant block order is a Latin-square
+permutation (`block_order_for_participant`).
+
+### 3. Run a session
+
+```bash
+# Linux / headless (CI, servers):
+Xvfb :100 -screen 0 1920x1080x24 &
+cd openmatb && DISPLAY=:100 .venv/bin/python main.py
+
+# Windows:   cd openmatb && .venv/Scripts/python main.py
+# macOS:     cd openmatb && .venv/bin/python main.py
+```
+
+OpenMATB writes a timestamped session CSV under `openmatb/sessions/`.
+
+### 4. Convert a session CSV to metrics
+
+```bash
+python3 -m matb_integration.log_converter openmatb/sessions/<run>.csv \
+  --participant P01 --level LOW --block low_workload \
+  -o exports/P01_low.jsonl
+```
+
+Emits one JSONL record with SYSMON d′ (Hautus log-linear), COMM SDT d′,
+NASA-TLX subscales + raw, Bedford, ISA time-series, and SAGAT probe accuracy.
+
+### 5. Fit the Suhir DEPDF (needs all three workload levels of a visit)
+
+```bash
+python3 -m matb_integration.suhir.cli fit \
+  --participant P01 \
+  --low LOW.csv --medium MEDIUM.csv --high HIGH.csv \
+  --source raw_tlx --out exports/P01_suhir.json
+```
+
+Fits the baseline parameters G₀ / P₀ / τ₀ from the three graded-workload
+time-to-failure series and writes a parameters JSON. See
+[`matb_integration/suhir/README.md`](matb_integration/suhir/README.md).
+
+### 6. Run the research console backend (PR #6)
+
+```bash
+python3 -m venv ~/.venvs/matb-webui
+~/.venvs/matb-webui/bin/pip install -r webui/backend/requirements.txt
+cd webui/backend
+~/.venvs/matb-webui/bin/uvicorn app.main:app --reload --port 8000
+```
+
+Endpoints: `GET /health`; `POST /participants`, `GET /participants`,
+`GET /participants/{id}/visits`; `POST /ingest` (multipart upload of a session
+CSV, tagged with participant/visit/level); `GET /tracker` (the completeness
+grid). Ingesting all three levels of a visit auto-runs the DEPDF fit.
+See [`webui/backend/README.md`](webui/backend/README.md).
+
+### 7. Run the tests
+
+```bash
+# bridge + protocol + suhir + sagat tests:
+python3 -m pytest tests/ -v
+
+# research-console backend tests:
+cd webui/backend && ~/.venvs/matb-webui/bin/python -m pytest -q
+```
+
+---
+
+## Capabilities (current)
+
+- **Four canonical MATB tasks** via OpenMATB: system monitoring (SYSMON), tracking (TRACK), communications (COMM), resource management (RESMAN), with operator input and per-task logging.
+- **Graded mental-workload blocks** (LOW/MEDIUM/HIGH) calibrated to the Pontiggia et al. (2024) event-rate range, generated and per-participant counterbalanced.
+- **Workload & SA instruments:** instantaneous ISA (1–10), post-block NASA-TLX (6 subscales) and Bedford (1–10), and SAGAT freeze-probe situational-awareness capture. Spanish questionnaire assets included (NASA-TLX Spanish is psychometrically validated; ISA/Bedford Spanish are functional-equivalence translations — see `docs/research/scales/scale_validation_es.md`).
+- **Analysis-ready metrics:** signal-detection d′ (log-linear correction), reaction times, hit/miss/false-alarm counts, TLX subscales, Bedford, ISA series, SAGAT accuracy — all as structured JSONL.
+- **Probabilistic mission-outcome model (suhir):** Suhir's double-exponential human-nonfailure DEPDF (Eq. 5.1/5.16), FOAT calibration (Eq. 5.19–5.21), Weibull degradation, and mission-outcome composition (Eq. 5.10), validated against the book's own Table 5.1 and Example 5.1.
+- **Research console backend:** file ingestion with integrity guards (sha256 dedup, cross-cell mislabel prevention, overwrite confirmation, validation), a derived study-completeness grid, and auto DEPDF fitting per completed visit.
+
+---
+
+## Latest developments
+
+- **Suhir DEPDF mission-outcome layer** (`matb_integration/suhir/`, PR #5): turns the platform into a calibration rig for Ephraim Suhir's *Human-in-the-Loop* (2018) probabilistic model — the graded LOW/MED/HIGH scenarios serve as the elevated-workload levels his FOAT calibration requires. Design + plan in `docs/superpowers/specs/` and `docs/superpowers/plans/`.
+- **MATB Research Console — backend** (`webui/backend/`, PR #6): FastAPI + SQLModel (SQLite) console for the planned longitudinal study (**12 participants × 6 visits × 3 workload levels**, every 3 days over 15 days). Ingests OpenMATB CSVs (reusing `matb_integration` as a library — no metric logic duplicated), tracks completeness, and auto-fits the DEPDF per visit.
+- **In development — Phase 1B frontend:** a Next.js/TypeScript tracker + visualization + analysis UI mirroring the HRV "Mission Control" design system, with a pre-specified statistics engine (linear mixed-effects, repeated-measures correlation, Bayesian hierarchical, with classical rmANOVA/OLS as sensitivity) for the repeated-measures design.
+
+### Readiness
+
+- **Pilot an OpenMATB session with d′ + NASA-TLX/Bedford/ISA + Latin-square counterbalancing:** ready (verified headless via Xvfb; no real-participant data collected yet).
+- **DEPDF analysis + research-console ingestion/tracking:** built and tested (in open PRs).
+- **Full Q1-grade study (frontend + physiology sync + participant data):** not yet — frontend, LSL physiology, and a real data-collection run remain.
+
+---
+
+## Legacy aircraft-monitoring dashboard
+
+The original Rich terminal dashboard remains in `aircraft_monitor/` for demos and as the historical base of the project. It is no longer the active research surface.
+
+```bash
 pip install -r requirements.txt
-
-# Run the monitoring system
-python -m aircraft_monitor
-
-# Or run specific modules
-python -m aircraft_monitor.demo_uav      # UAV operations demo
-python -m aircraft_monitor.demo_fighter  # Fighter aircraft demo
-python -m aircraft_monitor.demo_combined # Combined operations
-
-# Optional runtime flags
-python -m aircraft_monitor fighter --event-delay 0.35
-python -m aircraft_monitor combined --headless
-
-# Run a MATB-inspired research protocol
+python -m aircraft_monitor                 # combined demo
+python -m aircraft_monitor.demo_uav        # UAV demo
+python -m aircraft_monitor.demo_fighter    # fighter demo
 python -m aircraft_monitor experiment --headless --research-modality uas --seed 42
 ```
 
-## 🧪 Non-interactive / CI usage
+It runs headless automatically when stdout is not a TTY; `AIRCRAFT_MONITOR_HEADLESS=true|false` forces the mode. Generated files default to `./exports/` (override with `--research-output-dir` or `AIRCRAFT_MONITOR_OUTPUT_DIR`).
 
-When stdout/stderr are not attached to a TTY (for example, in CI logs), the app:
+---
 
-- Runs in **headless mode** (prints a readable event stream instead of a full-screen UI)
-- Avoids blocking on interactive prompts (defaults to `combined` mode when no mode is provided)
-- Supports explicit override via environment variable:
-  - `AIRCRAFT_MONITOR_HEADLESS=true` forces headless mode
-  - `AIRCRAFT_MONITOR_HEADLESS=false` forces full-screen mode
+## Research background & roadmap
 
-### CLI Options
+The platform follows the AF-MATB (Miller et al., 2014) and USAARL MATB (Vogl et al., 2024) lineage. A peer-review-grade evidence audit is maintained in [`docs/research/military-aviation-platform/research_evidence_review.md`](docs/research/military-aviation-platform/research_evidence_review.md).
 
-- `mode` (optional positional): `uav`, `fighter`, `combined`, or `experiment`
-- `--event-delay <seconds>`: set frame/event pacing (`0.05` to `5.0`)
-- `--headless`: force non-interactive stream output
-- `--participant-id <id>`: participant identifier for `experiment` mode
-- `--session-id <id>`: session identifier for `experiment` mode
-- `--seed <integer>`: deterministic event seed for `experiment` mode
-- `--research-modality <uas|fighter|combined>`: research scenario family
-- `--research-output-dir <path>`: output directory for JSONL events and summary files
-
-## 🧠 MATB-Inspired Research Mode
-
-`experiment` mode implements the easiest publishable features from the AF-MATB and USAARL MATB lineage:
-
-- **Seeded repeatability**: every protocol run stores the base seed and block metadata.
-- **Demand transitions**: low, medium, and high workload blocks progressively increase event density.
-- **Instantaneous workload probes**: ISA-style 1-10 workload prompt events are injected during each block.
-- **Automation markers**: manual, advisory, and forced-handoff blocks capture automation mode and reliability.
-- **Structured data export**: every emitted event is written to `events.jsonl`, with a compact `summary.json`.
-
-By default, generated research files go to `/root/.openclaw/workspace/exports` unless `AIRCRAFT_MONITOR_OUTPUT_DIR` or `--research-output-dir` overrides the location.
-
-## 📦 Project Structure
-
-```
-aircraft_monitor/
-├── __init__.py           # Package initialization
-├── __main__.py           # Entry point
-├── models/               # Data models
-│   ├── __init__.py
-│   ├── uav.py           # UAV model
-│   └── fighter.py       # Fighter aircraft model
-├── events/               # Event system
-│   ├── __init__.py
-│   ├── base.py          # Base event classes
-│   ├── uav_events.py    # UAV-specific events
-│   └── fighter_events.py # Fighter-specific events
-├── visualization/        # Rich UI components
-│   ├── __init__.py
-│   ├── dashboard.py     # Main dashboard
-│   ├── panels.py        # UI panels
-│   └── themes.py        # Color themes
-├── simulation/           # Simulation engine
-│   ├── __init__.py
-│   └── engine.py        # Event simulation
-├── research/             # Human-factors protocol and logging
-│   ├── __init__.py
-│   ├── logger.py        # JSONL event and summary logger
-│   ├── protocol.py      # Demand blocks and protocol definitions
-│   └── runner.py        # Research experiment execution
-├── demo_uav.py          # UAV demo
-├── demo_fighter.py      # Fighter demo
-└── demo_combined.py     # Combined demo
-```
-
-## 🎮 Controls
-
-During simulation:
-- Press `Ctrl+C` to gracefully exit
-- Events auto-progress with realistic timing
-
-## 📊 Visualization Components
-
-- **Status Panels**: Real-time aircraft status with gauges
-- **Event Timeline**: Scrolling event log with severity colors
-- **Radar Display**: ASCII radar with threat indicators
-- **Mission Progress**: Visual progress bars for objectives
-- **System Health**: Fuel, weapons, and sensor status
-
-## 🔧 Configuration
-
-Customize simulation parameters in the demo files or create your own scenarios.
-
-## 🗺️ Roadmap
-
-The current platform is a Python/Rich terminal dashboard. It can be expanded into a human-factors research platform without replacing the UI by treating each aircraft or mission family as a bounded scenario model that emits timestamped events into reusable panels. A browser/TSX interface can be added later, but the lowest-risk path is to preserve the existing Rich UI as the operator station and add research instrumentation around the current model -> event -> dashboard flow.
-
-### Research Architecture
-
-```mermaid
-flowchart LR
-  ScenarioConfig[ScenarioConfig] --> PlatformModel[PlatformModel]
-  PlatformModel --> EventGenerator[EventGenerator]
-  EventGenerator --> EventStream[BoundedEventStream]
-  EventStream --> Dashboard[RichDashboard]
-  Dashboard --> Panels[StatusRadarMissionEventPanels]
-  EventStream --> DataLogger[ResearchDataLogger]
-  OperatorInput[OperatorInput] --> DataLogger
-```
-
-Recommended implementation layers:
-
-| Layer | Existing location | Research extension |
-|---|---|---|
-| Scenario entrypoint | `aircraft_monitor/__main__.py` | Add modes such as `uas`, `swarm`, `fighter`, `military`, and `experiment` while keeping `uav`, `fighter`, and `combined` compatible. |
-| Scenario orchestration | `aircraft_monitor/simulation/engine.py` | Add scenario factories for UAS, swarm s-UAS, fighter combat, transport, tanker, ISR, and joint operations. |
-| Platform state | `aircraft_monitor/models/uav.py`, `aircraft_monitor/models/fighter.py` | Add typed models for `Swarm`, `MilitaryAircraft`, crew state, automation state, datalink state, task demand, and operator workload probes. |
-| Event generation | `aircraft_monitor/events/base.py`, `aircraft_monitor/events/*_events.py` | Keep all scenario changes as immutable `Event` records with severity, category, source, timestamp, and structured data. |
-| Operator display | `aircraft_monitor/visualization/dashboard.py`, `aircraft_monitor/visualization/panels.py` | Add modality-specific status panels while reusing `EventLogPanel`, `RadarPanel`, and `MissionPanel`. |
-| Research logging | `aircraft_monitor/research/logger.py` | Record event timestamps, response latency anchors, workload prompts, scenario seeds, automation settings, and summary counts. |
-
-The research design should follow the MATB tradition: use configurable event rates, concurrent tasks, response windows, and task overlap to produce low, medium, and high workload blocks. MATB research commonly manipulates number of subtasks, event rate, event overlap, and response time; recent reviews report median MATB test duration around 20 min and stimulus rates of roughly 3 events/min for low workload and 23.5 events/min for high workload, with substantial variability across studies [Pontiggia et al., 2024]. The USAARL MATB also supports real-time workload probes every 30 s or 1 min using an instantaneous 1-10 rating rather than pausing the experiment for a full NASA-TLX [Vogl et al., 2024].
-
-### Common Human-Factors Core
-
-These parameters should be implemented across all modalities so studies are comparable:
+### Common human-factors core
 
 | Construct | Best parameterization | Primary measures |
 |---|---|---|
-| Mental workload | Event rate, number of concurrent panels, alert frequency, response window, automation support level, mission phase complexity | NASA-TLX post-block, instantaneous workload 1-10, response latency, missed events, dual-task decrement, optional HR/HRV/EEG/eye tracking |
-| Situation awareness | Query probes at freeze points, map/radar uncertainty, hidden system failures, stale datalink data, conflict prediction | SAGAT-style perception/comprehension/projection probes, contact recall, threat prioritization accuracy, route prediction accuracy |
-| Trust in automation | Automation reliability, false-alarm rate, missed-detection rate, confidence display, explanation availability, handoff transparency | Automation use, manual override rate, agreement with recommendations, trust questionnaire, recovery after automation failure |
-| Attention management | Visual salience, alert modality, panel density, competing auditory messages, task-switch frequency | Time to first response, event detection rate, communication errors, dwell time if eye tracking is available |
-| Decision quality | Ambiguous threats, rules of engagement, fuel/range tradeoffs, lost-link procedures, re-tasking pressure | Correct action rate, time to decision, unsafe action count, mission score, after-action explanation quality |
-| Fatigue and sustained operations | Trial duration, vigilance periods, monotonous monitoring, circadian or sleep-loss protocols | Performance slope over time, lapses, delayed responses, subjective sleepiness, physiological workload trends |
+| Mental workload | Event rate, concurrent panels, alert frequency, response window, automation level, mission-phase complexity | NASA-TLX, instantaneous ISA 1–10, response latency, missed events, dual-task decrement, optional HR/HRV/EEG/eye-tracking |
+| Situation awareness | Freeze-point query probes, map/radar uncertainty, hidden failures, stale datalink, conflict prediction | SAGAT perception/comprehension/projection probes, contact recall, threat prioritization, route prediction |
+| Trust in automation | Reliability, false-alarm/missed-detection rate, confidence display, handoff transparency | Automation use, override rate, agreement, trust questionnaire, recovery after failure |
+| Attention management | Visual salience, alert modality, panel density, competing messages, task-switch frequency | Time to first response, detection rate, communication errors, dwell time |
+| Decision quality | Ambiguous threats, ROE, fuel/range tradeoffs, lost-link procedures, re-tasking pressure | Correct-action rate, time to decision, unsafe-action count, mission score |
+| Fatigue / sustained ops | Trial duration, vigilance periods, monotonous monitoring, circadian/sleep-loss protocols | Performance slope, lapses, delayed responses, subjective sleepiness |
 
-Situation awareness should be treated as a three-level construct: perception of relevant cues, comprehension of what they mean, and projection of future state. Endsley's dynamic-systems model remains the main reference for SA measurement and explains why workload, stress, automation, and system complexity can degrade operator SA [Endsley, 1995a; Endsley, 1995b]. Wickens emphasizes that aviation SA includes spatial awareness, system awareness, and task awareness, and that workload rises when competing tasks exceed limited attentional resources [Wickens, 2002].
+Situation awareness is treated as a three-level construct — perception, comprehension, projection [Endsley, 1995a/b; Wickens, 2002]. The platform targets four operational modalities (UAS/RPA, swarm s-UAS, fighter, transport/tanker/ISR/MUM-T); the detailed parameter matrices for each are in the evidence-review document.
 
-### Modality 1: UAS / Remotely Piloted Aircraft
+### Phased roadmap (status)
 
-The current `UAV` model is the natural base for UAS research. Expand it from one vehicle demo telemetry into an operator-in-the-loop ground-control-station scenario.
-
-| Area | Best parameters |
-|---|---|
-| Aircraft state | Altitude, airspeed, heading, fuel, battery, GPS satellites, waypoint index, mission progress, autopilot state, payload status |
-| Control and datalink | Uplink/downlink quality, latency, packet loss, lost-link state, command acknowledgment time, stale telemetry age, fallback route |
-| Payload | EO/IR/SAR/SIGINT/LIDAR state, target-detection confidence, image queue length, sensor slew time, classification uncertainty |
-| Airspace and hazards | Traffic contacts, geofence conformance, terrain/obstacle proximity, weather, restricted areas, lost-link squawk/procedure state |
-| Operator tasks | Monitor telemetry, classify sensor detections, respond to communication requests, accept/reject automation, re-plan waypoints |
-
-Suggested workload ladder:
-
-| Level | Scenario manipulation | Expected endpoint |
+| Phase | Goal | Status |
 |---|---|---|
-| Low | One UAS, stable datalink, sparse sensor events, generous response windows | Baseline response latency and detection accuracy |
-| Medium | One UAS with intermittent link degradation, more target images, occasional route changes | Increased task switching and moderate workload |
-| High | BVLOS-like degraded link, simultaneous sensor classification, emergency re-route, lost-link procedure, traffic conflict | Higher missed-event risk and SA probe failures |
+| 1 | Research instrumentation (JSONL logger, seeds, trial metadata, workload prompts) | Done |
+| — | **OpenMATB integration** (real inner loop, 4 tasks, ISA/TLX/Bedford/SAGAT, headless fixes) | **Done** |
+| — | **Scenario builder + log converter** (counterbalancing, d′, SDT, JSONL) | **Done** |
+| — | **Suhir DEPDF mission-outcome model** | **Done (PR #5)** |
+| — | **Research console — data model + ingestion + tracker (backend)** | **Done (PR #6)** |
+| — | **Research console — frontend (tracker + viz + analysis)** | **In development (Phase 1B)** |
+| 9 | Multimodal physiology (LSL) + reproducibility (practice criterion, version-pinned manifests) | Partial / planned |
+| 10 | Population-specific stressor packs (fighter/RPA/transport-MUM-T) + BIDS-derivative export + baseline neurocognitive screen | Planned |
+| 11 | Adaptive automation engine (performance/physiology-driven handoffs, transparency cues) | Planned |
 
-UAS safety work should explicitly model the system as aircraft, control station, data links, payload, crew, procedures, and support equipment rather than just the air vehicle. Human-factors mishap analyses emphasize workload, fatigue, crew coordination, training, and ground-control-station design [Waraich et al., 2013]. FAA lost-link guidance defines lost link as loss of the command and control link, distinguishes uplink from downlink, and treats preprogrammed lost-link procedures as safety mitigations; the simulator should therefore include link-loss detection, operator awareness of the programmed contingency, and whether the aircraft follows or deviates from that contingency.
+---
 
-### Modality 2: Swarm s-UAS / Human-Swarm Interaction
+## References
 
-Swarm s-UAS should not be implemented as many independent copies of the current UAV panel. Human-swarm interaction research shows that direct control of individual agents increases workload and does not scale well, whereas indirect control lets the operator treat the swarm as a coherent entity but may reduce fine control [Bjurling, 2025]. The UI should therefore expose both aggregate swarm state and limited drill-down.
+- Endsley, M. R. (1995a). Measurement of situation awareness in dynamic systems. *Human Factors*, 37(1), 65–84. https://doi.org/10.1518/001872095779049499
+- Endsley, M. R. (1995b). Toward a theory of situation awareness in dynamic systems. *Human Factors*, 37(1), 32–64. https://doi.org/10.1518/001872095779049543
+- Levulis, S. J., DeLucia, P. R., & Kim, S. Y. (2018). Effects of touch, voice, and multimodal input … manned-unmanned teaming. *Human Factors*, 60(8), 1117–1129. https://doi.org/10.1177/0018720818788995
+- Miller, W. D. et al. (2014). *The U.S. Air Force-developed adaptation of the Multi-Attribute Task Battery (AF-MATB)*. DTIC ADA611870.
+- NASA (2011). *The Multi-Attribute Task Battery II (MATB-II)*. https://ntrs.nasa.gov/api/citations/20110014456/downloads/20110014456.pdf
+- Onnasch, L., Wickens, C. D., Li, H., & Manzey, D. (2014). Human performance consequences of stages and levels of automation. *Human Factors*, 56(3), 476–488. https://doi.org/10.1177/0018720813501549
+- Pontiggia, A., Gomez-Merino, D., & Quiquempoix, M. (2024). MATB for assessing different mental workload levels. *Frontiers in Physiology*, 15, 1408242. https://doi.org/10.3389/fphys.2024.1408242
+- Suhir, E. (2018). *Human-in-the-Loop: Probabilistic Modeling of an Aerospace Mission Outcome*. CRC Press.
+- Vogl, J., McCurry, C. D., Bommer, S., & Atchley, J. A. (2024). The USAARL Multi-Attribute Task Battery. *Frontiers in Neuroergonomics*, 5, 1435588. https://doi.org/10.3389/fnrgo.2024.1435588
+- Wickens, C. D. (2002). Situation awareness and workload in aviation. *Current Directions in Psychological Science*, 11(4), 128–133. https://doi.org/10.1111/1467-8721.00184
 
-| Area | Best parameters |
-|---|---|
-| Swarm state | Number of agents, active/inactive count, centroid, dispersion, formation, coverage percent, cluster count, agent health distribution |
-| Autonomy and control | Direct control, waypoint groups, virtual beacons, behavior modes, rules of engagement, operator influence level |
-| Communication | Mesh health, command propagation delay, percent agents receiving command, degraded nodes, relay loss |
-| Mission | Search area, coverage rate, target probability map, no-fly zones, dynamic obstacles, re-tasking events |
-| UI abstraction | Individual icons for small swarms, aggregate blobs/heatmaps for larger swarms, predictive future-state overlays |
+The full modality parameter matrices and the complete reference list live in the [evidence-review document](docs/research/military-aviation-platform/research_evidence_review.md).
 
-Suggested workload ladder:
+## License
 
-| Level | Scenario manipulation | Expected endpoint |
-|---|---|---|
-| Low | 3-5 s-UAS, group waypoint control, simple coverage task, no adversarial interference | Baseline swarm comprehension and command latency |
-| Medium | 8-15 s-UAS, partial comms loss, dynamic no-fly zone, target-priority changes | Higher re-planning demand and moderate trust calibration |
-| High | 20+ s-UAS, jamming, agent attrition, multiple simultaneous targets, ambiguous autonomy recommendation | Increased overload risk, over-control, and degraded projection SA |
-
-Human-swarm literature supports adding predictive information: forecasts of future swarm states can improve accuracy, reduce input frequency, and reduce overcorrection [Bjurling, 2025]. Prior work also suggests the ideal level of human influence depends on environmental complexity; in obstacle-rich environments, some human intervention improves performance, but too much intervention can degrade swarm performance [Walker et al., 2013]. The roadmap should therefore implement human influence level as an experimental variable, not as a fixed UI setting.
-
-### Modality 3: Fighter Aircraft
-
-The existing `FighterAircraft` model already supports tactical aircraft research: speed, Mach, G, fuel, oxygen, weapons, radar contacts, missile warnings, defensive systems, avionics, and mission objectives. The research roadmap should add richer cockpit workload, tactical decision, and automation constructs rather than only more aircraft telemetry.
-
-| Area | Best parameters |
-|---|---|
-| Flight state | Altitude, Mach, true airspeed, heading, G load, fuel/bingo state, oxygen, engine state, landing gear, canopy |
-| Tactical state | Radar mode, contact count, hostile/unknown/friendly classification, lock state, missile warning time-to-impact, countermeasures |
-| Mission state | CAP, intercept, strike, SEAD, escort, RTB, aerial refueling, divert, rules of engagement |
-| Pilot tasks | Threat prioritization, weapons selection, countermeasure timing, fuel/mission tradeoff, communication response, target classification |
-| Automation | Radar assistance, threat ranking, route recommendation, checklist automation, voice/touch/multimodal control, transparency of automation actions |
-
-Suggested workload ladder:
-
-| Level | Scenario manipulation | Expected endpoint |
-|---|---|---|
-| Low | Stable CAP, low contact density, no weapons release, nominal systems | Baseline scan and communication response |
-| Medium | Unknown contacts, fuel planning, intermittent radar clutter, one tactical decision | Increased decision latency and moderate SA demand |
-| High | Missile warning, high-G maneuver, multiple contacts, jamming, ROE ambiguity, simultaneous comms | Workload saturation, threat-prioritization errors, missed communication |
-
-Fighter and military cockpit research should avoid assuming that more automation is always better. Meta-analytic work on automation shows performance benefits can come with costs when automation fails or when operators lose awareness [Onnasch et al., 2013]. In multiple-UAV and aviation studies, operators often prefer intermediate automation because it improves support while preserving insight and trust [Prinet et al., 2012]. A fighter roadmap should therefore include transparency, handoff quality, and manual recovery after automation failure as first-class parameters.
-
-### Modality 4: Broader Military Aircraft / Joint Operations
-
-Military aircraft beyond fighters should be treated as crewed mission systems: transport, tanker, ISR, helicopter, bomber, AWACS, and joint command-and-control platforms. These scenarios can reuse the dashboard but should shift emphasis from weapon state to crew coordination, communication load, mission system management, and shared SA.
-
-| Aircraft family | Best parameters |
-|---|---|
-| Transport / airlift | Cargo status, route constraints, terrain/weather, fuel, engine health, checklist events, landing-zone threat level |
-| Tanker | Receiver queue, fuel offload rate, rendezvous timing, airspace deconfliction, weather, boom/drogue state |
-| ISR / patrol | Sensor queue, track custody, target confidence, data-link load, analyst/operator handoffs |
-| Helicopter / MUM-T | Route hazard detection, landing-zone classification, multiple-UAV monitoring, voice/touch input, crew communication load |
-| Bomber / strike package | Mission timeline, target list, threat rings, electronic warfare, weapons inventory, abort/divert criteria |
-
-Suggested workload ladder:
-
-| Level | Scenario manipulation | Expected endpoint |
-|---|---|---|
-| Low | Single mission objective, stable comms, low crew coordination demand | Baseline mission monitoring and checklist compliance |
-| Medium | Multiple mission objectives, changing weather/threats, handoff to another platform | Shared-SA and communication workload effects |
-| High | Joint operation with UAS, fighter escort, datalink degradation, conflicting priorities, time-critical re-plan | Team SA, prioritization, and coordination breakdown risk |
-
-Manned-unmanned teaming evidence is directly relevant. In a simulated military helicopter supervising multiple UAVs, touch and multimodal inputs outperformed voice-only control on photo classification time, percentage classified, instrument warning response time, communication accuracy, workload, SA, and usability [Levulis et al., 2018]. This supports a roadmap where voice commands are optional research variables rather than the default primary input.
-
-### Research Data Model
-
-Every scenario should emit a trial-level and event-level dataset.
-
-| Dataset | Fields |
-|---|---|
-| Trial metadata | Participant ID, session ID, scenario ID, modality, seed, workload level, automation level, display configuration |
-| Event log | Monotonic timestamp, wall-clock timestamp, source, severity, category, title, structured event data |
-| Operator actions | Input timestamp, action type, target object, correctness, latency from cue, manual/automated origin |
-| Performance | Detection rate, false alarm rate, missed events, route deviation, target classification accuracy, mission score |
-| Workload and SA | Instantaneous workload rating, NASA-TLX after block, SAGAT/SA query accuracy, trust ratings |
-| Optional physiology | HR, HRV, respiration, EEG markers, eye tracking, synchronization pulses |
-
-Use monotonic timing for response latency and wall-clock timing for audit logs. Keep all loops bounded, use fixed scenario durations or fixed event counts, and record the scenario seed for reproducibility.
-
-### Phased Implementation
-
-| Phase | Goal | Deliverable |
-|---|---|---|
-| 1 | Research instrumentation | Done: JSONL logger, scenario seed, trial metadata, workload prompt events, automation markers, and summary JSON. |
-| 2 | UAS research mode | Extend the existing `UAV` scenario with datalink degradation, lost-link procedures, sensor classification, and BVLOS-like conflicts. |
-| 3 | Fighter research mode | Add tactical workload blocks, ROE ambiguity, radar clutter, automation support levels, and post-block NASA-TLX. |
-| 4 | Swarm s-UAS mode | Add aggregate swarm model, swarm panel, group commands, comms degradation, predictive overlays, and influence-level manipulation. |
-| 5 | Military/joint operations mode | Add transport/tanker/ISR/helicopter mission families and multi-platform shared-SA scenarios. |
-| 6 | Experimental protocol runner | Add scripted blocks, counterbalancing, training trials, practice criteria, CSV/JSONL export, and optional physiological synchronization. |
-| 7 | Optional web UI | Add a TSX/JS front end only after the Python research core is stable; connect through HTTP/WebSocket event streams. |
-
-### Phase 8+ — Research-grade additions for U.S. military aviation parity
-
-A peer-review-grade evidence audit of the platform against the U.S. Air Force AF-MATB (Miller et al., 2014, DTIC ADA611870) and the U.S. Army Aeromedical Research Laboratory (USAARL) MATB (Vogl et al., 2024) is maintained in [`docs/research/military-aviation-platform/research_evidence_review.md`](docs/research/military-aviation-platform/research_evidence_review.md). The headline finding from that document is that the current `experiment` mode emits and logs scenario events but does not yet implement the *inner* MATB loop (operator input, primary-task scoring, validated rating ingestion, objective SA capture). Phases 8–11 below close those gaps and align the platform with operationally relevant U.S. military aviator research populations (tactical fighter aircrew, RPA operators, transport / tanker / MUM-T crews).
-
-| Phase | Goal | Deliverable |
-|---|---|---|
-| 8 | Real MATB inner loop | Operator input thread; the four canonical primary tasks (system monitoring, tracking, communications, resource management) with per-task accuracy and reaction-time scoring; synchronous capture of ISA 1–10 ratings and post-block NASA-TLX / Bedford; SAGAT freeze-probe service. Acceptance: head-to-head with NASA MATB-II within ±5% per-task. |
-| 9 | Multimodal physiology + reproducibility | Lab Streaming Layer (LSL) outlet for events / markers and inlets for EEG, ECG, GSR, eye tracking; Latin-square block ordering; practice block with explicit performance criterion; version-pinned scenario manifests. |
-| 10 | Population-specific stressor packs + community-standard data export | **Fighter:** G-LOC threshold/recovery, AGSM-quality input, hypoxia onset / hypoxia hangover, SD events, ROE ambiguity. **RPA:** 12/24-h shift-work timeline with circadian markers, kill-chain trauma annotations, NtoM multi-aircraft load, audiovisual-feedback condition. **Transport / MUM-T:** sustained-operations fatigue, AAR receiver/boomer states (KC-46 RVS), MUM-T datalink, crew-coordination channel. BIDS-derivative-style data layout (`dataset_description.json`, `participants.tsv`, per-subject `beh/`, `eeg/`, `physio/`). Aeromedical baseline neurocognitive screen (CogScreen-AE / ANAM-style). |
-| 11 | Adaptive automation engine | Performance- and physiology-driven automation handoffs in the spirit of USAARL MATB §3 (Vogl et al., 2024); transparency cues for each handoff; post-handoff trust capture. |
-
-The full gap-analysis table, population-specific evidence (with DOIs for the Chappelle RPA-operator series, the McKendrick / Hebbar / Memar / Haseeb fighter cognitive-workload literature, the Serres / Levulis / Saetti transport-and-MUM-T literature, the Salmon SAGAT meta-analysis, and the Kothe et al. canonical LSL paper), and the proposed-additions rationale are in the linked review document.
-
-### Parameter Matrix by Modality
-
-| Modality | Highest-value operational parameters | Highest-value human-factors parameters |
-|---|---|---|
-| UAS | Datalink quality, stale telemetry age, waypoint deviation, sensor queue, lost-link profile, detect-and-avoid conflicts | SA, attention allocation, workload, target classification latency, trust in automation, emergency procedure compliance |
-| Swarm s-UAS | Agent count, coverage, dispersion, mesh health, group behavior, attrition, command propagation delay | Human influence level, over-control, aggregate-state comprehension, trust calibration, command latency, projection SA |
-| Fighter | G load, fuel/bingo, radar contacts, missile TTI, jamming, weapon state, oxygen, mission phase | Threat prioritization, tactical decision latency, workload saturation, automation transparency, ROE interpretation, communication accuracy |
-| Military aircraft | Mission timeline, crew roles, comms load, airspace constraints, cargo/fuel/sensor tasks, joint platform interactions | Team SA, crew coordination, shared workload, handoff quality, checklist discipline, fatigue and vigilance |
-
-### References
-
-- Aweiss, A., Owens, B. D., & Rios, J. (2018). Unmanned Aircraft Systems (UAS) Traffic Management (UTM) National Campaign II. American Institute of Aeronautics and Astronautics. https://doi.org/10.2514/6.2018-1727
-- Bjurling, O. (2025). Designing Human-Swarm Interaction Systems. Linkoping University Electronic Press. https://doi.org/10.3384/9789180759595
-- Cahill, J., Callari, T. C., & Fortmann, F. (2018). Adaptive Automation and the Third Pilot. InTech. https://doi.org/10.5772/intechopen.73689
-- Cummings, M. L., & Mitchell, P. (2007). Operator scheduling strategies in supervisory control of multiple UAVs. Aerospace Science and Technology, 11(4), 339-348. https://doi.org/10.1016/j.ast.2006.10.007
-- Endsley, M. R. (1995a). Measurement of situation awareness in dynamic systems. Human Factors, 37(1), 65-84. https://doi.org/10.1518/001872095779049499
-- Endsley, M. R. (1995b). Toward a theory of situation awareness in dynamic systems. Human Factors, 37(1), 32-64. https://doi.org/10.1518/001872095779049543
-- Federal Aviation Administration. (2016). Unmanned Aircraft Systems (UAS) Lost Link, Notice N JO 7110.724. https://www.faa.gov/documentLibrary/media/Notice/N_JO_7110.724_5-2-9_UAS_Lost_Link_2.pdf
-- Hoff, K. A., & Bashir, M. (2015). Trust in automation. Human Factors, 57(3), 407-434. https://doi.org/10.1177/0018720814547570
-- Levulis, S. J., DeLucia, P. R., & Kim, S. Y. (2018). Effects of touch, voice, and multimodal input, and task load on multiple-UAV monitoring performance during simulated manned-unmanned teaming in a military helicopter. Human Factors, 60(8), 1117-1129. https://doi.org/10.1177/0018720818788995
-- NASA. (2011). The Multi-Attribute Task Battery II (MATB-II) Software for Human Performance and Workload Research. https://ntrs.nasa.gov/api/citations/20110014456/downloads/20110014456.pdf
-- Onnasch, L., Wickens, C. D., Li, H., & Manzey, D. (2014). Human performance consequences of stages and levels of automation. Human Factors, 56(3), 476-488. https://doi.org/10.1177/0018720813501549
-- Pontiggia, A., Gomez-Merino, D., & Quiquempoix, M. (2024). MATB for assessing different mental workload levels. Frontiers in Physiology, 15, 1408242. https://doi.org/10.3389/fphys.2024.1408242
-- Prinet, J. C., Terhune, A., & Sarter, N. (2012). Supporting dynamic re-planning in multiple UAV control: A comparison of 3 levels of automation. Proceedings of the Human Factors and Ergonomics Society Annual Meeting, 56(1), 423-427. https://doi.org/10.1177/1071181312561095
-- Vogl, J., McCurry, C. D., Bommer, S., & Atchley, J. A. (2024). The United States Army Aeromedical Research Laboratory Multi-Attribute Task Battery. Frontiers in Neuroergonomics, 5, 1435588. https://doi.org/10.3389/fnrgo.2024.1435588
-- Walker, P., Nunnally, S., & Lewis, M. (2013). Levels of automation for human influence of robot swarms. Proceedings of the Human Factors and Ergonomics Society Annual Meeting, 57(1), 429-433. https://doi.org/10.1177/1541931213571093
-- Waraich, Q. R., Mazzuchi, T. A., & Sarkani, S. (2013). Minimizing human factors mishaps in unmanned aircraft systems. Ergonomics in Design, 21(1), 25-32. https://doi.org/10.1177/1064804612463215
-- Wickens, C. D. (2002). Situation awareness and workload in aviation. Current Directions in Psychological Science, 11(4), 128-133. https://doi.org/10.1111/1467-8721.00184
-
-## 📄 License
-
-MIT License - See LICENSE file for details.
+MIT License — see [LICENSE](LICENSE).
