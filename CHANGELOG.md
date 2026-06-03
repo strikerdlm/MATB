@@ -141,6 +141,12 @@ Confirmed working after three bug fixes below:
 - `docs/research/military-aviation-platform/research_evidence_review.md`:
   peer-reviewer-grade gap analysis vs AF-MATB and USAARL MATB (40 refs)
 
+- **Suhir DEPDF mission-outcome layer** (`matb_integration/suhir/`): implements
+  Suhir (2018) probabilistic human-nonfailure (Eq. 5.1/5.16), FOAT calibration
+  (Eq. 5.19–5.21), and mission-outcome composition (Eq. 5.10) on existing
+  log_converter output. Model core validated against book Table 5.1 and
+  Example 5.1. Phase 1 (F = F0); HCF via external neurocognitive screen.
+
 ### Changed
 - `requirements.txt`: added `pyglet>=2.1.0,<3.0.0` (OpenMATB engine dep)
 - README: extended Phase 8+ roadmap with OpenMATB integration strategy
