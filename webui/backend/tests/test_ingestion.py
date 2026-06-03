@@ -40,6 +40,19 @@ def test_duplicate_sha_rejected(engine, sample_csv_bytes):
                        visit_ordinal=2, workload_level="LOW")
 
 
+def test_cross_cell_sha_collision_rejected_even_with_overwrite(engine, sample_csv_bytes):
+    # The critical mislabel guard: a file already stored in one cell must never
+    # be re-filed into a DIFFERENT cell, even with overwrite=True.
+    _participant_with_visits(engine)
+    content = sample_csv_bytes(misses=(5.0, 25.0))
+    with Session(engine) as s:
+        ingest_csv(s, content=content, filename="a.csv", participant_id="P01",
+                   visit_ordinal=1, workload_level="LOW")
+        with pytest.raises(IngestionError, match="already ingested"):
+            ingest_csv(s, content=content, filename="a.csv", participant_id="P01",
+                       visit_ordinal=2, workload_level="HIGH", overwrite=True)
+
+
 def test_filled_cell_requires_overwrite(engine, sample_csv_bytes):
     _participant_with_visits(engine)
     with Session(engine) as s:
