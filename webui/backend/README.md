@@ -33,6 +33,9 @@ per visit once all 3 levels are ingested.
 - POST /participants  ·  GET /participants  ·  GET /participants/{id}/visits
 - POST /ingest  (multipart: file, participant_id, visit_ordinal, workload_level, overwrite)
 - GET  /tracker  — the completeness grid
+- GET  /block  — one block's metrics + the visit's DEPDF fit
+- GET  /metrics/long  — tidy long-format metric rows (optional `participant_id`)
+- GET  /fits  — DEPDF fits incl. server-computed P^h(G/G₀) curves
 
 ## Notes
 - Pseudonymized participant IDs only (P01…); no PII.

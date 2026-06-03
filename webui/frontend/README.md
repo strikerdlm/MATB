@@ -38,7 +38,9 @@ npm run build     # production build
 - **Participants** (`/participants`) — list + add (auto-generates the 6 visits).
 - **Upload** (`/upload`) — tag + ingest an OpenMATB CSV, with guard feedback
   (duplicate / filled-cell / validation).
-- **Visualization / Analysis** — Phase 2 / Phase 3 placeholders.
+- **Visualization** (`/visualization`) — Trajectories / Levels / DEPDF / Group tabs
+  with PNG export on every chart (descriptive only; inferential stats are Phase 3).
+- **Analysis** — Phase 3 placeholder.
 
 ## Design system
 
