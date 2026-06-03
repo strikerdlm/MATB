@@ -1,0 +1,21 @@
+# Pre-registered discrete failure criteria (Suhir Phase 1). Fixed before any fit.
+# version is bumped on any change; recorded in fit output for provenance.
+version: 1
+sysmon:
+  kind: discrete_event
+  match: {type: performance, module: sysmon, address: signal_detection, value: MISS}
+comm:
+  kind: discrete_event
+  match: {type: performance, module: communications, address: sdt_value, value: MISS}
+track:
+  kind: threshold_excursion
+  signal: {type: performance, module: track, address: cursor_radius}
+  lo: -150.0          # px from centre; tune per scenario
+  hi: 150.0
+  min_dur: 0.5        # seconds sustained outside band
+resman:
+  kind: threshold_excursion
+  signal: {type: performance, module: resman, address: tank_level_deviation}
+  lo: -500.0
+  hi: 500.0
+  min_dur: 2.0
