@@ -9,7 +9,7 @@ const ITEMS = [
   { href: "/", label: "Tracker", icon: LayoutGrid, enabled: true },
   { href: "/participants", label: "Participants", icon: Users, enabled: true },
   { href: "/upload", label: "Upload", icon: Upload, enabled: true },
-  { href: "/visualization", label: "Visualization", icon: BarChart3, enabled: false },
+  { href: "/visualization", label: "Visualization", icon: BarChart3, enabled: true },
   { href: "/analysis", label: "Analysis", icon: FlaskConical, enabled: false },
 ];
 
