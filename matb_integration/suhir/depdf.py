@@ -28,8 +28,11 @@ def p_nonfailure_basic(p0: float, g: float, g0: float, f: float, f0: float) -> f
 
 
 def p_nonfailure_ordinary(p0: float, g: float, g0: float) -> float:
-    """Ordinary-capacity reduction F = F0 (Eq. 5.16)."""
-    return p0 * math.exp(1.0 - (g / g0) ** 2)
+    """Ordinary-capacity reduction F = F0 (Eq. 5.16).
+
+    Delegates to p_bar with f2=1 (exp(1-1)=1) so the formula stays single-sourced.
+    """
+    return p0 * p_bar((g / g0) ** 2, 1.0)
 
 
 def weibull_nonfailure(lam: float, t: float, beta: float) -> float:
