@@ -1,0 +1,11 @@
+# Local SQLite store (created at runtime by init_db)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Python caches / venv
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
