@@ -43,8 +43,9 @@ class Block(SQLModel, table=True):
 
 class DepdfFit(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    participant_id: str = Field(index=True)
+    participant_id: str = Field(foreign_key="participant.id", index=True)
     visit_id: int = Field(foreign_key="visit.id", unique=True)
+    mwl_source: str                                 # MWL instrument used for the fit (provenance)
     g0: float
     p0: float
     tau0: float
