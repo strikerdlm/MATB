@@ -6,10 +6,15 @@ import type { FitRow } from "@/types";
 const VISIT_COLORS = ["#38bdf8", "#34d399", "#f59e0b", "#f472b6", "#a78bfa", "#ef4444"];
 
 function ParamChart({ fits, param, label }: { fits: FitRow[]; param: "g0" | "p0" | "tau0"; label: string }) {
+  // P0 is a probability (fixed [0,1] axis); G0/tau0 use a 0-anchored axis so a
+  // single early fit doesn't produce a degenerate auto-scaled range.
+  const yAxis = param === "p0"
+    ? { type: "value", min: 0, max: 1, ...AXIS_STYLE }
+    : { type: "value", ...AXIS_STYLE };
   const option = {
     title: { text: label, textStyle: { color: "#94a3b8", fontSize: 12 } },
     xAxis: { type: "category", data: fits.map((f) => `V${f.visit_ordinal}`), ...AXIS_STYLE },
-    yAxis: { type: "value", scale: true, ...AXIS_STYLE },
+    yAxis,
     series: [{ type: "line", data: fits.map((f) => f[param]), color: "#38bdf8", symbolSize: 7 }],
     legend: { show: false },
   };
