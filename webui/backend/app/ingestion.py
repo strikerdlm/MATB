@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import tempfile
 from pathlib import Path
 
@@ -16,6 +17,8 @@ from sqlmodel import Session, select
 from app.models import Block, Visit
 
 WORKLOAD_LEVELS = ("LOW", "MEDIUM", "HIGH")
+
+_log = logging.getLogger(__name__)
 
 
 class IngestionError(Exception):
@@ -35,9 +38,13 @@ def _convert_and_rows(content: bytes, level: str) -> tuple[dict, list[dict]]:
         tmp = Path(fh.name)
     try:
         record = convert_session(tmp, workload_level=level)
+        # MISS rows only: that is all the Suhir fit consumes
+        # (sysmon_failure_times filters to MISS), and it keeps metrics_json lean.
         sysmon_rows = [
             r for r in parse_csv(tmp)
-            if r.get("module") == "sysmon" and r.get("address") == "signal_detection"
+            if r.get("module") == "sysmon"
+            and r.get("address") == "signal_detection"
+            and r.get("value", "").upper() == "MISS"
         ]
         return record, sysmon_rows
     finally:
@@ -127,24 +134,27 @@ def _maybe_fit_visit(session: Session, visit: Visit) -> None:
         rows = record.get("_raw_sysmon_rows", [])
         blocks_arg[level] = (record, rows)
 
+    # The whole fit+upsert is isolated: ingestion must never fail (and the
+    # already-committed Block must never roll back) because a fit could not be
+    # computed or stored. Failures are logged, not raised.
     try:
         out = fit_participant(visit.participant_id, blocks_arg, source="raw_tlx")
-    except Exception:
-        return
-
-    existing = session.exec(
-        select(DepdfFit).where(DepdfFit.visit_id == visit.id)
-    ).first()
-    if existing is not None:
-        session.delete(existing)
-        session.flush()
-    session.add(DepdfFit(
-        participant_id=visit.participant_id,
-        visit_id=visit.id,
-        mwl_source=out["mwl_source"],
-        g0=out["g0"], p0=out["p0"], tau0=out["tau0"],
-        hcf_value=out["hcf_value"], hcf_source=out["hcf_source"],
-        criteria_version=out["criteria_version"],
-        per_level_json=json.dumps(out["per_level"], ensure_ascii=False),
-    ))
-    session.commit()
+        existing = session.exec(
+            select(DepdfFit).where(DepdfFit.visit_id == visit.id)
+        ).first()
+        if existing is not None:
+            session.delete(existing)
+            session.flush()
+        session.add(DepdfFit(
+            participant_id=visit.participant_id,
+            visit_id=visit.id,
+            mwl_source=out["mwl_source"],
+            g0=out["g0"], p0=out["p0"], tau0=out["tau0"],
+            hcf_value=out["hcf_value"], hcf_source=out["hcf_source"],
+            criteria_version=out["criteria_version"],
+            per_level_json=json.dumps(out["per_level"], ensure_ascii=False),
+        ))
+        session.commit()
+    except Exception as exc:  # noqa: BLE001 — fit/store must not break ingestion
+        session.rollback()
+        _log.warning("Suhir fit failed/skipped for visit %s: %r", visit.id, exc)
