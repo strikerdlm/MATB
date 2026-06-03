@@ -21,6 +21,10 @@ _CRITERIA_PATH = Path(__file__).with_name("failure_criteria.yaml")
 
 
 def _criteria_version() -> int:
+    # Phase 1 wires only the `sysmon` criterion below; the YAML also declares
+    # comm/track/resman for future phases. `version` tracks the IMPLEMENTED
+    # criteria set, not every criterion defined in the file — bump it when the
+    # wired extraction logic changes.
     with open(_CRITERIA_PATH, encoding="utf-8") as fh:
         return int(yaml.safe_load(fh)["version"])
 
