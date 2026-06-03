@@ -56,3 +56,31 @@ def test_no_fit_with_two_levels(engine, sample_csv_bytes):
                        filename=f"{level}.csv", participant_id="P01",
                        visit_ordinal=1, workload_level=level)
         assert s.exec(select(DepdfFit)).first() is None
+
+
+def test_fit_failure_does_not_break_ingestion(engine, sample_csv_bytes):
+    # One level has SYSMON data (so it ingests) but NO NASA-TLX row, so its
+    # raw_tlx is None. When the visit completes, fit_participant's MWL lookup
+    # raises on the None -> the fit must be swallowed: all 3 Blocks stay
+    # committed and no DepdfFit row is created.
+    from app.models import Block
+
+    no_tlx_csv = (
+        b"scenario_time,type,module,address,value\n"
+        b"5.0,performance,sysmon,signal_detection,MISS\n"
+        b"25.0,performance,sysmon,signal_detection,MISS\n"
+    )
+    _enroll(engine)
+    with Session(engine) as s:
+        b1 = ingest_csv(s, content=sample_csv_bytes(misses=(5.0,), raw_tlx=44.0),
+                        filename="LOW.csv", participant_id="P01",
+                        visit_ordinal=1, workload_level="LOW")
+        b2 = ingest_csv(s, content=sample_csv_bytes(misses=(5.0, 25.0), raw_tlx=60.0),
+                        filename="MEDIUM.csv", participant_id="P01",
+                        visit_ordinal=1, workload_level="MEDIUM")
+        b3 = ingest_csv(s, content=no_tlx_csv, filename="HIGH.csv",
+                        participant_id="P01", visit_ordinal=1, workload_level="HIGH")
+        assert b1.id and b2.id and b3.id  # all ingested despite the doomed fit
+        v = s.exec(select(Visit).where(Visit.visit_ordinal == 1)).first()
+        assert len(s.exec(select(Block).where(Block.visit_id == v.id)).all()) == 3
+        assert s.exec(select(DepdfFit)).first() is None  # fit failed, swallowed
