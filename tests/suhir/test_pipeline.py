@@ -47,6 +47,7 @@ def test_fit_participant_recovers_parameters_and_serializes():
     assert out["participant_id"] == "P01"
     assert out["g0"] == pytest.approx(G0_TRUE, rel=2e-2)
     assert out["p0"] == pytest.approx(P0_TRUE, rel=2e-2)
+    assert out["tau0"] == pytest.approx(TAU0_TRUE, rel=5e-2)
     assert out["hcf_source"] == "F0_default"
     assert out["criteria_version"] == 1
     # Must be JSON-serializable.

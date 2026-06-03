@@ -17,9 +17,9 @@ from matb_integration.log_converter import convert_session, parse_csv
 from matb_integration.suhir.pipeline import fit_participant
 
 
-def _build_block(csv_path: str, level: str):
+def _build_block(csv_path: str, level: str, participant: str):
     path = Path(csv_path)
-    record = convert_session(path, workload_level=level)
+    record = convert_session(path, participant_id=participant, workload_level=level)
     rows = parse_csv(path)
     return record, rows
 
@@ -39,9 +39,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.cmd == "fit":
         blocks = {
-            "LOW": _build_block(args.low, "LOW"),
-            "MEDIUM": _build_block(args.medium, "MEDIUM"),
-            "HIGH": _build_block(args.high, "HIGH"),
+            "LOW": _build_block(args.low, "LOW", args.participant),
+            "MEDIUM": _build_block(args.medium, "MEDIUM", args.participant),
+            "HIGH": _build_block(args.high, "HIGH", args.participant),
         }
         out = fit_participant(args.participant, blocks, source=args.source)
         Path(args.out).write_text(json.dumps(out, indent=2, ensure_ascii=False), encoding="utf-8")

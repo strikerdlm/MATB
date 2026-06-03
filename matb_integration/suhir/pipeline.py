@@ -54,8 +54,8 @@ def fit_participant(
             f"need 3 MWL levels with observed failures to fit; got {len(levels)}"
         )
     levels.sort(key=lambda x: x[0])
-    (g1, t1), (g2, t2), (g3, _t3) = levels
-    g0 = solve_g0(levels)
+    g0 = solve_g0(levels)  # consumes all three levels internally
+    (g1, t1), (g2, t2) = levels[0], levels[1]
     p0 = estimate_p0(g1, g2, t1, t2, g0=g0)
     tau0 = estimate_tau0(g1, t1, g0=g0, p0=p0)
     hcf_est = hcf.resolve(participant_id, store=hcf_store)
