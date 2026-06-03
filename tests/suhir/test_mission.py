@@ -23,6 +23,6 @@ def test_example_5_1_gives_one_percent():
 
 
 def test_equipment_weibull_lowers_nonfailure():
+    # P^e = exp(-((0.1*5)^2)) = exp(-0.25) = 0.7788; Q = 1 - 1.0*0.7788*1.0.
     segs = [Segment(q=1.0, p_human=1.0, lam_e=0.1, t=5.0, beta_e=2.0)]
-    q = mission_failure_Q(segs)
-    assert 0.0 < q < 1.0
+    assert mission_failure_Q(segs) == pytest.approx(1.0 - 0.7788, abs=1e-4)

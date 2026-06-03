@@ -27,6 +27,10 @@ def mission_failure_Q(segments: list[Segment], tol: float = 1e-6) -> float:
         raise ValueError(f"segment q_i must sum to 1 (Eq. 5.9); got {total_q}")
     success = 0.0
     for s in segments:
+        # lam_e == 0 means a perfectly reliable equipment segment (Suhir lets
+        # P^e_i = 1, e.g. take-off where the human is not the limiting factor).
+        # weibull_nonfailure(0, ...) already returns 1.0; the branch just makes
+        # that intent explicit (optimization, not a correctness fix).
         p_e = weibull_nonfailure(s.lam_e, s.t, s.beta_e) if s.lam_e > 0 else 1.0
         success += s.q * p_e * s.p_human
     return 1.0 - success
