@@ -36,3 +36,17 @@ export interface ParticipantCreate {
   age_band?: string;
   notes?: string;
 }
+
+export interface BlockDetail {
+  participant_id: string;
+  visit_ordinal: number;
+  workload_level: string;
+  metrics: {
+    sysmon?: { d_prime?: number | null; hit_rate?: number | null; n_misses?: number; mean_rt_ms?: number | null };
+    comm?: { d_prime?: number | null };
+    nasatlx?: { raw_tlx?: number | null };
+    bedford?: { value?: number | null };
+    isa?: { mean?: number | null };
+  };
+  depdf_fit: { g0: number; p0: number; tau0: number; hcf_source: string; mwl_source: string } | null;
+}

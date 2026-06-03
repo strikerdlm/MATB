@@ -29,3 +29,22 @@ def test_ingest_duplicate_returns_409(client, sample_csv_bytes):
     data2 = {"participant_id": "P01", "visit_ordinal": "2", "workload_level": "LOW"}
     r = client.post("/ingest", files=files2, data=data2)
     assert r.status_code == 409
+
+
+def test_block_detail_endpoint(client, sample_csv_bytes):
+    _enroll(client)
+    files = {"file": ("run1.csv", sample_csv_bytes(misses=(5.0, 25.0)), "text/csv")}
+    data = {"participant_id": "P01", "visit_ordinal": "1", "workload_level": "LOW"}
+    assert client.post("/ingest", files=files, data=data).status_code == 201
+    r = client.get("/block", params={"participant_id": "P01", "visit_ordinal": 1, "workload_level": "LOW"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["metrics"]["sysmon"]["n_misses"] == 2
+    assert "_raw_sysmon_rows" not in body["metrics"]
+    assert body["depdf_fit"] is None  # only LOW ingested, no full-visit fit
+
+
+def test_block_detail_404_when_absent(client):
+    _enroll(client)
+    r = client.get("/block", params={"participant_id": "P01", "visit_ordinal": 2, "workload_level": "HIGH"})
+    assert r.status_code == 404

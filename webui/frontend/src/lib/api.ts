@@ -1,5 +1,5 @@
 import type {
-  IngestResult, Participant, ParticipantCreate, TrackerCell, Visit,
+  BlockDetail, IngestResult, Participant, ParticipantCreate, TrackerCell, Visit,
 } from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -70,5 +70,16 @@ export async function ingestCsv(file: File, tags: IngestTags): Promise<IngestRes
   form.append("overwrite", String(tags.overwrite ?? false));
   const res = await fetch(`${API_BASE}/ingest`, { method: "POST", body: form });
   if (!res.ok) throw new IngestError(res.status, await detail(res));
+  return res.json();
+}
+
+export async function getBlock(
+  participantId: string, visitOrdinal: number, level: string,
+): Promise<BlockDetail> {
+  const q = new URLSearchParams({
+    participant_id: participantId, visit_ordinal: String(visitOrdinal), workload_level: level,
+  });
+  const res = await fetch(`${API_BASE}/block?${q}`, { method: "GET" });
+  if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();
 }
