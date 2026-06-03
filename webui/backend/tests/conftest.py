@@ -47,7 +47,7 @@ def sample_csv_bytes():
     """Minimal OpenMATB-style CSV with SYSMON rows convert_session can parse."""
     def _build(misses: tuple[float, ...] = (5.0, 25.0), raw_tlx: float = 60.0) -> bytes:
         lines = ["scenario_time,type,module,address,value"]
-        lines.append(f"900.0,performance,genericscales,nasatlx,{raw_tlx}")
+        lines.append(f"900.0,performance,genericscales,Mental demand,{raw_tlx}")
         for t in misses:
             lines.append(f"{t},performance,sysmon,signal_detection,MISS")
         lines.append("10.0,performance,sysmon,signal_detection,HIT")

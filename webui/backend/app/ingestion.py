@@ -22,15 +22,24 @@ class IngestionError(Exception):
     """Raised when a file cannot be mapped/validated; never silently mislabel."""
 
 
-def _convert(content: bytes, level: str) -> dict:
-    """Run log_converter.convert_session on the uploaded bytes."""
-    from matb_integration.log_converter import convert_session
+def _convert_and_rows(content: bytes, level: str) -> tuple[dict, list[dict]]:
+    """Run convert_session and capture the raw SYSMON detection rows (timestamps).
+
+    The Suhir fit needs the raw MISS timestamps; Block stores only the converted
+    record, so we embed the rows into the record (see ingest_csv).
+    """
+    from matb_integration.log_converter import convert_session, parse_csv
 
     with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as fh:
         fh.write(content)
         tmp = Path(fh.name)
     try:
-        return convert_session(tmp, workload_level=level)
+        record = convert_session(tmp, workload_level=level)
+        sysmon_rows = [
+            r for r in parse_csv(tmp)
+            if r.get("module") == "sysmon" and r.get("address") == "signal_detection"
+        ]
+        return record, sysmon_rows
     finally:
         tmp.unlink(missing_ok=True)
 
@@ -72,10 +81,12 @@ def ingest_csv(
             f"cell already filled: {participant_id} visit {visit_ordinal} {workload_level}"
         )
 
-    record = _convert(content, workload_level)
+    record, sysmon_rows = _convert_and_rows(content, workload_level)
     sysmon = record.get("sysmon") or {}
     if not sysmon.get("n_signals") and not sysmon.get("n_misses"):
         raise IngestionError("no usable metrics in CSV (no SYSMON signal rows)")
+    # Persist raw SYSMON detection rows (timestamps) the Suhir fit needs.
+    record["_raw_sysmon_rows"] = sysmon_rows
 
     if existing is not None:
         session.delete(existing)
@@ -91,4 +102,49 @@ def ingest_csv(
     session.add(block)
     session.commit()
     session.refresh(block)
+    _maybe_fit_visit(session, visit)
     return block
+
+
+def _maybe_fit_visit(session: Session, visit: Visit) -> None:
+    """If all 3 levels of this visit are present, run the Suhir fit and upsert it.
+
+    Imported lazily so Tasks 1-6 don't require matb_integration.suhir. A failed
+    fit (e.g. unbracketed G0) is swallowed — ingestion must not fail because a
+    fit could not be computed.
+    """
+    blocks = session.exec(select(Block).where(Block.visit_id == visit.id)).all()
+    by_level = {b.workload_level: b for b in blocks}
+    if set(by_level) != set(WORKLOAD_LEVELS):
+        return
+
+    from matb_integration.suhir.pipeline import fit_participant
+    from app.models import DepdfFit
+
+    blocks_arg: dict[str, tuple[dict, list[dict]]] = {}
+    for level, b in by_level.items():
+        record = json.loads(b.metrics_json)
+        rows = record.get("_raw_sysmon_rows", [])
+        blocks_arg[level] = (record, rows)
+
+    try:
+        out = fit_participant(visit.participant_id, blocks_arg, source="raw_tlx")
+    except Exception:
+        return
+
+    existing = session.exec(
+        select(DepdfFit).where(DepdfFit.visit_id == visit.id)
+    ).first()
+    if existing is not None:
+        session.delete(existing)
+        session.flush()
+    session.add(DepdfFit(
+        participant_id=visit.participant_id,
+        visit_id=visit.id,
+        mwl_source=out["mwl_source"],
+        g0=out["g0"], p0=out["p0"], tau0=out["tau0"],
+        hcf_value=out["hcf_value"], hcf_source=out["hcf_source"],
+        criteria_version=out["criteria_version"],
+        per_level_json=json.dumps(out["per_level"], ensure_ascii=False),
+    ))
+    session.commit()
