@@ -1,0 +1,6 @@
+fastapi>=0.110
+sqlmodel>=0.0.16
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+pytest>=7.4
+httpx>=0.27
