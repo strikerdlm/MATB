@@ -60,6 +60,7 @@ export function CellDetailDialog({ cell, onClose }: { cell: TrackerCell | null; 
                   <Row label="P₀" value={fmt(data.depdf_fit.p0, 4)} />
                   <Row label="τ₀" value={fmt(data.depdf_fit.tau0, 2)} />
                   <Row label="HCF source" value={data.depdf_fit.hcf_source} />
+                  <Row label="MWL source" value={data.depdf_fit.mwl_source} />
                 </>
               ) : (
                 <p className="text-sm text-muted-foreground">No fit yet (needs all 3 levels of this visit).</p>
