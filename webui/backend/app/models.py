@@ -63,3 +63,14 @@ class AnalysisResult(SQLModel, table=True):
     engine_version: str
     artifact_json: str                              # full engine artifact
     created_at: datetime = Field(default_factory=_utcnow)
+
+
+class BayesResult(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    fingerprint: str = Field(index=True)            # input rows at job creation
+    bayes_version: str
+    status: str = "queued"                          # queued|running|done|failed
+    artifact_json: str | None = None
+    error: str | None = None
+    created_at: datetime = Field(default_factory=_utcnow)
+    finished_at: datetime | None = None

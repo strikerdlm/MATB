@@ -44,7 +44,7 @@ MATB/
 | `matb_integration/suhir/` | DEPDF human-nonfailure + mission-outcome model | Built — **PR #5** (not yet on `main`) |
 | `webui/backend/` | FastAPI ingestion + study tracker + auto-fit + analysis endpoints | Built — **PR #6** (stacked on #5) |
 | `webui/frontend/` | Next.js tracker/analysis UI (HRV design system) | Phase 1B built; Phase 3A analysis screen built |
-| `matb_integration/analysis/stats/` | Frequentist statistics engine (MixedLM, rmcorr, DEPDF drift) | **Phase 3A — done** |
+| `matb_integration/analysis/stats/` | Frequentist + Bayesian statistics engines (MixedLM, rmcorr, DEPDF drift; PyMC NUTS hierarchical re-fits) | **Phase 3 — done (3A + 3B)** |
 | `aircraft_monitor/` | Legacy Rich dashboard | Retained, not the active surface |
 
 **Data flow:** OpenMATB session → CSV logs → `log_converter` → JSONL metrics → (`suhir` DEPDF fit) → analysis / research console.
@@ -125,19 +125,29 @@ Endpoints: `GET /health`; `POST /participants`, `GET /participants`,
 `GET /participants/{id}/visits`; `POST /ingest` (multipart upload of a session
 CSV, tagged with participant/visit/level); `GET /tracker` (the completeness
 grid); `GET /metrics/long`, `GET /fits`; `POST /analysis/run`,
-`GET /analysis/latest`. Ingesting all three levels of a visit auto-runs the
-DEPDF fit. See [`webui/backend/README.md`](webui/backend/README.md).
+`GET /analysis/latest`; `POST /analysis/bayes/run` (202, async background
+job), `GET /analysis/bayes/status` (job lifecycle + artifact when done).
+Ingesting all three levels of a visit auto-runs the DEPDF fit.
+See [`webui/backend/README.md`](webui/backend/README.md).
 
-### 7. Run the statistics engine CLI (Phase 3A)
+### 7. Run the statistics engine CLI (Phase 3A/3B)
 
 ```bash
+# Frequentist (Phase 3A):
 python3 -m matb_integration.analysis.stats.cli run \
   --metrics-json m.json --fits-json f.json -o artifact.json
+
+# Bayesian sensitivity (Phase 3B):
+python3 -m matb_integration.analysis.stats.cli bayes \
+  --metrics-json m.json --fits-json f.json -o bayes.json \
+  [--seed SEED] [--draws DRAWS] [--tune TUNE] [--chains CHAINS]
 ```
 
 `m.json` and `f.json` are the JSON bodies returned by `GET /metrics/long` and
-`GET /fits` respectively. Writes a fully-provenance-stamped JSON artifact
-suitable for manuscript supplementary material.
+`GET /fits` respectively. The frequentist command writes a fully-provenance-stamped
+JSON artifact; the Bayesian command writes a separate artifact (BAYES_VERSION 1.0.0)
+with 95% ETIs, R̂, ESS, and per-model diagnostics — never extending the frequentist
+artifact.
 
 ### 8. Run the tests
 
@@ -166,14 +176,15 @@ cd webui/backend && ~/.venvs/matb-webui/bin/python -m pytest -q
 
 - **Suhir DEPDF mission-outcome layer** (`matb_integration/suhir/`, PR #5): turns the platform into a calibration rig for Ephraim Suhir's *Human-in-the-Loop* (2018) probabilistic model — the graded LOW/MED/HIGH scenarios serve as the elevated-workload levels his FOAT calibration requires. Design + plan in `docs/superpowers/specs/` and `docs/superpowers/plans/`.
 - **MATB Research Console — backend** (`webui/backend/`, PR #6): FastAPI + SQLModel (SQLite) console for the planned longitudinal study (**12 participants × 6 visits × 3 workload levels**, every 3 days over 15 days). Ingests OpenMATB CSVs (reusing `matb_integration` as a library — no metric logic duplicated), tracks completeness, and auto-fits the DEPDF per visit.
-- **Phase 3A — frequentist statistics engine** (`matb_integration/analysis/stats/`): standalone library (pandas + statsmodels + scipy) implementing the pre-specified research questions — Q1 workload-level effects (MixedLM, 2-df Wald omnibus, Holm pairwise contrasts gated on BH-FDR), Q2 visit trajectories (additive MixedLM, level-adjusted slope), Q3 repeated-measures correlation (Bakdash & Marusich 2017 ANCOVA rmcorr, validated to 1e-9 against the published Bland-Altman oracle), and Q4 DEPDF parameter drift (g0/p0/tau0 ~ visit). First-class `ok | insufficient_data | not_estimable` statuses, effect sizes with 95% CI, rmANOVA complete-case sensitivity, and full provenance (input fingerprint, library versions, engine v1.0.0). CLI and backend endpoints included; `/analysis` frontend screen with confirmatory family table, Q1–Q4 cards, and provenance footer. Live end-to-end verified with a 48-CSV synthetic cohort. Phase 3B (async Bayesian PyMC sensitivity) pending.
-- **In development — Phase 1B frontend** (complete as of Phase 3A): a Next.js/TypeScript UI mirroring the HRV "Mission Control" design system. Includes Tracker, Participants, Upload, Visualization, and Analysis screens.
+- **Phase 3A — frequentist statistics engine** (`matb_integration/analysis/stats/`): standalone library (pandas + statsmodels + scipy) implementing Q1 workload-level effects (MixedLM, 2-df Wald omnibus, Holm pairwise contrasts gated on BH-FDR), Q2 visit trajectories (level-adjusted slope), Q3 repeated-measures correlation (Bakdash & Marusich 2017 ANCOVA rmcorr, validated to 1e-9 against the published oracle), and Q4 DEPDF parameter drift (g0/p0/tau0 ~ visit). First-class `ok | insufficient_data | not_estimable` statuses, effect sizes with 95% CI, rmANOVA complete-case sensitivity, full provenance (input fingerprint, library versions, engine v1.0.0). CLI and backend endpoints included; `/analysis` frontend screen with confirmatory family table, Q1–Q4 cards, and provenance footer. Live end-to-end verified with a 48-CSV synthetic cohort.
+- **Phase 3B — async Bayesian sensitivity** (`matb_integration/analysis/stats/bayes.py`): PyMC NUTS hierarchical re-fits of Q2 (per confirmatory metric, level indicators included) and Q4 (per DEPDF parameter). Pinned priors: coefficients Normal(0, 2.5·sd(y)); SDs HalfNormal(sd(y)). Outputs 95% equal-tailed intervals (ETI) with per-model diagnostics (R̂, ESS, divergences, seed/chains/draws/tune); "not converged" if max R̂ > 1.01 or any divergence. Separate artifact (BAYES_VERSION 1.0.0) — never extends the frequentist artifact; gates (gate_q2/gate_q4) reused. Backend: `POST /analysis/bayes/run` returns 202 and spawns a background worker (caches by fingerprint+bayes_version; re-POST returns the active job); `GET /analysis/bayes/status` reports queued|running|done|failed with the artifact attached on completion. Frontend: Bayesian section on `/analysis` with 2-s polling, posterior tables (mean/ETI/R̂/ESS per parameter), red "not converged" badge, and sampler+priors provenance footnote. Library tests 40 (3 Bayesian incl. seeded NUTS recovery); backend 34 (3 job-lifecycle); frontend 21. Live e2e 2026-06-04 on the 48-CSV cohort: job done in ~36 s; Bayesian d′ visit slope +0.124 ETI [0.080, 0.160], converged, consistent with frequentist +0.127; degenerate synthetic responses correctly flagged not-converged (R̂ up to 3.3, hundreds of divergences); cache hit on re-POST confirmed.
+- **Phase 1B frontend** (complete as of Phase 3B): a Next.js/TypeScript UI mirroring the HRV "Mission Control" design system. Includes Tracker, Participants, Upload, Visualization, and Analysis screens (including the Bayesian section).
 
 ### Readiness
 
 - **Pilot an OpenMATB session with d′ + NASA-TLX/Bedford/ISA + Latin-square counterbalancing:** ready (verified headless via Xvfb; no real-participant data collected yet).
 - **DEPDF analysis + research-console ingestion/tracking:** built and tested (in open PRs).
-- **Frequentist inferential statistics (Phase 3A):** built and live end-to-end verified; CLI artifact matches backend run to fingerprint level.
+- **Inferential statistics (Phase 3 — complete):** frequentist (Phase 3A) and Bayesian sensitivity (Phase 3B) both built and live end-to-end verified; CLI artifacts match backend runs to fingerprint level.
 - **Full Q1-grade study (physiology sync + participant data):** not yet — LSL physiology integration and a real data-collection run remain.
 
 ---
@@ -222,7 +233,7 @@ Situation awareness is treated as a three-level construct — perception, compre
 | — | **Research console — data model + ingestion + tracker (backend)** | **Done (PR #6)** |
 | — | **Research console — frontend (tracker + viz + analysis)** | **Done (Phase 1B)** |
 | — | **Frequentist statistics engine (MixedLM, rmcorr, DEPDF drift, CLI + endpoints)** | **Done (Phase 3A)** |
-| — | **Bayesian sensitivity layer (PyMC, async)** | Pending (Phase 3B) |
+| — | **Bayesian sensitivity layer (PyMC, async)** | **Done (Phase 3B)** |
 | 9 | Multimodal physiology (LSL) + reproducibility (practice criterion, version-pinned manifests) | Partial / planned |
 | 10 | Population-specific stressor packs (fighter/RPA/transport-MUM-T) + BIDS-derivative export + baseline neurocognitive screen | Planned |
 | 11 | Adaptive automation engine (performance/physiology-driven handoffs, transparency cues) | Planned |

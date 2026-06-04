@@ -4,6 +4,46 @@ All notable changes to the MATB military aviation research platform.
 
 ## [Unreleased] — 2026-06-04
 
+### Phase 3B — async Bayesian sensitivity (PyMC NUTS)
+
+#### Added
+- `matb_integration/analysis/stats/bayes.py` — PyMC NUTS hierarchical re-fits of
+  Q2 (visit slope per confirmatory metric, level indicators included) and Q4
+  (drift per DEPDF parameter g0/p0/tau0). Pinned priors: coefficients
+  Normal(0, 2.5·sd(y)); SDs HalfNormal(sd(y)). Outputs 95% equal-tailed intervals
+  (ETI). Per-model diagnostics persisted: R̂, ESS bulk/tail, divergence count,
+  seed/chains/draws/tune. Convergence rule: max R̂ > 1.01 or any divergence →
+  "not converged". Separate artifact with its own `BAYES_VERSION = "1.0.0"` —
+  never extends the frequentist artifact. Gates gate_q2/gate_q4 reused;
+  statuses `ok | insufficient_data | not_estimable`.
+- CLI: `python3 -m matb_integration.analysis.stats.cli bayes --metrics-json m.json
+  --fits-json f.json -o bayes.json [--seed --draws --tune --chains]`
+- Backend: `POST /analysis/bayes/run` — fingerprints input, spawns background
+  worker thread; returns 202 immediately; re-POST while job is active returns the
+  existing job (no duplicate sampling); caches done artifact by
+  (fingerprint, bayes_version) in the new `bayes_result` table.
+  `GET /analysis/bayes/status` — lifecycle queued|running|done|failed; artifact
+  attached in the `done` response; 404 before any job is submitted.
+- `webui/backend/requirements.txt`: `pymc>=6` added.
+- Frontend: Bayesian section on `/analysis` — run button; 2-s polling that resumes
+  on mount over an active job; posterior tables (mean/ETI/R̂/ESS per parameter)
+  for Q2 and Q4 re-fits; red "not converged" badge; sampler settings + pinned
+  priors provenance footnote.
+- Tests: library 40 total (3 Bayesian: seeded NUTS recovery, reproducibility,
+  degenerate-data not-converged path); backend 34 total (3 job-lifecycle: submit,
+  poll-running, poll-done); frontend 21 total.
+
+#### Verified
+- Live e2e 2026-06-04, 48-CSV cohort (8 participants × 2 visits × 3 levels):
+  job completed in ~36 s; Bayesian d′ visit slope +0.124 ETI [0.080, 0.160],
+  converged, consistent with frequentist +0.127; degenerate synthetic responses
+  correctly flagged not-converged (R̂ up to 3.3, hundreds of divergences);
+  cache hit confirmed on re-POST; CLI fingerprint parity with backend artifact.
+
+> Phase 3 (3A frequentist + 3B Bayesian) is now complete.
+
+---
+
 ### Phase 3A — frequentist statistics engine
 
 #### Added
@@ -44,8 +84,6 @@ All notable changes to the MATB military aviation research platform.
 - Live end-to-end verified 2026-06-04: 8 participants × 2 visits × 3 levels =
   48 CSVs ingested over HTTP with a gate-crossing synthetic cohort; CLI artifact
   fingerprint matched the backend run exactly.
-
-> Phase 3B (async Bayesian PyMC sensitivity) is pending — not marked done.
 
 ---
 

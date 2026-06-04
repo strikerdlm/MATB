@@ -158,3 +158,55 @@ export interface AnalysisArtifact {
   rmanova: Record<string, RmanovaResult>;
   caveats: string[];
 }
+
+// --- Phase 3B Bayesian sensitivity (matb_integration.analysis.stats.bayes) ---
+
+export interface BayesCoef {
+  mean: number;
+  sd: number;
+  eti95: [number, number];
+  r_hat: number;
+  ess_bulk: number;
+  ess_tail: number;
+}
+
+export interface BayesModelResult {
+  status: AnalysisStatus;
+  detail?: string;
+  n_obs?: number;
+  n_participants?: number;
+  coefs?: Record<string, BayesCoef>;
+  diagnostics?: { max_r_hat: number; min_ess_bulk: number; divergences: number };
+  converged?: boolean;
+}
+
+export interface BayesArtifact {
+  bayes_version: string;
+  spec: string;
+  sampler: {
+    seed: number; chains: number; draws: number; tune: number;
+    nuts: string; cores: number; interval: string;
+    priors: Record<string, string>;
+  };
+  provenance: {
+    fingerprint: string;
+    n_metric_rows: number;
+    n_fit_rows: number;
+    libraries: Record<string, string>;
+    created_utc: string | null;
+  };
+  q2: Record<string, BayesModelResult>;
+  q4: Record<string, BayesModelResult>;
+  all_converged: boolean;
+  caveats: string[];
+}
+
+export interface BayesJob {
+  job_id: number;
+  status: "queued" | "running" | "done" | "failed";
+  cached?: boolean;
+  error?: string | null;
+  created_at?: string;
+  finished_at?: string | null;
+  artifact?: BayesArtifact;
+}

@@ -1,5 +1,5 @@
 import type {
-  AnalysisArtifact, BlockDetail, FitRow, IngestResult, MetricRow, Participant, ParticipantCreate, TrackerCell, Visit,
+  AnalysisArtifact, BayesJob, BlockDetail, FitRow, IngestResult, MetricRow, Participant, ParticipantCreate, TrackerCell, Visit,
 } from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -106,6 +106,19 @@ export async function runAnalysis(): Promise<AnalysisArtifact> {
 
 export async function getLatestAnalysis(): Promise<AnalysisArtifact | null> {
   const res = await fetch(`${API_BASE}/analysis/latest`, { method: "GET" });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new ApiError(res.status, await detail(res));
+  return res.json();
+}
+
+export async function runBayes(): Promise<BayesJob> {
+  const res = await fetch(`${API_BASE}/analysis/bayes/run`, { method: "POST" });
+  if (!res.ok) throw new ApiError(res.status, await detail(res));
+  return res.json();
+}
+
+export async function getBayesStatus(): Promise<BayesJob | null> {
+  const res = await fetch(`${API_BASE}/analysis/bayes/status`, { method: "GET" });
   if (res.status === 404) return null;
   if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();

@@ -109,6 +109,28 @@ coefficients, `HalfNormal` for SDs. The artifact persists seed, chains, draws,
 tune, R-hat, ESS, divergences; result is labeled **"not converged"** if any
 R-hat > 1.01 or divergences > 0. PyMC is a Phase-3B-only dependency.
 
+Pinned at planning time (2026-06-04, verified on pymc 6.0.1 + arviz 1.1.0,
+py3.14):
+
+- **Separate artifact, separate cache.** The Bayesian result is its own
+  versioned artifact (`BAYES_VERSION`) in its own `bayes_result` table keyed by
+  (input fingerprint, bayes_version) with a job lifecycle
+  `queued|running|done|failed`. It never extends the frequentist artifact —
+  this avoids silently serving stale cached frequentist artifacts when the
+  Bayesian layer evolves.
+- **Models.** Per confirmatory metric, Bayesian Q2:
+  `y = b0 + b_visit·visit_c + b_med·[MEDIUM] + b_high·[HIGH] + u[participant] + ε`;
+  per DEPDF parameter, Bayesian Q4: `θ = b0 + b_visit·visit_c + u[participant] + ε`.
+- **Priors (exact).** Coefficients `Normal(0, 2.5·sd(y))`; group and residual
+  SDs `HalfNormal(sd(y))` (scale = observed sd of the response).
+- **Intervals are 95% equal-tailed (ETI), not HDI** — arviz 1.x
+  `summary(ci_prob=0.95)` reports `eti95_lb/ub`; the artifact and UI label them
+  "95% ETI".
+- **Sampler.** NUTS, `cores=1` (the job runs inside a backend worker thread;
+  no nested multiprocessing), defaults seed=20260604, chains=4, draws=1000,
+  tune=1000 — all persisted and overridable via CLI/endpoint for testing.
+- Data gates reuse §4 (`gate_q2`, `gate_q4`).
+
 ## 8. Sequencing
 
 - **Phase 3A (first plan):** frequentist engine (Q1–Q4 + rmcorr + rmANOVA
