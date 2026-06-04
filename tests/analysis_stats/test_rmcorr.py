@@ -64,3 +64,16 @@ def test_rm_corr_degenerate_constant_input_is_not_estimable():
     # constant x with varying y is equally unidentifiable
     pairs2 = pairs.assign(y=list(range(20)))
     assert rm_corr(pairs2)["status"] == "not_estimable"
+
+
+def test_rm_corr_level_adjusted_degenerate_is_not_estimable():
+    # OLS residuals of constant input carry float jitter (~1e-16) that must
+    # not bypass the variance guard
+    pairs = pd.DataFrame({
+        "participant_id": [f"P{p}" for p in range(4) for _ in range(5)],
+        "x": [1.0] * 20, "y": [2.0] * 20,
+        "workload_level": (["LOW", "MEDIUM", "HIGH"] * 7)[:20],
+    })
+    out = rm_corr_level_adjusted(pairs)
+    assert out["status"] == "not_estimable"
+    assert "variance" in out["detail"]

@@ -22,9 +22,11 @@ def rm_corr(pairs: pd.DataFrame) -> dict[str, Any]:
     reason = gates.gate_rmcorr(pairs)
     if reason:
         return {"status": "insufficient_data", "detail": reason}
-    if pairs["x"].nunique() < 2 or pairs["y"].nunique() < 2:
-        return {"status": "not_estimable",
-                "detail": "x or y has no within-data variance"}
+    for col in ("x", "y"):
+        s = pairs[col]
+        if float(s.std(ddof=0)) <= 1e-12 * (abs(float(s.mean())) + 1.0):
+            return {"status": "not_estimable",
+                    "detail": f"{col} has no within-data variance"}
     try:
         import statsmodels.api as sm
         from statsmodels.formula.api import ols
