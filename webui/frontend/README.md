@@ -47,6 +47,12 @@ npm run build     # production build
   badges and pairwise contrast tables; Q3 repeated-measures correlation table;
   Q4 DEPDF parameter drift cards; rmANOVA complete-case sensitivity lines; and a
   provenance footer (input fingerprint, engine version, library versions, caveats).
+  **Bayesian section (Phase 3B):** dedicated run button that posts to
+  `POST /analysis/bayes/run` and polls `GET /analysis/bayes/status` every 2 s
+  (polling resumes automatically when mounting over an active job); posterior
+  summary tables showing mean, 95% ETI, R̂, and ESS per parameter for Q2 and Q4
+  re-fits; red "not converged" badge when max R̂ > 1.01 or divergences detected;
+  sampler settings and pinned priors provenance footnote.
 
 ## Design system
 

@@ -38,6 +38,8 @@ per visit once all 3 levels are ingested.
 - GET  /fits  — DEPDF fits incl. server-computed P^h(G/G₀) curves
 - POST /analysis/run  — collect rows, fingerprint input, run the Phase 3A stats engine, cache result
 - GET  /analysis/latest  — return the most recent cached artifact (404 when none)
+- POST /analysis/bayes/run  — fingerprint input, spawn background NUTS sampler; returns 202 immediately; re-POST while a job is active returns the existing job (no duplicate sampling); caches done artifact by (fingerprint, bayes_version)
+- GET  /analysis/bayes/status  — job lifecycle: queued|running|done|failed; artifact attached when done; 404 before any job submitted
 
 ## Notes
 - Pseudonymized participant IDs only (P01…); no PII.
