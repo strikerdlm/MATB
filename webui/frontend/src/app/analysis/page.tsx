@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Play } from "lucide-react";
 
+import { BayesSection } from "@/components/analysis/BayesSection";
 import { FamilyTable } from "@/components/analysis/FamilyTable";
 import { LmmCard } from "@/components/analysis/LmmCard";
 import { RmcorrTable } from "@/components/analysis/RmcorrTable";
@@ -120,6 +121,8 @@ export default function AnalysisPage() {
               </p>
             ))}
           </section>
+
+          <BayesSection />
 
           <footer className="space-y-1 rounded-lg border border-border p-4 text-xs text-muted-foreground">
             <p>
