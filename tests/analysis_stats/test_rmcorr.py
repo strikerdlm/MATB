@@ -50,3 +50,17 @@ def test_rm_corr_level_adjusted_runs():
     assert out["status"] == "ok"
     assert "sensitivity" in out["method"]
     assert -1.0 <= out["r"] <= 0.0  # same direction as canonical
+
+
+def test_rm_corr_degenerate_constant_input_is_not_estimable():
+    # constant x and y previously fabricated r=1.0 with p~1e-244
+    pairs = pd.DataFrame({
+        "participant_id": [f"P{p}" for p in range(4) for _ in range(5)],
+        "x": [1.0] * 20, "y": [2.0] * 20,
+    })
+    out = rm_corr(pairs)
+    assert out["status"] == "not_estimable"
+    assert "variance" in out["detail"]
+    # constant x with varying y is equally unidentifiable
+    pairs2 = pairs.assign(y=list(range(20)))
+    assert rm_corr(pairs2)["status"] == "not_estimable"

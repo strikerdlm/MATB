@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 MIN_COMPLETE_CASE = 3
@@ -23,6 +24,9 @@ def rm_anova_q1(df: pd.DataFrame) -> dict[str, Any]:
                       within=["workload_level"], aggregate_func="mean").fit()
         row = res.anova_table.iloc[0]
         f, df1, df2 = float(row["F Value"]), float(row["Num DF"]), float(row["Den DF"])
+        if not np.isfinite(f) or f < 0:
+            return {"status": "not_estimable",
+                    "detail": "non-finite or negative F (degenerate within-subject variance)"}
         return {"status": "ok", "F": f, "df": [df1, df2],
                 "p": float(row["Pr > F"]),
                 "partial_eta_sq": f * df1 / (f * df1 + df2),

@@ -29,3 +29,11 @@ def test_rm_anova_complete_case_only():
 def test_rm_anova_insufficient():
     rows = simulate_metric_rows("bedford", seed=42, n_participants=2)
     assert rm_anova_q1(metrics_frame(rows))["status"] == "insufficient_data"
+
+
+def test_rm_anova_degenerate_constant_input_is_not_estimable():
+    rows = simulate_metric_rows("bedford", seed=42)
+    for r in rows:
+        r["value"] = 5.0
+    out = rm_anova_q1(metrics_frame(rows))
+    assert out["status"] == "not_estimable"
