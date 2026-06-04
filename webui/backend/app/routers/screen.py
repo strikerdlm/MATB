@@ -57,7 +57,8 @@ def ingest_screen(
     )
     session.add(row)
     session.commit()
-    # Task 4 wires refresh_fit_hcf(session) here.
+    from app.hcf_refresh import refresh_fit_hcf
+    refresh_fit_hcf(session)
     return {"participant_id": participant_id, "screen_version": SCREEN_VERSION,
             "scores": scores}
 

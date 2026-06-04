@@ -138,7 +138,9 @@ def _maybe_fit_visit(session: Session, visit: Visit) -> None:
     # already-committed Block must never roll back) because a fit could not be
     # computed or stored. Failures are logged, not raised.
     try:
-        out = fit_participant(visit.participant_id, blocks_arg, source="raw_tlx")
+        from app.hcf_refresh import build_hcf_store
+        out = fit_participant(visit.participant_id, blocks_arg, source="raw_tlx",
+                              hcf_store=build_hcf_store(session) or None)
         existing = session.exec(
             select(DepdfFit).where(DepdfFit.visit_id == visit.id)
         ).first()

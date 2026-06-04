@@ -26,13 +26,13 @@ def collect_fit_rows(session: Session) -> list[dict[str, Any]]:
     ]
 
 
-def _curve(p0: float) -> list[dict[str, float]]:
-    from matb_integration.suhir.depdf import p_nonfailure_ordinary
+def _curve(p0: float, f_ratio: float = 1.0) -> list[dict[str, float]]:
+    from matb_integration.suhir.depdf import p_bar
 
     points: list[dict[str, float]] = []
     for i in range(N_CURVE_POINTS):
         r = 1.0 + (R_MAX - 1.0) * i / (N_CURVE_POINTS - 1)
-        points.append({"r": round(r, 4), "p": p_nonfailure_ordinary(p0, g=r, g0=1.0)})
+        points.append({"r": round(r, 4), "p": p0 * p_bar(r ** 2, f_ratio ** 2)})
     return points
 
 
@@ -51,7 +51,8 @@ def list_fits(
             "visit_ordinal": visit.visit_ordinal,
             "g0": fit.g0, "p0": fit.p0, "tau0": fit.tau0,
             "hcf_source": fit.hcf_source, "mwl_source": fit.mwl_source,
-            "curve": _curve(fit.p0),
+            "hcf_value": fit.hcf_value,
+            "curve": _curve(fit.p0, fit.hcf_value if fit.hcf_source == "screen" else 1.0),
         })
     out.sort(key=lambda f: (f["participant_id"], f["visit_ordinal"]))
     return out
