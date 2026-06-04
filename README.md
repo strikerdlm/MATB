@@ -42,8 +42,9 @@ MATB/
 | `matb_integration/scenario_builder.py` | Generate counterbalanced LOW/MED/HIGH scenarios | Built, tested |
 | `matb_integration/log_converter.py` | CSV → JSONL metrics (SDT d′, TLX, Bedford, ISA, SAGAT) | Built, tested |
 | `matb_integration/suhir/` | DEPDF human-nonfailure + mission-outcome model | Built — **PR #5** (not yet on `main`) |
-| `webui/backend/` | FastAPI ingestion + study tracker + auto-fit | Built — **PR #6** (stacked on #5) |
-| `webui/frontend/` | Next.js tracker/analysis UI (HRV design system) | **Phase 1B — in development** |
+| `webui/backend/` | FastAPI ingestion + study tracker + auto-fit + analysis endpoints | Built — **PR #6** (stacked on #5) |
+| `webui/frontend/` | Next.js tracker/analysis UI (HRV design system) | Phase 1B built; Phase 3A analysis screen built |
+| `matb_integration/analysis/stats/` | Frequentist statistics engine (MixedLM, rmcorr, DEPDF drift) | **Phase 3A — done** |
 | `aircraft_monitor/` | Legacy Rich dashboard | Retained, not the active surface |
 
 **Data flow:** OpenMATB session → CSV logs → `log_converter` → JSONL metrics → (`suhir` DEPDF fit) → analysis / research console.
@@ -123,10 +124,22 @@ cd webui/backend
 Endpoints: `GET /health`; `POST /participants`, `GET /participants`,
 `GET /participants/{id}/visits`; `POST /ingest` (multipart upload of a session
 CSV, tagged with participant/visit/level); `GET /tracker` (the completeness
-grid). Ingesting all three levels of a visit auto-runs the DEPDF fit.
-See [`webui/backend/README.md`](webui/backend/README.md).
+grid); `GET /metrics/long`, `GET /fits`; `POST /analysis/run`,
+`GET /analysis/latest`. Ingesting all three levels of a visit auto-runs the
+DEPDF fit. See [`webui/backend/README.md`](webui/backend/README.md).
 
-### 7. Run the tests
+### 7. Run the statistics engine CLI (Phase 3A)
+
+```bash
+python3 -m matb_integration.analysis.stats.cli run \
+  --metrics-json m.json --fits-json f.json -o artifact.json
+```
+
+`m.json` and `f.json` are the JSON bodies returned by `GET /metrics/long` and
+`GET /fits` respectively. Writes a fully-provenance-stamped JSON artifact
+suitable for manuscript supplementary material.
+
+### 8. Run the tests
 
 ```bash
 # bridge + protocol + suhir + sagat tests:
@@ -153,13 +166,15 @@ cd webui/backend && ~/.venvs/matb-webui/bin/python -m pytest -q
 
 - **Suhir DEPDF mission-outcome layer** (`matb_integration/suhir/`, PR #5): turns the platform into a calibration rig for Ephraim Suhir's *Human-in-the-Loop* (2018) probabilistic model — the graded LOW/MED/HIGH scenarios serve as the elevated-workload levels his FOAT calibration requires. Design + plan in `docs/superpowers/specs/` and `docs/superpowers/plans/`.
 - **MATB Research Console — backend** (`webui/backend/`, PR #6): FastAPI + SQLModel (SQLite) console for the planned longitudinal study (**12 participants × 6 visits × 3 workload levels**, every 3 days over 15 days). Ingests OpenMATB CSVs (reusing `matb_integration` as a library — no metric logic duplicated), tracks completeness, and auto-fits the DEPDF per visit.
-- **In development — Phase 1B frontend:** a Next.js/TypeScript tracker + visualization + analysis UI mirroring the HRV "Mission Control" design system, with a pre-specified statistics engine (linear mixed-effects, repeated-measures correlation, Bayesian hierarchical, with classical rmANOVA/OLS as sensitivity) for the repeated-measures design.
+- **Phase 3A — frequentist statistics engine** (`matb_integration/analysis/stats/`): standalone library (pandas + statsmodels + scipy) implementing the pre-specified research questions — Q1 workload-level effects (MixedLM, 2-df Wald omnibus, Holm pairwise contrasts gated on BH-FDR), Q2 visit trajectories (additive MixedLM, level-adjusted slope), Q3 repeated-measures correlation (Bakdash & Marusich 2017 ANCOVA rmcorr, validated to 1e-9 against the published Bland-Altman oracle), and Q4 DEPDF parameter drift (g0/p0/tau0 ~ visit). First-class `ok | insufficient_data | not_estimable` statuses, effect sizes with 95% CI, rmANOVA complete-case sensitivity, and full provenance (input fingerprint, library versions, engine v1.0.0). CLI and backend endpoints included; `/analysis` frontend screen with confirmatory family table, Q1–Q4 cards, and provenance footer. Live end-to-end verified with a 48-CSV synthetic cohort. Phase 3B (async Bayesian PyMC sensitivity) pending.
+- **In development — Phase 1B frontend** (complete as of Phase 3A): a Next.js/TypeScript UI mirroring the HRV "Mission Control" design system. Includes Tracker, Participants, Upload, Visualization, and Analysis screens.
 
 ### Readiness
 
 - **Pilot an OpenMATB session with d′ + NASA-TLX/Bedford/ISA + Latin-square counterbalancing:** ready (verified headless via Xvfb; no real-participant data collected yet).
 - **DEPDF analysis + research-console ingestion/tracking:** built and tested (in open PRs).
-- **Full Q1-grade study (frontend + physiology sync + participant data):** not yet — frontend, LSL physiology, and a real data-collection run remain.
+- **Frequentist inferential statistics (Phase 3A):** built and live end-to-end verified; CLI artifact matches backend run to fingerprint level.
+- **Full Q1-grade study (physiology sync + participant data):** not yet — LSL physiology integration and a real data-collection run remain.
 
 ---
 
@@ -205,7 +220,9 @@ Situation awareness is treated as a three-level construct — perception, compre
 | — | **Scenario builder + log converter** (counterbalancing, d′, SDT, JSONL) | **Done** |
 | — | **Suhir DEPDF mission-outcome model** | **Done (PR #5)** |
 | — | **Research console — data model + ingestion + tracker (backend)** | **Done (PR #6)** |
-| — | **Research console — frontend (tracker + viz + analysis)** | **In development (Phase 1B)** |
+| — | **Research console — frontend (tracker + viz + analysis)** | **Done (Phase 1B)** |
+| — | **Frequentist statistics engine (MixedLM, rmcorr, DEPDF drift, CLI + endpoints)** | **Done (Phase 3A)** |
+| — | **Bayesian sensitivity layer (PyMC, async)** | Pending (Phase 3B) |
 | 9 | Multimodal physiology (LSL) + reproducibility (practice criterion, version-pinned manifests) | Partial / planned |
 | 10 | Population-specific stressor packs (fighter/RPA/transport-MUM-T) + BIDS-derivative export + baseline neurocognitive screen | Planned |
 | 11 | Adaptive automation engine (performance/physiology-driven handoffs, transparency cues) | Planned |

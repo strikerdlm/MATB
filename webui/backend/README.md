@@ -36,11 +36,16 @@ per visit once all 3 levels are ingested.
 - GET  /block  — one block's metrics + the visit's DEPDF fit
 - GET  /metrics/long  — tidy long-format metric rows (optional `participant_id`)
 - GET  /fits  — DEPDF fits incl. server-computed P^h(G/G₀) curves
+- POST /analysis/run  — collect rows, fingerprint input, run the Phase 3A stats engine, cache result
+- GET  /analysis/latest  — return the most recent cached artifact (404 when none)
 
 ## Notes
 - Pseudonymized participant IDs only (P01…); no PII.
 - Ingestion guards against duplicate files (sha256), filled-cell overwrite, and
   CSVs with no SYSMON data.
+- Analysis results are cached per (input fingerprint, engine version) in the
+  `analysis_result` table; re-running `POST /analysis/run` with unchanged data
+  returns the cached artifact immediately (response includes `"cached": true`).
 
 Spec: `docs/superpowers/specs/2026-06-03-webui-phase1-data-tracker-design.md`
 Plan: `docs/superpowers/plans/2026-06-03-webui-phase1a-backend.md`
