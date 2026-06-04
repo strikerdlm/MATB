@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createParticipant, getTracker, ingestCsv, IngestError, getMetricsLong, getFits } from "@/lib/api";
+import { createParticipant, getTracker, ingestCsv, IngestError, getMetricsLong, getFits, runAnalysis, getLatestAnalysis } from "@/lib/api";
 
 beforeEach(() => { vi.restoreAllMocks(); });
 
@@ -70,5 +70,19 @@ describe("api client", () => {
     const url = (global.fetch as any).mock.calls[0][0] as string;
     expect(url).toContain("/fits");
     expect(url).toContain("participant_id=P01");
+  });
+
+  it("runAnalysis POSTs /analysis/run", async () => {
+    global.fetch = mockFetch(200, { cached: false, engine_version: "1.0.0" });
+    const art = await runAnalysis();
+    expect(art.cached).toBe(false);
+    const [url, init] = (global.fetch as any).mock.calls[0];
+    expect(url).toContain("/analysis/run");
+    expect(init.method).toBe("POST");
+  });
+
+  it("getLatestAnalysis returns null on 404", async () => {
+    global.fetch = mockFetch(404, { detail: "no analysis has been run yet" });
+    expect(await getLatestAnalysis()).toBeNull();
   });
 });
