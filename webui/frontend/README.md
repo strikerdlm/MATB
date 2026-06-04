@@ -53,6 +53,15 @@ npm run build     # production build
   summary tables showing mean, 95% ETI, R̂, and ESS per parameter for Q2 and Q4
   re-fits; red "not converged" badge when max R̂ > 1.01 or divergences detected;
   sampler settings and pinned priors provenance footnote.
+- **Screen** (`/screen`) — baseline neurocognitive screen (Phase 10 #20). Picker
+  lists unscreened participants; selecting one launches a fullscreen 4-subtest
+  battery in es-CO Spanish (~10–12 min): Simple RT, Choice RT (2-choice arrows),
+  2-back letters (d′ via Hautus helper), pursuit tracking (90 s sum-of-sines).
+  After completion the backend scores the raw trials, computes validity and the
+  cohort-z F/F₀ composite, and returns a per-participant summary with an
+  explicitly "exploratory" F/F₀ column. Append `?fast=1` for a reduced-trial
+  dev/e2e run that exercises the same scoring logic. All participant-facing text
+  is in `src/components/screen/strings_es.ts`.
 
 ## Design system
 

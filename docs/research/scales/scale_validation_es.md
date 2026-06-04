@@ -105,13 +105,31 @@ If a fully validated Spanish workload scale is preferred over translated instrum
 
 ---
 
-## 5. Summary for Methods Section
+## 5. Neurocognitive Screen — Operational es-CO Instructions (Phase 10 #20)
 
-| Scale | File | Validation status | Recommended use |
+The baseline neurocognitive screen (`matb_integration/screen/`) presents all
+participant-facing text in es-CO Spanish via
+`webui/frontend/src/components/screen/strings_es.ts`. The register and
+terminology follow the same conventions as `nasatlx_es.txt` (INSST NTP-544
+vocabulary, tuteo avoided, Colombianismo-neutral phrasing).
+
+This is **operational task text** — instructions, button labels, and trial
+prompts — not a psychometric scale. Formal psychometric validation does not
+apply: the subtests (Simple RT, Choice RT, 2-back, pursuit tracking) are
+performance tasks scored on objective outcomes (reaction time, accuracy, d′,
+RMS error), not self-report instruments requiring cultural adaptation. No
+validation entry is needed or appropriate for this component.
+
+---
+
+## 6. Summary for Methods Section
+
+| Scale / Component | File | Validation status | Recommended use |
 |---|---|---|---|
 | NASA-TLX | `nasatlx_es.txt` | Formally validated (Sebastián García & del Hoyo, 2010; N=398; INSST NTP-544) | Primary workload outcome ✓ |
 | ISA | `isa_es.txt` | Functional-equivalence translation only; no formal Spanish validation | Periodic in-task probe; note caveat ◑ |
 | Bedford | `bedford_es.txt` | Functional-equivalence translation only; no formal Spanish validation | Secondary / optional; note caveat ◑ |
+| Neurocognitive screen | `strings_es.ts` | Operational task text — not a psychometric scale; no validation applicable | Performance task (RT / d′ / RMS); no caveat needed |
 
 ---
 

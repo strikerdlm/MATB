@@ -35,11 +35,13 @@ per visit once all 3 levels are ingested.
 - GET  /tracker  — the completeness grid
 - GET  /block  — one block's metrics + the visit's DEPDF fit
 - GET  /metrics/long  — tidy long-format metric rows (optional `participant_id`)
-- GET  /fits  — DEPDF fits incl. server-computed P^h(G/G₀) curves
+- GET  /fits  — DEPDF fits incl. `hcf_value` and F-aware P^h(G/G₀) curves (Eq. 5.1 when a screen HCF is present, Eq. 5.16 otherwise)
 - POST /analysis/run  — collect rows, fingerprint input, run the Phase 3A stats engine, cache result
 - GET  /analysis/latest  — return the most recent cached artifact (404 when none)
 - POST /analysis/bayes/run  — fingerprint input, spawn background NUTS sampler; returns 202 immediately; re-POST while a job is active returns the existing job (no duplicate sampling); caches done artifact by (fingerprint, bayes_version)
 - GET  /analysis/bayes/status  — job lifecycle: queued|running|done|failed; artifact attached when done; 404 before any job submitted
+- POST /screen  — ingest raw subtest trial payload; score server-side; store result; refresh `hcf_value`/`hcf_source` on all existing DepdfFit rows; 409 on duplicate (unless `overwrite=true`); 422 on malformed payload
+- GET  /screen  — per-participant screen scores, cohort F/F₀ values, and gate status
 
 ## Notes
 - Pseudonymized participant IDs only (P01…); no PII.
@@ -48,6 +50,10 @@ per visit once all 3 levels are ingested.
 - Analysis results are cached per (input fingerprint, engine version) in the
   `analysis_result` table; re-running `POST /analysis/run` with unchanged data
   returns the cached artifact immediately (response includes `"cached": true`).
+- Screen HCF refresh: every `POST /screen` ingest (including overwrites) recomputes
+  the cohort F value and writes it to `hcf_value`/`hcf_source` on all DepdfFit rows.
+  New fits pick the stored value up automatically; no re-ingest of session data is needed.
+  Mapping is exploratory — not a validated predictive instrument.
 
 Spec: `docs/superpowers/specs/2026-06-03-webui-phase1-data-tracker-design.md`
 Plan: `docs/superpowers/plans/2026-06-03-webui-phase1a-backend.md`

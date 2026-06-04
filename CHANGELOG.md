@@ -4,6 +4,51 @@ All notable changes to the MATB military aviation research platform.
 
 ## [Unreleased] — 2026-06-04
 
+### Phase 10 #20 — baseline neurocognitive screen + HCF integration
+
+#### Added
+- `matb_integration/screen/` — stdlib-only scoring library (raw-trials-first,
+  re-derivable). Four subtests: Simple RT (30 trials; < 150 ms anticipations
+  discarded), Choice RT (30 trials, 2-choice arrows; accuracy ≥ 60% validity
+  gate), 2-back letters (60 trials, consonants only; d′ via the same Hautus
+  log-linear helper used in SYSMON; SOA gaps derived server-side from raw
+  timestamps), pursuit tracking (90 s sum-of-sines, normalized RMS error).
+  Pre-registered validity rule: ≥ 80% usable trials per subtest; cohort-z
+  composite F/F₀ = 1 + 0.05·z̄ clamped [0.85, 1.15]; gates: ≥ 3 screened
+  participants, ≥ 2 valid values per metric. Mapping is exploratory-labeled —
+  no validated external standard exists.
+- `webui/backend/` screen endpoints:
+  - `POST /screen` — ingest raw trial payload; score; store; refresh
+    `hcf_value`/`hcf_source` on all existing DepdfFit rows; 409 on duplicate
+    (unless `overwrite=true`); 422 on malformed payload.
+  - `GET /screen` — per-participant scores, cohort F values, gate status.
+  - `GET /fits` now returns `hcf_value` and F-aware P^h curves (Eq. 5.1 when
+    a screen HCF is present, Eq. 5.16 otherwise).
+- `webui/frontend/src/components/screen/` — `/screen` page: unscreened-
+  participant picker; fullscreen Spanish task runner; backend-scored summary
+  table with an explicitly "exploratory" F/F₀ column; sidebar Screen item.
+  `?fast=1` query parameter activates a reduced-trial dev/e2e mode.
+- `webui/frontend/src/components/screen/strings_es.ts` — all participant-facing
+  instructions and labels in es-CO Spanish; register follows `nasatlx_es.txt`.
+- Model integration: calibration (g0/p0/τ0) untouched — F enters at evaluation
+  only. With a screen HCF, the participant's P^h curve switches from Eq. 5.16
+  to full Eq. 5.1. Every screen ingest refreshes all DepdfFit rows; new fits
+  pick the stored value up automatically. Closes the F = F₀ assumption
+  (roadmap item #20).
+
+#### Verified
+- Live e2e 2026-06-04, cohort DB: full battery completed in-browser via
+  automated key presses and mouse pursuit. Bot's sub-150 ms presses correctly
+  invalidated its Simple RT subtest; F computed from the remaining 3 valid
+  metrics. Cohort gate held all fits at F₀ until the 3rd screen was ingested,
+  then refreshed all 16 DepdfFit rows. F > 1 raised P^h; F < 1 lowered it.
+  This validates plumbing, gates, and propagation — not the scientific
+  calibration of the mapping (bot inputs are not real human performance data).
+- Tests: library 241 collected (237 pass, 4 skip); backend 42 pass;
+  frontend 29 pass.
+
+---
+
 ### Phase 3B — async Bayesian sensitivity (PyMC NUTS)
 
 #### Added
