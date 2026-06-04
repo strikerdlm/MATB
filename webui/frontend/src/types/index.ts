@@ -210,3 +210,39 @@ export interface BayesJob {
   finished_at?: string | null;
   artifact?: BayesArtifact;
 }
+
+// --- neurocognitive screen (matb_integration/screen) ---
+
+export interface SubtestScore {
+  valid: boolean;
+  n_trials?: number;
+  n_usable?: number;
+  median_ms?: number | null;
+  accuracy?: number | null;
+  d_prime?: number | null;
+  rms_norm?: number | null;
+  [k: string]: unknown;
+}
+
+export interface ScreenEntry {
+  participant_id: string;
+  administered_at: string;
+  screen_version: number;
+  scores: Record<string, SubtestScore>;
+  hcf_value: number | null;
+  components: Record<string, number> | null;
+}
+
+export interface ScreenSummary {
+  n_screened: number;
+  min_cohort: number;
+  hcf_active: boolean;
+  screen_version: number;
+  screens: ScreenEntry[];
+}
+
+export interface ScreenIngestResult {
+  participant_id: string;
+  screen_version: number;
+  scores: Record<string, SubtestScore>;
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createParticipant, getTracker, ingestCsv, IngestError, getMetricsLong, getFits, runAnalysis, getLatestAnalysis, runBayes, getBayesStatus } from "@/lib/api";
+import { createParticipant, getTracker, ingestCsv, IngestError, getMetricsLong, getFits, runAnalysis, getLatestAnalysis, runBayes, getBayesStatus, postScreen, getScreenSummary } from "@/lib/api";
 
 beforeEach(() => { vi.restoreAllMocks(); });
 
@@ -98,5 +98,28 @@ describe("api client", () => {
   it("getBayesStatus returns null on 404", async () => {
     global.fetch = mockFetch(404, { detail: "no Bayesian job yet" });
     expect(await getBayesStatus()).toBeNull();
+  });
+
+  it("postScreen POSTs participant_id + payload + overwrite", async () => {
+    global.fetch = mockFetch(201, { participant_id: "P01", screen_version: 1, scores: {} });
+    const payload = { seed: 1, administered_at: "t", fast_mode: false,
+      simple_rt: { trials: [] }, choice_rt: { trials: [] },
+      nback: { trials: [], soa_ms: 2500 },
+      tracking: { samples: [], n_expected_samples: 0, path_amplitude_px: 0 } } as any;
+    await postScreen("P01", payload, true);
+    const [url, init] = (global.fetch as any).mock.calls[0];
+    expect(url).toContain("/screen");
+    expect(init.method).toBe("POST");
+    const body = JSON.parse(init.body);
+    expect(body.participant_id).toBe("P01");
+    expect(body.overwrite).toBe(true);
+    expect(body.payload.nback.soa_ms).toBe(2500);
+  });
+
+  it("getScreenSummary GETs /screen", async () => {
+    global.fetch = mockFetch(200, { n_screened: 0, min_cohort: 3, hcf_active: false, screen_version: 1, screens: [] });
+    const s = await getScreenSummary();
+    expect(s.hcf_active).toBe(false);
+    expect((global.fetch as any).mock.calls[0][0]).toContain("/screen");
   });
 });

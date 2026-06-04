@@ -1,5 +1,5 @@
 import type {
-  AnalysisArtifact, BayesJob, BlockDetail, FitRow, IngestResult, MetricRow, Participant, ParticipantCreate, TrackerCell, Visit,
+  AnalysisArtifact, BayesJob, BlockDetail, FitRow, IngestResult, MetricRow, Participant, ParticipantCreate, ScreenIngestResult, ScreenSummary, TrackerCell, Visit,
 } from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -120,6 +120,25 @@ export async function runBayes(): Promise<BayesJob> {
 export async function getBayesStatus(): Promise<BayesJob | null> {
   const res = await fetch(`${API_BASE}/analysis/bayes/status`, { method: "GET" });
   if (res.status === 404) return null;
+  if (!res.ok) throw new ApiError(res.status, await detail(res));
+  return res.json();
+}
+
+export async function postScreen(
+  participantId: string, payload: import("@/lib/screen").ScreenPayload,
+  overwrite = false,
+): Promise<ScreenIngestResult> {
+  const res = await fetch(`${API_BASE}/screen`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ participant_id: participantId, payload, overwrite }),
+  });
+  if (!res.ok) throw new ApiError(res.status, await detail(res));
+  return res.json();
+}
+
+export async function getScreenSummary(): Promise<ScreenSummary> {
+  const res = await fetch(`${API_BASE}/screen`, { method: "GET" });
   if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();
 }
