@@ -54,3 +54,12 @@ class DepdfFit(SQLModel, table=True):
     criteria_version: int
     per_level_json: str
     fitted_at: datetime = Field(default_factory=_utcnow)
+
+
+class AnalysisResult(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("fingerprint", "engine_version"),)
+    id: int | None = Field(default=None, primary_key=True)
+    fingerprint: str = Field(index=True)            # sha256 of canonical input rows
+    engine_version: str
+    artifact_json: str                              # full engine artifact
+    created_at: datetime = Field(default_factory=_utcnow)
