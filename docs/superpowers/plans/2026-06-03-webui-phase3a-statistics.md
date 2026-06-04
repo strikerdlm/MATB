@@ -590,9 +590,33 @@ def test_q1_contrasts_include_high_vs_medium(df42):
 def test_q2_recovers_visit_slope(df42):
     out = fit_q2(df42)
     assert out["status"] == "ok"
+    # primary slope comes from the ADDITIVE model (level-adjusted common slope)
+    assert "visit_c:" not in out["formula"]
     slope = {c["name"]: c for c in out["coefs"]}["visit_c"]
     assert slope["coef"] == pytest.approx(-0.05, abs=0.04)
+    # interaction terms come from a separate exploratory fit
     assert any(":" in c["name"] for c in out["interactions"])
+
+
+def test_q2_primary_slope_is_common_not_low_only():
+    """If learning happens ONLY at HIGH, the confirmatory slope must still see it."""
+    import numpy as np
+    rng = np.random.default_rng(7)
+    rows = []
+    for p in range(12):
+        u = rng.normal(0, 0.5)
+        for v in range(1, 7):
+            for li, lvl in enumerate(["LOW", "MEDIUM", "HIGH"]):
+                slope = -0.3 if lvl == "HIGH" else 0.0   # marginal avg = -0.1
+                y = 2.0 + 0.8 * li + slope * (v - 3.5) + u + rng.normal(0, 0.3)
+                rows.append({"participant_id": f"P{p:02d}", "visit_ordinal": v,
+                             "workload_level": lvl, "metric": "sysmon_d_prime",
+                             "value": float(y)})
+    out = fit_q2(metrics_frame(rows))
+    slope = {c["name"]: c for c in out["coefs"]}["visit_c"]
+    # the LOW-only slope is 0; the level-adjusted common slope is ~ -0.1
+    assert slope["coef"] == pytest.approx(-0.1, abs=0.05)
+    assert slope["p"] < 0.05
 
 
 def test_insufficient_data_status():
@@ -729,26 +753,41 @@ def fit_q1(df: pd.DataFrame) -> dict[str, Any]:
 
 
 def fit_q2(df: pd.DataFrame) -> dict[str, Any]:
+    """Primary trajectory = ADDITIVE model: under treatment coding with an
+    interaction present, visit_c would be the LOW-only slope; the additive
+    model makes it the level-adjusted common slope (spec section 2). The
+    interaction model is a second, exploratory fit."""
     reason = gates.gate_q2(df)
     if reason:
         return {"status": "insufficient_data", "detail": reason}
-    formula = f"value ~ visit_c + {LEVEL_TERM} + visit_c:{LEVEL_TERM}"
+    formula = f"value ~ visit_c + {LEVEL_TERM}"
     try:
         res = _fit(formula, df)
         if not res.converged:
             return {"status": "not_estimable", "detail": "MixedLM did not converge"}
         re_var, resid_var = _variances(res)
         denom = math.sqrt(re_var + resid_var)
-        inter = [n for n in res.params.index if n.startswith("visit_c:")]
-        return {
+        out = {
             "status": "ok", **_meta(res, df), "formula": formula,
             "coefs": [_coef(res, "visit_c", "visit_c", denom),
                       _coef(res, MED, "MEDIUM-LOW", denom),
                       _coef(res, HIGH, "HIGH-LOW", denom)],
-            "interactions": [_coef(res, n, n, denom) for n in inter],
+            "interactions": [],
         }
     except Exception as e:  # noqa: BLE001
         return {"status": "not_estimable", "detail": f"{type(e).__name__}: {e}"}
+    # exploratory: do slopes differ by level? Failure here must not take down
+    # the primary result — interactions just stay empty.
+    try:
+        res_i = _fit(f"value ~ visit_c + {LEVEL_TERM} + visit_c:{LEVEL_TERM}", df)
+        if res_i.converged:
+            re_v, rs_v = _variances(res_i)
+            d_i = math.sqrt(re_v + rs_v)
+            inter = [n for n in res_i.params.index if n.startswith("visit_c:")]
+            out["interactions"] = [_coef(res_i, n, n, d_i) for n in inter]
+    except Exception:  # noqa: BLE001,S110 — secondary fit is best-effort
+        pass
+    return out
 
 
 def fit_q4(fits: pd.DataFrame, param: str) -> dict[str, Any]:
@@ -1141,8 +1180,12 @@ Q3_PAIRS: tuple[tuple[str, str], ...] = tuple(
 CAVEATS = [
     "Wald inference on REML fits; small-sample (n=12) p-values are approximate.",
     "Random intercepts only; random slopes not estimable at this n.",
+    "Q2 primary slope is the level-adjusted common slope (additive model); "
+    "level-specific slopes are exploratory (interaction fit).",
     "rmANOVA is complete-case and visit-averaged; descriptive sensitivity only.",
     "Q3/Q4 and non-confirmatory metrics are exploratory (no error-rate control).",
+    "Q4 on p0: near-boundary [0,1] probability; the linear-LMM slope is "
+    "descriptive only and may be not_estimable.",
 ]
 
 
@@ -2208,18 +2251,36 @@ git commit -m "feat(webui): /analysis page rendering the Phase 3A artifact"
 
 - [ ] **Step 1: Live backend verification** (controller does this, not a subagent)
 
-Start the backend on a scratch DB, ingest a synthetic full participant (reuse
-the Phase 2 e2e CSV generation approach from session history), then:
+**The e2e cohort MUST cross the pre-registered gates** — otherwise the live run
+only exercises the `insufficient_data` path and proves nothing about the `ok`
+artifact's serialization or rendering. Minimum gate-crossing cohort: **8
+participants × 2 visits × 3 levels = 48 ingested CSVs** (clears Q1: ≥6
+participants ≥2 levels + ≥24 rows; Q2: ≥6 participants ≥2 visits; Q3 error df;
+Q4 needs ≥4 participants ≥2 fitted visits — both visits complete per
+participant, so DEPDF fits exist). Script the ingestion with the Phase 2 e2e
+synthetic-CSV generator (vary MISS times / raw TLX by level so level effects
+are non-trivial), looping participants P01–P08 × visits 1–2 × the 3 levels
+against `POST /participants` + `POST /ingest` on a scratch DB.
+
+Then verify:
 
 ```bash
-curl -s -X POST localhost:8000/analysis/run | python3 -m json.tool | head -40
-curl -s -X POST localhost:8000/analysis/run | python3 -c "import json,sys; print(json.load(sys.stdin)['cached'])"   # True
+curl -s -X POST localhost:8000/analysis/run -o /tmp/art1.json
+python3 - <<'PY'
+import json
+a = json.load(open("/tmp/art1.json"))
+assert a["cached"] is False
+assert a["confirmatory"]["family_size_actual"] >= 4, a["confirmatory"]
+# at least one confirmatory metric must reach the full ok path
+q1ok = [m for m, r in a["q1"].items() if r["status"] == "ok"]
+q2ok = [m for m, r in a["q2"].items() if r["status"] == "ok"]
+assert q1ok and q2ok, (q1ok, q2ok)
+assert a["q4"]["g0"]["status"] in ("ok", "not_estimable")
+print("ok-path verified:", q1ok, q2ok)
+PY
+curl -s -X POST localhost:8000/analysis/run | python3 -c "import json,sys; assert json.load(sys.stdin)['cached'] is True; print('cache hit')"
 curl -s localhost:8000/analysis/latest | python3 -c "import json,sys; a=json.load(sys.stdin); print(a['engine_version'], a['provenance']['fingerprint'][:12])"
 ```
-
-Expected: first run `cached: false` with statuses populated (small ingests will
-legitimately show `insufficient_data` — that is correct gate behavior, not a bug);
-second run `cached: true`; latest returns the artifact.
 
 - [ ] **Step 2: Live CLI verification**
 
@@ -2236,8 +2297,13 @@ Expected: artifact written; its fingerprint equals the backend run's fingerprint
 - [ ] **Step 3: Live frontend verification**
 
 `npm run dev` (port 3100) → Playwright: open `/analysis`, click **Run analysis**,
-verify the family table + Q1–Q4 sections render with status badges; check the
-console for errors.
+then verify against the gate-crossing cohort from Step 1 — not just that the
+page loads: the family table shows 6 planned rows with numeric p / p(FDR)
+values; at least one Q1 card shows an omnibus line and (if its omnibus
+survived FDR) a Holm-annotated contrasts table; Q2 cards show the visit_c
+slope row; the rmcorr table shows ≥1 `ok` row with r/df/CI; the provenance
+footer shows the fingerprint + library versions. Check the browser console for
+errors.
 
 - [ ] **Step 4: Update docs**
 

@@ -39,9 +39,9 @@ are not attempted. `visit` enters as a centered numeric covariate
 | Q | Model (statsmodels formula) | Primary test |
 |---|---|---|
 | Q1 Workload-level effect | `value ~ C(level, Treatment('LOW')) + visit_c`, `groups=participant` | 2-df Wald omnibus on the two level coefficients |
-| Q2 Trajectory (learning/fatigue) | `value ~ visit_c + C(level, Treatment('LOW')) + visit_c:C(level, Treatment('LOW'))`, `groups=participant` | `visit_c` slope (primary); interaction reported as secondary |
+| Q2 Trajectory (learning/fatigue) | **Additive** `value ~ visit_c + C(level, Treatment('LOW'))`, `groups=participant` — under treatment coding with an interaction present, `visit_c` would be the LOW-only slope; the additive model makes it the level-adjusted **common** slope, i.e. the average trajectory | `visit_c` slope (primary); a second, exploratory fit adds `visit_c:C(level)` and reports the interaction terms (do slopes differ by level?) |
 | Q3 Within-subject coupling | Canonical **rmcorr** (Bakdash & Marusich 2017): ANCOVA `y ~ x + C(participant)`; r from the x coefficient's partial SS, **df = N − k − 1** (N pairs, k participants) | rmcorr r |
-| Q4 Drift in DEPDF params | Per parameter θ ∈ {g0, p0, tau0}: `θ ~ visit_c`, `groups=participant` | `visit_c` slope |
+| Q4 Drift in DEPDF params | Per parameter θ ∈ {g0, p0, tau0}: `θ ~ visit_c`, `groups=participant` | `visit_c` slope. **Caveat carried in the artifact:** p0 is a near-boundary [0,1] probability; a linear-LMM slope on it is descriptive only and will often be `not_estimable` |
 
 - Fitting: REML for estimates; the Q1 omnibus uses a Wald chi-square on the
   REML fit (small-sample caveat stated in the artifact's `caveats` list).
