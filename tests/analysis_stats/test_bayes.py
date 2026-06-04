@@ -5,7 +5,9 @@ import json
 
 import pytest
 
-from matb_integration.analysis.stats.bayes import BAYES_VERSION, run_bayes
+pytest.importorskip("pymc")  # Phase-3B-only dependency (webui/backend/requirements.txt)
+
+from matb_integration.analysis.stats.bayes import BAYES_VERSION, run_bayes  # noqa: E402
 
 from .conftest import simulate_metric_rows
 

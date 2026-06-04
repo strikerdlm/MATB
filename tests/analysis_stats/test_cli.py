@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from matb_integration.analysis.stats.cli import main
 
 
@@ -20,6 +22,7 @@ def test_cli_run_writes_artifact(tmp_path, sim_study, sim_fits):
 
 
 def test_cli_bayes_writes_artifact(tmp_path, sim_study, sim_fits):
+    pytest.importorskip("pymc")  # Phase-3B-only dependency
     m = tmp_path / "metrics.json"
     f = tmp_path / "fits.json"
     out = tmp_path / "bayes.json"
