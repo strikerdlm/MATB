@@ -70,6 +70,27 @@ def test_tracking_rms_normalized():
     assert score_tracking(sparse)["valid"] is False  # 50% < 80% of expected
 
 
+def test_nback_gap_derived_from_timestamps_when_present():
+    # SOA nominal 2500 ms; trial 2 shown 2900 ms after trial 1 -> drift 400 > 250 -> gap
+    trials = [
+        {"is_target": False, "responded": False, "shown_at_ms": 0.0},
+        {"is_target": False, "responded": False, "shown_at_ms": 2500.0},
+        {"is_target": True, "responded": True, "shown_at_ms": 5400.0},
+        {"is_target": False, "responded": False, "shown_at_ms": 7900.0},
+    ]
+    out = score_nback(trials, soa_ms=2500.0)
+    assert out["n_usable"] == 3            # trial index 2 gap-flagged
+    # browser flag is ignored when timestamps are present
+    flagged = [dict(t, gap=True) for t in trials]
+    assert score_nback(flagged, soa_ms=2500.0)["n_usable"] == 3
+
+
+def test_nback_falls_back_to_browser_gap_flag():
+    trials = [{"is_target": False, "responded": False, "gap": i == 1}
+              for i in range(4)]
+    assert score_nback(trials)["n_usable"] == 3
+
+
 def test_score_screen_assembles_all_subtests():
     payload = {
         "simple_rt": {"trials": _rt_trials([300] * 30)},
