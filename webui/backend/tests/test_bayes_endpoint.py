@@ -4,7 +4,9 @@ from __future__ import annotations
 import time
 
 
-def _wait_done(client, timeout_s: float = 180.0  # first pymc import may hit a cold pytensor compile-lock under load) -> dict:
+# The worker's first `import pymc` may hit a cold/contended pytensor
+# compile-lock under load — hence the generous poll timeout.
+def _wait_done(client, timeout_s: float = 180.0) -> dict:
     body = None
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
