@@ -85,12 +85,14 @@ export function SimpleRT({
     const isi = isis[idx] ?? 1500;
     timeoutRef.current = setTimeout(() => {
       timeoutRef.current = null;
-      phaseRef.current = "stimulus";
       setShowStimulus(true);
-      // Capture onset after paint.
+      // Capture onset after paint. The acceptance gate (phaseRef) opens HERE,
+      // together with the onset timestamp — never before it, so a sub-frame
+      // keydown is still classified as an anticipation (rt_ms: 0, discarded).
       rafRef.current = requestAnimationFrame(() => {
         rafRef.current = null;
         shownAtRef.current = performance.now();
+        phaseRef.current = "stimulus";
         // Arm the no-response timeout from the measured onset.
         timeoutRef.current = setTimeout(() => {
           timeoutRef.current = null;

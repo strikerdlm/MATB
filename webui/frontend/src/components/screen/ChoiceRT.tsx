@@ -85,12 +85,15 @@ export function ChoiceRT({
     timeoutRef.current = setTimeout(() => {
       timeoutRef.current = null;
       const side = sides[idx];
-      phaseRef.current = "stimulus";
       sideRef.current = side;
       setShownSide(side);
+      // Acceptance gate opens with the measured onset (see SimpleRT) — a
+      // sub-frame keydown is ignored by the phase guard instead of computing
+      // an RT against a stale onset.
       rafRef.current = requestAnimationFrame(() => {
         rafRef.current = null;
         shownAtRef.current = performance.now();
+        phaseRef.current = "stimulus";
         timeoutRef.current = setTimeout(() => {
           timeoutRef.current = null;
           if (resolvedRef.current) return;
