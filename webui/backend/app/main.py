@@ -25,7 +25,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.routers import analysis, fits, ingest, metrics, participants, tracker  # noqa: E402
+from app.routers import analysis, fits, ingest, metrics, participants, screen, tracker  # noqa: E402
 
 app.include_router(participants.router)
 app.include_router(ingest.router)
@@ -33,6 +33,7 @@ app.include_router(tracker.router)
 app.include_router(metrics.router)
 app.include_router(fits.router)
 app.include_router(analysis.router)
+app.include_router(screen.router)
 
 
 @app.get("/health")
