@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createParticipant, getTracker, ingestCsv, IngestError, getMetricsLong, getFits, runAnalysis, getLatestAnalysis } from "@/lib/api";
+import { createParticipant, getTracker, ingestCsv, IngestError, getMetricsLong, getFits, runAnalysis, getLatestAnalysis, runBayes, getBayesStatus } from "@/lib/api";
 
 beforeEach(() => { vi.restoreAllMocks(); });
 
@@ -84,5 +84,19 @@ describe("api client", () => {
   it("getLatestAnalysis returns null on 404", async () => {
     global.fetch = mockFetch(404, { detail: "no analysis has been run yet" });
     expect(await getLatestAnalysis()).toBeNull();
+  });
+
+  it("runBayes POSTs /analysis/bayes/run", async () => {
+    global.fetch = mockFetch(202, { job_id: 1, status: "queued", cached: false });
+    const job = await runBayes();
+    expect(job.status).toBe("queued");
+    const [url, init] = (global.fetch as any).mock.calls[0];
+    expect(url).toContain("/analysis/bayes/run");
+    expect(init.method).toBe("POST");
+  });
+
+  it("getBayesStatus returns null on 404", async () => {
+    global.fetch = mockFetch(404, { detail: "no Bayesian job yet" });
+    expect(await getBayesStatus()).toBeNull();
   });
 });
