@@ -24,7 +24,11 @@ def _score_payload(payload: dict[str, Any]) -> dict[str, Any]:
     missing = required - set(payload)
     if missing:
         raise HTTPException(status_code=422, detail=f"payload missing: {sorted(missing)}")
-    return score_screen(payload)
+    try:
+        return score_screen(payload)
+    except (KeyError, TypeError, AttributeError, ValueError) as exc:
+        raise HTTPException(status_code=422,
+                            detail=f"malformed screen payload: {exc}") from exc
 
 
 @router.post("/screen", status_code=201)

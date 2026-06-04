@@ -63,3 +63,16 @@ def test_screen_summary_gate_status(client):
     assert s["n_screened"] == 3 and s["hcf_active"] is True
     by_pid = {e["participant_id"]: e for e in s["screens"]}
     assert by_pid["P01"]["hcf_value"] > 1.0 > by_pid["P03"]["hcf_value"]
+
+
+def test_screen_malformed_payload_422_not_500(client):
+    _enroll(client, "P01")
+    bad = _payload()
+    bad["nback"]["trials"] = [{"responded": True}]   # missing is_target
+    r = client.post("/screen", json={"participant_id": "P01", "payload": bad})
+    assert r.status_code == 422
+    assert "malformed" in r.json()["detail"]
+    bad2 = _payload()
+    bad2["simple_rt"] = {"trials": None}             # trials not a list
+    r2 = client.post("/screen", json={"participant_id": "P01", "payload": bad2})
+    assert r2.status_code == 422
