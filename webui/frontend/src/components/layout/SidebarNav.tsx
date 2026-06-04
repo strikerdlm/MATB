@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, Users, Upload, BarChart3, FlaskConical } from "lucide-react";
+import { LayoutGrid, Users, Upload, BarChart3, FlaskConical, Brain } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ITEMS = [
@@ -11,6 +11,7 @@ const ITEMS = [
   { href: "/upload", label: "Upload", icon: Upload, enabled: true },
   { href: "/visualization", label: "Visualization", icon: BarChart3, enabled: true },
   { href: "/analysis", label: "Analysis", icon: FlaskConical, enabled: true },
+  { href: "/screen", label: "Screen", icon: Brain, enabled: true },
 ];
 
 export function SidebarNav() {
