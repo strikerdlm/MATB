@@ -23,9 +23,9 @@ All notable changes to the MATB military aviation research platform.
   - First-class result statuses: `ok | insufficient_data | not_estimable` with
     pre-registered data gates.
   - Effect sizes: raw + 95% CI + standardized by √(re_var + resid_var).
-  - Full provenance: input fingerprint (sha256 of sorted metric rows), library
+  - Full provenance: input fingerprint (sha256 of sorted metric and fit rows), library
     versions, engine version 1.0.0.
-  - rmANOVA complete-case sensitivity for every Q1/Q2 outcome.
+  - rmANOVA complete-case sensitivity for the three confirmatory metrics.
 - CLI: `python3 -m matb_integration.analysis.stats.cli run --metrics-json m.json
   --fits-json f.json -o artifact.json` — accepts the JSON bodies of
   `GET /metrics/long` and `GET /fits`; writes a reproducible provenance-stamped
