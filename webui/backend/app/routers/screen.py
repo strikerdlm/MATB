@@ -26,7 +26,7 @@ def _score_payload(payload: dict[str, Any]) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail=f"payload missing: {sorted(missing)}")
     try:
         return score_screen(payload)
-    except (KeyError, TypeError, AttributeError, ValueError) as exc:
+    except (KeyError, IndexError, TypeError, AttributeError, ValueError) as exc:
         raise HTTPException(status_code=422,
                             detail=f"malformed screen payload: {exc}") from exc
 

@@ -68,6 +68,7 @@ export interface FitRow {
   p0: number;
   tau0: number;
   hcf_source: string;
+  hcf_value: number;
   mwl_source: string;
   curve: CurvePoint[];
 }
