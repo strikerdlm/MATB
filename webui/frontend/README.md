@@ -40,7 +40,13 @@ npm run build     # production build
   (duplicate / filled-cell / validation).
 - **Visualization** (`/visualization`) — Trajectories / Levels / DEPDF / Group tabs
   with PNG export on every chart (descriptive only; inferential stats are Phase 3).
-- **Analysis** — Phase 3 placeholder.
+- **Analysis** (`/analysis`) — run the frequentist statistics engine via a
+  single button; displays a confirmatory family table (p, p-FDR, survives) for
+  the 6-test BH-FDR family; Q1 (MixedLM workload effects) and Q2 (visit
+  trajectory) cards with `ok` / `insufficient_data` / `not_estimable` status
+  badges and pairwise contrast tables; Q3 repeated-measures correlation table;
+  Q4 DEPDF parameter drift cards; rmANOVA complete-case sensitivity lines; and a
+  provenance footer (input fingerprint, engine version, library versions, caveats).
 
 ## Design system
 

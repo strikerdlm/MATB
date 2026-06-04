@@ -15,11 +15,7 @@ from app.models import Block, Visit
 router = APIRouter(tags=["metrics"])
 
 
-@router.get("/metrics/long")
-def metrics_long(
-    participant_id: str | None = Query(None),
-    session: Session = Depends(get_session),
-) -> list[dict[str, Any]]:
+def collect_metric_rows(session: Session, participant_id: str | None = None) -> list[dict[str, Any]]:
     query = select(Block, Visit).where(Block.visit_id == Visit.id)
     if participant_id is not None:
         query = query.where(Visit.participant_id == participant_id)
@@ -35,3 +31,11 @@ def metrics_long(
                 "value": value,
             })
     return rows
+
+
+@router.get("/metrics/long")
+def metrics_long(
+    participant_id: str | None = Query(None),
+    session: Session = Depends(get_session),
+) -> list[dict[str, Any]]:
+    return collect_metric_rows(session, participant_id)

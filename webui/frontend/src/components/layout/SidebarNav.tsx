@@ -10,7 +10,7 @@ const ITEMS = [
   { href: "/participants", label: "Participants", icon: Users, enabled: true },
   { href: "/upload", label: "Upload", icon: Upload, enabled: true },
   { href: "/visualization", label: "Visualization", icon: BarChart3, enabled: true },
-  { href: "/analysis", label: "Analysis", icon: FlaskConical, enabled: false },
+  { href: "/analysis", label: "Analysis", icon: FlaskConical, enabled: true },
 ];
 
 export function SidebarNav() {

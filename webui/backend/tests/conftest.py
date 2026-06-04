@@ -53,3 +53,20 @@ def sample_csv_bytes():
         lines.append("10.0,performance,sysmon,signal_detection,HIT")
         return ("\n".join(lines) + "\n").encode("utf-8")
     return _build
+
+
+@pytest.fixture
+def ingest_one_block(client, sample_csv_bytes):
+    def _ingest(participant_id="P01", visit_ordinal=1, workload_level="LOW"):
+        client.post("/participants",
+                    json={"id": participant_id, "enrollment_date": "2026-06-01"})
+        r = client.post(
+            "/ingest",
+            data={"participant_id": participant_id,
+                  "visit_ordinal": str(visit_ordinal),
+                  "workload_level": workload_level},
+            files={"file": ("run.csv", sample_csv_bytes(), "text/csv")},
+        )
+        assert r.status_code == 201, r.text
+        return r
+    return _ingest

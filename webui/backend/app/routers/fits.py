@@ -17,6 +17,15 @@ N_CURVE_POINTS = 51
 R_MAX = 3.0  # Suhir: effects saturate beyond G/G0 ~ 3
 
 
+def collect_fit_rows(session: Session) -> list[dict[str, Any]]:
+    query = select(DepdfFit, Visit).where(DepdfFit.visit_id == Visit.id)
+    return [
+        {"participant_id": fit.participant_id, "visit_ordinal": visit.visit_ordinal,
+         "g0": fit.g0, "p0": fit.p0, "tau0": fit.tau0}
+        for fit, visit in session.exec(query).all()
+    ]
+
+
 def _curve(p0: float) -> list[dict[str, float]]:
     from matb_integration.suhir.depdf import p_nonfailure_ordinary
 

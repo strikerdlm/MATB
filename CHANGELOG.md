@@ -2,6 +2,53 @@
 
 All notable changes to the MATB military aviation research platform.
 
+## [Unreleased] — 2026-06-04
+
+### Phase 3A — frequentist statistics engine
+
+#### Added
+- `matb_integration/analysis/stats/` — standalone frequentist library (pandas +
+  statsmodels + scipy; no web imports). Implements four pre-specified research
+  questions:
+  - **Q1** workload-level effects: MixedLM with random intercepts per participant,
+    2-df Wald omnibus, Holm-corrected pairwise contrasts gated on BH-FDR
+    (q = .05) over the 6-test confirmatory family ({SYSMON d′, raw TLX, Bedford}
+    × {Q1 omnibus, Q2 slope}).
+  - **Q2** visit trajectories: additive MixedLM (level-adjusted common slope as
+    primary; interaction model fit exploratory).
+  - **Q3** repeated-measures correlation: Bakdash & Marusich (2017) ANCOVA
+    rmcorr implementation, validated to 1e-9 against the published Bland-Altman
+    oracle; level-adjusted sensitivity included.
+  - **Q4** DEPDF parameter drift: g0/p0/tau0 ~ visit LMM.
+  - First-class result statuses: `ok | insufficient_data | not_estimable` with
+    pre-registered data gates.
+  - Effect sizes: raw + 95% CI + standardized by √(re_var + resid_var).
+  - Full provenance: input fingerprint (sha256 of sorted metric and fit rows), library
+    versions, engine version 1.0.0.
+  - rmANOVA complete-case sensitivity for the three confirmatory metrics.
+- CLI: `python3 -m matb_integration.analysis.stats.cli run --metrics-json m.json
+  --fits-json f.json -o artifact.json` — accepts the JSON bodies of
+  `GET /metrics/long` and `GET /fits`; writes a reproducible provenance-stamped
+  JSON artifact for manuscript supplementary material.
+- Backend: `POST /analysis/run` — collects rows from the DB, fingerprints input,
+  runs the stats engine, caches result per (fingerprint, engine_version) in the
+  new `analysis_result` table, returns the artifact with a `cached` flag.
+  `GET /analysis/latest` — returns the most recent cached artifact; 404 when
+  none exists.
+- Frontend: `/analysis` screen — run button; confirmatory family table (p, p-FDR,
+  survives); Q1 and Q2 LMM cards with status badges and pairwise contrast tables;
+  Q3 rmcorr table; Q4 drift cards; rmANOVA sensitivity lines; provenance footer
+  with library versions and pre-registration caveats. Sidebar item enabled.
+- Tests: 36 library tests (`tests/analysis_stats/`; pandas 2.x and 3.x), 31
+  backend tests, 19 frontend tests.
+- Live end-to-end verified 2026-06-04: 8 participants × 2 visits × 3 levels =
+  48 CSVs ingested over HTTP with a gate-crossing synthetic cohort; CLI artifact
+  fingerprint matched the backend run exactly.
+
+> Phase 3B (async Bayesian PyMC sensitivity) is pending — not marked done.
+
+---
+
 ## [Unreleased] — 2026-05-03
 
 ### Smoke test — headless Xvfb, low_workload.txt, 95s run (session 27)

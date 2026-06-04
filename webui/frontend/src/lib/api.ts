@@ -1,5 +1,5 @@
 import type {
-  BlockDetail, FitRow, IngestResult, MetricRow, Participant, ParticipantCreate, TrackerCell, Visit,
+  AnalysisArtifact, BlockDetail, FitRow, IngestResult, MetricRow, Participant, ParticipantCreate, TrackerCell, Visit,
 } from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -94,6 +94,19 @@ export async function getMetricsLong(participantId?: string): Promise<MetricRow[
 export async function getFits(participantId?: string): Promise<FitRow[]> {
   const q = participantId ? `?${new URLSearchParams({ participant_id: participantId })}` : "";
   const res = await fetch(`${API_BASE}/fits${q}`, { method: "GET" });
+  if (!res.ok) throw new ApiError(res.status, await detail(res));
+  return res.json();
+}
+
+export async function runAnalysis(): Promise<AnalysisArtifact> {
+  const res = await fetch(`${API_BASE}/analysis/run`, { method: "POST" });
+  if (!res.ok) throw new ApiError(res.status, await detail(res));
+  return res.json();
+}
+
+export async function getLatestAnalysis(): Promise<AnalysisArtifact | null> {
+  const res = await fetch(`${API_BASE}/analysis/latest`, { method: "GET" });
+  if (res.status === 404) return null;
   if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();
 }

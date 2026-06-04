@@ -71,3 +71,90 @@ export interface FitRow {
   mwl_source: string;
   curve: CurvePoint[];
 }
+
+// --- Phase 3A analysis artifact (matches matb_integration.analysis.stats) ---
+
+export type AnalysisStatus = "ok" | "insufficient_data" | "not_estimable";
+
+export interface CoefRow {
+  name: string;
+  coef: number;
+  ci95: [number, number];
+  p: number;
+  std_effect: number;
+  standardizer: string;
+  p_holm?: number;
+  reject_holm?: boolean;
+}
+
+export interface LmmResult {
+  status: AnalysisStatus;
+  detail?: string;
+  formula?: string;
+  n_obs?: number;
+  n_participants?: number;
+  re_var?: number;
+  resid_var?: number;
+  omnibus?: { statistic: number; df: number; p: number; test: string };
+  coefs?: CoefRow[];
+  interactions?: CoefRow[];
+  contrasts?: CoefRow[] | null;
+  exploratory?: boolean;
+}
+
+export interface RmcorrResult {
+  status: AnalysisStatus;
+  detail?: string;
+  r?: number;
+  dof?: number;
+  p?: number;
+  ci95?: [number, number];
+  n_pairs?: number;
+  n_participants?: number;
+  method?: string;
+}
+
+export interface FamilyTest {
+  metric: string;
+  test: "Q1_omnibus" | "Q2_visit_slope";
+  p: number | null;
+  p_fdr: number | null;
+  reject: boolean | null;
+}
+
+export interface RmanovaResult {
+  status: AnalysisStatus;
+  detail?: string;
+  F?: number;
+  df?: [number, number];
+  p?: number;
+  partial_eta_sq?: number;
+  complete_case_n?: number;
+  note?: string;
+}
+
+export interface AnalysisArtifact {
+  cached: boolean;
+  engine_version: string;
+  spec: string;
+  provenance: {
+    fingerprint: string;
+    n_metric_rows: number;
+    n_fit_rows: number;
+    n_participants: number;
+    libraries: Record<string, string>;
+    created_utc: string | null;
+  };
+  confirmatory: {
+    family_size_planned: number;
+    family_size_actual: number;
+    fdr_q: number;
+    tests: FamilyTest[];
+  };
+  q1: Record<string, LmmResult>;
+  q2: Record<string, LmmResult>;
+  q3: { x: string; y: string; canonical: RmcorrResult; sensitivity?: RmcorrResult }[];
+  q4: Record<string, LmmResult>;
+  rmanova: Record<string, RmanovaResult>;
+  caveats: string[];
+}
