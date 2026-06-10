@@ -4,7 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { FlaskConical } from "lucide-react";
 
 import { StatBadge } from "@/components/analysis/StatBadge";
+import { ScientificChart } from "@/components/charts/EChart";
 import { getBayesStatus, runBayes } from "@/lib/api";
+import { buildBayesForestOption } from "@/lib/figures";
 import { fmtNum } from "@/lib/format";
 import type { BayesJob, BayesModelResult } from "@/types";
 
@@ -69,6 +71,14 @@ const METRIC_LABELS: Record<string, string> = {
   bedford: "Bedford",
   g0: "G₀", p0: "P₀", tau0: "τ₀",
 };
+
+function hasBayesRows(section: Record<string, BayesModelResult>, names: string[]): boolean {
+  return Object.values(section).some((result) => (
+    result.status === "ok" &&
+    result.coefs &&
+    names.some((name) => result.coefs?.[name])
+  ));
+}
 
 export function BayesSection() {
   const [job, setJob] = useState<BayesJob | null>(null);
@@ -156,6 +166,26 @@ export function BayesSection() {
 
       {art && (
         <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {hasBayesRows(art.q2, ["b_visit", "b_med", "b_high"]) && (
+              <ScientificChart
+                figureId="Bayesian Q2"
+                exportName={`bayes-q2-${art.provenance.fingerprint.slice(0, 12)}`}
+                option={buildBayesForestOption(art, "q2")}
+                height={420}
+                caption="Bayesian sensitivity estimates for Q2. Points show posterior means; intervals show 95% equal-tailed intervals."
+              />
+            )}
+            {hasBayesRows(art.q4, ["b_visit"]) && (
+              <ScientificChart
+                figureId="Bayesian Q4"
+                exportName={`bayes-q4-${art.provenance.fingerprint.slice(0, 12)}`}
+                option={buildBayesForestOption(art, "q4")}
+                height={360}
+                caption="Bayesian sensitivity estimates for exploratory DEPDF parameter drift. Points show posterior means; intervals show 95% equal-tailed intervals."
+              />
+            )}
+          </div>
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             {Object.entries(art.q2).map(([m, r]) => (
               <BayesCard key={m} title={`Q2 · ${METRIC_LABELS[m] ?? m}`} result={r} />

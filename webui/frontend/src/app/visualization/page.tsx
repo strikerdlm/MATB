@@ -34,17 +34,37 @@ export default function VisualizationPage() {
   const trajectory = useMemo(() => trajectorySeries(rows, pid, metric), [rows, pid, metric]);
   const group = useMemo(() => groupOverview(rows, metric), [rows, metric]);
   const participantFits = useMemo(() => fits.filter((f) => f.participant_id === pid), [fits, pid]);
+  const participantRows = useMemo(() => rows.filter((r) => r.participant_id === pid), [rows, pid]);
   const hasData = rows.length > 0;
 
   return (
     <div className="space-y-6">
-      <header>
-        <h2 className="text-xl font-semibold tracking-tight">Visualization</h2>
-        <p className="text-sm text-muted-foreground">Descriptive views. Inferential statistics arrive with the Analysis module (Phase 3).</p>
+      <header className="flex flex-col gap-3 border-b border-border pb-5 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">MATB figure studio</p>
+          <h2 className="mt-1 text-2xl font-semibold tracking-tight">Visualization</h2>
+          <p className="text-sm text-muted-foreground">
+            Participant trajectories, cohort intervals, and DEPDF model figures.
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-right text-xs">
+          <div className="rounded-md border border-border bg-card px-3 py-2">
+            <p className="text-muted-foreground">Participants</p>
+            <p className="text-lg font-semibold text-foreground">{participants.length}</p>
+          </div>
+          <div className="rounded-md border border-border bg-card px-3 py-2">
+            <p className="text-muted-foreground">Rows</p>
+            <p className="text-lg font-semibold text-foreground">{rows.length}</p>
+          </div>
+          <div className="rounded-md border border-border bg-card px-3 py-2">
+            <p className="text-muted-foreground">Fits</p>
+            <p className="text-lg font-semibold text-foreground">{fits.length}</p>
+          </div>
+        </div>
       </header>
       {error && <p className="text-sm text-danger">{error}</p>}
 
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3 rounded-md border border-border bg-card p-3">
         <label className="flex items-center gap-2 text-sm">
           Participant
           <select className={SELECT_CLS} value={pid} onChange={(e) => setPid(e.target.value)}>
@@ -60,20 +80,34 @@ export default function VisualizationPage() {
       </div>
 
       {!hasData ? (
-        <p className="text-sm text-muted-foreground">No data yet — ingest sessions first.</p>
+        <p className="rounded-md border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+          No data yet. Ingest sessions first.
+        </p>
       ) : (
         <Tabs defaultValue="trajectories">
           <TabsList>
-            <TabsTrigger value="trajectories">Trajectories</TabsTrigger>
-            <TabsTrigger value="levels">Levels</TabsTrigger>
+            <TabsTrigger value="trajectories">Participant</TabsTrigger>
+            <TabsTrigger value="levels">Workload</TabsTrigger>
             <TabsTrigger value="depdf">DEPDF</TabsTrigger>
-            <TabsTrigger value="group">Group</TabsTrigger>
+            <TabsTrigger value="group">Cohort</TabsTrigger>
           </TabsList>
           <TabsContent value="trajectories" className="pt-4">
-            <TrajectoryChart data={trajectory} metric={metric} />
+            {participantRows.length ? (
+              <TrajectoryChart data={trajectory} metric={metric} />
+            ) : (
+              <p className="rounded-md border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+                No rows for this participant and metric.
+              </p>
+            )}
           </TabsContent>
           <TabsContent value="levels" className="pt-4">
-            <LevelBarsChart data={trajectory} metric={metric} />
+            {participantRows.length ? (
+              <LevelBarsChart data={trajectory} metric={metric} />
+            ) : (
+              <p className="rounded-md border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+                No rows for this participant and metric.
+              </p>
+            )}
           </TabsContent>
           <TabsContent value="depdf" className="pt-4">
             <DepdfPanel fits={participantFits} />

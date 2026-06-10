@@ -1,24 +1,18 @@
 "use client";
 
-import { EChart, LEVEL_COLORS, AXIS_STYLE } from "@/components/charts/EChart";
-import { METRICS, type Trajectory } from "@/lib/viz";
-import { LEVELS } from "@/lib/tracker";
+import { ScientificChart } from "@/components/charts/EChart";
+import { buildTrajectoryOption } from "@/lib/figures";
+import { type Trajectory } from "@/lib/viz";
 
 export function TrajectoryChart({ data, metric, kind = "line" }: {
   data: Trajectory; metric: string; kind?: "line" | "bar";
 }) {
-  const meta = METRICS[metric];
-  const option = {
-    xAxis: { type: "category", data: data.visits.map((v) => `Visit ${v}`), ...AXIS_STYLE },
-    yAxis: { type: "value", name: meta?.unit ?? "", ...AXIS_STYLE },
-    series: LEVELS.map((level) => ({
-      name: level,
-      type: kind,
-      data: data.series[level],
-      connectNulls: false,
-      color: LEVEL_COLORS[level],
-      symbolSize: 7,
-    })),
-  };
-  return <EChart option={option} />;
+  return (
+    <ScientificChart
+      figureId={kind === "bar" ? "Participant Workload Profile" : "Participant Trajectory"}
+      exportName={`${metric}-${kind === "bar" ? "workload-profile" : "participant-trajectory"}`}
+      option={buildTrajectoryOption(data, metric, kind)}
+      caption="Per-participant observed metric values across the six planned visits, stratified by MATB workload level."
+    />
+  );
 }
