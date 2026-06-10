@@ -118,14 +118,61 @@ Fits the baseline parameters G₀ / P₀ / τ₀ from the three graded-workload
 time-to-failure series and writes a parameters JSON. See
 [`matb_integration/suhir/README.md`](matb_integration/suhir/README.md).
 
-### 6. Run the research console backend (PR #6)
+### 6. Run the research console app (backend + frontend)
+
+The research console is a FastAPI backend on `http://localhost:8000` plus a
+Next.js frontend on `http://localhost:3100`. Use Python 3.12: `pymc>=6` is part
+of the backend requirements and does not install on Python 3.11.
 
 ```bash
-python3 -m venv ~/.venvs/matb-webui
-~/.venvs/matb-webui/bin/pip install -r webui/backend/requirements.txt
-cd webui/backend
-~/.venvs/matb-webui/bin/uvicorn app.main:app --reload --port 8000
+# Ubuntu / macOS
+conda create -n matb -c conda-forge python=3.12 pip -y
+conda activate matb
+python -m pip install -r requirements.txt -r openmatb/requirements.txt -r webui/backend/requirements.txt
+
+cd webui/frontend
+npm ci
+cd ../..
 ```
+
+```powershell
+# Windows PowerShell
+conda create -n matb -c conda-forge python=3.12 pip -y
+conda activate matb
+conda env config vars set PYTHONNOUSERSITE=1
+python -m pip install -r requirements.txt -r openmatb\requirements.txt -r webui\backend\requirements.txt
+
+cd webui\frontend
+npm ci
+cd ..\..
+```
+
+Start the backend and frontend in two terminals:
+
+```bash
+# Terminal 1: Ubuntu / macOS backend
+conda activate matb
+cd webui/backend
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+
+# Terminal 2: Ubuntu / macOS frontend
+cd webui/frontend
+NEXT_PUBLIC_API_URL=http://localhost:8000 npm run dev
+```
+
+```powershell
+# Terminal 1: Windows backend
+conda activate matb
+.\webui\backend\run_backend.ps1
+
+# Terminal 2: Windows frontend
+.\webui\frontend\run_frontend.ps1
+```
+
+Then open `http://localhost:3100`. For a fresh database the tracker page should
+load with "No participants enrolled yet." The backend health check is
+`http://localhost:8000/health`, and the live data endpoints include
+`http://localhost:8000/tracker`.
 
 Endpoints: `GET /health`; `POST /participants`, `GET /participants`,
 `GET /participants/{id}/visits`; `POST /ingest` (multipart upload of a session
@@ -181,13 +228,16 @@ Use `?fast=1` query parameter for a reduced-trial dev/e2e run (same scoring logi
 
 ```bash
 # bridge + protocol + suhir + sagat + screen library tests:
-python3 -m pytest tests/ -v   # 241 collected (237 pass, 4 skip)
+conda activate matb
+python -m pytest tests/ -v   # 241 collected (237 pass, 4 skip)
 
 # research-console backend tests (includes provenance/export + screen/HCF tests):
-cd webui/backend && ~/.venvs/matb-webui/bin/python -m pytest -q   # 46 collected
+cd webui/backend && python -m pytest -q   # 46 collected
 
 # frontend tests:
-cd webui/frontend && npm test -- --run   # 36 pass
+cd ../frontend && npm test -- --run   # 36 pass
+npm run typecheck
+npm run build
 ```
 
 ---

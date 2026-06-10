@@ -3,6 +3,7 @@
 *.db-journal
 *.db-wal
 *.db-shm
+*.log
 
 # Python caches / venv
 __pycache__/
