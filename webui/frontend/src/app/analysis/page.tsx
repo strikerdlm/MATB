@@ -6,7 +6,9 @@ import { Download, Play } from "lucide-react";
 import { BayesSection } from "@/components/analysis/BayesSection";
 import { FamilyTable } from "@/components/analysis/FamilyTable";
 import { LmmCard } from "@/components/analysis/LmmCard";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { RmcorrTable } from "@/components/analysis/RmcorrTable";
+import { Button } from "@/components/ui/button";
 import { ScientificChart } from "@/components/charts/EChart";
 import { downloadResearchBundle, getResearchContext, runAnalysis } from "@/lib/api";
 import { buildLmmForestOption, buildRmcorrForestOption, lmmIntervalRows } from "@/lib/figures";
@@ -27,7 +29,7 @@ const Q4_LABELS: Record<string, string> = {
 
 function FigureEmptyState({ label }: { label: string }) {
   return (
-    <div className="flex min-h-[220px] items-center justify-center rounded-md border border-dashed border-border bg-card/60 px-4 text-center text-sm text-muted-foreground">
+    <div className="flex min-h-[220px] items-center justify-center rounded-[6px] border border-dashed border-white/15 bg-card/60 px-4 text-center text-sm text-muted-foreground">
       {label}
     </div>
   );
@@ -103,43 +105,41 @@ export default function AnalysisPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Statistical analysis</h2>
-          <p className="text-sm text-muted-foreground">
-            Pre-specified engine (Q1–Q4) — LMM, rmcorr, rmANOVA sensitivity, BH-FDR.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      <PageHeader
+        kicker="Analysis engine"
+        title="Statistical Analysis"
+        description="Pre-specified Q1-Q4 pipeline: LMM, rmcorr, rmANOVA sensitivity, and BH-FDR."
+        actions={
+          <>
           {artifact && (
-            <button
+            <Button
+              variant="outline"
               onClick={onExportBundle}
               disabled={exporting}
-              className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-accent disabled:opacity-50"
             >
               <Download className="h-4 w-4" />
-              {exporting ? "Exporting…" : "Research bundle"}
-            </button>
+              {exporting ? "Exporting..." : "Research bundle"}
+            </Button>
           )}
-          <button
+          <Button
             onClick={onRun}
             disabled={running}
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             <Play className="h-4 w-4" />
-            {running ? "Running…" : "Run analysis"}
-          </button>
-        </div>
-      </div>
+            {running ? "Running..." : "Run analysis"}
+          </Button>
+          </>
+        }
+      />
 
       {error && (
-        <p className="rounded-md border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-400">
+        <p className="rounded-[4px] border border-danger/40 bg-danger/10 px-4 py-2 text-sm text-danger">
           {error}
         </p>
       )}
 
       {!artifact && !error && (
-        <div className="flex h-48 items-center justify-center rounded-lg border border-dashed border-border">
+        <div className="flex h-48 items-center justify-center rounded-[6px] border border-dashed border-white/15">
           <p className="text-muted-foreground">No analysis yet — ingest data, then run.</p>
         </div>
       )}
@@ -148,19 +148,19 @@ export default function AnalysisPage() {
         <div className="space-y-8">
           <section className="space-y-4">
             <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-              <div className="rounded-md border border-border bg-card p-4">
+              <div className="metric-tile p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Participants</p>
                 <p className="mt-1 text-2xl font-semibold">{artifact.provenance.n_participants}</p>
               </div>
-              <div className="rounded-md border border-border bg-card p-4">
+              <div className="metric-tile p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Metric rows</p>
                 <p className="mt-1 text-2xl font-semibold">{artifact.provenance.n_metric_rows}</p>
               </div>
-              <div className="rounded-md border border-border bg-card p-4">
+              <div className="metric-tile p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">DEPDF fits</p>
                 <p className="mt-1 text-2xl font-semibold">{artifact.provenance.n_fit_rows}</p>
               </div>
-              <div className="rounded-md border border-border bg-card p-4">
+              <div className="metric-tile p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">FDR family</p>
                 <p className="mt-1 text-2xl font-semibold">
                   {artifact.confirmatory.family_size_actual}/{artifact.confirmatory.family_size_planned}
@@ -262,7 +262,7 @@ export default function AnalysisPage() {
 
           <BayesSection />
 
-          <footer className="space-y-1 rounded-lg border border-border p-4 text-xs text-muted-foreground">
+          <footer className="mission-panel space-y-1 p-4 text-xs text-muted-foreground">
             <p>
               Engine v{artifact.engine_version} · fingerprint{" "}
               <span className="font-mono">{artifact.provenance.fingerprint.slice(0, 12)}…</span> ·{" "}

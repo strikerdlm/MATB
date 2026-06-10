@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getFits, getMetricsLong, listParticipants } from "@/lib/api";
 import { METRICS, groupOverview, trajectorySeries } from "@/lib/viz";
@@ -10,7 +11,7 @@ import { DepdfPanel } from "@/components/charts/DepdfPanel";
 import { GroupChart } from "@/components/charts/GroupChart";
 import type { FitRow, MetricRow, Participant } from "@/types";
 
-const SELECT_CLS = "flex h-10 rounded-md border border-input bg-background px-3 text-sm";
+const SELECT_CLS = "native-select min-w-[12rem]";
 
 export default function VisualizationPage() {
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -39,40 +40,27 @@ export default function VisualizationPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-3 border-b border-border pb-5 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">MATB figure studio</p>
-          <h2 className="mt-1 text-2xl font-semibold tracking-tight">Visualization</h2>
-          <p className="text-sm text-muted-foreground">
-            Participant trajectories, cohort intervals, and DEPDF model figures.
-          </p>
-        </div>
-        <div className="grid grid-cols-3 gap-2 text-right text-xs">
-          <div className="rounded-md border border-border bg-card px-3 py-2">
-            <p className="text-muted-foreground">Participants</p>
-            <p className="text-lg font-semibold text-foreground">{participants.length}</p>
-          </div>
-          <div className="rounded-md border border-border bg-card px-3 py-2">
-            <p className="text-muted-foreground">Rows</p>
-            <p className="text-lg font-semibold text-foreground">{rows.length}</p>
-          </div>
-          <div className="rounded-md border border-border bg-card px-3 py-2">
-            <p className="text-muted-foreground">Fits</p>
-            <p className="text-lg font-semibold text-foreground">{fits.length}</p>
-          </div>
-        </div>
-      </header>
-      {error && <p className="text-sm text-danger">{error}</p>}
+      <PageHeader
+        kicker="Figure studio"
+        title="Visualization"
+        description="Participant trajectories, cohort intervals, and DEPDF model figures."
+        stats={[
+          { label: "Crew", value: participants.length },
+          { label: "Rows", value: rows.length },
+          { label: "Fits", value: fits.length },
+        ]}
+      />
+      {error && <p className="rounded-[4px] border border-danger/40 bg-danger/10 px-4 py-2 text-sm text-danger">{error}</p>}
 
-      <div className="flex flex-wrap gap-3 rounded-md border border-border bg-card p-3">
-        <label className="flex items-center gap-2 text-sm">
-          Participant
+      <div className="control-surface flex flex-wrap gap-3">
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Participant</span>
           <select className={SELECT_CLS} value={pid} onChange={(e) => setPid(e.target.value)}>
             {participants.map((p) => <option key={p.id} value={p.id}>{p.id}</option>)}
           </select>
         </label>
-        <label className="flex items-center gap-2 text-sm">
-          Metric
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Metric</span>
           <select className={SELECT_CLS} value={metric} onChange={(e) => setMetric(e.target.value)}>
             {Object.entries(METRICS).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
           </select>
@@ -80,7 +68,7 @@ export default function VisualizationPage() {
       </div>
 
       {!hasData ? (
-        <p className="rounded-md border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+        <p className="rounded-[6px] border border-dashed border-white/15 px-4 py-8 text-center text-sm text-muted-foreground">
           No data yet. Ingest sessions first.
         </p>
       ) : (
@@ -95,7 +83,7 @@ export default function VisualizationPage() {
             {participantRows.length ? (
               <TrajectoryChart data={trajectory} metric={metric} />
             ) : (
-              <p className="rounded-md border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+              <p className="rounded-[6px] border border-dashed border-white/15 px-4 py-8 text-center text-sm text-muted-foreground">
                 No rows for this participant and metric.
               </p>
             )}
@@ -104,7 +92,7 @@ export default function VisualizationPage() {
             {participantRows.length ? (
               <LevelBarsChart data={trajectory} metric={metric} />
             ) : (
-              <p className="rounded-md border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+              <p className="rounded-[6px] border border-dashed border-white/15 px-4 py-8 text-center text-sm text-muted-foreground">
                 No rows for this participant and metric.
               </p>
             )}

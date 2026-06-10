@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useConsole } from "@/lib/store";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { UploadForm } from "@/components/upload/UploadForm";
 
 export default function UploadPage() {
@@ -10,10 +11,16 @@ export default function UploadPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h2 className="text-xl font-semibold tracking-tight">Ingest a session</h2>
-        <p className="text-sm text-muted-foreground">Upload an OpenMATB CSV and tag it to a participant / visit / level.</p>
-      </header>
+      <PageHeader
+        kicker="Data uplink"
+        title="Ingest Session"
+        description="Attach an OpenMATB block to crew, visit, and workload metadata."
+        stats={[
+          { label: "Crew", value: participants.length },
+          { label: "Visits", value: "01-06" },
+          { label: "Format", value: "CSV" },
+        ]}
+      />
       <UploadForm participants={participants} onIngested={() => void refreshTracker()} />
     </div>
   );

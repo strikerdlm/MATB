@@ -8,14 +8,14 @@ const TEST_LABEL: Record<string, string> = {
 
 export function FamilyTable({ confirmatory }: { confirmatory: AnalysisArtifact["confirmatory"] }) {
   return (
-    <div className="rounded-lg border border-border">
-      <div className="border-b border-border px-4 py-2 text-sm text-muted-foreground">
-        Confirmatory family — BH-FDR at q = {confirmatory.fdr_q} over{" "}
+    <div className="data-table-wrap overflow-x-auto">
+      <div className="border-b border-white/10 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+        Confirmatory family - BH-FDR at q = {confirmatory.fdr_q} over{" "}
         {confirmatory.family_size_actual}/{confirmatory.family_size_planned} planned tests
       </div>
-      <table className="w-full text-sm">
+      <table className="data-table">
         <thead>
-          <tr className="text-left text-muted-foreground">
+          <tr>
             <th className="px-4 py-2">Metric</th>
             <th className="px-4 py-2">Test</th>
             <th className="px-4 py-2">p</th>
@@ -25,7 +25,7 @@ export function FamilyTable({ confirmatory }: { confirmatory: AnalysisArtifact["
         </thead>
         <tbody>
           {confirmatory.tests.map((t) => (
-            <tr key={`${t.metric}-${t.test}`} className="border-t border-border/50">
+            <tr key={`${t.metric}-${t.test}`}>
               <td className="px-4 py-2 font-mono text-xs">{t.metric}</td>
               <td className="px-4 py-2">{TEST_LABEL[t.test] ?? t.test}</td>
               <td className="px-4 py-2">{fmtP(t.p)}</td>

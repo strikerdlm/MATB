@@ -8,17 +8,17 @@ export function ParticipantTable({ participants, tracker }: { participants: Part
   const doneById = new Map(rows.map((r) => [r.participantId, `${r.filled}/${r.total}`]));
 
   if (participants.length === 0)
-    return <p className="text-sm text-muted-foreground">No participants yet. Add one to generate its 6 visits.</p>;
+    return <p className="rounded-[6px] border border-dashed border-white/15 px-4 py-8 text-center text-sm text-muted-foreground">No participants yet. Add one to generate its 6 visits.</p>;
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border">
-      <table className="w-full text-sm">
-        <thead className="bg-card text-left text-xs uppercase tracking-wide text-muted-foreground">
+    <div className="data-table-wrap overflow-x-auto">
+      <table className="data-table">
+        <thead>
           <tr><th className="px-4 py-2">ID</th><th className="px-4 py-2">Enrolled</th><th className="px-4 py-2">Sex</th><th className="px-4 py-2">Age band</th><th className="px-4 py-2 text-right">Cells done</th></tr>
         </thead>
         <tbody>
           {participants.map((p) => (
-            <tr key={p.id} className="border-t border-border">
+            <tr key={p.id}>
               <td className="px-4 py-2 font-mono">{p.id}</td>
               <td className="px-4 py-2">{p.enrollment_date}</td>
               <td className="px-4 py-2">{p.sex || "—"}</td>

@@ -69,6 +69,7 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["Aptos", "IBM Plex Sans", "Segoe UI", "sans-serif"],
+        display: ["Bahnschrift", "DIN Condensed", "Aptos Display", "Segoe UI", "sans-serif"],
         serif: ["Charter", "Iowan Old Style", "Palatino Linotype", "Georgia", "serif"],
         mono: ["JetBrains Mono", "IBM Plex Mono", "monospace"],
       },
@@ -76,6 +77,8 @@ const config: Config = {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "fade-in": "fade-in 0.3s ease-out",
+        "telemetry-in": "telemetry-in 0.55s cubic-bezier(0.16, 1, 0.3, 1)",
+        "signal-sweep": "signal-sweep 3.2s linear infinite",
         "slide-in-right": "slide-in-right 0.3s ease-out",
         "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
       },
@@ -91,6 +94,14 @@ const config: Config = {
         "fade-in": {
           from: { opacity: "0" },
           to: { opacity: "1" },
+        },
+        "telemetry-in": {
+          from: { opacity: "0", transform: "translateY(12px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "signal-sweep": {
+          from: { transform: "translateX(-100%)" },
+          to: { transform: "translateX(100%)" },
         },
         "slide-in-right": {
           from: { transform: "translateX(100%)", opacity: "0" },

@@ -38,7 +38,7 @@ export function AddParticipantDialog({ onCreated }: { onCreated: () => void }) {
           <div><Label htmlFor="page">Age band (optional)</Label><Input id="page" value={ageBand} onChange={(e) => setAgeBand(e.target.value)} /></div>
           {err && <p className="text-sm text-danger">{err}</p>}
           <Button onClick={submit} disabled={busy || !id || !date} className="w-full">
-            {busy ? "Saving…" : "Create (generates 6 visits)"}
+            {busy ? "Saving..." : "Create (generates 6 visits)"}
           </Button>
         </div>
       </DialogContent>

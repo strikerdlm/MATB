@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { ingestCsv, IngestError } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import type { Participant } from "@/types";
 
 const LEVELS = ["LOW", "MEDIUM", "HIGH"] as const;
@@ -46,7 +47,11 @@ export function UploadForm({ participants, onIngested }: { participants: Partici
   }
 
   return (
-    <div className="max-w-lg space-y-4 rounded-lg border border-border p-5">
+    <div className="control-surface max-w-3xl space-y-5">
+      <div className="grid gap-1 border-b border-white/10 pb-4">
+        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Session package</p>
+        <p className="text-sm text-muted-foreground">Bind the CSV payload to one planned cell.</p>
+      </div>
       <div>
         <Label htmlFor="csv">Session CSV</Label>
         <Input id="csv" type="file" accept=".csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
@@ -63,8 +68,8 @@ export function UploadForm({ participants, onIngested }: { participants: Partici
       <div>
         <Label htmlFor="up-pid">Participant</Label>
         <select id="up-pid" value={pid} onChange={(e) => setPid(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
-          <option value="">Select…</option>
+                className="native-select w-full">
+          <option value="">Select...</option>
           {participants.map((p) => <option key={p.id} value={p.id}>{p.id}</option>)}
         </select>
       </div>
@@ -72,14 +77,14 @@ export function UploadForm({ participants, onIngested }: { participants: Partici
         <div className="flex-1">
           <Label htmlFor="up-visit">Visit</Label>
           <select id="up-visit" value={ordinal} onChange={(e) => setOrdinal(Number(e.target.value))}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                  className="native-select w-full">
             {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>Visit {n}</option>)}
           </select>
         </div>
         <div className="flex-1">
           <Label htmlFor="up-level">Level</Label>
           <select id="up-level" value={level} onChange={(e) => setLevel(e.target.value as (typeof LEVELS)[number])}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                  className="native-select w-full">
             {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
           </select>
         </div>
@@ -89,10 +94,15 @@ export function UploadForm({ participants, onIngested }: { participants: Partici
         <Label htmlFor="ow">Overwrite if cell already filled</Label>
       </div>
       {result && (
-        <p className={result.kind === "ok" ? "text-sm text-success" : "text-sm text-danger"}>{result.msg}</p>
+        <p className={cn(
+          "rounded-[4px] border px-3 py-2 text-sm",
+          result.kind === "ok"
+            ? "border-success/40 bg-success/10 text-success"
+            : "border-danger/40 bg-danger/10 text-danger",
+        )}>{result.msg}</p>
       )}
       <Button onClick={submit} disabled={busy || !file || !pid} className="w-full">
-        {busy ? "Uploading…" : "Ingest session"}
+        {busy ? "Uploading..." : "Ingest session"}
       </Button>
     </div>
   );
