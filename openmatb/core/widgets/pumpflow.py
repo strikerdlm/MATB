@@ -1,0 +1,45 @@
+# Copyright 2023-2026, by Julien Cegarra & Benoît Valéry. All rights reserved.
+# Institut National Universitaire Champollion (Albi, France).
+# License : CeCILL, version 2.1 (see the LICENSE file)
+
+from __future__ import annotations
+
+from core.container import Container
+from core.widgets.abstractwidget import *
+
+
+class PumpFlow(AbstractWidget):
+    def __init__(self, name: str, container: Container, label: str, flow: int) -> None:
+        super().__init__(name, container)
+
+        self.label: str = label
+        self.flow: int = flow
+
+        # Pump label #
+        self.vertex[self.label] = Label(
+            self.pump_string(0),
+            font_size=F["SMALL"],
+            font_name=self.font_name,
+            x=self.container.l + self.container.w * 0.3,
+            y=self.container.cy,
+            anchor_x="left",
+            anchor_y="center",
+            color=C["BLACK"],
+            group=G(self.m_draw + 1),
+        )
+
+        # Pump arrow #
+        v: list[float] = self.get_triangle_vertice(h_ratio=0.25, x_ratio=-0.05, angle=3 * math.pi / 2)
+        self.add_triangles(f"{self.label}_arrow", G(self.m_draw + 2), v, C["BLACK"] * 3)
+
+    def pump_string(self, value: int) -> str:
+        return f"{self.label}\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t{value}"
+
+    def set_flow(self, flow: int) -> None:
+        if self.pump_string(flow) == self.get_flow():
+            return
+        self.vertex[self.label].text = self.pump_string(flow)
+        self.logger.record_state(self.name, self.label, flow)
+
+    def get_flow(self) -> str:
+        return self.vertex[self.label].text

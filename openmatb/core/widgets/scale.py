@@ -1,0 +1,124 @@
+# Copyright 2023-2026, by Julien Cegarra & Benoit Valery. All rights reserved.
+# Institut National Universitaire Champollion (Albi, France).
+# License : CeCILL, version 2.1 (see the LICENSE file)
+
+from __future__ import annotations
+
+from core.constants import COLORS as C
+from core.constants import FONT_SIZES as F
+from core.constants import Group as G
+from core.widgets.abstractwidget import *
+
+
+class Scale(AbstractWidget):
+    def __init__(self, name: str, container: Any, label: str, arrow_position: int = 5) -> None:
+        super().__init__(name, container)
+
+        self.background_color: tuple[int, int, int] = (255, 255, 255)
+        self.feedback_visible: bool = False
+
+        # Compute arrow positions list
+        self.positions: list[float] = [
+            self.container.b + (self.container.h / 11) * i + self.container.h / 22 for i in range(11)
+        ]
+        self.position: int = 5
+
+        # Compute vertices
+        self.vertex["label"] = Label(
+            label.upper(),
+            font_size=F["MEDIUM"],
+            x=self.container.cx,
+            font_name=self.font_name,
+            y=self.container.b - 20,
+            anchor_x="center",
+            anchor_y="center",
+            color=C["BLACK"],
+            batch=None,
+            group=G(self.m_draw + 1),
+        )
+
+        scale_vertice: tuple[float, ...] = self.vertice_border(self.container)
+        self.add_quad("background", G(self.m_draw + self.m_draw + 1), scale_vertice, (255, 255, 255, 255) * 4)
+        self.add_lines("border", G(self.m_draw + self.m_draw + 3), self.vertice_strip(scale_vertice), C["BLACK"] * 8)
+
+        # Compute widths
+        self.tick_width: float = self.container.w * 0.25
+        v: list[float] = list()
+        for i in range(11):
+            w: float = self.tick_width if i != 5 else self.tick_width + 8
+            v.extend([self.container.x2 - w, self.positions[i], self.container.x2, self.positions[i]])
+
+        self.arrow_width: float = 0.15 * self.container.w
+        self.arrow_x_offset: float = 0.22 * self.container.w  # So the arrow does not stick to
+        # the right side of the scale
+        self.feedback_height: float = 0.12 * self.container.h
+
+        self.add_lines("ticks", G(self.m_draw + 3), v, C["BLACK"] * (len(v) // 2))
+        self.add_quad("feedback", G(self.m_draw + 2), (0, 0, 0, 0, 0, 0, 0, 0), C["GREEN"] * 4)
+        self.add_triangles("arrow", G(self.m_draw + 2), self.return_arrow_vertice(arrow_position), C["BLACK"] * 3)
+
+    def return_arrow_vertice(self, position: int) -> tuple[float, ...]:
+        xo: float = self.arrow_x_offset
+        aw: float = self.arrow_width
+        return (
+            self.container.x2 - self.tick_width - xo,
+            self.positions[position],
+            self.container.x2 - self.tick_width - (xo + aw),
+            self.positions[position] - aw / 2,
+            self.container.x2 - self.tick_width - (xo + aw),
+            self.positions[position] + aw / 2,
+        )
+
+    def set_feedback_visibility(self, visible: bool) -> None:
+        if visible == self.feedback_visible:
+            return
+        self.feedback_visible = visible
+        h: float = self.feedback_height
+        v: tuple[float, ...] = (
+            (
+                self.container.x1,
+                self.container.y2 + h,
+                self.container.x2,
+                self.container.y2 + h,
+                self.container.x2,
+                self.container.y2,
+                self.container.x1,
+                self.container.y2,
+            )
+            if visible
+            else (0, 0) * 4
+        )
+        self.on_batch["feedback"].position[:] = v
+        self.logger.record_state(self.name, "feedback_visible", visible)
+
+    def is_feedback_visible(self) -> bool:
+        return self.feedback_visible is True
+
+    def set_feedback_color(self, color: tuple[int, ...]) -> None:
+        if color == self.get_feedback_color():
+            return
+        self.on_batch["feedback"].colors[:] = color * 4
+        self.logger.record_state(self.name, "feedback_color", color)
+
+    def get_feedback_color(self) -> tuple[int, ...]:
+        return self.get_vertex_color("feedback")
+
+    def set_arrow_position(self, position: int) -> None:
+        if position == self.get_arrow_position():
+            return
+        self.position = position
+        self.on_batch["arrow"].position[:] = self.return_arrow_vertice(self.position)
+        self.logger.record_state(self.name, "arrow", self.position)
+
+    def get_arrow_position(self) -> int:
+        return self.position
+
+    def set_label(self, label: str) -> None:
+        label_to_upper: str = label.upper()
+        if label == self.get_label():
+            return
+        self.vertex["label"].text = label_to_upper
+        self.logger.record_state(self.name, "label", label_to_upper)
+
+    def get_label(self) -> str:
+        return self.vertex["label"].text

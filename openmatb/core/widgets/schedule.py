@@ -1,0 +1,104 @@
+# Copyright 2023-2026, by Julien Cegarra & Benoit Valery. All rights reserved.
+# Institut National Universitaire Champollion (Albi, France).
+# License : CeCILL, version 2.1 (see the LICENSE file)
+
+from __future__ import annotations
+
+from core.widgets.abstractwidget import *
+
+
+class Schedule(AbstractWidget):
+    def __init__(self, name: str, container: Any, label: str) -> None:
+        super().__init__(name, container)
+
+        self.line_radius: int = int(self.container.h / 200)
+        self.bound_radius: int = int(self.container.h / 70)
+        self.box_radius: float = self.bound_radius * 1.5
+
+        self.vertex["letter"] = Label(
+            label[0].upper(),
+            font_size=F["MEDIUM"],
+            font_name=self.font_name,
+            x=self.container.cx,
+            y=self.container.y2 - 15,
+            anchor_x="center",
+            anchor_y="top",
+            color=C["BLACK"],
+            group=G(1),
+        )
+
+        v: list[float] = [self.container.cx, self.container.y1, self.container.cx, self.container.y2]
+        self.add_lines("line", G(self.m_draw + 1), v, C["GREY"] * 2)
+
+        self.add_quad(
+            "top_bound",
+            G(self.m_draw + 3),
+            (
+                self.container.cx - self.bound_radius,
+                self.container.y1 + self.bound_radius * 2,
+                self.container.cx + self.bound_radius,
+                self.container.y1 + self.bound_radius * 2,
+                self.container.cx + self.bound_radius,
+                self.container.y1,
+                self.container.cx - self.bound_radius,
+                self.container.y1,
+            ),
+            C["GREY"] * 4,
+        )
+
+        self.add_quad(
+            "bottom_bound",
+            G(self.m_draw + 3),
+            (
+                self.container.cx - self.bound_radius,
+                self.container.y2 - self.bound_radius * 2,
+                self.container.cx + self.bound_radius,
+                self.container.y2 - self.bound_radius * 2,
+                self.container.cx + self.bound_radius,
+                self.container.y2,
+                self.container.cx - self.bound_radius,
+                self.container.y2,
+            ),
+            C["GREY"] * 4,
+        )
+
+        for g, t in enumerate(["running", "manual"]):
+            self.add_quad(t, G(self.m_draw + g + 2), (0, 0) * 4, C["GREY"] * 4)
+
+    def set_top_bound_color(self, bound_color: tuple[int, ...]) -> None:
+        if bound_color == self.get_vertex_color("top_bound"):
+            return
+        self.on_batch["top_bound"].colors[:] = bound_color * 4
+        self.logger.record_state(self.name, "top_bound_color", bound_color)
+
+    def sec_to_y(self, sec: float, max_sec: float) -> float:
+        return self.container.y1 - (sec / max_sec * (self.container.y1 - self.container.y2))
+
+    def map_segment(
+        self, time_mode: str, rel_plan: list[tuple[float, float]], max_sec: float, color: tuple[int, ...]
+    ) -> None:
+        v: list[float] = list()
+        for segment_sec in rel_plan:
+            x_radius: float | int = self.line_radius if time_mode == "running" else self.box_radius
+            start, end = segment_sec
+            y1: float = self.sec_to_y(start, max_sec)
+            y2: float = self.sec_to_y(end, max_sec)
+            v.extend(
+                [
+                    self.container.cx - x_radius,
+                    y1,
+                    self.container.cx + x_radius,
+                    y1,
+                    self.container.cx + x_radius,
+                    y2,
+                    self.container.cx - x_radius,
+                    y2,
+                ]
+            )
+            self.resize_quad(time_mode, len(v) // 2)
+            self.on_batch[time_mode].position[:] = v
+            self.on_batch[time_mode].colors[:] = list(color) * (len(v) // 2)
+
+    def update(self) -> None:
+        if self.visible:
+            self.change_top_bound_color()
