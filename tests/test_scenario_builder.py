@@ -265,7 +265,7 @@ def test_build_block_scenario_with_sagat_emits_two_lines_per_freeze(tmp_path):
     from aircraft_monitor.research.protocol import WorkloadLevel
 
     repo_root = Path(__file__).resolve().parents[1]
-    sagat_bank = repo_root / "openmatb" / "includes" / "questionnaires" / "sagat_generic_en.txt"
+    sagat_bank = repo_root / "matb_integration" / "questionnaires" / "sagat_generic_en.txt"
 
     text = build_block_scenario(
         level=WorkloadLevel.LOW,

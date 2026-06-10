@@ -1,6 +1,6 @@
 # 🛩️ MATB — Military Aviation Research Platform
 
-A Python research platform for **multi-attribute task battery (MATB)** human-factors studies in military aviation. It pairs a vendored **OpenMATB** task engine (the four canonical MATB tasks + workload/SA instruments) with a Python bridge that builds counterbalanced scenarios, converts session logs into analysis-ready metrics, and applies a probabilistic mission-outcome model. A FastAPI research console for longitudinal data collection and analysis is in active development.
+A Python research platform for **multi-attribute task battery (MATB)** human-factors studies in military aviation. It builds OpenMATB-compatible counterbalanced scenarios, converts session logs into analysis-ready metrics, and applies a probabilistic mission-outcome model. A FastAPI research console for longitudinal data collection and analysis is in active development.
 
 > **Author:** Dr. Diego Malpica, MD — Aerospace Medicine, Colombian Aerospace Force (FAC).
 > Research targets: *Aerospace Medicine and Human Performance*, *Human Factors*, *Frontiers in Neuroergonomics*.
@@ -9,7 +9,7 @@ A Python research platform for **multi-attribute task battery (MATB)** human-fac
 
 ## What this is (and what it is not)
 
-This repository has evolved from a terminal aircraft-monitoring demo into a research platform built around **OpenMATB**. The active research surface is OpenMATB + the `matb_integration` bridge, **not** the original Rich dashboard (which is retained as a legacy/secondary tool — see [Legacy dashboard](#legacy-aircraft-monitoring-dashboard)).
+This repository has evolved from a terminal aircraft-monitoring demo into an OpenMATB-compatible research platform. The active research surface is the `matb_integration` bridge plus the research console, **not** the original Rich dashboard (which is retained as a legacy/secondary tool — see [Legacy dashboard](#legacy-aircraft-monitoring-dashboard)). The OpenMATB task runner is no longer vendored here; use a separate working OpenMATB checkout/install when collecting operator-in-the-loop sessions.
 
 It is a **research instrument**, not a clinical or certified safety tool. Statistical and modelling outputs use comparative, evidence-based framing (effect sizes, confidence/credible intervals).
 
@@ -19,14 +19,12 @@ It is a **research instrument**, not a clinical or certified safety tool. Statis
 
 ```
 MATB/
-├── openmatb/                 # Vendored OpenMATB v1.4.x submodule — the task engine
-│                             #   (SYSMON, TRACK, COMM, RESMAN + ISA / NASA-TLX / Bedford / SAGAT)
 ├── matb_integration/         # Python bridge layer (no OpenMATB install needed to use it)
 │   ├── scenario_builder.py   #   ResearchProtocol → OpenMATB .txt; Latin-square counterbalancing
 │   ├── scenario_manifest.py  #   Deterministic scenario provenance + CSV validation helpers
 │   ├── log_converter.py      #   OpenMATB CSV → structured JSONL metrics (d′, TLX, Bedford, ISA, SAGAT)
 │   ├── suhir/                #   Suhir (2018) DEPDF probabilistic mission-outcome model  [PR #5]
-│   ├── questionnaires/       #   EN/ES NASA-TLX, ISA, Bedford scale assets
+│   ├── questionnaires/       #   EN/ES NASA-TLX, ISA, Bedford, SAGAT assets
 │   └── analysis/             #   descriptive analysis helpers
 ├── webui/                    # MATB Research Console (FastAPI backend + Next.js UI)  [PR #6]
 │   ├── backend/              #   ingestion + tracker + provenance + exports + auto DEPDF fit
@@ -40,7 +38,7 @@ MATB/
 
 | Component | Role | Status |
 |---|---|---|
-| `openmatb/` submodule | The MATB task runner (operator-in-the-loop) | Built; 3 Diego-authored headless fixes; Xvfb smoke-verified |
+| External OpenMATB runtime | Operator-in-the-loop MATB task runner | Not vendored; broken `openmatb @ 2d9e20a` submodule removed after the GitHub source resolved 404 |
 | `matb_integration/scenario_builder.py` | Generate counterbalanced LOW/MED/HIGH scenarios + adjacent manifests | Built, tested |
 | `matb_integration/scenario_manifest.py` | Scenario provenance hashing + CSV validation against expected probes/questionnaires | Built, tested |
 | `matb_integration/log_converter.py` | CSV → JSONL metrics (SDT d′, TLX, Bedford, ISA, SAGAT) | Built, tested |
@@ -50,21 +48,25 @@ MATB/
 | `matb_integration/analysis/stats/` | Frequentist + Bayesian statistics engines (MixedLM, rmcorr, DEPDF drift; PyMC NUTS hierarchical re-fits) | **Phase 3 — done (3A + 3B)** |
 | `aircraft_monitor/` | Legacy Rich dashboard | Retained, not the active surface |
 
-**Data flow:** OpenMATB session → CSV logs → `log_converter` → JSONL metrics → (`suhir` DEPDF fit) → analysis / research console.
+**Data flow:** external OpenMATB session → CSV logs → `log_converter` → JSONL metrics → (`suhir` DEPDF fit) → analysis / research console.
 
 ---
 
 ## Step-by-step: how to run it
 
-### 1. Install (engine + assets)
+### 1. Install repository dependencies
 
 ```bash
-git clone --recurse-submodules https://github.com/strikerdlm/MATB
+git clone https://github.com/strikerdlm/MATB
 cd MATB
 bash setup.sh
 ```
 
-`setup.sh` initialises the `openmatb` submodule, creates a venv at `openmatb/.venv`, installs engine deps (pyglet, pylsl, rstr, rich, pydantic, pytest), and copies the military-aviation questionnaires + scenarios into `openmatb/includes/`.
+`setup.sh` creates a repository virtual environment at `.venv` and installs local dependencies. The task runner is external. If you have a local OpenMATB checkout/install, copy this repo's scenarios and questionnaires into it with:
+
+```bash
+OPENMATB_DIR=/path/to/openmatb python3 install_to_openmatb.py
+```
 
 ### 2. Build counterbalanced scenarios (optional — pre-baked ones ship in `scenarios/`)
 
@@ -85,19 +87,20 @@ block order is a Latin-square permutation (`block_order_for_participant`).
 
 ```bash
 # Linux / headless (CI, servers):
+OPENMATB_DIR=/path/to/openmatb
+python3 install_to_openmatb.py "$OPENMATB_DIR"
 Xvfb :100 -screen 0 1920x1080x24 &
-cd openmatb && DISPLAY=:100 .venv/bin/python main.py
+cd "$OPENMATB_DIR" && DISPLAY=:100 python main.py
 
-# Windows:   cd openmatb && .venv/Scripts/python main.py
-# macOS:     cd openmatb && .venv/bin/python main.py
+# Windows/macOS: cd "$OPENMATB_DIR" && python main.py
 ```
 
-OpenMATB writes a timestamped session CSV under `openmatb/sessions/`.
+OpenMATB writes a timestamped session CSV under `$OPENMATB_DIR/sessions/`.
 
 ### 4. Convert a session CSV to metrics
 
 ```bash
-python3 -m matb_integration.log_converter openmatb/sessions/<run>.csv \
+python3 -m matb_integration.log_converter "$OPENMATB_DIR/sessions/<run>.csv" \
   --participant P01 --level LOW --block low_workload \
   -o exports/P01_low.jsonl
 ```
@@ -244,7 +247,7 @@ npm run build
 
 ## Capabilities (current)
 
-- **Four canonical MATB tasks** via OpenMATB: system monitoring (SYSMON), tracking (TRACK), communications (COMM), resource management (RESMAN), with operator input and per-task logging.
+- **OpenMATB-compatible four-task workflow:** generated scenarios target system monitoring (SYSMON), tracking (TRACK), communications (COMM), and resource management (RESMAN), with operator input and per-task logging handled by an external task runner.
 - **Graded mental-workload blocks** (LOW/MEDIUM/HIGH) calibrated to the Pontiggia et al. (2024) event-rate range, generated and per-participant counterbalanced.
 - **Workload & SA instruments:** instantaneous ISA (1–10), post-block NASA-TLX (6 subscales) and Bedford (1–10), and SAGAT freeze-probe situational-awareness capture. Spanish questionnaire assets included (NASA-TLX Spanish is psychometrically validated; ISA/Bedford Spanish are functional-equivalence translations — see `docs/research/scales/scale_validation_es.md`).
 - **Analysis-ready metrics:** signal-detection d′ (log-linear correction), reaction times, hit/miss/false-alarm counts, TLX subscales, Bedford, ISA series, SAGAT accuracy — all as structured JSONL.
@@ -259,6 +262,7 @@ npm run build
 ## Latest developments
 
 - **Suhir DEPDF mission-outcome layer** (`matb_integration/suhir/`, PR #5): turns the platform into a calibration rig for Ephraim Suhir's *Human-in-the-Loop* (2018) probabilistic model — the graded LOW/MED/HIGH scenarios serve as the elevated-workload levels his FOAT calibration requires. Design + plan in `docs/superpowers/specs/` and `docs/superpowers/plans/`.
+- **Removed broken OpenMATB submodule** (`openmatb @ 2d9e20a`): the vendored gitlink pointed to a GitHub source that now returns 404, so the submodule and `.gitmodules` were deleted. SAGAT probe banks now live in `matb_integration/questionnaires/`; `install_to_openmatb.py` copies repo-owned assets into a separate OpenMATB checkout/install when one is available.
 - **MATB Research Console — backend** (`webui/backend/`, PR #6): FastAPI + SQLModel (SQLite) console for the planned longitudinal study (**12 participants × 6 visits × 3 workload levels**, every 3 days over 15 days). Ingests OpenMATB CSVs (reusing `matb_integration` as a library — no metric logic duplicated), tracks completeness, and auto-fits the DEPDF per visit.
 - **Scenario provenance + research bundles** (`matb_integration/scenario_manifest.py`, `webui/backend/app/routers/exports.py`): scenario generation now writes adjacent deterministic manifests; ingestion stores per-block manifest hashes and validation issues; tracker/block views expose validation summaries; `/exports/research-context` and `/exports/research-bundle` assemble analysis-ready JSON, caveats, scenario manifests, and frontend figure option JSON into a reproducible ZIP.
 - **Headless frontend QA + responsive shell** (`webui/frontend/src/components/layout/`): browser-verified on a headless server at `127.0.0.1:3100` with the backend at `127.0.0.1:8000`; CORS now allows both `localhost` and `127.0.0.1` dev origins, the app includes an icon route, Analysis avoids expected 404 noise on empty datasets, and the mobile shell stacks the nav above content instead of forcing horizontal page overflow.
@@ -269,7 +273,7 @@ npm run build
 
 ### Readiness
 
-- **Pilot an OpenMATB session with d′ + NASA-TLX/Bedford/ISA + Latin-square counterbalancing:** ready (verified headless via Xvfb; no real-participant data collected yet).
+- **Pilot an OpenMATB session with d′ + NASA-TLX/Bedford/ISA + Latin-square counterbalancing:** ready when pointed at a working external OpenMATB install; no real-participant data collected yet.
 - **DEPDF analysis + research-console ingestion/tracking:** built and tested (in open PRs).
 - **Inferential statistics (Phase 3 — complete):** frequentist (Phase 3A) and Bayesian sensitivity (Phase 3B) both built and live end-to-end verified; CLI artifacts match backend runs to fingerprint level.
 - **Full Q1-grade study (physiology sync + participant data):** not yet — LSL physiology integration and a real data-collection run remain.
@@ -314,7 +318,7 @@ Situation awareness is treated as a three-level construct — perception, compre
 | Phase | Goal | Status |
 |---|---|---|
 | 1 | Research instrumentation (JSONL logger, seeds, trial metadata, workload prompts) | Done |
-| — | **OpenMATB integration** (real inner loop, 4 tasks, ISA/TLX/Bedford/SAGAT, headless fixes) | **Done** |
+| — | **OpenMATB-compatible integration** (4-task scenarios, ISA/TLX/Bedford/SAGAT assets, log conversion; runtime external) | **Done for scenario/log workflow; engine not vendored** |
 | — | **Scenario builder + log converter** (counterbalancing, d′, SDT, JSONL) | **Done** |
 | — | **Suhir DEPDF mission-outcome model** | **Done (PR #5)** |
 | — | **Research console — data model + ingestion + tracker (backend)** | **Done (PR #6)** |

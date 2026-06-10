@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useConsole } from "@/lib/store";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { ParticipantTable } from "@/components/participants/ParticipantTable";
 import { AddParticipantDialog } from "@/components/participants/AddParticipantDialog";
 
@@ -11,14 +12,18 @@ export default function ParticipantsPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight">Participants</h2>
-          <p className="text-sm text-muted-foreground">Pseudonymized IDs only. Creating one generates its 6 visits.</p>
-        </div>
-        <AddParticipantDialog onCreated={() => void refreshAll()} />
-      </header>
-      {error && <p className="text-sm text-danger">{error}</p>}
+      <PageHeader
+        kicker="Crew manifest"
+        title="Participants"
+        description="Pseudonymized enrollment roster with visit-cell readiness."
+        actions={<AddParticipantDialog onCreated={() => void refreshAll()} />}
+        stats={[
+          { label: "Crew", value: participants.length },
+          { label: "Visits", value: "06" },
+          { label: "Cells", value: tracker.filter((cell) => cell.present).length },
+        ]}
+      />
+      {error && <p className="rounded-[4px] border border-danger/40 bg-danger/10 px-4 py-2 text-sm text-danger">{error}</p>}
       <ParticipantTable participants={participants} tracker={tracker} />
     </div>
   );

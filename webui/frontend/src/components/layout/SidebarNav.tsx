@@ -17,20 +17,39 @@ const ITEMS = [
 export function SidebarNav() {
   const pathname = usePathname();
   return (
-    <nav className="flex gap-1 overflow-x-auto p-3 md:flex-col md:overflow-visible">
-      {ITEMS.map(({ href, label, icon: Icon, enabled }) => {
+    <nav className="flex gap-2 overflow-x-auto p-3 md:flex-col md:overflow-visible md:p-4">
+      {ITEMS.map(({ href, label, icon: Icon, enabled }, index) => {
         const active = pathname === href;
-        const base = "flex shrink-0 items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors";
+        const base = "group flex shrink-0 items-center gap-3 rounded-[3px] border px-3 py-3 text-xs font-semibold uppercase tracking-[0.12em] transition-all";
         if (!enabled)
           return (
-            <span key={href} className={cn(base, "cursor-not-allowed text-muted-foreground/50")} title="Coming soon">
+            <span
+              key={href}
+              className={cn(base, "cursor-not-allowed border-white/5 text-muted-foreground/50")}
+              title="Coming soon"
+            >
+              <span className="font-mono text-[10px] text-muted-foreground/40">
+                {String(index + 1).padStart(2, "0")}
+              </span>
               <Icon className="h-4 w-4" /> {label}
-              <span className="ml-auto text-[10px] uppercase tracking-wide">soon</span>
+              <span className="ml-auto font-mono text-[10px] uppercase tracking-wide">soon</span>
             </span>
           );
         return (
-          <Link key={href} href={href}
-            className={cn(base, active ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-accent hover:text-accent-foreground")}>
+          <Link
+            key={href}
+            href={href}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              base,
+              active
+                ? "border-white bg-white text-black shadow-[0_0_40px_rgb(255_255_255/0.14)]"
+                : "border-white/10 text-muted-foreground hover:border-white/30 hover:bg-white/[0.04] hover:text-foreground",
+            )}
+          >
+            <span className={cn("font-mono text-[10px]", active ? "text-black/60" : "text-muted-foreground/50")}>
+              {String(index + 1).padStart(2, "0")}
+            </span>
             <Icon className="h-4 w-4" /> {label}
           </Link>
         );

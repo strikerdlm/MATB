@@ -6,7 +6,7 @@ function CoefTable({ rows, showHolm }: { rows: CoefRow[]; showHolm?: boolean }) 
   return (
     <table className="w-full text-sm">
       <thead>
-        <tr className="text-left text-muted-foreground">
+        <tr className="text-left font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
           <th className="py-1 pr-2">Term</th>
           <th className="py-1 pr-2">b</th>
           <th className="py-1 pr-2">95% CI</th>
@@ -17,7 +17,7 @@ function CoefTable({ rows, showHolm }: { rows: CoefRow[]; showHolm?: boolean }) 
       </thead>
       <tbody>
         {rows.map((c) => (
-          <tr key={c.name} className="border-t border-border/40">
+          <tr key={c.name} className="border-t border-white/10">
             <td className="py-1 pr-2 font-mono text-xs">{c.name}</td>
             <td className="py-1 pr-2">{fmtNum(c.coef)}</td>
             <td className="py-1 pr-2">{fmtCi(c.ci95)}</td>
@@ -33,12 +33,12 @@ function CoefTable({ rows, showHolm }: { rows: CoefRow[]; showHolm?: boolean }) 
 
 export function LmmCard({ title, result }: { title: string; result: LmmResult }) {
   return (
-    <div className="space-y-3 rounded-lg border border-border p-4">
+    <div className="mission-panel space-y-3 p-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium">
+        <h3 className="font-mono text-xs font-semibold uppercase tracking-[0.12em]">
           {title}
           {result.exploratory && (
-            <span className="ml-2 text-xs text-muted-foreground">(exploratory)</span>
+            <span className="ml-2 text-[10px] text-muted-foreground">(exploratory)</span>
           )}
         </h3>
         <StatBadge status={result.status} detail={result.detail} />

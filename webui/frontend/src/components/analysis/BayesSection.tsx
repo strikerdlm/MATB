@@ -5,6 +5,7 @@ import { FlaskConical } from "lucide-react";
 
 import { StatBadge } from "@/components/analysis/StatBadge";
 import { ScientificChart } from "@/components/charts/EChart";
+import { Button } from "@/components/ui/button";
 import { getBayesStatus, runBayes } from "@/lib/api";
 import { buildBayesForestOption } from "@/lib/figures";
 import { fmtNum } from "@/lib/format";
@@ -14,12 +15,12 @@ const POLL_MS = 2000;
 
 function BayesCard({ title, result }: { title: string; result: BayesModelResult }) {
   return (
-    <div className="space-y-2 rounded-lg border border-border p-4">
+    <div className="mission-panel space-y-2 p-4">
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-medium">{title}</h4>
+        <h4 className="font-mono text-xs font-semibold uppercase tracking-[0.12em]">{title}</h4>
         <div className="flex items-center gap-2">
           {result.status === "ok" && result.converged === false && (
-            <span className="rounded-full border border-red-500/30 bg-red-500/15 px-2 py-0.5 text-xs font-medium text-red-400">
+            <span className="rounded-[3px] border border-danger/40 bg-danger/10 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-danger">
               not converged
             </span>
           )}
@@ -30,7 +31,7 @@ function BayesCard({ title, result }: { title: string; result: BayesModelResult 
         <>
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-muted-foreground">
+              <tr className="text-left font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                 <th className="py-1 pr-2">Param</th>
                 <th className="py-1 pr-2">mean</th>
                 <th className="py-1 pr-2">95% ETI</th>
@@ -40,7 +41,7 @@ function BayesCard({ title, result }: { title: string; result: BayesModelResult 
             </thead>
             <tbody>
               {Object.entries(result.coefs).map(([name, c]) => (
-                <tr key={name} className="border-t border-border/40">
+                <tr key={name} className="border-t border-white/10">
                   <td className="py-1 pr-2 font-mono text-xs">{name}</td>
                   <td className="py-1 pr-2">{fmtNum(c.mean)}</td>
                   <td className="py-1 pr-2">
@@ -133,30 +134,30 @@ export function BayesSection() {
     <section className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold">
-            Bayesian sensitivity (Q2/Q4 — PyMC, async)
+          <h3 className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            Bayesian sensitivity (Q2/Q4 - PyMC, async)
           </h3>
           <p className="text-xs text-muted-foreground">
             Hierarchical NUTS re-fit with pre-specified priors; separate artifact.
           </p>
         </div>
-        <button
+        <Button
+          variant="outline"
           onClick={onRun}
           disabled={running}
-          className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-accent disabled:opacity-50"
         >
           <FlaskConical className="h-4 w-4" />
-          {running ? `Job ${job?.status}…` : "Run Bayesian sensitivity"}
-        </button>
+          {running ? `Job ${job?.status}...` : "Run Bayesian sensitivity"}
+        </Button>
       </div>
 
       {error && (
-        <p className="rounded-md border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-400">
+        <p className="rounded-[4px] border border-danger/40 bg-danger/10 px-4 py-2 text-sm text-danger">
           {error}
         </p>
       )}
       {job?.status === "failed" && (
-        <p className="rounded-md border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-400">
+        <p className="rounded-[4px] border border-danger/40 bg-danger/10 px-4 py-2 text-sm text-danger">
           Job failed: {job.error}
         </p>
       )}

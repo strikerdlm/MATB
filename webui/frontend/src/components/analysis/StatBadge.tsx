@@ -16,7 +16,7 @@ export function StatBadge({ status, detail }: { status: AnalysisStatus; detail?:
   return (
     <span
       title={detail}
-      className={cn("inline-block rounded-full border px-2 py-0.5 text-xs font-medium", STYLES[status])}
+      className={cn("inline-block rounded-[3px] border px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.12em]", STYLES[status])}
     >
       {LABELS[status]}
     </span>
