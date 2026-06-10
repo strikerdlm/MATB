@@ -1,5 +1,5 @@
 import type {
-  AnalysisArtifact, BayesJob, BlockDetail, FitRow, IngestResult, MetricRow, Participant, ParticipantCreate, ScreenIngestResult, ScreenSummary, TrackerCell, Visit,
+  AnalysisArtifact, BayesJob, BlockDetail, FigureOptionExport, FitRow, IngestResult, MetricRow, Participant, ParticipantCreate, ResearchContext, ScreenIngestResult, ScreenSummary, TrackerCell, Visit,
 } from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -59,6 +59,7 @@ export interface IngestTags {
   visit_ordinal: number;
   workload_level: "LOW" | "MEDIUM" | "HIGH";
   overwrite?: boolean;
+  manifest?: File | null;
 }
 
 export async function ingestCsv(file: File, tags: IngestTags): Promise<IngestResult> {
@@ -68,6 +69,7 @@ export async function ingestCsv(file: File, tags: IngestTags): Promise<IngestRes
   form.append("visit_ordinal", String(tags.visit_ordinal));
   form.append("workload_level", tags.workload_level);
   form.append("overwrite", String(tags.overwrite ?? false));
+  if (tags.manifest) form.append("manifest", tags.manifest);
   const res = await fetch(`${API_BASE}/ingest`, { method: "POST", body: form });
   if (!res.ok) throw new IngestError(res.status, await detail(res));
   return res.json();
@@ -141,4 +143,20 @@ export async function getScreenSummary(): Promise<ScreenSummary> {
   const res = await fetch(`${API_BASE}/screen`, { method: "GET" });
   if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();
+}
+
+export async function getResearchContext(): Promise<ResearchContext> {
+  const res = await fetch(`${API_BASE}/exports/research-context`, { method: "GET" });
+  if (!res.ok) throw new ApiError(res.status, await detail(res));
+  return res.json();
+}
+
+export async function downloadResearchBundle(figures: FigureOptionExport[]): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/exports/research-bundle`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ figures }),
+  });
+  if (!res.ok) throw new ApiError(res.status, await detail(res));
+  return res.blob();
 }

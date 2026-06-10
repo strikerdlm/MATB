@@ -27,6 +27,29 @@ export interface IngestResult {
   id: number;
   workload_level: string;
   visit_id: number;
+  validation?: ValidationSummary;
+}
+
+export interface ValidationIssue {
+  severity: "warning" | "error" | string;
+  code: string;
+  message: string;
+  expected?: unknown;
+  observed?: unknown;
+}
+
+export interface ValidationSummary {
+  status: string;
+  issue_count: number;
+  issues_preview: ValidationIssue[];
+}
+
+export interface BlockProvenance {
+  manifest_filename?: string | null;
+  manifest_hash?: string | null;
+  validation_status: string;
+  validation_issues: ValidationIssue[];
+  manifest_summary?: Record<string, unknown> | null;
 }
 
 export interface ParticipantCreate {
@@ -49,6 +72,7 @@ export interface BlockDetail {
     isa?: { mean?: number | null };
   };
   depdf_fit: { g0: number; p0: number; tau0: number; hcf_source: string; mwl_source: string } | null;
+  provenance?: BlockProvenance | null;
 }
 
 export interface MetricRow {
@@ -246,4 +270,26 @@ export interface ScreenIngestResult {
   participant_id: string;
   screen_version: number;
   scores: Record<string, SubtestScore>;
+}
+
+// --- P0 reproducibility export ---
+
+export interface FigureOptionExport {
+  name: string;
+  option: Record<string, unknown>;
+}
+
+export interface ResearchContext {
+  bundle_version: string;
+  created_utc: string;
+  participants: Participant[];
+  visits: Visit[];
+  tracker: TrackerCell[];
+  metrics_long: MetricRow[];
+  fits: FitRow[];
+  analysis_latest: AnalysisArtifact | null;
+  bayes_latest: BayesArtifact | null;
+  block_provenance: Array<BlockProvenance & { block_id: number }>;
+  validation_status_counts: Record<string, number>;
+  counts: Record<string, number>;
 }

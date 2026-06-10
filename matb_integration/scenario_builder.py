@@ -26,11 +26,12 @@ from __future__ import annotations
 import random
 import sys
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from aircraft_monitor.research.protocol import ResearchProtocol, WorkloadLevel
+from matb_integration.scenario_manifest import build_scenario_manifest, write_manifest
 from matb_integration.sagat.scenario_builder_ext import emit_freezes_for_block
 
 # ── OpenMATB sync-guard constants ─────────────────────────────────────────────
@@ -351,6 +352,84 @@ def build_block_scenario(
     return "\n".join(lines) + "\n"
 
 
+def _manifest_payload(
+    *,
+    scenario_filename: str,
+    scenario_text: str,
+    level: WorkloadLevel,
+    block_duration_sec: int,
+    seed: int,
+    isa_questionnaire: str,
+    nasatlx_questionnaire: str,
+    bedford_questionnaire: str,
+    include_nasatlx: bool,
+    include_bedford: bool,
+    participant_id: str | None = None,
+    block_num: int | None = None,
+    visit_ordinal: int | None = None,
+    sagat_manifest_path: Path | None = None,
+    sagat_n_freezes: int = 0,
+) -> dict[str, Any]:
+    sysmon_n = _sysmon_event_count(level, block_duration_sec)
+    comm_n = _comm_event_count(level, block_duration_sec)
+    isa_interval = ISA_PROBE_INTERVAL_SEC[level]
+    isa_times = [
+        isa_interval * (i + 1)
+        for i in range(block_duration_sec // isa_interval)
+        if isa_interval * (i + 1) < block_duration_sec
+    ]
+    return build_scenario_manifest(
+        scenario_filename=scenario_filename,
+        scenario_text=scenario_text,
+        workload_level=level.name,
+        seed=seed,
+        block_duration_sec=block_duration_sec,
+        participant_id=participant_id,
+        block_num=block_num,
+        visit_ordinal=visit_ordinal,
+        sagat_manifest_path=sagat_manifest_path,
+        parameters={
+            "difficulty": DIFFICULTY[level],
+            "track_target_proportion": TRACK_TARGET_PROPORTION[level],
+            "resman_loss_per_min": RESMAN_LOSS_PER_MIN[level],
+            "isa_probe_interval_sec": isa_interval,
+            "openmatb_alerttimeout_ms": OPENMATB_ALERTTIMEOUT_MS,
+            "openmatb_sysmon_lights": list(OPENMATB_SYSMON_LIGHTS),
+            "openmatb_sysmon_scales": list(OPENMATB_SYSMON_SCALES),
+        },
+        questionnaires={
+            "isa": isa_questionnaire,
+            "nasatlx": nasatlx_questionnaire,
+            "bedford": bedford_questionnaire,
+            "include_nasatlx": include_nasatlx,
+            "include_bedford": include_bedford,
+        },
+        expected={
+            "sysmon_light_events": sysmon_n,
+            "sysmon_scale_events": sysmon_n,
+            "comm_events": comm_n,
+            "task_events_total": sysmon_n * 2 + comm_n,
+            "event_rate_per_min": round((sysmon_n * 2 + comm_n) / (block_duration_sec / 60), 3),
+            "isa_probe_times_sec": isa_times,
+            "sagat_freezes": sagat_n_freezes,
+        },
+    )
+
+
+def _write_scenario_with_manifest(
+    out_path: Path,
+    scenario_text: str,
+    **manifest_kwargs: Any,
+) -> None:
+    out_path.write_text(scenario_text, encoding="utf-8")
+    manifest = _manifest_payload(
+        scenario_filename=out_path.name,
+        scenario_text=scenario_text,
+        **manifest_kwargs,
+    )
+    write_manifest(out_path.with_suffix(out_path.suffix + ".manifest.json"), manifest)
+
+
 def build_protocol_scenarios(
     protocol: ResearchProtocol,
     output_dir: Path,
@@ -369,14 +448,26 @@ def build_protocol_scenarios(
     output_dir.mkdir(parents=True, exist_ok=True)
     paths: dict[str, Path] = {}
     for i, block in enumerate(protocol.blocks):
+        seed = protocol.seed + i
         scenario_text = build_block_scenario(
             level=block.workload,
             block_duration_sec=block_duration_sec,
-            seed=protocol.seed + i,
+            seed=seed,
         )
         filename = f"{block.name}.txt"
         out_path = output_dir / filename
-        out_path.write_text(scenario_text, encoding="utf-8")
+        _write_scenario_with_manifest(
+            out_path,
+            scenario_text,
+            level=block.workload,
+            block_duration_sec=block_duration_sec,
+            seed=seed,
+            isa_questionnaire=ISA_QUESTIONNAIRE,
+            nasatlx_questionnaire=NASATLX_QUESTIONNAIRE,
+            bedford_questionnaire=BEDFORD_QUESTIONNAIRE,
+            include_nasatlx=True,
+            include_bedford=False,
+        )
         paths[block.name] = out_path
     return paths
 
@@ -411,16 +502,30 @@ def build_session_files(
     results: list[tuple[int, WorkloadLevel, Path]] = []
 
     for block_num, level in enumerate(order, start=1):
+        seed = base_seed + block_num - 1
         scenario_text = build_block_scenario(
             level=level,
             block_duration_sec=block_duration_sec,
-            seed=base_seed + block_num - 1,
+            seed=seed,
             include_nasatlx=include_nasatlx,
             include_bedford=include_bedford,
         )
         filename = f"{participant_id}_block{block_num}_{level.value.upper()}.txt"
         out_path = output_dir / filename
-        out_path.write_text(scenario_text, encoding="utf-8")
+        _write_scenario_with_manifest(
+            out_path,
+            scenario_text,
+            level=level,
+            block_duration_sec=block_duration_sec,
+            seed=seed,
+            isa_questionnaire=ISA_QUESTIONNAIRE,
+            nasatlx_questionnaire=NASATLX_QUESTIONNAIRE,
+            bedford_questionnaire=BEDFORD_QUESTIONNAIRE,
+            include_nasatlx=include_nasatlx,
+            include_bedford=include_bedford,
+            participant_id=participant_id,
+            block_num=block_num,
+        )
         results.append((block_num, level, out_path))
 
     return results
@@ -463,5 +568,16 @@ if __name__ == "__main__":
         )
         out = args.output_dir / f"{level.value}_workload.txt"
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(text, encoding="utf-8")
+        _write_scenario_with_manifest(
+            out,
+            text,
+            level=level,
+            block_duration_sec=args.block_duration,
+            seed=args.seed + i,
+            isa_questionnaire=ISA_QUESTIONNAIRE,
+            nasatlx_questionnaire=NASATLX_QUESTIONNAIRE,
+            bedford_questionnaire=BEDFORD_QUESTIONNAIRE,
+            include_nasatlx=True,
+            include_bedford=False,
+        )
         print(f"Written: {out}")

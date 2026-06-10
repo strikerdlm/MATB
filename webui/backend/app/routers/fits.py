@@ -26,21 +26,7 @@ def collect_fit_rows(session: Session) -> list[dict[str, Any]]:
     ]
 
 
-def _curve(p0: float, f_ratio: float = 1.0) -> list[dict[str, float]]:
-    from matb_integration.suhir.depdf import p_bar
-
-    points: list[dict[str, float]] = []
-    for i in range(N_CURVE_POINTS):
-        r = 1.0 + (R_MAX - 1.0) * i / (N_CURVE_POINTS - 1)
-        points.append({"r": round(r, 4), "p": p0 * p_bar(r ** 2, f_ratio ** 2)})
-    return points
-
-
-@router.get("/fits")
-def list_fits(
-    participant_id: str | None = Query(None),
-    session: Session = Depends(get_session),
-) -> list[dict[str, Any]]:
+def collect_full_fit_rows(session: Session, participant_id: str | None = None) -> list[dict[str, Any]]:
     query = select(DepdfFit, Visit).where(DepdfFit.visit_id == Visit.id)
     if participant_id is not None:
         query = query.where(DepdfFit.participant_id == participant_id)
@@ -56,3 +42,21 @@ def list_fits(
         })
     out.sort(key=lambda f: (f["participant_id"], f["visit_ordinal"]))
     return out
+
+
+def _curve(p0: float, f_ratio: float = 1.0) -> list[dict[str, float]]:
+    from matb_integration.suhir.depdf import p_bar
+
+    points: list[dict[str, float]] = []
+    for i in range(N_CURVE_POINTS):
+        r = 1.0 + (R_MAX - 1.0) * i / (N_CURVE_POINTS - 1)
+        points.append({"r": round(r, 4), "p": p0 * p_bar(r ** 2, f_ratio ** 2)})
+    return points
+
+
+@router.get("/fits")
+def list_fits(
+    participant_id: str | None = Query(None),
+    session: Session = Depends(get_session),
+) -> list[dict[str, Any]]:
+    return collect_full_fit_rows(session, participant_id)

@@ -81,7 +81,9 @@ export default function ScreenPage() {
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">Start a screen</h3>
         {unscreened.length === 0 && (
-          <p className="text-sm text-muted-foreground">All participants screened.</p>
+          <p className="text-sm text-muted-foreground">
+            {participants.length === 0 ? "No participants enrolled yet." : "All participants screened."}
+          </p>
         )}
         <div className="flex flex-wrap gap-2">
           {unscreened.map((p) => (

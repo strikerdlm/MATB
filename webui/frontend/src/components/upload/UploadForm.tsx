@@ -13,6 +13,7 @@ type Result = { kind: "ok"; msg: string } | { kind: "err"; msg: string } | null;
 
 export function UploadForm({ participants, onIngested }: { participants: Participant[]; onIngested: () => void }) {
   const [file, setFile] = useState<File | null>(null);
+  const [manifest, setManifest] = useState<File | null>(null);
   const [pid, setPid] = useState("");
   const [ordinal, setOrdinal] = useState(1);
   const [level, setLevel] = useState<(typeof LEVELS)[number]>("LOW");
@@ -24,9 +25,19 @@ export function UploadForm({ participants, onIngested }: { participants: Partici
     if (!file || !pid) return;
     setBusy(true); setResult(null);
     try {
-      const r = await ingestCsv(file, { participant_id: pid, visit_ordinal: ordinal, workload_level: level, overwrite });
-      setResult({ kind: "ok", msg: `Ingested block #${r.id} (${r.workload_level}).` });
+      const r = await ingestCsv(file, {
+        participant_id: pid,
+        visit_ordinal: ordinal,
+        workload_level: level,
+        overwrite,
+        manifest,
+      });
+      const validation = r.validation
+        ? ` Validation: ${r.validation.status}${r.validation.issue_count ? ` (${r.validation.issue_count} issue${r.validation.issue_count === 1 ? "" : "s"})` : ""}.`
+        : "";
+      setResult({ kind: "ok", msg: `Ingested block #${r.id} (${r.workload_level}).${validation}` });
       setFile(null);
+      setManifest(null);
       onIngested();
     } catch (e) {
       const msg = e instanceof IngestError ? `Rejected (${e.status}): ${e.message}` : (e as Error).message;
@@ -39,6 +50,15 @@ export function UploadForm({ participants, onIngested }: { participants: Partici
       <div>
         <Label htmlFor="csv">Session CSV</Label>
         <Input id="csv" type="file" accept=".csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+      </div>
+      <div>
+        <Label htmlFor="manifest">Scenario manifest (optional)</Label>
+        <Input
+          id="manifest"
+          type="file"
+          accept=".json,.manifest.json,application/json"
+          onChange={(e) => setManifest(e.target.files?.[0] ?? null)}
+        />
       </div>
       <div>
         <Label htmlFor="up-pid">Participant</Label>

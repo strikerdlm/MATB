@@ -20,12 +20,17 @@ app = FastAPI(title="MATB Research Console", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3100"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3100",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3100",
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-from app.routers import analysis, fits, ingest, metrics, participants, screen, tracker  # noqa: E402
+from app.routers import analysis, exports, fits, ingest, metrics, participants, screen, tracker  # noqa: E402
 
 app.include_router(participants.router)
 app.include_router(ingest.router)
@@ -34,6 +39,7 @@ app.include_router(metrics.router)
 app.include_router(fits.router)
 app.include_router(analysis.router)
 app.include_router(screen.router)
+app.include_router(exports.router)
 
 
 @app.get("/health")

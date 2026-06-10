@@ -17,10 +17,10 @@ const ITEMS = [
 export function SidebarNav() {
   const pathname = usePathname();
   return (
-    <nav className="flex flex-col gap-1 p-3">
+    <nav className="flex gap-1 overflow-x-auto p-3 md:flex-col md:overflow-visible">
       {ITEMS.map(({ href, label, icon: Icon, enabled }) => {
         const active = pathname === href;
-        const base = "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors";
+        const base = "flex shrink-0 items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors";
         if (!enabled)
           return (
             <span key={href} className={cn(base, "cursor-not-allowed text-muted-foreground/50")} title="Coming soon">

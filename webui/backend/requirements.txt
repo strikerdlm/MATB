@@ -1,9 +1,11 @@
-fastapi>=0.110
+fastapi==0.110.3
+starlette==0.37.2
+anyio==4.3.0
 sqlmodel>=0.0.16
 uvicorn[standard]>=0.29
 python-multipart>=0.0.9
 pytest>=7.4
-httpx>=0.27
+httpx==0.27.0
 
 # Required by the reused matb_integration.suhir fit path (calibration + pipeline)
 numpy>=1.26

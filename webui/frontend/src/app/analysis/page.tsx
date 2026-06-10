@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Play } from "lucide-react";
+import { Download, Play } from "lucide-react";
 
 import { BayesSection } from "@/components/analysis/BayesSection";
 import { FamilyTable } from "@/components/analysis/FamilyTable";
 import { LmmCard } from "@/components/analysis/LmmCard";
 import { RmcorrTable } from "@/components/analysis/RmcorrTable";
 import { ScientificChart } from "@/components/charts/EChart";
-import { getLatestAnalysis, runAnalysis } from "@/lib/api";
+import { downloadResearchBundle, getResearchContext, runAnalysis } from "@/lib/api";
 import { buildLmmForestOption, buildRmcorrForestOption, lmmIntervalRows } from "@/lib/figures";
-import type { AnalysisArtifact } from "@/types";
+import type { AnalysisArtifact, FigureOptionExport } from "@/types";
 
 const METRIC_LABELS: Record<string, string> = {
   sysmon_d_prime: "SYSMON d′",
@@ -48,10 +48,11 @@ function hasRmcorrRows(artifact: AnalysisArtifact): boolean {
 export default function AnalysisPage() {
   const [artifact, setArtifact] = useState<AnalysisArtifact | null>(null);
   const [running, setRunning] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getLatestAnalysis().then(setArtifact).catch((e) => setError(String(e)));
+    getResearchContext().then((ctx) => setArtifact(ctx.analysis_latest)).catch((e) => setError(String(e)));
   }, []);
 
   async function onRun() {
@@ -66,6 +67,40 @@ export default function AnalysisPage() {
     }
   }
 
+  async function onExportBundle() {
+    if (!artifact) return;
+    setExporting(true);
+    setError(null);
+    try {
+      const figures: FigureOptionExport[] = [];
+      if (lmmIntervalRows(artifact.q1, "q1").length) {
+        figures.push({ name: "q1-workload-effects", option: buildLmmForestOption(artifact.q1, "q1") });
+      }
+      if (lmmIntervalRows(artifact.q2, "q2").length) {
+        figures.push({ name: "q2-visit-slopes", option: buildLmmForestOption(artifact.q2, "q2") });
+      }
+      if (hasRmcorrRows(artifact)) {
+        figures.push({ name: "q3-rmcorr", option: buildRmcorrForestOption(artifact.q3) });
+      }
+      if (lmmIntervalRows(artifact.q4, "q4").length) {
+        figures.push({ name: "q4-depdf-drift", option: buildLmmForestOption(artifact.q4, "q4") });
+      }
+      const blob = await downloadResearchBundle(figures);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `matb_research_bundle_${artifact.provenance.fingerprint.slice(0, 12)}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -75,14 +110,26 @@ export default function AnalysisPage() {
             Pre-specified engine (Q1–Q4) — LMM, rmcorr, rmANOVA sensitivity, BH-FDR.
           </p>
         </div>
-        <button
-          onClick={onRun}
-          disabled={running}
-          className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-        >
-          <Play className="h-4 w-4" />
-          {running ? "Running…" : "Run analysis"}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {artifact && (
+            <button
+              onClick={onExportBundle}
+              disabled={exporting}
+              className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-accent disabled:opacity-50"
+            >
+              <Download className="h-4 w-4" />
+              {exporting ? "Exporting…" : "Research bundle"}
+            </button>
+          )}
+          <button
+            onClick={onRun}
+            disabled={running}
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            <Play className="h-4 w-4" />
+            {running ? "Running…" : "Run analysis"}
+          </button>
+        </div>
       </div>
 
       {error && (

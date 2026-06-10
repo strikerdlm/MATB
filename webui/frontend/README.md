@@ -37,7 +37,9 @@ npm run build     # production build
   the visit's DEPDF fit (G₀/P₀/τ₀) once all three levels are ingested.
 - **Participants** (`/participants`) — list + add (auto-generates the 6 visits).
 - **Upload** (`/upload`) — tag + ingest an OpenMATB CSV, with guard feedback
-  (duplicate / filled-cell / validation).
+  (duplicate / filled-cell / validation). Optionally attach the adjacent
+  `*.txt.manifest.json` scenario manifest so the backend can store provenance and
+  validate workload/visit tags, expected probes, and questionnaire completion.
 - **Visualization** (`/visualization`) — Trajectories / Levels / DEPDF / Group tabs
   with PNG export on every chart (descriptive only; inferential stats are Phase 3).
 - **Analysis** (`/analysis`) — run the frequentist statistics engine via a
@@ -53,6 +55,9 @@ npm run build     # production build
   summary tables showing mean, 95% ETI, R̂, and ESS per parameter for Q2 and Q4
   re-fits; red "not converged" badge when max R̂ > 1.01 or divergences detected;
   sampler settings and pinned priors provenance footnote.
+  The Research Bundle button exports a ZIP from `POST /exports/research-bundle`
+  containing backend research context, caveats, scenario-manifest provenance, and
+  the current publication-grade ECharts option JSON for the Q1-Q4 figures.
 - **Screen** (`/screen`) — baseline neurocognitive screen (Phase 10 #20). Picker
   lists unscreened participants; selecting one launches a fullscreen 4-subtest
   battery in es-CO Spanish (~10–12 min): Simple RT, Choice RT (2-choice arrows),
