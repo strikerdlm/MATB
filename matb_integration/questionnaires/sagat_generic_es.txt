@@ -1,0 +1,76 @@
+# SAGAT banco de sondas generico | idioma=es | format_version=1.0
+# 9 sondas: 3 percepcion (L1), 3 comprension (L2), 3 proyeccion (L3).
+# Traduccion de equivalencia funcional; no validada psicometricamente
+# en espanol (consultar docs/research/scales/sagat_validation.md).
+
+PROBE_ID: gen_l1_active_tasks
+SA_LEVEL: 1
+DOMAIN: perception
+QUESTION: Cuantas tareas principales requerian su atencion justo antes de la pausa?
+OPTIONS: 0 | 1 | 2 | 3 | 4
+CORRECT: 3
+TIMEOUT_SEC: 15
+
+PROBE_ID: gen_l1_track_state
+SA_LEVEL: 1
+DOMAIN: perception
+QUESTION: Donde se encontraba el cursor de seguimiento justo antes de la pausa?
+OPTIONS: dentro de la zona objetivo | fuera de la zona objetivo
+CORRECT: dentro de la zona objetivo
+TIMEOUT_SEC: 15
+
+PROBE_ID: gen_l1_radio_recent
+SA_LEVEL: 1
+DOMAIN: perception
+QUESTION: Hubo en los ultimos 20 segundos algun mensaje de radio dirigido a su indicativo?
+OPTIONS: si | no
+CORRECT: no
+TIMEOUT_SEC: 15
+
+PROBE_ID: gen_l2_demand_trend
+SA_LEVEL: 2
+DOMAIN: comprehension
+QUESTION: Como ha evolucionado la demanda global de tareas durante este bloque?
+OPTIONS: claramente disminuye | estable | claramente aumenta | mixta
+CORRECT: estable
+TIMEOUT_SEC: 15
+
+PROBE_ID: gen_l2_resman_balance
+SA_LEVEL: 2
+DOMAIN: comprehension
+QUESTION: Los tanques de gestion de recursos estan actualmente equilibrados con la demanda programada?
+OPTIONS: si, equilibrados | no, un tanque rezagado | no, ambos tanques rezagados
+CORRECT: si, equilibrados
+TIMEOUT_SEC: 15
+
+PROBE_ID: gen_l2_priority
+SA_LEVEL: 2
+DOMAIN: comprehension
+QUESTION: Que tipo de tarea le ha requerido mas respuestas activas en el ultimo minuto?
+OPTIONS: SYSMON | TRACK | RESMAN | COMMUNICATIONS
+CORRECT: SYSMON
+TIMEOUT_SEC: 15
+
+PROBE_ID: gen_l3_next_demand
+SA_LEVEL: 3
+DOMAIN: projection
+QUESTION: En los proximos 60 segundos, que tarea es mas probable que requiera su atencion primero?
+OPTIONS: SYSMON | TRACK | RESMAN | COMMUNICATIONS
+CORRECT: SYSMON
+TIMEOUT_SEC: 15
+
+PROBE_ID: gen_l3_workload_next
+SA_LEVEL: 3
+DOMAIN: projection
+QUESTION: Que anticipa para los proximos 60 segundos?
+OPTIONS: la carga disminuira | la carga sera similar | la carga aumentara
+CORRECT: la carga sera similar
+TIMEOUT_SEC: 15
+
+PROBE_ID: gen_l3_critical_event
+SA_LEVEL: 3
+DOMAIN: projection
+QUESTION: En los proximos 2 minutos, es probable que ocurra un agotamiento de recursos o una falla critica?
+OPTIONS: muy improbable | posible | probable | casi seguro
+CORRECT: muy improbable
+TIMEOUT_SEC: 15

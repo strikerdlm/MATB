@@ -335,7 +335,7 @@ TIMEOUT_SEC: 15
 def test_generic_en_bank_loads_and_is_balanced() -> None:
     """The shipped EN bank parses and has 3 probes at each SA level."""
     repo_root = Path(__file__).resolve().parents[1]
-    bank = repo_root / "openmatb" / "includes" / "questionnaires" / "sagat_generic_en.txt"
+    bank = repo_root / "matb_integration" / "questionnaires" / "sagat_generic_en.txt"
     probes = load_probes(bank)
     assert len(probes) == 9
     levels = [p.sa_level for p in probes]
@@ -349,7 +349,7 @@ def test_generic_en_bank_loads_and_is_balanced() -> None:
 
 def test_generic_es_bank_loads_with_no_se_anchor() -> None:
     repo_root = Path(__file__).resolve().parents[1]
-    bank = repo_root / "openmatb" / "includes" / "questionnaires" / "sagat_generic_es.txt"
+    bank = repo_root / "matb_integration" / "questionnaires" / "sagat_generic_es.txt"
     probes = load_probes(bank)
     assert len(probes) == 9
     # ES anchor present, EN anchor absent
@@ -360,6 +360,7 @@ def test_generic_es_bank_loads_with_no_se_anchor() -> None:
 
 def test_en_and_es_banks_share_probe_ids() -> None:
     repo_root = Path(__file__).resolve().parents[1]
-    en = load_probes(repo_root / "openmatb" / "includes" / "questionnaires" / "sagat_generic_en.txt")
-    es = load_probes(repo_root / "openmatb" / "includes" / "questionnaires" / "sagat_generic_es.txt")
+    questionnaire_dir = repo_root / "matb_integration" / "questionnaires"
+    en = load_probes(questionnaire_dir / "sagat_generic_en.txt")
+    es = load_probes(questionnaire_dir / "sagat_generic_es.txt")
     assert {p.probe_id for p in en} == {p.probe_id for p in es}

@@ -435,7 +435,7 @@ def convert_session(
         extra_metadata: Additional fields merged into the top-level output dict.
         sagat_manifest_dir: Optional directory to search for the SAGAT manifest JSON.
             When set, searched first. Falls back to csv_path.parent, then to the
-            standard openmatb/includes/questionnaires/ directory.
+            repo-owned questionnaire asset directory used by generated fixtures.
 
     Returns:
         Dict suitable for json.dumps() as one JSONL line.
@@ -468,16 +468,15 @@ def convert_session(
     # Locate optional SAGAT manifest. Search order:
     #   1. Explicit sagat_manifest_dir parameter, if given.
     #   2. csv_path.parent (e.g. when manifest is co-located with the CSV).
-    #   3. Standard openmatb questionnaires dir (the runtime default).
+    #   3. Repo-owned questionnaire assets directory (for generated fixtures).
     sagat_manifest_path: Path | None = None
     search_dirs: list[Path] = []
     if sagat_manifest_dir is not None:
         search_dirs.append(Path(sagat_manifest_dir))
     if hasattr(csv_path, "parent"):
         search_dirs.append(csv_path.parent)
-    # Standard runtime dir (relative to the MATB repo root)
     repo_root = Path(__file__).resolve().parents[1]
-    search_dirs.append(repo_root / "openmatb" / "includes" / "questionnaires")
+    search_dirs.append(repo_root / "matb_integration" / "questionnaires")
     for d in search_dirs:
         candidates = list(d.glob("*_sagat_manifest.json"))
         if candidates:

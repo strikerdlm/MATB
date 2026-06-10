@@ -21,7 +21,8 @@ from matb_integration.sagat.scenario_builder_ext import (
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-EN_BANK = REPO_ROOT / "openmatb" / "includes" / "questionnaires" / "sagat_generic_en.txt"
+QUESTIONNAIRE_DIR = REPO_ROOT / "matb_integration" / "questionnaires"
+EN_BANK = QUESTIONNAIRE_DIR / "sagat_generic_en.txt"
 
 
 def test_scheduling_is_deterministic_from_seed(tmp_path: Path) -> None:
@@ -256,7 +257,7 @@ def test_manifest_round_trip(tmp_path: Path) -> None:
 
 def test_es_bank_emits_es_freeze_files(tmp_path: Path) -> None:
     from matb_integration.sagat.probe_bank import load_probes
-    es_bank = REPO_ROOT / "openmatb" / "includes" / "questionnaires" / "sagat_generic_es.txt"
+    es_bank = QUESTIONNAIRE_DIR / "sagat_generic_es.txt"
     events = emit_freezes_for_block(
         participant_id="P03",
         block_num=1,

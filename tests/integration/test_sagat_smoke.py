@@ -25,9 +25,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-OPENMATB_DIR = REPO_ROOT / "openmatb"
-EN_BANK = OPENMATB_DIR / "includes" / "questionnaires" / "sagat_generic_en.txt"
-ES_BANK = OPENMATB_DIR / "includes" / "questionnaires" / "sagat_generic_es.txt"
+QUESTIONNAIRE_DIR = REPO_ROOT / "matb_integration" / "questionnaires"
+EN_BANK = QUESTIONNAIRE_DIR / "sagat_generic_en.txt"
+ES_BANK = QUESTIONNAIRE_DIR / "sagat_generic_es.txt"
 
 
 def _xvfb_available() -> bool:

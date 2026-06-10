@@ -257,22 +257,10 @@ def build_block_scenario(
             raise ValueError(
                 "include_sagat=True requires sagat_bank and sagat_output_dir"
             )
-        # Warn if probe files won't land in the directory the Sagat plugin
-        # searches at runtime. The plugin reads from openmatb/includes/
-        # questionnaires/ relative to OpenMATB's CWD.
-        import warnings
-        _resolved_output_dir = Path(sagat_output_dir).resolve()
-        _expected_dir = (Path(__file__).resolve().parents[1] /
-                         "openmatb" / "includes" / "questionnaires").resolve()
-        if _resolved_output_dir != _expected_dir:
-            warnings.warn(
-                f"sagat_output_dir={_resolved_output_dir} is not the OpenMATB "
-                f"questionnaires directory ({_expected_dir}). The Sagat plugin "
-                f"won't find the probe files at runtime. Either pass "
-                f"sagat_output_dir=<questionnaires dir>, or copy the "
-                f"generated probe .txt files there before launching OpenMATB.",
-                stacklevel=2,
-            )
+        # The runtime task engine is not vendored. The emitted scenario
+        # references probe filenames only, so callers must put generated
+        # freeze files in the task runner's questionnaires directory before
+        # launching the session.
         sagat_events = emit_freezes_for_block(
             participant_id=participant_id,
             block_num=block_num,

@@ -1,0 +1,80 @@
+# SAGAT generic probe bank | language=en | format_version=1.0
+# 9 probes: 3 perception (L1), 3 comprehension (L2), 3 projection (L3).
+# Designed for OpenMATB scenarios where the operator monitors SYSMON
+# (lights + scales), TRACK (cursor in target), RESMAN (fuel tanks),
+# and COMMUNICATIONS (radio prompts). Correct answers describe the
+# expected scenario state at freeze onset for the LOW workload condition
+# (about 2.9 ev/min). Scenario builder may regenerate per-freeze CORRECT
+# values for higher workloads.
+
+PROBE_ID: gen_l1_active_tasks
+SA_LEVEL: 1
+DOMAIN: perception
+QUESTION: How many primary tasks were demanding your attention immediately before the freeze?
+OPTIONS: 0 | 1 | 2 | 3 | 4
+CORRECT: 3
+TIMEOUT_SEC: 15
+
+PROBE_ID: gen_l1_track_state
+SA_LEVEL: 1
+DOMAIN: perception
+QUESTION: Where was the tracking cursor immediately before the freeze?
+OPTIONS: inside the target zone | outside the target zone
+CORRECT: inside the target zone
+TIMEOUT_SEC: 15
+
+PROBE_ID: gen_l1_radio_recent
+SA_LEVEL: 1
+DOMAIN: perception
+QUESTION: Was there an active radio prompt directed at your callsign in the past 20 seconds?
+OPTIONS: yes | no
+CORRECT: no
+TIMEOUT_SEC: 15
+
+PROBE_ID: gen_l2_demand_trend
+SA_LEVEL: 2
+DOMAIN: comprehension
+QUESTION: How has the overall task demand changed across this block?
+OPTIONS: clearly decreasing | stable | clearly increasing | mixed
+CORRECT: stable
+TIMEOUT_SEC: 15
+
+PROBE_ID: gen_l2_resman_balance
+SA_LEVEL: 2
+DOMAIN: comprehension
+QUESTION: Are the resource-management tanks currently in balance with the demand schedule?
+OPTIONS: yes, balanced | no, one tank lagging | no, both tanks lagging
+CORRECT: yes, balanced
+TIMEOUT_SEC: 15
+
+PROBE_ID: gen_l2_priority
+SA_LEVEL: 2
+DOMAIN: comprehension
+QUESTION: Which task type has required the most active responses from you in the past minute?
+OPTIONS: SYSMON | TRACK | RESMAN | COMMUNICATIONS
+CORRECT: SYSMON
+TIMEOUT_SEC: 15
+
+PROBE_ID: gen_l3_next_demand
+SA_LEVEL: 3
+DOMAIN: projection
+QUESTION: In the next 60 seconds, which task is most likely to require your action first?
+OPTIONS: SYSMON | TRACK | RESMAN | COMMUNICATIONS
+CORRECT: SYSMON
+TIMEOUT_SEC: 15
+
+PROBE_ID: gen_l3_workload_next
+SA_LEVEL: 3
+DOMAIN: projection
+QUESTION: What do you anticipate for the next 60 seconds?
+OPTIONS: workload will decrease | workload will be similar | workload will increase
+CORRECT: workload will be similar
+TIMEOUT_SEC: 15
+
+PROBE_ID: gen_l3_critical_event
+SA_LEVEL: 3
+DOMAIN: projection
+QUESTION: In the next 2 minutes, is a resource depletion or critical fault likely to occur?
+OPTIONS: very unlikely | possible | likely | almost certain
+CORRECT: very unlikely
+TIMEOUT_SEC: 15
