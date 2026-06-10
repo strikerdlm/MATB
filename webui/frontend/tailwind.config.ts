@@ -68,8 +68,9 @@ const config: Config = {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "monospace"],
+        sans: ["Aptos", "IBM Plex Sans", "Segoe UI", "sans-serif"],
+        serif: ["Charter", "Iowan Old Style", "Palatino Linotype", "Georgia", "serif"],
+        mono: ["JetBrains Mono", "IBM Plex Mono", "monospace"],
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",

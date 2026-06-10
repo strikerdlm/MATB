@@ -41,6 +41,18 @@ class Block(SQLModel, table=True):
     metrics_json: str                               # full log_converter record
 
 
+class BlockProvenance(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("block_id"),)
+    id: int | None = Field(default=None, primary_key=True)
+    block_id: int = Field(foreign_key="block.id", index=True)
+    manifest_filename: str | None = None
+    manifest_sha256: str | None = Field(default=None, index=True)
+    manifest_json: str | None = None
+    validation_status: str = "missing_manifest"     # ok|warning|error|missing_manifest|invalid_manifest
+    validation_issues_json: str = "[]"              # list[ValidationIssue]
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
 class DepdfFit(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     participant_id: str = Field(foreign_key="participant.id", index=True)
@@ -54,6 +66,16 @@ class DepdfFit(SQLModel, table=True):
     criteria_version: int
     per_level_json: str
     fitted_at: datetime = Field(default_factory=_utcnow)
+
+
+class ScreenResult(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    participant_id: str = Field(foreign_key="participant.id", unique=True, index=True)
+    administered_at: str                            # ISO timestamp from the browser
+    screen_version: int
+    raw_trials_json: str                            # full raw payload (re-derivable)
+    scores_json: str                                # score_screen() output
+    created_at: datetime = Field(default_factory=_utcnow)
 
 
 class AnalysisResult(SQLModel, table=True):

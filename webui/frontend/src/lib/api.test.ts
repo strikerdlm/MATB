@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createParticipant, getTracker, ingestCsv, IngestError, getMetricsLong, getFits, runAnalysis, getLatestAnalysis, runBayes, getBayesStatus } from "@/lib/api";
+import { createParticipant, getTracker, ingestCsv, IngestError, getMetricsLong, getFits, runAnalysis, getLatestAnalysis, runBayes, getBayesStatus, postScreen, getScreenSummary, getResearchContext, downloadResearchBundle } from "@/lib/api";
 
 beforeEach(() => { vi.restoreAllMocks(); });
 
@@ -41,8 +41,9 @@ describe("api client", () => {
   it("ingestCsv builds FormData with the exact backend field names", async () => {
     global.fetch = mockFetch(201, { id: 1, workload_level: "MEDIUM", visit_id: 7 });
     const file = new File([new Uint8Array([1, 2, 3])], "run.csv", { type: "text/csv" });
+    const manifest = new File([JSON.stringify({ manifest_version: 1 })], "run.manifest.json", { type: "application/json" });
     await ingestCsv(file, {
-      participant_id: "P02", visit_ordinal: 3, workload_level: "MEDIUM", overwrite: true,
+      participant_id: "P02", visit_ordinal: 3, workload_level: "MEDIUM", overwrite: true, manifest,
     });
     const [url, init] = (global.fetch as any).mock.calls[0];
     expect(url).toContain("/ingest");
@@ -53,6 +54,7 @@ describe("api client", () => {
     expect(form.get("workload_level")).toBe("MEDIUM");
     expect(form.get("overwrite")).toBe("true");
     expect(form.get("file")).toBeInstanceOf(File);
+    expect(form.get("manifest")).toBeInstanceOf(File);
   });
 
   it("getMetricsLong hits /metrics/long with optional participant filter", async () => {
@@ -98,5 +100,50 @@ describe("api client", () => {
   it("getBayesStatus returns null on 404", async () => {
     global.fetch = mockFetch(404, { detail: "no Bayesian job yet" });
     expect(await getBayesStatus()).toBeNull();
+  });
+
+  it("postScreen POSTs participant_id + payload + overwrite", async () => {
+    global.fetch = mockFetch(201, { participant_id: "P01", screen_version: 1, scores: {} });
+    const payload = { seed: 1, administered_at: "t", fast_mode: false,
+      simple_rt: { trials: [] }, choice_rt: { trials: [] },
+      nback: { trials: [], soa_ms: 2500 },
+      tracking: { samples: [], n_expected_samples: 0, path_amplitude_px: 0 } } as any;
+    await postScreen("P01", payload, true);
+    const [url, init] = (global.fetch as any).mock.calls[0];
+    expect(url).toContain("/screen");
+    expect(init.method).toBe("POST");
+    const body = JSON.parse(init.body);
+    expect(body.participant_id).toBe("P01");
+    expect(body.overwrite).toBe(true);
+    expect(body.payload.nback.soa_ms).toBe(2500);
+  });
+
+  it("getScreenSummary GETs /screen", async () => {
+    global.fetch = mockFetch(200, { n_screened: 0, min_cohort: 3, hcf_active: false, screen_version: 1, screens: [] });
+    const s = await getScreenSummary();
+    expect(s.hcf_active).toBe(false);
+    expect((global.fetch as any).mock.calls[0][0]).toContain("/screen");
+  });
+
+  it("getResearchContext GETs the export context", async () => {
+    global.fetch = mockFetch(200, { bundle_version: "research-bundle-v1", counts: {} });
+    const ctx = await getResearchContext();
+    expect(ctx.bundle_version).toBe("research-bundle-v1");
+    expect((global.fetch as any).mock.calls[0][0]).toContain("/exports/research-context");
+  });
+
+  it("downloadResearchBundle POSTs figure option JSON", async () => {
+    const blob = new Blob(["zip"], { type: "application/zip" });
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      blob: async () => blob,
+      json: async () => ({}),
+    } as Response);
+    await downloadResearchBundle([{ name: "q1", option: { xAxis: { type: "value" } } }]);
+    const [url, init] = (global.fetch as any).mock.calls[0];
+    expect(url).toContain("/exports/research-bundle");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body).figures[0].name).toBe("q1");
   });
 });

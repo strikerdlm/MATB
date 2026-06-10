@@ -7,7 +7,7 @@ import pytest
 from sqlmodel import Session, select
 
 from app.ingestion import IngestionError, ingest_csv
-from app.models import Block, Participant, Visit
+from app.models import Block, BlockProvenance, Participant, Visit
 
 
 def _participant_with_visits(engine):
@@ -65,6 +65,9 @@ def test_filled_cell_requires_overwrite(engine, sample_csv_bytes):
                            participant_id="P01", visit_ordinal=1, workload_level="LOW",
                            overwrite=True)
         assert json.loads(block.metrics_json)["sysmon"]["n_misses"] == 1
+        prov = s.exec(select(BlockProvenance).where(BlockProvenance.block_id == block.id)).first()
+        assert prov is not None
+        assert prov.validation_status == "missing_manifest"
 
 
 def test_unknown_visit_rejected(engine, sample_csv_bytes):
@@ -82,3 +85,45 @@ def test_csv_without_sysmon_rejected(engine):
         with pytest.raises(IngestionError, match="no usable"):
             ingest_csv(s, content=empty, filename="a.csv", participant_id="P01",
                        visit_ordinal=1, workload_level="LOW")
+
+
+def test_ingest_stores_missing_manifest_warning(engine, sample_csv_bytes):
+    _participant_with_visits(engine)
+    with Session(engine) as s:
+        block = ingest_csv(s, content=sample_csv_bytes(), filename="a.csv",
+                           participant_id="P01", visit_ordinal=1, workload_level="LOW")
+        prov = s.exec(select(BlockProvenance).where(BlockProvenance.block_id == block.id)).first()
+        assert prov is not None
+        assert prov.validation_status == "missing_manifest"
+        issues = json.loads(prov.validation_issues_json)
+        assert issues[0]["code"] == "missing_manifest"
+
+
+def test_ingest_stores_manifest_validation_errors(engine, sample_csv_bytes):
+    _participant_with_visits(engine)
+    manifest = {
+        "manifest_version": 1,
+        "participant_id": "P02",
+        "visit_ordinal": 2,
+        "workload_level": "HIGH",
+        "block_duration_sec": 900,
+        "scenario": {"filename": "expected.txt", "sha256": "abc"},
+        "questionnaires": {"include_nasatlx": True},
+        "expected": {"isa_probe_times_sec": [90], "sagat_freezes": 0},
+    }
+    with Session(engine) as s:
+        block = ingest_csv(
+            s,
+            content=sample_csv_bytes(),
+            filename="a.csv",
+            participant_id="P01",
+            visit_ordinal=1,
+            workload_level="LOW",
+            manifest_content=json.dumps(manifest).encode("utf-8"),
+            manifest_filename="expected.txt.manifest.json",
+        )
+        prov = s.exec(select(BlockProvenance).where(BlockProvenance.block_id == block.id)).first()
+        assert prov is not None
+        assert prov.validation_status == "error"
+        codes = {i["code"] for i in json.loads(prov.validation_issues_json)}
+        assert {"workload_mismatch", "participant_mismatch", "visit_mismatch"} <= codes

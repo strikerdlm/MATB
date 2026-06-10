@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import io
+import json
+import zipfile
+
 
 def _enroll(client):
     client.post("/participants", json={"id": "P01", "enrollment_date": "2026-06-01"})
@@ -12,6 +16,7 @@ def test_ingest_endpoint_and_tracker(client, sample_csv_bytes):
     r = client.post("/ingest", files=files, data=data)
     assert r.status_code == 201, r.text
     assert r.json()["workload_level"] == "LOW"
+    assert r.json()["validation"]["status"] == "missing_manifest"
 
     grid = client.get("/tracker").json()
     assert len(grid) == 18
@@ -31,6 +36,28 @@ def test_ingest_duplicate_returns_409(client, sample_csv_bytes):
     assert r.status_code == 409
 
 
+def test_ingest_endpoint_accepts_valid_manifest(client, sample_csv_bytes):
+    _enroll(client)
+    manifest = {
+        "manifest_version": 1,
+        "participant_id": "P01",
+        "visit_ordinal": 1,
+        "workload_level": "LOW",
+        "block_duration_sec": 900,
+        "scenario": {"filename": "run1.txt", "sha256": "abc"},
+        "questionnaires": {"include_nasatlx": True},
+        "expected": {"isa_probe_times_sec": [], "sagat_freezes": 0},
+    }
+    files = {
+        "file": ("run1.csv", sample_csv_bytes(misses=(5.0, 25.0)), "text/csv"),
+        "manifest": ("run1.txt.manifest.json", json.dumps(manifest).encode("utf-8"), "application/json"),
+    }
+    data = {"participant_id": "P01", "visit_ordinal": "1", "workload_level": "LOW"}
+    r = client.post("/ingest", files=files, data=data)
+    assert r.status_code == 201, r.text
+    assert r.json()["validation"]["status"] == "ok"
+
+
 def test_block_detail_endpoint(client, sample_csv_bytes):
     _enroll(client)
     files = {"file": ("run1.csv", sample_csv_bytes(misses=(5.0, 25.0)), "text/csv")}
@@ -42,9 +69,37 @@ def test_block_detail_endpoint(client, sample_csv_bytes):
     assert body["metrics"]["sysmon"]["n_misses"] == 2
     assert "_raw_sysmon_rows" not in body["metrics"]
     assert body["depdf_fit"] is None  # only LOW ingested, no full-visit fit
+    assert body["provenance"]["validation_status"] == "missing_manifest"
 
 
 def test_block_detail_404_when_absent(client):
     _enroll(client)
     r = client.get("/block", params={"participant_id": "P01", "visit_ordinal": 2, "workload_level": "HIGH"})
     assert r.status_code == 404
+
+
+def test_research_context_and_bundle_exports(client, sample_csv_bytes):
+    _enroll(client)
+    files = {"file": ("run1.csv", sample_csv_bytes(misses=(5.0, 25.0)), "text/csv")}
+    data = {"participant_id": "P01", "visit_ordinal": "1", "workload_level": "LOW"}
+    assert client.post("/ingest", files=files, data=data).status_code == 201
+
+    ctx = client.get("/exports/research-context")
+    assert ctx.status_code == 200
+    body = ctx.json()
+    assert body["bundle_version"] == "research-bundle-v1"
+    assert body["counts"]["participants"] == 1
+    assert body["block_provenance"][0]["validation_status"] == "missing_manifest"
+
+    r = client.post("/exports/research-bundle", json={
+        "figures": [{"name": "q1-test", "option": {"xAxis": {"type": "value"}}}],
+    })
+    assert r.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+        names = set(zf.namelist())
+        assert "manifest.json" in names
+        assert "metrics_long.json" in names
+        assert "provenance/block_validations.json" in names
+        assert "figures/q1-test.option.json" in names
+        manifest = json.loads(zf.read("manifest.json"))
+        assert manifest["figure_count"] == 1

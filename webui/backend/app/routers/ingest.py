@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from sqlmodel import Session
 
 from app.db import get_session
-from app.ingestion import IngestionError, ingest_csv
+from app.ingestion import IngestionError, block_validation_summary, ingest_csv
 
 router = APIRouter(tags=["ingest"])
 
@@ -14,6 +14,7 @@ router = APIRouter(tags=["ingest"])
 @router.post("/ingest", status_code=status.HTTP_201_CREATED)
 def ingest(
     file: UploadFile = File(...),
+    manifest: UploadFile | None = File(None),
     participant_id: str = Form(...),
     visit_ordinal: int = Form(...),
     workload_level: str = Form(...),
@@ -21,6 +22,7 @@ def ingest(
     session: Session = Depends(get_session),
 ):
     content = file.file.read()
+    manifest_content = manifest.file.read() if manifest is not None else None
     try:
         block = ingest_csv(
             session,
@@ -30,8 +32,11 @@ def ingest(
             visit_ordinal=visit_ordinal,
             workload_level=workload_level,
             overwrite=overwrite,
+            manifest_content=manifest_content,
+            manifest_filename=manifest.filename if manifest is not None else None,
         )
     except IngestionError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     return {"id": block.id, "workload_level": block.workload_level,
-            "visit_id": block.visit_id}
+            "visit_id": block.visit_id,
+            "validation": block_validation_summary(session, block.id)}

@@ -2,9 +2,14 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+import asyncio
 
+import fastapi.concurrency
+import fastapi.dependencies.utils
+import fastapi.routing
+import httpx
 import pytest
-from fastapi.testclient import TestClient
+import starlette.concurrency
 from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
@@ -15,6 +20,31 @@ from app.main import app
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+
+
+class SyncASGIClient:
+    """Small sync wrapper around httpx's ASGI transport for endpoint tests."""
+
+    def __init__(self, app):
+        self._app = app
+
+    def request(self, method: str, url: str, **kwargs) -> httpx.Response:
+        async def _send() -> httpx.Response:
+            transport = httpx.ASGITransport(app=self._app, raise_app_exceptions=True)
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="http://testserver",
+                follow_redirects=True,
+            ) as client:
+                return await client.request(method, url, **kwargs)
+
+        return asyncio.run(_send())
+
+    def get(self, url: str, **kwargs) -> httpx.Response:
+        return self.request("GET", url, **kwargs)
+
+    def post(self, url: str, **kwargs) -> httpx.Response:
+        return self.request("POST", url, **kwargs)
 
 
 @pytest.fixture(name="engine")
@@ -31,15 +61,26 @@ def engine_fixture():
 
 
 @pytest.fixture(name="client")
-def client_fixture(engine):
+def client_fixture(engine, monkeypatch):
+    async def _run_direct(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(starlette.concurrency, "run_in_threadpool", _run_direct)
+    monkeypatch.setattr(fastapi.concurrency, "run_in_threadpool", _run_direct)
+    monkeypatch.setattr(fastapi.dependencies.utils, "run_in_threadpool", _run_direct)
+    monkeypatch.setattr(fastapi.routing, "run_in_threadpool", _run_direct)
+
+    session = Session(engine)
+
     def _get_session_override():
-        with Session(engine) as session:
-            yield session
+        return session
 
     app.dependency_overrides[db_module.get_session] = _get_session_override
-    with TestClient(app) as c:
-        yield c
-    app.dependency_overrides.clear()
+    try:
+        yield SyncASGIClient(app)
+    finally:
+        session.close()
+        app.dependency_overrides.clear()
 
 
 @pytest.fixture

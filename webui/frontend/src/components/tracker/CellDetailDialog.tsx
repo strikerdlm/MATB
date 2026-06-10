@@ -66,6 +66,33 @@ export function CellDetailDialog({ cell, onClose }: { cell: TrackerCell | null; 
                 <p className="text-sm text-muted-foreground">No fit yet (needs all 3 levels of this visit).</p>
               )}
             </div>
+            <div>
+              <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Scenario provenance</h4>
+              {data.provenance ? (
+                <>
+                  <Row label="Validation" value={data.provenance.validation_status} />
+                  <Row label="Manifest" value={data.provenance.manifest_filename ?? "—"} />
+                  <Row
+                    label="Manifest hash"
+                    value={data.provenance.manifest_hash ? `${data.provenance.manifest_hash.slice(0, 12)}…` : "—"}
+                  />
+                  {data.provenance.validation_issues.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {data.provenance.validation_issues.slice(0, 4).map((issue) => (
+                        <p key={`${issue.code}-${issue.message}`} className="text-xs text-muted-foreground">
+                          <span className={issue.severity === "error" ? "text-danger" : "text-warning"}>
+                            {issue.code}
+                          </span>{" "}
+                          {issue.message}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">No provenance recorded.</p>
+              )}
+            </div>
           </div>
         )}
       </DialogContent>

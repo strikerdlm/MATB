@@ -11,7 +11,7 @@ from sqlmodel import Session, select
 
 from app.completeness import build_completeness_grid
 from app.db import get_session
-from app.models import Block, DepdfFit, Visit
+from app.models import Block, BlockProvenance, DepdfFit, Visit
 
 router = APIRouter(tags=["tracker"])
 
@@ -47,5 +47,21 @@ def block_detail(
     if fit is not None:
         fit_out = {"g0": fit.g0, "p0": fit.p0, "tau0": fit.tau0,
                    "hcf_source": fit.hcf_source, "mwl_source": fit.mwl_source}
+    provenance = None
+    prov = session.exec(
+        select(BlockProvenance).where(BlockProvenance.block_id == block.id)
+    ).first()
+    if prov is not None:
+        from matb_integration.scenario_manifest import manifest_summary
+
+        manifest = json.loads(prov.manifest_json) if prov.manifest_json else None
+        provenance = {
+            "manifest_filename": prov.manifest_filename,
+            "manifest_hash": prov.manifest_sha256,
+            "validation_status": prov.validation_status,
+            "validation_issues": json.loads(prov.validation_issues_json or "[]"),
+            "manifest_summary": manifest_summary(manifest),
+        }
     return {"participant_id": participant_id, "visit_ordinal": visit_ordinal,
-            "workload_level": workload_level, "metrics": metrics, "depdf_fit": fit_out}
+            "workload_level": workload_level, "metrics": metrics, "depdf_fit": fit_out,
+            "provenance": provenance}
