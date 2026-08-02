@@ -59,6 +59,7 @@ class HubSubscription:
     session_id: str
     role: str
     queue: asyncio.Queue[StreamEnvelope]
+    identity: str | None = None
     close_callback: CloseCallback | None = None
     closed_code: int | None = None
     _closed: asyncio.Event = field(default_factory=asyncio.Event)
@@ -101,6 +102,7 @@ class SimulationHub:
         role: str,
         initial: StreamEnvelope | None = None,
         close_callback: CloseCallback | None = None,
+        identity: str | None = None,
     ) -> HubSubscription:
         if role not in {"controller", "observer"}:
             raise ValueError("role must be controller or observer")
@@ -108,12 +110,24 @@ class SimulationHub:
             session_id=session_id,
             role=role,
             queue=asyncio.Queue(maxsize=self.queue_size),
+            identity=identity,
             close_callback=close_callback,
         )
         async with self._lock:
             current = self._subscribers.setdefault(session_id, [])
-            if role == "controller" and any(item.role == "controller" and not item.closed for item in current):
-                raise HubConflict("a controller is already connected")
+            if role == "controller":
+                active_controllers = [item for item in current if item.role == "controller" and not item.closed]
+                if active_controllers:
+                    same_identity = identity is not None and all(item.identity == identity for item in active_controllers)
+                    if not same_identity:
+                        raise HubConflict("a controller is already connected")
+                    # A reconnect with the same lease is a handoff, not a
+                    # second operator. Close old subscriptions before the
+                    # replacement is published so their finally blocks can
+                    # never pause the still-authoritative replacement stream.
+                    for item in active_controllers:
+                        item.closed_code = 4001
+                        item._closed.set()
             current.append(subscription)
             if initial is not None:
                 try:

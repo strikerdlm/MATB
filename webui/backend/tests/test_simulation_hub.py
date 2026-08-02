@@ -46,6 +46,16 @@ async def test_only_one_controller_is_allowed() -> None:
 
 
 @pytest.mark.anyio
+async def test_same_identity_controller_reconnect_replaces_old_subscription() -> None:
+    hub = SimulationHub()
+    old = await hub.subscribe("sim-1", role="controller", identity="lease-1")
+    replacement = await hub.subscribe("sim-1", role="controller", identity="lease-1")
+    assert old.closed_code == 4001
+    assert not replacement.closed
+    assert await hub.subscribers("sim-1") == (old, replacement)
+
+
+@pytest.mark.anyio
 async def test_controller_overflow_requests_pause_before_close() -> None:
     paused: list[str] = []
 

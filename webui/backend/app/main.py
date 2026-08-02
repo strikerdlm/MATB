@@ -194,7 +194,11 @@ async def simulation_stream(websocket: WebSocket, session_id: str) -> None:
         else:
             await manager.view(session_id)
         initial = await manager.snapshot_envelope(session_id, after_sequence=after_sequence)
-        subscription = await manager.hub.subscribe(session_id, role=role)
+        subscription = await manager.hub.subscribe(
+            session_id,
+            role=role,
+            identity=lease if role == "controller" else None,
+        )
     except HubConflict:
         await websocket.close(code=4409)
         return
