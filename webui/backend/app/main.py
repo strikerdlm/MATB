@@ -189,13 +189,13 @@ async def simulation_stream(websocket: WebSocket, session_id: str) -> None:
     lease = websocket.query_params.get("lease")
     role = "controller" if lease else "observer"
     controller_handshake_pending = False
+    subscription = None
     try:
         if lease:
             await manager.controller_connected(session_id, lease)
             controller_handshake_pending = True
         else:
             await manager.view(session_id)
-        initial = await manager.snapshot_envelope(session_id, after_sequence=after_sequence)
         subscription = await manager.hub.subscribe(
             session_id,
             role=role,
@@ -204,6 +204,10 @@ async def simulation_stream(websocket: WebSocket, session_id: str) -> None:
         if lease:
             await manager.controller_stream_established(session_id, lease)
             controller_handshake_pending = False
+        # Subscribe before taking the snapshot. Any event published during
+        # snapshot capture is then queued behind the snapshot boundary rather
+        # than being lost between an old sequence and the first live frame.
+        initial = await manager.snapshot_envelope(session_id, after_sequence=after_sequence)
     except HubConflict:
         if lease and controller_handshake_pending:
             await manager.controller_stream_failed(session_id, lease)
@@ -216,6 +220,8 @@ async def simulation_stream(websocket: WebSocket, session_id: str) -> None:
                 await manager.controller_stream_failed(session_id, lease)
             except Exception:
                 pass
+        if subscription is not None:
+            await manager.hub.unsubscribe(subscription)
         await websocket.close(code=4403 if lease else 4404)
         return
 
