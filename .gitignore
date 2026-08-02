@@ -1,3 +1,7 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+webui/frontend/test-results/
+webui/frontend/playwright-report/
+.suas-e2e/
+/exports/
