@@ -89,23 +89,33 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
     } finally { setBusy(false); }
   }
 
-  async function issueCommand(kind: CommandKind | ProtocolCommandKind, payload: Record<string, unknown>) {
-    if (!currentSnapshot || !canControl) return;
+  async function issueCommand(kind: CommandKind | ProtocolCommandKind, payload: Record<string, unknown>): Promise<boolean> {
+    if (!currentSnapshot || !canControl) return false;
     setMessage(null);
     try {
       await submitCommand({ command_id: commandId(), expected_state_version: currentSnapshot.state_version, kind, payload: payload as Record<string, JsonValue> });
       setMessage("command.accepted");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "command failed"); }
+      return true;
+    } catch (error) { setMessage(error instanceof Error ? error.message : "command failed"); return false; }
   }
 
   function acknowledgeAlert(alertId: string) { void issueCommand("ACKNOWLEDGE_ALERT", { alert_id: alertId }); }
 
   const probeSubmit = async (kind: ProtocolCommandKind, payload: Record<string, unknown>) => {
-    await issueCommand(kind, payload);
+    if (kind === "SUBMIT_POST_BLOCK_SCALE") {
+      const values = payload as { nasa_tlx?: Record<string, number>; bedford?: number | null };
+      const tlxOk = await issueCommand(kind, { scale_id: "NASA_TLX", answers: values.nasa_tlx ?? {} });
+      const bedfordOk = tlxOk && typeof values.bedford === "number"
+        ? await issueCommand(kind, { scale_id: "BEDFORD", answers: { value: values.bedford } })
+        : false;
+      if (!tlxOk || !bedfordOk) return;
+    } else if (!await issueCommand(kind, payload)) {
+      return;
+    }
     useSimulationStore.setState({ activeProbe: null, concealOperationalState: false });
   };
 
-  const probeOverlay = activeProbe ? <ProbeOverlay locale={locale} probe={activeProbe} pending={pendingCommandIds.length > 0} onIsa={(rating) => void probeSubmit("SUBMIT_ISA", { probe_id: activeProbe.kind === "ISA" ? activeProbe.probe_id : "", rating })} onSagat={(answer) => void probeSubmit("SUBMIT_SAGAT", { probe_id: activeProbe.kind === "SAGAT" ? activeProbe.probe_id : "", answer })} onPostBlock={(values: PostBlockScaleValues) => void probeSubmit("SUBMIT_POST_BLOCK_SCALE", { scale_id: "NASA_TLX", answers: values.nasa_tlx })} /> : null;
+  const probeOverlay = activeProbe ? <ProbeOverlay locale={locale} probe={activeProbe} pending={pendingCommandIds.length > 0} onIsa={(rating) => void probeSubmit("SUBMIT_ISA", { probe_id: activeProbe.kind === "ISA" ? activeProbe.probe_id : "", rating })} onSagat={(answer) => void probeSubmit("SUBMIT_SAGAT", { probe_id: activeProbe.kind === "SAGAT" ? activeProbe.probe_id : "", answer })} onPostBlock={(values: PostBlockScaleValues) => void probeSubmit("SUBMIT_POST_BLOCK_SCALE", { ...values })} /> : null;
 
   return (
     <div className="simulation-console flex min-h-screen flex-col bg-background text-foreground" aria-busy={busy}>
@@ -116,7 +126,7 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
         <main className="grid flex-1 place-items-center p-8"><div className="mission-panel max-w-lg p-8 text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-info" aria-hidden="true" /><h1 className="mt-4 font-display text-2xl uppercase">Telemetry standing by</h1><p className="mt-2 text-sm text-muted-foreground">Start the next protocol block to receive the authoritative synthetic fleet snapshot.</p></div></main>
       ) : <main className="grid min-h-0 flex-1 gap-3 p-3 lg:grid-cols-[18rem_minmax(0,1fr)_22rem] lg:p-4"><FleetPanel snapshot={currentSnapshot} locale={locale} selectedAircraftId={selectedAircraftId} onSelect={selectAircraft} /><MissionMap snapshot={currentSnapshot} locale={locale} selectedAircraftId={selectedAircraftId} selectedContactId={selectedContactId} onSelectAircraft={selectAircraft} onSelectContact={selectContact} /><aside className="mission-panel flex min-h-0 flex-col"><div className="grid grid-cols-2 border-b border-white/10"><button type="button" className="border-b-2 border-white px-3 py-3 font-mono text-[10px] uppercase tracking-wider">Alerts</button><button type="button" className="border-b-2 border-transparent px-3 py-3 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Contacts</button></div><div className="min-h-0 flex-1"><AlertQueue alerts={alerts} locale={locale} readOnly={!canControl} onAcknowledge={(alert) => acknowledgeAlert(alert.alert_id)} /><ContactQueue contacts={contacts} locale={locale} readOnly={!canControl} onAction={(kind, contact) => void issueCommand(kind, { contact_id: contact.contact_id, ...(kind === "CLASSIFY_CONTACT" ? { classification: "uncertain" } : kind === "SET_CONTACT_PRIORITY" ? { priority: "MEDIUM" } : kind === "REPORT_CONTACT" ? { note_code: "GENERAL" } : {}) })} /></div></aside></main>}
       {activeProbe && !concealOperationalState && probeOverlay}
-      <CommandBar snapshot={currentSnapshot} selectedAircraft={selectedAircraft} selectedContact={selectedContact} locale={locale} readOnly={!canControl} pending={pendingCommandIds.length > 0} onCommand={issueCommand} />
+      <CommandBar snapshot={currentSnapshot} selectedAircraft={selectedAircraft} selectedContact={selectedContact} locale={locale} readOnly={!canControl} pending={pendingCommandIds.length > 0} onCommand={(kind, payload) => { void issueCommand(kind, payload); }} />
     </div>
   );
 }

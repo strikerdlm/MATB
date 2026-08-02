@@ -30,7 +30,7 @@ from matb_integration.suas.domain.serialization import canonical_data, canonical
 from matb_integration.suas.engine.runtime import (
     CHECKPOINT_INTERVAL_MS, ENGINE_VERSION, SNAPSHOT_INTERVAL_MS, TICK_MS, SimulationEngine,
 )
-from matb_integration.suas.metrics.mission import derive_block_metrics
+from matb_integration.suas.metrics.debrief import build_public_debrief
 from matb_integration.suas.recording.records import RecordKind, RecordingError, SessionRecord
 from matb_integration.suas.recording.recorder import SessionRecorder
 from matb_integration.suas.recording.checkpoints import load_checkpoint
@@ -320,14 +320,32 @@ class SimulationManager:
                 artifacts = handle.recorder.seal_partial(reason="aborted")
                 self.persistence.replace_artifacts(handle.session_id, artifacts)
             else:
-                # A complete multi-block seal is finalized by the protocol layer; a
-                # one-block runtime can still expose a deterministic partial view.
                 replay = ReplayVerifier().verify(handle.recorder.run_dir)
                 if replay.status.value == "match":
                     records = _read_records(handle.recorder.run_dir / "events.jsonl")
-                    metrics = derive_block_metrics(records, handle.manifest).to_dict()
-                    artifacts = handle.recorder.seal(questionnaires={}, metrics=metrics, debrief={"timeline": []}, replay=replay)
+                    debrief, questionnaires = build_public_debrief(
+                        handle.recorder.run_dir,
+                        handle.manifest,
+                        replay,
+                        records,
+                        validity=handle.validity,
+                        live_frames=(handle.engine.snapshot(),) if handle.engine is not None else (),
+                    )
+                    metrics = debrief.get("metrics", {})
+                    metrics_mapping = metrics if isinstance(metrics, Mapping) else {}
+                    artifacts = handle.recorder.seal(
+                        questionnaires=questionnaires,
+                        metrics=metrics_mapping,
+                        debrief=debrief,
+                        replay=replay,
+                    )
                     self.persistence.replace_artifacts(handle.session_id, artifacts)
+                    for block_id in sorted({record.block_id for record in records}):
+                        self.persistence.update_block(
+                            handle.session_id,
+                            block_id,
+                            metrics_json=canonical_json(metrics_mapping),
+                        )
             self.persistence.update_session(session_id, lifecycle=handle.lifecycle, finished_at=_utcnow(), active_block_id=handle.active_block_id)
             if handle.active_block_id:
                 self.persistence.update_block(session_id, handle.active_block_id, lifecycle=handle.lifecycle, simulation_finished_ms=now, finished_at=_utcnow())
@@ -995,12 +1013,14 @@ class SimulationManager:
             "active_probe": None,
             "next_block_id": handle.active_block_id,
         }
+        protocol_validity = str(protocol.get("validity", "valid"))
+        effective_validity = handle.validity if handle.validity != "valid" else protocol_validity
         return SessionView(
             id=handle.session_id, participant_id=handle.participant_id, visit_id=handle.visit_id,
             scenario_id=handle.scenario.definition.scenario_id, scenario_sha256=handle.scenario.sha256,
             locale=handle.locale, lifecycle=handle.lifecycle, active_block_id=handle.active_block_id,
             block_order=list(handle.manifest["block_order"]), state_version=self._version(handle),
-            simulation_time_ms=self._time(handle), validity=handle.validity,
+            simulation_time_ms=self._time(handle), validity=effective_validity,
             protocol_phase=str(protocol["protocol_phase"]),
             current_block_index=int(protocol["current_block_index"]),
             active_probe=protocol["active_probe"],

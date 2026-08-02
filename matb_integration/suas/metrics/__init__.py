@@ -14,6 +14,7 @@ from .mission import (
     mission_score,
     normalize_component,
 )
+from .research import ResearchMetrics, derive_research_metrics
 
 __all__ = [
     "AlertMetrics",
@@ -28,4 +29,6 @@ __all__ = [
     "derive_block_metrics",
     "mission_score",
     "normalize_component",
+    "ResearchMetrics",
+    "derive_research_metrics",
 ]

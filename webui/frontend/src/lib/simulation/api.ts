@@ -130,6 +130,24 @@ export async function listSimulationArtifacts(id: string): Promise<ArtifactView[
   return simulationRequest<ArtifactView[]>(`/simulation/sessions/${encodeURIComponent(id)}/artifacts`, { method: "GET" });
 }
 
+export async function downloadSimulationBundle(id: string): Promise<Blob> {
+  const apiBase = await getApiBase();
+  const response = await fetch(`${apiBase}/simulation/sessions/${encodeURIComponent(id)}/bundle`, { method: "GET" });
+  if (!response.ok) {
+    const body: unknown = await response.json().catch(() => ({}));
+    const detail = body && typeof body === "object" && "detail" in body
+      ? (body as { detail?: unknown }).detail
+      : body;
+    const error = detail && typeof detail === "object" ? detail as { code?: unknown; message?: unknown } : {};
+    throw new SimulationApiError(
+      response.status,
+      typeof error.code === "string" ? error.code : "bundle_download_failed",
+      typeof error.message === "string" ? error.message : "public bundle download failed",
+    );
+  }
+  return response.blob();
+}
+
 export function simulationWsUrl(
   apiBase: string,
   sessionId: string,
@@ -155,6 +173,7 @@ export const simulationApi = {
   getSimulationState,
   getSimulationDebrief,
   listSimulationArtifacts,
+  downloadSimulationBundle,
   simulationWsUrl,
 };
 

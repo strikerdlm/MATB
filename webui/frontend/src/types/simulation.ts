@@ -170,6 +170,10 @@ export interface SessionView {
   started_at: string | null;
   finished_at: string | null;
   interrupted_at: string | null;
+  protocol_phase?: string;
+  current_block_index?: number;
+  active_probe?: ActiveProbePayload | null;
+  next_block_id?: string | null;
 }
 
 export interface CreateSimulationSession {
@@ -244,10 +248,11 @@ export interface StreamEnvelope<T = JsonValue> {
 export interface IsaProbePayload {
   kind: "ISA";
   probe_id: string;
-  question: string;
+  question?: string;
   timeout_ms: number;
-  min: 1;
-  max: 10;
+  options?: number[];
+  min?: 1;
+  max?: 10;
 }
 
 export interface SagatProbePayload {
@@ -262,8 +267,9 @@ export interface SagatProbePayload {
 
 export interface PostBlockScalePayload {
   kind: "POST_BLOCK";
-  block_id: string;
-  required: ("NASA_TLX" | "BEDFORD")[];
+  block_id?: string;
+  scales?: ("NASA_TLX" | "BEDFORD")[];
+  required?: ("NASA_TLX" | "BEDFORD")[];
 }
 
 export type ActiveProbePayload = IsaProbePayload | SagatProbePayload | PostBlockScalePayload;

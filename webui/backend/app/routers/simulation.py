@@ -9,11 +9,13 @@ or filesystem implementation detail is returned from an ordinary public view.
 from __future__ import annotations
 
 import json
+import io
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import datetime
 from pathlib import Path
 from typing import Any, TypeVar
 from uuid import UUID
+import zipfile
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, UploadFile, status
 from sqlmodel import Session, select
@@ -49,6 +51,7 @@ from app.simulation_schemas import (
 )
 
 from matb_integration.suas.recording.records import RecordingError
+from matb_integration.suas.recording.artifacts import verify_checksum_file
 from matb_integration.suas.research.protocol import ProtocolError
 from matb_integration.suas.scenarios.loader import MAX_YAML_BYTES, load_scenario, load_scenario_text
 
@@ -59,7 +62,8 @@ _T = TypeVar("_T")
 _LEASE_HEADER = "X-Simulation-Controller"
 _PUBLIC_SECRET_KEYS = frozenset({
     "controller_lease", "lease", "lease_hash", "truth", "truth_priority",
-    "required_report", "artifact_root", "run_dir", "absolute_path",
+    "required_report", "correct_answer", "answer", "private_probe", "evaluator",
+    "future_schedule", "artifact_root", "run_dir", "absolute_path",
 })
 
 
@@ -578,6 +582,55 @@ async def get_debrief(
     if not isinstance(payload, dict):
         raise _error(status.HTTP_500_INTERNAL_SERVER_ERROR, "invalid_debrief", "debrief artifact is not a JSON object")
     return _sanitize_public(payload)
+
+
+@router.get("/sessions/{session_id}/bundle")
+async def get_public_bundle(
+    session_id: str,
+    manager: SimulationManager = Depends(get_simulation_manager),
+    db: Session = Depends(get_session),
+) -> Response:
+    """Download a checksum-verified public bundle without private run files."""
+
+    view = await _terminal_session(session_id, manager, db)
+    run_dir = _session_run_dir(session_id, manager, db)
+    if run_dir is None:
+        raise _error(status.HTTP_404_NOT_FOUND, "bundle_not_found", "public bundle not found")
+    checksum_path = run_dir / "checksums.sha256"
+    checksum_codes = verify_checksum_file(checksum_path) if checksum_path.is_file() else ("checksum_missing",)
+    if checksum_codes:
+        raise _error(
+            status.HTTP_409_CONFLICT,
+            "artifact_integrity_failed",
+            "sealed artifact checksums could not be verified",
+            context={"codes": list(checksum_codes)},
+        )
+    allowed = (
+        "debrief.json", "metrics.json", "replay-verification.json", "partial-run.json", "checksums.sha256",
+    )
+    manifest = {
+        "bundle_version": "suas-public-bundle-v1",
+        "session_id": session_id,
+        "scenario_id": view.scenario_id,
+        "scenario_sha256": view.scenario_sha256,
+        "lifecycle": view.lifecycle,
+        "validity": view.validity,
+        "private_files_excluded": ["events.jsonl", "questionnaires.json", "scenario.yaml", "checkpoints/"],
+    }
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("manifest.json", json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n")
+        for name in allowed:
+            path = run_dir / name
+            if not path.is_file():
+                continue
+            archive.writestr(name, path.read_bytes())
+    filename = f"{session_id}_suas_public_bundle.zip"
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 def _sanitize_public(value: Any, *, key: str | None = None) -> Any:
