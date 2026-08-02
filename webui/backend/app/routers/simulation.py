@@ -20,6 +20,7 @@ from sqlmodel import Session, select
 import yaml
 
 from app.db import get_session
+from app.models import Visit
 from app.simulation_models import SimulationArtifact, SimulationSession
 from app.simulation_runtime import (
     InvalidLease,
@@ -256,12 +257,51 @@ async def prepare_session(
     return await _managed(manager.prepare(body, db))
 
 
+def _session_view_from_row(row: SimulationSession, db: Session) -> SessionView:
+    """Rehydrate public metadata for a sealed session after a process restart."""
+
+    try:
+        manifest = json.loads(row.manifest_json)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        manifest = {}
+    block_order = manifest.get("block_order", []) if isinstance(manifest, Mapping) else []
+    if not isinstance(block_order, list) or not all(isinstance(item, str) for item in block_order):
+        block_order = []
+    visit = db.get(Visit, row.visit_id)
+    return SessionView(
+        id=row.id,
+        participant_id=row.participant_id,
+        visit_id=row.visit_id,
+        visit_ordinal=visit.visit_ordinal if visit is not None else None,
+        scenario_id=row.scenario_id,
+        scenario_sha256=row.scenario_sha256,
+        locale=row.locale,
+        lifecycle=row.lifecycle,
+        active_block_id=row.active_block_id,
+        validity=row.validity,
+        block_order=block_order,
+        state_version=0,
+        simulation_time_ms=0,
+        created_at=row.created_at,
+        started_at=row.started_at,
+        finished_at=row.finished_at,
+        interrupted_at=row.interrupted_at,
+    )
+
+
 @router.get("/sessions/{session_id}", response_model=SessionView)
 async def get_session_view(
     session_id: str,
     manager: SimulationManager = Depends(get_simulation_manager),
+    db: Session = Depends(get_session),
 ) -> SessionView:
-    return await _managed(manager.view(session_id))
+    try:
+        return await manager.view(session_id)
+    except SimulationNotFound:
+        row = db.get(SimulationSession, session_id)
+        if row is None:
+            raise _error(status.HTTP_404_NOT_FOUND, "simulation_not_found", "simulation not found")
+        return _session_view_from_row(row, db)
 
 
 @router.post("/sessions/{session_id}/start", response_model=SessionView)
@@ -392,8 +432,15 @@ async def get_state(
 async def _terminal_session(
     session_id: str,
     manager: SimulationManager,
+    db: Session,
 ) -> SessionView:
-    view = await _managed(manager.view(session_id))
+    try:
+        view = await manager.view(session_id)
+    except SimulationNotFound:
+        row = db.get(SimulationSession, session_id)
+        if row is None:
+            raise _error(status.HTTP_404_NOT_FOUND, "simulation_not_found", "simulation not found")
+        view = _session_view_from_row(row, db)
     if view.lifecycle not in {"FINISHED", "ABORTED"}:
         raise _error(
             status.HTTP_409_CONFLICT,
@@ -470,7 +517,7 @@ async def get_artifacts(
     manager: SimulationManager = Depends(get_simulation_manager),
     db: Session = Depends(get_session),
 ) -> list[ArtifactView]:
-    await _terminal_session(session_id, manager)
+    await _terminal_session(session_id, manager, db)
     return _artifact_views(session_id, manager, db)
 
 
@@ -503,7 +550,7 @@ async def get_debrief(
     manager: SimulationManager = Depends(get_simulation_manager),
     db: Session = Depends(get_session),
 ) -> dict[str, object]:
-    await _terminal_session(session_id, manager)
+    view = await _terminal_session(session_id, manager, db)
     run_dir = _session_run_dir(session_id, manager, db)
     if run_dir is None:
         raise _error(status.HTTP_404_NOT_FOUND, "debrief_not_found", "debrief artifact not found")
@@ -513,7 +560,7 @@ async def get_debrief(
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         # Aborted runs are intentionally partial and have no debrief artifact;
         # expose a stable, explicitly incomplete public view instead.
-        if manager.active is not None and manager.active.session_id == session_id and manager.active.lifecycle == "ABORTED":
+        if view.lifecycle == "ABORTED":
             return {"status": "partial_unverified", "timeline": []}
         raise _error(status.HTTP_404_NOT_FOUND, "debrief_not_found", "debrief artifact not found") from exc
     if not isinstance(payload, dict):
