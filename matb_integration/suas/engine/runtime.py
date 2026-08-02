@@ -72,7 +72,7 @@ class ScheduledConflictInjector:
                     {"event_id": event.event_id, "reason": unavailable},
                 ))
                 continue
-            plan = self._plan(state, event)
+            plan = self._plan(state, event, now_ms=now_ms)
             if plan is None:
                 events.append(self._emit(
                     state, EventKind.CONFLICT_INJECTION_SKIPPED,
@@ -135,7 +135,9 @@ class ScheduledConflictInjector:
                 del self._pending_releases[event_id]
         return tuple(events)
 
-    def _plan(self, state: WorldState, event) -> tuple[dict[str, int], dict[str, int]] | None:
+    def _plan(
+        self, state: WorldState, event, *, now_ms: int,
+    ) -> tuple[dict[str, int], dict[str, int]] | None:
         """Return deterministic release and travel durations, or no safe schedule.
 
         Aircraft move at a fixed adapter speed.  A direct route cannot arrive
@@ -156,7 +158,7 @@ class ScheduledConflictInjector:
             # Conflict planning happens immediately before the adapter advances
             # the state for this clock tick.  Stage one tick so the first travel
             # increment begins after injection, not in its already-elapsed slot.
-            aircraft_id: state.simulation_time_ms + event.convergence_in_ms - movement_ms + TICK_MS
+            aircraft_id: now_ms + event.convergence_in_ms - movement_ms + TICK_MS
             for aircraft_id, movement_ms in movement_times.items()
         }
         if any(release_at_ms % TICK_MS for release_at_ms in releases.values()):
@@ -395,7 +397,7 @@ class SimulationEngine:
             raw["conflict_applied_event_ids"], self._scenario.conflict_events, self._block_id, time_ms, "conflict event IDs",
         )
         self._conflicts.restore_pending_releases(_pending_conflicts(
-            raw["conflict_pending_releases"], self._scenario, self._block_id, time_ms,
+            raw["conflict_pending_releases"], self._scenario, self._block_id, time_ms, state,
             self._conflicts._applied_event_ids,
         ))
         streams = _mapping(raw["sensor_prng"], "sensor PRNG")
@@ -485,7 +487,8 @@ def _scheduled_ids(value: object, declarations, block_id: str, now_ms: int, name
 
 
 def _pending_conflicts(
-    value: object, scenario: ScenarioDefinition, block_id: str, now_ms: int, applied: set[str],
+    value: object, scenario: ScenarioDefinition, block_id: str, now_ms: int,
+    state: WorldState, applied: set[str],
 ) -> dict[str, dict[str, int]]:
     raw = _mapping(value, "conflict pending releases")
     declarations = {
@@ -497,13 +500,34 @@ def _pending_conflicts(
         if event is None or event_id not in applied:
             raise ValueError("invalid checkpoint conflict pending releases")
         releases = _mapping(release_value, "conflict pending release")
-        if not set(releases) or not set(releases).issubset({event.aircraft_a, event.aircraft_b}):
+        if set(releases) != {event.aircraft_a, event.aircraft_b}:
             raise ValueError("invalid checkpoint conflict pending releases")
         parsed = {aircraft_id: _nonnegative(at_ms, "conflict release time") for aircraft_id, at_ms in releases.items()}
         if any(at_ms <= now_ms or at_ms % TICK_MS for at_ms in parsed.values()):
             raise ValueError("invalid checkpoint conflict pending releases")
+        expected = ScheduledConflictInjector(scenario)._plan(state, event, now_ms=event.at_ms)
+        if expected is None or parsed != expected[0] or not _is_conflict_staging(state, event):
+            raise ValueError("invalid checkpoint conflict pending releases")
         result[event_id] = parsed
+    for event_id in applied:
+        event = declarations[event_id]
+        if _is_conflict_staging(state, event) and event_id not in result:
+            raise ValueError("checkpoint omits a pending conflict release")
     return result
+
+
+def _is_conflict_staging(state: WorldState, event) -> bool:
+    for aircraft_id in (event.aircraft_a, event.aircraft_b):
+        aircraft = state.aircraft.get(aircraft_id)
+        if aircraft is None:
+            return False
+        if aircraft.mode is not AircraftMode.HOLD or aircraft.route.waypoints != (event.convergence_point,):
+            return False
+        if aircraft.route_leg != 0 or aircraft.route_leg_start is not None or aircraft.route_leg_target is not None:
+            return False
+        if aircraft.route_leg_distance_mm or aircraft.route_leg_progress_mm or aircraft.movement_remainder:
+            return False
+    return True
 
 
 def _pcg(value: object) -> PCG32State:

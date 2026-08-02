@@ -71,10 +71,16 @@ def test_conflict_uses_configured_arrival_interval(loaded_scenario) -> None:
     scenario = replace(scenario, conflict_events=(conflict,))
     engine = SimulationEngine(scenario, "LOW")
     events = []
+    first_arrivals: dict[str, int] = {}
     for _ in range(3_300):
         events.extend(engine.step().events)
+        for aircraft_id in ("UAS-01", "UAS-02"):
+            if (aircraft_id not in first_arrivals
+                    and engine._state.aircraft[aircraft_id].position == conflict.convergence_point):
+                first_arrivals[aircraft_id] = engine._state.simulation_time_ms
     started = [event for event in events if event.kind.value == "CONFLICT_INJECTION_STARTED"]
     assert len(started) == 1
+    assert first_arrivals == {"UAS-01": 330_000, "UAS-02": 330_000}
     assert engine._state.aircraft["UAS-01"].position == conflict.convergence_point
     assert engine._state.aircraft["UAS-02"].position == conflict.convergence_point
 
@@ -88,6 +94,32 @@ def test_impossible_conflict_interval_is_skipped_without_route_mutation(loaded_s
     assert skipped[-1].payload["reason"] == "impossible_schedule"
     assert engine._state.aircraft["UAS-01"].route.waypoints == ()
     assert engine._state.aircraft["UAS-02"].route.waypoints == ()
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda pending: pending.clear(),
+    lambda pending: pending["low_conflict_01"].update({"UAS-01": 300_200}),
+])
+def test_rehashed_checkpoint_rejects_omitted_or_retimed_pending_conflict_release(
+    loaded_scenario, mutate,
+) -> None:
+    scenario = loaded_scenario.definition
+    original = next(event for event in scenario.conflict_events if event.event_id == "low_conflict_01")
+    scenario = replace(scenario, conflict_events=(replace(
+        original, convergence_point=PointMM(1_200_000, 4_000_000),
+    ),))
+    engine = SimulationEngine(scenario, "LOW")
+    for _ in range(3_000):
+        engine.step()
+    checkpoint = engine.checkpoint_snapshot()
+    mutate(checkpoint["conflict_pending_releases"])
+    payload = dict(checkpoint)
+    payload.pop("authoritative_state_sha256")
+    checkpoint["authoritative_state_sha256"] = canonical_sha256(payload)
+    before = engine.state_hash
+    with pytest.raises(ValueError):
+        engine.restore(checkpoint)
+    assert engine.state_hash == before
 
 
 def test_report_note_and_history_survive_private_checkpoint(loaded_scenario) -> None:
