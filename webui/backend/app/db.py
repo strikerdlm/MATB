@@ -18,6 +18,7 @@ def get_engine():
 def init_db() -> None:
     """Create tables. Import models for side-effect registration first."""
     from app import models  # noqa: F401
+    from app import simulation_models  # noqa: F401
 
     SQLModel.metadata.create_all(_engine)
 

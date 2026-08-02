@@ -56,6 +56,7 @@ def engine_fixture():
         poolclass=StaticPool,
     )
     import app.models  # noqa: F401  (register tables)
+    import app.simulation_models  # noqa: F401  (register simulation tables)
     SQLModel.metadata.create_all(engine)
     yield engine
 
