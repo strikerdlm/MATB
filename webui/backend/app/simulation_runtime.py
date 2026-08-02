@@ -164,6 +164,9 @@ class SimulationManager:
                 lease_hash=self._hash_lease(lease),
             )
             self._handle = handle
+            self._append(handle, RecordKind.LIFECYCLE, {
+                "event": "session_prepared", "scenario_id": loaded.definition.scenario_id,
+            }, 0, 0)
             db.add(SimulationSession(
                 id=session_id,
                 participant_id=request.participant_id,
@@ -240,8 +243,10 @@ class SimulationManager:
                 if handle.finish_disposition == value:
                     return self._view(handle)
                 raise InvalidTransition("conflicting terminal disposition")
-            if handle.lifecycle not in {"RUNNING", "PAUSED"}:
+            if handle.lifecycle not in {"PREPARED", "RUNNING", "PAUSED"}:
                 raise InvalidTransition(f"cannot finish from {handle.lifecycle}")
+            if handle.lifecycle == "PREPARED" and value != "abort":
+                raise InvalidTransition("a prepared session can only be aborted")
             handle.finish_disposition = value
             handle.lifecycle = "FINISHED" if value == "complete" else "ABORTED"
             now = self._time(handle)
@@ -255,7 +260,12 @@ class SimulationManager:
             self._cancel_tasks(handle)
             handle.recorder.close()
             if value == "abort":
-                handle.recorder.seal_partial(reason="aborted")
+                self.persistence.add_deviation(
+                    handle.session_id, handle.active_block_id, "aborted", "warning", now,
+                    {"reason": "aborted"},
+                )
+                artifacts = handle.recorder.seal_partial(reason="aborted")
+                self.persistence.replace_artifacts(handle.session_id, artifacts)
             else:
                 # A complete multi-block seal is finalized by the protocol layer; a
                 # one-block runtime can still expose a deterministic partial view.
@@ -263,7 +273,8 @@ class SimulationManager:
                 if replay.status.value == "match":
                     records = _read_records(handle.recorder.run_dir / "events.jsonl")
                     metrics = derive_block_metrics(records, handle.manifest).to_dict()
-                    handle.recorder.seal(questionnaires={}, metrics=metrics, debrief={"timeline": []}, replay=replay)
+                    artifacts = handle.recorder.seal(questionnaires={}, metrics=metrics, debrief={"timeline": []}, replay=replay)
+                    self.persistence.replace_artifacts(handle.session_id, artifacts)
             self.persistence.update_session(session_id, lifecycle=handle.lifecycle, finished_at=_utcnow(), active_block_id=handle.active_block_id)
             if handle.active_block_id:
                 self.persistence.update_block(session_id, handle.active_block_id, lifecycle=handle.lifecycle, simulation_finished_ms=now, finished_at=_utcnow())
