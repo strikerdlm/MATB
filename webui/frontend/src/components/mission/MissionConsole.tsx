@@ -10,6 +10,7 @@ import { FleetPanel } from "@/components/mission/FleetPanel";
 import { MissionTopBar } from "@/components/mission/MissionTopBar";
 import { ProbeOverlay } from "@/components/mission/probes/ProbeOverlay";
 import type { PostBlockScaleValues } from "@/components/mission/probes/PostBlockScales";
+import { t } from "@/lib/simulation/i18n";
 import { getSimulationState, transitionSession } from "@/lib/simulation/api";
 import { useSimulationStore } from "@/lib/simulation/store";
 import type { ActiveProbePayload, AircraftSnapshot, CommandKind, ContactSnapshot, JsonValue, Locale, ProtocolCommandKind, SessionView, WorldSnapshot } from "@/types/simulation";
@@ -79,7 +80,7 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
     try {
       const updated = await transitionSession(currentSession.id, action, lease!, action === "finish" ? { disposition: "complete" } : body);
       useSimulationStore.setState({ session: updated });
-      setMessage(`lifecycle.${updated.lifecycle.toLowerCase()}`);
+      setMessage(t(locale, `lifecycle.${updated.lifecycle.toLowerCase()}` as never));
       if (updated.lifecycle === "FINISHED") onFinished?.(updated);
       if (action === "start") {
         const state = await getSimulationState(currentSession.id);
@@ -95,7 +96,7 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
     setMessage(null);
     try {
       await submitCommand({ command_id: commandId(), expected_state_version: currentSnapshot.state_version, kind, payload: payload as Record<string, JsonValue> });
-      setMessage("command.accepted");
+      setMessage(t(locale, "command.accepted"));
       return true;
     } catch (error) { setMessage(error instanceof Error ? error.message : "command failed"); return false; }
   }
