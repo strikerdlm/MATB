@@ -34,6 +34,7 @@ function commandId(): string {
 
 export function MissionConsole({ initialSession, initialSnapshot = null, readOnly = false, onFinished }: MissionConsoleProps) {
   const initialized = useRef(false);
+  const cleanupTimer = useRef<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [detailView, setDetailView] = useState<"alerts" | "contacts">("alerts");
@@ -60,11 +61,26 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
   const canControl = !readOnly && Boolean(lease);
 
   useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
-    initialize({ session: initialSession, snapshot: initialSnapshot ?? undefined, locale: initialSession.locale });
-    void connect({ role: lease ? "controller" : "observer", lease });
-    return () => { disconnect(); reset(); initialized.current = false; };
+    if (cleanupTimer.current !== null) {
+      window.clearTimeout(cleanupTimer.current);
+      cleanupTimer.current = null;
+    }
+    if (!initialized.current) {
+      initialized.current = true;
+      initialize({ session: initialSession, snapshot: initialSnapshot ?? undefined, locale: initialSession.locale });
+      void connect({ role: lease ? "controller" : "observer", lease });
+    }
+    return () => {
+      // React StrictMode performs an immediate setup → cleanup → setup probe
+      // in development. Defer teardown by one turn so that probe does not
+      // create overlapping controller sockets or pause a live session.
+      cleanupTimer.current = window.setTimeout(() => {
+        cleanupTimer.current = null;
+        disconnect();
+        reset();
+        initialized.current = false;
+      }, 0);
+    };
   // The session is immutable for the lifetime of a console route.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialSession.id]);
