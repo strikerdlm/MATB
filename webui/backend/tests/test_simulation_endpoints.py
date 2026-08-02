@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import io
+import json
+import zipfile
 from uuid import uuid4
 
 import pytest
@@ -203,6 +206,38 @@ async def test_lifecycle_conflicts_and_terminal_artifacts(simulation_client, see
     assert debrief.json()["timeline"] == []
     assert "/" not in debrief.text
 
+    await manager.shutdown()
+
+
+@pytest.mark.anyio
+async def test_public_bundle_excludes_private_run_files(simulation_client, seeded_participant) -> None:
+    client, manager = simulation_client
+    prepared = await _prepare(client)
+    body = prepared.json()
+    session_id = body["id"]
+    headers = {"X-Simulation-Controller": body["controller_lease"]}
+    started = await client.post(
+        f"/simulation/sessions/{session_id}/start",
+        json={"block_id": "PRACTICE"},
+        headers=headers,
+    )
+    assert started.status_code == 200
+    finished = await client.post(
+        f"/simulation/sessions/{session_id}/finish",
+        json={"disposition": "complete"},
+        headers=headers,
+    )
+    assert finished.status_code == 200
+    bundle = await client.get(f"/simulation/sessions/{session_id}/bundle")
+    assert bundle.status_code == 200, bundle.text
+    with zipfile.ZipFile(io.BytesIO(bundle.content)) as archive:
+        names = set(archive.namelist())
+        assert "manifest.json" in names
+        assert "debrief.json" in names
+        assert "metrics.json" in names
+        assert not {"events.jsonl", "questionnaires.json", "scenario.yaml"} & names
+        manifest = json.loads(archive.read("manifest.json"))
+        assert "questionnaires.json" in manifest["private_files_excluded"]
     await manager.shutdown()
 
 
