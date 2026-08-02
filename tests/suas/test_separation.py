@@ -95,3 +95,68 @@ def test_checkpoint_rejects_falsified_critical_occupancy_provenance(
     with pytest.raises(ValueError, match="separation checkpoint"):
         target.restore(checkpoint)
     assert target.state_hash == before
+
+
+def test_checkpoint_rejects_injected_critical_transition_history(
+    loaded_scenario,
+) -> None:
+    scenario = replace(
+        loaded_scenario.definition,
+        advisory_separation_mm=300_000,
+        critical_separation_mm=150_000,
+    )
+    source = SimulationEngine(scenario, "LOW")
+    place_pair(source._state, 140_000)
+    source.step()
+    checkpoint = source.checkpoint_snapshot()
+    pair = checkpoint["separation"]["UAS-01:UAS-02"]
+    assert "critical_occupancy" not in pair
+
+    critical_alert = checkpoint["world"]["alerts"]["SEPARATION_CRITICAL:UAS-01:UAS-02"]
+    critical_alert["payload"]["threshold_transitions"] = [
+        {"at_ms": 200, "below": False},
+        {"at_ms": 300, "below": True},
+    ]
+    payload = dict(checkpoint)
+    payload.pop("authoritative_state_sha256")
+    checkpoint["authoritative_state_sha256"] = canonical_sha256(payload)
+
+    target = SimulationEngine(scenario, "LOW")
+    before = target.state_hash
+    with pytest.raises(ValueError, match="separation checkpoint"):
+        target.restore(checkpoint)
+    assert target.state_hash == before
+
+
+def test_checkpoint_after_real_critical_exit_continues_and_closes(
+    loaded_scenario,
+) -> None:
+    scenario = replace(
+        loaded_scenario.definition,
+        advisory_separation_mm=300_000,
+        critical_separation_mm=150_000,
+    )
+    source = SimulationEngine(scenario, "LOW")
+    place_pair(source._state, 140_000)
+    source.step()
+    place_pair(source._state, 200_000)
+    source.step()
+
+    after_exit = source.checkpoint_snapshot()
+    continued = SimulationEngine(scenario, "LOW")
+    continued.restore(after_exit)
+    place_pair(continued._state, 200_000)
+    assert continued.step().events == ()
+
+    after_continuation = continued.checkpoint_snapshot()
+    closing = SimulationEngine(scenario, "LOW")
+    closing.restore(after_continuation)
+    place_pair(closing._state, 400_000)
+    closed = closing.step().events
+    assert event_kinds(closed) == ["SEPARATION_ALERT_CLOSED"]
+    assert closed[0].payload["critical_duration_ms"] == 100
+
+    after_close = closing.checkpoint_snapshot()
+    restored_closed = SimulationEngine(scenario, "LOW")
+    restored_closed.restore(after_close)
+    assert restored_closed.state_hash == closing.state_hash

@@ -227,6 +227,11 @@ class SeparationMonitor:
             ):
                 raise ValueError("invalid separation checkpoint stale critical occupancy")
             return
+        has_transition_history = (
+            alert is not None and "threshold_transitions" in alert.payload
+        )
+        if has_transition_history != (pair.critical_transition_ms is not None):
+            raise ValueError("invalid separation checkpoint occupancy provenance")
         if pair.critical_transition_ms is None:
             if pair.critical_duration_at_transition_ms is not None:
                 raise ValueError("invalid separation checkpoint occupancy")
