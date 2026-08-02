@@ -3,7 +3,7 @@ from dataclasses import replace
 
 import pytest
 
-from matb_integration.suas.domain.commands import ReportContact
+from matb_integration.suas.domain.commands import ReportContact, ReturnToBase
 from matb_integration.suas.domain.enums import ContactClassification, ContactEvidence, ContactPriority, ContactWorkflow
 from matb_integration.suas.domain.geometry import PointMM
 from matb_integration.suas.domain.serialization import canonical_sha256
@@ -123,6 +123,62 @@ def test_rehashed_checkpoint_rejects_omitted_or_retimed_pending_conflict_release
 
 
 def test_staggered_conflict_checkpoint_restores_after_first_release(loaded_scenario) -> None:
+    scenario, engine = _staggered_conflict_after_first_release(loaded_scenario)
+    checkpoint = engine.checkpoint_snapshot()
+    restored = SimulationEngine(scenario, "LOW")
+    restored.restore(checkpoint)
+    assert restored.state_hash == engine.state_hash
+
+
+def test_staggered_conflict_checkpoint_restores_after_released_aircraft_returns_to_base(
+    loaded_scenario,
+) -> None:
+    scenario, engine = _staggered_conflict_after_first_release(loaded_scenario)
+    result = engine.step([envelope(
+        "safety-rtb", expected=engine._state.version, command=ReturnToBase("UAS-01"),
+    )])
+    assert result.command_results[0].status.value == "accepted"
+    assert engine._state.simulation_time_ms == 301_200
+    assert engine._state.aircraft["UAS-01"].mode.value == "RETURN_TO_BASE"
+    assert engine._state.aircraft["UAS-02"].mode.value == "HOLD"
+    checkpoint = engine.checkpoint_snapshot()
+    assert checkpoint["conflict_pending_releases"] == {
+        "low_conflict_01": {"UAS-02": 302_100},
+    }
+    restored = SimulationEngine(scenario, "LOW")
+    restored.restore(checkpoint)
+    assert restored.state_hash == engine.state_hash
+
+
+@pytest.mark.parametrize("tamper", ["omitted", "retimed", "foreign", "stale"])
+def test_rehashed_safety_rerouted_checkpoint_rejects_pending_conflict_tampering(
+    loaded_scenario, tamper,
+) -> None:
+    scenario, engine = _staggered_conflict_after_first_release(loaded_scenario)
+    result = engine.step([envelope(
+        "safety-rtb", expected=engine._state.version, command=ReturnToBase("UAS-01"),
+    )])
+    assert result.command_results[0].status.value == "accepted"
+    checkpoint = engine.checkpoint_snapshot()
+    pending = checkpoint["conflict_pending_releases"]
+    if tamper == "omitted":
+        pending.clear()
+    elif tamper == "retimed":
+        pending["low_conflict_01"]["UAS-02"] = 302_200
+    elif tamper == "foreign":
+        pending["foreign_conflict"] = {"UAS-02": 302_100}
+    else:
+        pending["low_conflict_01"]["UAS-02"] = 301_100
+    payload = dict(checkpoint)
+    payload.pop("authoritative_state_sha256")
+    checkpoint["authoritative_state_sha256"] = canonical_sha256(payload)
+    before = engine.state_hash
+    with pytest.raises(ValueError):
+        engine.restore(checkpoint)
+    assert engine.state_hash == before
+
+
+def _staggered_conflict_after_first_release(loaded_scenario):
     scenario = loaded_scenario.definition
     original = next(event for event in scenario.conflict_events if event.event_id == "low_conflict_01")
     scenario = replace(scenario, conflict_events=(replace(
@@ -142,9 +198,7 @@ def test_staggered_conflict_checkpoint_restores_after_first_release(loaded_scena
     assert checkpoint["conflict_pending_releases"] == {
         "low_conflict_01": {"UAS-02": 302_100},
     }
-    restored = SimulationEngine(scenario, "LOW")
-    restored.restore(checkpoint)
-    assert restored.state_hash == engine.state_hash
+    return scenario, engine
 
 
 def test_report_note_and_history_survive_private_checkpoint(loaded_scenario) -> None:

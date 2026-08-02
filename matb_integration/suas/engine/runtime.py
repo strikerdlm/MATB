@@ -499,17 +499,30 @@ def _pending_conflicts(
     result: dict[str, dict[str, int]] = {}
     for event_id in applied:
         event = declarations[event_id]
-        plan = _full_conflict_release_plan(state, event, scenario)
-        if plan is None:
-            # A skipped conflict has no injected route/plan and therefore no
-            # pending release record.  A foreign record was rejected above.
-            if event_id in raw:
-                raise ValueError("invalid checkpoint conflict pending releases")
-            continue
-        expected_pending = {
-            aircraft_id: release_at_ms for aircraft_id, release_at_ms in plan.items()
-            if release_at_ms > now_ms
-        }
+        expected_pending: dict[str, int] = {}
+        retained_plan = False
+        valid_released: set[str] = set()
+        for aircraft_id in (event.aircraft_a, event.aircraft_b):
+            release_at_ms = _conflict_release_from_retained_route(
+                state, event, scenario, aircraft_id,
+            )
+            if release_at_ms is None:
+                if _is_legitimate_released_conflict_aircraft(state, event, aircraft_id):
+                    valid_released.add(aircraft_id)
+                continue
+            retained_plan = True
+            if release_at_ms > now_ms:
+                if not _is_conflict_staging_aircraft(state, event, aircraft_id):
+                    raise ValueError("invalid checkpoint conflict pending releases")
+                expected_pending[aircraft_id] = release_at_ms
+            elif _is_legitimate_released_conflict_aircraft(state, event, aircraft_id):
+                valid_released.add(aircraft_id)
+            else:
+                raise ValueError("invalid checkpoint released conflict state")
+        if retained_plan and set(expected_pending) | valid_released != {
+            event.aircraft_a, event.aircraft_b,
+        }:
+            raise ValueError("invalid checkpoint released conflict state")
         release_value = raw.get(event_id)
         if expected_pending:
             if release_value is None:
@@ -529,45 +542,35 @@ def _pending_conflicts(
             result[event_id] = parsed
         elif release_value is not None:
             raise ValueError("invalid checkpoint conflict pending releases")
-        for aircraft_id, release_at_ms in plan.items():
-            if release_at_ms <= now_ms and not _is_legitimate_released_conflict_aircraft(
-                state, event, aircraft_id,
-            ):
-                raise ValueError("invalid checkpoint released conflict state")
     return result
 
 
-def _full_conflict_release_plan(
-    state: WorldState, event, scenario: ScenarioDefinition,
-) -> dict[str, int] | None:
-    """Reconstruct the injection-time releases from retained route-leg state."""
+def _conflict_release_from_retained_route(
+    state: WorldState, event, scenario: ScenarioDefinition, aircraft_id: str,
+) -> int | None:
+    """Derive one release independently when its injected route is still retained."""
 
-    releases: dict[str, int] = {}
-    for aircraft_id in (event.aircraft_a, event.aircraft_b):
-        aircraft = state.aircraft.get(aircraft_id)
-        if aircraft is None:
-            return None
-        if _is_conflict_staging_aircraft(state, event, aircraft_id):
-            start = aircraft.position
-        elif (
-            aircraft.route.waypoints == (event.convergence_point,)
-            and aircraft.route_leg == 0
-            and aircraft.route_leg_start is not None
-            and aircraft.route_leg_target == event.convergence_point
-        ):
-            start = aircraft.route_leg_start
-        else:
-            # No injected conflict route: this event was safely skipped, or a
-            # later legitimate command owns the route after release.
-            return None
-        speed = scenario.aircraft[aircraft_id].speed_mm_per_s
-        movement_ms = _ceil_div(
-            distance_mm(start, event.convergence_point) * 1_000, speed * TICK_MS,
-        ) * TICK_MS
-        if movement_ms > event.convergence_in_ms:
-            return None
-        releases[aircraft_id] = event.at_ms + event.convergence_in_ms - movement_ms + TICK_MS
-    return releases
+    aircraft = state.aircraft.get(aircraft_id)
+    if aircraft is None:
+        return None
+    if _is_conflict_staging_aircraft(state, event, aircraft_id):
+        start = aircraft.position
+    elif (
+        aircraft.route.waypoints == (event.convergence_point,)
+        and aircraft.route_leg == 0
+        and aircraft.route_leg_start is not None
+        and aircraft.route_leg_target == event.convergence_point
+    ):
+        start = aircraft.route_leg_start
+    else:
+        return None
+    speed = scenario.aircraft[aircraft_id].speed_mm_per_s
+    movement_ms = _ceil_div(
+        distance_mm(start, event.convergence_point) * 1_000, speed * TICK_MS,
+    ) * TICK_MS
+    if movement_ms > event.convergence_in_ms:
+        return None
+    return event.at_ms + event.convergence_in_ms - movement_ms + TICK_MS
 
 
 def _is_conflict_staging_aircraft(state: WorldState, event, aircraft_id: str) -> bool:
