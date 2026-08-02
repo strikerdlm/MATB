@@ -128,7 +128,7 @@ class ReplayVerifier:
             self._validate_checkpoints(run_dir)
             records = self._load_records(run_dir / "events.jsonl")
             records_read = len(records)
-            blocks = self._blocks(records)
+            blocks = self._blocks(records, tuple(scenario.definition.blocks))
             expected_state = actual_state = expected_event = actual_event = None
             all_expected_events: list[object] = []
             all_actual_events: list[object] = []
@@ -221,15 +221,21 @@ class ReplayVerifier:
                 raise _InvalidRecord("checkpoint_ordinal_gap")
 
     @staticmethod
-    def _blocks(records: list[SessionRecord]) -> list[tuple[str, list[SessionRecord], SessionRecord]]:
+    def _blocks(
+        records: list[SessionRecord], allowed_order: tuple[str, ...],
+    ) -> list[tuple[str, list[SessionRecord], SessionRecord]]:
         blocks: list[tuple[str, list[SessionRecord], SessionRecord]] = []
         active: tuple[str, list[SessionRecord]] | None = None
         for record in records:
             if record.kind is RecordKind.LIFECYCLE:
                 event = record.payload.get("event")
+                if event not in {"block_started", "block_finished"}:
+                    raise _InvalidRecord("unknown_lifecycle_event")
                 if event == "block_started":
                     if active is not None:
                         raise _InvalidRecord("overlapping_block")
+                    if record.block_id not in allowed_order:
+                        raise _InvalidRecord("invalid_block_protocol")
                     active = (record.block_id, [])
                     continue
                 if event == "block_finished":
@@ -246,6 +252,9 @@ class ReplayVerifier:
                 raise _InvalidRecord("record_outside_block")
         if active is not None:
             raise _InvalidRecord("missing_block_finish")
+        completed = tuple(block_id for block_id, _, _ in blocks)
+        if len(completed) != 1 and completed != allowed_order:
+            raise _InvalidRecord("invalid_block_protocol")
         return blocks
 
     @staticmethod

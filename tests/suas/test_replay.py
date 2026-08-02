@@ -62,6 +62,15 @@ def rewrite_manifest(run: Path, *, engine_version: str) -> None:
     (run / "manifest.json").write_text(canonical_json(manifest), encoding="utf-8")
 
 
+def rewrite_rows(run: Path, mutate) -> None:
+    path = run / "events.jsonl"
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    mutate(rows)
+    for sequence, row in enumerate(rows, start=1):
+        row["sequence"] = sequence
+    path.write_text("".join(canonical_json(row) + "\n" for row in rows), encoding="utf-8")
+
+
 def test_replay_matches_final_state_and_event_chain(recorded_low_run: Path) -> None:
     result = ReplayVerifier().verify(recorded_low_run)
     assert result.status is ReplayStatus.MATCH
@@ -80,3 +89,38 @@ def test_replay_refuses_engine_version_mismatch(recorded_low_run: Path) -> None:
     rewrite_manifest(recorded_low_run, engine_version="99.0.0")
     result = ReplayVerifier().verify(recorded_low_run)
     assert result.status is ReplayStatus.INCOMPATIBLE_ENGINE
+
+
+def test_replay_rejects_duplicate_block_protocol(recorded_low_run: Path) -> None:
+    def duplicate(rows: list[dict[str, object]]) -> None:
+        rows.extend(json.loads(canonical_json(row)) for row in rows[:])
+
+    rewrite_rows(recorded_low_run, duplicate)
+    result = ReplayVerifier().verify(recorded_low_run)
+    assert result.status is ReplayStatus.INVALID_RECORD
+    assert result.differences == ("invalid_block_protocol",)
+
+
+def test_replay_rejects_partial_block_protocol(recorded_low_run: Path) -> None:
+    def add_medium(rows: list[dict[str, object]]) -> None:
+        copied = [json.loads(canonical_json(row)) for row in rows[:]]
+        for row in copied:
+            row["block_id"] = "MEDIUM"
+        rows.extend(copied)
+
+    rewrite_rows(recorded_low_run, add_medium)
+    result = ReplayVerifier().verify(recorded_low_run)
+    assert result.status is ReplayStatus.INVALID_RECORD
+    assert result.differences == ("invalid_block_protocol",)
+
+
+def test_replay_rejects_unknown_lifecycle_event(recorded_low_run: Path) -> None:
+    def insert_unknown(rows: list[dict[str, object]]) -> None:
+        first = json.loads(canonical_json(rows[0]))
+        first["payload"] = {"event": "block_paused"}
+        rows.insert(1, first)
+
+    rewrite_rows(recorded_low_run, insert_unknown)
+    result = ReplayVerifier().verify(recorded_low_run)
+    assert result.status is ReplayStatus.INVALID_RECORD
+    assert result.differences == ("unknown_lifecycle_event",)
