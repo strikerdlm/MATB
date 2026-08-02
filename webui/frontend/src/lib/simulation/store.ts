@@ -18,6 +18,7 @@ import type {
   CommandResultView,
   ConnectionMode,
   ContactSnapshot,
+  ActiveProbePayload,
   Lifecycle,
   Locale,
   SessionView,
@@ -40,6 +41,8 @@ export interface SimulationStoreState {
   commandResults: Record<string, CommandResultView>;
   transportError: string | null;
   locale: Locale;
+  activeProbe: ActiveProbePayload | null;
+  concealOperationalState: boolean;
   initialize: {
     (session: SessionView, snapshot?: WorldSnapshot): void;
     (input: { session: SessionView; snapshot?: WorldSnapshot; locale?: Locale }): void;
@@ -214,6 +217,8 @@ function initialState(): Omit<SimulationStoreState, keyof {
     commandResults: {},
     transportError: null,
     locale: "en",
+    activeProbe: null,
+    concealOperationalState: false,
   };
 }
 
@@ -309,6 +314,11 @@ export function createSimulationStore() {
             pendingCommandIds: get().pendingCommandIds.filter((id) => id !== commandId),
           });
         }
+      }
+      if (envelope.kind === "probe" && isRecord(envelope.payload)) {
+        const payload = envelope.payload as unknown as ActiveProbePayload;
+        const isSagat = payload.kind === "SAGAT";
+        set({ activeProbe: payload, concealOperationalState: isSagat });
       }
       if (envelope.kind === "error" && isRecord(envelope.payload)) {
         const code = typeof envelope.payload.code === "string" ? envelope.payload.code : "stream_error";

@@ -8,9 +8,11 @@ import { ContactQueue } from "@/components/mission/ContactQueue";
 import { CommandBar } from "@/components/mission/CommandBar";
 import { FleetPanel } from "@/components/mission/FleetPanel";
 import { MissionTopBar } from "@/components/mission/MissionTopBar";
+import { ProbeOverlay } from "@/components/mission/probes/ProbeOverlay";
+import type { PostBlockScaleValues } from "@/components/mission/probes/PostBlockScales";
 import { getSimulationState, transitionSession } from "@/lib/simulation/api";
 import { useSimulationStore } from "@/lib/simulation/store";
-import type { AircraftSnapshot, CommandKind, ContactSnapshot, JsonValue, Locale, SessionView, WorldSnapshot } from "@/types/simulation";
+import type { ActiveProbePayload, AircraftSnapshot, CommandKind, ContactSnapshot, JsonValue, Locale, ProtocolCommandKind, SessionView, WorldSnapshot } from "@/types/simulation";
 
 export interface MissionConsoleProps {
   initialSession: SessionView;
@@ -41,6 +43,8 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
   const selectedContactId = useSimulationStore((state) => state.selectedContactId);
   const pendingCommandIds = useSimulationStore((state) => state.pendingCommandIds);
   const transportError = useSimulationStore((state) => state.transportError);
+  const activeProbe = useSimulationStore((state) => state.activeProbe);
+  const concealOperationalState = useSimulationStore((state) => state.concealOperationalState);
   const initialize = useSimulationStore((state) => state.initialize);
   const connect = useSimulationStore((state) => state.connect);
   const disconnect = useSimulationStore((state) => state.disconnect);
@@ -85,7 +89,7 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
     } finally { setBusy(false); }
   }
 
-  async function issueCommand(kind: CommandKind, payload: Record<string, unknown>) {
+  async function issueCommand(kind: CommandKind | ProtocolCommandKind, payload: Record<string, unknown>) {
     if (!currentSnapshot || !canControl) return;
     setMessage(null);
     try {
@@ -96,14 +100,22 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
 
   function acknowledgeAlert(alertId: string) { void issueCommand("ACKNOWLEDGE_ALERT", { alert_id: alertId }); }
 
+  const probeSubmit = async (kind: ProtocolCommandKind, payload: Record<string, unknown>) => {
+    await issueCommand(kind, payload);
+    useSimulationStore.setState({ activeProbe: null, concealOperationalState: false });
+  };
+
+  const probeOverlay = activeProbe ? <ProbeOverlay locale={locale} probe={activeProbe} pending={pendingCommandIds.length > 0} onIsa={(rating) => void probeSubmit("SUBMIT_ISA", { probe_id: activeProbe.kind === "ISA" ? activeProbe.probe_id : "", rating })} onSagat={(answer) => void probeSubmit("SUBMIT_SAGAT", { probe_id: activeProbe.kind === "SAGAT" ? activeProbe.probe_id : "", answer })} onPostBlock={(values: PostBlockScaleValues) => void probeSubmit("SUBMIT_POST_BLOCK_SCALE", { scale_id: "NASA_TLX", answers: values.nasa_tlx })} /> : null;
+
   return (
     <div className="simulation-console flex min-h-screen flex-col bg-background text-foreground" aria-busy={busy}>
       <MissionTopBar session={currentSession} locale={locale} connection={connection} canControl={canControl} busy={busy} onStart={() => void lifecycle("start", { block_id: currentSession.active_block_id ?? "PRACTICE" })} onPause={() => void lifecycle("pause", { reason: "operator_pause" })} onResume={() => void lifecycle("resume")} onFinish={() => void lifecycle("finish")} />
       {(transportError || message) && <div role="status" aria-live="polite" className="flex items-center gap-2 border-b border-warning/30 bg-warning/5 px-4 py-2 font-mono text-xs text-warning"><AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />{transportError ?? message}</div>}
       {busy && <div className="sr-only" role="status">Working…</div>}
-      {!currentSnapshot?.aircraft ? (
+      {concealOperationalState && probeOverlay ? probeOverlay : !currentSnapshot?.aircraft ? (
         <main className="grid flex-1 place-items-center p-8"><div className="mission-panel max-w-lg p-8 text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-info" aria-hidden="true" /><h1 className="mt-4 font-display text-2xl uppercase">Telemetry standing by</h1><p className="mt-2 text-sm text-muted-foreground">Start the next protocol block to receive the authoritative synthetic fleet snapshot.</p></div></main>
       ) : <main className="grid min-h-0 flex-1 gap-3 p-3 lg:grid-cols-[18rem_minmax(0,1fr)_22rem] lg:p-4"><FleetPanel snapshot={currentSnapshot} locale={locale} selectedAircraftId={selectedAircraftId} onSelect={selectAircraft} /><MissionMap snapshot={currentSnapshot} locale={locale} selectedAircraftId={selectedAircraftId} selectedContactId={selectedContactId} onSelectAircraft={selectAircraft} onSelectContact={selectContact} /><aside className="mission-panel flex min-h-0 flex-col"><div className="grid grid-cols-2 border-b border-white/10"><button type="button" className="border-b-2 border-white px-3 py-3 font-mono text-[10px] uppercase tracking-wider">Alerts</button><button type="button" className="border-b-2 border-transparent px-3 py-3 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Contacts</button></div><div className="min-h-0 flex-1"><AlertQueue alerts={alerts} locale={locale} readOnly={!canControl} onAcknowledge={(alert) => acknowledgeAlert(alert.alert_id)} /><ContactQueue contacts={contacts} locale={locale} readOnly={!canControl} onAction={(kind, contact) => void issueCommand(kind, { contact_id: contact.contact_id, ...(kind === "CLASSIFY_CONTACT" ? { classification: "uncertain" } : kind === "SET_CONTACT_PRIORITY" ? { priority: "MEDIUM" } : kind === "REPORT_CONTACT" ? { note_code: "GENERAL" } : {}) })} /></div></aside></main>}
+      {activeProbe && !concealOperationalState && probeOverlay}
       <CommandBar snapshot={currentSnapshot} selectedAircraft={selectedAircraft} selectedContact={selectedContact} locale={locale} readOnly={!canControl} pending={pendingCommandIds.length > 0} onCommand={issueCommand} />
     </div>
   );

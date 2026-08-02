@@ -42,6 +42,7 @@ export type CommandKind =
   | "CLASSIFY_CONTACT"
   | "SET_CONTACT_PRIORITY"
   | "REPORT_CONTACT";
+export type ProtocolCommandKind = "SUBMIT_ISA" | "SUBMIT_SAGAT" | "SUBMIT_POST_BLOCK_SCALE";
 export type StreamKind =
   | "snapshot"
   | "domain_event"
@@ -213,7 +214,7 @@ export interface ErrorDetail {
 export interface CommandRequest {
   command_id: string;
   expected_state_version: number;
-  kind: CommandKind;
+  kind: CommandKind | ProtocolCommandKind;
   payload: Record<string, JsonValue>;
 }
 
@@ -239,6 +240,33 @@ export interface StreamEnvelope<T = JsonValue> {
   /** Set on a post-reconnect full snapshot so the store can resynchronize. */
   resynchronizes_after_sequence?: number;
 }
+
+export interface IsaProbePayload {
+  kind: "ISA";
+  probe_id: string;
+  question: string;
+  timeout_ms: number;
+  min: 1;
+  max: 10;
+}
+
+export interface SagatProbePayload {
+  kind: "SAGAT";
+  probe_id: string;
+  sa_level: 1 | 2 | 3;
+  domain: string;
+  question: string;
+  options: string[];
+  timeout_ms: number;
+}
+
+export interface PostBlockScalePayload {
+  kind: "POST_BLOCK";
+  block_id: string;
+  required: ("NASA_TLX" | "BEDFORD")[];
+}
+
+export type ActiveProbePayload = IsaProbePayload | SagatProbePayload | PostBlockScalePayload;
 
 export interface ArtifactView {
   kind: string;
