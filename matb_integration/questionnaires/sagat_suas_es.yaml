@@ -1,0 +1,66 @@
+format_version: 1
+locale: es-CO
+probes:
+  - probe_id: suas_l1_lost_links
+    domain: perception
+    answer_evaluator: suas_l1_lost_links
+    sa_level: 1
+    question: ¿Cuántas aeronaves tienen actualmente un enlace perdido?
+    option_source: integer_0_8
+    timeout_s: 15
+  - probe_id: suas_l1_lowest_battery
+    domain: perception
+    answer_evaluator: suas_l1_lowest_battery
+    sa_level: 1
+    question: ¿Qué aeronave tiene la menor energía de batería restante?
+    option_source: active_aircraft
+    timeout_s: 15
+  - probe_id: suas_l1_unreported
+    domain: perception
+    answer_evaluator: suas_l1_unreported
+    sa_level: 1
+    question: ¿Cuántos contactos detectados o inspeccionables aún no se han reportado?
+    option_source: integer_0_8
+    timeout_s: 15
+  - probe_id: suas_l2_largest_gap
+    domain: comprehension
+    answer_evaluator: suas_l2_largest_gap
+    sa_level: 2
+    question: ¿Qué sector de búsqueda tiene la mayor brecha de cobertura restante?
+    option_source: sectors
+    timeout_s: 15
+  - probe_id: suas_l2_attention
+    domain: comprehension
+    answer_evaluator: suas_l2_attention
+    sa_level: 2
+    question: ¿Qué aeronave requiere primero la atención del operador?
+    option_source: aircraft_or_none
+    timeout_s: 15
+  - probe_id: suas_l2_mission_state
+    domain: comprehension
+    answer_evaluator: suas_l2_mission_state
+    sa_level: 2
+    question: ¿Qué banda de cobertura describe mejor el estado actual de misión?
+    option_source: coverage_band
+    timeout_s: 15
+  - probe_id: suas_l3_reserve_first
+    domain: projection
+    answer_evaluator: suas_l3_reserve_first
+    sa_level: 3
+    question: ¿Qué aeronave alcanzará primero su umbral de reserva si continúan las tareas actuales?
+    option_source: aircraft_or_none
+    timeout_s: 15
+  - probe_id: suas_l3_next_sector
+    domain: projection
+    answer_evaluator: suas_l3_next_sector
+    sa_level: 3
+    question: ¿Qué aeronave se prevé que terminará primero la ruta de su sector actual?
+    option_source: active_aircraft
+    timeout_s: 15
+  - probe_id: suas_l3_conflict_risk
+    domain: projection
+    answer_evaluator: suas_l3_conflict_risk
+    sa_level: 3
+    question: ¿Qué par tiene el mayor riesgo de separación a corto plazo?
+    option_source: aircraft_pair_or_none
+    timeout_s: 15
