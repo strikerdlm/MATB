@@ -92,6 +92,19 @@ def test_exported_snapshot_keeps_initialized_world_position_context(loaded_scena
     }
 
 
+def test_exported_snapshot_keeps_detected_position_after_deepcopy(loaded_scenario) -> None:
+    """Catches identity-bound scenario context disappearing after checkpoint restoration."""
+
+    scenario = loaded_scenario.definition
+    world = SyntheticVehicleBackend().initialize(scenario, scenario.blocks["LOW"])
+    world.contacts["C-01"].evidence = ContactEvidence.DETECTED
+    restored = deepcopy(world)
+
+    assert public_snapshot(restored)["contacts"]["C-01"]["position"] == {
+        "x_mm": 2_500_000, "y_mm": 1_800_000,
+    }
+
+
 @pytest.mark.parametrize("sensor_first", [False, True])
 def test_due_scan_has_one_charge_and_detection_in_either_runtime_order(
     loaded_scenario, sensor_first: bool,
@@ -114,6 +127,40 @@ def test_due_scan_has_one_charge_and_detection_in_either_runtime_order(
     assert world.contacts["C-01"].evidence is ContactEvidence.DETECTED
     assert world.aircraft["UAS-01"].energy_units == 99_985
     assert world.aircraft["UAS-01"].next_sensor_scan_ms == 10_000
+
+
+@pytest.mark.parametrize("sensor_first", [False, True])
+def test_due_scan_refreshes_reserve_alert_once_at_exact_crossing(
+    loaded_scenario, sensor_first: bool,
+) -> None:
+    """Catches scan charges leaving reserve state and threshold alerts stale."""
+
+    scenario = loaded_scenario.definition
+    backend = SyntheticVehicleBackend()
+    world = backend.initialize(scenario, scenario.blocks["LOW"])
+    aircraft = world.aircraft["UAS-01"]
+    aircraft.position = scenario.contacts["C-01"].position
+    aircraft.energy_units = 18_891
+    sensor = SensorSystem(scenario)
+
+    if sensor_first:
+        sensor_events = sensor.step(world, now_ms=5_000)
+        _, backend_events = backend.advance(world, tick_ms=5_000)
+    else:
+        _, backend_events = backend.advance(world, tick_ms=5_000)
+        sensor_events = sensor.step(world, now_ms=world.simulation_time_ms)
+
+    reserve_events = [
+        event for event in (*backend_events, *sensor_events)
+        if event.kind.value == "ENERGY_THRESHOLD_CROSSED"
+        and event.payload["alert_kind"] == "ENERGY_RESERVE"
+    ]
+    assert aircraft.energy_units == 18_876
+    assert aircraft.predicted_home_reserve_units == 15_000
+    assert len(reserve_events) == 1
+    assert reserve_events[0].payload["transition"] == "opened"
+    assert reserve_events[0].simulation_time_ms == 5_000
+    assert world.alerts["ENERGY_RESERVE:UAS-01"].closed_at_ms is None
 
 
 def test_nominal_sensor_detects_while_link_is_lost(loaded_scenario, reference_world) -> None:

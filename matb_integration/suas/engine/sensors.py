@@ -12,6 +12,7 @@ from matb_integration.suas.domain.enums import (
 from matb_integration.suas.domain.events import DomainEvent
 from matb_integration.suas.domain.geometry import distance_mm
 from matb_integration.suas.domain.models import ScenarioDefinition, WorldState
+from matb_integration.suas.engine.energy import refresh_energy_reserve
 from matb_integration.suas.engine.prng import PCG32, derive_stream_seed
 
 if TYPE_CHECKING:
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
 
 
 _REPORT_HISTORY: dict[int, dict[str, list[dict[str, object]]]] = {}
-_SCENARIO_BY_WORLD: dict[int, tuple[WorldState, ScenarioDefinition]] = {}
+_SCENARIO_BY_CONTEXT: dict[tuple[str, tuple[str, ...], tuple[str, ...]], ScenarioDefinition] = {}
 
 
 class SensorSystem:
@@ -54,6 +55,9 @@ class SensorSystem:
                 if aircraft.sensor is not SensorState.NOMINAL:
                     continue
                 aircraft.energy_units -= definition.energy.sensor_units_per_scan
+                refresh_energy_reserve(
+                    state, aircraft, definition, events, at_ms=scan_at_ms,
+                )
                 if coverage is not None:
                     coverage.mark_scan(state, aircraft_id)
                 pairs = [(aircraft_id, contact_id) for contact_id in sorted(state.contacts)]
@@ -270,12 +274,15 @@ def public_snapshot(state: WorldState, *, scenario: ScenarioDefinition | None = 
 def bind_world_scenario(state: WorldState, scenario: ScenarioDefinition) -> None:
     """Retain non-public lookup context without widening locked world state."""
 
-    _SCENARIO_BY_WORLD[id(state)] = (state, scenario)
+    _SCENARIO_BY_CONTEXT[_world_context_key(state)] = scenario
 
 
 def _scenario_for_world(state: WorldState) -> ScenarioDefinition | None:
-    entry = _SCENARIO_BY_WORLD.get(id(state))
-    return entry[1] if entry is not None and entry[0] is state else None
+    return _SCENARIO_BY_CONTEXT.get(_world_context_key(state))
+
+
+def _world_context_key(state: WorldState) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
+    return state.block_id, tuple(sorted(state.aircraft)), tuple(sorted(state.contacts))
 
 
 def _workflow_event(

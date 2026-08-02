@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 from matb_integration.suas.domain.enums import (
-    AircraftMode, AlertKind, AlertSeverity, ContactEvidence, ContactWorkflow,
+    AircraftMode, ContactEvidence, ContactWorkflow,
 )
-from matb_integration.suas.domain.events import AlertState, DomainEvent
+from matb_integration.suas.domain.events import DomainEvent
 from matb_integration.suas.domain.geometry import PointMM, distance_mm, heading_mdeg
 from matb_integration.suas.domain.models import (
     AircraftDefinition, AircraftState, BlockDefinition, ContactState, Route,
     ScenarioDefinition, WorldState,
 )
 from matb_integration.suas.engine.sensors import bind_world_scenario
+from matb_integration.suas.engine.energy import refresh_energy_reserve
 
 
 class SyntheticVehicleBackend:
@@ -82,7 +83,9 @@ class SyntheticVehicleBackend:
             if definition is None:
                 raise ValueError(f"world references missing aircraft definition {aircraft_id}")
             if aircraft.mode in (AircraftMode.RECOVERED, AircraftMode.MISSION_FAILED):
-                self._update_reserve(state, aircraft, definition, events)
+                refresh_energy_reserve(
+                    state, aircraft, definition, events, at_ms=state.simulation_time_ms,
+                )
                 continue
             rate = _consumption_rate(aircraft.mode, definition)
             numerator = rate * tick_ms + aircraft.energy_remainder
@@ -91,7 +94,9 @@ class SyntheticVehicleBackend:
             self._advance_position(aircraft, definition, tick_ms, state, events)
             if aircraft.energy_units <= 0 and aircraft.position != definition.home:
                 self._set_mode(state, aircraft, AircraftMode.MISSION_FAILED, events)
-            self._update_reserve(state, aircraft, definition, events)
+            refresh_energy_reserve(
+                state, aircraft, definition, events, at_ms=state.simulation_time_ms,
+            )
         return state, tuple(events)
 
     def _advance_position(
@@ -175,93 +180,6 @@ class SyntheticVehicleBackend:
             entity_ids=(aircraft.aircraft_id,),
             payload={"from": previous.value, "to": mode.value},
         ))
-
-    def _update_reserve(
-        self,
-        state: WorldState,
-        aircraft: AircraftState,
-        definition: AircraftDefinition,
-        events: list[DomainEvent],
-    ) -> None:
-        return_cost = ceil_div(
-            distance_mm(aircraft.position, definition.home) * definition.energy.transit_units_per_s,
-            definition.return_speed_mm_per_s,
-        )
-        margin = ceil_div(
-            definition.energy.capacity_units * definition.energy.reserve_margin_ppm,
-            1_000_000,
-        )
-        aircraft.predicted_home_reserve_units = aircraft.energy_units - return_cost
-        reserve_alert = aircraft.predicted_home_reserve_units <= margin
-        critical_alert = aircraft.predicted_home_reserve_units < 0
-        self._set_alert(
-            state, aircraft, AlertKind.ENERGY_RESERVE, AlertSeverity.ADVISORY,
-            reserve_alert, margin, events,
-        )
-        self._set_alert(
-            state, aircraft, AlertKind.ENERGY_CRITICAL, AlertSeverity.CRITICAL,
-            critical_alert, 0, events,
-        )
-
-    def _set_alert(
-        self,
-        state: WorldState,
-        aircraft: AircraftState,
-        kind: AlertKind,
-        severity: AlertSeverity,
-        should_be_open: bool,
-        boundary: int,
-        events: list[DomainEvent],
-    ) -> None:
-        alert_id = f"{kind.value}:{aircraft.aircraft_id}"
-        current = state.alerts.get(alert_id)
-        open_now = current is not None and current.closed_sequence is None
-        if open_now == should_be_open:
-            return
-        if should_be_open:
-            sequence = state.event_sequence + 1
-            state.alerts[alert_id] = AlertState(
-                alert_id=alert_id,
-                kind=kind,
-                severity=severity,
-                entity_ids=(aircraft.aircraft_id,),
-                opened_sequence=sequence,
-                opened_at_ms=state.simulation_time_ms,
-                closed_sequence=None,
-                closed_at_ms=None,
-                acknowledged=False,
-                acknowledged_sequence=None,
-                acknowledged_at_ms=None,
-                payload={"boundary_units": boundary, "predicted_home_reserve_units": aircraft.predicted_home_reserve_units},
-            )
-            transition = "opened"
-        else:
-            assert current is not None
-            current.closed_sequence = state.event_sequence + 1
-            current.closed_at_ms = state.simulation_time_ms
-            current.payload = {
-                "boundary_units": boundary,
-                "predicted_home_reserve_units": aircraft.predicted_home_reserve_units,
-            }
-            transition = "closed"
-        events.append(_emit(
-            state,
-            kind="ENERGY_THRESHOLD_CROSSED",
-            entity_ids=(aircraft.aircraft_id,),
-            payload={
-                "alert_kind": kind.value,
-                "transition": transition,
-                "boundary_units": boundary,
-                "predicted_home_reserve_units": aircraft.predicted_home_reserve_units,
-            },
-        ))
-
-
-def ceil_div(numerator: int, denominator: int) -> int:
-    if denominator <= 0:
-        raise ValueError("denominator must be positive")
-    return -(-numerator // denominator)
-
 
 def _initial_aircraft_state(definition: AircraftDefinition) -> AircraftState:
     return AircraftState(
