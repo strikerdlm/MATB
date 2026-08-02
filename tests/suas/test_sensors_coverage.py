@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+import pytest
+
+from matb_integration.suas.adapters.synthetic import SyntheticVehicleBackend
 from matb_integration.suas.domain.enums import (
     ContactClassification,
     ContactEvidence,
@@ -62,6 +65,55 @@ def test_detected_contact_exposes_position_but_not_before(loaded_scenario, refer
     assert public_snapshot(reference_world, scenario=scenario)["contacts"]["C-01"]["position"] == {
         "x_mm": 2_500_000, "y_mm": 1_800_000,
     }
+
+
+def test_exported_snapshot_includes_detected_contact_position(loaded_scenario, reference_world) -> None:
+    """Catches the one-argument public API dropping a detected contact position."""
+
+    scenario = loaded_scenario.definition
+    sensor = SensorSystem(scenario)
+    reference_world.aircraft["UAS-01"].position = scenario.contacts["C-01"].position
+    sensor.scan_pairs(reference_world, pairs=[("UAS-01", "C-01")])
+
+    assert public_snapshot(reference_world)["contacts"]["C-01"]["position"] == {
+        "x_mm": 2_500_000, "y_mm": 1_800_000,
+    }
+
+
+def test_exported_snapshot_keeps_initialized_world_position_context(loaded_scenario) -> None:
+    """Catches a restored detected world losing its one-argument position projection."""
+
+    scenario = loaded_scenario.definition
+    world = SyntheticVehicleBackend().initialize(scenario, scenario.blocks["LOW"])
+    world.contacts["C-01"].evidence = ContactEvidence.DETECTED
+
+    assert public_snapshot(world)["contacts"]["C-01"]["position"] == {
+        "x_mm": 2_500_000, "y_mm": 1_800_000,
+    }
+
+
+@pytest.mark.parametrize("sensor_first", [False, True])
+def test_due_scan_has_one_charge_and_detection_in_either_runtime_order(
+    loaded_scenario, sensor_first: bool,
+) -> None:
+    """Catches backend-owned scan cursor advancement hiding the due scan from sensors."""
+
+    scenario = loaded_scenario.definition
+    backend = SyntheticVehicleBackend()
+    world = backend.initialize(scenario, scenario.blocks["LOW"])
+    world.aircraft["UAS-01"].position = scenario.contacts["C-01"].position
+    sensor = SensorSystem(scenario)
+
+    if sensor_first:
+        sensor.step(world, now_ms=5_000)
+        backend.advance(world, tick_ms=5_000)
+    else:
+        backend.advance(world, tick_ms=5_000)
+        sensor.step(world, now_ms=world.simulation_time_ms)
+
+    assert world.contacts["C-01"].evidence is ContactEvidence.DETECTED
+    assert world.aircraft["UAS-01"].energy_units == 99_985
+    assert world.aircraft["UAS-01"].next_sensor_scan_ms == 10_000
 
 
 def test_nominal_sensor_detects_while_link_is_lost(loaded_scenario, reference_world) -> None:

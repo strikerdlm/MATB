@@ -11,6 +11,7 @@ from matb_integration.suas.domain.models import (
     AircraftDefinition, AircraftState, BlockDefinition, ContactState, Route,
     ScenarioDefinition, WorldState,
 )
+from matb_integration.suas.engine.sensors import bind_world_scenario
 
 
 class SyntheticVehicleBackend:
@@ -48,7 +49,7 @@ class SyntheticVehicleBackend:
             )
             for contact_id in sorted(block.contact_ids)
         }
-        return WorldState(
+        state = WorldState(
             block_id=block.block_id,
             tick=0,
             simulation_time_ms=0,
@@ -59,6 +60,8 @@ class SyntheticVehicleBackend:
             coverage_cells=set(),
             event_sequence=0,
         )
+        bind_world_scenario(state, scenario)
+        return state
 
     def advance(
         self, state: WorldState, *, tick_ms: int,
@@ -82,11 +85,6 @@ class SyntheticVehicleBackend:
                 self._update_reserve(state, aircraft, definition, events)
                 continue
             rate = _consumption_rate(aircraft.mode, definition)
-            if aircraft.sensor.value == "NOMINAL":
-                while aircraft.next_sensor_scan_ms <= state.simulation_time_ms:
-                    rate_charge = definition.energy.sensor_units_per_scan
-                    aircraft.energy_units -= rate_charge
-                    aircraft.next_sensor_scan_ms += definition.sensor.scan_interval_ms
             numerator = rate * tick_ms + aircraft.energy_remainder
             aircraft.energy_units -= numerator // 1_000
             aircraft.energy_remainder = numerator % 1_000

@@ -6,8 +6,8 @@ from collections.abc import MutableMapping, Sequence
 from typing import TYPE_CHECKING
 
 from matb_integration.suas.domain.enums import (
-    ContactClassification, ContactEvidence, ContactPriority, ContactWorkflow, EventKind,
-    SensorState,
+    AircraftMode, ContactClassification, ContactEvidence, ContactPriority, ContactWorkflow,
+    EventKind, SensorState,
 )
 from matb_integration.suas.domain.events import DomainEvent
 from matb_integration.suas.domain.geometry import distance_mm
@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
 
 _REPORT_HISTORY: dict[int, dict[str, list[dict[str, object]]]] = {}
+_SCENARIO_BY_WORLD: dict[int, tuple[WorldState, ScenarioDefinition]] = {}
 
 
 class SensorSystem:
@@ -40,15 +41,19 @@ class SensorSystem:
 
         if isinstance(now_ms, bool) or not isinstance(now_ms, int) or now_ms < 0:
             raise ValueError("now_ms must be non-negative integer milliseconds")
+        bind_world_scenario(state, self._scenario)
         events: list[DomainEvent] = []
         for aircraft_id in sorted(state.aircraft):
             aircraft = state.aircraft[aircraft_id]
             definition = self._scenario.aircraft[aircraft_id]
+            if aircraft.mode in (AircraftMode.RECOVERED, AircraftMode.MISSION_FAILED):
+                continue
             while aircraft.next_sensor_scan_ms <= now_ms:
                 scan_at_ms = aircraft.next_sensor_scan_ms
                 aircraft.next_sensor_scan_ms += definition.sensor.scan_interval_ms
                 if aircraft.sensor is not SensorState.NOMINAL:
                     continue
+                aircraft.energy_units -= definition.energy.sensor_units_per_scan
                 if coverage is not None:
                     coverage.mark_scan(state, aircraft_id)
                 pairs = [(aircraft_id, contact_id) for contact_id in sorted(state.contacts)]
@@ -64,6 +69,7 @@ class SensorSystem:
     ) -> tuple[DomainEvent, ...]:
         """Run explicit observations, primarily for deterministic integrations/tests."""
 
+        bind_world_scenario(state, self._scenario)
         timestamp = state.simulation_time_ms if at_ms is None else at_ms
         events: list[DomainEvent] = []
         for aircraft_id, contact_id in pairs:
@@ -240,6 +246,9 @@ def apply_contact_action(
 def public_snapshot(state: WorldState, *, scenario: ScenarioDefinition | None = None) -> dict[str, object]:
     """Project contact state without leaking hidden truth or reporting requirements."""
 
+    resolved_scenario = scenario or _scenario_for_world(state)
+    if scenario is not None:
+        bind_world_scenario(state, scenario)
     contacts: dict[str, dict[str, object]] = {}
     for contact_id in sorted(state.contacts):
         contact = state.contacts[contact_id]
@@ -251,11 +260,22 @@ def public_snapshot(state: WorldState, *, scenario: ScenarioDefinition | None = 
             "priority": contact.priority.value if contact.priority else None,
             "report_ids": list(contact.report_ids),
         }
-        if scenario is not None and contact.evidence is not ContactEvidence.NONE:
-            position = scenario.contacts[contact_id].position
+        if resolved_scenario is not None and contact.evidence is not ContactEvidence.NONE:
+            position = resolved_scenario.contacts[contact_id].position
             projected["position"] = {"x_mm": position.x_mm, "y_mm": position.y_mm}
         contacts[contact_id] = projected
     return {"contacts": contacts}
+
+
+def bind_world_scenario(state: WorldState, scenario: ScenarioDefinition) -> None:
+    """Retain non-public lookup context without widening locked world state."""
+
+    _SCENARIO_BY_WORLD[id(state)] = (state, scenario)
+
+
+def _scenario_for_world(state: WorldState) -> ScenarioDefinition | None:
+    entry = _SCENARIO_BY_WORLD.get(id(state))
+    return entry[1] if entry is not None and entry[0] is state else None
 
 
 def _workflow_event(
