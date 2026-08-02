@@ -11,7 +11,7 @@ from matb_integration.suas.domain.commands import CommandEnvelope, Hold
 from matb_integration.suas.domain.serialization import canonical_data, canonical_json
 from matb_integration.suas.engine.runtime import ENGINE_VERSION, SimulationEngine
 from matb_integration.suas.recording.recorder import RecordKind, SessionRecord, SessionRecorder
-from matb_integration.suas.recording.replay import ReplayStatus, ReplayVerifier, event_chain_hash
+from matb_integration.suas.recording.replay import ReplayStatus, ReplayVerifier, effective_records, event_chain_hash
 from matb_integration.suas.scenarios.loader import load_scenario
 
 
@@ -201,3 +201,22 @@ def test_replay_rejects_full_protocol_in_wrong_manifest_order(recorded_full_run:
     result = ReplayVerifier().verify(recorded_full_run)
     assert result.status is ReplayStatus.INVALID_RECORD
     assert result.differences == ("invalid_block_protocol",)
+
+
+def test_effective_records_excludes_invalidated_branch_but_keeps_recovery_audit() -> None:
+    records = [
+        _record(1, RecordKind.LIFECYCLE, 0, 0, {"event": "block_started"}),
+        _record(2, RecordKind.COMMAND, 100, 0, {"applied_tick": 1, "command": {"command_id": "a", "expected_state_version": 0, "kind": "Hold", "payload": {"aircraft_id": "UAS-01"}}}),
+        _record(3, RecordKind.DOMAIN_EVENT, 100, 1, {"event": {"event_id": "old"}}),
+        _record(4, RecordKind.LIFECYCLE, 100, 1, {"event": "checkpoint_recovery", "invalidated_sequence_start": 2, "invalidated_sequence_end": 3}),
+        _record(5, RecordKind.DOMAIN_EVENT, 200, 2, {"event": {"event_id": "new"}}),
+    ]
+    assert [record.sequence for record in effective_records(records)] == [1, 4, 5]
+
+
+def test_effective_records_rejects_overlapping_recovery_ranges() -> None:
+    records = [
+        _record(1, RecordKind.LIFECYCLE, 0, 0, {"event": "checkpoint_recovery", "invalidated_sequence_start": 1, "invalidated_sequence_end": 0}),
+    ]
+    with pytest.raises(ValueError, match="invalid_recovery_range"):
+        effective_records(records)

@@ -110,6 +110,52 @@ def event_chain_hash(events: Iterable[object]) -> str:
     return chain.hex()
 
 
+def effective_records(records: Iterable[SessionRecord]) -> tuple[SessionRecord, ...]:
+    """Return the authoritative branch after explicit checkpoint recovery.
+
+    The append-only audit stream is never rewritten.  A recovery marker may
+    invalidate a contiguous suffix from an earlier branch; those records stay
+    on disk but are excluded from replay outcomes.  Recovery/deviation audit
+    records themselves remain visible in the returned sequence.
+    """
+
+    materialized = tuple(records)
+    for expected, record in enumerate(materialized, start=1):
+        if not isinstance(record, SessionRecord) or record.sequence != expected:
+            raise ValueError("sequence_gap")
+    ranges: list[tuple[int, int]] = []
+    recovery_sequences: set[int] = set()
+    for record in materialized:
+        if record.kind is not RecordKind.LIFECYCLE or record.payload.get("event") != "checkpoint_recovery":
+            continue
+        recovery_sequences.add(record.sequence)
+        start = record.payload.get("invalidated_sequence_start")
+        end = record.payload.get("invalidated_sequence_end")
+        if start is None and end is None:
+            continue
+        if (
+            isinstance(start, bool) or not isinstance(start, int)
+            or isinstance(end, bool) or not isinstance(end, int)
+            or start < 1 or end < start or end >= record.sequence
+        ):
+            raise ValueError("invalid_recovery_range")
+        if any(not (end < old_start or start > old_end) for old_start, old_end in ranges):
+            raise ValueError("overlapping_recovery_range")
+        if any(start <= prior <= end for prior in recovery_sequences if prior != record.sequence):
+            raise ValueError("recovery_invalidates_recovery")
+        ranges.append((start, end))
+    def invalidated(sequence: int) -> bool:
+        return any(start <= sequence <= end for start, end in ranges)
+    effective: list[SessionRecord] = []
+    for record in materialized:
+        if not invalidated(record.sequence):
+            effective.append(record)
+            continue
+        if record.kind is RecordKind.PROTOCOL_DEVIATION:
+            effective.append(record)
+    return tuple(effective)
+
+
 class _InvalidRecord(ValueError):
     pass
 
@@ -136,8 +182,9 @@ class ReplayVerifier:
             if any(block_id not in scenario_block_ids for block_id in manifest_protocol):
                 raise _InvalidRecord("invalid_manifest_block_order")
             self._validate_checkpoints(run_dir)
-            records = self._load_records(run_dir / "events.jsonl")
-            records_read = len(records)
+            raw_records = self._load_records(run_dir / "events.jsonl")
+            records_read = len(raw_records)
+            records = list(effective_records(raw_records))
             blocks = self._blocks(records, scenario_block_ids, block_order)
             expected_state = actual_state = expected_event = actual_event = None
             all_expected_events: list[object] = []

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import inspect
+import json
 import secrets
 from collections import deque
 from collections.abc import Awaitable, Callable, Mapping, Sequence
@@ -30,6 +31,7 @@ from matb_integration.suas.engine.runtime import (
 from matb_integration.suas.metrics.mission import derive_block_metrics
 from matb_integration.suas.recording.records import RecordKind, RecordingError, SessionRecord
 from matb_integration.suas.recording.recorder import SessionRecorder
+from matb_integration.suas.recording.checkpoints import load_checkpoint
 from matb_integration.suas.recording.replay import ReplayVerifier, event_chain_hash
 from matb_integration.suas.scenarios.loader import load_scenario
 from matb_integration.suas.scenarios.manifest import build_session_manifest
@@ -90,6 +92,7 @@ class RuntimeHandle:
     snapshot_task: asyncio.Task[Any] | None = None
     finish_disposition: str | None = None
     transport_sequence: int = 0
+    validity: str = "valid"
 
 
 def _utcnow() -> datetime:
@@ -313,6 +316,7 @@ class SimulationManager:
             handle.queue.clear()
             commands = [item.envelope for item in queued]
             record_sequence_before = handle.sequence
+            checkpoint_before = handle.engine.checkpoint_snapshot()
             try:
                 result = handle.engine.step(commands)
                 tick = int(result.snapshot["tick"])
@@ -332,17 +336,24 @@ class SimulationManager:
                         item.future.set_result(command_result)
                 await self._publish_tick_records(handle, result.snapshot, record_sequence_before)
             except RecordingError:
-                handle.lifecycle = "INTERRUPTED"
-                self.persistence.update_session(handle.session_id, lifecycle="INTERRUPTED", interrupted_at=_utcnow(), validity="invalid")
-                self.persistence.add_deviation(handle.session_id, handle.active_block_id, "recording_failure", "fatal", self._time(handle), {"reason": "recording_failure"})
+                try:
+                    handle.engine.restore(checkpoint_before)
+                except Exception:
+                    pass
+                await self._interrupt(handle, "recording_failure", {"reason": "recording_failure"})
                 for item in queued:
                     if not item.future.done():
                         item.future.set_exception(RecordingError("recording failure"))
             except Exception as error:
+                try:
+                    handle.engine.restore(checkpoint_before)
+                except Exception:
+                    pass
+                await self._interrupt(handle, "runtime_failure", {"reason": type(error).__name__})
                 for item in queued:
                     if not item.future.done():
                         item.future.set_exception(error)
-                raise
+                return
 
     async def snapshot_once(self) -> dict[str, object]:
         async with self._lock:
@@ -371,7 +382,184 @@ class SimulationManager:
         async with self._lock:
             self._shutdown = True
             if self._handle is not None:
+                if self._handle.lifecycle in {"RUNNING", "PAUSED"}:
+                    await self._interrupt(self._handle, "process_shutdown", {"reason": "process_shutdown"}, severity="warning")
                 self._cancel_tasks(self._handle)
+
+    async def recover(
+        self,
+        session_id: str,
+        lease: str | None,
+        checkpoint_version: int,
+        *,
+        confirm_process_restart: bool = False,
+    ) -> RecoveryView:
+        """Restore one exact checkpoint and return a paused, deviated view."""
+
+        async with self._lock:
+            if self._handle is None:
+                if lease is not None or not confirm_process_restart:
+                    raise InvalidLease("process-restart recovery requires confirmation")
+                return self._recover_stale_locked(session_id, checkpoint_version)
+            handle = self._require(session_id, lease, check_lease=True)
+            if handle.lifecycle != "INTERRUPTED":
+                raise InvalidTransition(f"cannot recover from {handle.lifecycle}")
+            if isinstance(checkpoint_version, bool) or not isinstance(checkpoint_version, int) or checkpoint_version <= 0:
+                raise ValueError("checkpoint_version must be positive")
+            path = handle.recorder.checkpoints_dir / f"checkpoint-{checkpoint_version:08d}.json.gz"
+            wrapper = load_checkpoint(path)
+            engine_snapshot = wrapper["engine"]
+            if not isinstance(engine_snapshot, Mapping):
+                raise RecordingError("checkpoint has no engine snapshot")
+            if handle.engine is None:
+                raise RecordingError("interrupted session has no engine")
+            handle.engine.restore(engine_snapshot)
+            old_recorder = handle.recorder
+            old_recorder.close()
+            reopened = SessionRecorder.open_existing(old_recorder.run_dir)
+            previous_sequence = reopened._last_sequence
+            record_sequence = wrapper["record_sequence"]
+            if not isinstance(record_sequence, int) or record_sequence > previous_sequence:
+                raise RecordingError("checkpoint record sequence is outside the recording")
+            reopened.append(SessionRecord(
+                session_id=session_id,
+                block_id=handle.active_block_id or "PRACTICE",
+                sequence=previous_sequence + 1,
+                simulation_time_ms=int(engine_snapshot.get("simulation_time_ms", 0)),
+                wall_time_utc=self._wall_clock(),
+                state_version=int(engine_snapshot.get("state_version", 0)),
+                kind=RecordKind.LIFECYCLE,
+                payload={
+                    "event": "checkpoint_recovery",
+                    "checkpoint_version": checkpoint_version,
+                    "record_sequence": record_sequence,
+                    "invalidated_sequence_start": record_sequence + 1 if record_sequence < previous_sequence else None,
+                    "invalidated_sequence_end": previous_sequence if record_sequence < previous_sequence else None,
+                },
+            ))
+            handle.recorder = reopened
+            handle.sequence = previous_sequence + 1
+            handle.lifecycle = "PAUSED"
+            handle.validity = "valid_with_deviation"
+            self.persistence.update_session(
+                session_id, lifecycle="PAUSED", validity="valid_with_deviation", active_block_id=handle.active_block_id,
+            )
+            if handle.active_block_id:
+                self.persistence.update_block(
+                    session_id,
+                    handle.active_block_id,
+                    lifecycle="PAUSED",
+                    validity="valid_with_deviation",
+                    was_interrupted=True,
+                    recovered_from_checkpoint=checkpoint_version,
+                    simulation_finished_ms=None,
+                )
+            self.persistence.add_deviation(
+                session_id,
+                handle.active_block_id,
+                "checkpoint_recovery",
+                "warning",
+                int(engine_snapshot.get("simulation_time_ms", 0)),
+                {"checkpoint_version": checkpoint_version, "record_sequence": record_sequence},
+            )
+            return RecoveryView.model_validate({**self._view(handle).model_dump(), "controller_lease": None})
+
+    def _recover_stale_locked(self, session_id: str, checkpoint_version: int) -> RecoveryView:
+        loader = getattr(self.persistence, "load_session", None)
+        if loader is None:
+            raise SimulationNotFound("simulation not found")
+        row = loader(session_id)
+        if row is None:
+            raise SimulationNotFound("simulation not found")
+        if isinstance(checkpoint_version, bool) or not isinstance(checkpoint_version, int) or checkpoint_version <= 0:
+            raise ValueError("checkpoint_version must be positive")
+        scenario_root = self.scenario_root.resolve()
+        scenario_path = (scenario_root / f"{row.scenario_id}.yaml").resolve()
+        if scenario_path.parent != scenario_root or not scenario_path.is_file():
+            raise SimulationNotFound("scenario not found")
+        loaded = load_scenario(scenario_path)
+        if loaded.sha256 != row.scenario_sha256:
+            raise RecordingError("scenario hash does not match persisted session")
+        try:
+            manifest = json.loads(row.manifest_json)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise RecordingError("persisted manifest is invalid") from exc
+        if not isinstance(manifest, dict) or manifest.get("scenario_sha256") != loaded.sha256:
+            raise RecordingError("persisted manifest does not match scenario")
+        configured_root = self.artifact_root.resolve()
+        run_dir = Path(row.artifact_root)
+        if not run_dir.is_absolute():
+            run_dir = configured_root / run_dir
+        run_dir = run_dir.resolve()
+        if run_dir.parent != configured_root or run_dir.name != session_id:
+            raise RecordingError("persisted artifact root is outside configured output")
+        recorder = SessionRecorder.open_existing(run_dir)
+        checkpoint_path = recorder.checkpoints_dir / f"checkpoint-{checkpoint_version:08d}.json.gz"
+        wrapper = load_checkpoint(checkpoint_path)
+        engine_snapshot = wrapper["engine"]
+        if not isinstance(engine_snapshot, Mapping):
+            raise RecordingError("checkpoint has no engine snapshot")
+        block_id = engine_snapshot.get("block_id")
+        if not isinstance(block_id, str) or block_id not in loaded.definition.blocks:
+            raise RecordingError("checkpoint block does not match scenario")
+        engine = SimulationEngine(loaded.definition, block_id)
+        engine.restore(engine_snapshot)
+        lease = secrets.token_urlsafe(32)
+        handle = RuntimeHandle(
+            session_id=session_id,
+            participant_id=row.participant_id,
+            visit_id=int(row.visit_id),
+            locale=row.locale,
+            scenario=loaded,
+            manifest=manifest,
+            recorder=recorder,
+            lease_hash=self._hash_lease(lease),
+            lifecycle="INTERRUPTED",
+            active_block_id=block_id,
+            engine=engine,
+            validity="valid_with_deviation",
+        )
+        previous_sequence = recorder._last_sequence
+        record_sequence = wrapper["record_sequence"]
+        if not isinstance(record_sequence, int) or record_sequence > previous_sequence:
+            raise RecordingError("checkpoint record sequence is outside the recording")
+        recorder.append(SessionRecord(
+            session_id=session_id,
+            block_id=block_id,
+            sequence=previous_sequence + 1,
+            simulation_time_ms=int(engine_snapshot.get("simulation_time_ms", 0)),
+            wall_time_utc=self._wall_clock(),
+            state_version=int(engine_snapshot.get("state_version", 0)),
+            kind=RecordKind.LIFECYCLE,
+            payload={
+                "event": "checkpoint_recovery",
+                "checkpoint_version": checkpoint_version,
+                "record_sequence": record_sequence,
+                "invalidated_sequence_start": record_sequence + 1 if record_sequence < previous_sequence else None,
+                "invalidated_sequence_end": previous_sequence if record_sequence < previous_sequence else None,
+            },
+        ))
+        handle.sequence = previous_sequence + 1
+        handle.lifecycle = "PAUSED"
+        self._handle = handle
+        self.persistence.update_session(session_id, lifecycle="PAUSED", validity="valid_with_deviation", active_block_id=block_id)
+        self.persistence.update_block(
+            session_id,
+            block_id,
+            lifecycle="PAUSED",
+            validity="valid_with_deviation",
+            was_interrupted=True,
+            recovered_from_checkpoint=checkpoint_version,
+        )
+        self.persistence.add_deviation(
+            session_id,
+            block_id,
+            "checkpoint_recovery",
+            "warning",
+            int(engine_snapshot.get("simulation_time_ms", 0)),
+            {"checkpoint_version": checkpoint_version, "record_sequence": record_sequence, "process_restart": True},
+        )
+        return RecoveryView.model_validate({**self._view(handle).model_dump(), "controller_lease": lease})
 
     async def controller_connected(self, session_id: str, lease: str) -> None:
         """Validate a controller stream lease without changing lifecycle."""
@@ -585,8 +773,53 @@ class SimulationManager:
             scenario_id=handle.scenario.definition.scenario_id, scenario_sha256=handle.scenario.sha256,
             locale=handle.locale, lifecycle=handle.lifecycle, active_block_id=handle.active_block_id,
             block_order=list(handle.manifest["block_order"]), state_version=self._version(handle),
-            simulation_time_ms=self._time(handle),
+            simulation_time_ms=self._time(handle), validity=handle.validity,
         )
+
+    async def _interrupt(
+        self,
+        handle: RuntimeHandle,
+        code: str,
+        detail: Mapping[str, object],
+        *,
+        severity: str = "fatal",
+    ) -> None:
+        handle.lifecycle = "INTERRUPTED"
+        handle.validity = "invalid"
+        self._cancel_tasks(handle)
+        now = self._time(handle)
+        self.persistence.update_session(
+            handle.session_id,
+            lifecycle="INTERRUPTED",
+            interrupted_at=_utcnow(),
+            validity="invalid",
+        )
+        if handle.active_block_id:
+            self.persistence.update_block(
+                handle.session_id,
+                handle.active_block_id,
+                lifecycle="INTERRUPTED",
+                validity="invalid",
+                was_interrupted=True,
+            )
+        self.persistence.add_deviation(handle.session_id, handle.active_block_id, code, severity, now, detail)
+        try:
+            record = self._append(
+                handle,
+                RecordKind.LIFECYCLE,
+                {"event": code, **dict(detail)},
+                now,
+                self._version(handle),
+            )
+            await self.hub.publish(
+                handle.session_id,
+                self._new_envelope(handle, StreamKind.ERROR, {"code": code, "fatal": severity == "fatal"}, now, record.state_version),
+            )
+        except RecordingError:
+            await self.hub.publish(
+                handle.session_id,
+                self._new_envelope(handle, StreamKind.ERROR, {"code": code, "fatal": severity == "fatal"}, now, self._version(handle)),
+            )
 
     def _prepared_view(self, handle: RuntimeHandle, lease: str) -> PreparedSession:
         return PreparedSession.model_validate({**self._view(handle).model_dump(), "controller_lease": lease})

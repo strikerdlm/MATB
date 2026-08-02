@@ -15,6 +15,10 @@ from .simulation_models import ProtocolDeviation, SimulationArtifact, Simulation
 
 
 class SimulationPersistence(Protocol):
+    def load_session(self, session_id: str) -> SimulationSession | None: ...
+
+    def load_block(self, session_id: str, block_id: str) -> SimulationBlock | None: ...
+
     def update_session(self, session_id: str, **fields: object) -> None: ...
     def update_block(self, session_id: str, block_id: str, **fields: object) -> None: ...
     def add_deviation(
@@ -38,6 +42,45 @@ class SQLModelSimulationPersistence:
 
     def __init__(self, engine: Any) -> None:
         self.engine = engine
+
+    def load_session(self, session_id: str) -> SimulationSession | None:
+        with Session(self.engine) as db:
+            row = db.get(SimulationSession, session_id)
+            if row is None:
+                return None
+            db.expunge(row)
+            return row
+
+    def load_block(self, session_id: str, block_id: str) -> SimulationBlock | None:
+        with Session(self.engine) as db:
+            row = db.exec(
+                select(SimulationBlock).where(
+                    SimulationBlock.session_id == session_id,
+                    SimulationBlock.block_id == block_id,
+                )
+            ).one_or_none()
+            if row is None:
+                return None
+            db.expunge(row)
+            return row
+
+    def mark_orphaned_sessions(self) -> int:
+        """Fail closed for rows left active by a prior process."""
+
+        changed = 0
+        with Session(self.engine) as db:
+            rows = db.exec(
+                select(SimulationSession).where(SimulationSession.lifecycle.in_(("RUNNING", "PAUSED")))
+            ).all()
+            for row in rows:
+                row.lifecycle = "INTERRUPTED"
+                row.validity = "invalid"
+                row.interrupted_at = datetime.now().astimezone()
+                db.add(row)
+                changed += 1
+            if changed:
+                db.commit()
+        return changed
 
     def update_session(self, session_id: str, **fields: object) -> None:
         self._check_fields(fields, _SESSION_FIELDS)
@@ -114,6 +157,15 @@ class InMemorySimulationPersistence:
         self.blocks: dict[tuple[str, str], dict[str, object]] = {}
         self.deviations: list[dict[str, object]] = []
         self.artifacts: dict[str, tuple[ArtifactInfo, ...]] = {}
+
+    def load_session(self, session_id: str) -> SimulationSession | None:
+        return None
+
+    def load_block(self, session_id: str, block_id: str) -> SimulationBlock | None:
+        return None
+
+    def mark_orphaned_sessions(self) -> int:
+        return 0
 
     def update_session(self, session_id: str, **fields: object) -> None:
         self.sessions.setdefault(session_id, {}).update(fields)

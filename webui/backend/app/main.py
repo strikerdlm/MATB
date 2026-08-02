@@ -84,10 +84,12 @@ def _simulation_artifact_root() -> Path:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    persistence = SQLModelSimulationPersistence(get_engine())
+    persistence.mark_orphaned_sessions()
     manager = SimulationManager(
         scenario_root=_repo_root() / "scenarios" / "suas",
         artifact_root=_simulation_artifact_root(),
-        persistence=SQLModelSimulationPersistence(get_engine()),
+        persistence=persistence,
     )
     app.state.simulation_manager = manager
     try:

@@ -217,10 +217,13 @@ async def validate_scenario(request: Request) -> ScenarioValidationView:
         form = await request.form()
     except Exception as exc:  # noqa: BLE001
         raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "scenario_read_error", "scenario upload could not be read") from exc
-    values = form.getlist("file")
-    if len(values) != 1 or not hasattr(values[0], "read"):
+    uploads = [
+        value for _, value in form.multi_items()
+        if hasattr(value, "filename") and hasattr(value, "read")
+    ]
+    if len(uploads) != 1:
         raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "scenario_file_required", "exactly one scenario file is required")
-    file = values[0]
+    file = uploads[0]
     try:
         payload = await file.read(MAX_YAML_BYTES + 1)
     except Exception as exc:  # noqa: BLE001

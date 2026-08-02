@@ -48,6 +48,40 @@ all 3 levels are ingested.
 - GET  /exports/research-context  — one JSON payload with participants, visits, tracker, metrics_long, fits, latest analysis artifacts, and block provenance
 - POST /exports/research-bundle  — ZIP export with the research context, caveats, stored scenario manifests, and optional frontend ECharts figure options
 
+### Native offline sUAS research console
+
+The native simulator is a Linux/headless-safe, non-kinetic research instrument.
+It uses one process-local controller lease and a local SQLite/artifact root; no
+Internet, real-world map, vehicle, weapon, or external telemetry service is
+required.
+
+- `GET /simulation/scenarios` lists valid direct `.yaml` children of the
+  configured scenario directory.
+- `POST /simulation/sessions` prepares a pseudonymized participant/visit and
+  returns the controller lease once.  Send that value only as
+  `X-Simulation-Controller` on lifecycle and command mutations.
+- `POST /simulation/sessions/{id}/start|pause|resume|finish|recover` controls
+  lifecycle.  A controller WebSocket disconnect pauses a running session and
+  never resumes it automatically.
+- `POST /simulation/sessions/{id}/commands` accepts supervisory, non-kinetic
+  commands; `GET .../state` is observer-readable and redacted.
+- `WS /simulation/sessions/{id}/stream` accepts an exact configured Origin,
+  an optional URL-encoded `lease`, and `after_sequence`.  A lease-bearing
+  stream is the sole controller; a lease-free stream is read-only.  The first
+  message is a complete resynchronizing snapshot, followed by ordered bounded
+  envelopes.  Pings must be exactly `{"kind":"ping"}`.
+- `GET .../debrief` and `GET .../artifacts` are available only after a terminal
+  finish/abort and expose relative paths plus hashes, never leases or absolute
+  filesystem paths.
+
+Set `MATB_SIMULATION_OUTPUT_DIR` to an owner-only local directory for run
+artifacts.  On startup, rows left RUNNING/PAUSED by a dead process are marked
+INTERRUPTED.  Recovery is explicit: an in-process interruption requires the
+  existing lease; a stale-process recovery requires
+  `confirm_process_restart=true` and returns a new lease once.  Checkpoint
+  recovery always marks `valid_with_deviation` and preserves the append-only
+  audit trail.
+
 ## Notes
 - Pseudonymized participant IDs only (P01…); no PII.
 - Ingestion guards against duplicate files (sha256), filled-cell overwrite, and
