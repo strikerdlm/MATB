@@ -47,6 +47,13 @@ class SyncASGIClient:
         return self.request("POST", url, **kwargs)
 
 
+@pytest.fixture
+def anyio_backend():
+    """Keep async backend tests deterministic on the supported asyncio loop."""
+
+    return "asyncio"
+
+
 @pytest.fixture(name="engine")
 def engine_fixture():
     # In-memory DB shared across the test's connections.
