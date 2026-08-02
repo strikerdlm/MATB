@@ -50,7 +50,10 @@ export default defineConfig({
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "off",
-    ...(chromiumExecutable ? { launchOptions: { executablePath: chromiumExecutable } } : {}),
+    launchOptions: {
+      ...(chromiumExecutable ? { executablePath: chromiumExecutable } : {}),
+      ...(typeof process.getuid === "function" && process.getuid() === 0 ? { args: ["--no-sandbox"] } : {}),
+    },
   },
   webServer: [
     {
