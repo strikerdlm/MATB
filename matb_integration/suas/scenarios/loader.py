@@ -26,6 +26,7 @@ from matb_integration.suas.domain.models import (
     MetricThresholdDefinition, SagatScheduleDefinition, ScenarioDefinition,
     SensorDefinition, TerminationDefinition,
 )
+from matb_integration.suas.domain.scenario_context import register_scenario
 
 from .profiles import SUAS_PROBE_IDS
 from .schema import PointSpec, PolygonSpec, ScenarioSpec
@@ -121,6 +122,7 @@ def load_scenario_text(text: str, *, source_name: str = "<scenario>") -> LoadedS
     )
     scenario_sha256 = sha256_text(normalized_yaml)
     definition = normalize_scenario(spec, scenario_sha256=scenario_sha256)
+    register_scenario(definition)
     return LoadedScenario(
         definition=definition,
         normalized_document=normalized_document,

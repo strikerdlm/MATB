@@ -208,3 +208,5 @@ class WorldState:
     alerts: dict[str, AlertState]
     coverage_cells: set[tuple[int, int]]
     event_sequence: int
+    # Checkpoint-safe scenario identity; defaults for legacy/manual world builders.
+    scenario_sha256: str = ""

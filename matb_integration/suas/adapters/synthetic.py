@@ -11,7 +11,7 @@ from matb_integration.suas.domain.models import (
     AircraftDefinition, AircraftState, BlockDefinition, ContactState, Route,
     ScenarioDefinition, WorldState,
 )
-from matb_integration.suas.engine.sensors import bind_world_scenario
+from matb_integration.suas.domain.scenario_context import bind_world_scenario
 from matb_integration.suas.engine.energy import refresh_energy_reserve
 
 
@@ -60,6 +60,7 @@ class SyntheticVehicleBackend:
             alerts={},
             coverage_cells=set(),
             event_sequence=0,
+            scenario_sha256=scenario.scenario_sha256,
         )
         bind_world_scenario(state, scenario)
         return state

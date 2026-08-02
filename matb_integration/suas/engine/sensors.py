@@ -12,6 +12,7 @@ from matb_integration.suas.domain.enums import (
 from matb_integration.suas.domain.events import DomainEvent
 from matb_integration.suas.domain.geometry import distance_mm
 from matb_integration.suas.domain.models import ScenarioDefinition, WorldState
+from matb_integration.suas.domain.scenario_context import bind_world_scenario, scenario_for_world
 from matb_integration.suas.engine.energy import refresh_energy_reserve
 from matb_integration.suas.engine.prng import PCG32, derive_stream_seed
 
@@ -20,7 +21,6 @@ if TYPE_CHECKING:
 
 
 _REPORT_HISTORY: dict[int, dict[str, list[dict[str, object]]]] = {}
-_SCENARIO_BY_CONTEXT: dict[tuple[str, tuple[str, ...], tuple[str, ...]], ScenarioDefinition] = {}
 
 
 class SensorSystem:
@@ -55,13 +55,14 @@ class SensorSystem:
                 if aircraft.sensor is not SensorState.NOMINAL:
                     continue
                 aircraft.energy_units -= definition.energy.sensor_units_per_scan
-                refresh_energy_reserve(
-                    state, aircraft, definition, events, at_ms=scan_at_ms,
-                )
                 if coverage is not None:
                     coverage.mark_scan(state, aircraft_id)
                 pairs = [(aircraft_id, contact_id) for contact_id in sorted(state.contacts)]
                 events.extend(self.scan_pairs(state, pairs=pairs, at_ms=scan_at_ms))
+                # Contact evidence is ordered before same-timestamp energy alerts.
+                refresh_energy_reserve(
+                    state, aircraft, definition, events, at_ms=scan_at_ms,
+                )
         return tuple(events)
 
     def scan_pairs(
@@ -250,7 +251,7 @@ def apply_contact_action(
 def public_snapshot(state: WorldState, *, scenario: ScenarioDefinition | None = None) -> dict[str, object]:
     """Project contact state without leaking hidden truth or reporting requirements."""
 
-    resolved_scenario = scenario or _scenario_for_world(state)
+    resolved_scenario = scenario or scenario_for_world(state)
     if scenario is not None:
         bind_world_scenario(state, scenario)
     contacts: dict[str, dict[str, object]] = {}
@@ -269,20 +270,6 @@ def public_snapshot(state: WorldState, *, scenario: ScenarioDefinition | None = 
             projected["position"] = {"x_mm": position.x_mm, "y_mm": position.y_mm}
         contacts[contact_id] = projected
     return {"contacts": contacts}
-
-
-def bind_world_scenario(state: WorldState, scenario: ScenarioDefinition) -> None:
-    """Retain non-public lookup context without widening locked world state."""
-
-    _SCENARIO_BY_CONTEXT[_world_context_key(state)] = scenario
-
-
-def _scenario_for_world(state: WorldState) -> ScenarioDefinition | None:
-    return _SCENARIO_BY_CONTEXT.get(_world_context_key(state))
-
-
-def _world_context_key(state: WorldState) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
-    return state.block_id, tuple(sorted(state.aircraft)), tuple(sorted(state.contacts))
 
 
 def _workflow_event(
