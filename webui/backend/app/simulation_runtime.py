@@ -108,6 +108,7 @@ class RuntimeHandle:
     transport_sequence: int = 0
     validity: str = "valid"
     protocol: ProtocolController | None = None
+    probe_timeout_task: asyncio.Task[Any] | None = None
 
 
 def _utcnow() -> datetime:
@@ -473,6 +474,63 @@ class SimulationManager:
             self._version(handle),
         )
         await self._publish_latest_record(handle, kind=StreamKind.PROBE)
+
+    def _schedule_probe_timeout_locked(self, handle: RuntimeHandle, probe: ActiveProbe) -> None:
+        if not self._run_background_tasks or probe.timeout_ms <= 0:
+            return
+        if handle.probe_timeout_task is not None and not handle.probe_timeout_task.done():
+            handle.probe_timeout_task.cancel()
+        handle.probe_timeout_task = asyncio.create_task(
+            self._protocol_timeout_loop(handle.session_id, probe.kind, probe.probe_id, probe.timeout_ms),
+        )
+
+    async def _protocol_timeout_loop(
+        self, session_id: str, kind: str, probe_id: str | None, timeout_ms: int,
+    ) -> None:
+        await asyncio.sleep(max(0, timeout_ms) / 1_000)
+        async with self._lock:
+            handle = self._handle
+            if (
+                handle is None
+                or handle.session_id != session_id
+                or handle.protocol is None
+                or handle.protocol.active_probe is None
+                or handle.protocol.active_probe.kind != kind
+                or handle.protocol.active_probe.probe_id != probe_id
+            ):
+                return
+            handle.probe_timeout_task = None
+            try:
+                result = handle.protocol.timeout_active_probe()
+            except ProtocolError:
+                return
+            self.persistence.update_session(
+                handle.session_id,
+                lifecycle=handle.lifecycle,
+                validity=handle.protocol.validity,
+            )
+            if handle.active_block_id:
+                self.persistence.update_block(
+                    handle.session_id,
+                    handle.active_block_id,
+                    lifecycle=handle.lifecycle,
+                    validity=handle.protocol.validity,
+                )
+            self._append(handle, RecordKind.PROTOCOL_DEVIATION, {
+                "code": "probe_timeout", "kind": kind, "probe_id": probe_id,
+            }, self._time(handle), self._version(handle))
+            if result is not None:
+                self._append(handle, RecordKind.QUESTIONNAIRE, {
+                    "instrument": "SAGAT", "probe_id": result.probe_id,
+                    "sa_level": result.sa_level, "correct": result.correct,
+                    "timed_out": True, "latency_ms": result.latency_ms,
+                    "unscorable_reason": result.unscorable_reason,
+                }, self._time(handle), self._version(handle))
+            if handle.protocol.active_probe is not None:
+                await self._publish_protocol_probe_locked(handle, handle.protocol.active_probe)
+                self._schedule_probe_timeout_locked(handle, handle.protocol.active_probe)
+            elif handle.protocol.phase is ProtocolPhase.BLOCK_RUNNING:
+                await self._resume_after_protocol_locked(handle)
 
     async def _pause_for_protocol_locked(self, handle: RuntimeHandle, reason: str) -> None:
         if handle.lifecycle == "PAUSED":
@@ -923,6 +981,7 @@ class SimulationManager:
                 "freeze_time_ms": self._time(handle),
             }, self._time(handle), self._version(handle))
         await self._publish_protocol_probe_locked(handle, active)
+        self._schedule_probe_timeout_locked(handle, active)
 
     async def _publish_snapshot(self, handle: RuntimeHandle, snapshot: Mapping[str, object]) -> None:
         await self.hub.publish(handle.session_id, self._new_envelope(
@@ -995,11 +1054,12 @@ class SimulationManager:
 
     @staticmethod
     def _cancel_tasks(handle: RuntimeHandle) -> None:
-        for task in (handle.tick_task, handle.snapshot_task):
+        for task in (handle.tick_task, handle.snapshot_task, handle.probe_timeout_task):
             if task is not None and not task.done() and task is not asyncio.current_task():
                 task.cancel()
         handle.tick_task = None
         handle.snapshot_task = None
+        handle.probe_timeout_task = None
 
     @staticmethod
     def _time(handle: RuntimeHandle) -> int:

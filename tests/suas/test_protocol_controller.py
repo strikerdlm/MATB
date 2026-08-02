@@ -85,3 +85,19 @@ def test_probe_gate_rejects_wrong_answers_and_interrupts_without_resume(loaded_s
     controller.interrupt_probe()
     assert controller.phase is ProtocolPhase.ABORTED
     assert controller.validity == "valid_with_deviation"
+
+
+def test_probe_timeout_is_scored_and_advances_without_exposing_truth(loaded_scenario) -> None:
+    scenario = loaded_scenario.definition
+    controller = ProtocolController(scenario, participant_id="P01", locale=Locale.EN)
+    controller.start_block("PRACTICE")
+    state = SyntheticVehicleBackend().initialize(scenario, scenario.blocks["PRACTICE"])
+    controller.on_tick(state, simulation_time_ms=controller.sagat_due_ms)
+    active = controller.active_probe
+    assert active is not None and active.kind == "SAGAT"
+    result = controller.timeout_active_probe()
+    assert result is not None
+    assert result.timed_out is True
+    assert controller.validity == "valid_with_deviation"
+    assert controller.active_probe is not None
+    assert "correct_answer" not in controller.active_probe.public_payload

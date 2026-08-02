@@ -305,6 +305,32 @@ class ProtocolController:
             self._complete_current_block()
         return score
 
+    def timeout_active_probe(self) -> ProbeAnswer | None:
+        """Close an expired probe deterministically and mark a deviation."""
+
+        active = self.active_probe
+        if active is None or active.kind not in {"ISA", "SAGAT"}:
+            raise ProtocolError("no_active_probe")
+        self.validity = "valid_with_deviation"
+        self.protocol_deviations.append({
+            "code": "probe_timeout",
+            "kind": active.kind,
+            "probe_id": active.probe_id,
+            "block_id": self.current_block_id,
+        })
+        if active.kind == "SAGAT":
+            if active.probe_id is None:
+                raise ProtocolError("probe_state_missing")
+            return self.submit_sagat(
+                active.probe_id,
+                None,
+                latency_ms=active.timeout_ms,
+                timed_out=True,
+            )
+        self.active_probe = None
+        self.phase = ProtocolPhase.BLOCK_RUNNING
+        return None
+
     def interrupt_probe(self, reason: str = "probe_interrupted") -> None:
         if not self.probe_active:
             raise ProtocolError("no_active_probe")
