@@ -7,6 +7,7 @@ import hashlib
 import inspect
 import json
 import secrets
+import math
 from collections import deque
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -117,6 +118,7 @@ class SimulationManager:
         run_background_tasks: bool = True,
         ui_version: str = "0.1.0",
         hub: SimulationHub | None = None,
+        wall_time_scale: float = 1.0,
     ) -> None:
         self.scenario_root = Path(scenario_root)
         self.artifact_root = Path(artifact_root)
@@ -125,6 +127,9 @@ class SimulationManager:
         self._wall_clock = wall_clock
         self._run_background_tasks = run_background_tasks
         self._ui_version = ui_version
+        if not math.isfinite(wall_time_scale) or not 0.05 <= wall_time_scale <= 1.0:
+            raise ValueError("wall_time_scale must be a finite value in [0.05, 1.0]")
+        self._wall_time_scale = wall_time_scale
         self.hub = hub or SimulationHub(on_controller_overflow=self._pause_for_stream_overflow)
         self._handle: RuntimeHandle | None = None
         self._lock = asyncio.Lock()
@@ -612,7 +617,8 @@ class SimulationManager:
                     return
             started = asyncio.get_running_loop().time()
             await self.tick_once()
-            await self._sleep(max(0.0, (TICK_MS / 1000) - (asyncio.get_running_loop().time() - started)))
+            remaining = max(0.0, (TICK_MS / 1000) - (asyncio.get_running_loop().time() - started))
+            await self._sleep(remaining * self._wall_time_scale)
 
     async def _snapshot_loop(self) -> None:
         while True:
@@ -621,7 +627,7 @@ class SimulationManager:
                 if handle is None or handle.lifecycle not in {"RUNNING", "PAUSED"} or self._shutdown:
                     return
             await self.snapshot_once()
-            await self._sleep(SNAPSHOT_INTERVAL_MS / 1000)
+            await self._sleep((SNAPSHOT_INTERVAL_MS / 1000) * self._wall_time_scale)
 
     def _append(self, handle: RuntimeHandle, kind: RecordKind, payload: Mapping[str, object], time_ms: int, state_version: int) -> SessionRecord:
         handle.sequence += 1

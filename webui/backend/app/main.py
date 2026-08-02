@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 import asyncio
 import json
+import math
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
@@ -81,15 +82,37 @@ def _simulation_artifact_root() -> Path:
     return value if value.is_absolute() else _repo_root() / value
 
 
+def _simulation_scenario_root() -> Path:
+    configured = os.getenv("MATB_SIMULATION_SCENARIO_DIR")
+    value = Path(configured) if configured else Path("scenarios") / "suas"
+    return value if value.is_absolute() else _repo_root() / value
+
+
+def _simulation_wall_time_scale() -> float:
+    """Return an accelerated wall-clock factor only for explicit test mode."""
+
+    if os.getenv("MATB_SIMULATION_TEST_MODE") != "1":
+        return 1.0
+    raw = os.getenv("MATB_SIMULATION_WALL_TIME_SCALE", "1.0")
+    try:
+        value = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("MATB_SIMULATION_WALL_TIME_SCALE must be a finite decimal in [0.05, 1.0]") from exc
+    if not math.isfinite(value) or not 0.05 <= value <= 1.0:
+        raise ValueError("MATB_SIMULATION_WALL_TIME_SCALE must be a finite decimal in [0.05, 1.0]")
+    return value
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
     persistence = SQLModelSimulationPersistence(get_engine())
     persistence.mark_orphaned_sessions()
     manager = SimulationManager(
-        scenario_root=_repo_root() / "scenarios" / "suas",
+        scenario_root=_simulation_scenario_root(),
         artifact_root=_simulation_artifact_root(),
         persistence=persistence,
+        wall_time_scale=_simulation_wall_time_scale(),
     )
     app.state.simulation_manager = manager
     try:
