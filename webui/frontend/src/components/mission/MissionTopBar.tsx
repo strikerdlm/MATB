@@ -33,6 +33,8 @@ export function MissionTopBar({ session, locale, connection, canControl, onStart
   const isPrepared = session.lifecycle === "PREPARED";
   const isRunning = session.lifecycle === "RUNNING";
   const isPaused = session.lifecycle === "PAUSED";
+  const protocolGateActive = ["ISA_ACTIVE", "SAGAT_ACTIVE", "POST_BLOCK_ACTIVE"].includes(session.protocol_phase ?? "");
+  const readyForNextBlock = isPaused && session.protocol_phase === "READY_FOR_BLOCK";
 
   return (
     <header className="mission-panel flex min-h-[68px] flex-wrap items-center justify-between gap-3 rounded-none border-x-0 border-t-0 px-4 py-3 lg:px-6">
@@ -52,9 +54,9 @@ export function MissionTopBar({ session, locale, connection, canControl, onStart
         </div>
       </div>
       <div className="flex items-center gap-2">
-        {isPrepared && <Button type="button" size="sm" onClick={onStart} disabled={!canControl || busy}><Play className="mr-2 h-3.5 w-3.5" aria-hidden="true" />{t(locale, "lifecycle.start")}</Button>}
+        {(isPrepared || readyForNextBlock) && <Button type="button" size="sm" onClick={onStart} disabled={!canControl || busy}><Play className="mr-2 h-3.5 w-3.5" aria-hidden="true" />{t(locale, "lifecycle.start")}</Button>}
         {isRunning && <Button type="button" size="sm" variant="warning" onClick={onPause} disabled={!canControl || busy}><Pause className="mr-2 h-3.5 w-3.5" aria-hidden="true" />{t(locale, "lifecycle.pause")}</Button>}
-        {isPaused && <Button type="button" size="sm" variant="success" onClick={onResume} disabled={!canControl || busy}><Play className="mr-2 h-3.5 w-3.5" aria-hidden="true" />{t(locale, "lifecycle.resume")}</Button>}
+        {isPaused && !readyForNextBlock && <Button type="button" size="sm" variant="success" onClick={onResume} disabled={!canControl || busy || protocolGateActive}><Play className="mr-2 h-3.5 w-3.5" aria-hidden="true" />{t(locale, "lifecycle.resume")}</Button>}
         {confirmFinish ? (
           <div className="flex items-center gap-1" role="group" aria-label={t(locale, "confirm.finish")}>
             <Button type="button" size="sm" variant="destructive" onClick={() => { setConfirmFinish(false); onFinish(); }} disabled={!canControl || busy}>Confirm</Button>

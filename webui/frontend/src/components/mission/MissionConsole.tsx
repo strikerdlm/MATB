@@ -120,7 +120,7 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
 
   return (
     <div className="simulation-console flex min-h-screen flex-col bg-background text-foreground" aria-busy={busy}>
-      <MissionTopBar session={currentSession} locale={locale} connection={connection} canControl={canControl} busy={busy} onStart={() => void lifecycle("start", { block_id: currentSession.active_block_id ?? "PRACTICE" })} onPause={() => void lifecycle("pause", { reason: "operator_pause" })} onResume={() => void lifecycle("resume")} onFinish={() => void lifecycle("finish")} />
+      <MissionTopBar session={currentSession} locale={locale} connection={connection} canControl={canControl} busy={busy} onStart={() => void lifecycle("start", { block_id: currentSession.next_block_id ?? currentSession.active_block_id ?? "PRACTICE" })} onPause={() => void lifecycle("pause", { reason: "operator_pause" })} onResume={() => void lifecycle("resume")} onFinish={() => void lifecycle("finish")} />
       {(transportError || message) && <div role="status" aria-live="polite" className="flex items-center gap-2 border-b border-warning/30 bg-warning/5 px-4 py-2 font-mono text-xs text-warning"><AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />{transportError ?? message}</div>}
       {busy && <div className="sr-only" role="status">Working…</div>}
       {concealOperationalState && probeOverlay ? probeOverlay : !currentSnapshot?.aircraft ? (
