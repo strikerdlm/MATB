@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
 from matb_integration.scenario_builder import block_order_for_participant as legacy_block_order
@@ -34,6 +35,24 @@ def test_cross_reference_and_energy_feasibility_are_validated() -> None:
     raw = REFERENCE.read_text(encoding="utf-8").replace("UAS-08", "UAS-99", 1)
     with pytest.raises(ValueError, match="unknown aircraft"):
         load_scenario_text(raw)
+
+
+def test_sector_crossing_concave_terrain_notch_is_rejected() -> None:
+    """All vertices can be valid while a sector edge bridges an excluded notch."""
+
+    raw = yaml.safe_load(REFERENCE.read_text(encoding="utf-8"))
+    raw["terrain"]["vertices"] = [
+        {"x_m": 0, "y_m": 0},
+        {"x_m": 3000, "y_m": 0},
+        {"x_m": 3000, "y_m": 2000},
+        {"x_m": 4000, "y_m": 2000},
+        {"x_m": 4000, "y_m": 0},
+        {"x_m": 12000, "y_m": 0},
+        {"x_m": 12000, "y_m": 8000},
+        {"x_m": 0, "y_m": 8000},
+    ]
+    with pytest.raises(ValueError, match="polygon sector_alpha is outside terrain"):
+        load_scenario_text(yaml.safe_dump(raw))
 
 
 def test_session_manifest_is_stable_and_session_specific() -> None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_EVEN
+from fractions import Fraction
 from hashlib import sha256
 from pathlib import Path
 import re
@@ -264,8 +265,7 @@ def _validate_semantics(spec: ScenarioSpec, *, source_name: str) -> None:
     _validate_initial_view(terrain, spec)
     polygons = [*spec.sectors, *spec.restricted_zones]
     for polygon in polygons:
-        _polygon(polygon)
-        _require_points_within(terrain, polygon.vertices, f"polygon {polygon.polygon_id}")
+        _require_polygon_within_terrain(terrain, polygon)
     restricted = [_polygon(value) for value in spec.restricted_zones]
     homes = [_point(spec.home_base), *(_point(item.home) for item in spec.aircraft)]
     if any(zone.contains(home) for zone in restricted for home in homes):
@@ -358,6 +358,115 @@ def _validate_initial_view(terrain: PolygonMM, spec: ScenarioSpec) -> None:
 def _require_points_within(terrain: PolygonMM, points: list[PointSpec], description: str) -> None:
     if any(not terrain.contains(_point(point)) for point in points):
         raise ValueError(f"{description} is outside terrain")
+
+
+def _require_polygon_within_terrain(terrain: PolygonMM, polygon_spec: PolygonSpec) -> None:
+    """Reject a polygon if any part lies outside the simple terrain polygon.
+
+    Checking vertices alone fails for concave terrain: an edge may bridge an
+    excluded notch while both endpoints are valid.  We split every candidate
+    edge at all terrain-boundary intersections and check one exact rational
+    midpoint from every resulting interval.  Thus each full edge, including
+    portions between crossings, is contained.  For simple, hole-free polygons,
+    a connected candidate whose complete boundary is contained is itself
+    contained; otherwise a path from an exterior interior point to its boundary
+    would cross the terrain boundary.
+    """
+
+    candidate = _polygon(polygon_spec)
+    description = f"polygon {polygon_spec.polygon_id}"
+    if any(not terrain.contains(vertex) for vertex in candidate.vertices):
+        raise ValueError(f"{description} is outside terrain")
+    terrain_edges = _polygon_edges(terrain.vertices)
+    for start, end in _polygon_edges(candidate.vertices):
+        parameters = {Fraction(0), Fraction(1)}
+        for terrain_start, terrain_end in terrain_edges:
+            parameters.update(_edge_intersection_parameters(start, end, terrain_start, terrain_end))
+        ordered = sorted(parameters)
+        for left, right in zip(ordered, ordered[1:]):
+            if left == right:
+                continue
+            midpoint = _point_on_edge(start, end, (left + right) / 2)
+            if not _contains_fractional_point(terrain, midpoint):
+                raise ValueError(f"{description} is outside terrain")
+
+
+def _polygon_edges(vertices: tuple[PointMM, ...]) -> tuple[tuple[PointMM, PointMM], ...]:
+    return tuple((point, vertices[(index + 1) % len(vertices)]) for index, point in enumerate(vertices))
+
+
+def _edge_intersection_parameters(
+    start: PointMM,
+    end: PointMM,
+    boundary_start: PointMM,
+    boundary_end: PointMM,
+) -> tuple[Fraction, ...]:
+    """Return exact positions on one edge where it meets a boundary edge."""
+
+    dx, dy = end.x_mm - start.x_mm, end.y_mm - start.y_mm
+    bx, by = boundary_end.x_mm - boundary_start.x_mm, boundary_end.y_mm - boundary_start.y_mm
+    offset_x, offset_y = boundary_start.x_mm - start.x_mm, boundary_start.y_mm - start.y_mm
+    denominator = _cross_components(dx, dy, bx, by)
+    if denominator:
+        edge_fraction = Fraction(_cross_components(offset_x, offset_y, bx, by), denominator)
+        boundary_fraction = Fraction(_cross_components(offset_x, offset_y, dx, dy), denominator)
+        if Fraction(0) <= edge_fraction <= Fraction(1) and Fraction(0) <= boundary_fraction <= Fraction(1):
+            return (edge_fraction,)
+        return ()
+    if _cross_components(offset_x, offset_y, dx, dy):
+        return ()
+    edge_length_squared = dx * dx + dy * dy
+    if edge_length_squared == 0:
+        return ()
+    first = Fraction(offset_x * dx + offset_y * dy, edge_length_squared)
+    last = Fraction(
+        (boundary_end.x_mm - start.x_mm) * dx + (boundary_end.y_mm - start.y_mm) * dy,
+        edge_length_squared,
+    )
+    return tuple(
+        value for value in (first, last)
+        if Fraction(0) <= value <= Fraction(1)
+    )
+
+
+def _point_on_edge(start: PointMM, end: PointMM, fraction: Fraction) -> tuple[Fraction, Fraction]:
+    return (
+        Fraction(start.x_mm) + fraction * (end.x_mm - start.x_mm),
+        Fraction(start.y_mm) + fraction * (end.y_mm - start.y_mm),
+    )
+
+
+def _contains_fractional_point(terrain: PolygonMM, point: tuple[Fraction, Fraction]) -> bool:
+    """Inclusive point-in-polygon test retaining exact rational intersections."""
+
+    x, y = point
+    inside = False
+    for start, end in _polygon_edges(terrain.vertices):
+        if _fractional_point_on_segment(x, y, start, end):
+            return True
+        if (start.y_mm > y) != (end.y_mm > y):
+            cross = (
+                (end.x_mm - start.x_mm) * (y - start.y_mm)
+                - (x - start.x_mm) * (end.y_mm - start.y_mm)
+            )
+            if (end.y_mm > start.y_mm and cross > 0) or (end.y_mm < start.y_mm and cross < 0):
+                inside = not inside
+    return inside
+
+
+def _fractional_point_on_segment(
+    x: Fraction, y: Fraction, start: PointMM, end: PointMM,
+) -> bool:
+    return (
+        (end.x_mm - start.x_mm) * (y - start.y_mm)
+        == (x - start.x_mm) * (end.y_mm - start.y_mm)
+        and min(start.x_mm, end.x_mm) <= x <= max(start.x_mm, end.x_mm)
+        and min(start.y_mm, end.y_mm) <= y <= max(start.y_mm, end.y_mm)
+    )
+
+
+def _cross_components(left_x: int, left_y: int, right_x: int, right_y: int) -> int:
+    return left_x * right_y - left_y * right_x
 
 
 def _require_unique(values: Any, description: str) -> None:
