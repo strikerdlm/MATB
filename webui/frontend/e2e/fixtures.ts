@@ -48,7 +48,14 @@ async function submitPostBlock(page: Page): Promise<void> {
   // Six NASA-TLX dimensions and one Bedford value must all emit a change;
   // leaving the browser defaults untouched would not populate the reducer.
   await expect(tlx).toHaveCount(7);
-  for (let index = 0; index < 7; index += 1) await tlx.nth(index).fill(index === 6 ? "5" : "4");
+  for (let index = 0; index < 7; index += 1) {
+    const slider = tlx.nth(index);
+    await slider.focus();
+    await slider.press("Home");
+    const target = index === 6 ? 5 : 4;
+    const minimum = index === 6 ? 1 : 0;
+    for (let step = minimum; step < target; step += 1) await slider.press("ArrowRight");
+  }
   await dialog.getByRole("button", { name: /submit measures/i }).click();
   await expect(dialog).toBeHidden();
 }
