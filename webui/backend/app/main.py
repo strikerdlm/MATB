@@ -188,9 +188,11 @@ async def simulation_stream(websocket: WebSocket, session_id: str) -> None:
         return
     lease = websocket.query_params.get("lease")
     role = "controller" if lease else "observer"
+    controller_handshake_pending = False
     try:
         if lease:
             await manager.controller_connected(session_id, lease)
+            controller_handshake_pending = True
         else:
             await manager.view(session_id)
         initial = await manager.snapshot_envelope(session_id, after_sequence=after_sequence)
@@ -199,11 +201,21 @@ async def simulation_stream(websocket: WebSocket, session_id: str) -> None:
             role=role,
             identity=lease if role == "controller" else None,
         )
+        if lease:
+            await manager.controller_stream_established(session_id, lease)
+            controller_handshake_pending = False
     except HubConflict:
+        if lease and controller_handshake_pending:
+            await manager.controller_stream_failed(session_id, lease)
         await websocket.close(code=4409)
         return
     except Exception:
         # Do not expose lease/hash/path details during the pre-accept phase.
+        if lease and controller_handshake_pending:
+            try:
+                await manager.controller_stream_failed(session_id, lease)
+            except Exception:
+                pass
         await websocket.close(code=4403 if lease else 4404)
         return
 

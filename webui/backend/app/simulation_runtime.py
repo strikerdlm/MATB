@@ -148,6 +148,7 @@ class SimulationManager:
         self.hub = hub or SimulationHub(on_controller_overflow=self._pause_for_stream_overflow)
         self._handle: RuntimeHandle | None = None
         self._lock = asyncio.Lock()
+        self._pending_controller_streams: dict[tuple[str, str], int] = {}
         self._shutdown = False
 
     @property
@@ -831,13 +832,50 @@ class SimulationManager:
         """Validate a controller stream lease without changing lifecycle."""
 
         async with self._lock:
-            self._require(session_id, lease)
+            handle = self._require(session_id, lease)
+            key = (session_id, handle.lease_hash)
+            self._pending_controller_streams[key] = self._pending_controller_streams.get(key, 0) + 1
+
+    async def controller_stream_established(self, session_id: str, lease: str) -> None:
+        """Mark a validated controller stream as subscribed to the hub."""
+
+        async with self._lock:
+            handle = self._require(session_id, lease)
+            key = (session_id, handle.lease_hash)
+            pending = self._pending_controller_streams.get(key, 0)
+            if pending <= 1:
+                self._pending_controller_streams.pop(key, None)
+            else:
+                self._pending_controller_streams[key] = pending - 1
+
+    async def controller_stream_failed(self, session_id: str, lease: str) -> None:
+        """Release a failed handshake and fail closed if no stream remains."""
+
+        async with self._lock:
+            handle = self._require(session_id, lease)
+            key = (session_id, handle.lease_hash)
+            pending = self._pending_controller_streams.get(key, 0)
+            if pending <= 1:
+                self._pending_controller_streams.pop(key, None)
+            else:
+                self._pending_controller_streams[key] = pending - 1
+            if pending > 1 or handle.lifecycle != "RUNNING":
+                return
+            subscribers = await self.hub.subscribers(session_id)
+            if any(item.role == "controller" and not item.closed for item in subscribers):
+                return
+            paused = self._pause_controller_locked(handle)
+            if paused:
+                await self._publish_latest_record(handle, kind=StreamKind.LIFECYCLE)
 
     async def controller_disconnected(self, session_id: str, lease: str) -> None:
         """Pause immediately on a valid controller disconnect; never resume."""
 
         async with self._lock:
             handle = self._require(session_id, lease)
+            key = (session_id, handle.lease_hash)
+            if self._pending_controller_streams.get(key, 0) > 0:
+                return
             # React StrictMode and a browser reconnect can close an older
             # socket after its replacement has already subscribed.  The hub
             # removes the old subscription before this callback, so a live
@@ -846,14 +884,21 @@ class SimulationManager:
             subscribers = await self.hub.subscribers(session_id)
             if any(item.role == "controller" and not item.closed for item in subscribers):
                 return
-            if handle.lifecycle != "RUNNING":
-                return
-            handle.lifecycle = "PAUSED"
-            self.persistence.update_session(session_id, lifecycle="PAUSED")
-            self._append(handle, RecordKind.LIFECYCLE, {
-                "event": "controller_disconnected", "reason": "controller_disconnect",
-            }, self._time(handle), self._version(handle))
-            await self._publish_latest_record(handle, kind=StreamKind.LIFECYCLE)
+            paused = self._pause_controller_locked(handle)
+            if paused:
+                await self._publish_latest_record(handle, kind=StreamKind.LIFECYCLE)
+
+    def _pause_controller_locked(self, handle: RuntimeHandle) -> bool:
+        """Persist the controller disconnect transition while manager lock is held."""
+
+        if handle.lifecycle != "RUNNING":
+            return False
+        handle.lifecycle = "PAUSED"
+        self.persistence.update_session(handle.session_id, lifecycle="PAUSED")
+        self._append(handle, RecordKind.LIFECYCLE, {
+            "event": "controller_disconnected", "reason": "controller_disconnect",
+        }, self._time(handle), self._version(handle))
+        return True
 
     async def observer_disconnected(self, session_id: str) -> None:
         """Observer disconnects are read-only and do not affect lifecycle."""

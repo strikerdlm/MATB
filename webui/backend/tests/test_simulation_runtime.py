@@ -104,6 +104,22 @@ async def test_stale_controller_disconnect_does_not_pause_replacement_stream(man
 
 
 @pytest.mark.anyio
+async def test_pending_controller_handoff_defers_disconnect_pause(manager, runtime_db):
+    with Session(runtime_db) as db:
+        prepared = await manager.prepare(request(), db)
+    await manager.start(prepared.id, "PRACTICE", prepared.controller_lease)
+
+    await manager.controller_connected(prepared.id, prepared.controller_lease)
+    await manager.controller_disconnected(prepared.id, prepared.controller_lease)
+    assert manager.active is not None and manager.active.lifecycle == "RUNNING"
+
+    await manager.controller_stream_established(prepared.id, prepared.controller_lease)
+    await manager.controller_disconnected(prepared.id, prepared.controller_lease)
+    assert manager.active.lifecycle == "PAUSED"
+    await manager.shutdown()
+
+
+@pytest.mark.anyio
 async def test_protocol_probe_pauses_and_redacts_operational_state(manager, runtime_db):
     with Session(runtime_db) as db:
         prepared = await manager.prepare(request(), db)
