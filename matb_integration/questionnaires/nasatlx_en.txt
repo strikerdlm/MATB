@@ -1,0 +1,6 @@
+Mental demand;How much mental and perceptual activity was required (for example, thinking, deciding, calculating, remembering)? Was the task easy or demanding, simple or complex?;Low/High;0/10/5
+Physical demand;How much physical activity was required (for example, pressing, pushing, turning, controlling)? Was the task restful or laborious?;Low/High;0/10/5
+Temporal demand;How much time pressure did you feel due to the pace or rate of the task? Was the pace slow and relaxed or rapid and frantic?;Low/High;0/10/5
+Performance;How satisfied were you with your performance in accomplishing the task goals? How successful were you in achieving what you were asked to do?;Good/Poor;0/10/5
+Effort;How hard did you have to work mentally and physically to accomplish your level of performance?;Low/High;0/10/5
+Frustration;How insecure, discouraged, irritated, stressed, and annoyed were you during the task?;Low/High;0/10/5

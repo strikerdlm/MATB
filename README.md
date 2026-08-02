@@ -54,7 +54,7 @@ MATB/
 
 ## Step-by-step: how to run it
 
-### 1. Install repository dependencies
+### 1. Install this MATB repository
 
 ```bash
 git clone https://github.com/strikerdlm/MATB
@@ -62,15 +62,37 @@ cd MATB
 bash setup.sh
 ```
 
-`setup.sh` creates a repository virtual environment at `.venv` and installs local dependencies. The task runner is external. If you have a local OpenMATB checkout/install, copy this repo's scenarios and questionnaires into it with:
+`setup.sh` creates this repository's `.venv` and installs MATB bridge /
+analysis dependencies. It does **not** install the OpenMATB desktop task
+runner, because OpenMATB is intentionally external.
+
+### 2. Install the external OpenMATB runner
+
+Use a separate OpenMATB checkout or install directory. In the examples below,
+replace `/path/to/openmatb` with your actual OpenMATB path.
 
 ```bash
-OPENMATB_DIR=/path/to/openmatb python3 install_to_openmatb.py
+OPENMATB_DIR=/path/to/openmatb
+cd "$OPENMATB_DIR"
+
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-### 2. Build counterbalanced scenarios (optional — pre-baked ones ship in `scenarios/`)
+If `python main.py` later reports `ModuleNotFoundError: pyglet`, you are not
+inside the OpenMATB virtual environment. Activate it again with:
 
 ```bash
+cd "$OPENMATB_DIR"
+. .venv/bin/activate
+```
+
+### 3. Build counterbalanced scenarios (optional — pre-baked ones ship in `scenarios/`)
+
+```bash
+cd /path/to/MATB
 python3 -m matb_integration.scenario_builder \
   --output-dir scenarios/military_aviation \
   --block-duration 900 --seed 42
@@ -83,23 +105,105 @@ participant/visit tags when available, workload level, block duration, seed,
 scenario SHA-256, expected ISA/SAGAT counts, and questionnaire inclusion. Per-participant
 block order is a Latin-square permutation (`block_order_for_participant`).
 
-### 3. Run a session
+### 4. Install MATB scenarios into OpenMATB
+
+Copy this repo's scenarios and questionnaires into the external OpenMATB tree:
 
 ```bash
-# Linux / headless (CI, servers):
-OPENMATB_DIR=/path/to/openmatb
-python3 install_to_openmatb.py "$OPENMATB_DIR"
-Xvfb :100 -screen 0 1920x1080x24 &
-cd "$OPENMATB_DIR" && DISPLAY=:100 python main.py
+cd /path/to/MATB
+OPENMATB_DIR=/path/to/openmatb python3 install_to_openmatb.py "$OPENMATB_DIR"
+```
 
-# Windows/macOS: cd "$OPENMATB_DIR" && python main.py
+This creates, among others:
+
+- `$OPENMATB_DIR/includes/scenarios/military_aviation/low_workload.txt`
+- `$OPENMATB_DIR/includes/scenarios/military_aviation/medium_workload.txt`
+- `$OPENMATB_DIR/includes/scenarios/military_aviation/high_workload.txt`
+
+### 5. Configure OpenMATB to avoid startup flicker
+
+OpenMATB uses Pyglet for its desktop window. On Wayland/XWayland, remote
+desktop, VMs, X11 forwarding, and some multi-monitor setups, the fullscreen
+scenario selector can visibly flicker. The stable first-run setup is:
+
+- start windowed (`fullscreen=False`);
+- skip the selector by setting `scenario_path` directly;
+- skip the startup session-number modal while debugging
+  (`display_session_number=False`).
+
+Apply those settings with:
+
+```bash
+OPENMATB_DIR=/path/to/openmatb
+cd "$OPENMATB_DIR"
+cp config.ini config.ini.bak
+python - <<'PY'
+from pathlib import Path
+
+path = Path("config.ini")
+lines = path.read_text().splitlines()
+updates = {
+    "fullscreen": "False",
+    "scenario_path": "military_aviation/low_workload.txt",
+    "display_session_number": "False",
+}
+
+out = []
+for line in lines:
+    stripped = line.strip()
+    if "=" in stripped and not stripped.startswith("#"):
+        key = stripped.split("=", 1)[0].strip()
+        if key in updates:
+            line = f"{key}={updates[key]}"
+    out.append(line)
+
+path.write_text("\n".join(out) + "\n")
+PY
+```
+
+To switch workload levels later, edit `scenario_path` to:
+
+```ini
+scenario_path=military_aviation/medium_workload.txt
+```
+
+or:
+
+```ini
+scenario_path=military_aviation/high_workload.txt
+```
+
+After you confirm the app is stable on the target machine, you may try
+`fullscreen=True` again for participant data collection. If flicker returns,
+keep `fullscreen=False`.
+
+### 6. Run an OpenMATB session
+
+```bash
+# Local desktop:
+OPENMATB_DIR=/path/to/openmatb
+cd "$OPENMATB_DIR"
+. .venv/bin/activate
+python main.py
+```
+
+For Linux/headless CI or servers, use Xvfb and keep `fullscreen=False`:
+
+```bash
+OPENMATB_DIR=/path/to/openmatb
+Xvfb :100 -screen 0 1920x1080x24 &
+
+cd "$OPENMATB_DIR"
+. .venv/bin/activate
+DISPLAY=:100 python main.py
 ```
 
 OpenMATB writes a timestamped session CSV under `$OPENMATB_DIR/sessions/`.
 
-### 4. Convert a session CSV to metrics
+### 7. Convert a session CSV to metrics
 
 ```bash
+cd /path/to/MATB
 python3 -m matb_integration.log_converter "$OPENMATB_DIR/sessions/<run>.csv" \
   --participant P01 --level LOW --block low_workload \
   -o exports/P01_low.jsonl
@@ -108,9 +212,10 @@ python3 -m matb_integration.log_converter "$OPENMATB_DIR/sessions/<run>.csv" \
 Emits one JSONL record with SYSMON d′ (Hautus log-linear), COMM SDT d′,
 NASA-TLX subscales + raw, Bedford, ISA time-series, and SAGAT probe accuracy.
 
-### 5. Fit the Suhir DEPDF (needs all three workload levels of a visit)
+### 8. Fit the Suhir DEPDF (needs all three workload levels of a visit)
 
 ```bash
+cd /path/to/MATB
 python3 -m matb_integration.suhir.cli fit \
   --participant P01 \
   --low LOW.csv --medium MEDIUM.csv --high HIGH.csv \
@@ -121,61 +226,18 @@ Fits the baseline parameters G₀ / P₀ / τ₀ from the three graded-workload
 time-to-failure series and writes a parameters JSON. See
 [`matb_integration/suhir/README.md`](matb_integration/suhir/README.md).
 
-### 6. Run the research console app (backend + frontend)
+### 9. Run the research console backend
 
-The research console is a FastAPI backend on `http://localhost:8000` plus a
-Next.js frontend on `http://localhost:3100`. Use Python 3.12: `pymc>=6` is part
-of the backend requirements and does not install on Python 3.11.
-
-```bash
-# Ubuntu / macOS
-conda create -n matb -c conda-forge python=3.12 pip -y
-conda activate matb
-python -m pip install -r requirements.txt -r openmatb/requirements.txt -r webui/backend/requirements.txt
-
-cd webui/frontend
-npm ci
-cd ../..
-```
-
-```powershell
-# Windows PowerShell
-conda create -n matb -c conda-forge python=3.12 pip -y
-conda activate matb
-conda env config vars set PYTHONNOUSERSITE=1
-python -m pip install -r requirements.txt -r openmatb\requirements.txt -r webui\backend\requirements.txt
-
-cd webui\frontend
-npm ci
-cd ..\..
-```
-
-Start the backend and frontend in two terminals:
+Use a repository-local virtual environment for the headless backend. The
+frontend is documented in the next section.
 
 ```bash
-# Terminal 1: Ubuntu / macOS backend
-conda activate matb
+cd /path/to/MATB
+python3 -m venv ~/.venvs/matb-webui
+~/.venvs/matb-webui/bin/pip install -r webui/backend/requirements.txt
 cd webui/backend
-python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
-
-# Terminal 2: Ubuntu / macOS frontend
-cd webui/frontend
-NEXT_PUBLIC_API_URL=http://localhost:8000 npm run dev
+~/.venvs/matb-webui/bin/uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
-
-```powershell
-# Terminal 1: Windows backend
-conda activate matb
-.\webui\backend\run_backend.ps1
-
-# Terminal 2: Windows frontend
-.\webui\frontend\run_frontend.ps1
-```
-
-Then open `http://localhost:3100`. For a fresh database the tracker page should
-load with "No participants enrolled yet." The backend health check is
-`http://localhost:8000/health`, and the live data endpoints include
-`http://localhost:8000/tracker`.
 
 Endpoints: `GET /health`; `POST /participants`, `GET /participants`,
 `GET /participants/{id}/visits`; `POST /ingest` (multipart upload of a session
@@ -192,9 +254,37 @@ scenario manifests, caveats, and frontend ECharts option JSON).
 Ingesting all three levels of a visit auto-runs the DEPDF fit.
 See [`webui/backend/README.md`](webui/backend/README.md).
 
-### 7. Run the statistics engine CLI (Phase 3A/3B)
+### 10. Run the research console frontend
+
+In a second terminal:
 
 ```bash
+cd /path/to/MATB/webui/frontend
+npm install
+npm run dev
+```
+
+Open `http://localhost:3100`. The frontend defaults to the backend at
+`http://localhost:8000`. If you run the backend somewhere else, set the API URL
+explicitly:
+
+```bash
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8000 npm run dev
+```
+
+Recommended first workflow in the console:
+
+1. Go to `Participants` and create `P01`.
+2. Go to `Upload` and ingest the LOW, MEDIUM, and HIGH OpenMATB CSVs for the
+   same participant / visit.
+3. Go to `Tracker` to verify completeness.
+4. Go to `Visualization` or `Analysis` after data are ingested.
+
+### 11. Run the statistics engine CLI (Phase 3A/3B)
+
+```bash
+cd /path/to/MATB
+
 # Frequentist (Phase 3A):
 python3 -m matb_integration.analysis.stats.cli run \
   --metrics-json m.json --fits-json f.json -o artifact.json
@@ -211,7 +301,7 @@ JSON artifact; the Bayesian command writes a separate artifact (BAYES_VERSION 1.
 with 95% ETIs, R̂, ESS, and per-model diagnostics — never extending the frequentist
 artifact.
 
-### 7b. Run the baseline neurocognitive screen (Phase 10 #20)
+### 12. Run the baseline neurocognitive screen (Phase 10 #20)
 
 Navigate to `http://localhost:3100/screen` in a browser:
 
@@ -227,7 +317,7 @@ Navigate to `http://localhost:3100/screen` in a browser:
 
 Use `?fast=1` query parameter for a reduced-trial dev/e2e run (same scoring logic).
 
-### 8. Run the tests
+### 13. Run the tests
 
 ```bash
 # bridge + protocol + suhir + sagat + screen library tests:

@@ -1,0 +1,66 @@
+format_version: 1
+locale: en
+probes:
+  - probe_id: suas_l1_lost_links
+    domain: perception
+    answer_evaluator: suas_l1_lost_links
+    sa_level: 1
+    question: How many aircraft currently have a lost link?
+    option_source: integer_0_8
+    timeout_s: 15
+  - probe_id: suas_l1_lowest_battery
+    domain: perception
+    answer_evaluator: suas_l1_lowest_battery
+    sa_level: 1
+    question: Which aircraft has the lowest remaining battery energy?
+    option_source: active_aircraft
+    timeout_s: 15
+  - probe_id: suas_l1_unreported
+    domain: perception
+    answer_evaluator: suas_l1_unreported
+    sa_level: 1
+    question: How many detected or inspectable contacts have not yet been reported?
+    option_source: integer_0_8
+    timeout_s: 15
+  - probe_id: suas_l2_largest_gap
+    domain: comprehension
+    answer_evaluator: suas_l2_largest_gap
+    sa_level: 2
+    question: Which search sector has the largest remaining coverage gap?
+    option_source: sectors
+    timeout_s: 15
+  - probe_id: suas_l2_attention
+    domain: comprehension
+    answer_evaluator: suas_l2_attention
+    sa_level: 2
+    question: Which aircraft requires operator attention first?
+    option_source: aircraft_or_none
+    timeout_s: 15
+  - probe_id: suas_l2_mission_state
+    domain: comprehension
+    answer_evaluator: suas_l2_mission_state
+    sa_level: 2
+    question: What coverage band best describes the current mission state?
+    option_source: coverage_band
+    timeout_s: 15
+  - probe_id: suas_l3_reserve_first
+    domain: projection
+    answer_evaluator: suas_l3_reserve_first
+    sa_level: 3
+    question: Which aircraft will reach its reserve threshold first if current tasks continue?
+    option_source: aircraft_or_none
+    timeout_s: 15
+  - probe_id: suas_l3_next_sector
+    domain: projection
+    answer_evaluator: suas_l3_next_sector
+    sa_level: 3
+    question: Which aircraft is predicted to finish its current sector route first?
+    option_source: active_aircraft
+    timeout_s: 15
+  - probe_id: suas_l3_conflict_risk
+    domain: projection
+    answer_evaluator: suas_l3_conflict_risk
+    sa_level: 3
+    question: Which pair has the greatest near-term separation risk?
+    option_source: aircraft_pair_or_none
+    timeout_s: 15

@@ -4,6 +4,7 @@ rich>=13.7.0
 
 # Type checking and validation
 pydantic>=2.5.0
+PyYAML>=6.0
 
 # OpenMATB-compatible runtime dependencies. The task runner is external.
 # On Linux/headless: requires Xvfb  e.g. `Xvfb :100 -screen 0 1920x1080x24 &`
