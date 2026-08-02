@@ -104,8 +104,10 @@ pushd "$REPO_ROOT/webui/backend" >/dev/null
 setsid "$python_bin" -m uvicorn app.main:app --host "$backend_bind" --port "$backend_port" >"$data_dir/logs/backend.log" 2>&1 &
 backend_pid=$!
 popd >/dev/null
+pushd "$REPO_ROOT/webui/frontend" >/dev/null
 setsid "$next_bin" start --hostname "$frontend_bind" --port "$frontend_port" >"$data_dir/logs/frontend.log" 2>&1 &
 frontend_pid=$!
+popd >/dev/null
 
 wait_http "http://$backend_bind:$backend_port/health"
 wait_http "http://$frontend_bind:$frontend_port/mission/setup"
