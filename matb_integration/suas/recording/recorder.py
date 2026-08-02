@@ -6,12 +6,13 @@ import gzip
 import hashlib
 import json
 import os
+import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import BinaryIO
 
 from matb_integration.suas.domain.serialization import canonical_data, canonical_json, canonical_sha256
-from matb_integration.suas.scenarios.loader import load_scenario
+from matb_integration.suas.scenarios.loader import load_scenario, load_scenario_text
 
 from .checkpoints import load_checkpoint
 from .records import ArtifactInfo, RecordKind, RecordingError, SessionRecord
@@ -24,6 +25,7 @@ _PRIVATE_CHECKPOINT_FIELDS = frozenset({
     "sensor_due_times", "coverage_cells", "separation", "command_results",
     "authoritative_state_sha256",
 })
+_CHECKPOINT_FILENAME = re.compile(r"checkpoint-[0-9]{8}\.json\.gz")
 
 
 class SessionRecorder:
@@ -41,10 +43,19 @@ class SessionRecorder:
             raise RecordingError("scenario_yaml must be text")
         try:
             canonical_data(manifest)
+            scenario = load_scenario_text(scenario_yaml, source_name="session scenario")
+            if (manifest.get("scenario_id") != scenario.definition.scenario_id
+                    or manifest.get("scenario_sha256") != scenario.sha256):
+                raise RecordingError("manifest does not match normalized scenario")
+        except RecordingError:
+            raise
+        except (TypeError, ValueError) as exc:
+            raise RecordingError(f"recording initialization failed: {exc}") from exc
+        try:
             self.run_dir.mkdir(parents=True, exist_ok=False)
             self.checkpoints_dir.mkdir(exist_ok=False)
             self._write_atomic(self.run_dir / "manifest.json", canonical_json(manifest).encode("utf-8"))
-            self._write_atomic(self.run_dir / "scenario.yaml", scenario_yaml.encode("utf-8"))
+            self._write_atomic(self.run_dir / "scenario.yaml", scenario.normalized_yaml.encode("utf-8"))
             events_path = self.run_dir / "events.jsonl"
             with events_path.open("xb"):
                 pass
@@ -70,6 +81,12 @@ class SessionRecorder:
                 raise ValueError("manifest does not match frozen scenario")
             if not checkpoints_dir.is_dir() or not events_path.is_file():
                 raise ValueError("run is missing recording artifacts")
+            invalid_checkpoint_paths = [
+                path.name for path in checkpoints_dir.iterdir()
+                if not path.is_file() or _CHECKPOINT_FILENAME.fullmatch(path.name) is None
+            ]
+            if invalid_checkpoint_paths:
+                raise RecordingError("partial checkpoint artifact is present")
             instance = cls.__new__(cls)
             instance.run_dir = run_dir
             instance.checkpoints_dir = checkpoints_dir
@@ -155,15 +172,21 @@ class SessionRecorder:
     @staticmethod
     def _read_last_sequence(events_path: Path) -> int:
         previous = 0
-        for line_number, raw_line in enumerate(events_path.read_text(encoding="utf-8").splitlines(), start=1):
+        raw_events = events_path.read_bytes()
+        if raw_events and not raw_events.endswith(b"\n"):
+            raise RecordingError("events.jsonl final record is incomplete")
+        for line_number, raw_line in enumerate(raw_events.split(b"\n")[:-1], start=1):
             if not raw_line:
                 raise RecordingError(f"events.jsonl has an empty line at {line_number}")
+            if b"\r" in raw_line:
+                raise RecordingError(f"events.jsonl has non-canonical line endings at {line_number}")
             try:
-                data = json.loads(raw_line)
+                decoded_line = raw_line.decode("utf-8")
+                data = json.loads(decoded_line)
                 record = SessionRecord(**data)
-            except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            except (TypeError, UnicodeDecodeError, ValueError, json.JSONDecodeError) as exc:
                 raise RecordingError(f"events.jsonl has an invalid record at {line_number}: {exc}") from exc
-            if canonical_json(record) != raw_line:
+            if canonical_json(record).encode("utf-8") != raw_line:
                 raise RecordingError(f"events.jsonl record at {line_number} is not canonical")
             if record.sequence <= previous:
                 raise RecordingError("events.jsonl sequences are not strictly increasing")

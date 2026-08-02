@@ -16,14 +16,20 @@ from matb_integration.suas.recording.recorder import (
     SessionRecorder,
 )
 from matb_integration.suas.recording.checkpoints import load_checkpoint
+from matb_integration.suas.scenarios.loader import load_scenario
 
 
 def manifest() -> dict[str, object]:
-    return {"manifest_version": 1, "scenario_id": "reference-area-search"}
+    loaded = load_scenario(Path("scenarios/suas/reference_area_search.yaml"))
+    return {
+        "manifest_version": 1,
+        "scenario_id": loaded.definition.scenario_id,
+        "scenario_sha256": loaded.sha256,
+    }
 
 
 def scenario_yaml() -> str:
-    return "scenario_id: reference-area-search\n"
+    return load_scenario(Path("scenarios/suas/reference_area_search.yaml")).normalized_yaml
 
 
 def record(*, sequence: int, kind: RecordKind = RecordKind.LIFECYCLE) -> SessionRecord:
@@ -95,3 +101,43 @@ def test_write_failure_is_not_hidden(tmp_path: Path, monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(recorder, "_write_line", Mock(side_effect=OSError("disk full")))
     with pytest.raises(RecordingError, match="disk full"):
         recorder.append(record(sequence=1))
+
+
+@pytest.mark.parametrize("mutation", [lambda data: data.rstrip(b"\n"), lambda data: data.replace(b"\n", b"\r\n")])
+def test_open_existing_rejects_incomplete_or_noncanonical_jsonl_line(
+    tmp_path: Path, mutation,
+) -> None:
+    run_dir = tmp_path / "run"
+    recorder = SessionRecorder(run_dir, manifest(), scenario_yaml())
+    recorder.append(record(sequence=1))
+    recorder.close()
+    events_path = run_dir / "events.jsonl"
+    events_path.write_bytes(mutation(events_path.read_bytes()))
+
+    with pytest.raises(RecordingError):
+        SessionRecorder.open_existing(run_dir)
+
+
+def test_constructor_validates_and_persists_normalized_manifest_scenario_pair(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    normalized = scenario_yaml()
+    source_yaml = Path("scenarios/suas/reference_area_search.yaml").read_text(encoding="utf-8")
+    recorder = SessionRecorder(run_dir, manifest(), source_yaml)
+    recorder.close()
+
+    assert (run_dir / "scenario.yaml").read_text(encoding="utf-8") == normalized
+    assert SessionRecorder.open_existing(run_dir)
+
+    with pytest.raises(RecordingError, match="manifest does not match"):
+        SessionRecorder(tmp_path / "mismatch", {**manifest(), "scenario_sha256": "0" * 64}, normalized)
+    assert not (tmp_path / "mismatch").exists()
+
+
+def test_open_existing_rejects_orphan_checkpoint_temporary_file(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    recorder = SessionRecorder(run_dir, manifest(), scenario_yaml())
+    recorder.close()
+    (run_dir / "checkpoints/checkpoint-00000001.json.gz.tmp").write_bytes(b"partial")
+
+    with pytest.raises(RecordingError, match="partial checkpoint"):
+        SessionRecorder.open_existing(run_dir)
