@@ -14,9 +14,12 @@ from matb_integration.suas.domain.models import WorldState
 class _PairState:
     advisory_open: bool = False
     critical_open: bool = False
+    critical_below: bool = False
     advisory_duration_ms: int = 0
     critical_duration_ms: int = 0
     last_seen_ms: int | None = None
+    critical_transition_ms: int | None = None
+    critical_duration_at_transition_ms: int | None = None
 
 
 class SeparationMonitor:
@@ -30,21 +33,28 @@ class SeparationMonitor:
         self.critical_mm = critical_mm
         self._pairs: dict[str, _PairState] = {}
 
-    def checkpoint_state(self) -> dict[str, dict[str, int | bool | None]]:
-        return {
-            key: {
+    def checkpoint_state(self) -> dict[str, dict[str, object]]:
+        result: dict[str, dict[str, object]] = {}
+        for key, pair in sorted(self._pairs.items()):
+            item: dict[str, object] = {
                 "advisory_open": pair.advisory_open,
                 "critical_open": pair.critical_open,
                 "advisory_duration_ms": pair.advisory_duration_ms,
                 "critical_duration_ms": pair.critical_duration_ms,
                 "last_seen_ms": pair.last_seen_ms,
             }
-            for key, pair in sorted(self._pairs.items())
-        }
+            if pair.critical_transition_ms is not None:
+                item["critical_occupancy"] = {
+                    "below": pair.critical_below,
+                    "transition_ms": pair.critical_transition_ms,
+                    "duration_ms": pair.critical_duration_at_transition_ms,
+                }
+            result[key] = item
+        return result
 
     def restore_state(
         self,
-        raw: dict[str, dict[str, int | bool | None]],
+        raw: dict[str, dict[str, object]],
         *,
         state: WorldState | None = None,
     ) -> None:
@@ -52,17 +62,34 @@ class SeparationMonitor:
         for key, value in raw.items():
             if not isinstance(key, str) or not isinstance(value, dict):
                 raise ValueError("invalid separation checkpoint")
-            if set(value) != {
+            base_fields = {
                 "advisory_open", "critical_open", "advisory_duration_ms",
                 "critical_duration_ms", "last_seen_ms",
-            }:
+            }
+            if set(value) not in (base_fields, base_fields | {"critical_occupancy"}):
                 raise ValueError("invalid separation checkpoint")
+            critical_open = _bool(value, "critical_open")
+            occupancy = value.get("critical_occupancy")
+            critical_below = critical_open
+            transition_ms = None
+            duration_at_transition_ms = None
+            if occupancy is not None:
+                if not isinstance(occupancy, dict) or set(occupancy) != {
+                    "below", "transition_ms", "duration_ms",
+                }:
+                    raise ValueError("invalid separation checkpoint occupancy")
+                critical_below = _bool(occupancy, "below")
+                transition_ms = _counter(occupancy, "transition_ms")
+                duration_at_transition_ms = _counter(occupancy, "duration_ms")
             pairs[key] = _PairState(
                 advisory_open=_bool(value, "advisory_open"),
-                critical_open=_bool(value, "critical_open"),
+                critical_open=critical_open,
+                critical_below=critical_below,
                 advisory_duration_ms=_counter(value, "advisory_duration_ms"),
                 critical_duration_ms=_counter(value, "critical_duration_ms"),
                 last_seen_ms=_optional_counter(value, "last_seen_ms"),
+                critical_transition_ms=transition_ms,
+                critical_duration_at_transition_ms=duration_at_transition_ms,
             )
         if state is not None:
             self._validate_restored_state(pairs, state)
@@ -90,8 +117,10 @@ class SeparationMonitor:
             critical_now = separation < self.critical_mm
             if pair.advisory_open != advisory_now:
                 raise ValueError("invalid separation checkpoint geometry")
-            if critical_now and not pair.critical_open:
-                raise ValueError("invalid separation checkpoint critical flag")
+            if pair.critical_below != critical_now:
+                raise ValueError("invalid separation checkpoint critical occupancy")
+            if pair.critical_below and not pair.critical_open:
+                raise ValueError("invalid separation checkpoint critical lifecycle")
             if pair.critical_open and not pair.advisory_open:
                 raise ValueError("invalid separation checkpoint flags")
             if pair.critical_duration_ms > pair.advisory_duration_ms:
@@ -104,8 +133,9 @@ class SeparationMonitor:
             self._validate_alert_lifecycle(
                 state, key, pair.critical_open, pair.critical_duration_ms,
                 AlertKind.SEPARATION_CRITICAL, AlertSeverity.CRITICAL,
-                (left_id, right_id),
+                (left_id, right_id), validate_duration=False,
             )
+            self._validate_critical_occupancy(state, key, pair)
         for alert in state.alerts.values():
             if alert.kind not in (
                 AlertKind.SEPARATION_ADVISORY, AlertKind.SEPARATION_CRITICAL,
@@ -124,6 +154,8 @@ class SeparationMonitor:
         kind: AlertKind,
         severity: AlertSeverity,
         entity_ids: tuple[str, str],
+        *,
+        validate_duration: bool = True,
     ) -> None:
         alert = state.alerts.get(f"{kind.value}:{pair_key}")
         if alert is None:
@@ -152,7 +184,7 @@ class SeparationMonitor:
             ):
                 raise ValueError("invalid separation checkpoint alert lifecycle")
             lifecycle_end = alert.closed_at_ms
-        if duration_ms != lifecycle_end - alert.opened_at_ms:
+        if validate_duration and duration_ms != lifecycle_end - alert.opened_at_ms:
             raise ValueError("invalid separation checkpoint durations")
         if alert.acknowledged:
             if (
@@ -164,6 +196,42 @@ class SeparationMonitor:
                 raise ValueError("invalid separation checkpoint acknowledgement")
         elif alert.acknowledged_sequence is not None or alert.acknowledged_at_ms is not None:
             raise ValueError("invalid separation checkpoint acknowledgement")
+
+    @staticmethod
+    def _validate_critical_occupancy(
+        state: WorldState, pair_key: str, pair: _PairState,
+    ) -> None:
+        if pair.critical_duration_ms > pair.advisory_duration_ms:
+            raise ValueError("invalid separation checkpoint durations")
+        alert = state.alerts.get(f"{AlertKind.SEPARATION_CRITICAL.value}:{pair_key}")
+        if pair.critical_transition_ms is None:
+            if pair.critical_duration_at_transition_ms is not None:
+                raise ValueError("invalid separation checkpoint occupancy")
+            if pair.critical_below:
+                if alert is None or alert.closed_at_ms is not None:
+                    raise ValueError("invalid separation checkpoint occupancy")
+                expected = state.simulation_time_ms - alert.opened_at_ms
+                if pair.critical_duration_ms != expected:
+                    raise ValueError("invalid separation checkpoint occupancy duration")
+            elif pair.critical_duration_ms != 0:
+                raise ValueError("invalid separation checkpoint occupancy duration")
+            return
+        transition_ms = pair.critical_transition_ms
+        duration_at_transition = pair.critical_duration_at_transition_ms
+        if duration_at_transition is None or alert is None:
+            raise ValueError("invalid separation checkpoint occupancy")
+        lifecycle_end = (
+            state.simulation_time_ms if alert.closed_at_ms is None else alert.closed_at_ms
+        )
+        if not alert.opened_at_ms <= transition_ms <= lifecycle_end:
+            raise ValueError("invalid separation checkpoint occupancy timestamp")
+        expected = duration_at_transition
+        if pair.critical_below:
+            expected += state.simulation_time_ms - transition_ms
+        if pair.critical_duration_ms != expected:
+            raise ValueError("invalid separation checkpoint occupancy duration")
+        if not 0 <= duration_at_transition <= lifecycle_end - alert.opened_at_ms:
+            raise ValueError("invalid separation checkpoint occupancy duration")
 
     def step(self, state: WorldState) -> tuple[DomainEvent, ...]:
         events: list[DomainEvent] = []
@@ -182,11 +250,15 @@ class SeparationMonitor:
                 critical_now = separation < self.critical_mm
                 if pair.advisory_open:
                     pair.advisory_duration_ms += elapsed
-                if pair.critical_open:
+                if pair.critical_below:
                     pair.critical_duration_ms += elapsed
                 if advisory_now and not pair.advisory_open:
                     pair.advisory_open = True
                     pair.advisory_duration_ms = 0
+                    pair.critical_duration_ms = 0
+                    pair.critical_below = False
+                    pair.critical_transition_ms = None
+                    pair.critical_duration_at_transition_ms = None
                     self._open_alert(
                         state, key, AlertKind.SEPARATION_ADVISORY, AlertSeverity.ADVISORY,
                         (left_id, right_id), now_ms,
@@ -195,9 +267,21 @@ class SeparationMonitor:
                         state, EventKind.SEPARATION_ADVISORY_OPENED, (left_id, right_id), now_ms,
                         {"pair_key": key, "distance_mm": separation, "advisory_mm": self.advisory_mm},
                     ))
-                if critical_now and not pair.critical_open:
+                critical_alert_id = f"{AlertKind.SEPARATION_CRITICAL.value}:{key}"
+                critical_alert = state.alerts.get(critical_alert_id)
+                critical_lifecycle_open = (
+                    critical_alert is not None and critical_alert.closed_sequence is None
+                )
+                if critical_now != pair.critical_below:
+                    pair.critical_below = critical_now
+                    if critical_now and not critical_lifecycle_open:
+                        pair.critical_transition_ms = None
+                        pair.critical_duration_at_transition_ms = None
+                    else:
+                        pair.critical_transition_ms = now_ms
+                        pair.critical_duration_at_transition_ms = pair.critical_duration_ms
+                if critical_now and not critical_lifecycle_open:
                     pair.critical_open = True
-                    pair.critical_duration_ms = 0
                     self._open_alert(
                         state, key, AlertKind.SEPARATION_CRITICAL, AlertSeverity.CRITICAL,
                         (left_id, right_id), now_ms,
