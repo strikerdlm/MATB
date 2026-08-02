@@ -152,6 +152,7 @@ def apply_contact_action(
     *,
     classification: ContactClassification | str | None = None,
     priority: ContactPriority | str | None = None,
+    note_code: str | None = None,
     at_ms: int | None = None,
     report_history: MutableMapping[str, list[dict[str, object]]] | None = None,
 ) -> tuple[DomainEvent, ...]:
@@ -238,6 +239,7 @@ def apply_contact_action(
             "revision": contact.revision,
             "classification": contact.classification.value,
             "priority": contact.priority.value,
+            "note_code": note_code,
         }
         (report_history if report_history is not None else _REPORT_HISTORY.setdefault(id(state), {})) \
             .setdefault(contact_id, []).append(report)

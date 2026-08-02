@@ -1,4 +1,5 @@
-from matb_integration.suas.domain.commands import AssignSector, CommandStatus, Hold
+from matb_integration.suas.domain.commands import AssignSector, ClassifyContact, CommandStatus, Hold
+from matb_integration.suas.domain.enums import ContactEvidence, ContactWorkflow
 from matb_integration.suas.engine.runtime import SimulationEngine
 from .helpers import envelope
 
@@ -21,3 +22,15 @@ def test_duplicate_returns_first_result_without_another_epoch(loaded_scenario) -
     assert duplicate.status is CommandStatus.DUPLICATE
     assert duplicate.code == first.code
     assert engine.snapshot()["state_version"] == version
+
+
+def test_invalid_runtime_enum_value_is_rejected_not_raised(loaded_scenario) -> None:
+    engine = SimulationEngine(loaded_scenario.definition, "LOW")
+    contact = engine._state.contacts["C-01"]
+    contact.evidence = ContactEvidence.INSPECTABLE
+    contact.workflow = ContactWorkflow.INSPECTED
+    result = engine.step([envelope(
+        "bad-class", expected=0, command=ClassifyContact("C-01", "not-an-enum"),  # type: ignore[arg-type]
+    )]).command_results[0]
+    assert result.status is CommandStatus.REJECTED
+    assert result.code == "invalid_command_value"

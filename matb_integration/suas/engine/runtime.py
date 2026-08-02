@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from enum import Enum
 
 from matb_integration.suas.adapters.synthetic import SyntheticVehicleBackend
 from matb_integration.suas.domain.commands import CommandEnvelope, CommandResult, CommandStatus
@@ -13,13 +12,13 @@ from matb_integration.suas.domain.enums import (
     ContactPriority, ContactWorkflow, EventKind, LinkState, SensorState,
 )
 from matb_integration.suas.domain.events import AlertState, DomainEvent
-from matb_integration.suas.domain.geometry import PointMM
+from matb_integration.suas.domain.geometry import PointMM, distance_mm
 from matb_integration.suas.domain.models import AircraftState, ContactState, Route, ScenarioDefinition, WorldState
 from matb_integration.suas.domain.serialization import canonical_data, canonical_sha256
 from matb_integration.suas.engine.clock import SimulationClock
 from matb_integration.suas.engine.coverage import CoverageGrid
 from matb_integration.suas.engine.links import LinkSystem
-from matb_integration.suas.engine.prng import MASK_64, PCG32, PCG32State
+from matb_integration.suas.engine.prng import MASK_64, PCG32, PCG32State, derive_stream_seed
 from matb_integration.suas.engine.reducer import CommandReducer
 from matb_integration.suas.engine.separation import SeparationMonitor
 from matb_integration.suas.engine.sensors import SensorSystem, public_snapshot as public_contacts
@@ -44,9 +43,19 @@ class ScheduledConflictInjector:
     def __init__(self, scenario: ScenarioDefinition) -> None:
         self._scenario = scenario
         self._applied_event_ids: set[str] = set()
+        self._pending_releases: dict[str, dict[str, int]] = {}
+
+    def checkpoint_pending_releases(self) -> dict[str, dict[str, int]]:
+        return {
+            event_id: dict(sorted(releases.items()))
+            for event_id, releases in sorted(self._pending_releases.items())
+        }
+
+    def restore_pending_releases(self, pending: dict[str, dict[str, int]]) -> None:
+        self._pending_releases = {event_id: dict(releases) for event_id, releases in pending.items()}
 
     def step(self, state: WorldState, *, now_ms: int) -> tuple[DomainEvent, ...]:
-        events: list[DomainEvent] = []
+        events: list[DomainEvent] = list(self._release_due(state, now_ms))
         due = sorted(
             (event for event in self._scenario.conflict_events
              if event.block_id == state.block_id and event.at_ms <= now_ms
@@ -63,6 +72,15 @@ class ScheduledConflictInjector:
                     {"event_id": event.event_id, "reason": unavailable},
                 ))
                 continue
+            plan = self._plan(state, event)
+            if plan is None:
+                events.append(self._emit(
+                    state, EventKind.CONFLICT_INJECTION_SKIPPED,
+                    (event.aircraft_a, event.aircraft_b), event.at_ms,
+                    {"event_id": event.event_id, "reason": "impossible_schedule"},
+                ))
+                continue
+            release_times, movement_times = plan
             for aircraft_id in (event.aircraft_a, event.aircraft_b):
                 aircraft = state.aircraft[aircraft_id]
                 aircraft.route = Route((event.convergence_point,))
@@ -73,9 +91,12 @@ class ScheduledConflictInjector:
                 aircraft.route_leg_progress_mm = 0
                 aircraft.movement_remainder = 0
                 aircraft.mission_progress_ppm = 0
-                if aircraft.mode is not AircraftMode.TRANSIT:
+                target_mode = AircraftMode.HOLD if release_times[aircraft_id] > now_ms else AircraftMode.TRANSIT
+                if aircraft.mode is not target_mode:
                     aircraft.previous_mode = aircraft.mode
-                    aircraft.mode = AircraftMode.TRANSIT
+                    aircraft.mode = target_mode
+            if any(release_at_ms > now_ms for release_at_ms in release_times.values()):
+                self._pending_releases[event.event_id] = release_times
             events.append(self._emit(
                 state, EventKind.CONFLICT_INJECTION_STARTED,
                 (event.aircraft_a, event.aircraft_b), event.at_ms,
@@ -83,9 +104,64 @@ class ScheduledConflictInjector:
                     "event_id": event.event_id,
                     "convergence_point": _point(event.convergence_point),
                     "convergence_in_ms": event.convergence_in_ms,
+                    "movement_ms": movement_times,
+                    "staging_delay_ms": {key: value - now_ms for key, value in sorted(release_times.items())},
+                    "planned_arrival_ms": now_ms + event.convergence_in_ms,
                 },
             ))
         return tuple(events)
+
+    def _release_due(self, state: WorldState, now_ms: int) -> tuple[DomainEvent, ...]:
+        events: list[DomainEvent] = []
+        for event_id, releases in sorted(self._pending_releases.items()):
+            remaining: dict[str, int] = {}
+            for aircraft_id, release_at_ms in sorted(releases.items()):
+                if release_at_ms > now_ms:
+                    remaining[aircraft_id] = release_at_ms
+                    continue
+                aircraft = state.aircraft[aircraft_id]
+                unavailable = self._unavailable(state, aircraft_id, aircraft_id)
+                if unavailable is None and aircraft.mode is AircraftMode.HOLD:
+                    aircraft.previous_mode = aircraft.mode
+                    aircraft.mode = AircraftMode.TRANSIT
+                    events.append(self._emit(
+                        state, EventKind.AIRCRAFT_MODE_CHANGED, (aircraft_id,), now_ms,
+                        {"from": AircraftMode.HOLD.value, "to": AircraftMode.TRANSIT.value,
+                         "conflict_event_id": event_id},
+                    ))
+            if remaining:
+                self._pending_releases[event_id] = remaining
+            else:
+                del self._pending_releases[event_id]
+        return tuple(events)
+
+    def _plan(self, state: WorldState, event) -> tuple[dict[str, int], dict[str, int]] | None:
+        """Return deterministic release and travel durations, or no safe schedule.
+
+        Aircraft move at a fixed adapter speed.  A direct route cannot arrive
+        earlier than its fixed-point travel duration, so an over-constrained
+        scenario is explicitly skipped.  When time remains, the aircraft stages
+        in HOLD before release; its direct route then reaches convergence at the
+        configured interval without changing speed or teleporting position.
+        """
+        movement_times: dict[str, int] = {}
+        for aircraft_id in (event.aircraft_a, event.aircraft_b):
+            aircraft = state.aircraft[aircraft_id]
+            speed = self._scenario.aircraft[aircraft_id].speed_mm_per_s
+            distance = distance_mm(aircraft.position, event.convergence_point)
+            movement_times[aircraft_id] = _ceil_div(distance * 1_000, speed * TICK_MS) * TICK_MS
+        if any(movement_ms > event.convergence_in_ms for movement_ms in movement_times.values()):
+            return None
+        releases = {
+            # Conflict planning happens immediately before the adapter advances
+            # the state for this clock tick.  Stage one tick so the first travel
+            # increment begins after injection, not in its already-elapsed slot.
+            aircraft_id: state.simulation_time_ms + event.convergence_in_ms - movement_ms + TICK_MS
+            for aircraft_id, movement_ms in movement_times.items()
+        }
+        if any(release_at_ms % TICK_MS for release_at_ms in releases.values()):
+            return None
+        return releases, movement_times
 
     @staticmethod
     def _unavailable(state: WorldState, first: str, second: str) -> str | None:
@@ -102,7 +178,7 @@ class ScheduledConflictInjector:
         return None
 
     @staticmethod
-    def _emit(state: WorldState, kind: EventKind, entity_ids: tuple[str, str], at_ms: int, payload: dict) -> DomainEvent:
+    def _emit(state: WorldState, kind: EventKind, entity_ids: tuple[str, ...], at_ms: int, payload: dict) -> DomainEvent:
         state.event_sequence += 1
         return DomainEvent(
             event_id=f"{state.block_id}:{state.event_sequence:08d}", sequence=state.event_sequence,
@@ -125,10 +201,10 @@ class SimulationEngine:
         self._clock = SimulationClock(tick_ms=TICK_MS)
         self._backend = SyntheticVehicleBackend()
         self._state = self._backend.initialize(scenario, block)
-        self._reducer = CommandReducer(scenario)
+        self._sensors = SensorSystem(scenario)
+        self._reducer = CommandReducer(scenario, self._sensors)
         self._links = LinkSystem(scenario)
         self._conflicts = ScheduledConflictInjector(scenario)
-        self._sensors = SensorSystem(scenario)
         self._coverage = CoverageGrid(scenario)
         self._separation = SeparationMonitor(
             advisory_mm=scenario.advisory_separation_mm,
@@ -256,6 +332,7 @@ class SimulationEngine:
             "sensor_reports": canonical_data(self._sensors._reports),
             "link_applied_event_ids": sorted(self._links._applied_event_ids),
             "conflict_applied_event_ids": sorted(self._conflicts._applied_event_ids),
+            "conflict_pending_releases": self._conflicts.checkpoint_pending_releases(),
             "sensor_due_times": {key: value.next_sensor_scan_ms for key, value in sorted(self._state.aircraft.items())},
             "coverage_cells": [[x, y] for x, y in sorted(self._state.coverage_cells)],
             "separation": self._separation.checkpoint_state(),
@@ -278,7 +355,7 @@ class SimulationEngine:
         required = {
             "engine_version", "scenario_id", "scenario_sha256", "block_id", "clock", "tick",
             "simulation_time_ms", "state_version", "world", "sensor_prng", "sensor_reports",
-            "link_applied_event_ids", "conflict_applied_event_ids", "sensor_due_times", "coverage_cells",
+            "link_applied_event_ids", "conflict_applied_event_ids", "conflict_pending_releases", "sensor_due_times", "coverage_cells",
             "separation", "command_results",
         }
         if set(raw) != required:
@@ -311,11 +388,20 @@ class SimulationEngine:
             raise ValueError("checkpoint coverage does not match")
         self._clock = SimulationClock(tick_ms=TICK_MS, simulation_time_ms=time_ms, paused=clock["paused"])
         self._state = state
-        self._links._applied_event_ids = _id_set(raw["link_applied_event_ids"], "link event IDs")
-        self._conflicts._applied_event_ids = _id_set(raw["conflict_applied_event_ids"], "conflict event IDs")
+        self._links._applied_event_ids = _scheduled_ids(
+            raw["link_applied_event_ids"], self._scenario.link_events, self._block_id, time_ms, "link event IDs",
+        )
+        self._conflicts._applied_event_ids = _scheduled_ids(
+            raw["conflict_applied_event_ids"], self._scenario.conflict_events, self._block_id, time_ms, "conflict event IDs",
+        )
+        self._conflicts.restore_pending_releases(_pending_conflicts(
+            raw["conflict_pending_releases"], self._scenario, self._block_id, time_ms,
+            self._conflicts._applied_event_ids,
+        ))
+        streams = _mapping(raw["sensor_prng"], "sensor PRNG")
         self._sensors._streams = {
-            key: PCG32.from_state(_pcg(value))
-            for key, value in _mapping(raw["sensor_prng"], "sensor PRNG").items()
+            key: PCG32.from_state(_pcg_for_pair(key, value, state, self._scenario))
+            for key, value in streams.items()
         }
         reports = _mapping(raw["sensor_reports"], "sensor reports")
         if any(not isinstance(key, str) or not isinstance(value, list) for key, value in reports.items()):
@@ -323,6 +409,7 @@ class SimulationEngine:
         self._sensors._reports = {key: [dict(item) for item in value if isinstance(item, Mapping)] for key, value in reports.items()}
         if any(len(self._sensors._reports[key]) != len(value) for key, value in reports.items()):
             raise ValueError("invalid sensor report record")
+        _validate_reports(self._sensors._reports, state, self._scenario)
         self._separation.restore_state(_mapping(raw["separation"], "separation"))
         result_raw = _mapping(raw["command_results"], "command results")
         results: dict[str, CommandResult] = {}
@@ -384,6 +471,41 @@ def _id_set(value: object, name: str) -> set[str]:
     return set(value)
 
 
+def _scheduled_ids(value: object, declarations, block_id: str, now_ms: int, name: str) -> set[str]:
+    applied = _id_set(value, name)
+    active = {event.event_id: event for event in declarations if event.block_id == block_id}
+    due = {event_id for event_id, event in active.items() if event.at_ms <= now_ms}
+    if not applied.issubset(active) or not applied.issubset(due):
+        raise ValueError(f"invalid checkpoint {name}")
+    # Engine checkpoints are emitted only after a complete tick, so every due
+    # declaration has either started or been safely skipped exactly once.
+    if applied != due:
+        raise ValueError(f"checkpoint {name} omit a due event")
+    return applied
+
+
+def _pending_conflicts(
+    value: object, scenario: ScenarioDefinition, block_id: str, now_ms: int, applied: set[str],
+) -> dict[str, dict[str, int]]:
+    raw = _mapping(value, "conflict pending releases")
+    declarations = {
+        event.event_id: event for event in scenario.conflict_events if event.block_id == block_id
+    }
+    result: dict[str, dict[str, int]] = {}
+    for event_id, release_value in raw.items():
+        event = declarations.get(event_id)
+        if event is None or event_id not in applied:
+            raise ValueError("invalid checkpoint conflict pending releases")
+        releases = _mapping(release_value, "conflict pending release")
+        if not set(releases) or not set(releases).issubset({event.aircraft_a, event.aircraft_b}):
+            raise ValueError("invalid checkpoint conflict pending releases")
+        parsed = {aircraft_id: _nonnegative(at_ms, "conflict release time") for aircraft_id, at_ms in releases.items()}
+        if any(at_ms <= now_ms or at_ms % TICK_MS for at_ms in parsed.values()):
+            raise ValueError("invalid checkpoint conflict pending releases")
+        result[event_id] = parsed
+    return result
+
+
 def _pcg(value: object) -> PCG32State:
     raw = _mapping(value, "PCG state")
     if set(raw) != {"state", "increment"}:
@@ -392,6 +514,52 @@ def _pcg(value: object) -> PCG32State:
     if state > MASK_64 or increment > MASK_64 or not increment & 1:
         raise ValueError("invalid checkpoint PCG state")
     return PCG32State(state=state, increment=increment)
+
+
+def _pcg_for_pair(
+    key: object, value: object, state: WorldState, scenario: ScenarioDefinition,
+) -> PCG32State:
+    if not isinstance(key, str) or key.count(":") != 1:
+        raise ValueError("invalid checkpoint sensor PRNG key")
+    aircraft_id, contact_id = key.split(":")
+    if aircraft_id not in state.aircraft or contact_id not in state.contacts:
+        raise ValueError("invalid checkpoint sensor PRNG key")
+    parsed = _pcg(value)
+    _, stream = derive_stream_seed(scenario.seed, "sensor", key)
+    if parsed.increment != ((stream << 1) | 1) & MASK_64:
+        raise ValueError("invalid checkpoint sensor PRNG increment")
+    return parsed
+
+
+def _validate_reports(reports: dict[str, list[dict[str, object]]], state: WorldState, scenario: ScenarioDefinition) -> None:
+    if not set(reports).issubset(state.contacts):
+        raise ValueError("invalid sensor reports")
+    for contact_id, contact in state.contacts.items():
+        history = reports.get(contact_id, [])
+        if [item.get("report_id") for item in history] != contact.report_ids:
+            raise ValueError("checkpoint report history does not match world")
+        for index, report in enumerate(history):
+            if set(report) != {"report_id", "replaces_report_id", "revision", "classification", "priority", "note_code"}:
+                raise ValueError("invalid checkpoint report record")
+            if report["report_id"] != f"{contact_id}:R{index + 1:04d}":
+                raise ValueError("invalid checkpoint report record")
+            expected_replacement = None if index == 0 else f"{contact_id}:R{index:04d}"
+            if report["replaces_report_id"] != expected_replacement:
+                raise ValueError("invalid checkpoint report record")
+            if (isinstance(report["revision"], bool) or not isinstance(report["revision"], int)
+                    or report["revision"] < 0):
+                raise ValueError("invalid checkpoint report record")
+            try:
+                ContactClassification(report["classification"])
+                ContactPriority(report["priority"])
+            except (TypeError, ValueError) as error:
+                raise ValueError("invalid checkpoint report record") from error
+            if report["note_code"] is not None and report["note_code"] not in scenario.report_note_codes:
+                raise ValueError("invalid checkpoint report record")
+
+
+def _ceil_div(numerator: int, denominator: int) -> int:
+    return -(-numerator // denominator)
 
 
 def _world(raw: dict, scenario: ScenarioDefinition, block_id: str) -> WorldState:

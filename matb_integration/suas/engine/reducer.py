@@ -16,7 +16,7 @@ from matb_integration.suas.domain.geometry import PointMM, PolygonMM, distance_m
 from matb_integration.suas.domain.models import Route, ScenarioDefinition, WorldState
 from matb_integration.suas.engine.energy import ceil_div
 from matb_integration.suas.engine.routes import lawnmower_route
-from matb_integration.suas.engine.sensors import apply_contact_action
+from matb_integration.suas.engine.sensors import SensorSystem, apply_contact_action
 
 
 _AIRCRAFT_COMMANDS = (AssignSector, SetWaypoint, Hold, ResumeMission, ReturnToBase)
@@ -26,8 +26,9 @@ _TERMINAL_MODES = (AircraftMode.RECOVERED, AircraftMode.MISSION_FAILED)
 class CommandReducer:
     """Apply envelopes once, retaining a private idempotency cache by command ID."""
 
-    def __init__(self, scenario: ScenarioDefinition) -> None:
+    def __init__(self, scenario: ScenarioDefinition, sensors: SensorSystem | None = None) -> None:
         self._scenario = scenario
+        self._sensors = sensors
         self._results: dict[str, CommandResult] = {}
 
     @property
@@ -82,6 +83,10 @@ class CommandReducer:
             events = self._mutate(state, command)
         except _Rejected as rejected:
             return self._reject(envelope.command_id, rejected.code, state), ()
+        except (TypeError, ValueError):
+            # Dataclasses do not enforce annotations at runtime.  Invalid enum
+            # values must remain an ordinary rejected operator command.
+            return self._reject(envelope.command_id, "invalid_command_value", state), ()
         state.version += 1
         if isinstance(command, _AIRCRAFT_COMMANDS):
             state.aircraft[command.aircraft_id].last_accepted_command_id = envelope.command_id
@@ -169,13 +174,17 @@ class CommandReducer:
             self._contact(state, command.contact_id)
             if command.note_code not in self._scenario.report_note_codes:
                 raise _Rejected("unknown_report_note_code")
-            events = self._contact_events(state, command.contact_id, "REPORT_CONTACT")
-            events[0].payload["note_code"] = command.note_code
+            events = self._contact_events(
+                state, command.contact_id, "REPORT_CONTACT", note_code=command.note_code,
+            )
             return events
         raise _Rejected("unsupported_command")
 
     def _contact_events(self, state: WorldState, contact_id: str, action: str, **values: object) -> tuple[DomainEvent, ...]:
-        events = apply_contact_action(state, contact_id, action, **values)
+        if self._sensors is None:
+            events = apply_contact_action(state, contact_id, action, **values)
+        else:
+            events = self._sensors.apply_contact_action(state, contact_id, action, **values)
         if not events:
             raise _Rejected("invalid_contact_workflow")
         return events
