@@ -264,6 +264,10 @@ class ReplayVerifier:
         for record in records:
             if record.kind is RecordKind.LIFECYCLE:
                 event = record.payload.get("event")
+                if event == "session_prepared":
+                    if active is not None:
+                        raise _InvalidRecord("session_prepared_inside_block")
+                    continue
                 if event not in {"block_started", "block_finished"}:
                     raise _InvalidRecord("unknown_lifecycle_event")
                 if event == "block_started":

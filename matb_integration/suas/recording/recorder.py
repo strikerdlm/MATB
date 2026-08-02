@@ -14,8 +14,10 @@ from typing import BinaryIO
 from matb_integration.suas.domain.serialization import canonical_data, canonical_json, canonical_sha256
 from matb_integration.suas.scenarios.loader import load_scenario, load_scenario_text
 
+from .artifacts import artifact_inventory, build_checksum_file, verify_checksum_file, write_json_artifact
 from .checkpoints import load_checkpoint
 from .records import ArtifactInfo, RecordKind, RecordingError, SessionRecord
+from .replay import ReplayResult, ReplayStatus
 
 _CHECKPOINT_INTERVAL_MS = 5_000
 _PRIVATE_CHECKPOINT_FIELDS = frozenset({
@@ -39,6 +41,8 @@ class SessionRecorder:
         self._last_checkpoint_time_ms: int | None = None
         self._last_checkpoint_block_id: str | None = None
         self._last_checkpoint: ArtifactInfo | None = None
+        self._closed = False
+        self._sealed = False
         if not isinstance(scenario_yaml, str):
             raise RecordingError("scenario_yaml must be text")
         try:
@@ -52,7 +56,11 @@ class SessionRecorder:
         except (TypeError, ValueError) as exc:
             raise RecordingError(f"recording initialization failed: {exc}") from exc
         try:
-            self.run_dir.mkdir(parents=True, exist_ok=False)
+            if self.run_dir.exists():
+                if not self.run_dir.is_dir() or any(self.run_dir.iterdir()):
+                    raise RecordingError("recording initialization failed: run directory is not empty")
+            else:
+                self.run_dir.mkdir(parents=True, exist_ok=False)
             self.checkpoints_dir.mkdir(exist_ok=False)
             self._write_atomic(self.run_dir / "manifest.json", canonical_json(manifest).encode("utf-8"))
             self._write_atomic(self.run_dir / "scenario.yaml", scenario.normalized_yaml.encode("utf-8"))
@@ -96,23 +104,34 @@ class SessionRecorder:
             instance._last_checkpoint_block_id = None
             instance._last_checkpoint = None
             instance._read_checkpoint_metadata()
+            # Reopening is append-safe, but starts in a closed state so a
+            # caller can seal a frozen run directly.  ``append`` lazily opens
+            # the stream again when an append is explicitly requested.
             instance._events = events_path.open("ab")
+            instance._events.close()
+            instance._closed = True
+            instance._sealed = False
             return instance
         except (OSError, TypeError, ValueError, json.JSONDecodeError, RecordingError) as exc:
             raise RecordingError(f"cannot reopen recording: {exc}") from exc
 
     def append(self, record: SessionRecord) -> None:
+        if self._sealed or (self.run_dir / "checksums.sha256").exists():
+            raise RecordingError("sealed run is immutable")
         if not isinstance(record, SessionRecord):
             raise RecordingError("record append failed: record must be a SessionRecord")
         if record.sequence <= self._last_sequence:
             raise RecordingError("record sequence must be strictly increasing")
         try:
+            self._ensure_open()
             self._write_line(canonical_json(record).encode("utf-8"))
         except (OSError, TypeError, ValueError) as exc:
             raise RecordingError(f"record append failed: {exc}") from exc
         self._last_sequence = record.sequence
 
     def checkpoint(self, snapshot: Mapping[str, object]) -> ArtifactInfo:
+        if self._sealed or (self.run_dir / "checksums.sha256").exists():
+            raise RecordingError("sealed run is immutable")
         engine = self._validated_private_snapshot(snapshot)
         block_id = engine["block_id"]
         simulation_time_ms = engine["simulation_time_ms"]
@@ -143,7 +162,85 @@ class SessionRecorder:
         return artifact
 
     def close(self) -> None:
-        self._events.close()
+        if not self._closed:
+            self._events.close()
+            self._closed = True
+
+    def seal(
+        self,
+        *,
+        questionnaires: Mapping[str, object],
+        metrics: Mapping[str, object],
+        debrief: Mapping[str, object],
+        replay: ReplayResult,
+    ) -> tuple[ArtifactInfo, ...]:
+        """Seal a closed recording after a successful deterministic replay."""
+
+        if not self._closed:
+            raise RecordingError("recording must be closed before sealing")
+        if not isinstance(replay, ReplayResult) or replay.status is not ReplayStatus.MATCH:
+            raise RecordingError("replay must match before sealing")
+        checksum_path = self.run_dir / "checksums.sha256"
+        if checksum_path.exists():
+            if verify_checksum_file(checksum_path) != ():
+                raise RecordingError("sealed run is immutable")
+            expected = {
+                "questionnaires.json": questionnaires,
+                "metrics.json": metrics,
+                "debrief.json": debrief,
+                "replay-verification.json": replay,
+            }
+            for name, payload in expected.items():
+                path = self.run_dir / name
+                if not path.is_file() or path.read_bytes() != canonical_json(payload).encode("utf-8"):
+                    raise RecordingError("sealed run is immutable")
+            return artifact_inventory(self.run_dir)
+        try:
+            write_json_artifact(self.run_dir / "questionnaires.json", questionnaires)
+            write_json_artifact(self.run_dir / "metrics.json", metrics)
+            write_json_artifact(self.run_dir / "debrief.json", debrief)
+            write_json_artifact(self.run_dir / "replay-verification.json", replay)
+            build_checksum_file(self.run_dir)
+            self._sealed = True
+        except (OSError, TypeError, ValueError) as exc:
+            raise RecordingError(f"artifact sealing failed: {exc}") from exc
+        return artifact_inventory(self.run_dir)
+
+    def seal_partial(self, *, reason: str) -> tuple[ArtifactInfo, ...]:
+        """Close a run as checksum-verifiable but replay-unverified."""
+
+        if not self._closed:
+            raise RecordingError("recording must be closed before sealing")
+        if not isinstance(reason, str) or not reason.strip():
+            raise RecordingError("partial seal reason must be nonempty")
+        partial_path = self.run_dir / "partial-run.json"
+        payload = {
+            "status": "partial_unverified",
+            "reason": reason,
+            "last_sequence": self._last_sequence,
+            "last_checkpoint": self._last_checkpoint.path.name if self._last_checkpoint else None,
+        }
+        checksum_path = self.run_dir / "checksums.sha256"
+        if checksum_path.exists():
+            if verify_checksum_file(checksum_path) != () or not partial_path.is_file():
+                raise RecordingError("sealed run is immutable")
+            if partial_path.read_bytes() != canonical_json(payload).encode("utf-8"):
+                raise RecordingError("sealed run is immutable")
+            return artifact_inventory(self.run_dir, partial=True)
+        if partial_path.exists() and partial_path.read_bytes() != canonical_json(payload).encode("utf-8"):
+            raise RecordingError("sealed run is immutable")
+        try:
+            write_json_artifact(partial_path, payload)
+            build_checksum_file(self.run_dir)
+            self._sealed = True
+        except (OSError, TypeError, ValueError) as exc:
+            raise RecordingError(f"partial artifact sealing failed: {exc}") from exc
+        return artifact_inventory(self.run_dir, partial=True)
+
+    def _ensure_open(self) -> None:
+        if self._events.closed:
+            self._events = self.run_dir.joinpath("events.jsonl").open("ab")
+            self._closed = False
 
     def _write_line(self, payload: bytes) -> None:
         self._events.write(payload + b"\n")
