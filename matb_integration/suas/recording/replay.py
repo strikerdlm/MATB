@@ -57,6 +57,8 @@ _COMMANDS = {
     "ReportContact": (ReportContact, {"contact_id", "note_code"}),
 }
 _CHECKPOINT_NAME = re.compile(r"checkpoint-([0-9]{8})\.json\.gz")
+_RESEARCH_BLOCK_ORDER = ("LOW", "MEDIUM", "HIGH")
+_PROTOCOL_PRACTICE = "PRACTICE"
 
 
 def deserialize_command(data: Mapping[str, object]) -> CommandEnvelope:
@@ -122,13 +124,21 @@ class ReplayVerifier:
             manifest = self._load_manifest(run_dir)
             if manifest.get("engine_version") != ENGINE_VERSION:
                 return self._result(ReplayStatus.INCOMPATIBLE_ENGINE, records_read, ticks, "engine_version")
+            block_order = self._manifest_block_order(manifest)
             scenario = load_scenario_text((run_dir / "scenario.yaml").read_text(encoding="utf-8"), source_name="frozen scenario")
             if manifest.get("scenario_id") != scenario.definition.scenario_id or manifest.get("scenario_sha256") != scenario.sha256:
                 raise _InvalidRecord("scenario_sha256")
+            # ``blocks`` is a mapping normalized by identifier.  Its keys are
+            # the valid profile IDs; its order is intentionally not protocol
+            # authority (the manifest carries the counterbalanced order).
+            scenario_block_ids = tuple(scenario.definition.blocks)
+            manifest_protocol = ((_PROTOCOL_PRACTICE, *block_order) if block_order is not None else ())
+            if any(block_id not in scenario_block_ids for block_id in manifest_protocol):
+                raise _InvalidRecord("invalid_manifest_block_order")
             self._validate_checkpoints(run_dir)
             records = self._load_records(run_dir / "events.jsonl")
             records_read = len(records)
-            blocks = self._blocks(records, tuple(scenario.definition.blocks))
+            blocks = self._blocks(records, scenario_block_ids, block_order)
             expected_state = actual_state = expected_event = actual_event = None
             all_expected_events: list[object] = []
             all_actual_events: list[object] = []
@@ -183,6 +193,31 @@ class ReplayVerifier:
         return manifest
 
     @staticmethod
+    def _manifest_block_order(manifest: Mapping[str, object]) -> tuple[str, ...] | None:
+        """Parse the participant-specific counterbalanced block order.
+
+        Scenario definitions are normalized by identifier for deterministic
+        hashing and therefore cannot provide the protocol sequence.  The
+        session manifest is the authority for the closed LOW/MEDIUM/HIGH
+        permutation used by a complete research run.  A one-block CLI run may
+        omit this field; ``_blocks`` enforces that omission only remains valid
+        when exactly one lifecycle block was recorded.
+        """
+        # A pre-protocol CLI recording may contain one block and no research
+        # counterbalancing field.  That exception is resolved after lifecycle
+        # parsing; a complete four-block protocol still requires this field.
+        if "block_order" not in manifest:
+            return None
+        value = manifest["block_order"]
+        if not isinstance(value, list):
+            raise _InvalidRecord("invalid_block_order")
+        if len(value) != len(_RESEARCH_BLOCK_ORDER) or any(not isinstance(item, str) for item in value):
+            raise _InvalidRecord("invalid_block_order")
+        if set(value) != set(_RESEARCH_BLOCK_ORDER):
+            raise _InvalidRecord("invalid_block_order")
+        return tuple(value)
+
+    @staticmethod
     def _load_records(path: Path) -> list[SessionRecord]:
         raw = path.read_bytes()
         if raw and not raw.endswith(b"\n"):
@@ -222,7 +257,7 @@ class ReplayVerifier:
 
     @staticmethod
     def _blocks(
-        records: list[SessionRecord], allowed_order: tuple[str, ...],
+        records: list[SessionRecord], scenario_block_ids: tuple[str, ...], block_order: tuple[str, ...] | None,
     ) -> list[tuple[str, list[SessionRecord], SessionRecord]]:
         blocks: list[tuple[str, list[SessionRecord], SessionRecord]] = []
         active: tuple[str, list[SessionRecord]] | None = None
@@ -234,7 +269,7 @@ class ReplayVerifier:
                 if event == "block_started":
                     if active is not None:
                         raise _InvalidRecord("overlapping_block")
-                    if record.block_id not in allowed_order:
+                    if record.block_id not in scenario_block_ids:
                         raise _InvalidRecord("invalid_block_protocol")
                     active = (record.block_id, [])
                     continue
@@ -253,7 +288,12 @@ class ReplayVerifier:
         if active is not None:
             raise _InvalidRecord("missing_block_finish")
         completed = tuple(block_id for block_id, _, _ in blocks)
-        if len(completed) != 1 and completed != allowed_order:
+        if len(completed) == 1:
+            return blocks
+        if block_order is None:
+            raise _InvalidRecord("missing_block_order")
+        expected_protocol = (_PROTOCOL_PRACTICE, *block_order)
+        if len(completed) != 1 and completed != expected_protocol:
             raise _InvalidRecord("invalid_block_protocol")
         return blocks
 
