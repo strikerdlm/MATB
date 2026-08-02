@@ -257,11 +257,13 @@ export class SimulationStream {
         throw new Error("stream envelope session_id does not match the requested session");
       }
       const payload = envelope.payload as Record<string, unknown>;
-      const resynchronizesAfter = envelope.resynchronizes_after_sequence ?? (
-        typeof payload.resynchronizes_after_sequence === "number"
-          ? payload.resynchronizes_after_sequence
-          : undefined
-      );
+      let resynchronizesAfter = envelope.resynchronizes_after_sequence;
+      if (resynchronizesAfter === undefined && payload.resynchronizes_after_sequence !== undefined) {
+        resynchronizesAfter = nonNegativeInteger(
+          payload.resynchronizes_after_sequence,
+          "resynchronizes_after_sequence",
+        );
+      }
       if (this.waitingForSnapshot) {
         if (envelope.kind !== "snapshot") {
           throw new Error("simulation stream must begin with a full snapshot");

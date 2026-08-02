@@ -260,6 +260,13 @@ export function createSimulationStore() {
         try {
           const authoritative = await getSimulationState(current.session.id);
           replaceState(authoritative);
+          // A gap means the current socket can no longer prove contiguous
+          // delivery. Re-open from the last known-good sequence so the server
+          // sends a marked full snapshot and the next event starts a new chain.
+          if (activeStream) {
+            activeStream.close();
+            activeStream.connect();
+          }
         } catch (error) {
           set({ transportError: errorMessage(error), connection: "reconnecting" });
         }
