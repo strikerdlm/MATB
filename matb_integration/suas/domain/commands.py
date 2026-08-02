@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Literal, Mapping
 
 from .enums import ContactClassification, ContactPriority
 from .geometry import PointMM
@@ -64,10 +65,29 @@ class ReportContact:
     note_code: str
 
 
+@dataclass(frozen=True, slots=True)
+class SubmitIsa:
+    probe_id: str
+    rating: int
+
+
+@dataclass(frozen=True, slots=True)
+class SubmitSagat:
+    probe_id: str
+    answer: str
+
+
+@dataclass(frozen=True, slots=True)
+class SubmitPostBlockScale:
+    scale_id: Literal["NASA_TLX", "BEDFORD"]
+    answers: Mapping[str, int]
+
+
 OperatorCommand = (
     AssignSector | SetWaypoint | Hold | ResumeMission | ReturnToBase |
     AcknowledgeAlert | InspectContact | ClassifyContact |
-    SetContactPriority | ReportContact
+    SetContactPriority | ReportContact | SubmitIsa | SubmitSagat |
+    SubmitPostBlockScale
 )
 
 

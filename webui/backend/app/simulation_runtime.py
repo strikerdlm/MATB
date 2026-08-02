@@ -20,10 +20,11 @@ from sqlmodel import Session, select
 
 from matb_integration.suas.domain.commands import (
     AcknowledgeAlert, AssignSector, ClassifyContact, CommandEnvelope, CommandResult,
+    CommandStatus,
     Hold, InspectContact, ReportContact, ResumeMission, ReturnToBase,
     SetContactPriority, SetWaypoint,
 )
-from matb_integration.suas.domain.enums import ContactClassification, ContactPriority
+from matb_integration.suas.domain.enums import ContactClassification, ContactPriority, Locale
 from matb_integration.suas.domain.geometry import PointMM
 from matb_integration.suas.domain.serialization import canonical_data, canonical_json
 from matb_integration.suas.engine.runtime import (
@@ -37,6 +38,10 @@ from matb_integration.suas.recording.replay import ReplayVerifier, event_chain_h
 from matb_integration.suas.scenarios.loader import load_scenario
 from matb_integration.suas.scenarios.manifest import build_session_manifest
 from matb_integration.suas.scenarios.profiles import block_order_for_participant
+from matb_integration.suas.research.protocol import (
+    ActiveProbe, ProtocolController, ProtocolError, ProtocolPhase,
+)
+from matb_integration.suas.research.scoring import ProbeAnswer
 
 from .models import Participant, Visit
 from .simulation_models import SimulationBlock, SimulationSession
@@ -67,6 +72,14 @@ class InvalidTransition(SimulationError):
     code = "invalid_transition"
 
 
+class ProtocolGateActive(SimulationError):
+    code = "probe_active"
+
+
+class PostBlockGateActive(SimulationError):
+    code = "post_block_active"
+
+
 @dataclass(slots=True)
 class _QueuedCommand:
     envelope: CommandEnvelope
@@ -94,6 +107,7 @@ class RuntimeHandle:
     finish_disposition: str | None = None
     transport_sequence: int = 0
     validity: str = "valid"
+    protocol: ProtocolController | None = None
 
 
 def _utcnow() -> datetime:
@@ -180,6 +194,12 @@ class SimulationManager:
                 session_id=session_id, participant_id=request.participant_id, visit_id=int(visit.id),
                 locale=request.locale, scenario=loaded, manifest=manifest, recorder=recorder,
                 lease_hash=self._hash_lease(lease),
+                protocol=ProtocolController(
+                    loaded.definition,
+                    participant_id=request.participant_id,
+                    locale=Locale(request.locale),
+                    monotonic_clock=lambda: asyncio.get_running_loop().time(),
+                ),
             )
             self._handle = handle
             self._append(handle, RecordKind.LIFECYCLE, {
@@ -211,11 +231,22 @@ class SimulationManager:
             handle = self._require(session_id, lease)
             if handle.lifecycle == "RUNNING" and handle.active_block_id == block_id:
                 return self._view(handle)
-            if handle.lifecycle != "PREPARED":
+            if handle.lifecycle not in {"PREPARED", "PAUSED"}:
                 raise InvalidTransition(f"cannot start from {handle.lifecycle}")
-            expected = ("PRACTICE", *handle.manifest["block_order"])
-            if block_id != expected[0]:
-                raise InvalidTransition("block is not next in protocol")
+            expected = (
+                handle.protocol.next_block_id
+                if handle.protocol is not None
+                else ("PRACTICE", *handle.manifest["block_order"])[0]
+            )
+            if block_id != expected:
+                raise InvalidTransition("block_order_violation")
+            if handle.protocol is not None:
+                try:
+                    handle.protocol.start_block(block_id)
+                except ProtocolError as error:
+                    if error.code == "block_order_violation":
+                        raise InvalidTransition(str(error)) from error
+                    raise
             handle.engine = SimulationEngine(handle.scenario.definition, block_id)
             handle.active_block_id = block_id
             handle.lifecycle = "RUNNING"
@@ -305,12 +336,147 @@ class SimulationManager:
     async def submit(self, session_id: str, lease: str, request: CommandRequest) -> CommandResult:
         async with self._lock:
             handle = self._require(session_id, lease)
+            if handle.protocol is not None and handle.protocol.phase in {
+                ProtocolPhase.ISA_ACTIVE,
+                ProtocolPhase.SAGAT_ACTIVE,
+                ProtocolPhase.POST_BLOCK_ACTIVE,
+            }:
+                if request.kind in {"SUBMIT_ISA", "SUBMIT_SAGAT", "SUBMIT_POST_BLOCK_SCALE"}:
+                    return await self._submit_protocol_locked(handle, request)
+                code = (
+                    "post_block_active"
+                    if handle.protocol.phase is ProtocolPhase.POST_BLOCK_ACTIVE
+                    else "probe_active"
+                )
+                return CommandResult(
+                    command_id=str(request.command_id), status=CommandStatus.REJECTED,
+                    code=code, applied_tick=None, state_version=self._version(handle),
+                )
+            if request.kind in {"SUBMIT_ISA", "SUBMIT_SAGAT", "SUBMIT_POST_BLOCK_SCALE"}:
+                return CommandResult(
+                    command_id=str(request.command_id), status=CommandStatus.REJECTED,
+                    code="invalid_protocol_phase", applied_tick=None, state_version=self._version(handle),
+                )
             if handle.lifecycle != "RUNNING" or handle.engine is None:
                 raise InvalidTransition("commands require a running session")
             envelope = _command_envelope(request)
             future: asyncio.Future[CommandResult] = asyncio.get_running_loop().create_future()
             handle.queue.append(_QueuedCommand(envelope, future))
         return await future
+
+    async def _submit_protocol_locked(self, handle: RuntimeHandle, request: CommandRequest) -> CommandResult:
+        """Apply one server-scored instrument command while the engine is paused."""
+
+        protocol = handle.protocol
+        if protocol is None:
+            return CommandResult(
+                command_id=str(request.command_id), status=CommandStatus.REJECTED,
+                code="invalid_protocol_phase", applied_tick=None, state_version=self._version(handle),
+            )
+        payload = dict(request.payload)
+        try:
+            if request.kind == "SUBMIT_ISA":
+                if set(payload) != {"probe_id", "rating"}:
+                    raise ValueError("invalid ISA payload")
+                probe_id, rating = payload["probe_id"], payload["rating"]
+                if not isinstance(probe_id, str) or isinstance(rating, bool) or not isinstance(rating, int):
+                    raise ValueError("invalid ISA payload")
+                score = protocol.submit_isa(probe_id, rating)
+                self._append(handle, RecordKind.QUESTIONNAIRE, {
+                    "instrument": "ISA", "probe_id": probe_id, "rating": score.value,
+                }, self._time(handle), self._version(handle))
+                code = "accepted"
+            elif request.kind == "SUBMIT_SAGAT":
+                if set(payload) != {"probe_id", "answer"}:
+                    raise ValueError("invalid SAGAT payload")
+                probe_id, answer = payload["probe_id"], payload["answer"]
+                if not isinstance(probe_id, str) or not isinstance(answer, str):
+                    raise ValueError("invalid SAGAT payload")
+                result = protocol.submit_sagat(probe_id, answer)
+                self._append(handle, RecordKind.QUESTIONNAIRE, {
+                    "instrument": "SAGAT", "probe_id": result.probe_id,
+                    "sa_level": result.sa_level, "answer": result.answer,
+                    "correct_answer": result.correct_answer, "correct": result.correct,
+                    "timed_out": result.timed_out, "latency_ms": result.latency_ms,
+                    "unscorable_reason": result.unscorable_reason,
+                }, self._time(handle), self._version(handle))
+                code = "accepted"
+            else:
+                if set(payload) != {"scale_id", "answers"}:
+                    raise ValueError("invalid post-block scale payload")
+                scale_id, answers = payload["scale_id"], payload["answers"]
+                if scale_id not in {"NASA_TLX", "BEDFORD"} or not isinstance(answers, Mapping):
+                    raise ValueError("invalid post-block scale payload")
+                if any(isinstance(value, bool) or not isinstance(value, int) for value in answers.values()):
+                    raise ValueError("invalid post-block scale payload")
+                score = protocol.submit_post_block(str(scale_id), answers)
+                score_payload: dict[str, object] = {"instrument": str(scale_id), "scale_id": str(scale_id)}
+                if hasattr(score, "raw_tlx"):
+                    score_payload["raw_tlx"] = float(score.raw_tlx)  # type: ignore[attr-defined]
+                elif hasattr(score, "value"):
+                    score_payload["value"] = int(score.value)  # type: ignore[attr-defined]
+                self._append(handle, RecordKind.QUESTIONNAIRE, score_payload, self._time(handle), self._version(handle))
+                code = "accepted"
+        except ProtocolError as error:
+            return CommandResult(
+                command_id=str(request.command_id), status=CommandStatus.REJECTED,
+                code=error.code, applied_tick=None, state_version=self._version(handle),
+            )
+        except (TypeError, ValueError) as error:
+            return CommandResult(
+                command_id=str(request.command_id), status=CommandStatus.REJECTED,
+                code="invalid_protocol_payload", applied_tick=None, state_version=self._version(handle),
+            )
+
+        if protocol.active_probe is not None:
+            await self._publish_protocol_probe_locked(handle, protocol.active_probe)
+        elif protocol.phase is ProtocolPhase.BLOCK_RUNNING:
+            await self._resume_after_protocol_locked(handle)
+        elif protocol.phase in {ProtocolPhase.READY_FOR_BLOCK, ProtocolPhase.COMPLETE}:
+            # The next block is explicitly started by the controller; scales
+            # close this block's gate but never auto-advance the protocol.
+            handle.lifecycle = "PAUSED"
+            self.persistence.update_session(handle.session_id, lifecycle="PAUSED", validity=protocol.validity)
+        return CommandResult(
+            command_id=str(request.command_id), status=CommandStatus.ACCEPTED,
+            code=code, applied_tick=self._tick(handle), state_version=self._version(handle),
+        )
+
+    async def _publish_protocol_probe_locked(self, handle: RuntimeHandle, probe: ActiveProbe) -> None:
+        """Publish only redacted probe data; private scoring stays on disk."""
+        self._append(
+            handle,
+            RecordKind.PROBE,
+            dict(probe.public_payload),
+            self._time(handle),
+            self._version(handle),
+        )
+        await self._publish_latest_record(handle, kind=StreamKind.PROBE)
+
+    async def _pause_for_protocol_locked(self, handle: RuntimeHandle, reason: str) -> None:
+        if handle.lifecycle == "PAUSED":
+            return
+        handle.lifecycle = "PAUSED"
+        self._cancel_tasks(handle)
+        self.persistence.update_session(handle.session_id, lifecycle="PAUSED", validity=handle.protocol.validity if handle.protocol else handle.validity)
+        self._append(handle, RecordKind.LIFECYCLE, {"event": "session_paused", "reason": reason}, self._time(handle), self._version(handle))
+        if handle.active_block_id:
+            self.persistence.update_block(handle.session_id, handle.active_block_id, lifecycle="PAUSED")
+
+    async def _resume_after_protocol_locked(self, handle: RuntimeHandle) -> None:
+        handle.lifecycle = "RUNNING"
+        self.persistence.update_session(handle.session_id, lifecycle="RUNNING")
+        self._append(handle, RecordKind.LIFECYCLE, {"event": "session_resumed", "reason": "protocol_gate_complete"}, self._time(handle), self._version(handle))
+        if handle.active_block_id:
+            self.persistence.update_block(handle.session_id, handle.active_block_id, lifecycle="RUNNING")
+        if handle.engine is not None:
+            await self._publish_snapshot(handle, handle.engine.snapshot())
+        if self._run_background_tasks and handle.tick_task is None:
+            handle.tick_task = asyncio.create_task(self._tick_loop())
+
+    @staticmethod
+    def _tick(handle: RuntimeHandle) -> int | None:
+        return int(handle.engine.snapshot()["tick"]) if handle.engine else None
 
     async def tick_once(self) -> None:
         async with self._lock:
@@ -339,6 +505,7 @@ class SimulationManager:
                 for item, command_result in zip(queued, result.command_results, strict=False):
                     if not item.future.done():
                         item.future.set_result(command_result)
+                await self._process_protocol_tick_locked(handle)
                 await self._publish_tick_records(handle, result.snapshot, record_sequence_before)
             except RecordingError:
                 try:
@@ -366,7 +533,8 @@ class SimulationManager:
             if handle is None or handle.engine is None:
                 raise SimulationNotFound("no active simulation")
             snapshot = dict(handle.engine.snapshot())
-            await self._publish_snapshot(handle, snapshot)
+            if handle.protocol is None or not handle.protocol.conceal_operational_state:
+                await self._publish_snapshot(handle, snapshot)
             return snapshot
 
     async def state(self, session_id: str) -> dict[str, object]:
@@ -374,6 +542,14 @@ class SimulationManager:
             handle = self._require(session_id, None, check_lease=False)
             if handle.engine is None:
                 return {"session_id": session_id, "lifecycle": handle.lifecycle, "simulation_time_ms": 0, "state_version": 0}
+            if handle.protocol is not None and handle.protocol.conceal_operational_state:
+                return {
+                    "session_id": session_id,
+                    "lifecycle": handle.lifecycle,
+                    "simulation_time_ms": self._time(handle),
+                    "state_version": self._version(handle),
+                    **handle.protocol.status(),
+                }
             return handle.engine.snapshot()
 
     async def view(self, session_id: str, lease: str | None = None) -> SessionView:
@@ -523,6 +699,12 @@ class SimulationManager:
             active_block_id=block_id,
             engine=engine,
             validity="valid_with_deviation",
+            protocol=ProtocolController(
+                loaded.definition,
+                participant_id=row.participant_id,
+                locale=Locale(row.locale),
+                monotonic_clock=lambda: asyncio.get_running_loop().time(),
+            ),
         )
         previous_sequence = recorder._last_sequence
         record_sequence = wrapper["record_sequence"]
@@ -688,6 +870,39 @@ class SimulationManager:
                     handle, kind, canonical_data(record.payload), record.simulation_time_ms, record.state_version,
                 ))
 
+    async def _process_protocol_tick_locked(self, handle: RuntimeHandle) -> None:
+        """Run protocol scheduling after one authoritative engine step."""
+
+        protocol = handle.protocol
+        if protocol is None or handle.engine is None or protocol.phase is not ProtocolPhase.BLOCK_RUNNING:
+            return
+        active = protocol.on_tick(handle.engine._state, simulation_time_ms=self._time(handle))  # noqa: SLF001
+        if active is None:
+            return
+        reason = {
+            "ISA": "isa_probe",
+            "SAGAT": "sagat_freeze",
+            "POST_BLOCK": "post_block_active",
+        }[active.kind]
+        await self._pause_for_protocol_locked(handle, reason)
+        if active.kind == "SAGAT" and active.private_probe is not None:
+            private = active.private_probe
+            self._append(handle, RecordKind.QUESTIONNAIRE, {
+                "instrument": "SAGAT",
+                "event": "probe_started",
+                "probe_id": private.probe_id,
+                "sa_level": private.sa_level,
+                "domain": private.domain,
+                "question": private.question,
+                "options": list(private.options),
+                "correct_answer": private.correct_answer,
+                "timeout_ms": private.timeout_ms,
+                "unscorable_reason": private.unscorable_reason,
+                "state_sha256": handle.engine.state_hash,
+                "freeze_time_ms": self._time(handle),
+            }, self._time(handle), self._version(handle))
+        await self._publish_protocol_probe_locked(handle, active)
+
     async def _publish_snapshot(self, handle: RuntimeHandle, snapshot: Mapping[str, object]) -> None:
         await self.hub.publish(handle.session_id, self._new_envelope(
             handle, StreamKind.SNAPSHOT,
@@ -774,12 +989,22 @@ class SimulationManager:
         return int(handle.engine.snapshot()["state_version"]) if handle.engine else 0
 
     def _view(self, handle: RuntimeHandle) -> SessionView:
+        protocol = handle.protocol.status() if handle.protocol is not None else {
+            "protocol_phase": "READY_FOR_BLOCK",
+            "current_block_index": 0,
+            "active_probe": None,
+            "next_block_id": handle.active_block_id,
+        }
         return SessionView(
             id=handle.session_id, participant_id=handle.participant_id, visit_id=handle.visit_id,
             scenario_id=handle.scenario.definition.scenario_id, scenario_sha256=handle.scenario.sha256,
             locale=handle.locale, lifecycle=handle.lifecycle, active_block_id=handle.active_block_id,
             block_order=list(handle.manifest["block_order"]), state_version=self._version(handle),
             simulation_time_ms=self._time(handle), validity=handle.validity,
+            protocol_phase=str(protocol["protocol_phase"]),
+            current_block_index=int(protocol["current_block_index"]),
+            active_probe=protocol["active_probe"],
+            next_block_id=protocol["next_block_id"],
         )
 
     async def _interrupt(

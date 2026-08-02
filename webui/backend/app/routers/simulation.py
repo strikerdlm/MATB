@@ -25,6 +25,8 @@ from app.simulation_models import SimulationArtifact, SimulationSession
 from app.simulation_runtime import (
     InvalidLease,
     InvalidTransition,
+    PostBlockGateActive,
+    ProtocolGateActive,
     SimulationConflict,
     SimulationError,
     SimulationManager,
@@ -47,6 +49,7 @@ from app.simulation_schemas import (
 )
 
 from matb_integration.suas.recording.records import RecordingError
+from matb_integration.suas.research.protocol import ProtocolError
 from matb_integration.suas.scenarios.loader import MAX_YAML_BYTES, load_scenario, load_scenario_text
 
 
@@ -99,6 +102,12 @@ def _stable_code(exc: BaseException) -> str:
         return "active_session"
     if isinstance(exc, InvalidTransition):
         return "invalid_transition"
+    if isinstance(exc, ProtocolGateActive):
+        return "probe_active"
+    if isinstance(exc, PostBlockGateActive):
+        return "post_block_active"
+    if isinstance(exc, ProtocolError):
+        return exc.code
     if isinstance(exc, SimulationNotFound):
         message = str(exc).lower()
         if "participant" in message:
@@ -125,7 +134,7 @@ def _translate(exc: BaseException) -> HTTPException:
         status_code = status.HTTP_403_FORBIDDEN
     elif isinstance(exc, (SimulationNotFound,)):
         status_code = status.HTTP_404_NOT_FOUND
-    elif isinstance(exc, (SimulationConflict, InvalidTransition)):
+    elif isinstance(exc, (SimulationConflict, InvalidTransition, ProtocolGateActive, PostBlockGateActive)):
         status_code = status.HTTP_409_CONFLICT
     elif isinstance(exc, RecordingError):
         status_code = status.HTTP_507_INSUFFICIENT_STORAGE

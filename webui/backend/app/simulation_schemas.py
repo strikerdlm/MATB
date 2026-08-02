@@ -63,6 +63,10 @@ class SessionView(BaseModel):
     active_block_id: str | None = None
     validity: str = "valid"
     block_order: list[str] = Field(default_factory=list)
+    protocol_phase: str = "READY_FOR_BLOCK"
+    current_block_index: int = Field(default=0, ge=0)
+    active_probe: dict[str, JsonValue] | None = None
+    next_block_id: str | None = None
     state_version: int = Field(default=0, ge=0)
     simulation_time_ms: int = Field(default=0, ge=0)
     created_at: datetime | None = None
@@ -125,6 +129,9 @@ class CommandRequest(BaseModel):
         "CLASSIFY_CONTACT",
         "SET_CONTACT_PRIORITY",
         "REPORT_CONTACT",
+        "SUBMIT_ISA",
+        "SUBMIT_SAGAT",
+        "SUBMIT_POST_BLOCK_SCALE",
     ]
     payload: dict[str, JsonValue]
 
