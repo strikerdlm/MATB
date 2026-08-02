@@ -228,6 +228,9 @@ async def test_public_bundle_excludes_private_run_files(simulation_client, seede
         headers=headers,
     )
     assert finished.status_code == 200
+    debrief = await client.get(f"/simulation/sessions/{session_id}/debrief")
+    assert debrief.status_code == 200
+    assert debrief.json()["session_id"] == session_id
     bundle = await client.get(f"/simulation/sessions/{session_id}/bundle")
     assert bundle.status_code == 200, bundle.text
     with zipfile.ZipFile(io.BytesIO(bundle.content)) as archive:
