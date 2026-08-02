@@ -187,6 +187,9 @@ class SimulationManager:
                 engine_version=ENGINE_VERSION,
             )
             session_id = self._new_session_id()
+            # Bind the immutable manifest to the durable session identity before
+            # it is written into the append-only run directory.
+            manifest["session_id"] = session_id
             lease = secrets.token_urlsafe(32)
             run_dir = self.artifact_root / session_id
             recorder = SessionRecorder(run_dir, manifest, loaded.normalized_yaml)
