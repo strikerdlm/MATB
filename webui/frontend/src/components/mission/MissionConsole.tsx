@@ -11,7 +11,7 @@ import { MissionTopBar } from "@/components/mission/MissionTopBar";
 import { ProbeOverlay } from "@/components/mission/probes/ProbeOverlay";
 import type { PostBlockScaleValues } from "@/components/mission/probes/PostBlockScales";
 import { t } from "@/lib/simulation/i18n";
-import { getSimulationState, transitionSession } from "@/lib/simulation/api";
+import { getSimulationSession, getSimulationState, transitionSession } from "@/lib/simulation/api";
 import { useSimulationStore } from "@/lib/simulation/store";
 import type { ActiveProbePayload, AircraftSnapshot, CommandKind, ContactSnapshot, JsonValue, Locale, ProtocolCommandKind, SessionView, WorldSnapshot } from "@/types/simulation";
 
@@ -114,7 +114,15 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
     } else if (!await issueCommand(kind, payload)) {
       return;
     }
-    useSimulationStore.setState({ activeProbe: null, concealOperationalState: false });
+    // Protocol command results carry an authoritative state version but not
+    // the full protocol phase. Refresh the public session view so the next
+    // block button appears immediately after the final post-block scale.
+    try {
+      const refreshed = await getSimulationSession(currentSession.id);
+      useSimulationStore.setState({ session: refreshed, activeProbe: null, concealOperationalState: false });
+    } catch {
+      useSimulationStore.setState({ activeProbe: null, concealOperationalState: false });
+    }
   };
 
   const probeOverlay = activeProbe ? <ProbeOverlay locale={locale} probe={activeProbe} pending={pendingCommandIds.length > 0} onIsa={(rating) => void probeSubmit("SUBMIT_ISA", { probe_id: activeProbe.kind === "ISA" ? activeProbe.probe_id : "", rating })} onSagat={(answer) => void probeSubmit("SUBMIT_SAGAT", { probe_id: activeProbe.kind === "SAGAT" ? activeProbe.probe_id : "", answer })} onPostBlock={(values: PostBlockScaleValues) => void probeSubmit("SUBMIT_POST_BLOCK_SCALE", { ...values })} /> : null;
