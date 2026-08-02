@@ -6,13 +6,18 @@ from contextlib import asynccontextmanager
 import os
 from pathlib import Path
 from urllib.parse import urlsplit
+import asyncio
+import json
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.db import get_engine, init_db
 from app.simulation_persistence import SQLModelSimulationPersistence
 from app.simulation_runtime import SimulationManager
+from app.websocket.simulation import HubConflict
 
 
 _DEFAULT_FRONTEND_ORIGINS = (
@@ -39,6 +44,7 @@ def _parse_frontend_origins(raw: str | None) -> frozenset[str]:
         try:
             parsed = urlsplit(origin)
             hostname = parsed.hostname
+            port = parsed.port
         except ValueError as exc:
             raise ValueError("MATB_FRONTEND_ORIGINS contains an invalid origin") from exc
         if (
@@ -51,6 +57,8 @@ def _parse_frontend_origins(raw: str | None) -> frozenset[str]:
             or parsed.query
             or parsed.fragment
             or parsed.geturl() != origin
+            or parsed.netloc.endswith(":")
+            or (port is not None and not 1 <= port <= 65535)
         ):
             raise ValueError(
                 "MATB_FRONTEND_ORIGINS entries must be exact http:// or https:// origins "
@@ -91,6 +99,27 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="MATB Research Console", version="0.1.0", lifespan=lifespan)
 app.state.frontend_origins = _FRONTEND_ORIGINS
 
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Use one stable error shape for all JSON/form validation failures."""
+
+    del request
+    fields = [
+        ".".join(str(part) for part in error.get("loc", ()))
+        for error in exc.errors()
+    ]
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": {
+                "code": "invalid_request",
+                "message": "request validation failed",
+                "context": {"fields": fields},
+            }
+        },
+    )
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=sorted(_FRONTEND_ORIGINS),
@@ -110,6 +139,98 @@ app.include_router(analysis.router)
 app.include_router(screen.router)
 app.include_router(exports.router)
 app.include_router(simulation.router)
+
+
+@app.websocket("/simulation/sessions/{session_id}/stream")
+async def simulation_stream(websocket: WebSocket, session_id: str) -> None:
+    """Serve one ordered controller or observer stream for a session."""
+
+    origin = websocket.headers.get("origin")
+    if origin is None or origin not in websocket.app.state.frontend_origins:
+        await websocket.close(code=4403)
+        return
+    manager = getattr(websocket.app.state, "simulation_manager", None)
+    if manager is None:
+        await websocket.close(code=4503)
+        return
+    try:
+        after_sequence = int(websocket.query_params.get("after_sequence", "0"))
+    except (TypeError, ValueError):
+        await websocket.close(code=4400)
+        return
+    if after_sequence < 0:
+        await websocket.close(code=4400)
+        return
+    lease = websocket.query_params.get("lease")
+    role = "controller" if lease else "observer"
+    try:
+        if lease:
+            await manager.controller_connected(session_id, lease)
+        else:
+            await manager.view(session_id)
+        initial = await manager.snapshot_envelope(session_id, after_sequence=after_sequence)
+        subscription = await manager.hub.subscribe(session_id, role=role)
+    except HubConflict:
+        await websocket.close(code=4409)
+        return
+    except Exception:
+        # Do not expose lease/hash/path details during the pre-accept phase.
+        await websocket.close(code=4403 if lease else 4404)
+        return
+
+    await websocket.accept()
+    try:
+        await websocket.send_json(initial.as_json())
+        receive_task = asyncio.create_task(websocket.receive())
+        queue_task = asyncio.create_task(subscription.queue.get())
+        closed_task = asyncio.create_task(subscription._closed.wait())
+        while True:
+            done, _ = await asyncio.wait(
+                {receive_task, queue_task, closed_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if closed_task in done:
+                if not websocket.client_state.value == "DISCONNECTED":
+                    await websocket.close(code=subscription.closed_code or 4408)
+                break
+            if queue_task in done:
+                envelope = queue_task.result()
+                await websocket.send_json(envelope.as_json())
+                queue_task = asyncio.create_task(subscription.queue.get())
+            if receive_task in done:
+                message = receive_task.result()
+                if message.get("type") == "websocket.disconnect":
+                    break
+                raw = message.get("text")
+                if raw is None:
+                    await websocket.close(code=4400)
+                    break
+                try:
+                    payload = json.loads(raw)
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    await websocket.close(code=4400)
+                    break
+                if payload != {"kind": "ping"}:
+                    await websocket.close(code=4400)
+                    break
+                await websocket.send_json({"kind": "pong"})
+                receive_task = asyncio.create_task(websocket.receive())
+    except WebSocketDisconnect:
+        pass
+    finally:
+        for task in (receive_task, queue_task, closed_task):
+            if not task.done():
+                task.cancel()
+        await manager.hub.unsubscribe(subscription)
+        try:
+            if role == "controller":
+                await manager.controller_disconnected(session_id, lease or "")
+            else:
+                await manager.observer_disconnected(session_id)
+        except Exception:
+            # A terminal session or an already-closed process needs no further
+            # lifecycle mutation; the durable session state remains authoritative.
+            pass
 
 
 @app.get("/health")

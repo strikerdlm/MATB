@@ -17,6 +17,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, UploadFile, status
 from sqlmodel import Session, select
+import yaml
 
 from app.db import get_session
 from app.simulation_models import SimulationArtifact, SimulationSession
@@ -112,7 +113,7 @@ def _stable_code(exc: BaseException) -> str:
         return getattr(exc, "code", "simulation_error")
     if isinstance(exc, UnicodeDecodeError):
         return "scenario_not_utf8"
-    if isinstance(exc, ValueError):
+    if isinstance(exc, (ValueError, yaml.YAMLError)):
         return "invalid_request"
     return "simulation_error"
 
@@ -127,7 +128,7 @@ def _translate(exc: BaseException) -> HTTPException:
         status_code = status.HTTP_409_CONFLICT
     elif isinstance(exc, RecordingError):
         status_code = status.HTTP_507_INSUFFICIENT_STORAGE
-    elif isinstance(exc, (ValueError, UnicodeDecodeError)):
+    elif isinstance(exc, (ValueError, UnicodeDecodeError, yaml.YAMLError)):
         status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
     else:
         status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -181,7 +182,10 @@ def _direct_yaml_files(root: Path) -> list[Path]:
             return []
         return sorted(
             path for path in root_resolved.iterdir()
-            if path.is_file() and path.suffix.lower() == ".yaml" and path.parent == root_resolved
+            if path.is_file()
+            and path.suffix.lower() == ".yaml"
+            and path.resolve().is_file()
+            and path.resolve().parent == root_resolved
         )
     except OSError:
         return []
@@ -193,7 +197,7 @@ async def list_scenarios(manager: SimulationManager = Depends(get_simulation_man
     for path in _direct_yaml_files(manager.scenario_root):
         try:
             summaries.append(_scenario_summary(load_scenario(path)))
-        except (OSError, UnicodeDecodeError, ValueError):
+        except (OSError, UnicodeDecodeError, ValueError, yaml.YAMLError):
             # The listing is intentionally limited to installed *valid*
             # scenarios.  Invalid files remain visible to an operator through
             # the explicit upload validation endpoint, never as executable
@@ -232,7 +236,7 @@ async def validate_scenario(request: Request) -> ScenarioValidationView:
         raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "scenario_not_utf8", "scenario must be UTF-8") from exc
     try:
         loaded = load_scenario_text(text, source_name=file.filename or "<upload>")
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, yaml.YAMLError) as exc:
         raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "scenario_invalid", str(exc)) from exc
     summary = _scenario_summary(loaded)
     return ScenarioValidationView(
@@ -426,16 +430,19 @@ def _artifact_views(
         .order_by(SimulationArtifact.relative_path)
     ).all()
     if rows:
-        return [
-            ArtifactView(
+        views: list[ArtifactView] = []
+        for row in rows:
+            relative = _safe_relative(Path(row.relative_path))
+            if relative is None:
+                continue
+            views.append(ArtifactView(
                 kind=row.kind,
-                relative_path=row.relative_path,
+                relative_path=relative,
                 sha256=row.sha256,
                 size_bytes=row.size_bytes,
                 created_at=row.created_at,
-            )
-            for row in rows
-        ]
+            ))
+        return views
     # Endpoint tests use the in-memory adapter.  Keep the same public shape
     # without leaking the adapter's absolute temporary artifact root.
     inventory = getattr(manager.persistence, "artifacts", {}).get(session_id, ())
@@ -477,9 +484,15 @@ def _session_run_dir(session_id: str, manager: SimulationManager, db: Session) -
     # The path is trusted only as an internal server-side lookup.  It is never
     # returned to the browser and is constrained to the configured artifact
     # root where possible.
+    configured_root = manager.artifact_root.resolve()
     path = Path(row.artifact_root)
+    if not path.is_absolute():
+        path = configured_root / path
     try:
-        return path.resolve()
+        resolved = path.resolve()
+        if resolved.parent != configured_root or resolved.name != session_id:
+            return None
+        return resolved
     except OSError:
         return None
 
@@ -500,7 +513,7 @@ async def get_debrief(
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         # Aborted runs are intentionally partial and have no debrief artifact;
         # expose a stable, explicitly incomplete public view instead.
-        if manager.active is not None and manager.active.lifecycle == "ABORTED":
+        if manager.active is not None and manager.active.session_id == session_id and manager.active.lifecycle == "ABORTED":
             return {"status": "partial_unverified", "timeline": []}
         raise _error(status.HTTP_404_NOT_FOUND, "debrief_not_found", "debrief artifact not found") from exc
     if not isinstance(payload, dict):

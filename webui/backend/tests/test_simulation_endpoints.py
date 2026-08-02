@@ -34,6 +34,13 @@ async def test_scenarios_list_and_validate_without_installing(simulation_client)
     assert invalid.status_code == 422
     assert invalid.json()["detail"]["code"] == "scenario_invalid"
 
+    malformed = await client.post(
+        "/simulation/scenarios/validate",
+        files={"file": ("malformed.yaml", b"foo: [", "text/yaml")},
+    )
+    assert malformed.status_code == 422
+    assert malformed.json()["detail"]["code"] == "scenario_invalid"
+
 
 
 @pytest.mark.anyio
@@ -211,3 +218,13 @@ async def test_recovery_requires_lease_while_runtime_exists(simulation_client, s
     )
     assert missing.status_code == 403
     assert missing.json()["detail"]["code"] == "invalid_lease"
+
+
+@pytest.mark.anyio
+async def test_request_validation_uses_stable_error_shape(simulation_client, seeded_participant) -> None:
+    client, _manager = simulation_client
+    invalid = await client.post("/simulation/sessions", json={})
+    assert invalid.status_code == 422
+    detail = invalid.json()["detail"]
+    assert detail["code"] == "invalid_request"
+    assert isinstance(detail["context"]["fields"], list)

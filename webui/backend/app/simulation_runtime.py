@@ -41,6 +41,7 @@ from .simulation_persistence import InMemorySimulationPersistence, SimulationPer
 from .simulation_schemas import (
     CommandRequest, CreateSimulationSession, FinishRequest, PreparedSession, RecoveryView, SessionView,
 )
+from .websocket.simulation import SimulationHub, StreamEnvelope, StreamKind
 
 
 class SimulationError(RuntimeError):
@@ -88,6 +89,7 @@ class RuntimeHandle:
     tick_task: asyncio.Task[Any] | None = None
     snapshot_task: asyncio.Task[Any] | None = None
     finish_disposition: str | None = None
+    transport_sequence: int = 0
 
 
 def _utcnow() -> datetime:
@@ -111,6 +113,7 @@ class SimulationManager:
         wall_clock: Callable[[], str] = _wall_time,
         run_background_tasks: bool = True,
         ui_version: str = "0.1.0",
+        hub: SimulationHub | None = None,
     ) -> None:
         self.scenario_root = Path(scenario_root)
         self.artifact_root = Path(artifact_root)
@@ -119,6 +122,7 @@ class SimulationManager:
         self._wall_clock = wall_clock
         self._run_background_tasks = run_background_tasks
         self._ui_version = ui_version
+        self.hub = hub or SimulationHub(on_controller_overflow=self._pause_for_stream_overflow)
         self._handle: RuntimeHandle | None = None
         self._lock = asyncio.Lock()
         self._shutdown = False
@@ -140,10 +144,16 @@ class SimulationManager:
             )).one_or_none()
             if visit is None:
                 raise SimulationNotFound("visit not found")
+            scenario_root = self.scenario_root.resolve()
             scenario_path = self.scenario_root / f"{request.scenario_id}.yaml"
-            if not scenario_path.is_file() or scenario_path.parent.resolve() != self.scenario_root.resolve():
+            resolved_scenario = scenario_path.resolve()
+            if (
+                not scenario_path.is_file()
+                or resolved_scenario.parent != scenario_root
+                or not resolved_scenario.is_file()
+            ):
                 raise SimulationNotFound("scenario not found")
-            loaded = load_scenario(scenario_path)
+            loaded = load_scenario(resolved_scenario)
             order = block_order_for_participant(request.participant_id)
             manifest = build_session_manifest(
                 loaded,
@@ -204,6 +214,7 @@ class SimulationManager:
             self.persistence.update_session(session_id, lifecycle="RUNNING", active_block_id=block_id, started_at=_utcnow())
             self.persistence.update_block(session_id, block_id, lifecycle="RUNNING", simulation_started_ms=0, started_at=_utcnow())
             self._append(handle, RecordKind.LIFECYCLE, {"event": "block_started", "active_aircraft": len(handle.scenario.definition.blocks[block_id].aircraft_ids), "required_contacts": len(handle.scenario.definition.blocks[block_id].contact_ids), "required_actions": 0}, 0, 0)
+            await self._publish_latest_record(handle, kind=StreamKind.LIFECYCLE)
             if self._run_background_tasks:
                 handle.tick_task = asyncio.create_task(self._tick_loop())
                 handle.snapshot_task = asyncio.create_task(self._snapshot_loop())
@@ -219,6 +230,7 @@ class SimulationManager:
             handle.lifecycle = "PAUSED"
             self.persistence.update_session(session_id, lifecycle="PAUSED")
             self._append(handle, RecordKind.LIFECYCLE, {"event": "session_paused", "reason": reason}, self._time(handle), self._version(handle))
+            await self._publish_latest_record(handle, kind=StreamKind.LIFECYCLE)
             return self._view(handle)
 
     async def resume(self, session_id: str, lease: str) -> SessionView:
@@ -231,6 +243,7 @@ class SimulationManager:
             handle.lifecycle = "RUNNING"
             self.persistence.update_session(session_id, lifecycle="RUNNING")
             self._append(handle, RecordKind.LIFECYCLE, {"event": "session_resumed"}, self._time(handle), self._version(handle))
+            await self._publish_latest_record(handle, kind=StreamKind.LIFECYCLE)
             if self._run_background_tasks and handle.tick_task is None:
                 handle.tick_task = asyncio.create_task(self._tick_loop())
             return self._view(handle)
@@ -257,6 +270,7 @@ class SimulationManager:
                     "event_sha256": event_chain_hash(handle.block_events),
                 }, now, self._version(handle))
             self._append(handle, RecordKind.LIFECYCLE, {"event": "session_finished", "disposition": value}, now, self._version(handle))
+            await self._publish_latest_record(handle, kind=StreamKind.LIFECYCLE)
             self._cancel_tasks(handle)
             handle.recorder.close()
             if value == "abort":
@@ -298,6 +312,7 @@ class SimulationManager:
             queued = list(handle.queue)
             handle.queue.clear()
             commands = [item.envelope for item in queued]
+            record_sequence_before = handle.sequence
             try:
                 result = handle.engine.step(commands)
                 tick = int(result.snapshot["tick"])
@@ -315,6 +330,7 @@ class SimulationManager:
                 for item, command_result in zip(queued, result.command_results, strict=False):
                     if not item.future.done():
                         item.future.set_result(command_result)
+                await self._publish_tick_records(handle, result.snapshot, record_sequence_before)
             except RecordingError:
                 handle.lifecycle = "INTERRUPTED"
                 self.persistence.update_session(handle.session_id, lifecycle="INTERRUPTED", interrupted_at=_utcnow(), validity="invalid")
@@ -333,7 +349,9 @@ class SimulationManager:
             handle = self._handle
             if handle is None or handle.engine is None:
                 raise SimulationNotFound("no active simulation")
-            return dict(handle.engine.snapshot())
+            snapshot = dict(handle.engine.snapshot())
+            await self._publish_snapshot(handle, snapshot)
+            return snapshot
 
     async def state(self, session_id: str) -> dict[str, object]:
         async with self._lock:
@@ -355,6 +373,49 @@ class SimulationManager:
             if self._handle is not None:
                 self._cancel_tasks(self._handle)
 
+    async def controller_connected(self, session_id: str, lease: str) -> None:
+        """Validate a controller stream lease without changing lifecycle."""
+
+        async with self._lock:
+            self._require(session_id, lease)
+
+    async def controller_disconnected(self, session_id: str, lease: str) -> None:
+        """Pause immediately on a valid controller disconnect; never resume."""
+
+        async with self._lock:
+            handle = self._require(session_id, lease)
+            if handle.lifecycle != "RUNNING":
+                return
+            handle.lifecycle = "PAUSED"
+            self.persistence.update_session(session_id, lifecycle="PAUSED")
+            self._append(handle, RecordKind.LIFECYCLE, {
+                "event": "controller_disconnected", "reason": "controller_disconnect",
+            }, self._time(handle), self._version(handle))
+            await self._publish_latest_record(handle, kind=StreamKind.LIFECYCLE)
+
+    async def observer_disconnected(self, session_id: str) -> None:
+        """Observer disconnects are read-only and do not affect lifecycle."""
+
+        async with self._lock:
+            self._require(session_id, None, check_lease=False)
+
+    async def snapshot_envelope(self, session_id: str, *, after_sequence: int = 0) -> StreamEnvelope:
+        """Build a fresh complete snapshot for WebSocket resynchronization."""
+
+        async with self._lock:
+            handle = self._require(session_id, None, check_lease=False)
+            snapshot = dict(handle.engine.snapshot()) if handle.engine is not None else {
+                "session_id": session_id, "lifecycle": handle.lifecycle,
+                "simulation_time_ms": 0, "state_version": 0,
+            }
+            return self._new_envelope(
+                handle,
+                StreamKind.SNAPSHOT,
+                {**snapshot, "resynchronizes_after_sequence": max(0, int(after_sequence))},
+                self._time(handle),
+                self._version(handle),
+            )
+
     async def _tick_loop(self) -> None:
         while True:
             async with self._lock:
@@ -374,7 +435,7 @@ class SimulationManager:
             await self.snapshot_once()
             await self._sleep(SNAPSHOT_INTERVAL_MS / 1000)
 
-    def _append(self, handle: RuntimeHandle, kind: RecordKind, payload: Mapping[str, object], time_ms: int, state_version: int) -> None:
+    def _append(self, handle: RuntimeHandle, kind: RecordKind, payload: Mapping[str, object], time_ms: int, state_version: int) -> SessionRecord:
         handle.sequence += 1
         record = SessionRecord(
             session_id=handle.session_id,
@@ -387,6 +448,104 @@ class SimulationManager:
             payload=dict(payload),
         )
         handle.recorder.append(record)
+        return record
+
+    async def _publish_latest_record(self, handle: RuntimeHandle, *, kind: StreamKind | None = None) -> None:
+        """Publish the most recently appended record after it is durable."""
+
+        path = handle.recorder.run_dir / "events.jsonl"
+        records = _read_records(path)
+        if not records:
+            return
+        record = records[-1]
+        selected = kind
+        if selected is None:
+            selected = {
+                RecordKind.DOMAIN_EVENT: StreamKind.DOMAIN_EVENT,
+                RecordKind.ALERT: StreamKind.ALERT,
+                RecordKind.COMMAND_RESULT: StreamKind.COMMAND_RESULT,
+                RecordKind.PROBE: StreamKind.PROBE,
+                RecordKind.LIFECYCLE: StreamKind.LIFECYCLE,
+                RecordKind.CHECKPOINT: StreamKind.CHECKPOINT,
+            }.get(record.kind)
+        if selected is not None:
+            await self.hub.publish(handle.session_id, self._new_envelope(
+                handle, selected, canonical_data(record.payload), record.simulation_time_ms, record.state_version,
+            ))
+
+    async def _publish_tick_records(
+        self, handle: RuntimeHandle, snapshot: Mapping[str, object], record_sequence_before: int,
+    ) -> None:
+        records = _read_records(handle.recorder.run_dir / "events.jsonl")
+        # Only records produced by the current tick are transport events.  The
+        # recorder remains the authoritative order; transport subscribers see
+        # the same order but with an independent sequence counter.
+        for record in records:
+            if record.sequence <= record_sequence_before:
+                continue
+            kind = {
+                RecordKind.DOMAIN_EVENT: StreamKind.DOMAIN_EVENT,
+                RecordKind.ALERT: StreamKind.ALERT,
+                RecordKind.COMMAND_RESULT: StreamKind.COMMAND_RESULT,
+                RecordKind.CHECKPOINT: StreamKind.CHECKPOINT,
+            }.get(record.kind)
+            if kind is not None:
+                await self.hub.publish(handle.session_id, self._new_envelope(
+                    handle, kind, canonical_data(record.payload), record.simulation_time_ms, record.state_version,
+                ))
+
+    async def _publish_snapshot(self, handle: RuntimeHandle, snapshot: Mapping[str, object]) -> None:
+        await self.hub.publish(handle.session_id, self._new_envelope(
+            handle, StreamKind.SNAPSHOT,
+            {**canonical_data(snapshot), "authoritative_event_sequence": snapshot.get("event_sequence", 0)},
+            int(snapshot.get("simulation_time_ms", 0)), int(snapshot.get("state_version", 0)),
+        ))
+
+    def _new_envelope(
+        self, handle: RuntimeHandle, kind: StreamKind, payload: Mapping[str, object], time_ms: int, state_version: int,
+    ) -> StreamEnvelope:
+        handle.transport_sequence += 1
+        return StreamEnvelope(
+            session_id=handle.session_id,
+            sequence=handle.transport_sequence,
+            simulation_time_ms=max(0, int(time_ms)),
+            wall_time_utc=self._wall_clock(),
+            state_version=max(0, int(state_version)),
+            kind=kind,
+            payload=dict(payload),
+        )
+
+    async def _pause_for_stream_overflow(self, session_id: str) -> None:
+        handle = self._handle
+        if handle is None or handle.session_id != session_id or handle.lifecycle != "RUNNING":
+            return
+        if self._lock.locked():
+            # Hub publication normally occurs while tick/lifecycle mutation is
+            # protected by this lock.  Mutate the same handle directly to
+            # avoid waiting on ourselves; the durable pause record is written
+            # before the overflow callback returns.
+            handle.lifecycle = "PAUSED"
+            self.persistence.update_session(session_id, lifecycle="PAUSED")
+            self._append(
+                handle,
+                RecordKind.LIFECYCLE,
+                {"event": "session_paused", "reason": "stream_backpressure"},
+                self._time(handle),
+                self._version(handle),
+            )
+            return
+        # Called by the hub outside its lock.  Reuse the normal disconnect
+        # semantics with the in-memory lease hash already held by the manager.
+        await self._pause_without_lease(session_id)
+
+    async def _pause_without_lease(self, session_id: str) -> None:
+        async with self._lock:
+            handle = self._handle
+            if handle is None or handle.session_id != session_id or handle.lifecycle != "RUNNING":
+                return
+            handle.lifecycle = "PAUSED"
+            self.persistence.update_session(session_id, lifecycle="PAUSED")
+            self._append(handle, RecordKind.LIFECYCLE, {"event": "session_paused", "reason": "stream_backpressure"}, self._time(handle), self._version(handle))
 
     def _require(self, session_id: str, lease: str | None, *, check_lease: bool = True) -> RuntimeHandle:
         handle = self._handle
