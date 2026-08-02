@@ -87,6 +87,23 @@ async def test_submit_is_queued_until_tick(manager, runtime_db):
 
 
 @pytest.mark.anyio
+async def test_stale_controller_disconnect_does_not_pause_replacement_stream(manager, runtime_db):
+    with Session(runtime_db) as db:
+        prepared = await manager.prepare(request(), db)
+    await manager.start(prepared.id, "PRACTICE", prepared.controller_lease)
+
+    replacement = await manager.hub.subscribe(prepared.id, role="controller")
+    await manager.controller_disconnected(prepared.id, prepared.controller_lease)
+    assert manager.active is not None
+    assert manager.active.lifecycle == "RUNNING"
+
+    await manager.hub.unsubscribe(replacement)
+    await manager.controller_disconnected(prepared.id, prepared.controller_lease)
+    assert manager.active.lifecycle == "PAUSED"
+    await manager.shutdown()
+
+
+@pytest.mark.anyio
 async def test_protocol_probe_pauses_and_redacts_operational_state(manager, runtime_db):
     with Session(runtime_db) as db:
         prepared = await manager.prepare(request(), db)

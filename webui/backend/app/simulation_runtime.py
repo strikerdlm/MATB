@@ -838,6 +838,14 @@ class SimulationManager:
 
         async with self._lock:
             handle = self._require(session_id, lease)
+            # React StrictMode and a browser reconnect can close an older
+            # socket after its replacement has already subscribed.  The hub
+            # removes the old subscription before this callback, so a live
+            # controller subscriber is authoritative evidence that this
+            # disconnect is stale.  Do not pause a healthy replacement stream.
+            subscribers = await self.hub.subscribers(session_id)
+            if any(item.role == "controller" and not item.closed for item in subscribers):
+                return
             if handle.lifecycle != "RUNNING":
                 return
             handle.lifecycle = "PAUSED"
