@@ -19,7 +19,9 @@ from matb_integration.suas.domain.enums import (
     ContactClassification, ContactPriority, LinkState, Locale, SensorState,
     WorkloadProfile,
 )
-from matb_integration.suas.domain.geometry import PointMM, PolygonMM, distance_mm
+from matb_integration.suas.domain.geometry import (
+    PointMM, PolygonMM, distance_mm, polygon_within_polygon,
+)
 from matb_integration.suas.domain.models import (
     AircraftDefinition, BlockDefinition, ConflictEventDefinition, ContactDefinition,
     EnergyDefinition, InitialViewDefinition, LinkEventDefinition,
@@ -264,10 +266,10 @@ def _validate_semantics(spec: ScenarioSpec, *, source_name: str) -> None:
     _require_points_within(terrain, [spec.home_base], "home base")
     _require_points_within(terrain, [aircraft.home for aircraft in spec.aircraft], "aircraft home")
     _require_points_within(terrain, [contact.position for contact in spec.contacts], "contact")
-    _validate_initial_view(terrain, spec)
     polygons = [*spec.sectors, *spec.restricted_zones]
     for polygon in polygons:
         _require_polygon_within_terrain(terrain, polygon)
+    _validate_initial_view(terrain, spec)
     restricted = [_polygon(value) for value in spec.restricted_zones]
     homes = [_point(spec.home_base), *(_point(item.home) for item in spec.aircraft)]
     if any(zone.contains(home) for zone in restricted for home in homes):
@@ -350,11 +352,14 @@ def _validate_initial_view(terrain: PolygonMM, spec: ScenarioSpec) -> None:
     center = spec.initial_view.center
     half_width = spec.initial_view.width_m / 2
     half_height = spec.initial_view.height_m / 2
-    corners = [
-        PointSpec(x_m=center.x_m + dx, y_m=center.y_m + dy)
-        for dx in (-half_width, half_width) for dy in (-half_height, half_height)
-    ]
-    _require_points_within(terrain, [center, *corners], "initial view")
+    rectangle = PolygonMM(tuple(_point(PointSpec(x_m=x, y_m=y)) for x, y in (
+        (center.x_m - half_width, center.y_m - half_height),
+        (center.x_m + half_width, center.y_m - half_height),
+        (center.x_m + half_width, center.y_m + half_height),
+        (center.x_m - half_width, center.y_m + half_height),
+    )))
+    if not terrain.contains(_point(center)) or not polygon_within_polygon(terrain, rectangle):
+        raise ValueError("initial view is outside terrain")
 
 
 def _require_points_within(terrain: PolygonMM, points: list[PointSpec], description: str) -> None:

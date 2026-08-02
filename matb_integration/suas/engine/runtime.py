@@ -383,7 +383,15 @@ class SimulationEngine:
         if state.tick != tick or state.simulation_time_ms != time_ms or state.version != version:
             raise ValueError("checkpoint world counters do not match")
         due = _mapping(raw["sensor_due_times"], "sensor due times")
-        if set(due) != set(state.aircraft) or any(due[key] != value.next_sensor_scan_ms for key, value in state.aircraft.items()):
+        if set(due) != set(state.aircraft) or any(
+            isinstance(due[key], bool)
+            or not isinstance(due[key], int)
+            or due[key] != value.next_sensor_scan_ms
+            or due[key] != _expected_sensor_due_time(
+                time_ms, self._scenario.aircraft[key].sensor.scan_interval_ms,
+            )
+            for key, value in state.aircraft.items()
+        ):
             raise ValueError("checkpoint sensor due times do not match")
         coverage = raw["coverage_cells"]
         if not isinstance(coverage, list) or sorted([list(cell) for cell in state.coverage_cells]) != coverage:
@@ -412,7 +420,9 @@ class SimulationEngine:
         if any(len(self._sensors._reports[key]) != len(value) for key, value in reports.items()):
             raise ValueError("invalid sensor report record")
         _validate_reports(self._sensors._reports, state, self._scenario)
-        self._separation.restore_state(_mapping(raw["separation"], "separation"))
+        self._separation.restore_state(
+            _mapping(raw["separation"], "separation"), state=state,
+        )
         result_raw = _mapping(raw["command_results"], "command results")
         results: dict[str, CommandResult] = {}
         for key, value in result_raw.items():
@@ -461,6 +471,16 @@ def _nonnegative(value: object, name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise ValueError(f"invalid checkpoint {name}")
     return value
+
+
+def _integer(value: object, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"invalid checkpoint {name}")
+    return value
+
+
+def _expected_sensor_due_time(now_ms: int, interval_ms: int) -> int:
+    return (now_ms // interval_ms + 1) * interval_ms
 
 
 def _optional_nonnegative(value: object, name: str) -> int | None:
@@ -646,6 +666,9 @@ def _validate_reports(reports: dict[str, list[dict[str, object]]], state: WorldS
         history = reports.get(contact_id, [])
         if [item.get("report_id") for item in history] != contact.report_ids:
             raise ValueError("checkpoint report history does not match world")
+        revisions: list[int] = []
+        parsed_classifications: list[ContactClassification] = []
+        parsed_priorities: list[ContactPriority] = []
         for index, report in enumerate(history):
             if set(report) != {"report_id", "replaces_report_id", "revision", "classification", "priority", "note_code"}:
                 raise ValueError("invalid checkpoint report record")
@@ -658,12 +681,30 @@ def _validate_reports(reports: dict[str, list[dict[str, object]]], state: WorldS
                     or report["revision"] < 0):
                 raise ValueError("invalid checkpoint report record")
             try:
-                ContactClassification(report["classification"])
-                ContactPriority(report["priority"])
+                parsed_classifications.append(ContactClassification(report["classification"]))
+                parsed_priorities.append(ContactPriority(report["priority"]))
             except (TypeError, ValueError) as error:
                 raise ValueError("invalid checkpoint report record") from error
             if report["note_code"] is not None and report["note_code"] not in scenario.report_note_codes:
                 raise ValueError("invalid checkpoint report record")
+            revisions.append(report["revision"])
+        if not history:
+            if contact.last_reported_revision is not None or contact.workflow is ContactWorkflow.REPORTED:
+                raise ValueError("checkpoint report state does not match history")
+            continue
+        if contact.workflow is not ContactWorkflow.REPORTED:
+            raise ValueError("checkpoint report state does not match history")
+        if any(current <= previous for previous, current in zip(revisions, revisions[1:])):
+            raise ValueError("checkpoint report revisions are not strictly increasing")
+        if revisions[-1] != contact.last_reported_revision:
+            raise ValueError("checkpoint report revision does not match world")
+        if revisions[-1] > contact.revision:
+            raise ValueError("checkpoint report revision is unreachable")
+        if contact.revision == revisions[-1] and (
+            contact.classification is not parsed_classifications[-1]
+            or contact.priority is not parsed_priorities[-1]
+        ):
+            raise ValueError("checkpoint report values do not match world revision")
 
 
 def _ceil_div(numerator: int, denominator: int) -> int:
@@ -704,7 +745,7 @@ def _as_point(value: object) -> PointMM:
     raw = _mapping(value, "point")
     if set(raw) != {"x_mm", "y_mm"}:
         raise ValueError("invalid checkpoint point")
-    return PointMM(_nonnegative(raw["x_mm"], "point x"), _nonnegative(raw["y_mm"], "point y"))
+    return PointMM(_integer(raw["x_mm"], "point x"), _integer(raw["y_mm"], "point y"))
 
 
 def _aircraft(raw: dict) -> AircraftState:
@@ -715,8 +756,8 @@ def _aircraft(raw: dict) -> AircraftState:
     start = raw.get("route_leg_start")
     return AircraftState(
         aircraft_id=_string(raw.get("aircraft_id"), "aircraft ID"), position=_as_point(raw.get("position")),
-        heading_mdeg=_nonnegative(raw.get("heading_mdeg"), "heading"), energy_units=_nonnegative(raw.get("energy_units"), "energy"),
-        predicted_home_reserve_units=raw.get("predicted_home_reserve_units") if isinstance(raw.get("predicted_home_reserve_units"), int) else (_raise("invalid reserve")),
+        heading_mdeg=_nonnegative(raw.get("heading_mdeg"), "heading"), energy_units=_integer(raw.get("energy_units"), "energy"),
+        predicted_home_reserve_units=_integer(raw.get("predicted_home_reserve_units"), "reserve"),
         mode=AircraftMode(_string(raw.get("mode"), "mode")), previous_mode=AircraftMode(raw["previous_mode"]) if raw.get("previous_mode") is not None else None,
         link=LinkState(_string(raw.get("link"), "link")), sensor=SensorState(_string(raw.get("sensor"), "sensor")),
         assigned_sector_id=raw.get("assigned_sector_id") if raw.get("assigned_sector_id") is None or isinstance(raw.get("assigned_sector_id"), str) else _raise("invalid sector"),

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from matb_integration.suas.domain.enums import AlertKind, AlertSeverity, EventKind
+from matb_integration.suas.domain.enums import AircraftMode, AlertKind, AlertSeverity, EventKind
 from matb_integration.suas.domain.events import AlertState, DomainEvent
 from matb_integration.suas.domain.geometry import distance_mm
 from matb_integration.suas.domain.models import AircraftDefinition, AircraftState, WorldState
@@ -35,6 +35,35 @@ def refresh_energy_reserve(
         state, aircraft, AlertKind.ENERGY_CRITICAL, AlertSeverity.CRITICAL,
         aircraft.predicted_home_reserve_units < 0, 0, at_ms, events,
     )
+
+
+def fail_aircraft_if_energy_exhausted(
+    state: WorldState,
+    aircraft: AircraftState,
+    definition: AircraftDefinition,
+    events: list[DomainEvent],
+    *,
+    at_ms: int,
+) -> bool:
+    """Apply the authoritative away-from-home exhaustion transition once."""
+
+    if (
+        aircraft.energy_units > 0
+        or aircraft.position == definition.home
+        or aircraft.mode in (AircraftMode.RECOVERED, AircraftMode.MISSION_FAILED)
+    ):
+        return False
+    previous = aircraft.mode
+    aircraft.previous_mode = previous
+    aircraft.mode = AircraftMode.MISSION_FAILED
+    events.append(_emit(
+        state,
+        at_ms,
+        EventKind.AIRCRAFT_MODE_CHANGED,
+        (aircraft.aircraft_id,),
+        {"from": previous.value, "to": AircraftMode.MISSION_FAILED.value},
+    ))
+    return True
 
 
 def ceil_div(numerator: int, denominator: int) -> int:

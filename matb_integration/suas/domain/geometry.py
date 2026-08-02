@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fractions import Fraction
 from math import isqrt
 
 
@@ -82,6 +83,54 @@ def distance_mm(start: PointMM, end: PointMM) -> int:
     dx = end.x_mm - start.x_mm
     dy = end.y_mm - start.y_mm
     return isqrt(dx * dx + dy * dy)
+
+
+def segment_within_polygon(polygon: PolygonMM, start: PointMM, end: PointMM) -> bool:
+    """Return whether every point of one closed segment is inside *polygon*.
+
+    Endpoint-only checks are insufficient for concave polygons.  This routine
+    splits the segment at every exact boundary intersection and evaluates an
+    exact rational midpoint in each resulting interval, without rounding a
+    crossing back into integer mission coordinates.
+    """
+
+    if not isinstance(polygon, PolygonMM):
+        raise TypeError("polygon must be a PolygonMM")
+    if not isinstance(start, PointMM) or not isinstance(end, PointMM):
+        raise TypeError("segment endpoints must be PointMM instances")
+    if not polygon.contains(start) or not polygon.contains(end):
+        return False
+    if start == end:
+        return True
+    parameters = {Fraction(0), Fraction(1)}
+    vertices = polygon.vertices
+    for index, boundary_start in enumerate(vertices):
+        boundary_end = vertices[(index + 1) % len(vertices)]
+        parameters.update(_segment_intersection_parameters(
+            start, end, boundary_start, boundary_end,
+        ))
+    ordered = sorted(parameters)
+    return all(
+        _contains_fractional_point(
+            polygon,
+            _point_at_fraction(start, end, (left + right) / 2),
+        )
+        for left, right in zip(ordered, ordered[1:])
+        if left != right
+    )
+
+
+def polygon_within_polygon(container: PolygonMM, candidate: PolygonMM) -> bool:
+    """Return whether a simple candidate polygon is wholly in *container*."""
+
+    if not isinstance(container, PolygonMM) or not isinstance(candidate, PolygonMM):
+        raise TypeError("container and candidate must be PolygonMM instances")
+    return all(
+        segment_within_polygon(
+            container, point, candidate.vertices[(index + 1) % len(candidate.vertices)],
+        )
+        for index, point in enumerate(candidate.vertices)
+    )
 
 
 # atan(2**-i), in microdegrees, rounded once at source-generation time.
@@ -167,6 +216,79 @@ def _segments_intersect(first_start: PointMM, first_end: PointMM, second_start: 
     if second_b == 0 and _point_on_segment(first_end, second_start, second_end):
         return True
     return (first_a > 0) != (first_b > 0) and (second_a > 0) != (second_b > 0)
+
+
+def _segment_intersection_parameters(
+    start: PointMM,
+    end: PointMM,
+    boundary_start: PointMM,
+    boundary_end: PointMM,
+) -> tuple[Fraction, ...]:
+    dx, dy = end.x_mm - start.x_mm, end.y_mm - start.y_mm
+    bx = boundary_end.x_mm - boundary_start.x_mm
+    by = boundary_end.y_mm - boundary_start.y_mm
+    offset_x = boundary_start.x_mm - start.x_mm
+    offset_y = boundary_start.y_mm - start.y_mm
+    denominator = dx * by - dy * bx
+    if denominator:
+        segment_fraction = Fraction(offset_x * by - offset_y * bx, denominator)
+        boundary_fraction = Fraction(offset_x * dy - offset_y * dx, denominator)
+        if 0 <= segment_fraction <= 1 and 0 <= boundary_fraction <= 1:
+            return (segment_fraction,)
+        return ()
+    if offset_x * dy - offset_y * dx:
+        return ()
+    length_squared = dx * dx + dy * dy
+    if length_squared == 0:
+        return ()
+    first = Fraction(offset_x * dx + offset_y * dy, length_squared)
+    last = Fraction(
+        (boundary_end.x_mm - start.x_mm) * dx + (boundary_end.y_mm - start.y_mm) * dy,
+        length_squared,
+    )
+    return tuple(value for value in (first, last) if 0 <= value <= 1)
+
+
+def _point_at_fraction(
+    start: PointMM, end: PointMM, fraction: Fraction,
+) -> tuple[Fraction, Fraction]:
+    return (
+        Fraction(start.x_mm) + fraction * (end.x_mm - start.x_mm),
+        Fraction(start.y_mm) + fraction * (end.y_mm - start.y_mm),
+    )
+
+
+def _contains_fractional_point(
+    polygon: PolygonMM, point: tuple[Fraction, Fraction],
+) -> bool:
+    x, y = point
+    inside = False
+    vertices = polygon.vertices
+    for index, start in enumerate(vertices):
+        end = vertices[(index + 1) % len(vertices)]
+        if _fractional_point_on_segment(x, y, start, end):
+            return True
+        if (start.y_mm > y) != (end.y_mm > y):
+            crossing = (
+                (end.x_mm - start.x_mm) * (y - start.y_mm)
+                - (x - start.x_mm) * (end.y_mm - start.y_mm)
+            )
+            if (end.y_mm > start.y_mm and crossing > 0) or (
+                end.y_mm < start.y_mm and crossing < 0
+            ):
+                inside = not inside
+    return inside
+
+
+def _fractional_point_on_segment(
+    x: Fraction, y: Fraction, start: PointMM, end: PointMM,
+) -> bool:
+    return (
+        (end.x_mm - start.x_mm) * (y - start.y_mm)
+        == (x - start.x_mm) * (end.y_mm - start.y_mm)
+        and min(start.x_mm, end.x_mm) <= x <= max(start.x_mm, end.x_mm)
+        and min(start.y_mm, end.y_mm) <= y <= max(start.y_mm, end.y_mm)
+    )
 
 
 def _self_intersects(vertices: tuple[PointMM, ...]) -> bool:

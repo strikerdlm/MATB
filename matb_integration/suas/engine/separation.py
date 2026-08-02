@@ -42,10 +42,20 @@ class SeparationMonitor:
             for key, pair in sorted(self._pairs.items())
         }
 
-    def restore_state(self, raw: dict[str, dict[str, int | bool | None]]) -> None:
+    def restore_state(
+        self,
+        raw: dict[str, dict[str, int | bool | None]],
+        *,
+        state: WorldState | None = None,
+    ) -> None:
         pairs: dict[str, _PairState] = {}
         for key, value in raw.items():
             if not isinstance(key, str) or not isinstance(value, dict):
+                raise ValueError("invalid separation checkpoint")
+            if set(value) != {
+                "advisory_open", "critical_open", "advisory_duration_ms",
+                "critical_duration_ms", "last_seen_ms",
+            }:
                 raise ValueError("invalid separation checkpoint")
             pairs[key] = _PairState(
                 advisory_open=_bool(value, "advisory_open"),
@@ -54,7 +64,106 @@ class SeparationMonitor:
                 critical_duration_ms=_counter(value, "critical_duration_ms"),
                 last_seen_ms=_optional_counter(value, "last_seen_ms"),
             )
+        if state is not None:
+            self._validate_restored_state(pairs, state)
         self._pairs = pairs
+
+    def _validate_restored_state(
+        self, pairs: dict[str, _PairState], state: WorldState,
+    ) -> None:
+        ids = sorted(state.aircraft)
+        expected_keys = {
+            f"{left_id}:{right_id}"
+            for index, left_id in enumerate(ids)
+            for right_id in ids[index + 1:]
+        } if state.simulation_time_ms > 0 else set()
+        if set(pairs) != expected_keys:
+            raise ValueError("invalid separation checkpoint pair set")
+        for key, pair in pairs.items():
+            left_id, right_id = key.split(":", 1)
+            if pair.last_seen_ms != state.simulation_time_ms:
+                raise ValueError("invalid separation checkpoint timestamp")
+            separation = distance_mm(
+                state.aircraft[left_id].position, state.aircraft[right_id].position,
+            )
+            advisory_now = separation < self.advisory_mm
+            critical_now = separation < self.critical_mm
+            if pair.advisory_open != advisory_now:
+                raise ValueError("invalid separation checkpoint geometry")
+            if critical_now and not pair.critical_open:
+                raise ValueError("invalid separation checkpoint critical flag")
+            if pair.critical_open and not pair.advisory_open:
+                raise ValueError("invalid separation checkpoint flags")
+            if pair.critical_duration_ms > pair.advisory_duration_ms:
+                raise ValueError("invalid separation checkpoint durations")
+            self._validate_alert_lifecycle(
+                state, key, pair.advisory_open, pair.advisory_duration_ms,
+                AlertKind.SEPARATION_ADVISORY, AlertSeverity.ADVISORY,
+                (left_id, right_id),
+            )
+            self._validate_alert_lifecycle(
+                state, key, pair.critical_open, pair.critical_duration_ms,
+                AlertKind.SEPARATION_CRITICAL, AlertSeverity.CRITICAL,
+                (left_id, right_id),
+            )
+        for alert in state.alerts.values():
+            if alert.kind not in (
+                AlertKind.SEPARATION_ADVISORY, AlertKind.SEPARATION_CRITICAL,
+            ):
+                continue
+            prefix = f"{alert.kind.value}:"
+            if not alert.alert_id.startswith(prefix) or alert.alert_id[len(prefix):] not in pairs:
+                raise ValueError("invalid separation checkpoint alert")
+
+    @staticmethod
+    def _validate_alert_lifecycle(
+        state: WorldState,
+        pair_key: str,
+        expected_open: bool,
+        duration_ms: int,
+        kind: AlertKind,
+        severity: AlertSeverity,
+        entity_ids: tuple[str, str],
+    ) -> None:
+        alert = state.alerts.get(f"{kind.value}:{pair_key}")
+        if alert is None:
+            if expected_open or duration_ms:
+                raise ValueError("invalid separation checkpoint alert lifecycle")
+            return
+        if (
+            alert.kind is not kind
+            or alert.severity is not severity
+            or alert.entity_ids != entity_ids
+            or alert.payload != {"pair_key": pair_key}
+            or not 0 < alert.opened_sequence <= state.event_sequence
+            or not 0 <= alert.opened_at_ms <= state.simulation_time_ms
+        ):
+            raise ValueError("invalid separation checkpoint alert lifecycle")
+        is_open = alert.closed_sequence is None and alert.closed_at_ms is None
+        if is_open != expected_open:
+            raise ValueError("invalid separation checkpoint alert lifecycle")
+        lifecycle_end = state.simulation_time_ms
+        if not is_open:
+            if (
+                alert.closed_sequence is None
+                or alert.closed_at_ms is None
+                or not alert.opened_sequence < alert.closed_sequence <= state.event_sequence
+                or not alert.opened_at_ms <= alert.closed_at_ms <= state.simulation_time_ms
+            ):
+                raise ValueError("invalid separation checkpoint alert lifecycle")
+            lifecycle_end = alert.closed_at_ms
+        if duration_ms != lifecycle_end - alert.opened_at_ms:
+            raise ValueError("invalid separation checkpoint durations")
+        if alert.acknowledged:
+            if (
+                alert.acknowledged_sequence is None
+                or alert.acknowledged_at_ms is None
+                or not alert.opened_sequence <= alert.acknowledged_sequence <= state.event_sequence
+                or not alert.opened_at_ms <= alert.acknowledged_at_ms <= lifecycle_end
+            ):
+                raise ValueError("invalid separation checkpoint acknowledgement")
+        elif alert.acknowledged_sequence is not None or alert.acknowledged_at_ms is not None:
+            raise ValueError("invalid separation checkpoint acknowledgement")
 
     def step(self, state: WorldState) -> tuple[DomainEvent, ...]:
         events: list[DomainEvent] = []
@@ -77,6 +186,7 @@ class SeparationMonitor:
                     pair.critical_duration_ms += elapsed
                 if advisory_now and not pair.advisory_open:
                     pair.advisory_open = True
+                    pair.advisory_duration_ms = 0
                     self._open_alert(
                         state, key, AlertKind.SEPARATION_ADVISORY, AlertSeverity.ADVISORY,
                         (left_id, right_id), now_ms,
@@ -87,6 +197,7 @@ class SeparationMonitor:
                     ))
                 if critical_now and not pair.critical_open:
                     pair.critical_open = True
+                    pair.critical_duration_ms = 0
                     self._open_alert(
                         state, key, AlertKind.SEPARATION_CRITICAL, AlertSeverity.CRITICAL,
                         (left_id, right_id), now_ms,

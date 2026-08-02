@@ -12,7 +12,9 @@ from matb_integration.suas.domain.commands import (
 )
 from matb_integration.suas.domain.enums import AircraftMode, EventKind, LinkState
 from matb_integration.suas.domain.events import DomainEvent
-from matb_integration.suas.domain.geometry import PointMM, PolygonMM, distance_mm
+from matb_integration.suas.domain.geometry import (
+    PointMM, PolygonMM, distance_mm, segment_within_polygon,
+)
 from matb_integration.suas.domain.models import Route, ScenarioDefinition, WorldState
 from matb_integration.suas.engine.energy import ceil_div
 from matb_integration.suas.engine.routes import lawnmower_route
@@ -50,6 +52,13 @@ class CommandReducer:
         for envelope in commands:
             if not isinstance(envelope, CommandEnvelope):
                 raise TypeError("commands must be CommandEnvelope instances")
+            if not _valid_identifier(envelope.command_id):
+                results.append(self._reject(
+                    envelope.command_id if isinstance(envelope.command_id, str) else "",
+                    "invalid_command_id",
+                    state,
+                ))
+                continue
             cached = self._results.get(envelope.command_id)
             if cached is not None:
                 results.append(replace(cached, status=CommandStatus.DUPLICATE))
@@ -213,6 +222,8 @@ class CommandReducer:
         for waypoint in route.waypoints:
             if not self._scenario.terrain.contains(waypoint):
                 raise _Rejected("waypoint_outside_terrain")
+            if not segment_within_polygon(self._scenario.terrain, previous, waypoint):
+                raise _Rejected("route_outside_terrain")
             for zone in self._scenario.restricted_zones.values():
                 if _segment_intersects_polygon(previous, waypoint, zone):
                     raise _Rejected("restricted_zone")
@@ -223,12 +234,18 @@ class CommandReducer:
     ) -> None:
         definition = self._scenario.aircraft[aircraft_id]
         point = start
-        distance = 0
+        outbound_cost = 0
         for waypoint in route.waypoints:
-            distance += distance_mm(point, waypoint)
+            outbound_cost += ceil_div(
+                distance_mm(point, waypoint) * definition.energy.transit_units_per_s,
+                definition.speed_mm_per_s,
+            )
             point = waypoint
-        distance += distance_mm(point, definition.home)
-        cost = ceil_div(distance * definition.energy.transit_units_per_s, definition.return_speed_mm_per_s)
+        return_cost = ceil_div(
+            distance_mm(point, definition.home) * definition.energy.transit_units_per_s,
+            definition.return_speed_mm_per_s,
+        )
+        cost = outbound_cost + return_cost
         aircraft = state.aircraft[aircraft_id]
         if aircraft.energy_units - cost < 0:
             raise _Rejected("critical_reserve")

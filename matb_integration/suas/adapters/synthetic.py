@@ -12,7 +12,9 @@ from matb_integration.suas.domain.models import (
     ScenarioDefinition, WorldState,
 )
 from matb_integration.suas.domain.scenario_context import bind_world_scenario
-from matb_integration.suas.engine.energy import refresh_energy_reserve
+from matb_integration.suas.engine.energy import (
+    fail_aircraft_if_energy_exhausted, refresh_energy_reserve,
+)
 
 
 class SyntheticVehicleBackend:
@@ -92,8 +94,9 @@ class SyntheticVehicleBackend:
             aircraft.energy_units -= numerator // 1_000
             aircraft.energy_remainder = numerator % 1_000
             self._advance_position(aircraft, definition, tick_ms, state, events)
-            if aircraft.energy_units <= 0 and aircraft.position != definition.home:
-                self._set_mode(state, aircraft, AircraftMode.MISSION_FAILED, events)
+            fail_aircraft_if_energy_exhausted(
+                state, aircraft, definition, events, at_ms=state.simulation_time_ms,
+            )
             refresh_energy_reserve(
                 state, aircraft, definition, events, at_ms=state.simulation_time_ms,
             )

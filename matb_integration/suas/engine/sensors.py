@@ -13,7 +13,9 @@ from matb_integration.suas.domain.events import DomainEvent
 from matb_integration.suas.domain.geometry import distance_mm
 from matb_integration.suas.domain.models import ScenarioDefinition, WorldState
 from matb_integration.suas.domain.scenario_context import bind_world_scenario, scenario_for_world
-from matb_integration.suas.engine.energy import refresh_energy_reserve
+from matb_integration.suas.engine.energy import (
+    fail_aircraft_if_energy_exhausted, refresh_energy_reserve,
+)
 from matb_integration.suas.engine.prng import PCG32, derive_stream_seed
 
 if TYPE_CHECKING:
@@ -48,6 +50,8 @@ class SensorSystem:
             aircraft = state.aircraft[aircraft_id]
             definition = self._scenario.aircraft[aircraft_id]
             if aircraft.mode in (AircraftMode.RECOVERED, AircraftMode.MISSION_FAILED):
+                while aircraft.next_sensor_scan_ms <= now_ms:
+                    aircraft.next_sensor_scan_ms += definition.sensor.scan_interval_ms
                 continue
             while aircraft.next_sensor_scan_ms <= now_ms:
                 scan_at_ms = aircraft.next_sensor_scan_ms
@@ -60,9 +64,16 @@ class SensorSystem:
                 pairs = [(aircraft_id, contact_id) for contact_id in sorted(state.contacts)]
                 events.extend(self.scan_pairs(state, pairs=pairs, at_ms=scan_at_ms))
                 # Contact evidence is ordered before same-timestamp energy alerts.
+                failed = fail_aircraft_if_energy_exhausted(
+                    state, aircraft, definition, events, at_ms=scan_at_ms,
+                )
                 refresh_energy_reserve(
                     state, aircraft, definition, events, at_ms=scan_at_ms,
                 )
+                if failed:
+                    while aircraft.next_sensor_scan_ms <= now_ms:
+                        aircraft.next_sensor_scan_ms += definition.sensor.scan_interval_ms
+                    break
         return tuple(events)
 
     def scan_pairs(
