@@ -74,82 +74,82 @@ aircraft:
   - aircraft_id: UAS-01
     label: UAS 01
     home: {x_m: 600, y_m: 4000}
-    speed_mps: 30
+    speed_mps: 20
     return_speed_mps: 30
     altitude_m: 120
     initial_link: NOMINAL
     initial_sensor: NOMINAL
-    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 20, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
+    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 40, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
     sensor: {radius_m: 300, scan_interval_s: 5, detection_probability: 0.85, scans_to_inspectable: 2}
   - aircraft_id: UAS-02
     label: UAS 02
     home: {x_m: 600, y_m: 4000}
-    speed_mps: 30
+    speed_mps: 20
     return_speed_mps: 30
     altitude_m: 120
     initial_link: NOMINAL
     initial_sensor: NOMINAL
-    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 20, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
+    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 40, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
     sensor: {radius_m: 300, scan_interval_s: 5, detection_probability: 0.85, scans_to_inspectable: 2}
   - aircraft_id: UAS-03
     label: UAS 03
     home: {x_m: 600, y_m: 4000}
-    speed_mps: 30
+    speed_mps: 20
     return_speed_mps: 30
     altitude_m: 120
     initial_link: NOMINAL
     initial_sensor: NOMINAL
-    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 20, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
+    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 40, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
     sensor: {radius_m: 300, scan_interval_s: 5, detection_probability: 0.85, scans_to_inspectable: 2}
   - aircraft_id: UAS-04
     label: UAS 04
     home: {x_m: 600, y_m: 4000}
-    speed_mps: 30
+    speed_mps: 20
     return_speed_mps: 30
     altitude_m: 120
     initial_link: NOMINAL
     initial_sensor: NOMINAL
-    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 20, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
+    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 40, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
     sensor: {radius_m: 300, scan_interval_s: 5, detection_probability: 0.85, scans_to_inspectable: 2}
   - aircraft_id: UAS-05
     label: UAS 05
     home: {x_m: 600, y_m: 4000}
-    speed_mps: 30
+    speed_mps: 20
     return_speed_mps: 30
     altitude_m: 120
     initial_link: NOMINAL
     initial_sensor: NOMINAL
-    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 20, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
+    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 40, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
     sensor: {radius_m: 300, scan_interval_s: 5, detection_probability: 0.85, scans_to_inspectable: 2}
   - aircraft_id: UAS-06
     label: UAS 06
     home: {x_m: 600, y_m: 4000}
-    speed_mps: 30
+    speed_mps: 20
     return_speed_mps: 30
     altitude_m: 120
     initial_link: NOMINAL
     initial_sensor: NOMINAL
-    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 20, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
+    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 40, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
     sensor: {radius_m: 300, scan_interval_s: 5, detection_probability: 0.85, scans_to_inspectable: 2}
   - aircraft_id: UAS-07
     label: UAS 07
     home: {x_m: 600, y_m: 4000}
-    speed_mps: 30
+    speed_mps: 20
     return_speed_mps: 30
     altitude_m: 120
     initial_link: NOMINAL
     initial_sensor: NOMINAL
-    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 20, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
+    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 40, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
     sensor: {radius_m: 300, scan_interval_s: 5, detection_probability: 0.85, scans_to_inspectable: 2}
   - aircraft_id: UAS-08
     label: UAS 08
     home: {x_m: 600, y_m: 4000}
-    speed_mps: 30
+    speed_mps: 20
     return_speed_mps: 30
     altitude_m: 120
     initial_link: NOMINAL
     initial_sensor: NOMINAL
-    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 20, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
+    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 40, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
     sensor: {radius_m: 300, scan_interval_s: 5, detection_probability: 0.85, scans_to_inspectable: 2}
 contacts:
   - {contact_id: C-01, position: {x_m: 2500, y_m: 1800}, truth: routine, truth_priority: LOW, required_report: false}

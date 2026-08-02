@@ -17,3 +17,13 @@ def reference_scenario() -> Path:
 @pytest.fixture(scope="session")
 def loaded_scenario(reference_scenario: Path) -> LoadedScenario:
     return load_scenario(reference_scenario)
+
+
+@pytest.fixture
+def reference_world(loaded_scenario: LoadedScenario):
+    """A fresh mutable LOW-block world for each test."""
+
+    from matb_integration.suas.adapters.synthetic import SyntheticVehicleBackend
+
+    scenario = loaded_scenario.definition
+    return SyntheticVehicleBackend().initialize(scenario, scenario.blocks["LOW"])
