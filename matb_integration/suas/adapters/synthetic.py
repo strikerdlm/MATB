@@ -76,7 +76,6 @@ class SyntheticVehicleBackend:
             raise RuntimeError("initialize must be called before advance")
         state.tick += 1
         state.simulation_time_ms += tick_ms
-        state.version += 1
         events: list[DomainEvent] = []
         for aircraft_id in sorted(state.aircraft):
             aircraft = state.aircraft[aircraft_id]

@@ -1,6 +1,7 @@
 """Authoritative domain types for the sUAS simulator."""
 
 from .events import AlertState, DomainEvent
+from .commands import CommandEnvelope, CommandResult, CommandStatus
 from .geometry import PointMM, PolygonMM, distance_mm, heading_mdeg
 from .models import (
     AircraftDefinition,
@@ -21,6 +22,9 @@ __all__ = [
     "BlockDefinition",
     "ContactDefinition",
     "ContactState",
+    "CommandEnvelope",
+    "CommandResult",
+    "CommandStatus",
     "DomainEvent",
     "PointMM",
     "PolygonMM",
