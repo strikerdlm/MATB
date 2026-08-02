@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 import asyncio
+from datetime import date
 
 import fastapi.concurrency
 import fastapi.dependencies.utils
@@ -15,6 +16,9 @@ from sqlmodel.pool import StaticPool
 
 from app import db as db_module
 from app.main import app
+from app.simulation_persistence import SQLModelSimulationPersistence
+from app.simulation_runtime import SimulationManager
+from app.models import Participant, Visit
 
 # Make `matb_integration` importable (repo root is three levels up from this file).
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -54,6 +58,17 @@ def anyio_backend():
     return "asyncio"
 
 
+def build_test_manager(*, engine, artifact_root: Path) -> SimulationManager:
+    """Build a same-loop manager with durable metadata and explicit one-shot ticks."""
+
+    return SimulationManager(
+        scenario_root=_REPO_ROOT / "scenarios" / "suas",
+        artifact_root=artifact_root,
+        persistence=SQLModelSimulationPersistence(engine),
+        run_background_tasks=False,
+    )
+
+
 @pytest.fixture(name="engine")
 def engine_fixture():
     # In-memory DB shared across the test's connections.
@@ -66,6 +81,47 @@ def engine_fixture():
     import app.simulation_models  # noqa: F401  (register simulation tables)
     SQLModel.metadata.create_all(engine)
     yield engine
+
+
+@pytest.fixture
+def seeded_participant(engine):
+    """Seed one pseudonymized participant and its planned visit rows."""
+
+    with Session(engine) as session:
+        session.add(Participant(id="P01", enrollment_date=date(2026, 6, 1)))
+        session.add(Visit(participant_id="P01", visit_ordinal=1, scheduled_day=0))
+        session.commit()
+    return "P01"
+
+
+@pytest.fixture
+async def simulation_client(engine, tmp_path, monkeypatch):
+    """Async ASGI client sharing its event loop with a one-shot runtime manager."""
+
+    manager = build_test_manager(engine=engine, artifact_root=tmp_path / "exports")
+    app.state.simulation_manager = manager
+    session = Session(engine)
+
+    async def _run_direct(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(starlette.concurrency, "run_in_threadpool", _run_direct)
+    monkeypatch.setattr(fastapi.concurrency, "run_in_threadpool", _run_direct)
+    monkeypatch.setattr(fastapi.dependencies.utils, "run_in_threadpool", _run_direct)
+    monkeypatch.setattr(fastapi.routing, "run_in_threadpool", _run_direct)
+
+    async def _get_session_override():
+        return session
+
+    app.dependency_overrides[db_module.get_session] = _get_session_override
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=True)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            yield client, manager
+    finally:
+        session.close()
+        app.dependency_overrides.clear()
+        await manager.shutdown()
 
 
 @pytest.fixture(name="client")
