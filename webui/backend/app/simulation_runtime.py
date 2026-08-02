@@ -331,6 +331,13 @@ class SimulationManager:
                 return {"session_id": session_id, "lifecycle": handle.lifecycle, "simulation_time_ms": 0, "state_version": 0}
             return handle.engine.snapshot()
 
+    async def view(self, session_id: str, lease: str | None = None) -> SessionView:
+        """Return public lifecycle metadata without ever exposing a lease."""
+
+        async with self._lock:
+            handle = self._require(session_id, lease, check_lease=lease is not None)
+            return self._view(handle)
+
     async def shutdown(self) -> None:
         async with self._lock:
             self._shutdown = True
