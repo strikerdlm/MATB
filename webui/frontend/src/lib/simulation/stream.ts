@@ -161,6 +161,7 @@ export class SimulationStream {
   private waitingForSnapshot = true;
   private intentionallyClosed = false;
   private currentUrl: string | null = null;
+  private socketGeneration = 0;
 
   constructor(options: SimulationStreamOptions) {
     if (!options.apiBase) throw new Error("SimulationStream requires apiBase");
@@ -204,21 +205,26 @@ export class SimulationStream {
     );
     try {
       const socket = this.webSocketFactory(this.currentUrl);
+      const generation = ++this.socketGeneration;
       this.socket = socket;
       socket.onopen = () => {
+        if (this.socket !== socket || this.socketGeneration !== generation) return;
         // An open TCP/WebSocket connection is not yet authoritative. The
         // server must send its full snapshot before the UI is considered live.
         this.waitingForSnapshot = true;
         this.emitStatus("reconnecting");
       };
       socket.onmessage = (event) => {
-        void this.handleMessage(event);
+        if (this.socket !== socket || this.socketGeneration !== generation) return;
+        void this.handleMessage(event, socket, generation);
       };
       socket.onerror = () => {
+        if (this.socket !== socket || this.socketGeneration !== generation) return;
         this.reportError(new Error("simulation stream socket error"));
       };
       socket.onclose = () => {
-        if (this.socket === socket) this.socket = null;
+        if (this.socket !== socket || this.socketGeneration !== generation) return;
+        this.socket = null;
         if (this.intentionallyClosed) {
           this.emitStatus("disconnected");
           return;
@@ -237,6 +243,7 @@ export class SimulationStream {
   /** Stop the stream and cancel all future retry work. */
   close(): void {
     this.intentionallyClosed = true;
+    this.socketGeneration += 1;
     this.clearRetryTimer();
     const socket = this.socket;
     this.socket = null;
@@ -250,7 +257,11 @@ export class SimulationStream {
     this.emitStatus("disconnected");
   }
 
-  private async handleMessage(event: MessageEvent<unknown>): Promise<void> {
+  private async handleMessage(
+    event: MessageEvent<unknown>,
+    socket: SimulationWebSocket,
+    generation: number,
+  ): Promise<void> {
     try {
       const envelope = parseStreamEnvelope(decodeMessage(messageData(event)));
       if (envelope.session_id !== this.options.sessionId) {
@@ -276,13 +287,17 @@ export class SimulationStream {
       }
       this.transportSequence = Math.max(this.transportSequence, envelope.sequence);
       await this.options.onEnvelope?.(envelope);
-      if (envelope.kind === "snapshot" && resynchronizesAfter !== undefined) {
+      if (
+        this.socket === socket &&
+        this.socketGeneration === generation &&
+        envelope.kind === "snapshot" &&
+        resynchronizesAfter !== undefined
+      ) {
         this.emitStatus("live");
       }
     } catch (error) {
       this.reportError(errorFromUnknown(error, "invalid simulation stream message"));
-      const socket = this.socket;
-      if (socket) {
+      if (this.socket === socket && this.socketGeneration === generation) {
         try {
           socket.close(1003, "invalid stream message");
         } catch (closeError) {
