@@ -31,11 +31,11 @@ const session: SessionView = {
   interrupted_at: null,
 };
 
-function snapshot(stateVersion: number, x_mm = 0, y_mm = 0): WorldSnapshot {
+function snapshot(stateVersion: number, x_mm = 0, y_mm = 0, blockId = "PRACTICE"): WorldSnapshot {
   return {
     scenario_id: "reference_area_search",
     scenario_sha256: "a".repeat(64),
-    block_id: "PRACTICE",
+    block_id: blockId,
     tick: stateVersion,
     simulation_time_ms: stateVersion * 250,
     state_version: stateVersion,
@@ -110,6 +110,14 @@ describe("simulation store", () => {
     void store.getState().applyEnvelope(envelope(4, "snapshot", snapshot(8) as unknown as Record<string, JsonValue>));
     void store.getState().applyEnvelope(envelope(5, "snapshot", snapshot(7) as unknown as Record<string, JsonValue>));
     expect(store.getState().snapshot?.state_version).toBe(8);
+  });
+
+  it("accepts a lower engine version when the authoritative block changes", async () => {
+    const store = createSimulationStore();
+    store.getState().initialize(session, snapshot(8));
+    await store.getState().applyEnvelope(envelope(1, "snapshot", snapshot(0, 0, 0, "LOW") as unknown as Record<string, JsonValue>));
+    expect(store.getState().snapshot?.block_id).toBe("LOW");
+    expect(store.getState().snapshot?.state_version).toBe(0);
   });
 
   it("accepts a jump only for a marked resynchronizing snapshot", async () => {

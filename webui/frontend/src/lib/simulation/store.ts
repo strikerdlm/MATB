@@ -94,6 +94,13 @@ function snapshotPayload(envelope: StreamEnvelope): WorldSnapshot | null {
   return raw as unknown as WorldSnapshot;
 }
 
+function isPreStartSnapshot(envelope: StreamEnvelope): boolean {
+  if (!isRecord(envelope.payload)) return false;
+  return envelope.kind === "snapshot"
+    && typeof envelope.payload.lifecycle === "string"
+    && !isRecord(envelope.payload.aircraft);
+}
+
 function resynchronizesAfter(envelope: StreamEnvelope): number | undefined {
   if (typeof envelope.resynchronizes_after_sequence === "number") {
     return envelope.resynchronizes_after_sequence;
@@ -231,7 +238,10 @@ export function createSimulationStore() {
     const replaceState = (snapshot: WorldSnapshot, sequence?: number) => {
       const current = get().snapshot;
       const currentSession = get().session;
-      if (current && snapshot.state_version < current.state_version) return;
+      // The engine's state-version counter is scoped to a block.  A new
+      // block therefore legitimately starts lower than the prior block's
+      // final version; same-block snapshots must still be monotonic.
+      if (current && snapshot.block_id === current.block_id && snapshot.state_version < current.state_version) return;
       set({
         previousSnapshot: current,
         snapshot: cloneSnapshot(snapshot),
@@ -283,10 +293,19 @@ export function createSimulationStore() {
       if (isSnapshot) {
         const snapshot = snapshotPayload(envelope);
         if (!snapshot) {
+          if (isPreStartSnapshot(envelope)) {
+            // A prepared session has no engine world yet. Preserve the
+            // transport boundary so the first block lifecycle envelope is
+            // contiguous; do not invent an empty authoritative fleet.
+            set({ lastSequence: envelope.sequence, transportError: null });
+            return;
+          }
           set({ transportError: "invalid simulation snapshot payload" });
           return;
         }
-        if (current.snapshot && snapshot.state_version < current.snapshot.state_version) {
+        if (current.snapshot
+          && snapshot.block_id === current.snapshot.block_id
+          && snapshot.state_version < current.snapshot.state_version) {
           set({ lastSequence: envelope.sequence });
         } else {
           replaceState(snapshot, envelope.sequence);

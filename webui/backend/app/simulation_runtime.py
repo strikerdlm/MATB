@@ -109,6 +109,7 @@ class RuntimeHandle:
     validity: str = "valid"
     protocol: ProtocolController | None = None
     probe_timeout_task: asyncio.Task[Any] | None = None
+    block_closed: bool = False
 
 
 def _utcnow() -> datetime:
@@ -254,6 +255,8 @@ class SimulationManager:
                     raise
             handle.engine = SimulationEngine(handle.scenario.definition, block_id)
             handle.active_block_id = block_id
+            handle.block_events.clear()
+            handle.block_closed = False
             handle.lifecycle = "RUNNING"
             self.persistence.update_session(session_id, lifecycle="RUNNING", active_block_id=block_id, started_at=_utcnow())
             self.persistence.update_block(session_id, block_id, lifecycle="RUNNING", simulation_started_ms=0, started_at=_utcnow())
@@ -307,12 +310,13 @@ class SimulationManager:
             handle.finish_disposition = value
             handle.lifecycle = "FINISHED" if value == "complete" else "ABORTED"
             now = self._time(handle)
-            if value == "complete" and handle.active_block_id and handle.engine is not None:
+            if value == "complete" and handle.active_block_id and handle.engine is not None and not handle.block_closed:
                 self._append(handle, RecordKind.LIFECYCLE, {
                     "event": "block_finished",
                     "state_sha256": handle.engine.state_hash,
                     "event_sha256": event_chain_hash(handle.block_events),
                 }, now, self._version(handle))
+                handle.block_closed = True
             self._append(handle, RecordKind.LIFECYCLE, {"event": "session_finished", "disposition": value}, now, self._version(handle))
             await self._publish_latest_record(handle, kind=StreamKind.LIFECYCLE)
             self._cancel_tasks(handle)
@@ -460,6 +464,23 @@ class SimulationManager:
             # close this block's gate but never auto-advance the protocol.
             handle.lifecycle = "PAUSED"
             self.persistence.update_session(handle.session_id, lifecycle="PAUSED", validity=protocol.validity)
+            if not handle.block_closed and handle.active_block_id and handle.engine is not None:
+                now = self._time(handle)
+                self._append(handle, RecordKind.LIFECYCLE, {
+                    "event": "block_finished",
+                    "state_sha256": handle.engine.state_hash,
+                    "event_sha256": event_chain_hash(handle.block_events),
+                }, now, self._version(handle))
+                handle.block_closed = True
+                self.persistence.update_block(
+                    handle.session_id,
+                    handle.active_block_id,
+                    lifecycle="FINISHED",
+                    simulation_finished_ms=now,
+                    finished_at=_utcnow(),
+                    validity=protocol.validity,
+                )
+                await self._publish_latest_record(handle, kind=StreamKind.LIFECYCLE)
         return CommandResult(
             command_id=str(request.command_id), status=CommandStatus.ACCEPTED,
             code=code, applied_tick=self._tick(handle), state_version=self._version(handle),

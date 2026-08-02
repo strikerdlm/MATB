@@ -24,8 +24,15 @@ export async function selectSetup(
 async function submitIsa(page: Page): Promise<void> {
   const dialog = page.getByRole("dialog");
   await expect(dialog).toContainText(/ISA \/ response required/i);
-  await dialog.locator('label:has(input[name="isa-rating"])').first().click();
-  await dialog.getByRole("button", { name: /submit rating/i }).click();
+  const rating = dialog.locator('input[name="isa-rating"]').first();
+  await expect(rating).toBeAttached();
+  await rating.check({ force: true });
+  const submit = dialog.getByRole("button", { name: /submit rating/i });
+  await expect(submit).toBeEnabled();
+  await submit.click();
+  // The protocol replaces the ISA probe with the next gate asynchronously.
+  // Do not let the polling loop submit the still-mounted old form again.
+  await expect.poll(() => visibleProbe(page), { timeout: 10_000 }).not.toBe("ISA");
 }
 
 async function submitSagat(page: Page): Promise<void> {
@@ -37,8 +44,13 @@ async function submitSagat(page: Page): Promise<void> {
   await expect(page.locator('[data-testid="map-root"]')).toHaveCount(0);
   await expect(page.getByRole("listitem")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: /alerts/i })).toHaveCount(0);
-  await dialog.locator('label:has(input[name="sagat-answer"])').first().click();
-  await dialog.getByRole("button", { name: /submit answer/i }).click();
+  const answer = dialog.locator('input[name="sagat-answer"]').first();
+  await expect(answer).toBeAttached();
+  await answer.check({ force: true });
+  const submit = dialog.getByRole("button", { name: /submit answer/i });
+  await expect(submit).toBeEnabled();
+  await submit.click();
+  await expect.poll(() => visibleProbe(page), { timeout: 10_000 }).not.toBe("SAGAT");
 }
 
 async function submitPostBlock(page: Page): Promise<void> {
@@ -63,7 +75,7 @@ async function submitPostBlock(page: Page): Promise<void> {
 async function visibleProbe(page: Page): Promise<"ISA" | "SAGAT" | "POST_BLOCK" | null> {
   const dialog = page.getByRole("dialog");
   if (!(await dialog.isVisible().catch(() => false))) return null;
-  const text = await dialog.innerText();
+  const text = await dialog.innerText().catch(() => "");
   if (/ISA \/ response required/i.test(text)) return "ISA";
   if (/post-block measures/i.test(text)) return "POST_BLOCK";
   if (/situation awareness/i.test(text)) return "SAGAT";
@@ -84,25 +96,47 @@ async function assignActiveFleet(page: Page): Promise<void> {
     // local browser is settling a command click.  Drain that visible gate and
     // continue assigning the remaining fleet before the SAGAT boundary.
     while (true) {
-      const kind = await resolveVisibleProbe(page);
+      const kind = await visibleProbe(page);
       if (kind === null) break;
+      // Leave the post-block gate mounted for completeBlock's final loop;
+      // that loop owns the two-scale submission and its completion boundary.
       if (kind === "POST_BLOCK") return;
+      await resolveVisibleProbe(page);
     }
     const row = page.getByRole("listitem", { name: new RegExp(`^${aircraftId}\\b`, "i") });
     await expect(row).toBeVisible();
     try {
       await row.click({ timeout: 5_000 });
     } catch (error) {
-      if (await visibleProbe(page)) {
+      const probe = await visibleProbe(page);
+      if (probe && probe !== "POST_BLOCK") {
         await resolveVisibleProbe(page);
         await row.click({ timeout: 5_000 });
+      } else if (probe === "POST_BLOCK") {
+        return;
       } else {
         throw error;
       }
     }
-    const assign = page.getByRole("button", { name: /assign sector/i });
-    await expect(assign).toBeEnabled();
-    await assign.click();
+    while (true) {
+      const probe = await visibleProbe(page);
+      if (probe) {
+        if (probe === "POST_BLOCK") return;
+        await resolveVisibleProbe(page);
+        continue;
+      }
+      const assign = page.getByRole("button", { name: /assign sector/i });
+      await expect(assign).toBeEnabled();
+      try {
+        await assign.click({ timeout: 5_000 });
+        break;
+      } catch (error) {
+        const probe = await visibleProbe(page);
+        if (probe && probe !== "POST_BLOCK") continue;
+        if (probe === "POST_BLOCK") return;
+        throw error;
+      }
+    }
     await expect.poll(async () => {
       if (await visibleProbe(page)) return "probe";
       const rowText = await row.innerText().catch(() => "");
