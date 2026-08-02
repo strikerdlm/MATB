@@ -118,20 +118,28 @@ class SyntheticVehicleBackend:
         aircraft.movement_remainder = numerator % 1_000
         while remaining > 0 and aircraft.route_leg < len(aircraft.route.waypoints):
             target = aircraft.route.waypoints[aircraft.route_leg]
-            distance = distance_mm(aircraft.position, target)
+            if aircraft.route_leg_target != target or aircraft.route_leg_start is None:
+                aircraft.route_leg_start = aircraft.position
+                aircraft.route_leg_target = target
+                aircraft.route_leg_distance_mm = distance_mm(aircraft.position, target)
+                aircraft.route_leg_progress_mm = 0
+            distance = aircraft.route_leg_distance_mm
             if distance == 0:
                 aircraft.route_leg += 1
+                _reset_route_leg_progress(aircraft)
                 continue
-            budget = min(remaining, distance)
-            start = aircraft.position
+            budget = min(remaining, distance - aircraft.route_leg_progress_mm)
+            start = aircraft.route_leg_start
             aircraft.heading_mdeg = heading_mdeg(target.x_mm - start.x_mm, target.y_mm - start.y_mm)
-            if budget == distance:
+            aircraft.route_leg_progress_mm += budget
+            if aircraft.route_leg_progress_mm == distance:
                 aircraft.position = target
                 aircraft.route_leg += 1
+                _reset_route_leg_progress(aircraft)
             else:
                 aircraft.position = PointMM(
-                    start.x_mm + (target.x_mm - start.x_mm) * budget // distance,
-                    start.y_mm + (target.y_mm - start.y_mm) * budget // distance,
+                    start.x_mm + (target.x_mm - start.x_mm) * aircraft.route_leg_progress_mm // distance,
+                    start.y_mm + (target.y_mm - start.y_mm) * aircraft.route_leg_progress_mm // distance,
                 )
             remaining -= budget
         self._update_route_completion(aircraft, state, events)
@@ -279,6 +287,13 @@ def _initial_aircraft_state(definition: AircraftDefinition) -> AircraftState:
         mission_progress_ppm=0,
         last_accepted_command_id=None,
     )
+
+
+def _reset_route_leg_progress(aircraft: AircraftState) -> None:
+    aircraft.route_leg_start = None
+    aircraft.route_leg_target = None
+    aircraft.route_leg_distance_mm = 0
+    aircraft.route_leg_progress_mm = 0
 
 
 def _consumption_rate(mode: AircraftMode, definition: AircraftDefinition) -> int:

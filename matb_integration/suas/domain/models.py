@@ -79,6 +79,10 @@ class AircraftState:
     next_sensor_scan_ms: int
     mission_progress_ppm: int
     last_accepted_command_id: str | None
+    route_leg_start: PointMM | None = None
+    route_leg_target: PointMM | None = None
+    route_leg_distance_mm: int = 0
+    route_leg_progress_mm: int = 0
 
 
 @dataclass(frozen=True, slots=True)
