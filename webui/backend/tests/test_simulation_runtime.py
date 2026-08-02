@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from datetime import date
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
@@ -82,4 +83,53 @@ async def test_submit_is_queued_until_tick(manager, runtime_db):
     await manager.tick_once()
     result = await task
     assert result.status.value in {"accepted", "rejected"}
+    await manager.shutdown()
+
+
+@pytest.mark.anyio
+async def test_protocol_probe_pauses_and_redacts_operational_state(manager, runtime_db):
+    with Session(runtime_db) as db:
+        prepared = await manager.prepare(request(), db)
+    await manager.start(prepared.id, "PRACTICE", prepared.controller_lease)
+
+    # Practice ISA is scheduled at 150 s. One-shot ticks keep the test fully
+    # deterministic and avoid depending on wall-clock scheduling.
+    while manager.active is not None and manager.active.protocol is not None and manager.active.protocol.active_probe is None:
+        await manager.tick_once()
+    assert manager.active is not None and manager.active.protocol is not None
+    assert manager.active.protocol.phase.value == "ISA_ACTIVE"
+    isa = manager.active.protocol.active_probe
+    assert isa is not None and isa.probe_id
+    isa_result = await manager.submit(
+        prepared.id,
+        prepared.controller_lease,
+        CommandRequest(
+            command_id=uuid4(), expected_state_version=manager.active.engine.snapshot()["state_version"],
+            kind="SUBMIT_ISA", payload={"probe_id": isa.probe_id, "rating": 5},
+        ),
+    )
+    assert isa_result.status.value == "accepted"
+
+    while manager.active.protocol.active_probe is None:
+        await manager.tick_once()
+    sagat = manager.active.protocol.active_probe
+    assert sagat is not None and sagat.kind == "SAGAT"
+    state = await manager.state(prepared.id)
+    assert "aircraft" not in state
+    assert "truth" not in str(state)
+    assert "correct_answer" not in str(sagat.public_payload)
+
+    while manager.active.protocol.active_probe is not None:
+        current = manager.active.protocol.active_probe
+        assert current.probe_id
+        result = await manager.submit(
+            prepared.id,
+            prepared.controller_lease,
+            CommandRequest(
+                command_id=uuid4(), expected_state_version=manager.active.engine.snapshot()["state_version"],
+                kind="SUBMIT_SAGAT", payload={"probe_id": current.probe_id, "answer": "Unknown"},
+            ),
+        )
+        assert result.status.value == "accepted"
+    assert manager.active.lifecycle == "RUNNING"
     await manager.shutdown()
