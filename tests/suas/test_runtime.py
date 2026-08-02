@@ -122,6 +122,31 @@ def test_rehashed_checkpoint_rejects_omitted_or_retimed_pending_conflict_release
     assert engine.state_hash == before
 
 
+def test_staggered_conflict_checkpoint_restores_after_first_release(loaded_scenario) -> None:
+    scenario = loaded_scenario.definition
+    original = next(event for event in scenario.conflict_events if event.event_id == "low_conflict_01")
+    scenario = replace(scenario, conflict_events=(replace(
+        original, convergence_point=PointMM(1_200_000, 4_000_000),
+    ),))
+    engine = SimulationEngine(scenario, "LOW")
+    for _ in range(2_999):
+        engine.step()
+    engine._state.aircraft["UAS-01"].position = PointMM(620_000, 4_000_000)
+    engine._state.aircraft["UAS-02"].position = PointMM(640_000, 4_000_000)
+    for _ in range(12):
+        engine.step()
+    assert engine._state.simulation_time_ms == 301_100
+    assert engine._state.aircraft["UAS-01"].mode.value == "TRANSIT"
+    assert engine._state.aircraft["UAS-02"].mode.value == "HOLD"
+    checkpoint = engine.checkpoint_snapshot()
+    assert checkpoint["conflict_pending_releases"] == {
+        "low_conflict_01": {"UAS-02": 302_100},
+    }
+    restored = SimulationEngine(scenario, "LOW")
+    restored.restore(checkpoint)
+    assert restored.state_hash == engine.state_hash
+
+
 def test_report_note_and_history_survive_private_checkpoint(loaded_scenario) -> None:
     engine = SimulationEngine(loaded_scenario.definition, "LOW")
     contact = engine._state.contacts["C-01"]
