@@ -22,6 +22,11 @@ test("researcher completes the full native sUAS protocol", async ({ page, reques
   await completeBlock(page, "MEDIUM");
   await completeBlock(page, "HIGH");
 
+  // Protocol completion leaves the controller paused so the researcher can
+  // inspect the final state; finish is an explicit UI lifecycle action.
+  await page.getByRole("button", { name: /finish session/i }).click();
+  await page.getByRole("group", { name: /finish this session/i }).getByRole("button", { name: /confirm/i }).click();
+
   await expect(page).toHaveURL(/\/mission\/debrief\?session=sim-/);
   await expect(page.getByText(/deterministic replay verified/i)).toBeVisible();
   await expect(page.getByText(/descriptive feedback only/i)).toBeVisible();
