@@ -2,7 +2,8 @@
 
 Date: 2026-08-02  
 Branch: `feat/suas-c2-v1`  
-Latest implementation commit before this report: `fde04d1`
+Code verification commit: `47ba2b0`
+Documentation is finalized in the follow-up docs commit on this branch.
 
 ## Outcome
 
@@ -43,16 +44,15 @@ All commands below were run from this checkout with the repository venv at
 
 | Gate | Command | Result |
 |---|---|---|
-| Native sUAS library/protocol/replay suite | `PYTHONPATH=. /tmp/matb-backend-venv/bin/pytest tests/suas -q` | **161 passed** in 84.48 s |
-| Native slow + performance gates | `PYTHONPATH=. /tmp/matb-backend-venv/bin/pytest tests/suas -q -m 'slow or performance'` | **14 passed**, 147 deselected, 14.19 s |
-| FastAPI backend | `cd webui/backend && /tmp/matb-backend-venv/bin/pytest -q` | **83 passed**, 8 warnings, 18.70 s |
+| Native sUAS library/protocol/replay suite | `PYTHONPATH=. /tmp/matb-backend-venv/bin/pytest tests/suas -q` | **176 passed** in 169.56 s |
+| Native slow + performance gates | `PYTHONPATH=. /tmp/matb-backend-venv/bin/pytest tests/suas -q -m 'slow or performance'` | **29 passed**, 147 deselected, 94.70 s |
+| FastAPI backend | `cd webui/backend && /tmp/matb-backend-venv/bin/pytest -q` | **84 passed**, 8 warnings, 29.34 s |
 | Frontend unit/components | `cd webui/frontend && npm test -- --run` | **72 passed** across 17 files |
 | Type safety | `cd webui/frontend && npm run typecheck` | passed |
 | Production bundle | `cd webui/frontend && npm run build` | passed; 13 routes generated |
 | Shell contract | `bash tests/scripts/test_suas_scripts.sh` | passed |
 | Offline audit | `bash scripts/test_suas_offline.sh` | passed; 6 Python checks |
-| Browser suite, run 1 | `MATB_VENV=... PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/google/chrome/chrome npm run test:e2e` | **6 passed** in 1.2 min |
-| Browser suite, run 2 | same command | **6 passed** in 1.4 min |
+| Browser suite, final run | `MATB_VENV=/tmp/matb-backend-venv PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/google/chrome/chrome npm run test:e2e` | **6 passed** in 1.2 min |
 
 The browser suite covers the four-block rendered mission, all protocol gates,
 finish/debrief, replay sealing, axe/keyboard/reduced motion, observer
@@ -96,12 +96,12 @@ binds require an explicit `MATB_FRONTEND_ORIGINS` value.
 
 ## Repository-wide note
 
-The broader legacy `tests/` run completed 395 passed and 9 skipped, but three
-existing Bayesian analysis tests currently fail with `not_estimable`/missing
-coefficient assertions under the installed analysis dependency set. Those
-failures are outside the native sUAS scope; this implementation did not modify
-`matb_integration.analysis` and the dedicated native, backend, frontend,
-browser, shell, and offline gates above are green.
+The broader legacy `tests/` run completed **410 passed and 9 skipped**, with
+three existing Bayesian analysis tests failing with
+`not_estimable`/missing-coefficient assertions under the installed analysis
+dependency set. Those failures are outside the native sUAS scope; this
+implementation did not modify `matb_integration.analysis`, and the dedicated
+native, backend, frontend, browser, shell, and offline gates above are green.
 
 ## Known limitations
 

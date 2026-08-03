@@ -22,13 +22,20 @@ All notable changes to the MATB military aviation research platform.
   observer/reconnect behavior, responsive 1280×720 and 1920×1080 screenshots.
 
 #### Verified
-- Native sUAS tests: 161 passed; slow/performance gates: 14 passed.
-- Backend tests: 83 passed; frontend tests: 72 passed; typecheck and production
-  build passed.
-- Browser suite: 6 passed in two consecutive runs; shell contract and offline
-  audits passed.
+- Native sUAS tests: 176 passed; slow/performance gates: 29 passed (including
+  seeded record/replay, six Latin orders, 25 recovery cycles, and the
+  eight-aircraft 6,000-tick budget).
+- Backend tests: 84 passed; frontend tests: 72 passed; typecheck and
+  production build passed.
+- Browser suite: 6 passed in the final headless run (and in the prior flake
+  run); shell contract and offline audits passed.
 - A sealed UI run produced 89 ordered records, 220 replayed ticks, matching
   event/state hashes, and `deterministic_replay_verified: true`.
+
+The broader legacy repository regression was 410 passed, 9 skipped, and three
+pre-existing Bayesian-analysis failures (`not_estimable`/missing coefficients)
+under the installed analysis dependency set; no analysis code was changed by
+this release.
 
 #### Safety boundary
 - This release is a non-kinetic research simulator only. It has no vehicle,
