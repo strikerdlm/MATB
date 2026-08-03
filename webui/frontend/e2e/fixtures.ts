@@ -190,29 +190,32 @@ async function assignActiveFleet(page: Page): Promise<void> {
     // The accelerated fixture can reach its one-second ISA boundary while a
     // local browser is settling a command click.  Drain that visible gate and
     // continue assigning the remaining fleet before the SAGAT boundary.
-    while (true) {
-      const kind = await visibleProbe(page);
-      if (kind === null) break;
-      // Leave the post-block gate mounted for completeBlock's final loop;
-      // that loop owns the two-scale submission and its completion boundary.
-      if (kind === "POST_BLOCK") return;
-      await resolveVisibleProbe(page);
-    }
     const row = page.getByRole("listitem", { name: new RegExp(`^${aircraftId}\\b`, "i") });
-    await expect(row).toBeVisible();
-    try {
-      await row.getByRole("button").click({ timeout: 5_000 });
-    } catch (error) {
-      const probe = await visibleProbe(page);
-      if (probe && probe !== "POST_BLOCK") {
+    let aircraftSelected = false;
+    for (let attempt = 0; attempt < 8 && !aircraftSelected; attempt += 1) {
+      const kind = await visibleProbe(page);
+      if (kind !== null) {
+        // Leave the post-block gate mounted for completeBlock's final loop;
+        // that loop owns the two-scale submission and its completion boundary.
+        if (kind === "POST_BLOCK") return;
         await resolveVisibleProbe(page);
+        continue;
+      }
+      try {
+        await expect(row).toBeVisible({ timeout: 5_000 });
         await row.getByRole("button").click({ timeout: 5_000 });
-      } else if (probe === "POST_BLOCK") {
-        return;
-      } else {
+        aircraftSelected = true;
+      } catch (error) {
+        const probe = await visibleProbe(page);
+        if (probe && probe !== "POST_BLOCK") {
+          await resolveVisibleProbe(page);
+          continue;
+        }
+        if (probe === "POST_BLOCK") return;
         throw error;
       }
     }
+    if (!aircraftSelected) throw new Error(`could not select ${aircraftId} before a protocol gate`);
     while (true) {
       const probe = await visibleProbe(page);
       if (probe) {
