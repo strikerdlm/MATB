@@ -32,7 +32,7 @@ describe("MissionMap", () => {
     const onAircraft = vi.fn();
     const onContact = vi.fn();
     render(<MissionMap snapshot={snapshot} locale="en" onSelectAircraft={onAircraft} onSelectContact={onContact} />);
-    expect(screen.getByRole("img", { name: /tactical mission map/i })).toBeVisible();
+    expect(screen.getByRole("region", { name: /tactical mission map/i })).toBeVisible();
     expect(screen.getByRole("button", { name: /UAS-01.*nominal link/i })).toBeVisible();
     expect(screen.getByRole("button", { name: /C-01.*detected/i })).toBeVisible();
     expect(screen.queryByText(/priority truth/i)).not.toBeInTheDocument();

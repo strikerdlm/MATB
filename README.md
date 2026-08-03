@@ -1,6 +1,6 @@
 # 🛩️ MATB — Military Aviation Research Platform
 
-A Python research platform for **multi-attribute task battery (MATB)** human-factors studies in military aviation. It builds OpenMATB-compatible counterbalanced scenarios, converts session logs into analysis-ready metrics, and applies a probabilistic mission-outcome model. A FastAPI research console for longitudinal data collection and analysis is in active development.
+A Python research platform for **multi-attribute task battery (MATB)** human-factors studies in military aviation. It builds OpenMATB-compatible counterbalanced scenarios, converts session logs into analysis-ready metrics, and applies a probabilistic mission-outcome model. It also includes a native, Linux/headless-safe sUAS command-and-control research simulator with a browser UI and sealed replay artifacts.
 
 > **Author:** Dr. Diego Malpica, MD — Aerospace Medicine, Colombian Aerospace Force (FAC).
 > Research targets: *Aerospace Medicine and Human Performance*, *Human Factors*, *Frontiers in Neuroergonomics*.
@@ -49,6 +49,69 @@ MATB/
 | `aircraft_monitor/` | Legacy Rich dashboard | Retained, not the active surface |
 
 **Data flow:** external OpenMATB session → CSV logs → `log_converter` → JSONL metrics → (`suhir` DEPDF fit) → analysis / research console.
+
+## Native sUAS C2 simulator (Linux/headless first-class)
+
+The repository includes a self-contained synthetic small-UAS operations
+simulator under `matb_integration/suas/` and `webui/`. It models supervisory
+mission actions, fleet state, contacts, alerts, workload/protocol gates,
+observer streams, controller lease handoff, checkpoint recovery, debrief
+metrics, and deterministic replay verification. It is deliberately a
+research instrument: it has no weapons, real-world map data, vehicle control,
+external telemetry, or autonomous targeting path.
+
+Linux servers do not need Windows, X11, a desktop session, Docker, or a GPU.
+The shipped launcher runs the FastAPI backend and built Next.js UI on loopback
+and writes an owner-only SQLite/artifact directory. Windows is not a
+requirement; a Windows developer can use WSL2 or Docker, but the supported
+offline launcher is POSIX shell (Linux/macOS/WSL) and should be treated as the
+deployment contract.
+
+### Install and launch offline
+
+From the repository root (Python 3.12+ and Node.js 20+):
+
+```bash
+MATB_VENV="$PWD/.venv-suas" bash scripts/install_suas.sh
+MATB_VENV="$PWD/.venv-suas" bash scripts/run_suas.sh
+```
+
+Open `http://127.0.0.1:3100/mission/setup` from an operator workstation or
+headless browser. The backend health endpoint is
+`http://127.0.0.1:8000/health`. Use `--data-dir`, `--backend-port`, and
+`--frontend-port` to relocate the local store or avoid port collisions. The
+launcher refuses unsafe data roots and refuses non-loopback binds unless
+`MATB_FRONTEND_ORIGINS` is explicitly configured.
+
+For development, run the backend and frontend separately as documented in
+[`webui/backend/README.md`](webui/backend/README.md) and
+[`webui/frontend/README.md`](webui/frontend/README.md). The scenario directory
+defaults to `scenarios/suas/`; set `MATB_SIMULATION_SCENARIO_DIR` to use a
+validated fixture directory elsewhere.
+
+### Native API surface
+
+- `GET /simulation/scenarios` lists validated YAML scenarios.
+- `POST /simulation/sessions` prepares a pseudonymized participant/visit and
+  returns a controller lease once. Keep that lease out of logs and URLs; send
+  it only as `X-Simulation-Controller` on mutations.
+- `POST /simulation/sessions/{id}/start|pause|resume|finish|recover` controls
+  lifecycle. A valid controller WebSocket disconnect pauses a running session;
+  it never resumes automatically.
+- `POST /simulation/sessions/{id}/commands` accepts non-kinetic supervisory
+  commands. `GET .../state` is observer-readable and redacts private probe
+  truth.
+- `WS /simulation/sessions/{id}/stream` is an ordered, bounded stream. A
+  lease-bearing connection is the sole controller; a lease-free connection is
+  read-only. The first frame is a complete resynchronizing snapshot and the
+  `after_sequence` cursor supports reconnects.
+- `GET .../debrief` and `GET .../artifacts` are available only after a terminal
+  finish/abort and expose relative paths plus hashes, never absolute paths or
+  leases.
+
+The safety boundary is intentional: this platform can exercise operator
+workload, situation awareness, communications, and supervisory decisions, but
+it cannot command a real aircraft or weapon system.
 
 ---
 
@@ -331,6 +394,16 @@ cd webui/backend && python -m pytest -q   # 46 collected
 cd ../frontend && npm test -- --run   # 36 pass
 npm run typecheck
 npm run build
+
+# native sUAS gates (Linux/headless):
+cd /path/to/MATB
+PYTHONPATH=. .venv-suas/bin/pytest tests/suas -q                 # 161 pass
+PYTHONPATH=. .venv-suas/bin/pytest tests/suas -q -m 'slow or performance'
+bash tests/scripts/test_suas_scripts.sh
+bash scripts/test_suas_offline.sh
+# browser protocol/accessibility/reconnect/responsive suite:
+cd webui/frontend
+MATB_VENV=/path/to/MATB/.venv-suas npm run test:e2e
 ```
 
 ---

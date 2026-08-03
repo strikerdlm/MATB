@@ -1,7 +1,14 @@
-# MATB Research Console — Frontend (Phase 1B)
+# MATB Research Console — Frontend
 
 Next.js + TypeScript tracker UI for the MATB longitudinal study, styled to match
 the HRV "Mission Control" console. Talks to the Phase 1A FastAPI backend.
+
+The `/mission/setup` and `/mission` routes are the native synthetic sUAS
+operations console. They render the fleet, tactical map, alerts/contacts,
+controller lifecycle, protocol overlays, observer mode, and sealed debrief
+flow. The UI is browser-only and works on a headless Linux server because no
+desktop or X11 APIs are used; the shipped Playwright gate runs Chromium in
+headless mode.
 
 ## Setup
 
@@ -29,6 +36,28 @@ npm test          # vitest unit tests (lib/: api client + tracker aggregation)
 npm run typecheck # tsc --noEmit
 npm run build     # production build
 ```
+
+From the repository root, the offline launcher builds this frontend and starts
+it with the backend:
+
+```bash
+MATB_VENV="$PWD/.venv-suas" bash scripts/install_suas.sh
+MATB_VENV="$PWD/.venv-suas" bash scripts/run_suas.sh
+```
+
+For the browser hardening gate (Linux/Chromium, no GUI):
+
+```bash
+cd webui/frontend
+MATB_VENV=/path/to/MATB/.venv-suas \
+PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/google/chrome/chrome \
+npm run test:e2e
+```
+
+The suite covers the complete four-block protocol and replay/debrief path,
+axe serious/critical checks, keyboard operation, reduced motion, observer
+read-only behavior, controller disconnect/reconnect, and 1280×720 and
+1920×1080 responsive screenshot baselines.
 
 ## Screens
 
