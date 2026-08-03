@@ -144,7 +144,8 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
   const probeOverlay = activeProbe ? <ProbeOverlay locale={locale} probe={activeProbe} pending={pendingCommandIds.length > 0} onIsa={(rating) => void probeSubmit("SUBMIT_ISA", { probe_id: activeProbe.kind === "ISA" ? activeProbe.probe_id : "", rating })} onSagat={(answer) => void probeSubmit("SUBMIT_SAGAT", { probe_id: activeProbe.kind === "SAGAT" ? activeProbe.probe_id : "", answer })} onPostBlock={(values: PostBlockScaleValues) => void probeSubmit("SUBMIT_POST_BLOCK_SCALE", { ...values })} /> : null;
 
   return (
-    <div className="simulation-console flex min-h-screen flex-col bg-background text-foreground" aria-busy={busy}>
+    <div className="simulation-console relative flex min-h-screen flex-col bg-background text-foreground" aria-busy={busy}>
+      <div className="signal-sweep pointer-events-none absolute inset-x-0 top-0 z-20 h-px bg-white/10" aria-hidden="true" />
       <MissionTopBar session={currentSession} locale={locale} connection={connection} canControl={canControl} busy={busy} onStart={() => void lifecycle("start", { block_id: currentSession.next_block_id ?? currentSession.active_block_id ?? "PRACTICE" })} onPause={() => void lifecycle("pause", { reason: "operator_pause" })} onResume={() => void lifecycle("resume")} onFinish={() => void lifecycle("finish")} />
       {(transportError || message) && <div role="status" aria-live="polite" className="flex items-center gap-2 border-b border-warning/30 bg-warning/5 px-4 py-2 font-mono text-xs text-warning"><AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />{transportError ?? message}</div>}
       {busy && <div className="sr-only" role="status">Working…</div>}

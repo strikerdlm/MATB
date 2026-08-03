@@ -54,7 +54,7 @@ export function MissionMap({
     setPan((value) => ({ x: clamp(value.x + dx, -500, 500), y: clamp(value.y + dy, -500, 500) }));
   }, []);
 
-  const onKeyDown = (event: React.KeyboardEvent<SVGSVGElement>) => {
+  const onKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
     if (event.key === "+" || event.key === "=") { event.preventDefault(); zoomBy(0.25); }
     else if (event.key === "-") { event.preventDefault(); zoomBy(-0.25); }
     else if (event.key === "0") { event.preventDefault(); reset(); }
@@ -64,7 +64,7 @@ export function MissionMap({
     else if (event.key === "ArrowDown") { event.preventDefault(); panBy(0, -40); }
   };
 
-  const onWheel = (event: React.WheelEvent<SVGSVGElement>) => {
+  const onWheel = (event: React.WheelEvent<HTMLElement>) => {
     event.preventDefault();
     zoomBy(event.deltaY > 0 ? -0.12 : 0.12);
   };
@@ -77,21 +77,18 @@ export function MissionMap({
     .sort((left, right) => left.contact_id.localeCompare(right.contact_id));
 
   return (
-    <section className="mission-panel relative flex min-h-[420px] min-w-0 flex-1 flex-col overflow-hidden" aria-label={t(locale, "map.title")}>
+    <section className="mission-panel relative flex min-h-[420px] min-w-0 flex-1 flex-col overflow-hidden" aria-label={t(locale, "map.title")} tabIndex={0} onKeyDown={onKeyDown} onWheel={onWheel}>
       <MapToolbar locale={locale} layers={layers} onToggleLayer={toggleLayer} onZoomIn={() => zoomBy(0.25)} onZoomOut={() => zoomBy(-0.25)} onReset={reset} />
-      <div className="absolute bottom-3 left-3 z-10 rounded border border-white/10 bg-black/65 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-white/50">
+      <div data-testid="mission-clock" className="absolute bottom-3 left-3 z-10 rounded border border-white/10 bg-black/65 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-white/50">
         {snapshot.block_id} · T+{Math.floor(snapshot.simulation_time_ms / 1000).toString().padStart(3, "0")}s
       </div>
       <svg
-        role="img"
+        role="group"
         aria-label={t(locale, "map.title")}
         data-testid="map-root"
         data-zoom={zoom}
-        tabIndex={0}
         viewBox={`0 0 ${VIEWPORT.width} ${VIEWPORT.height}`}
         className="h-full min-h-[420px] w-full outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-        onKeyDown={onKeyDown}
-        onWheel={onWheel}
       >
         <defs>
           <pattern id="mission-grid" width="48" height="48" patternUnits="userSpaceOnUse">

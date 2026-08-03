@@ -30,7 +30,8 @@ export function FleetPanel({ snapshot, locale, selectedAircraftId, onSelect }: F
         {aircraft.map((item) => {
           const alert = highestAlert(item.aircraft_id, alerts);
           return (
-            <button key={item.aircraft_id} type="button" role="listitem" aria-label={`${item.aircraft_id} ${t(locale, linkKey(item.link))}`} aria-pressed={selectedAircraftId === item.aircraft_id} onClick={() => onSelect(item.aircraft_id)} className={`mb-2 w-full rounded border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${selectedAircraftId === item.aircraft_id ? "border-white bg-white/[0.08]" : "border-white/10 bg-black/15 hover:border-white/25"}`}>
+            <div key={item.aircraft_id} role="listitem" aria-label={`${item.aircraft_id} ${t(locale, linkKey(item.link))}`}>
+              <button type="button" aria-pressed={selectedAircraftId === item.aircraft_id} onClick={() => onSelect(item.aircraft_id)} className={`mb-2 w-full rounded border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${selectedAircraftId === item.aircraft_id ? "border-white bg-white/[0.08]" : "border-white/10 bg-black/15 hover:border-white/25"}`}>
               <div className="flex items-center justify-between gap-2"><span className="font-mono text-sm font-semibold">{item.aircraft_id}</span><span className={`h-2 w-2 rounded-full ${item.link === "NOMINAL" ? "bg-success" : item.link === "DEGRADED" ? "bg-warning" : "bg-danger"}`} aria-hidden="true" /></div>
               <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
                 <span>{t(locale, "fleet.mode")}</span><span className="text-right text-foreground">{t(locale, modeKey(item.mode))}</span>
@@ -40,7 +41,8 @@ export function FleetPanel({ snapshot, locale, selectedAircraftId, onSelect }: F
               </div>
               <div className="mt-2 h-1 overflow-hidden rounded bg-white/10"><div className={`h-full ${item.energy_units <= item.predicted_home_reserve_units ? "bg-danger" : "bg-success"}`} style={{ width: `${Math.max(3, Math.min(100, item.energy_units / 1000))}%` }} /></div>
               {alert && <div className="mt-2 font-mono text-[10px] uppercase tracking-wide text-danger">{t(locale, `alert.${alert.severity.toLowerCase()}` as never)} · {t(locale, `alert.${alert.kind.toLowerCase()}` as never)}</div>}
-            </button>
+              </button>
+            </div>
           );
         })}
       </div>

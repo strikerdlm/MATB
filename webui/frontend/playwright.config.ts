@@ -44,6 +44,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["line"], ["html", { open: "never" }]] : "list",
+  snapshotPathTemplate: "{testDir}/screenshots/{arg}{ext}",
   use: {
     ...devices["Desktop Chrome"],
     baseURL: "http://127.0.0.1:3100",

@@ -262,9 +262,7 @@ class SimulationManager:
             self.persistence.update_block(session_id, block_id, lifecycle="RUNNING", simulation_started_ms=0, started_at=_utcnow())
             self._append(handle, RecordKind.LIFECYCLE, {"event": "block_started", "active_aircraft": len(handle.scenario.definition.blocks[block_id].aircraft_ids), "required_contacts": len(handle.scenario.definition.blocks[block_id].contact_ids), "required_actions": 0}, 0, 0)
             await self._publish_latest_record(handle, kind=StreamKind.LIFECYCLE)
-            if self._run_background_tasks:
-                handle.tick_task = asyncio.create_task(self._tick_loop())
-                handle.snapshot_task = asyncio.create_task(self._snapshot_loop())
+            self._start_background_tasks(handle)
             return self._view(handle)
 
     async def pause(self, session_id: str, lease: str, reason: str = "operator_pause") -> SessionView:
@@ -291,8 +289,7 @@ class SimulationManager:
             self.persistence.update_session(session_id, lifecycle="RUNNING")
             self._append(handle, RecordKind.LIFECYCLE, {"event": "session_resumed"}, self._time(handle), self._version(handle))
             await self._publish_latest_record(handle, kind=StreamKind.LIFECYCLE)
-            if self._run_background_tasks and handle.tick_task is None:
-                handle.tick_task = asyncio.create_task(self._tick_loop())
+            self._start_background_tasks(handle)
             return self._view(handle)
 
     async def finish(self, session_id: str, lease: str, disposition: FinishRequest | str = "complete") -> SessionView:
@@ -572,8 +569,7 @@ class SimulationManager:
             self.persistence.update_block(handle.session_id, handle.active_block_id, lifecycle="RUNNING")
         if handle.engine is not None:
             await self._publish_snapshot(handle, handle.engine.snapshot())
-        if self._run_background_tasks and handle.tick_task is None:
-            handle.tick_task = asyncio.create_task(self._tick_loop())
+        self._start_background_tasks(handle)
 
     @staticmethod
     def _tick(handle: RuntimeHandle) -> int | None:
@@ -914,6 +910,10 @@ class SimulationManager:
 
         if handle.lifecycle != "RUNNING":
             return False
+        # A disconnected controller must not leave a high-rate snapshot loop
+        # running against observers while the session is paused.  Resume will
+        # recreate both publishers once a valid controller returns.
+        self._cancel_tasks(handle)
         handle.lifecycle = "PAUSED"
         self.persistence.update_session(handle.session_id, lifecycle="PAUSED")
         self._append(handle, RecordKind.LIFECYCLE, {
@@ -939,7 +939,11 @@ class SimulationManager:
             return self._new_envelope(
                 handle,
                 StreamKind.SNAPSHOT,
-                {**snapshot, "resynchronizes_after_sequence": max(0, int(after_sequence))},
+                {
+                    **snapshot,
+                    "lifecycle": handle.lifecycle,
+                    "resynchronizes_after_sequence": max(0, int(after_sequence)),
+                },
                 self._time(handle),
                 self._version(handle),
             )
@@ -959,7 +963,7 @@ class SimulationManager:
         while True:
             async with self._lock:
                 handle = self._handle
-                if handle is None or handle.lifecycle not in {"RUNNING", "PAUSED"} or self._shutdown:
+                if handle is None or handle.lifecycle != "RUNNING" or self._shutdown:
                     return
             await self.snapshot_once()
             await self._sleep((SNAPSHOT_INTERVAL_MS / 1000) * self._wall_time_scale)
@@ -1060,7 +1064,11 @@ class SimulationManager:
     async def _publish_snapshot(self, handle: RuntimeHandle, snapshot: Mapping[str, object]) -> None:
         await self.hub.publish(handle.session_id, self._new_envelope(
             handle, StreamKind.SNAPSHOT,
-            {**canonical_data(snapshot), "authoritative_event_sequence": snapshot.get("event_sequence", 0)},
+            {
+                **canonical_data(snapshot),
+                "lifecycle": handle.lifecycle,
+                "authoritative_event_sequence": snapshot.get("event_sequence", 0),
+            },
             int(snapshot.get("simulation_time_ms", 0)), int(snapshot.get("state_version", 0)),
         ))
 
@@ -1125,6 +1133,16 @@ class SimulationManager:
     @staticmethod
     def _new_session_id() -> str:
         return f"sim-{_utcnow().strftime('%Y%m%dT%H%M%S')}-{secrets.token_hex(4)}"
+
+    def _start_background_tasks(self, handle: RuntimeHandle) -> None:
+        """Start the live engine publishers after a block start or resume."""
+
+        if not self._run_background_tasks:
+            return
+        if handle.tick_task is None or handle.tick_task.done():
+            handle.tick_task = asyncio.create_task(self._tick_loop())
+        if handle.snapshot_task is None or handle.snapshot_task.done():
+            handle.snapshot_task = asyncio.create_task(self._snapshot_loop())
 
     @staticmethod
     def _cancel_tasks(handle: RuntimeHandle) -> None:

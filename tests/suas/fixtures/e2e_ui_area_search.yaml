@@ -1,0 +1,146 @@
+schema_version: 1
+scenario_id: e2e_ui_area_search
+title:
+  en: E2E area search
+  es-CO: Búsqueda de área E2E
+author: MATB research team
+description:
+  en: Longer fictional deterministic area search for browser accessibility tests
+  es-CO: Búsqueda ficticia determinista larga para pruebas de accesibilidad
+seed: 20260801
+terrain:
+  polygon_id: mission_area
+  label:
+    en: Mission area
+    es-CO: Área de misión
+  vertices:
+    - {x_m: 0, y_m: 0}
+    - {x_m: 12000, y_m: 0}
+    - {x_m: 12000, y_m: 8000}
+    - {x_m: 0, y_m: 8000}
+home_base: {x_m: 600, y_m: 4000}
+initial_view:
+  center: {x_m: 6000, y_m: 4000}
+  width_m: 12000
+  height_m: 8000
+grid_cell_m: 100
+advisory_separation_m: 500
+critical_separation_m: 250
+sectors:
+  - polygon_id: sector_alpha
+    label: {en: Sector Alpha, es-CO: Sector Alfa}
+    vertices:
+      - {x_m: 1800, y_m: 1000}
+      - {x_m: 5200, y_m: 1000}
+      - {x_m: 5200, y_m: 3400}
+      - {x_m: 1800, y_m: 3400}
+  - polygon_id: sector_bravo
+    label: {en: Sector Bravo, es-CO: Sector Bravo}
+    vertices:
+      - {x_m: 6800, y_m: 1000}
+      - {x_m: 10200, y_m: 1000}
+      - {x_m: 10200, y_m: 3400}
+      - {x_m: 6800, y_m: 3400}
+  - polygon_id: sector_charlie
+    label: {en: Sector Charlie, es-CO: Sector Charlie}
+    vertices:
+      - {x_m: 1800, y_m: 4600}
+      - {x_m: 5200, y_m: 4600}
+      - {x_m: 5200, y_m: 7000}
+      - {x_m: 1800, y_m: 7000}
+  - polygon_id: sector_delta
+    label: {en: Sector Delta, es-CO: Sector Delta}
+    vertices:
+      - {x_m: 6800, y_m: 4600}
+      - {x_m: 10200, y_m: 4600}
+      - {x_m: 10200, y_m: 7000}
+      - {x_m: 6800, y_m: 7000}
+restricted_zones:
+  - polygon_id: restricted_northwest
+    label: {en: Northwest restricted area, es-CO: Área restringida noroeste}
+    vertices:
+      - {x_m: 400, y_m: 6800}
+      - {x_m: 1400, y_m: 6800}
+      - {x_m: 1400, y_m: 7600}
+      - {x_m: 400, y_m: 7600}
+  - polygon_id: restricted_southeast
+    label: {en: Southeast restricted area, es-CO: Área restringida sureste}
+    vertices:
+      - {x_m: 10600, y_m: 300}
+      - {x_m: 11600, y_m: 300}
+      - {x_m: 11600, y_m: 1200}
+      - {x_m: 10600, y_m: 1200}
+aircraft:
+  - aircraft_id: UAS-01
+    label: UAS 01
+    home: {x_m: 600, y_m: 4000}
+    speed_mps: 20
+    return_speed_mps: 30
+    altitude_m: 120
+    initial_link: NOMINAL
+    initial_sensor: NOMINAL
+    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 40, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
+    sensor: {radius_m: 300, scan_interval_s: 5, detection_probability: 0.85, scans_to_inspectable: 2}
+  - aircraft_id: UAS-02
+    label: UAS 02
+    home: {x_m: 600, y_m: 4000}
+    speed_mps: 20
+    return_speed_mps: 30
+    altitude_m: 120
+    initial_link: NOMINAL
+    initial_sensor: NOMINAL
+    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 40, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
+    sensor: {radius_m: 300, scan_interval_s: 5, detection_probability: 0.85, scans_to_inspectable: 2}
+contacts:
+  - {contact_id: C-01, position: {x_m: 2500, y_m: 1800}, truth: routine, truth_priority: LOW, required_report: false}
+blocks:
+  - block_id: PRACTICE
+    duration_s: 60
+    aircraft_ids: [UAS-01, UAS-02]
+    contact_ids: [C-01]
+    required_action_window_s: 1
+    isa_interval_s: 30
+    isa_times_s: [30]
+    sagat: {window_start_s: 40, window_end_s: 50, probe_bank: suas, probe_ids: [suas_l1_lowest_battery]}
+    post_block_questionnaires: [NASA_TLX, BEDFORD]
+  - block_id: LOW
+    duration_s: 60
+    aircraft_ids: [UAS-01, UAS-02]
+    contact_ids: [C-01]
+    required_action_window_s: 1
+    isa_interval_s: 30
+    isa_times_s: [30]
+    sagat: {window_start_s: 40, window_end_s: 50, probe_bank: suas, probe_ids: [suas_l1_lowest_battery]}
+    post_block_questionnaires: [NASA_TLX, BEDFORD]
+  - block_id: MEDIUM
+    duration_s: 60
+    aircraft_ids: [UAS-01, UAS-02]
+    contact_ids: [C-01]
+    required_action_window_s: 1
+    isa_interval_s: 30
+    isa_times_s: [30]
+    sagat: {window_start_s: 40, window_end_s: 50, probe_bank: suas, probe_ids: [suas_l1_lowest_battery]}
+    post_block_questionnaires: [NASA_TLX, BEDFORD]
+  - block_id: HIGH
+    duration_s: 60
+    aircraft_ids: [UAS-01, UAS-02]
+    contact_ids: [C-01]
+    required_action_window_s: 1
+    isa_interval_s: 30
+    isa_times_s: [30]
+    sagat: {window_start_s: 40, window_end_s: 50, probe_bank: suas, probe_ids: [suas_l1_lowest_battery]}
+    post_block_questionnaires: [NASA_TLX, BEDFORD]
+link_events: []
+conflict_events: []
+report_note_codes:
+  observed: {en: Observed, es-CO: Observado}
+  needs_review: {en: Needs review, es-CO: Requiere revisión}
+  completed: {en: Completed, es-CO: Completado}
+metric_thresholds:
+  coverage_target_percent: 75
+  contact_effectiveness_target: 0.8
+  asset_preservation_target: 0.9
+  timeliness_target: 0.8
+termination:
+  finish_at_duration: true
+  abort_when_all_aircraft_failed: true

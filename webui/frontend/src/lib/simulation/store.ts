@@ -117,6 +117,7 @@ function lifecycleFromPayload(payload: unknown): Lifecycle | null {
   const map: Record<string, Lifecycle> = {
     block_started: "RUNNING",
     session_paused: "PAUSED",
+    controller_disconnected: "PAUSED",
     session_resumed: "RUNNING",
     session_finished: "FINISHED",
     session_interrupted: "INTERRUPTED",
@@ -124,6 +125,12 @@ function lifecycleFromPayload(payload: unknown): Lifecycle | null {
     runtime_failure: "INTERRUPTED",
   };
   return map[event] ?? null;
+}
+
+function lifecycleValue(value: unknown): Lifecycle | null {
+  return typeof value === "string" && ["PREPARED", "RUNNING", "PAUSED", "FINISHED", "ABORTED", "INTERRUPTED"].includes(value)
+    ? value as Lifecycle
+    : null;
 }
 
 function errorMessage(error: unknown): string {
@@ -309,6 +316,17 @@ export function createSimulationStore() {
           set({ lastSequence: envelope.sequence });
         } else {
           replaceState(snapshot, envelope.sequence);
+        }
+        const snapshotLifecycle = isRecord(envelope.payload) ? lifecycleValue(envelope.payload.lifecycle) : null;
+        if (snapshotLifecycle && get().session) {
+          set({
+            session: { ...get().session!, lifecycle: snapshotLifecycle },
+            connection: snapshotLifecycle === "PAUSED"
+              ? "paused"
+              : snapshotLifecycle === "RUNNING" && get().connection !== "reconnecting"
+                ? "live"
+                : get().connection,
+          });
         }
         if (isResync) set({ connection: streamStatusToConnection("live", get().session) });
       } else {

@@ -130,6 +130,16 @@ describe("simulation store", () => {
     expect(store.getState().snapshot?.state_version).toBe(20);
   });
 
+  it("uses the lifecycle carried by a resynchronizing snapshot", async () => {
+    const store = createSimulationStore();
+    store.getState().initialize(session, snapshot(4));
+    await store.getState().applyEnvelope({
+      ...envelope(20, "snapshot", { ...snapshot(20), lifecycle: "PAUSED", resynchronizes_after_sequence: 4 } as unknown as Record<string, JsonValue>),
+    });
+    expect(store.getState().session?.lifecycle).toBe("PAUSED");
+    expect(store.getState().connection).toBe("paused");
+  });
+
   it("tracks command pending state without optimistic aircraft mutation", async () => {
     const store = createSimulationStore();
     store.getState().initialize(session, snapshot(4));
