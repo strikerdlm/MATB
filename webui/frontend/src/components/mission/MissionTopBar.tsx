@@ -1,0 +1,72 @@
+"use client";
+
+import React, { useState } from "react";
+import { Pause, Play, Flag, Radio, ShieldAlert } from "lucide-react";
+import type { ConnectionMode, Locale, SessionView } from "@/types/simulation";
+import { t } from "@/lib/simulation/i18n";
+import { Button } from "@/components/ui/button";
+
+interface MissionTopBarProps {
+  session: SessionView;
+  locale: Locale;
+  connection: ConnectionMode;
+  canControl: boolean;
+  onStart: () => void;
+  onPause: () => void;
+  onResume: () => void;
+  onFinish: () => void;
+  busy?: boolean;
+}
+
+const connectionTone: Record<ConnectionMode, string> = {
+  live: "text-success",
+  reconnecting: "text-warning",
+  paused: "text-warning",
+  observer: "text-info",
+  disconnected: "text-muted-foreground",
+};
+
+export function MissionTopBar({ session, locale, connection, canControl, onStart, onPause, onResume, onFinish, busy = false }: MissionTopBarProps) {
+  const [confirmFinish, setConfirmFinish] = useState(false);
+  const lifecycleKey = `lifecycle.${session.lifecycle.toLowerCase()}` as never;
+  const connectionKey = `connection.${connection}` as never;
+  const isPrepared = session.lifecycle === "PREPARED";
+  const isRunning = session.lifecycle === "RUNNING";
+  const isPaused = session.lifecycle === "PAUSED";
+  const protocolGateActive = ["ISA_ACTIVE", "SAGAT_ACTIVE", "POST_BLOCK_ACTIVE"].includes(session.protocol_phase ?? "");
+  const readyForNextBlock = isPaused && session.protocol_phase === "READY_FOR_BLOCK";
+
+  return (
+    <header className="mission-panel flex min-h-[68px] flex-wrap items-center justify-between gap-3 rounded-none border-x-0 border-t-0 px-4 py-3 lg:px-6">
+      <div className="flex min-w-0 items-center gap-4">
+        <div className="flex h-9 w-9 items-center justify-center border border-success/40 bg-success/10 text-success" aria-hidden="true"><Radio className="h-4 w-4" /></div>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            <span>MISSION {session.id}</span><span aria-hidden="true">·</span><span>{session.active_block_id ?? "READY"}</span>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-3 text-sm font-semibold uppercase tracking-wide text-foreground">
+            <span>{session.participant_id}</span>
+            <span className={connectionTone[connection]} aria-label={t(locale, "a11y.connection", { status: t(locale, connectionKey) })}>
+              <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-current align-middle" aria-hidden="true" />{t(locale, connectionKey)}
+            </span>
+            <span className="font-mono text-xs text-muted-foreground">{t(locale, lifecycleKey)}</span>
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        {(isPrepared || readyForNextBlock) && <Button type="button" size="sm" onClick={onStart} disabled={!canControl || busy}><Play className="mr-2 h-3.5 w-3.5" aria-hidden="true" />{t(locale, "lifecycle.start")}</Button>}
+        {isRunning && <Button type="button" size="sm" variant="warning" onClick={onPause} disabled={!canControl || busy}><Pause className="mr-2 h-3.5 w-3.5" aria-hidden="true" />{t(locale, "lifecycle.pause")}</Button>}
+        {isPaused && !readyForNextBlock && <Button type="button" size="sm" variant="success" onClick={onResume} disabled={!canControl || busy || protocolGateActive}><Play className="mr-2 h-3.5 w-3.5" aria-hidden="true" />{t(locale, "lifecycle.resume")}</Button>}
+        {confirmFinish ? (
+          <div className="flex items-center gap-1" role="group" aria-label={t(locale, "confirm.finish")}>
+            <Button type="button" size="sm" variant="destructive" onClick={() => { setConfirmFinish(false); onFinish(); }} disabled={!canControl || busy}>Confirm</Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setConfirmFinish(false)}>×</Button>
+          </div>
+        ) : (
+          <Button type="button" size="sm" variant="outline" onClick={() => setConfirmFinish(true)} disabled={!canControl || busy || ["FINISHED", "ABORTED", "INTERRUPTED"].includes(session.lifecycle)}><Flag className="mr-2 h-3.5 w-3.5" aria-hidden="true" />{t(locale, "lifecycle.finish")}</Button>
+        )}
+        {!canControl && <span className="sr-only"><ShieldAlert />Observer mode: commands are disabled.</span>}
+      </div>
+    </header>
+  );
+}

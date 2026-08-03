@@ -1,8 +1,9 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, Users, Upload, BarChart3, FlaskConical, Brain } from "lucide-react";
+import { LayoutGrid, Users, Upload, BarChart3, FlaskConical, Brain, Radar } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ITEMS = [
@@ -12,14 +13,15 @@ const ITEMS = [
   { href: "/visualization", label: "Visualization", icon: BarChart3, enabled: true },
   { href: "/analysis", label: "Analysis", icon: FlaskConical, enabled: true },
   { href: "/screen", label: "Screen", icon: Brain, enabled: true },
+  { href: "/mission/setup", label: "Mission", icon: Radar, enabled: true },
 ];
 
 export function SidebarNav() {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "/";
   return (
     <nav className="flex gap-2 overflow-x-auto p-3 md:flex-col md:overflow-visible md:p-4">
       {ITEMS.map(({ href, label, icon: Icon, enabled }, index) => {
-        const active = pathname === href;
+        const active = pathname === href || (href === "/mission/setup" && pathname.startsWith("/mission"));
         const base = "group flex shrink-0 items-center gap-3 rounded-[3px] border px-3 py-3 text-xs font-semibold uppercase tracking-[0.12em] transition-all";
         if (!enabled)
           return (

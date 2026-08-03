@@ -10,6 +10,7 @@
 #   1. Creates a Python venv at ./.venv with repository dependencies
 #   2. Optionally installs military aviation assets into an external OpenMATB
 #      checkout when OPENMATB_DIR=/path/to/openmatb is set
+#   3. When MATB_INSTALL_SUAS=1, installs the native Linux/headless sUAS console
 #
 # After setup, run a scenario:
 #   Linux/headless:  Xvfb :100 -screen 0 1920x1080x24 &
@@ -36,6 +37,11 @@ else
     echo "==> Skipping OpenMATB asset install."
     echo "    The broken vendored openmatb submodule was removed."
     echo "    Set OPENMATB_DIR=/path/to/openmatb and rerun install_to_openmatb.py when needed."
+fi
+
+if [ "${MATB_INSTALL_SUAS:-0}" = "1" ]; then
+    echo "==> Installing native offline sUAS console..."
+    MATB_VENV="$MATB_VENV" bash "$SCRIPT_DIR/scripts/install_suas.sh"
 fi
 
 echo ""

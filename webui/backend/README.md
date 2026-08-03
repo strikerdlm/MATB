@@ -1,4 +1,4 @@
-# MATB Research Console — Backend (Phase 1A)
+# MATB Research Console — Backend
 
 FastAPI + SQLModel (SQLite) service that ingests OpenMATB session CSVs and
 optional scenario manifests via `matb_integration`, tracks study completeness,
@@ -8,21 +8,36 @@ duplicated — `log_converter` and `suhir.pipeline` are reused as a library.
 
 ## Setup
 ```bash
-python3 -m venv ~/.venvs/matb-webui
-~/.venvs/matb-webui/bin/pip install -r webui/backend/requirements.txt
+cd /path/to/MATB
+python3 -m venv .venv-suas
+.venv-suas/bin/pip install -r requirements-dev.txt
 ```
 
 ## Run (dev)
 ```bash
 cd webui/backend
-~/.venvs/matb-webui/bin/uvicorn app.main:app --reload --port 8000
+../../.venv-suas/bin/python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 ## Test
 ```bash
 cd webui/backend
-~/.venvs/matb-webui/bin/python -m pytest -q
+../../.venv-suas/bin/python -m pytest -q
 ```
+
+For the production-shaped offline server, use the repository launcher instead
+of a development reload:
+
+```bash
+cd /path/to/MATB
+MATB_VENV="$PWD/.venv-suas" bash scripts/install_suas.sh
+MATB_VENV="$PWD/.venv-suas" bash scripts/run_suas.sh
+```
+
+The launcher sets `MATB_DB_PATH`, `MATB_SIMULATION_OUTPUT_DIR`,
+`MATB_SIMULATION_SCENARIO_DIR`, and `MATB_FRONTEND_ORIGINS`, creates owner-only
+directories, starts the API and built frontend together, and tears both down
+on Ctrl-C. No Windows service, X server, or external telemetry is needed.
 
 ## Data model
 Participant -> Visit (timepoint 1-6) -> Block (LOW/MEDIUM/HIGH) -> metrics.
@@ -47,6 +62,47 @@ all 3 levels are ingested.
 - GET  /screen  — per-participant screen scores, cohort F/F₀ values, and gate status
 - GET  /exports/research-context  — one JSON payload with participants, visits, tracker, metrics_long, fits, latest analysis artifacts, and block provenance
 - POST /exports/research-bundle  — ZIP export with the research context, caveats, stored scenario manifests, and optional frontend ECharts figure options
+
+### Native offline sUAS research console
+
+The native simulator is a Linux/headless-safe, non-kinetic research instrument.
+It uses one process-local controller lease and a local SQLite/artifact root; no
+Internet, real-world map, vehicle, weapon, or external telemetry service is
+required.
+
+- `GET /simulation/scenarios` lists valid direct `.yaml` children of the
+  configured scenario directory.
+- `POST /simulation/sessions` prepares a pseudonymized participant/visit and
+  returns the controller lease once.  Send that value only as
+  `X-Simulation-Controller` on lifecycle and command mutations.
+- `POST /simulation/sessions/{id}/start|pause|resume|finish|recover` controls
+  lifecycle.  A controller WebSocket disconnect pauses a running session and
+  never resumes it automatically.
+- `POST /simulation/sessions/{id}/commands` accepts supervisory, non-kinetic
+  commands; `GET .../state` is observer-readable and redacted.
+- `WS /simulation/sessions/{id}/stream` accepts an exact configured Origin,
+  an optional URL-encoded `lease`, and `after_sequence`.  A lease-bearing
+  stream is the sole controller; a lease-free stream is read-only.  The first
+  message is a complete resynchronizing snapshot, followed by ordered bounded
+  envelopes.  Pings must be exactly `{"kind":"ping"}`.
+- `GET .../debrief` and `GET .../artifacts` are available only after a terminal
+  finish/abort and expose relative paths plus hashes, never leases or absolute
+  filesystem paths.
+
+The stream is intentionally ordered and bounded. The first frame is a complete
+snapshot marked with the requested `after_sequence`; later envelopes are
+monotonic. A lease-free stream is an observer and cannot submit commands or
+finish a session. A valid controller disconnect transitions RUNNING to PAUSED;
+an explicit lease-bearing reconnect is required to resume. Probe payloads are
+redacted, while private answers remain in the sealed artifact set.
+
+Set `MATB_SIMULATION_OUTPUT_DIR` to an owner-only local directory for run
+artifacts.  On startup, rows left RUNNING/PAUSED by a dead process are marked
+INTERRUPTED.  Recovery is explicit: an in-process interruption requires the
+  existing lease; a stale-process recovery requires
+  `confirm_process_restart=true` and returns a new lease once.  Checkpoint
+  recovery always marks `valid_with_deviation` and preserves the append-only
+  audit trail.
 
 ## Notes
 - Pseudonymized participant IDs only (P01…); no PII.

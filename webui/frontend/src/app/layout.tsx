@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { AppShell } from "@/components/layout/AppShell";
+import { RouteShell } from "@/components/layout/RouteShell";
 
 export const metadata: Metadata = {
   title: "MATB Research Console",
@@ -11,7 +11,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="dark">
       <body className="font-sans antialiased">
-        <AppShell>{children}</AppShell>
+        <RouteShell>{children}</RouteShell>
       </body>
     </html>
   );

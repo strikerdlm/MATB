@@ -1,8 +1,7 @@
 import type {
   AnalysisArtifact, BayesJob, BlockDetail, FigureOptionExport, FitRow, IngestResult, MetricRow, Participant, ParticipantCreate, ResearchContext, ScreenIngestResult, ScreenSummary, TrackerCell, Visit,
 } from "@/types";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { getApiBase } from "@/lib/runtime-config";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -26,20 +25,25 @@ async function detail(res: Response): Promise<string> {
   }
 }
 
+async function request(path: string, init: RequestInit): Promise<Response> {
+  const apiBase = await getApiBase();
+  return fetch(`${apiBase}${path}`, init);
+}
+
 export async function getTracker(): Promise<TrackerCell[]> {
-  const res = await fetch(`${API_BASE}/tracker`, { method: "GET" });
+  const res = await request("/tracker", { method: "GET" });
   if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();
 }
 
 export async function listParticipants(): Promise<Participant[]> {
-  const res = await fetch(`${API_BASE}/participants`, { method: "GET" });
+  const res = await request("/participants", { method: "GET" });
   if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();
 }
 
 export async function createParticipant(body: ParticipantCreate): Promise<Participant> {
-  const res = await fetch(`${API_BASE}/participants`, {
+  const res = await request("/participants", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -49,7 +53,7 @@ export async function createParticipant(body: ParticipantCreate): Promise<Partic
 }
 
 export async function listVisits(participantId: string): Promise<Visit[]> {
-  const res = await fetch(`${API_BASE}/participants/${participantId}/visits`, { method: "GET" });
+  const res = await request(`/participants/${encodeURIComponent(participantId)}/visits`, { method: "GET" });
   if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();
 }
@@ -70,7 +74,7 @@ export async function ingestCsv(file: File, tags: IngestTags): Promise<IngestRes
   form.append("workload_level", tags.workload_level);
   form.append("overwrite", String(tags.overwrite ?? false));
   if (tags.manifest) form.append("manifest", tags.manifest);
-  const res = await fetch(`${API_BASE}/ingest`, { method: "POST", body: form });
+  const res = await request("/ingest", { method: "POST", body: form });
   if (!res.ok) throw new IngestError(res.status, await detail(res));
   return res.json();
 }
@@ -81,46 +85,46 @@ export async function getBlock(
   const q = new URLSearchParams({
     participant_id: participantId, visit_ordinal: String(visitOrdinal), workload_level: level,
   });
-  const res = await fetch(`${API_BASE}/block?${q}`, { method: "GET" });
+  const res = await request(`/block?${q}`, { method: "GET" });
   if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();
 }
 
 export async function getMetricsLong(participantId?: string): Promise<MetricRow[]> {
   const q = participantId ? `?${new URLSearchParams({ participant_id: participantId })}` : "";
-  const res = await fetch(`${API_BASE}/metrics/long${q}`, { method: "GET" });
+  const res = await request(`/metrics/long${q}`, { method: "GET" });
   if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();
 }
 
 export async function getFits(participantId?: string): Promise<FitRow[]> {
   const q = participantId ? `?${new URLSearchParams({ participant_id: participantId })}` : "";
-  const res = await fetch(`${API_BASE}/fits${q}`, { method: "GET" });
+  const res = await request(`/fits${q}`, { method: "GET" });
   if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();
 }
 
 export async function runAnalysis(): Promise<AnalysisArtifact> {
-  const res = await fetch(`${API_BASE}/analysis/run`, { method: "POST" });
+  const res = await request("/analysis/run", { method: "POST" });
   if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();
 }
 
 export async function getLatestAnalysis(): Promise<AnalysisArtifact | null> {
-  const res = await fetch(`${API_BASE}/analysis/latest`, { method: "GET" });
+  const res = await request("/analysis/latest", { method: "GET" });
   if (res.status === 404) return null;
   if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();
 }
 
 export async function runBayes(): Promise<BayesJob> {
-  const res = await fetch(`${API_BASE}/analysis/bayes/run`, { method: "POST" });
+  const res = await request("/analysis/bayes/run", { method: "POST" });
   if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();
 }
 
 export async function getBayesStatus(): Promise<BayesJob | null> {
-  const res = await fetch(`${API_BASE}/analysis/bayes/status`, { method: "GET" });
+  const res = await request("/analysis/bayes/status", { method: "GET" });
   if (res.status === 404) return null;
   if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();
@@ -130,7 +134,7 @@ export async function postScreen(
   participantId: string, payload: import("@/lib/screen").ScreenPayload,
   overwrite = false,
 ): Promise<ScreenIngestResult> {
-  const res = await fetch(`${API_BASE}/screen`, {
+  const res = await request("/screen", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ participant_id: participantId, payload, overwrite }),
@@ -140,19 +144,19 @@ export async function postScreen(
 }
 
 export async function getScreenSummary(): Promise<ScreenSummary> {
-  const res = await fetch(`${API_BASE}/screen`, { method: "GET" });
+  const res = await request("/screen", { method: "GET" });
   if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();
 }
 
 export async function getResearchContext(): Promise<ResearchContext> {
-  const res = await fetch(`${API_BASE}/exports/research-context`, { method: "GET" });
+  const res = await request("/exports/research-context", { method: "GET" });
   if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();
 }
 
 export async function downloadResearchBundle(figures: FigureOptionExport[]): Promise<Blob> {
-  const res = await fetch(`${API_BASE}/exports/research-bundle`, {
+  const res = await request("/exports/research-bundle", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ figures }),

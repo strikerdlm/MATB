@@ -57,6 +57,7 @@ def build_session_manifest(
         "visit_ordinal": visit_ordinal,
         "locale": Locale(locale).value,
         "block_order": [profile.value for profile in order],
+        "metric_thresholds": canonical_data(definition.metric_thresholds),
         "block_parameters": {
             profile.value: canonical_data(definition.blocks[profile.value]) for profile in block_ids
         },
