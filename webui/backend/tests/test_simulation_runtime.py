@@ -166,3 +166,40 @@ async def test_protocol_probe_pauses_and_redacts_operational_state(manager, runt
         assert result.status.value == "accepted"
     assert manager.active.lifecycle == "RUNNING"
     await manager.shutdown()
+
+
+@pytest.mark.anyio
+async def test_repeated_pause_reconnect_and_checkpoint_recovery_cycles(manager, runtime_db):
+    """Repeated operator/controller failures do not leak tasks or state."""
+
+    with Session(runtime_db) as db:
+        prepared = await manager.prepare(request(), db)
+    await manager.start(prepared.id, "PRACTICE", prepared.controller_lease)
+
+    for _ in range(25):
+        # One checkpoint is emitted at each 5-second simulation boundary.
+        for _ in range(50):
+            await manager.tick_once()
+        handle = manager.active
+        assert handle is not None
+        checkpoint_paths = sorted(handle.recorder.checkpoints_dir.glob("checkpoint-*.json.gz"))
+        assert checkpoint_paths
+        checkpoint_version = int(checkpoint_paths[-1].name.split("-")[-1].split(".")[0])
+
+        await manager.pause(prepared.id, prepared.controller_lease, reason="cycle_pause")
+        await manager.resume(prepared.id, prepared.controller_lease)
+        await manager.controller_connected(prepared.id, prepared.controller_lease)
+        await manager.controller_stream_established(prepared.id, prepared.controller_lease)
+        await manager.controller_disconnected(prepared.id, prepared.controller_lease)
+        assert manager.active.lifecycle == "PAUSED"
+
+        await manager._interrupt(handle, "cycle_interruption", {"reason": "cycle"})  # noqa: SLF001
+        recovered = await manager.recover(
+            prepared.id, prepared.controller_lease, checkpoint_version,
+        )
+        assert recovered.lifecycle == "PAUSED"
+        await manager.resume(prepared.id, prepared.controller_lease)
+        assert manager.active.lifecycle == "RUNNING"
+
+    await manager.finish(prepared.id, prepared.controller_lease, "abort")
+    await manager.shutdown()
