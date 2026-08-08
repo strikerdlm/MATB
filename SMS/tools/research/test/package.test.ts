@@ -1,5 +1,5 @@
 import { generateKeyPairSync } from "node:crypto";
-import { lstat, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -23,10 +23,28 @@ describe("deterministic evidence package assembly", () => {
     expect((await readFile(join(output, "evidence-package-manifest.sig"), "utf8")).trim()).toBe(manifest.signature);
   });
   it("refuses to erase an existing caller-selected output directory", async () => {
-    const root = await mkdtemp(join(tmpdir(), "fac-evidence-source-")); const output = await mkdtemp(join(tmpdir(), "fac-evidence-output-")); paths.push(root, output);
+    const root = await mkdtemp(join(tmpdir(), "fac-evidence-source-")); const outputParent = await mkdtemp(join(tmpdir(), "fac-evidence-output-")); const output = join(outputParent, "package"); paths.push(root, outputParent); await mkdir(output);
     await writeFile(join(root, "rule.json"), "{}\n"); await writeFile(join(output, "preserve.txt"), "do-not-delete");
     await expect(assembleEvidencePackage({ sourceRoot: root, outputDirectory: output, files: [{ sourcePath: "rule.json" }], privateKey, manifest: { schemaVersion: "1.0", packageId: "fac-package-test", kind: "regulatory", issuer: "test issuer", version: "1.0.0", issuedAtUtc: "2026-08-08T00:00:00Z", effectiveFromUtc: "2026-08-08T00:00:00Z", geographicScope: "Colombia", keyId: "test", dependencies: [], qualification: "qualified-review", caveats: ["test only"] } })).rejects.toThrow("already exists");
     await expect(readFile(join(output, "preserve.txt"), "utf8")).resolves.toBe("do-not-delete");
+  });
+  it("rejects a group/other-writable publish parent before creating staging", async () => {
+    const root = await mkdtemp(join(tmpdir(), "fac-evidence-source-")); const outputParent = await mkdtemp(join(tmpdir(), "fac-evidence-output-")); const output = join(outputParent, "package"); paths.push(root, outputParent);
+    await writeFile(join(root, "rule.json"), "{}\n"); await chmod(outputParent, 0o777);
+    await expect(assembleEvidencePackage({ sourceRoot: root, outputDirectory: output, files: [{ sourcePath: "rule.json" }], privateKey, manifest: { schemaVersion: "1.0", packageId: "fac-package-test", kind: "regulatory", issuer: "test issuer", version: "1.0.0", issuedAtUtc: "2026-08-08T00:00:00Z", effectiveFromUtc: "2026-08-08T00:00:00Z", geographicScope: "Colombia", keyId: "test", dependencies: [], qualification: "qualified-review", caveats: ["test only"] } })).rejects.toThrow("outputDirectory parent");
+    expect((await readdir(outputParent)).filter((name) => name.startsWith(`.${basename(output)}.staging-`))).toEqual([]);
+  });
+  it.each([
+    ["NUL", "bad\0name.txt"],
+    ["backslash", "bad\\name.txt"],
+    ["oversized component", "x".repeat(256)],
+    ["oversized path", Array.from({ length: 17 }, () => "x".repeat(255)).join("/")],
+  ])("rejects a destination with %s before creating staging", async (_label, packagePath) => {
+    const root = await mkdtemp(join(tmpdir(), "fac-evidence-source-")); const outputParent = await mkdtemp(join(tmpdir(), "fac-evidence-output-")); const output = join(outputParent, "package"); paths.push(root, outputParent);
+    await writeFile(join(root, "rule.json"), "{}\n");
+    await expect(assembleEvidencePackage({ sourceRoot: root, outputDirectory: output, files: [{ sourcePath: "rule.json", packagePath }], privateKey, manifest: { schemaVersion: "1.0", packageId: "fac-package-test", kind: "regulatory", issuer: "test issuer", version: "1.0.0", issuedAtUtc: "2026-08-08T00:00:00Z", effectiveFromUtc: "2026-08-08T00:00:00Z", geographicScope: "Colombia", keyId: "test", dependencies: [], qualification: "qualified-review", caveats: ["test only"] } })).rejects.toThrow("packagePath");
+    await expect(lstat(output)).rejects.toMatchObject({ code: "ENOENT" });
+    expect((await readdir(outputParent)).filter((name) => name.startsWith(`.${basename(output)}.staging-`))).toEqual([]);
   });
   it("refuses source-root output selection before any filesystem mutation", async () => {
     const root = await mkdtemp(join(tmpdir(), "fac-evidence-source-")); paths.push(root); await writeFile(join(root, "rule.json"), "{}\n");
