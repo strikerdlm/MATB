@@ -7,7 +7,8 @@
     ".": "./src/acquire.ts"
   },
   "scripts": {
-    "test": "vitest run",
+    "build": "npm run build --workspace @fac-isr/evidence && tsc -p tsconfig.build.json",
+    "test": "npm run build --silent && vitest run",
     "typecheck": "tsc -p ../../tsconfig.base.json"
   },
   "dependencies": {

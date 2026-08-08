@@ -38,6 +38,8 @@ export function assertSourceRecord(record: unknown): SourceRecord {
   if (uri.protocol !== "https:") throw new Error("Source record canonicalUri must use HTTPS");
   if (!SHA256.test(value.sha256 as string)) throw new Error("Source record sha256 must be a SHA-256 hex digest");
   if (value.extractionSha256 !== undefined && (typeof value.extractionSha256 !== "string" || !SHA256.test(value.extractionSha256))) throw new Error("Source record extractionSha256 must be a SHA-256 hex digest");
+  if (value.extractionPath !== undefined && !requiredString(value, "extractionPath")) throw new Error("Source record extractionPath must be non-empty");
+  if (value.extractionPath !== undefined && value.extractionSha256 === undefined) throw new Error("Source record extractionPath requires extractionSha256");
   if (value.supersededBy !== undefined && (typeof value.supersededBy !== "string" || value.supersededBy.trim() === "")) throw new Error("Source record supersededBy must be non-empty");
   for (const key of ["reviewerId", "reviewSignature", "reviewedAtUtc", "validFromUtc", "validUntilUtc"]) {
     if (value[key] !== undefined && !requiredString(value, key)) throw new Error(`Source record ${key} must be non-empty`);

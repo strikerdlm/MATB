@@ -1,3 +1,9 @@
+---
+originalVaultPath: "Private Pilot & UAS School/Reglamentos Aeronáuticos de Colombia RAC 100.md"
+originalSha256: "d316a78d185f21a92052b1c7bd64df3861afd7726276e67d43b3680a3e260cd6"
+importedAtUtc: "2026-08-08T00:00:00Z"
+evidenceStatus: "candidate-context-only"
+---
 Unidad Administrativa Especial de Aeronáutica Civil
 
 SECRETARIA DE AUTORIDAD AERONAUTICA
@@ -2334,9 +2340,3 @@ Una vez cumplidos los requisitos y condiciones establecidas en el presente regla
 Nota: Sección expedida mediante el ARTICULO PRIMERO Resolución No 001983 del 27 de septiembre de 2023. Publicada en el Diario Oficial No 52.531 del 27 de septiembre de 2023
 
 RAC 100 Ir al ÍNDICE 71
----
-originalVaultPath: "Private Pilot & UAS School/Reglamentos Aeronáuticos de Colombia RAC 100.md"
-originalSha256: "d316a78d185f21a92052b1c7bd64df3861afd7726276e67d43b3680a3e260cd6"
-importedAtUtc: "2026-08-08T00:00:00Z"
-evidenceStatus: "candidate-context-only"
----

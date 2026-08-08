@@ -1,3 +1,9 @@
+---
+originalVaultPath: "Research/Drone and Health/FAA_vs_RAC100_sUAS_comparison.md"
+originalSha256: "eb51a97d401b45a9fbee9bec1d76b8a1b49d1f13563d20c737612b55708e7df1"
+importedAtUtc: "2026-08-08T00:00:00Z"
+evidenceStatus: "candidate-context-only"
+---
 # Comparative Analysis: FAA Part 107 (US) vs. RAC 100 (Colombia)
 ## Small Unmanned Aircraft Systems (sUAS/Drones) Regulations
 
@@ -506,9 +512,3 @@ The Colombian approach creates a defined competency pathway that could inform US
 **Document Status:** Final  
 **Classification:** Research synthesis for regulatory comparison  
 **Intended Use:** Academic and operational planning
----
-originalVaultPath: "Research/Drone and Health/FAA_vs_RAC100_sUAS_comparison.md"
-originalSha256: "eb51a97d401b45a9fbee9bec1d76b8a1b49d1f13563d20c737612b55708e7df1"
-importedAtUtc: "2026-08-08T00:00:00Z"
-evidenceStatus: "candidate-context-only"
----

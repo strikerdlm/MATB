@@ -1,3 +1,10 @@
+---
+originalVaultPath: "Private Pilot & UAS School/UAS Notes.md"
+originalSha256: "1fca11132ffed916789cbde4d9e3c1405d99c8483cee776118db8c60cab50003"
+importedAtUtc: "2026-08-08T00:00:00Z"
+evidenceStatus: "candidate-context-only"
+redactionRequired: true
+---
 
 [[USAFSAM]] [[drone]]
 [[RAC100]]
@@ -2057,9 +2064,3 @@ En RAC 100, sección 100.230 Sustancias psicoactivas:
 
 Nota: se acogen las disposiciones de RAC 120 sobre prevención y control de consumo indebido de sustancias psicoactivas en el personal aeronáutico.
 
----
-originalVaultPath: "Private Pilot & UAS School/UAS Notes.md"
-originalSha256: "1fca11132ffed916789cbde4d9e3c1405d99c8483cee776118db8c60cab50003"
-importedAtUtc: "2026-08-08T00:00:00Z"
-evidenceStatus: "candidate-context-only"
----

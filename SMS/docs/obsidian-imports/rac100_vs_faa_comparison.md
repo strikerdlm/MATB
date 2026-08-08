@@ -1,3 +1,9 @@
+---
+originalVaultPath: "Research/Drone and Health/rac100_vs_faa_comparison.md"
+originalSha256: "deafb90c999983afc531c26ec42a920aa8dae3a5aa780b9a57d33729fcbd6623"
+importedAtUtc: "2026-08-08T00:00:00Z"
+evidenceStatus: "candidate-context-only"
+---
 # RAC 100 Colombia vs. FAA 14 CFR Part 107: A Comparative Regulatory Analysis for RPAS/sUAS Operations
 
 **Narrative Review — Q1 2026**
@@ -788,9 +794,3 @@ World Bank. (2024). *Drones general assessment in Latin America and the Caribbea
 *Word count: approximately 12,500 words*
 *Primary sources consulted: 40+*
 *Jurisdictions covered: Colombia, United States, European Union (EASA), ICAO (international), JARUS (international)*
----
-originalVaultPath: "Research/Drone and Health/rac100_vs_faa_comparison.md"
-originalSha256: "deafb90c999983afc531c26ec42a920aa8dae3a5aa780b9a57d33729fcbd6623"
-importedAtUtc: "2026-08-08T00:00:00Z"
-evidenceStatus: "candidate-context-only"
----

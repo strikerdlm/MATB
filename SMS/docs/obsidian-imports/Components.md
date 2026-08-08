@@ -1,3 +1,9 @@
+---
+originalVaultPath: "AI Projects/SMS/Components.md"
+originalSha256: "5a8d75de699149b2c0f2a7dde10db8c6efc4219dfa9079f8bf5fdc3a180bba99"
+importedAtUtc: "2026-08-08T00:00:00Z"
+evidenceStatus: "candidate-context-only"
+---
 [[sms]] 
 [[RAC-219]] 
  1 Safety Policy and Objectives:
@@ -28,9 +34,3 @@
       understand and can fulfill their safety responsibilities.
     • 4.2 Safety Communication: Facilitates effective communication of safety
       information throughout the organization.
----
-originalVaultPath: "AI Projects/SMS/Components.md"
-originalSha256: "5a8d75de699149b2c0f2a7dde10db8c6efc4219dfa9079f8bf5fdc3a180bba99"
-importedAtUtc: "2026-08-08T00:00:00Z"
-evidenceStatus: "candidate-context-only"
----

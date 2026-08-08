@@ -16,6 +16,8 @@ export interface SourceRecord {
   retrievedAtUtc: string;
   sha256: string;
   extractionSha256?: string;
+  /** Workspace-relative text extraction whose hash is extractionSha256. */
+  extractionPath?: string;
   sensitivity: "unclassified-controlled";
   licenseOrRestriction: string;
   review: "unreviewed" | "in-review" | "accepted" | "superseded" | "rejected";

@@ -3,9 +3,12 @@
   "private": true,
   "workspaces": ["packages/*", "apps/*", "tools/*"],
   "scripts": {
+    "build": "npm run build --workspace @fac-isr/evidence && npm run build --workspace @fac-isr/research-tools",
+    "build:research": "npm run build --workspace @fac-isr/research-tools",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "lint": "eslint .",
+    "preverify:offline": "npm run build:research",
     "verify:offline": "node tools/research/dist/cli.js verify-offline",
     "verify:no-c2": "node tools/research/dist/cli.js verify-no-c2"
   },
