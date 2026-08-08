@@ -141,8 +141,7 @@ export async function acquireOfficialSource(input: OfficialSourceInput): Promise
     if (input.expectedSha256 !== undefined && sha256 !== input.expectedSha256) {
       throw new Error(`checksum mismatch for ${input.sourceId}: expected ${input.expectedSha256}, got ${sha256}`);
     }
-    await promoteTempFile(tempPath, targetPath);
-    return assertSourceRecord({
+    const record = assertSourceRecord({
       sourceId: input.sourceId,
       title: input.title,
       authority: input.authority,
@@ -160,6 +159,8 @@ export async function acquireOfficialSource(input: OfficialSourceInput): Promise
       licenseOrRestriction: input.licenseOrRestriction,
       review: input.review ?? "in-review",
     });
+    await promoteTempFile(tempPath, targetPath);
+    return record;
   } catch (error) {
     await rm(tempPath, { force: true });
     throw error;
@@ -194,29 +195,31 @@ export async function copyObsidianNote(input: ObsidianNoteInput): Promise<Source
   const tempPath = `${targetPath}.partial-${randomUUID()}`;
   try {
     await writeFile(tempPath, `${frontMatter}${body}`, { flag: "wx" });
+    const title = input.title ?? originalVaultPath.split("/").pop() ?? input.sourceId;
+    const sha256 = createHash("sha256").update(frontMatter).update(originalBytes).digest("hex");
+    const record = assertSourceRecord({
+      sourceId: input.sourceId,
+      title,
+      authority: "Local Obsidian knowledge vault",
+      authorityRank: 7,
+      canonicalUri: input.canonicalUri ?? `https://obsidian.local/vault/${encodeURIComponent(originalVaultPath)}`,
+      localPath: relative(workspaceRoot, targetPath),
+      mediaType: "text/markdown",
+      language: "multi",
+      retrievedAtUtc: input.importedAtUtc,
+      sha256,
+      sensitivity: "unclassified-controlled",
+      licenseOrRestriction: input.redactionRequired
+        ? "Internal candidate context; redaction required before any broader distribution; do not operationalize"
+        : "Internal candidate context; do not treat as regulatory authority",
+      review: "unreviewed",
+    });
     await promoteTempFile(tempPath, targetPath);
+    return record;
   } catch (error) {
     await rm(tempPath, { force: true });
     throw error;
   }
-  const title = input.title ?? originalVaultPath.split("/").pop() ?? input.sourceId;
-  return assertSourceRecord({
-    sourceId: input.sourceId,
-    title,
-    authority: "Local Obsidian knowledge vault",
-    authorityRank: 7,
-    canonicalUri: input.canonicalUri ?? `https://obsidian.local/vault/${encodeURIComponent(originalVaultPath)}`,
-    localPath: relative(workspaceRoot, targetPath),
-    mediaType: "text/markdown",
-    language: "multi",
-    retrievedAtUtc: input.importedAtUtc,
-    sha256: createHash("sha256").update(frontMatter).update(originalBytes).digest("hex"),
-    sensitivity: "unclassified-controlled",
-    licenseOrRestriction: input.redactionRequired
-      ? "Internal candidate context; redaction required before any broader distribution; do not operationalize"
-      : "Internal candidate context; do not treat as regulatory authority",
-    review: "unreviewed",
-  });
 }
 
 export async function verifyChecksum(path: string, expectedSha256: string): Promise<boolean> {

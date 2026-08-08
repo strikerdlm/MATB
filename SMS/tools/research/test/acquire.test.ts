@@ -81,6 +81,25 @@ describe("research acquisition", () => {
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 
+  it("validates official metadata before promotion so an invalid record can be retried", async () => {
+    const root = await tempRoot("fac-isr-official-metadata-");
+    try {
+      const source = join(root, "source.pdf"); await writeFile(source, "official bytes");
+      const input = {
+        sourceId: "" as never, title: "Official source", authority: "AAAES", authorityRank: 1 as const,
+        canonicalUri: "https://example.test/official.pdf", targetPath: "docs/official.pdf", workspaceRoot: root,
+        stagingFile: source, language: "es" as const, mediaType: "application/pdf", licenseOrRestriction: "public",
+        retrievedAtUtc: "2026-08-08T17:00:00Z", expectedSha256: hash("official bytes"),
+      };
+      await expect(acquireOfficialSource(input)).rejects.toThrow("missing a required non-empty string");
+      await expect(readFile(join(root, "docs/official.pdf"))).rejects.toThrow();
+
+      const record = await acquireOfficialSource({ ...input, sourceId: "official-retry" as never });
+      expect(record.sourceId).toBe("official-retry");
+      await expect(verifyChecksum(join(root, "docs/official.pdf"), hash("official bytes"))).resolves.toBe(true);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   it("preserves vault provenance in generated front matter and rejects unsafe targets", async () => {
     const root = await tempRoot("fac-isr-note-");
     try {
@@ -91,6 +110,23 @@ describe("research acquisition", () => {
       expect(imported.endsWith("# Candidate\n\nSpanish source context.\n")).toBe(true);
       expect(record.review).toBe("unreviewed");
       await expect(copyObsidianNote({ sourceId: "unsafe" as never, sourcePath: source, targetPath: "../escape.md", workspaceRoot: root, importedAtUtc: "2026-08-08T17:00:00Z" })).rejects.toThrow("escapes the workspace root");
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  it("validates Obsidian metadata before promotion so an invalid record can be retried", async () => {
+    const root = await tempRoot("fac-isr-note-metadata-");
+    try {
+      const source = join(root, "source.md"); await writeFile(source, "# Candidate\n", "utf8");
+      const input = {
+        sourceId: "" as never, sourcePath: source, originalVaultPath: "Vault/source.md", targetPath: "imports/import.md",
+        workspaceRoot: root, importedAtUtc: "2026-08-08T17:00:00Z",
+      };
+      await expect(copyObsidianNote(input)).rejects.toThrow("missing a required non-empty string");
+      await expect(readFile(join(root, "imports/import.md"))).rejects.toThrow();
+
+      const record = await copyObsidianNote({ ...input, sourceId: "obsidian-retry" as never });
+      expect(record.sourceId).toBe("obsidian-retry");
+      await expect(readFile(join(root, "imports/import.md"), "utf8")).resolves.toContain("originalVaultPath");
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 
