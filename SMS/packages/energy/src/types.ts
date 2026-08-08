@@ -1,0 +1,15 @@
+import { z } from "zod";
+export type WattHours = number & { readonly __unit: "Wh" };
+export type NauticalMiles = number & { readonly __unit: "NM" };
+const id = z.string().trim().min(1);
+const utc = z.string().regex(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z$/).refine((v) => { const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z$/.exec(v); if (!m) return false; const d = new Date(v); return Number.isFinite(d.getTime()) && d.getUTCFullYear() === +m[1] && d.getUTCMonth() + 1 === +m[2] && d.getUTCDate() === +m[3] && d.getUTCHours() === +m[4] && d.getUTCMinutes() === +m[5] && d.getUTCSeconds() === +m[6]; });
+const pct = z.number().finite().min(0).max(100);
+export interface BatteryState { serialNumber: string; aircraftCompatibility: readonly string[]; chemistry: string; nominalCapacityWh: WattHours; cycles: number; ageDays: number; stateOfChargePercent: number; stateOfHealthPercent: number; cellImbalanceMv?: number; internalResistanceMohm?: number; temperatureC?: number; status: "released" | "restricted" | "quarantined" }
+export interface EnergySegment { id: string; kind: "climb" | "cruise" | "work" | "hold" | "return" | "diversion" | "contingency"; distanceNm: NauticalMiles; durationMinutes?: number; altitudeChangeFt?: number; expectedGroundspeedKt?: number; payloadPowerW?: number }
+export interface ReservePolicy { recoveryMinimumPercent: number; diversionMinimumPercent: number; contingencyMinimumPercent: number; uncertaintyMethod: "approved-model"; effectiveFromUtc: string }
+const BatterySchema = z.object({ serialNumber: z.string().regex(/^[A-Z0-9][A-Z0-9._-]{2,63}$/), aircraftCompatibility: z.array(id).min(1), chemistry: id, nominalCapacityWh: z.number().finite().positive().transform((v) => v as WattHours), cycles: z.number().int().nonnegative(), ageDays: z.number().finite().nonnegative(), stateOfChargePercent: pct, stateOfHealthPercent: pct, cellImbalanceMv: z.number().finite().nonnegative().optional(), internalResistanceMohm: z.number().finite().nonnegative().optional(), temperatureC: z.number().finite().optional(), status: z.enum(["released", "restricted", "quarantined"]) }).strict();
+const SegmentSchema = z.object({ id, kind: z.enum(["climb", "cruise", "work", "hold", "return", "diversion", "contingency"]), distanceNm: z.number().finite().nonnegative().transform((v) => v as NauticalMiles), durationMinutes: z.number().finite().nonnegative().optional(), altitudeChangeFt: z.number().finite().optional(), expectedGroundspeedKt: z.number().finite().positive().optional(), payloadPowerW: z.number().finite().nonnegative().optional() }).strict();
+const ReserveSchema = z.object({ recoveryMinimumPercent: pct, diversionMinimumPercent: pct, contingencyMinimumPercent: pct, uncertaintyMethod: z.literal("approved-model"), effectiveFromUtc: utc }).strict();
+export function parseBattery(value: unknown): BatteryState { return BatterySchema.parse(value); }
+export function parseEnergySegment(value: unknown): EnergySegment { return SegmentSchema.parse(value); }
+export function parseReservePolicy(value: unknown): ReservePolicy { return ReserveSchema.parse(value); }

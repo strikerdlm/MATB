@@ -1,0 +1,1 @@
+{"name":"@fac-isr/energy","version":"0.1.0","private":true,"type":"module","exports":{".":"./src/index.ts"},"scripts":{"test":"vitest run","typecheck":"tsc -p ../../tsconfig.base.json","build":"tsc -p tsconfig.build.json"},"dependencies":{"zod":"3.25.76"}}
