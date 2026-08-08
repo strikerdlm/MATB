@@ -70,7 +70,8 @@ export function buildHardBlockers(mission: MissionRevision, facts: Applicability
     blockers.push(blocker("CONFIGURATION_OUT_OF_SCOPE", CONCEPT_IDS.configurationOutOfScope, "configurationOutOfScope"));
   }
   const crewMission = facts.crew ? { ...mission, crew: facts.crew } : mission;
-  if (operational && mission.aircraft.some((aircraft) => !assignedQualifiedOperator(crewMission, aircraft.aircraftId, facts))) {
+  const operatorRequired = mission.state === "Active" || operational;
+  if (operatorRequired && mission.aircraft.some((aircraft) => !assignedQualifiedOperator(crewMission, aircraft.aircraftId, facts))) {
     blockers.push(blocker("MISSING_OPERATOR_PER_AIRCRAFT", CONCEPT_IDS.missingOperatorPerAircraft, "missingOperatorPerAircraft"));
   }
   const assignments = mission.aircraft.map((aircraft) => aircraft.operatorUserId ?? facts.assignedOperatorIds?.[aircraft.aircraftId]).filter((id): id is string => Boolean(id));
@@ -95,11 +96,20 @@ export function evaluateApplicability(mission: MissionRevision, requirement: Req
   const expression = requirement.applicabilityExpression.toLowerCase();
   const applicable = expression.includes("ifr") ? mission.flightRule === "IFR" : expression.includes("autonomous") || expression.includes("supervised") || expression.includes("state_aviation") ? mission.profileId === "fac-state-aviation" : true;
   if (!applicable) return { applicable: false, result: "not-reviewed", reason: "REQUIREMENT_NOT_APPLICABLE", affectedGates: [] };
-  if (merged.automationMode === "autonomous") return { applicable: true, result: "fail", reason: "AUTONOMOUS_FLIGHT_PROHIBITED", affectedGates: HARD_GATES };
+  const autonomousRequirement = expression.includes("autonomous");
+  if (autonomousRequirement) {
+    if (merged.automationMode === "autonomous") return { applicable: true, result: "fail", reason: "AUTONOMOUS_FLIGHT_PROHIBITED", affectedGates: HARD_GATES };
+    if (merged.automationMode === undefined) return evidenceResult(false, true, "AUTOMATION_MODE_REQUIRED");
+    return { applicable: false, result: "not-reviewed", reason: "AUTONOMOUS_MODE_NOT_SELECTED", affectedGates: [] };
+  }
   if (requirement.interpretationStatus === "draft" || requirement.interpretationStatus === "superseded") return { applicable: true, result: "not-reviewed", reason: "REQUIREMENT_NOT_REVIEWED", affectedGates: HARD_GATES };
   if (requirement.interpretationStatus === "qualified-review") return evidenceResult(false, true, "REQUIREMENT_SOURCE_REVIEW_PENDING");
   if ((requirement.sourceRefs ?? []).some((sourceRef) => sourceRef.reviewState !== "accepted")) return evidenceResult(false, true, "REQUIREMENT_EVIDENCE_NOT_ACCEPTED");
-  if (merged.status !== "approved" && (expression.includes("ifr") || expression.includes("supervised") || expression.includes("autonomous"))) return evidenceResult(false, true, "APPROVED_POLICY_REQUIRED");
+  const acceptedEvidence = (requirement.sourceRefs ?? []).some((sourceRef) => sourceRef.reviewState === "accepted");
+  const evidenceRequired = requirement.evidenceRequired === true || requirement.severity === "hard";
+  if (evidenceRequired && !acceptedEvidence) return evidenceResult(false, true, "ACCEPTED_EVIDENCE_REQUIRED");
+  const policyDependent = evidenceRequired || expression.includes("ifr") || expression.includes("supervised") || expression.includes("state_aviation");
+  if (merged.status !== "approved" && policyDependent) return evidenceResult(false, true, "APPROVED_POLICY_REQUIRED");
   if (merged.automationMode === "supervised" || expression.includes("supervised_automation")) {
     const complete = merged.supervisedAutomationApproved === true && (merged.humanInterventionCapable ?? false) && (merged.approvedCapabilityEvidence ?? merged.approvedCapabilityEvidence === true);
     return evidenceResult(complete, true, complete ? "SUPERVISED_AUTOMATION_EVIDENCE_ACCEPTED" : "SUPERVISED_AUTOMATION_EVIDENCE_INCOMPLETE");
