@@ -34,3 +34,30 @@ Result: PASS — typecheck and build completed successfully.
 ## Limitations
 
 The fixtures intentionally consume the existing pure APIs and controlled metadata; they do not infer regulatory authority, replace signed evidence, or claim that a passing predicate is institutional approval.
+
+## Round 1 review fixes
+
+The golden test now retains accepted synthetic evidence for mission evaluations and asserts exact `MISSION_DATA_EXPIRED` plus `metar-stale` evidence for stale METAR. Expired qualification asserts `MISSING_OPERATOR_PER_AIRCRAFT`; autonomous, armed, one-to-many, and research-swarm cases assert their exact exposed kernel blockers. Missing risk matrix and residual-risk mismatch use `evaluateRisk` with exact fail-closed reasons. Airspace conflict, reserve, and maintenance-release are explicitly marked unsupported by the current pure MissionRevision predicates and are tested to fail closed through `REQUIREMENT_SOURCE_REVIEW_PENDING`, with their limitations recorded in the fixture.
+
+The source ID, extraction hash, policy signature, and labels in these tests are synthetic controlled test metadata (`golden-source`, `golden-hash`, `signed-policy`); they are not claims of signed P0 provenance or qualified regulatory approval.
+
+Verification:
+
+```text
+npm test --workspace packages/safety-kernel -- golden.test.ts --run
+```
+
+Result: PASS — 1 test file, 2 tests.
+
+```text
+npm test --workspace packages/safety-kernel -- --run
+```
+
+Result: PASS — 11 test files, 109 tests.
+
+```text
+npm run typecheck --workspace packages/safety-kernel
+npm run build --workspace packages/safety-kernel
+```
+
+Result: PASS — typecheck and build completed successfully.
