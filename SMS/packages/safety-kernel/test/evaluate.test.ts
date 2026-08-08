@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { NormalizedRequirement } from "@fac-isr/evidence";
 import { evaluateMission, explainEvaluation, type MissionRevision, type PolicyPackage } from "../src/index.js";
+import type { ApplicabilityPolicy } from "../src/applicability.js";
 
 const nowUtc = "2026-08-08T17:00:00Z";
 
@@ -23,6 +24,13 @@ const approvedPolicy: PolicyPackage = {
     terrain: { maxAgeMinutes: 60, critical: true }, airspace: { maxAgeMinutes: 60, critical: true }, policy: { maxAgeMinutes: 60, critical: true }, regulation: { maxAgeMinutes: 60, critical: true },
   },
   delegatedAuthorities: [],
+};
+
+const expiredPolicyManifest: NonNullable<PolicyPackage["manifest"]> = {
+  schemaVersion: "1.0", packageId: "policy-manifest-1", kind: "policy", issuer: "FAC", version: "1.0.0",
+  issuedAtUtc: "2026-01-01T00:00:00Z", effectiveFromUtc: "2026-01-01T00:00:00Z", expiresAtUtc: "2026-08-08T16:00:00Z",
+  geographicScope: "CO", contentSha256: "manifest-content", signature: "manifest-signature", keyId: "key-1",
+  dependencies: [], files: [], qualification: "approved", caveats: [],
 };
 
 const acceptedEvidence = {
@@ -96,9 +104,34 @@ describe("deterministic safety evaluation", () => {
     expect(result).toMatchObject({ status: "blocked", evaluations: [expect.objectContaining({ result: "unknown", reason: "APPROVED_POLICY_REQUIRED" })] });
   });
 
-  it("expires an applicable requirement when its approved policy is expired", () => {
+  it("preserves an applicability unknown when its policy is expired", () => {
     const result = evaluateMission({ mission: mission(), requirements: [requirement("req-policy-expired")], policy: { ...approvedPolicy, status: "expired" }, nowUtc });
-    expect(result).toMatchObject({ status: "blocked", evaluations: [expect.objectContaining({ result: "expired", reason: "POLICY_EXPIRED" })] });
+    expect(result).toMatchObject({ status: "blocked", evaluations: [expect.objectContaining({ result: "unknown", reason: "APPROVED_POLICY_REQUIRED" })] });
+  });
+
+  it("does not overwrite an autonomous applicability failure with expired policy freshness", () => {
+    const expiredAutonomousPolicy: PolicyPackage & ApplicabilityPolicy = { ...approvedPolicy, status: "expired", automationMode: "autonomous" };
+    const result = evaluateMission({
+      mission: mission(), requirements: [requirement("req-autonomous-expired", { applicabilityExpression: "autonomous_flight" })],
+      policy: expiredAutonomousPolicy, nowUtc,
+    });
+    expect(result.evaluations[0]).toMatchObject({ result: "fail", reason: "AUTONOMOUS_FLIGHT_PROHIBITED" });
+    expect(result.blockers[0]).toMatchObject({ code: "REQUIREMENT_FAILED", conceptId: "racae94.94-155.autonomous-flight.prohibited" });
+  });
+
+  it("does not overwrite an IFR applicability unknown with expired manifest or snapshot freshness", () => {
+    const expiredIncompleteIfrPolicy: PolicyPackage & ApplicabilityPolicy = { ...approvedPolicy, ifrApproved: true, manifest: expiredPolicyManifest };
+    const result = evaluateMission({
+      mission: mission({
+        flightRule: "IFR",
+        dataSnapshots: [{ snapshotId: "expired-ifr-weather", kind: "weather", packageId: "weather-1", status: "expired", capturedAtUtc: "2026-08-08T14:00:00Z" }],
+      }),
+      requirements: [requirement("req-ifr-expired", { applicabilityExpression: "ifr" })],
+      policy: expiredIncompleteIfrPolicy,
+      nowUtc,
+    });
+    expect(result.evaluations[0]).toMatchObject({ result: "unknown", reason: "IFR_EVIDENCE_INCOMPLETE" });
+    expect(result.blockers[0]).toMatchObject({ code: "REQUIREMENT_UNKNOWN", conceptId: "flight-rules.ifr.evidence-incomplete" });
   });
 
   it("invalidates release gates for mission-level hard blockers", () => {

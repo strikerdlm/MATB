@@ -67,8 +67,9 @@ function missionFreshness(input: SafetyEvaluationInput, sourceEvidenceIds: reado
 function evaluateRequirement(input: SafetyEvaluationInput, requirement: NormalizedRequirement): RuleEvaluation {
   const applicability = evaluateApplicability(input.mission, requirement, input.policy);
   const sourceEvidenceIds = evidenceIds(requirement);
-  const policyResult = applicability.applicable ? policyFreshness(input, sourceEvidenceIds) : undefined;
-  const freshness = policyResult ?? (applicability.result === "pass" ? missionFreshness(input, sourceEvidenceIds) : undefined);
+  const freshness = applicability.result === "pass"
+    ? policyFreshness(input, sourceEvidenceIds) ?? missionFreshness(input, sourceEvidenceIds)
+    : undefined;
   return {
     requirementId: requirement.requirementId,
     result: freshness?.result ?? applicability.result,
