@@ -42,6 +42,25 @@ export type OperationalDataSnapshot<K extends OperationalSnapshotKind> = DataSna
 /** Explicit, unit-labelled minimum reserve facts. Unknown reserve fields are rejected. */
 export interface ReserveFacts { recoveryPercent: number; diversionPercent: number; contingencyPercent: number }
 export interface RiskAssessmentInput { hazardIds: readonly string[]; probability?: number; severity?: number; residualRiskBand?: string; acceptanceAuthorityId?: string; mitigationIds: readonly string[]; status: "draft" | "complete" | "blocked" | "accepted"; reserve?: ReserveFacts }
+/** Input facts for an approved-matrix-only risk decision. Duration is in hours. */
+export interface RiskEvaluationInput extends RiskAssessmentInput { policy: PolicyPackage | undefined; durationHours?: number }
+export interface RiskEvaluation { status: "accepted" | "blocked"; band?: string; reason: string }
+export interface FreshnessResult { status: "current" | "unknown" | "expired" | "blocked"; reason: string }
+/** A revision-bound, explicit authorization for one stale or missing data source. */
+export interface ControlledExceptionInput {
+  missionRevisionId: string;
+  sourceRevisionId: string;
+  snapshot: DataSnapshotRef;
+  alternateVerifiedSource?: DataSnapshotRef;
+  consequence?: string;
+  mitigation?: string;
+  validityEndUtc?: string;
+  safetyReview?: { reviewerId: string; approved: boolean };
+  riskAuthorityId?: string;
+  residualRiskBand?: string;
+  operatorAcknowledged?: boolean;
+}
+export interface ExceptionResult { status: "accepted" | "blocked" | "expired"; reason: string }
 export interface MissionRevision { id: string; missionId: string; revision: number; profileId: "fac-state-aviation" | "private-certified" | "civil-public"; state: MissionState; aircraft: readonly AircraftAssignment[]; gcs?: GroundControlStationFacts; payload?: PayloadFacts; battery?: BatteryFacts; software?: SoftwareBaseline; flightRule: FlightRule; visualCondition: VisualCondition; altitude?: AltitudeProfile; schedule?: MissionSchedule; configuration: "unarmed-isr" | "unarmed-support" | "armed" | "strike"; route: RouteSafetyFacts; crew: readonly CrewAssignment[]; evidenceSnapshotId: string; policyPackageId?: string; dataSnapshots: readonly DataSnapshotRef[]; riskAssessment: RiskAssessmentInput }
 export interface RuleEvaluation { requirementId: string; result: "pass" | "fail" | "unknown" | "expired" | "not-reviewed"; severity: "hard" | "soft" | "advisory"; reason: string; evidenceRefs: readonly string[]; affectedGates: readonly GateName[] }
 export interface SafetyBlocker { code: string; conceptId: string; severity: "hard" | "policy" | "data" | "authority"; explanationKey: string; evidenceRefs: readonly string[] }
@@ -108,4 +127,7 @@ export function parseSafetyEvaluationResult(input: unknown): SafetyEvaluationRes
 export function createSafetyEvaluationResult(input: SafetyEvaluationResult): SafetyEvaluationResult { return parseSafetyEvaluationResult(input); }
 export function createTransitionResult(input: TransitionResult): TransitionResult { return freeze(TransitionResultSchema.parse(input)); }
 export function createInvalidationResult(input: InvalidationResult): InvalidationResult { return freeze(InvalidationResultSchema.parse(input)); }
+export function createRiskEvaluation(input: RiskEvaluation): RiskEvaluation { return freeze({ ...input }); }
+export function createFreshnessResult(input: FreshnessResult): FreshnessResult { return freeze({ ...input }); }
+export function createExceptionResult(input: ExceptionResult): ExceptionResult { return freeze({ ...input }); }
 export type { EvidenceReference, NormalizedRequirement, SignedPackageManifest };
