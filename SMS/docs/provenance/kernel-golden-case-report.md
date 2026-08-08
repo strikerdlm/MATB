@@ -31,6 +31,23 @@ npm run build --workspace packages/safety-kernel
 
 Result: PASS — typecheck and build completed successfully.
 
+## Round 3 manifest-verification fix
+
+The evidence manifest verifier now treats only the exact `kernel-golden-case-report.md` basename as non-payload provenance metadata, alongside its three existing detached-control files. Payload inventory and per-file hashes remain strict. A manifest regression test confirms the report is allowed while the existing extra-file rejection remains covered.
+
+Verification:
+
+```text
+npm test --workspace packages/evidence -- --run
+npm run typecheck --workspace packages/evidence
+SMS_EVIDENCE_VERIFY_AS_OF=2026-08-09T00:00:00Z npm run verify:offline
+npm test -- --run
+npm run typecheck
+npm run build --workspace packages/evidence
+```
+
+Result: PASS — evidence 37 tests; offline verification PASS; full workspace 147 tests; typechecks and build passed.
+
 ## Round 2 review fixes
 
 Every class fixture now runs through `evaluateMission`; normal VFR and explicit-evidence IC IFR cases are asserted ready, while the research swarm is evaluated as blocked. IFR negative cases remove policy approval, equipment, segregated airspace, and authorization independently and assert `IFR_EVIDENCE_INCOMPLETE`. Supported blocked fixtures assert their exact release-facing blocker codes/reasons and non-empty synthetic evidence references. Unsupported airspace/reserve/maintenance cases assert `REQUIREMENT_SOURCE_REVIEW_PENDING`, non-empty evidence, and non-empty documented limitations.

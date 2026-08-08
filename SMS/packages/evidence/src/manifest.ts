@@ -11,7 +11,9 @@ const PACKAGE_ID = /^[a-z0-9][a-z0-9._-]{2,127}$/;
 // promotion policy exist; this prevents 1.0.0-alpha being treated as 1.0.0.
 const VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const UTC = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{3})?Z$/;
-const CONTROL_FILES = new Set(["evidence-package-manifest.json", "evidence-package-manifest.sig", "evidence-package-public-key.pem"]);
+// Detached controls and the Task 7 provenance report are metadata outside the
+// signed payload inventory; all payload files remain inventory/hash checked.
+const CONTROL_FILES = new Set(["evidence-package-manifest.json", "evidence-package-manifest.sig", "evidence-package-public-key.pem", "kernel-golden-case-report.md"]);
 
 export interface VerificationCheck { id: string; status: "pass" | "fail" | "warn"; reason?: string; }
 export interface VerificationReport { ok: boolean; checks: readonly VerificationCheck[]; packageId: string; }
