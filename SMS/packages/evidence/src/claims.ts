@@ -11,7 +11,7 @@ export function assertClaimTraceable(claim: NormalizedRequirement, register: Sou
   }
   for (const evidence of claim.sourceRefs) {
     const source = register.get(evidence.sourceId as SourceId);
-    if (source === undefined || source.review !== "accepted" || register.isSuperseded(evidence.sourceId as SourceId)) {
+    if (source === undefined || source.review !== "accepted" || source.supersededBy !== undefined || register.isSuperseded(evidence.sourceId as SourceId)) {
       throw new Error(`Claim ${claim.requirementId} has no accepted evidence for source ${evidence.sourceId}`);
     }
     if (evidence.reviewState !== "accepted") {

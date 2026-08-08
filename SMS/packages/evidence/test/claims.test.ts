@@ -48,4 +48,10 @@ describe("assertClaimTraceable", () => {
     const missingBounds = new SourceRegister(); missingBounds.append({ ...source, validUntilUtc: undefined });
     expect(() => assertClaimTraceable(claim, missingBounds, "2026-08-08T00:00:00Z")).toThrow("bounds");
   });
+
+  it("rejects evidence from a legacy superseded source record", () => {
+    const register = new SourceRegister();
+    register.append({ ...source, supersededBy: "replacement" as SourceRecord["sourceId"] });
+    expect(() => assertClaimTraceable(claim, register, "2026-08-08T00:00:00Z")).toThrow("accepted evidence");
+  });
 });
