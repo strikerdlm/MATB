@@ -78,14 +78,37 @@ describe("RACAE 94 normalized evidence", () => {
     const expected = new Map([
       ["94.155", 38], ["94.201", 39], ["94.250", 42], ["94.705", 66], ["94.710", 68], ["94.715", 69],
     ]);
-    expect(artifact.requirements).toHaveLength(6);
+    expect(artifact.requirements).toHaveLength(7);
+    const expectedExcerptBySection: Record<string, string> = {
+      "94.155": "(a) La operación en modo de vuelo autónomo o con aeronaves autónomas está prohibida.\n\n(b) El vuelo en modo automatizado supervisado, se permitirá en el empleo de UAS/RPAS en misiones de aspersión aérea de cultivos y/o vigilancia, registro fotográfico, verificación y monitoreo de terrenos y zonas de interés militar y/o policiales específicos, según los roles, misiones y capacidades distintivas de cada EAE. Sin embargo, en todo momento el operador o piloto de UAS/RPAS estará supervisando y monitoreando el vuelo y estará en la capacidad de realizar un cambio en el patrón de vuelo inminente, en el evento que se identifique cualquier riesgo, emergencia o a instrucciones del ATC.",
+      "94.201": "(a) Un Piloto Remoto y/u Operador, no podrá comandar más de un UAS/RPAS al mismo tiempo, es decir, cada aeronave desde su encendido hasta su aterrizaje y con motores apagados, estará bajo el mando de un operador o piloto.",
+      "94.250": "94.250 Operación de UAS/RPAS en enjambre\n[Reservado]",
+      "94.705": "(a) La autorización que emita cada EAE para la operación de sus UAS/RPAS en una ubicación geográfica determinada, debe obedecer a la medición efectiva de la tolerabilidad del riesgo, producto de la estructuración de la Matriz de Gestión de Riesgos, para tal efecto, debe establecer la Identificación de peligros específicos en la operación de UAS y RPAS, Evaluación de riesgos mediante matrices de probabilidad y severidad, Definición de niveles aceptables de seguridad operacional (NASO) específicos para la operación y Políticas de seguridad operacional, alineadas con la misionalidad de cada Ente de Aviación de Estado.\n\n(b) Cada EAE debe implementar un formato de medición de riesgo, que permita tomar oportunamente acciones de mitigación para los riesgos asociados al factor técnico, operacional y humano y que se aplicará antes del cumplimiento de cada misión.\n\n(c) Siempre que el Sistema cuente con la opción de descarga de la telemetría de vuelo, el EAE debe implementar un programa de supervisión de las operaciones, mediante la revisión periódica y aleatoria de los datos registrados, con el fin de identificar oportunamente desviaciones a los procedimientos estandarizados y cualquier debilidad que pueda identificarse oportunamente, en especial en lo relacionado con factores humanos.\n\n(d) Las telemetrías y/o datos de vuelo registrados automáticamente en la memoria de los UAS/RPAS, deben almacenarse para facilitar la supervisión operacional. Para los UAS/RPA, las telemetrías e imágenes/videos obtenidos de la carga útil, deben descargarse después de cada vuelo y/o almacenarse cronológicamente por un período mínimo de un (01) año.",
+      "94.710": "(k) Cada EAE deberá contar con un Plan de Respuesta a Emergencias (ERP) diseñado específicamente para la gestión de contingencias relacionadas con el uso de Sistemas de Aeronaves No Tripuladas (UAS/RPAS). Este plan debe contemplar al menos los siguientes cinco aspectos fundamentales:\n\n(1) Se deben establecer procedimientos claros para actuar ante la pérdida parcial o total del control o del enlace de comunicaciones con el UAS/RPAS con el fin de reducir los riesgos asociados.\n\n(2) El plan debe establecer procedimientos en caso de fallo en sistemas críticos cuya falla comprometa la seguridad y prever protocolos para ejecutar aterrizajes de forma segura y controlada.\n\n(3) Deben contemplarse acciones ante eventos como la intrusión no autorizada de UAS/RPAS en espacios aéreos restringidos o controlados. El ERP debe incluir medidas de coordinación con autoridades civiles y militares para la respuesta oportuna y eficaz ante este tipo de incidentes.\n\n(4) El plan debe establecer procedimientos para la detección, identificación y neutralización segura de UAS/RPAS que representen una amenaza en zonas protegidas o de alto valor estratégico.\n\n(5) El plan debe establecer un procedimiento de contingencia para aterrizaje con armamento fallido o caliente.\n\n(6) Cada Ente de Aviación de Estado deberá garantizar la revisión de su Plan de Respuesta a Emergencias (PRE) con una periodicidad mínima anual, así como la ejecución de ejercicios de validación, ya sea mediante simulacros de mesa o ejercicios funcionales, al menos una vez por año. Adicionalmente, deberá realizar simulacros integrales o completos cada dos (2) años, con el fin de verificar la efectividad del plan.",
+      "94.715": "(a) Los EAE cumplirán con lo establecido en el numeral 91.695 del RACAE 91 Reglas de vuelo y operación y sus Enmiendas, para garantizar la operación segura de los UAS/RPAS, además de los tiempos contemplados en la Tabla 1-5, Tiempos de vuelo autorizados para tripulaciones de UAS/RPAS.\n\n(2) Normas generales para el descanso: tiempo máximo de disponibilidad y comisión, descanso por tiempo de disponibilidad o comisión operativa y mecanismos de control de la fatiga. El Tiempo máximo de vuelo diario para la tripulación remota y exposición a las pantallas, para Operadores y Pilotos Remotos, se específica en la tabla 1-5 Tiempos de vuelo autorizados para tripulaciones de UAS/RPAS.",
+    };
+    const expectedRestPolicyExcerpt = "(b) Cada EAE publicará un documento donde se reglamente el tiempo de descanso de las tripulaciones de UAS/RPAS, de acuerdo con su clasificación, y en el cual se contemple:\n\n(1) Definiciones y conceptos: asignación y programación de vuelo, comisión del servicio, disponibilidad de vuelo, período de descanso, tiempo de descanso estándar, tiempo de operatividad, tiempo de servicio para vuelo, tripulación (mínima, aumentada, entre otros).\n\n(3) Restricciones: limitaciones generales para la designación de tripulaciones, extensión del tiempo máximo de servicio o de vuelo, excepciones al cumplimiento de las políticas de descanso, entre otras.\n\n(4) Procedimientos: Proceso de evaluación, consideraciones especiales, autoridades, niveles de mando y mecanismos de control para las excepciones.";
+    const expectedLocators: Record<string, Array<[number, string | undefined]>> = {
+      "fac.racae94.autonomous-flight.prohibited": [[38, "(a)"], [38, "(b)"]],
+      "fac.racae94.one-pilot-one-uas": [[39, "(a)"]],
+      "fac.racae94.swarm-reserved": [[42, undefined]],
+      "fac.racae94.risk-telemetry-retention": [[66, "(a)"], [66, "(b)"], [66, "(c)"], [66, "(d)"]],
+      "fac.racae94.emergency-response-plan": [[68, "(k)"], [69, "(k)(1)"]],
+      "fac.racae94.rest-policy-document": [[69, "(b)"], [69, "(b)(1)"], [69, "(b)(3)"], [69, "(b)(4)"]],
+      "fac.racae94.fatigue-screen-exposure": [[69, "(a)"], [69, "(b)(2)"]],
+    };
     for (const requirement of artifact.requirements) {
       const first = requirement.sourceRefs[0];
       expect(first.extractionSha256).toBe(extractionSha);
       expect(first.quoteLanguage).toBe("es");
       expect(first.locator.section).toMatch(/^94\.\d{3}$/);
       expect(first.locator.page).toBe(expected.get(first.locator.section!));
-      expect(requirement.sourceTextSpanish.length).toBeGreaterThan(20);
+      expect(requirement.sourceRefs.map((reference) => [reference.locator.page, reference.locator.paragraph])).toEqual(expectedLocators[requirement.predicate]);
+      expect(requirement.sourceRefs.every((reference) => reference.extractionSha256 === extractionSha)).toBe(true);
+      const expectedExcerpt = requirement.predicate === "fac.racae94.rest-policy-document"
+        ? expectedRestPolicyExcerpt
+        : expectedExcerptBySection[first.locator.section!];
+      expect(requirement.sourceTextSpanish).toBe(expectedExcerpt);
       expect(requirement.interpretationStatus).not.toBe("approved");
       const regenerated = normalizeRequirement({
         sourceRefs: requirement.sourceRefs,
@@ -104,6 +127,8 @@ describe("RACAE 94 normalized evidence", () => {
       });
       expect(regenerated.requirementId).toBe(requirement.requirementId);
     }
+    expect(artifact.requirements.find((item) => item.predicate === "fac.racae94.rest-policy-document")?.Spanish).toContain("publicar");
+    expect(artifact.requirements.find((item) => item.predicate === "fac.racae94.autonomous-flight.prohibited")?.Spanish).toContain("aspersión aérea de cultivos");
     expect(artifact.requirements.find((item) => item.sourceRefs[0].locator.section === "94.250")?.unresolvedRationale).toContain("Reserved");
   });
 
@@ -120,17 +145,34 @@ describe("RACAE 94 normalized evidence", () => {
     expect(() => validateRequirementCitations([requirement], register())).not.toThrow();
   });
 
+  it("validates checked-in qualified-review citations against the checked-in in-review register", async () => {
+    const artifact = JSON.parse(await readFile(resolve(root, "docs/regulations/normalized/racae94-amendment-2.json"), "utf8")) as { requirements: ReviewedNormalizedRequirement[] };
+    const sourceRegister = SourceRegister.fromJsonl(await readFile(resolve(root, "docs/source-register/sources.jsonl"), "utf8"));
+    expect(() => validateRequirementCitations(artifact.requirements, sourceRegister)).not.toThrow();
+    const tampered = normalizeRequirement(input({ sourceRefs: [{ ...input().sourceRefs[0], extractionSha256: "b".repeat(64) }] }));
+    expect(() => validateRequirementCitations([tampered], sourceRegister)).toThrow("extraction hash does not match");
+  });
+
   it("rejects malformed locators and mismatched extraction hashes", () => {
     expect(() => normalizeRequirement(input({ sourceRefs: [{ ...input().sourceRefs[0], locator: { section: "94.15", page: 0 } }] }))).toThrow("malformed section locator");
     const requirement = normalizeRequirement(input());
     expect(() => validateRequirementCitations([requirement], register(source({ extractionSha256: "a".repeat(64) })))).toThrow("extraction hash does not match");
   });
 
-  it("rejects falsely approved rules without accepted source evidence", () => {
-    const accepted = { status: "accepted", reviewerRole: "qualified authority", reviewerId: "qualified-reviewer", rationale: "Accepted." } as const;
+  it("requires deterministic current signed provenance before a hard rule can be approved", () => {
+    const accepted = { status: "accepted", reviewerRole: "qualified authority", reviewerId: "qualified-reviewer", reviewedAtUtc: "2026-08-08T18:00:00Z", rationale: "Accepted." } as const;
     const requirement = normalizeRequirement(input({ interpretationStatus: "approved", sourceLanguageReview: accepted, applicabilityReview: accepted }));
-    expect(() => validateRequirementCitations([requirement], register(source({ review: "in-review" })))).toThrow("approved without accepted source evidence");
-    expect(() => validateRequirementCitations([requirement], register(source()))).not.toThrow();
+    const asOfUtc = "2026-08-09T00:00:00Z";
+    expect(() => validateRequirementCitations([requirement], register(source({ review: "in-review" })), asOfUtc)).toThrow("current signed source evidence");
+    expect(() => validateRequirementCitations([requirement], register(source()), asOfUtc)).not.toThrow();
+    expect(() => validateRequirementCitations([requirement], register(source()))).toThrow("asOfUtc");
+    expect(() => validateRequirementCitations([requirement], register(source()), "2026-02-30T00:00:00Z")).toThrow("asOfUtc");
+    expect(() => validateRequirementCitations([requirement], register(source({ reviewSignature: undefined })), asOfUtc)).toThrow("current signed source evidence");
+    expect(() => validateRequirementCitations([requirement], register(source({ validFromUtc: undefined })), asOfUtc)).toThrow("current signed source evidence");
+    expect(() => validateRequirementCitations([requirement], register(source({ validUntilUtc: "2026-08-08T00:00:00Z" })), asOfUtc)).toThrow("current signed source evidence");
+    expect(() => validateRequirementCitations([requirement], register(source({ supersededBy: "racae-94-replacement" as never })), asOfUtc)).toThrow("current signed source evidence");
+    const reviewsWithoutTimestamps = normalizeRequirement(input({ interpretationStatus: "approved", sourceLanguageReview: { ...accepted, reviewedAtUtc: undefined }, applicabilityReview: accepted }));
+    expect(() => validateRequirementCitations([reviewsWithoutTimestamps], register(source()), asOfUtc)).toThrow("accepted timestamped review");
   });
 
   it("rejects English-only authority and preserves IDs/predicates across locale changes", () => {

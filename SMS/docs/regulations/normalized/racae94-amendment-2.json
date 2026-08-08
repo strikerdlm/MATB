@@ -20,9 +20,9 @@
         { "evidenceId": "racae94-94.155-b", "sourceId": "racae-94-enm2", "edition": "Enmienda 2", "locator": { "section": "94.155", "page": 38, "paragraph": "(b)" }, "quoteLanguage": "es", "extractionSha256": "77cc55931dd862884751fc2510ef4d16def1546e8712195fff2500f2ea482a69", "reviewState": "unreviewed" }
       ],
       "sourceTextSpanish": "(a) La operación en modo de vuelo autónomo o con aeronaves autónomas está prohibida.\n\n(b) El vuelo en modo automatizado supervisado, se permitirá en el empleo de UAS/RPAS en misiones de aspersión aérea de cultivos y/o vigilancia, registro fotográfico, verificación y monitoreo de terrenos y zonas de interés militar y/o policiales específicos, según los roles, misiones y capacidades distintivas de cada EAE. Sin embargo, en todo momento el operador o piloto de UAS/RPAS estará supervisando y monitoreando el vuelo y estará en la capacidad de realizar un cambio en el patrón de vuelo inminente, en el evento que se identifique cualquier riesgo, emergencia o a instrucciones del ATC.",
-      "Spanish": "Prohibir el vuelo autónomo; permitir automatización supervisada únicamente con supervisión humana continua y capacidad de intervención o cambio inmediato del patrón de vuelo ante riesgo, emergencia o instrucción ATC.",
-      "EnglishControlled": "Prohibit autonomous flight; allow supervised automation only with continuous human supervision and capability to intervene or immediately change the flight pattern for risk, emergency, or ATC instruction.",
-      "applicabilityExpression": "state_aviation && uas_rpas_operation",
+      "Spanish": "Prohibir el vuelo autónomo. Permitir el vuelo automatizado supervisado únicamente en misiones de aspersión aérea de cultivos y/o vigilancia, registro fotográfico, verificación y monitoreo de terrenos y zonas específicas de interés militar y/o policial, conforme a los roles, misiones y capacidades distintivas de cada EAE; exigir supervisión y monitoreo continuos del Operador o Piloto de UAS/RPAS y capacidad de cambio inminente del patrón de vuelo ante riesgo, emergencia o instrucción ATC.",
+      "EnglishControlled": "Prohibit autonomous flight. Allow supervised automated flight only for crop spraying and/or surveillance, photographic recording, verification, and monitoring of specific terrain and areas of military and/or police interest, according to each EAE's roles, missions, and distinctive capabilities; require continuous UAS/RPAS Operator or Pilot supervision and monitoring and the capability for an imminent flight-pattern change in response to risk, emergency, or ATC instruction.",
+      "applicabilityExpression": "state_aviation && uas_rpas_operation && supervised_automation && source_listed_mission_scope",
       "severity": "hard",
       "evidenceRequired": true,
       "effectiveFromUtc": "2025-06-16T05:00:00Z",
@@ -107,6 +107,27 @@
       "reviewerIds": ["pending-qualified-fac-aaaes-review"],
       "sourceLanguageReview": { "status": "qualified-review", "reviewerRole": "qualified FAC/AAAES Spanish-language reviewer", "reviewerId": "pending-qualified-fac-aaaes-review", "rationale": "Primary Spanish extraction is checksum-linked; qualified human review remains pending." },
       "applicabilityReview": { "status": "pending", "reviewerRole": "FAC ISR emergency-response authority", "reviewerId": "pending-fac-isr-erp-review", "rationale": "Mission-specific ERP implementation and any armament-related procedure require qualified operational authorization." }
+    },
+    {
+      "requirementId": "req-31f873c7e0b12d2fff9f",
+      "predicate": "fac.racae94.rest-policy-document",
+      "sourceRefs": [
+        { "evidenceId": "racae94-94.715-b", "sourceId": "racae-94-enm2", "edition": "Enmienda 2", "locator": { "section": "94.715", "page": 69, "paragraph": "(b)" }, "quoteLanguage": "es", "extractionSha256": "77cc55931dd862884751fc2510ef4d16def1546e8712195fff2500f2ea482a69", "reviewState": "unreviewed" },
+        { "evidenceId": "racae94-94.715-b1", "sourceId": "racae-94-enm2", "edition": "Enmienda 2", "locator": { "section": "94.715", "page": 69, "paragraph": "(b)(1)" }, "quoteLanguage": "es", "extractionSha256": "77cc55931dd862884751fc2510ef4d16def1546e8712195fff2500f2ea482a69", "reviewState": "unreviewed" },
+        { "evidenceId": "racae94-94.715-b3", "sourceId": "racae-94-enm2", "edition": "Enmienda 2", "locator": { "section": "94.715", "page": 69, "paragraph": "(b)(3)" }, "quoteLanguage": "es", "extractionSha256": "77cc55931dd862884751fc2510ef4d16def1546e8712195fff2500f2ea482a69", "reviewState": "unreviewed" },
+        { "evidenceId": "racae94-94.715-b4", "sourceId": "racae-94-enm2", "edition": "Enmienda 2", "locator": { "section": "94.715", "page": 69, "paragraph": "(b)(4)" }, "quoteLanguage": "es", "extractionSha256": "77cc55931dd862884751fc2510ef4d16def1546e8712195fff2500f2ea482a69", "reviewState": "unreviewed" }
+      ],
+      "sourceTextSpanish": "(b) Cada EAE publicará un documento donde se reglamente el tiempo de descanso de las tripulaciones de UAS/RPAS, de acuerdo con su clasificación, y en el cual se contemple:\n\n(1) Definiciones y conceptos: asignación y programación de vuelo, comisión del servicio, disponibilidad de vuelo, período de descanso, tiempo de descanso estándar, tiempo de operatividad, tiempo de servicio para vuelo, tripulación (mínima, aumentada, entre otros).\n\n(3) Restricciones: limitaciones generales para la designación de tripulaciones, extensión del tiempo máximo de servicio o de vuelo, excepciones al cumplimiento de las políticas de descanso, entre otras.\n\n(4) Procedimientos: Proceso de evaluación, consideraciones especiales, autoridades, niveles de mando y mecanismos de control para las excepciones.",
+      "Spanish": "Cada EAE debe publicar, conforme a la clasificación de sus tripulaciones UAS/RPAS, un documento que reglamente el tiempo de descanso e incluya definiciones y conceptos, restricciones y procedimientos de evaluación, autoridad, niveles de mando y control para las excepciones.",
+      "EnglishControlled": "Each EAE must publish, according to its UAS/RPAS crew classification, a document governing rest time that includes definitions and concepts, restrictions, and evaluation, authority, command-level, and control procedures for exceptions.",
+      "applicabilityExpression": "state_aviation && uas_rpas_crew && fatigue_management && classification_appropriate_rest_policy",
+      "severity": "hard",
+      "evidenceRequired": true,
+      "effectiveFromUtc": "2025-06-16T05:00:00Z",
+      "interpretationStatus": "qualified-review",
+      "reviewerIds": ["pending-qualified-fac-aaaes-review", "pending-aerospace-medicine-review"],
+      "sourceLanguageReview": { "status": "qualified-review", "reviewerRole": "qualified FAC/AAAES Spanish-language reviewer", "reviewerId": "pending-qualified-fac-aaaes-review", "rationale": "Primary Spanish extraction is checksum-linked; the EAE-specific publication remains subject to qualified review." },
+      "applicabilityReview": { "status": "pending", "reviewerRole": "aerospace medicine and human performance authority", "reviewerId": "pending-aerospace-medicine-review", "rationale": "The classification-appropriate local rest document requires operational and human-performance review before release." }
     },
     {
       "requirementId": "req-05a239ad04957cd55f28",

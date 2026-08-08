@@ -4,7 +4,6 @@ import type { EvidenceReference, NormalizedRequirement, RequirementTranslation, 
 
 const SHA256 = /^[a-f0-9]{64}$/;
 const SECTION = /^94\.\d{3}$/;
-const UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
 const STATUSES = ["draft", "qualified-review", "approved", "superseded"] as const;
 type InterpretationStatus = (typeof STATUSES)[number];
 
@@ -46,8 +45,26 @@ export interface ControlledTranslationEvidence {
   sourceLanguageReview: RequirementReview;
 }
 
-function assertUtc(value: string, field: string): void {
-  if (!UTC.test(value) || Number.isNaN(Date.parse(value))) throw new Error(`${field} must be an exact UTC timestamp`);
+/** Exact UTC validation deliberately rejects calendar rollovers such as 2026-02-30. */
+function isExactUtc(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{3})?Z$/.exec(value);
+  if (match === null) return false;
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText);
+  if (month < 1 || month > 12 || hour > 23 || minute > 59 || second > 59) return false;
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+  return day >= 1 && day <= daysInMonth;
+}
+
+function assertUtc(value: unknown, field: string): asserts value is string {
+  if (!isExactUtc(value)) throw new Error(`${field} must be an exact UTC timestamp`);
 }
 
 function assertNonEmpty(value: unknown, field: string): asserts value is string {
@@ -136,7 +153,16 @@ export function normalizeRequirement(input: NormalizationInput): ReviewedNormali
 }
 
 /** Verify locators and source/extraction/review provenance before a rule can be used. */
-export function validateRequirementCitations(requirements: readonly ReviewedNormalizedRequirement[], register: SourceRegister): void {
+/**
+ * Validate citation provenance. For approved hard requirements `asOfUtc` is mandatory:
+ * approval is a deterministic claim about an explicitly stated point in time, never about
+ * the machine clock used to run validation.
+ */
+export function validateRequirementCitations(
+  requirements: readonly ReviewedNormalizedRequirement[],
+  register: SourceRegister,
+  asOfUtc?: string,
+): void {
   for (const requirement of requirements) {
     if (!Array.isArray(requirement.sourceRefs) || requirement.sourceRefs.length === 0) throw new Error(`${requirement.requirementId} has no evidence`);
     let spanishAuthority = false;
@@ -148,13 +174,35 @@ export function validateRequirementCitations(requirements: readonly ReviewedNorm
         throw new Error(`${requirement.requirementId} extraction hash does not match ${reference.sourceId}`);
       }
       if (reference.quoteLanguage === "es" && (source.language === "es" || source.language === "multi")) spanishAuthority = true;
-      if (requirement.interpretationStatus === "approved" && (source.review !== "accepted" || reference.reviewState !== "accepted" || register.isSuperseded(reference.sourceId as SourceId))) {
-        throw new Error(`${requirement.requirementId} is approved without accepted source evidence`);
+      if (requirement.interpretationStatus === "approved" && requirement.severity === "hard") {
+        assertUtc(asOfUtc, `${requirement.requirementId} approved hard requirement asOfUtc`);
+        if (
+          source.review !== "accepted" ||
+          source.supersededBy !== undefined ||
+          reference.reviewState !== "accepted" ||
+          register.isSuperseded(reference.sourceId as SourceId) ||
+          typeof source.reviewerId !== "string" || source.reviewerId.trim() === "" ||
+          typeof source.reviewSignature !== "string" || source.reviewSignature.trim() === "" ||
+          !isExactUtc(source.reviewedAtUtc) ||
+          !isExactUtc(source.validFromUtc) ||
+          !isExactUtc(source.validUntilUtc) ||
+          Date.parse(source.validFromUtc) > Date.parse(asOfUtc) ||
+          Date.parse(source.validUntilUtc) <= Date.parse(asOfUtc)
+        ) {
+          throw new Error(`${requirement.requirementId} is approved without current signed source evidence`);
+        }
       }
     }
     if (!spanishAuthority) throw new Error(`${requirement.requirementId} lacks Spanish-language authority`);
-    if (requirement.interpretationStatus === "approved" && (requirement.sourceLanguageReview.status !== "accepted" || requirement.applicabilityReview.status !== "accepted")) {
-      throw new Error(`${requirement.requirementId} is approved without qualified review`);
+    if (requirement.interpretationStatus === "approved" && requirement.severity === "hard") {
+      if (
+        requirement.sourceLanguageReview.status !== "accepted" ||
+        requirement.applicabilityReview.status !== "accepted" ||
+        !isExactUtc(requirement.sourceLanguageReview.reviewedAtUtc) ||
+        !isExactUtc(requirement.applicabilityReview.reviewedAtUtc)
+      ) {
+        throw new Error(`${requirement.requirementId} is approved without accepted timestamped review`);
+      }
     }
   }
 }
