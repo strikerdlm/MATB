@@ -54,8 +54,14 @@ function assertUtc(value: string): void {
 
 function hasFourAcceptedGates(approvals: readonly GateApproval[] | undefined): boolean {
   if (!approvals) return false;
-  return GATE_ORDER.every((gate) => approvals.filter((approval) => approval.gate === gate).length === 1
-    && approvals.some((approval) => approval.gate === gate && approval.decision === "accept" && approval.valid));
+  return GATE_ORDER.every((gate) => {
+    const decisions = approvals.filter((approval) => approval.gate === gate);
+    if (gate !== "operator") return decisions.length === 1 && decisions[0]?.decision === "accept" && decisions[0]?.valid === true;
+    const aircraftIds = decisions.map((approval) => approval.aircraftId);
+    return decisions.length > 0 && aircraftIds.every((aircraftId): aircraftId is string => aircraftId !== undefined)
+      && new Set(aircraftIds).size === aircraftIds.length
+      && decisions.every((approval) => approval.decision === "accept" && approval.valid);
+  });
 }
 
 function assertReleaseReady(input: TransitionInput): void {

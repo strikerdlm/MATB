@@ -73,7 +73,17 @@ export interface SafetyBlocker { code: string; conceptId: string; severity: "har
 export interface SafetyEvaluationResult { missionRevisionId: string; status: "ready" | "conditional" | "blocked" | "degraded"; evaluations: readonly RuleEvaluation[]; blockers: readonly SafetyBlocker[]; invalidatedGates: readonly GateName[]; kernelVersion: string }
 export interface SafetyEvaluationInput { mission: MissionRevision; requirements: readonly NormalizedRequirement[]; policy: PolicyPackage | undefined; nowUtc: string }
 export interface PolicyPackage { packageId: string; version: string; status: "draft" | "approved" | "expired" | "revoked"; riskMatrix?: { probabilityLevels: number; severityLevels: number; cells: readonly string[] }; nasoThresholds?: readonly { band: string; maxDurationHours?: number }[]; delegatedAuthorities: readonly { role: GateName; userRole: string; bands: readonly string[] }[]; freshness: Record<DataSnapshotRef["kind"], { maxAgeMinutes: number; critical: boolean }>; signature: string; manifest?: SignedPackageManifest }
-export interface GateApproval { missionRevisionId: string; gate: GateName; decision: "accept" | "block" | "escalate"; valid: boolean }
+export type GateDecision = "accept" | "block" | "escalate";
+export type GateActorRole = "maintainer" | "operator" | "safety" | "commander";
+/** A signed, revision-bound decision. Operator decisions are scoped to one aircraft. */
+export interface GateApproval { missionRevisionId: string; gate: GateName; actorUserId: string; actorRole: GateActorRole; aircraftId?: string; decision: GateDecision; valid: boolean; occurredAtUtc: string; evidenceSnapshotId: string; policyVersion: string; reason: string }
+/** A decision prepared for deterministic append-only audit recording. */
+export interface GateDecisionInput extends GateApproval { sequence: number; previousHash: string | null }
+export interface GateDecisionEvent extends GateApproval { eventType: "gate.decision"; sequence: number; previousHash: string | null; eventHash: string }
+export interface GateInvalidationEvent { eventType: "gate.invalidation"; sequence: number; previousHash: string | null; eventHash: string; missionRevisionId: string; gate: GateName; actorUserId: string; actorRole: GateActorRole; occurredAtUtc: string; affectedRequirementIds: readonly string[]; reason: string }
+export type GateApprovalEvent = GateDecisionEvent | GateInvalidationEvent;
+/** Material-change facts required to emit deterministic approval invalidations. */
+export interface GateInvalidationInput { missionRevisionId: string; nowUtc: string; actorUserId: string; actorRole: GateActorRole; sequence: number; previousHash: string | null; invalidation: InvalidationResult }
 export interface TransitionInput { missionRevisionId: string; current: MissionState; event: "plan" | "submit-review" | "gates-complete" | "release" | "activate" | "complete" | "suspend" | "abort" | "post-flight" | "close"; actor: { userId: string; role: CrewAssignment["role"] }; nowUtc: string; evaluation?: SafetyEvaluationResult; approvals?: readonly GateApproval[] }
 export interface TransitionResult { state: MissionState; auditEvent: { type: string; missionRevisionId: string; actorUserId: string; occurredAtUtc: string } }
 export interface DependencyGraphEntry { field: MaterialChangeField; affectedRequirementIds: readonly string[] }
@@ -125,6 +135,15 @@ export const SafetyBlockerSchema = z.object({ code: id, conceptId: id, severity:
 export const SafetyEvaluationResultSchema = z.object({ missionRevisionId: id, status: z.enum(["ready", "conditional", "blocked", "degraded"]), evaluations: z.array(RuleEvaluationSchema), blockers: z.array(SafetyBlockerSchema), invalidatedGates: z.array(z.enum(["maintenance", "operator", "safety", "commander"])), kernelVersion: z.string().regex(/^0\.\d+\.\d+$/) }).strict();
 export const TransitionResultSchema = z.object({ state: z.enum(["Draft", "Planned", "UnderReview", "ReadyForRelease", "Released", "Active", "Completed", "Suspended", "Aborted", "PostFlightReview", "Closed"]), auditEvent: z.object({ type: id, missionRevisionId: id, actorUserId: id, occurredAtUtc: utc }).strict() }).strict();
 export const InvalidationResultSchema = z.object({ material: z.boolean(), affectedRequirementIds: z.array(id), invalidatedGates: z.array(z.enum(["maintenance", "operator", "safety", "commander"])), reason: id }).strict();
+const GateNameSchema = z.enum(["maintenance", "operator", "safety", "commander"]);
+const GateActorRoleSchema = z.enum(["maintainer", "operator", "safety", "commander"]);
+const GateApprovalSchema = z.object({ missionRevisionId: id, gate: GateNameSchema, actorUserId: id, actorRole: GateActorRoleSchema, aircraftId: id.optional(), decision: z.enum(["accept", "block", "escalate"]), valid: z.boolean(), occurredAtUtc: utc, evidenceSnapshotId: id, policyVersion: id, reason: id }).strict();
+const HashSchema = z.string().regex(/^[a-f0-9]{64}$/, "hash must be a lowercase SHA-256 hex digest");
+const GateDecisionInputSchema = GateApprovalSchema.extend({ sequence: z.number().int().nonnegative(), previousHash: HashSchema.nullable() }).strict();
+const GateDecisionEventSchema = GateApprovalSchema.extend({ eventType: z.literal("gate.decision"), sequence: z.number().int().nonnegative(), previousHash: HashSchema.nullable(), eventHash: HashSchema }).strict();
+const GateInvalidationEventSchema = z.object({ eventType: z.literal("gate.invalidation"), sequence: z.number().int().nonnegative(), previousHash: HashSchema.nullable(), eventHash: HashSchema, missionRevisionId: id, gate: GateNameSchema, actorUserId: id, actorRole: GateActorRoleSchema, occurredAtUtc: utc, affectedRequirementIds: z.array(id), reason: id }).strict();
+const GateApprovalEventSchema = z.discriminatedUnion("eventType", [GateDecisionEventSchema, GateInvalidationEventSchema]);
+const GateInvalidationInputSchema = z.object({ missionRevisionId: id, nowUtc: utc, actorUserId: id, actorRole: GateActorRoleSchema, sequence: z.number().int().nonnegative(), previousHash: HashSchema.nullable(), invalidation: InvalidationResultSchema }).strict();
 function freeze<T>(value: T): T { if (value && typeof value === "object" && !Object.isFrozen(value)) { Object.freeze(value); for (const child of Object.values(value as Record<string, unknown>)) freeze(child); } return value; }
 export function parseMissionRevision(input: unknown): MissionRevision { return freeze(MissionRevisionSchema.parse(input)); }
 export function parseRuleEvaluation(input: unknown): RuleEvaluation { return freeze(RuleEvaluationSchema.parse(input)); }
@@ -133,6 +152,10 @@ export function parseSafetyEvaluationResult(input: unknown): SafetyEvaluationRes
 export function createSafetyEvaluationResult(input: SafetyEvaluationResult): SafetyEvaluationResult { return parseSafetyEvaluationResult(input); }
 export function createTransitionResult(input: TransitionResult): TransitionResult { return freeze(TransitionResultSchema.parse(input)); }
 export function createInvalidationResult(input: InvalidationResult): InvalidationResult { return freeze(InvalidationResultSchema.parse(input)); }
+export function parseGateApproval(input: unknown): GateApproval { return freeze(GateApprovalSchema.parse(input)); }
+export function parseGateDecisionInput(input: unknown): GateDecisionInput { return freeze(GateDecisionInputSchema.parse(input)); }
+export function parseGateApprovalEvent(input: unknown): GateApprovalEvent { return freeze(GateApprovalEventSchema.parse(input)); }
+export function parseGateInvalidationInput(input: unknown): GateInvalidationInput { return freeze(GateInvalidationInputSchema.parse(input)); }
 export function createRiskEvaluation(input: RiskEvaluation): RiskEvaluation { return freeze({ ...input }); }
 export function createFreshnessResult(input: FreshnessResult): FreshnessResult { return freeze({ ...input }); }
 export function createExceptionResult(input: ExceptionResult): ExceptionResult { return freeze({ ...input }); }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createMissionRevision, transitionMission, type MissionRevision, type MissionRevisionChange, type SafetyEvaluationResult } from "../src/index.js";
+import { createMissionRevision, transitionMission, type GateApproval, type MissionRevision, type MissionRevisionChange, type SafetyEvaluationResult } from "../src/index.js";
 
 const nowUtc = "2026-08-08T17:00:00Z";
 const actor = { userId: "commander-1", role: "commander" as const };
@@ -18,7 +18,12 @@ const readyEvaluation = (overrides: Partial<SafetyEvaluationResult> = {}): Safet
   missionRevisionId: "mr-lifecycle-1", status: "ready", evaluations: [], blockers: [], invalidatedGates: [], kernelVersion: "0.1.0", ...overrides,
 });
 
-const fourAcceptedGates = ["maintenance", "operator", "safety", "commander"].map((gate) => ({ missionRevisionId: "mr-lifecycle-1", gate: gate as "maintenance" | "operator" | "safety" | "commander", decision: "accept" as const, valid: true }));
+const fourAcceptedGates: readonly GateApproval[] = [
+  { missionRevisionId: "mr-lifecycle-1", gate: "maintenance", actorUserId: "maintainer-1", actorRole: "maintainer", decision: "accept", valid: true, occurredAtUtc: nowUtc, evidenceSnapshotId: "evidence-1", policyVersion: "policy-1", reason: "APPROVED" },
+  { missionRevisionId: "mr-lifecycle-1", gate: "operator", actorUserId: "operator-1", actorRole: "operator", aircraftId: "ac-1", decision: "accept", valid: true, occurredAtUtc: nowUtc, evidenceSnapshotId: "evidence-1", policyVersion: "policy-1", reason: "APPROVED" },
+  { missionRevisionId: "mr-lifecycle-1", gate: "safety", actorUserId: "safety-1", actorRole: "safety", decision: "accept", valid: true, occurredAtUtc: nowUtc, evidenceSnapshotId: "evidence-1", policyVersion: "policy-1", reason: "APPROVED" },
+  { missionRevisionId: "mr-lifecycle-1", gate: "commander", actorUserId: "commander-1", actorRole: "commander", decision: "accept", valid: true, occurredAtUtc: nowUtc, evidenceSnapshotId: "evidence-1", policyVersion: "policy-1", reason: "APPROVED" },
+];
 
 describe("authoritative mission lifecycle", () => {
   it("does not permit UnderReview to skip the four gates", () => {
