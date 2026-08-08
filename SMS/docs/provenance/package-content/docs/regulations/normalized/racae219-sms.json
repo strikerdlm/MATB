@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "1.0",
+  "artifactStatus": "blocked",
+  "sourceId": "racae-219-sms",
+  "canonicalUri": "https://aaaes.fac.mil.co/sites/aaaes/files/AAAES/documentos/RACAE/2025/racae_219_sistema_de_gestion_de_seguridad_operacional.pdf",
+  "acquisitionStatusReference": "docs/research/acquisition-status.jsonl",
+  "reason": "The official RACAE 219 primary PDF was not available and checksum-verified at normalization time. No RACAE 219 controls, claims, interpretations, or translations are included in this artifact.",
+  "requirements": [],
+  "claims": []
+}

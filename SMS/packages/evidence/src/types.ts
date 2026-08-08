@@ -69,7 +69,22 @@ export interface RequirementTranslation {
   reviewerIds: readonly string[];
 }
 
+/** A file carried by an immutable evidence package, relative to its package root. */
+export interface ManifestFile {
+  path: string;
+  sha256: string;
+  sizeBytes: number;
+}
+
+/** Immutable identity required from a package dependency. */
+export interface PackageDependency {
+  packageId: string;
+  version: string;
+  contentSha256: string;
+}
+
 export interface SignedPackageManifest {
+  schemaVersion: "1.0";
   packageId: string;
   kind: "regulatory" | "policy" | "map" | "weather" | "notam" | "terminology" | "software";
   issuer: string;
@@ -81,5 +96,10 @@ export interface SignedPackageManifest {
   contentSha256: string;
   signature: string;
   keyId: string;
-  dependencies: string[];
+  dependencies: PackageDependency[];
+  /** Stable, sorted inventory. The content digest is computed from this list. */
+  files: ManifestFile[];
+  /** Qualification is intentionally explicit: this first corpus is not approved for release. */
+  qualification: "qualified-review" | "approved" | "blocked";
+  caveats: string[];
 }

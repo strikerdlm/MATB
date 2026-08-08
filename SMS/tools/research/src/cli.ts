@@ -1,9 +1,10 @@
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { assertSourceRecord, sha256File } from "@fac-isr/evidence";
+import { assertSourceRecord, sha256File, verifyPackage } from "@fac-isr/evidence";
 import type { SourceRecord } from "@fac-isr/evidence";
 import { acquireOfficialSource, copyObsidianNote, extractText, resolveWorkspacePath, verifyChecksum } from "./acquire.js";
+import { readSignedManifest } from "./package.js";
 
 /** CLI is intentionally run from the SMS workspace root (`cd SMS`). */
 const ROOT = resolve(process.cwd());
@@ -27,7 +28,7 @@ function parseLines(contents: string): unknown[] {
 }
 
 /** Deterministically validate all registered artifacts without reaching the network. */
-export async function verifyOffline(root = ROOT, registerPath = resolve(root, "docs/source-register/sources.jsonl")): Promise<string[]> {
+export async function verifyOffline(root = ROOT, registerPath = resolve(root, "docs/source-register/sources.jsonl"), requireSignedPackage = resolve(root) === ROOT): Promise<string[]> {
   let sources: unknown[];
   try {
     sources = parseLines(await readFile(registerPath, "utf8"));
@@ -63,6 +64,19 @@ export async function verifyOffline(root = ROOT, registerPath = resolve(root, "d
       } catch (error) {
         failures.push(`${source.sourceId}: extraction artifact unavailable: ${error instanceof Error ? error.message : String(error)}`);
       }
+    }
+  }
+  if (requireSignedPackage) {
+    const provenanceRoot = resolve(root, "docs/provenance");
+    try {
+      const manifest = await readSignedManifest(resolve(provenanceRoot, "evidence-package-manifest.json"));
+      const signature = (await readFile(resolve(provenanceRoot, "evidence-package-manifest.sig"), "utf8")).trim();
+      if (signature !== manifest.signature) failures.push("evidence package: detached signature does not match manifest");
+      const publicKey = await readFile(resolve(provenanceRoot, "evidence-package-public-key.pem"), "utf8");
+      const report = await verifyPackage(provenanceRoot, manifest, publicKey, process.env.SMS_EVIDENCE_VERIFY_AS_OF ?? new Date().toISOString());
+      if (!report.ok) failures.push(...report.checks.filter((check) => check.status === "fail").map((check) => `evidence package ${check.id}: ${check.reason ?? "failed"}`));
+    } catch (error) {
+      failures.push(`evidence package: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   return failures;
