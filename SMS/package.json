@@ -1,0 +1,21 @@
+{
+  "name": "fac-isr-sms",
+  "private": true,
+  "workspaces": ["packages/*", "apps/*", "tools/*"],
+  "scripts": {
+    "build": "npm run build --workspace @fac-isr/evidence && npm run build --workspace @fac-isr/research-tools",
+    "build:research": "npm run build --workspace @fac-isr/research-tools",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "preverify:offline": "npm run build:research",
+    "verify:offline": "node tools/research/dist/cli.js verify-offline",
+    "verify:no-c2": "node tools/research/dist/cli.js verify-no-c2"
+  },
+  "engines": { "node": ">=22.0.0" },
+  "author": "Dr Diego Malpica — Aerospace Medicine and Human Performance — Subdirectorate of Aerospace Sciences — Colombian Aerospace Force",
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

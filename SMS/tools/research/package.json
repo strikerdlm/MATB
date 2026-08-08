@@ -1,0 +1,17 @@
+{
+  "name": "@fac-isr/research-tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/acquire.ts"
+  },
+  "scripts": {
+    "build": "npm run build --workspace @fac-isr/evidence && tsc -p tsconfig.build.json",
+    "test": "npm run build --silent && vitest run",
+    "typecheck": "tsc -p ../../tsconfig.base.json"
+  },
+  "dependencies": {
+    "@fac-isr/evidence": "0.1.0"
+  }
+}
