@@ -1,0 +1,132 @@
+{
+  "schemaVersion": "1.0",
+  "artifactStatus": "qualified-review",
+  "authority": "Autoridad Aeronáutica de Aviación de Estado (AAAES)",
+  "source": {
+    "sourceId": "racae-94-enm2",
+    "edition": "Enmienda 2",
+    "sourceLanguage": "es",
+    "effectiveFromUtc": "2025-06-16T05:00:00Z",
+    "extractionSha256": "77cc55931dd862884751fc2510ef4d16def1546e8712195fff2500f2ea482a69",
+    "extractionPath": "docs/regulations/extracted/racae_94_enm2.txt"
+  },
+  "translationPolicy": "Spanish source text is authoritative. EnglishControlled is a controlled, non-authoritative translation and must not independently drive rule behavior.",
+  "requirements": [
+    {
+      "requirementId": "req-ba6a70e0951b5b9df52c",
+      "predicate": "fac.racae94.autonomous-flight.prohibited",
+      "sourceRefs": [
+        { "evidenceId": "racae94-94.155-a", "sourceId": "racae-94-enm2", "edition": "Enmienda 2", "locator": { "section": "94.155", "page": 38, "paragraph": "(a)" }, "quoteLanguage": "es", "extractionSha256": "77cc55931dd862884751fc2510ef4d16def1546e8712195fff2500f2ea482a69", "reviewState": "unreviewed" },
+        { "evidenceId": "racae94-94.155-b", "sourceId": "racae-94-enm2", "edition": "Enmienda 2", "locator": { "section": "94.155", "page": 38, "paragraph": "(b)" }, "quoteLanguage": "es", "extractionSha256": "77cc55931dd862884751fc2510ef4d16def1546e8712195fff2500f2ea482a69", "reviewState": "unreviewed" }
+      ],
+      "sourceTextSpanish": "(a) La operación en modo de vuelo autónomo o con aeronaves autónomas está prohibida.\n\n(b) El vuelo en modo automatizado supervisado, se permitirá en el empleo de UAS/RPAS en misiones de aspersión aérea de cultivos y/o vigilancia, registro fotográfico, verificación y monitoreo de terrenos y zonas de interés militar y/o policiales específicos, según los roles, misiones y capacidades distintivas de cada EAE. Sin embargo, en todo momento el operador o piloto de UAS/RPAS estará supervisando y monitoreando el vuelo y estará en la capacidad de realizar un cambio en el patrón de vuelo inminente, en el evento que se identifique cualquier riesgo, emergencia o a instrucciones del ATC.",
+      "Spanish": "Prohibir el vuelo autónomo; permitir automatización supervisada únicamente con supervisión humana continua y capacidad de intervención o cambio inmediato del patrón de vuelo ante riesgo, emergencia o instrucción ATC.",
+      "EnglishControlled": "Prohibit autonomous flight; allow supervised automation only with continuous human supervision and capability to intervene or immediately change the flight pattern for risk, emergency, or ATC instruction.",
+      "applicabilityExpression": "state_aviation && uas_rpas_operation",
+      "severity": "hard",
+      "evidenceRequired": true,
+      "effectiveFromUtc": "2025-06-16T05:00:00Z",
+      "interpretationStatus": "qualified-review",
+      "reviewerIds": ["pending-qualified-fac-aaaes-review"],
+      "sourceLanguageReview": { "status": "qualified-review", "reviewerRole": "qualified FAC/AAAES Spanish-language reviewer", "reviewerId": "pending-qualified-fac-aaaes-review", "rationale": "Primary Spanish extraction is checksum-linked; qualified human review remains pending." },
+      "applicabilityReview": { "status": "pending", "reviewerRole": "FAC ISR operational authority", "reviewerId": "pending-fac-isr-operational-review", "rationale": "Operational application requires FAC/AAAES confirmation before release." }
+    },
+    {
+      "requirementId": "req-8d6e6b89443f70c92f7a",
+      "predicate": "fac.racae94.one-pilot-one-uas",
+      "sourceRefs": [
+        { "evidenceId": "racae94-94.201-a", "sourceId": "racae-94-enm2", "edition": "Enmienda 2", "locator": { "section": "94.201", "page": 39, "paragraph": "(a)" }, "quoteLanguage": "es", "extractionSha256": "77cc55931dd862884751fc2510ef4d16def1546e8712195fff2500f2ea482a69", "reviewState": "unreviewed" }
+      ],
+      "sourceTextSpanish": "(a) Un Piloto Remoto y/u Operador, no podrá comandar más de un UAS/RPAS al mismo tiempo, es decir, cada aeronave desde su encendido hasta su aterrizaje y con motores apagados, estará bajo el mando de un operador o piloto.",
+      "Spanish": "Asignar un único UAS/RPAS a cada Piloto Remoto u Operador desde el encendido hasta el aterrizaje y apagado de motores; no permitir mando simultáneo de más de un UAS/RPAS.",
+      "EnglishControlled": "Assign one UAS/RPAS to each Remote Pilot or Operator from power-on through landing and engine shutdown; do not permit simultaneous command of more than one UAS/RPAS.",
+      "applicabilityExpression": "state_aviation && uas_rpas_operation && command_assignment",
+      "severity": "hard",
+      "evidenceRequired": true,
+      "effectiveFromUtc": "2025-06-16T05:00:00Z",
+      "interpretationStatus": "qualified-review",
+      "reviewerIds": ["pending-qualified-fac-aaaes-review"],
+      "sourceLanguageReview": { "status": "qualified-review", "reviewerRole": "qualified FAC/AAAES Spanish-language reviewer", "reviewerId": "pending-qualified-fac-aaaes-review", "rationale": "Primary Spanish extraction is checksum-linked; qualified human review remains pending." },
+      "applicabilityReview": { "status": "pending", "reviewerRole": "FAC ISR operational authority", "reviewerId": "pending-fac-isr-operational-review", "rationale": "Pair, three-aircraft, and swarm scheduling effects require operational review." }
+    },
+    {
+      "requirementId": "req-413a604f141a8fe7bf3f",
+      "predicate": "fac.racae94.swarm-reserved",
+      "sourceRefs": [
+        { "evidenceId": "racae94-94.250", "sourceId": "racae-94-enm2", "edition": "Enmienda 2", "locator": { "section": "94.250", "page": 42 }, "quoteLanguage": "es", "extractionSha256": "77cc55931dd862884751fc2510ef4d16def1546e8712195fff2500f2ea482a69", "reviewState": "unreviewed" }
+      ],
+      "sourceTextSpanish": "94.250 Operación de UAS/RPAS en enjambre\n[Reservado]",
+      "Spanish": "Tratar la sección de operación en enjambre como reservada; no inferir autorización, procedimiento ni limitación operativa adicional a partir de esta sección.",
+      "EnglishControlled": "Treat the swarm-operation section as reserved; do not infer authorization, procedure, or additional operational limitation from this section.",
+      "applicabilityExpression": "state_aviation && uas_rpas_operation && swarm",
+      "severity": "advisory",
+      "evidenceRequired": true,
+      "effectiveFromUtc": "2025-06-16T05:00:00Z",
+      "interpretationStatus": "qualified-review",
+      "reviewerIds": ["pending-qualified-fac-aaaes-review"],
+      "sourceLanguageReview": { "status": "qualified-review", "reviewerRole": "qualified FAC/AAAES Spanish-language reviewer", "reviewerId": "pending-qualified-fac-aaaes-review", "rationale": "The source explicitly says [Reservado]; no operative rule is stated." },
+      "applicabilityReview": { "status": "pending", "reviewerRole": "AAAES operational policy authority", "reviewerId": "pending-aaaes-swarm-policy-review", "rationale": "A separate current authority is required before the system may operationalize swarm flight." },
+      "unresolvedRationale": "Reserved text is not an authorization or prohibition. The application must retain a blocking policy until an applicable qualified source is accepted."
+    },
+    {
+      "requirementId": "req-ebc15513f34b5b4c6955",
+      "predicate": "fac.racae94.risk-telemetry-retention",
+      "sourceRefs": [
+        { "evidenceId": "racae94-94.705-a", "sourceId": "racae-94-enm2", "edition": "Enmienda 2", "locator": { "section": "94.705", "page": 66, "paragraph": "(a)" }, "quoteLanguage": "es", "extractionSha256": "77cc55931dd862884751fc2510ef4d16def1546e8712195fff2500f2ea482a69", "reviewState": "unreviewed" },
+        { "evidenceId": "racae94-94.705-b", "sourceId": "racae-94-enm2", "edition": "Enmienda 2", "locator": { "section": "94.705", "page": 66, "paragraph": "(b)" }, "quoteLanguage": "es", "extractionSha256": "77cc55931dd862884751fc2510ef4d16def1546e8712195fff2500f2ea482a69", "reviewState": "unreviewed" },
+        { "evidenceId": "racae94-94.705-c", "sourceId": "racae-94-enm2", "edition": "Enmienda 2", "locator": { "section": "94.705", "page": 66, "paragraph": "(c)" }, "quoteLanguage": "es", "extractionSha256": "77cc55931dd862884751fc2510ef4d16def1546e8712195fff2500f2ea482a69", "reviewState": "unreviewed" },
+        { "evidenceId": "racae94-94.705-d", "sourceId": "racae-94-enm2", "edition": "Enmienda 2", "locator": { "section": "94.705", "page": 66, "paragraph": "(d)" }, "quoteLanguage": "es", "extractionSha256": "77cc55931dd862884751fc2510ef4d16def1546e8712195fff2500f2ea482a69", "reviewState": "unreviewed" }
+      ],
+      "sourceTextSpanish": "(a) La autorización que emita cada EAE para la operación de sus UAS/RPAS en una ubicación geográfica determinada, debe obedecer a la medición efectiva de la tolerabilidad del riesgo, producto de la estructuración de la Matriz de Gestión de Riesgos, para tal efecto, debe establecer la Identificación de peligros específicos en la operación de UAS y RPAS, Evaluación de riesgos mediante matrices de probabilidad y severidad, Definición de niveles aceptables de seguridad operacional (NASO) específicos para la operación y Políticas de seguridad operacional, alineadas con la misionalidad de cada Ente de Aviación de Estado.\n\n(b) Cada EAE debe implementar un formato de medición de riesgo, que permita tomar oportunamente acciones de mitigación para los riesgos asociados al factor técnico, operacional y humano y que se aplicará antes del cumplimiento de cada misión.\n\n(c) Siempre que el Sistema cuente con la opción de descarga de la telemetría de vuelo, el EAE debe implementar un programa de supervisión de las operaciones, mediante la revisión periódica y aleatoria de los datos registrados, con el fin de identificar oportunamente desviaciones a los procedimientos estandarizados y cualquier debilidad que pueda identificarse oportunamente, en especial en lo relacionado con factores humanos.\n\n(d) Las telemetrías y/o datos de vuelo registrados automáticamente en la memoria de los UAS/RPAS, deben almacenarse para facilitar la supervisión operacional. Para los UAS/RPA, las telemetrías e imágenes/videos obtenidos de la carga útil, deben descargarse después de cada vuelo y/o almacenarse cronológicamente por un período mínimo de un (01) año.",
+      "Spanish": "Autorizar operaciones por ubicación únicamente tras evaluar la tolerabilidad del riesgo con matriz de peligros, probabilidad, severidad, NASO y políticas misionales; aplicar la medición antes de cada misión; cuando haya descarga de telemetría, supervisar datos periódica y aleatoriamente; descargar o almacenar cronológicamente telemetría e imágenes/videos de carga útil después de cada vuelo por al menos un año.",
+      "EnglishControlled": "Authorize operations by location only after assessing risk tolerability with a hazard, probability, severity, NASO, and mission-policy matrix; apply the assessment before every mission; where telemetry download is available, supervise data periodically and randomly; download or chronologically store telemetry and payload images/videos after each flight for at least one year.",
+      "applicabilityExpression": "state_aviation && uas_rpas_operation && mission_authorization",
+      "severity": "hard",
+      "evidenceRequired": true,
+      "effectiveFromUtc": "2025-06-16T05:00:00Z",
+      "interpretationStatus": "qualified-review",
+      "reviewerIds": ["pending-qualified-fac-aaaes-review"],
+      "sourceLanguageReview": { "status": "qualified-review", "reviewerRole": "qualified FAC/AAAES Spanish-language reviewer", "reviewerId": "pending-qualified-fac-aaaes-review", "rationale": "Primary Spanish extraction is checksum-linked; qualified human review remains pending." },
+      "applicabilityReview": { "status": "pending", "reviewerRole": "FAC ISR safety manager", "reviewerId": "pending-fac-isr-sms-review", "rationale": "Data retention, evidence custody, and human-factor implementation require organizational approval." }
+    },
+    {
+      "requirementId": "req-5bbed101143891246e12",
+      "predicate": "fac.racae94.emergency-response-plan",
+      "sourceRefs": [
+        { "evidenceId": "racae94-94.710-k", "sourceId": "racae-94-enm2", "edition": "Enmienda 2", "locator": { "section": "94.710", "page": 68, "paragraph": "(k)" }, "quoteLanguage": "es", "extractionSha256": "77cc55931dd862884751fc2510ef4d16def1546e8712195fff2500f2ea482a69", "reviewState": "unreviewed" },
+        { "evidenceId": "racae94-94.710-k1", "sourceId": "racae-94-enm2", "edition": "Enmienda 2", "locator": { "section": "94.710", "page": 69, "paragraph": "(k)(1)" }, "quoteLanguage": "es", "extractionSha256": "77cc55931dd862884751fc2510ef4d16def1546e8712195fff2500f2ea482a69", "reviewState": "unreviewed" }
+      ],
+      "sourceTextSpanish": "(k) Cada EAE deberá contar con un Plan de Respuesta a Emergencias (ERP) diseñado específicamente para la gestión de contingencias relacionadas con el uso de Sistemas de Aeronaves No Tripuladas (UAS/RPAS). Este plan debe contemplar al menos los siguientes cinco aspectos fundamentales:\n\n(1) Se deben establecer procedimientos claros para actuar ante la pérdida parcial o total del control o del enlace de comunicaciones con el UAS/RPAS con el fin de reducir los riesgos asociados.\n\n(2) El plan debe establecer procedimientos en caso de fallo en sistemas críticos cuya falla comprometa la seguridad y prever protocolos para ejecutar aterrizajes de forma segura y controlada.\n\n(3) Deben contemplarse acciones ante eventos como la intrusión no autorizada de UAS/RPAS en espacios aéreos restringidos o controlados. El ERP debe incluir medidas de coordinación con autoridades civiles y militares para la respuesta oportuna y eficaz ante este tipo de incidentes.\n\n(4) El plan debe establecer procedimientos para la detección, identificación y neutralización segura de UAS/RPAS que representen una amenaza en zonas protegidas o de alto valor estratégico.\n\n(5) El plan debe establecer un procedimiento de contingencia para aterrizaje con armamento fallido o caliente.\n\n(6) Cada Ente de Aviación de Estado deberá garantizar la revisión de su Plan de Respuesta a Emergencias (PRE) con una periodicidad mínima anual, así como la ejecución de ejercicios de validación, ya sea mediante simulacros de mesa o ejercicios funcionales, al menos una vez por año. Adicionalmente, deberá realizar simulacros integrales o completos cada dos (2) años, con el fin de verificar la efectividad del plan.",
+      "Spanish": "Mantener un ERP específico para UAS/RPAS que cubra pérdida de control o enlace, fallos críticos y aterrizaje seguro, intrusión no autorizada y coordinación, y demás aspectos enumerados; revisar el plan al menos anualmente, validar con ejercicios al menos anuales y realizar simulacros integrales al menos cada dos años.",
+      "EnglishControlled": "Maintain a UAS/RPAS-specific ERP covering loss of control or link, critical failures and safe landing, unauthorized intrusion and coordination, and the other enumerated aspects; review the plan at least annually, validate it through exercises at least annually, and conduct full-scale exercises at least every two years.",
+      "applicabilityExpression": "state_aviation && uas_rpas_operation && emergency_preparedness",
+      "severity": "hard",
+      "evidenceRequired": true,
+      "effectiveFromUtc": "2025-06-16T05:00:00Z",
+      "interpretationStatus": "qualified-review",
+      "reviewerIds": ["pending-qualified-fac-aaaes-review"],
+      "sourceLanguageReview": { "status": "qualified-review", "reviewerRole": "qualified FAC/AAAES Spanish-language reviewer", "reviewerId": "pending-qualified-fac-aaaes-review", "rationale": "Primary Spanish extraction is checksum-linked; qualified human review remains pending." },
+      "applicabilityReview": { "status": "pending", "reviewerRole": "FAC ISR emergency-response authority", "reviewerId": "pending-fac-isr-erp-review", "rationale": "Mission-specific ERP implementation and any armament-related procedure require qualified operational authorization." }
+    },
+    {
+      "requirementId": "req-05a239ad04957cd55f28",
+      "predicate": "fac.racae94.fatigue-screen-exposure",
+      "sourceRefs": [
+        { "evidenceId": "racae94-94.715-a", "sourceId": "racae-94-enm2", "edition": "Enmienda 2", "locator": { "section": "94.715", "page": 69, "paragraph": "(a)" }, "quoteLanguage": "es", "extractionSha256": "77cc55931dd862884751fc2510ef4d16def1546e8712195fff2500f2ea482a69", "reviewState": "unreviewed" },
+        { "evidenceId": "racae94-94.715-b2", "sourceId": "racae-94-enm2", "edition": "Enmienda 2", "locator": { "section": "94.715", "page": 69, "paragraph": "(b)(2)" }, "quoteLanguage": "es", "extractionSha256": "77cc55931dd862884751fc2510ef4d16def1546e8712195fff2500f2ea482a69", "reviewState": "unreviewed" }
+      ],
+      "sourceTextSpanish": "(a) Los EAE cumplirán con lo establecido en el numeral 91.695 del RACAE 91 Reglas de vuelo y operación y sus Enmiendas, para garantizar la operación segura de los UAS/RPAS, además de los tiempos contemplados en la Tabla 1-5, Tiempos de vuelo autorizados para tripulaciones de UAS/RPAS.\n\n(2) Normas generales para el descanso: tiempo máximo de disponibilidad y comisión, descanso por tiempo de disponibilidad o comisión operativa y mecanismos de control de la fatiga. El Tiempo máximo de vuelo diario para la tripulación remota y exposición a las pantallas, para Operadores y Pilotos Remotos, se específica en la tabla 1-5 Tiempos de vuelo autorizados para tripulaciones de UAS/RPAS.",
+      "Spanish": "Aplicar las reglas de descanso, fatiga, tiempo de vuelo diario y exposición a pantallas remitidas por RACAE 91.695 y Tabla 1-5; no derivar límites numéricos en este artefacto sin verificar las fuentes incorporadas por referencia.",
+      "EnglishControlled": "Apply the rest, fatigue, daily flight-time, and screen-exposure rules referenced through RACAE 91.695 and Table 1-5; do not derive numeric limits in this artifact without verifying the incorporated references.",
+      "applicabilityExpression": "state_aviation && uas_rpas_crew && fatigue_management",
+      "severity": "hard",
+      "evidenceRequired": true,
+      "effectiveFromUtc": "2025-06-16T05:00:00Z",
+      "interpretationStatus": "qualified-review",
+      "reviewerIds": ["pending-qualified-fac-aaaes-review", "pending-aerospace-medicine-review"],
+      "sourceLanguageReview": { "status": "qualified-review", "reviewerRole": "qualified FAC/AAAES Spanish-language reviewer", "reviewerId": "pending-qualified-fac-aaaes-review", "rationale": "Primary Spanish extraction is checksum-linked; incorporated RACAE 91.695 and Table 1-5 require separate verification." },
+      "applicabilityReview": { "status": "pending", "reviewerRole": "aerospace medicine and human performance authority", "reviewerId": "pending-aerospace-medicine-review", "rationale": "Human-performance implementation must be reviewed before operational release." },
+      "unresolvedRationale": "The numerical content of Table 1-5 and the incorporated RACAE 91.695 source are not normalized here; the system must not invent or promote numeric fatigue limits."
+    }
+  ]
+}
