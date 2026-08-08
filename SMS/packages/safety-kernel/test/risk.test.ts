@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evaluateRisk, type PolicyPackage, type RiskEvaluationInput } from "../src/index.js";
+import { evaluateRisk, type PolicyPackage, type RiskEvaluationInput, type SignedPackageManifest } from "../src/index.js";
 
 const approvedPolicy: PolicyPackage = {
   packageId: "policy-risk-1", version: "1.0.0", status: "approved", signature: "signature-risk-1",
@@ -16,6 +16,13 @@ const riskInput: RiskEvaluationInput = {
   hazardIds: ["hazard-weather"], probability: 0.5, severity: 2, residualRiskBand: "medium",
   acceptanceAuthorityId: "safety-officer", mitigationIds: ["mitigation-divert"], status: "complete", durationHours: 4,
   probabilityLevel: 1, nowUtc: "2026-08-08T17:00:00Z", policy: approvedPolicy,
+};
+
+const approvedManifest: SignedPackageManifest = {
+  schemaVersion: "1.0", packageId: "policy-risk-1", kind: "policy", issuer: "FAC", version: "1.0.0",
+  issuedAtUtc: "2026-08-01T00:00:00Z", effectiveFromUtc: "2026-08-02T00:00:00Z", geographicScope: "CO",
+  contentSha256: "a".repeat(64), signature: "c2lnbmF0dXJl", keyId: "key-1", dependencies: [],
+  files: [{ path: "policy.json", sha256: "b".repeat(64), sizeBytes: 1 }], qualification: "approved", caveats: [],
 };
 
 describe("approved risk and NASO evaluation", () => {
@@ -44,10 +51,17 @@ describe("approved risk and NASO evaluation", () => {
   it("blocks an approved signed policy at or after its manifest expiry", () => {
     const policy = {
       ...approvedPolicy,
-      manifest: { expiresAtUtc: "2026-08-08T17:00:00Z" },
-    } as PolicyPackage;
+      manifest: { ...approvedManifest, expiresAtUtc: "2026-08-08T17:00:00Z" },
+    };
     expect(evaluateRisk({ ...riskInput, policy })).toMatchObject({ status: "blocked", reason: "APPROVED_RISK_POLICY_REQUIRED" });
-    expect(evaluateRisk({ ...riskInput, policy: { ...policy, manifest: { expiresAtUtc: "invalid" } } as PolicyPackage })).toMatchObject({ status: "blocked", reason: "APPROVED_RISK_POLICY_REQUIRED" });
+    expect(evaluateRisk({ ...riskInput, policy: { ...policy, manifest: { ...approvedManifest, expiresAtUtc: "invalid" } } })).toMatchObject({ status: "blocked", reason: "APPROVED_RISK_POLICY_REQUIRED" });
+  });
+
+  it("requires an approved, effective, fully shaped manifest when one is supplied", () => {
+    expect(evaluateRisk({ ...riskInput, policy: { ...approvedPolicy, manifest: approvedManifest } })).toMatchObject({ status: "accepted" });
+    expect(evaluateRisk({ ...riskInput, policy: { ...approvedPolicy, manifest: { ...approvedManifest, qualification: "blocked", expiresAtUtc: "2026-08-09T00:00:00Z" } } })).toMatchObject({ status: "blocked", reason: "APPROVED_RISK_POLICY_REQUIRED" });
+    expect(evaluateRisk({ ...riskInput, policy: { ...approvedPolicy, manifest: { ...approvedManifest, effectiveFromUtc: "2026-08-09T00:00:00Z", expiresAtUtc: "2026-08-10T00:00:00Z" } } })).toMatchObject({ status: "blocked", reason: "APPROVED_RISK_POLICY_REQUIRED" });
+    expect(evaluateRisk({ ...riskInput, policy: { ...approvedPolicy, manifest: { expiresAtUtc: "2026-08-09T00:00:00Z" } as SignedPackageManifest } })).toMatchObject({ status: "blocked", reason: "APPROVED_RISK_POLICY_REQUIRED" });
   });
 
   it("blocks a residual band that does not match the approved matrix cell", () => {

@@ -12,6 +12,11 @@ import {
 } from "./types.js";
 
 const UTC_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z$/;
+const MANIFEST_UTC_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{3})?Z$/;
+const PACKAGE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{2,127}$/;
+const VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+const SHA256_PATTERN = /^[a-f0-9]{64}$/;
+const SIGNATURE_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/;
 
 function compareStable(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -19,6 +24,10 @@ function compareStable(left: string, right: string): number {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function nonBlankString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function parseUtc(value: string): number {
@@ -51,13 +60,53 @@ function approvedPolicy(policy: PolicyPackage | undefined): policy is PolicyPack
   return isRecord(policy) && policy.status === "approved" && typeof policy.signature === "string" && policy.signature.trim().length > 0;
 }
 
+function manifestTimestamp(value: unknown): number | undefined {
+  return typeof value === "string" && MANIFEST_UTC_PATTERN.test(value) ? utcTimestamp(value) : undefined;
+}
+
+function validManifestDependency(value: unknown): boolean {
+  return isRecord(value)
+    && typeof value.packageId === "string" && PACKAGE_ID_PATTERN.test(value.packageId)
+    && typeof value.version === "string" && VERSION_PATTERN.test(value.version)
+    && typeof value.contentSha256 === "string" && SHA256_PATTERN.test(value.contentSha256);
+}
+
+function validManifestFile(value: unknown): boolean {
+  return isRecord(value)
+    && nonBlankString(value.path) && !value.path.startsWith("/") && !value.path.includes("\\")
+    && value.path.split("/").every((part) => part !== "" && part !== "." && part !== "..")
+    && typeof value.sha256 === "string" && SHA256_PATTERN.test(value.sha256)
+    && typeof value.sizeBytes === "number" && Number.isSafeInteger(value.sizeBytes) && value.sizeBytes >= 0;
+}
+
+/** Validates policy-manifest shape and its effective window without I/O or signature verification. */
+function validApprovedManifestAt(manifest: unknown, now: number): boolean {
+  if (!isRecord(manifest)
+    || manifest.schemaVersion !== "1.0"
+    || typeof manifest.packageId !== "string" || !PACKAGE_ID_PATTERN.test(manifest.packageId)
+    || manifest.kind !== "policy"
+    || !nonBlankString(manifest.issuer)
+    || typeof manifest.version !== "string" || !VERSION_PATTERN.test(manifest.version)
+    || !nonBlankString(manifest.geographicScope)
+    || typeof manifest.contentSha256 !== "string" || !SHA256_PATTERN.test(manifest.contentSha256)
+    || typeof manifest.signature !== "string" || !SIGNATURE_PATTERN.test(manifest.signature)
+    || !nonBlankString(manifest.keyId)
+    || !Array.isArray(manifest.dependencies) || !manifest.dependencies.every(validManifestDependency)
+    || !Array.isArray(manifest.files) || manifest.files.length === 0 || !manifest.files.every(validManifestFile)
+    || manifest.qualification !== "approved"
+    || !Array.isArray(manifest.caveats) || !manifest.caveats.every(nonBlankString)) return false;
+  const issuedAt = manifestTimestamp(manifest.issuedAtUtc);
+  const effectiveFrom = manifestTimestamp(manifest.effectiveFromUtc);
+  if (issuedAt === undefined || effectiveFrom === undefined || issuedAt > effectiveFrom || effectiveFrom > now) return false;
+  if (manifest.expiresAtUtc === undefined) return true;
+  const expiresAt = manifestTimestamp(manifest.expiresAtUtc);
+  return expiresAt !== undefined && expiresAt > effectiveFrom && expiresAt > now;
+}
+
 function policyCurrentAt(policy: PolicyPackage | undefined, now: number): policy is PolicyPackage {
   if (!approvedPolicy(policy)) return false;
   if (policy.manifest === undefined) return true;
-  if (!isRecord(policy.manifest)) return false;
-  const expiresAtUtc = policy.manifest.expiresAtUtc;
-  const expiresAt = utcTimestamp(expiresAtUtc);
-  return expiresAt !== undefined && expiresAt > now;
+  return validApprovedManifestAt(policy.manifest, now);
 }
 
 function validMatrix(policy: PolicyPackage): boolean {
@@ -139,7 +188,7 @@ export function evaluateFreshness(snapshot: DataSnapshotRef, policy: PolicyPacka
 }
 
 function hasId(value: string | undefined): value is string {
-  return value !== undefined && value.trim().length > 0;
+  return nonBlankString(value);
 }
 
 /** Evaluates an exception as a current, revision-bound fact; it cannot be copied to a different revision. */
@@ -147,6 +196,7 @@ export function evaluateException(exception: ControlledExceptionInput, policy: P
   const now = parseUtc(nowUtc);
   if (!policyCurrentAt(policy, now)) return createExceptionResult({ status: "blocked", reason: "APPROVED_EXCEPTION_POLICY_REQUIRED" });
   if (!validMatrix(policy)) return createExceptionResult({ status: "blocked", reason: "APPROVED_RISK_MATRIX_REQUIRED" });
+  if (!hasId(exception.missionRevisionId) || !hasId(exception.sourceRevisionId)) return createExceptionResult({ status: "blocked", reason: "EXCEPTION_REVISION_REQUIRED" });
   if (exception.sourceRevisionId !== exception.missionRevisionId) return createExceptionResult({ status: "blocked", reason: "EXCEPTION_REVISION_MISMATCH" });
   const sourceFreshness = evaluateFreshness(exception.snapshot, policy, nowUtc);
   const staleOrMissing = sourceFreshness.status === "expired"

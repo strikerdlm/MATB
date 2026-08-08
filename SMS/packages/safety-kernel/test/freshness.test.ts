@@ -58,6 +58,8 @@ describe("controlled degraded-data exceptions", () => {
     expect(evaluateException(exception, approvedPolicy, nowUtc)).toEqual({ status: "accepted", reason: "EXCEPTION_ACCEPTED" });
     expect(evaluateException({ ...exception, validityEndUtc: nowUtc }, approvedPolicy, nowUtc)).toMatchObject({ status: "expired", reason: "EXCEPTION_EXPIRED" });
     expect(evaluateException({ ...exception, sourceRevisionId: "mr-0" }, approvedPolicy, nowUtc)).toMatchObject({ status: "blocked", reason: "EXCEPTION_REVISION_MISMATCH" });
+    expect(evaluateException({ ...exception, missionRevisionId: "" }, approvedPolicy, nowUtc)).toMatchObject({ status: "blocked", reason: "EXCEPTION_REVISION_REQUIRED" });
+    expect(evaluateException({ ...exception, sourceRevisionId: "" }, approvedPolicy, nowUtc)).toMatchObject({ status: "blocked", reason: "EXCEPTION_REVISION_REQUIRED" });
     expect(Object.isFrozen(evaluateException(exception, approvedPolicy, nowUtc))).toBe(true);
   });
 
