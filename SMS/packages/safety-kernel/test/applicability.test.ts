@@ -22,6 +22,9 @@ describe("hard operational blockers", () => {
   it.each([["armed", "CONFIGURATION_OUT_OF_SCOPE"], ["strike", "CONFIGURATION_OUT_OF_SCOPE"]] as const)("blocks %s", (configuration, code) => {
     expect(buildHardBlockers(mission({ configuration, aircraft: [{ aircraftId: "ac-1", aircraftClass: "IC", configuration }] }), {})).toContainEqual(expect.objectContaining({ code }));
   });
+  it("keeps the FAC configuration allowlist invariant when operational facts are false", () => {
+    expect(buildHardBlockers(mission({ configuration: "armed", aircraft: [{ aircraftId: "ac-1", aircraftClass: "IC", configuration: "armed" }] }), { operational: false })).toContainEqual(expect.objectContaining({ code: "CONFIGURATION_OUT_OF_SCOPE" }));
+  });
   it("requires one qualified available operator per aircraft", () => {
     const result = buildHardBlockers(mission({ aircraft: [
       { aircraftId: "ac-1", aircraftClass: "IC", configuration: "unarmed-isr", operatorUserId: "op-1" },
@@ -35,10 +38,15 @@ describe("hard operational blockers", () => {
 describe("automation and IFR applicability", () => {
   const approved = { status: "approved", autonomousFlightProhibited: true, supervisedAutomationApproved: true, ifrApproved: true } as ApplicabilityFacts["policy"];
   it("hard-blocks autonomous mode", () => expect(evaluateApplicability(mission(), { requirementId: "r-autonomous", sourceRefs: [], Spanish: "", EnglishControlled: "", applicabilityExpression: "autonomous_flight", severity: "hard", evidenceRequired: true, effectiveFromUtc: "2025-01-01T00:00:00Z", interpretationStatus: "approved", reviewerIds: [] }, { ...approved, automationMode: "autonomous" })).toMatchObject({ applicable: true, result: "fail" }));
+  it.each([undefined, "draft"] as const)("hard-blocks autonomous mode with %s policy", (status) => expect(evaluateApplicability(mission(), { requirementId: "r-autonomous", sourceRefs: [], Spanish: "", EnglishControlled: "", applicabilityExpression: "autonomous_flight", severity: "hard", evidenceRequired: true, effectiveFromUtc: "2025-01-01T00:00:00Z", interpretationStatus: "approved", reviewerIds: [] }, { status, automationMode: "autonomous" })).toMatchObject({ applicable: true, result: "fail", reason: "AUTONOMOUS_FLIGHT_PROHIBITED" }));
   it("keeps supervised automation conditional without intervention evidence", () => expect(evaluateApplicability(mission(), { requirementId: "r-auto", sourceRefs: [], Spanish: "", EnglishControlled: "", applicabilityExpression: "supervised_automation", severity: "hard", evidenceRequired: true, effectiveFromUtc: "2025-01-01T00:00:00Z", interpretationStatus: "approved", reviewerIds: [] }, { ...approved, automationMode: "supervised" })).toMatchObject({ applicable: true, result: "unknown" }));
   it("requires explicit IFR package, equipment, segregated airspace, and authorization", () => {
     const req = { requirementId: "r-ifr", sourceRefs: [], Spanish: "", EnglishControlled: "", applicabilityExpression: "ifr", severity: "hard" as const, evidenceRequired: true, effectiveFromUtc: "2025-01-01T00:00:00Z", interpretationStatus: "approved" as const, reviewerIds: [] };
     expect(evaluateApplicability(mission({ flightRule: "IFR" }), req, { ...approved, flightRuleApproved: true, aircraftEquipmentCapable: true, segregatedAirspace: true, authorizationEvidence: true })).toMatchObject({ applicable: true, result: "pass" });
     expect(evaluateApplicability(mission({ flightRule: "IFR" }), req, { ...approved, flightRuleApproved: true })).toMatchObject({ applicable: true, result: "unknown" });
+  });
+  it("does not pass an ordinary qualified-review requirement as ready", () => {
+    const req = { requirementId: "r-qualified", sourceRefs: [], Spanish: "", EnglishControlled: "", applicabilityExpression: "state_aviation", severity: "hard" as const, evidenceRequired: true, effectiveFromUtc: "2025-01-01T00:00:00Z", interpretationStatus: "qualified-review" as const, reviewerIds: [] };
+    expect(evaluateApplicability(mission(), req, { status: "approved" })).toMatchObject({ applicable: true, result: "unknown", reason: "REQUIREMENT_SOURCE_REVIEW_PENDING" });
   });
 });

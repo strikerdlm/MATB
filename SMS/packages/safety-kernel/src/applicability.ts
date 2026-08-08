@@ -65,7 +65,8 @@ export function buildHardBlockers(mission: MissionRevision, facts: Applicability
   const blockers: SafetyBlocker[] = [];
   const configuration = mission.configuration;
   const operational = facts.operational ?? mission.profileId === "fac-state-aviation";
-  if (operational && (configuration === "armed" || configuration === "strike" || mission.aircraft.some((aircraft) => aircraft.configuration === "armed" || aircraft.configuration === "strike"))) {
+  const facProfile = mission.profileId === "fac-state-aviation";
+  if ((facProfile || operational) && (configuration === "armed" || configuration === "strike" || mission.aircraft.some((aircraft) => aircraft.configuration === "armed" || aircraft.configuration === "strike"))) {
     blockers.push(blocker("CONFIGURATION_OUT_OF_SCOPE", CONCEPT_IDS.configurationOutOfScope, "configurationOutOfScope"));
   }
   const crewMission = facts.crew ? { ...mission, crew: facts.crew } : mission;
@@ -94,9 +95,11 @@ export function evaluateApplicability(mission: MissionRevision, requirement: Req
   const expression = requirement.applicabilityExpression.toLowerCase();
   const applicable = expression.includes("ifr") ? mission.flightRule === "IFR" : expression.includes("autonomous") || expression.includes("supervised") || expression.includes("state_aviation") ? mission.profileId === "fac-state-aviation" : true;
   if (!applicable) return { applicable: false, result: "not-reviewed", reason: "REQUIREMENT_NOT_APPLICABLE", affectedGates: [] };
-  if (requirement.interpretationStatus === "draft" || requirement.interpretationStatus === "superseded") return { applicable: true, result: "not-reviewed", reason: "REQUIREMENT_NOT_REVIEWED", affectedGates: HARD_GATES };
-  if (merged.status !== "approved" && (expression.includes("ifr") || expression.includes("supervised") || expression.includes("autonomous"))) return evidenceResult(false, true, "APPROVED_POLICY_REQUIRED");
   if (merged.automationMode === "autonomous") return { applicable: true, result: "fail", reason: "AUTONOMOUS_FLIGHT_PROHIBITED", affectedGates: HARD_GATES };
+  if (requirement.interpretationStatus === "draft" || requirement.interpretationStatus === "superseded") return { applicable: true, result: "not-reviewed", reason: "REQUIREMENT_NOT_REVIEWED", affectedGates: HARD_GATES };
+  if (requirement.interpretationStatus === "qualified-review") return evidenceResult(false, true, "REQUIREMENT_SOURCE_REVIEW_PENDING");
+  if ((requirement.sourceRefs ?? []).some((sourceRef) => sourceRef.reviewState !== "accepted")) return evidenceResult(false, true, "REQUIREMENT_EVIDENCE_NOT_ACCEPTED");
+  if (merged.status !== "approved" && (expression.includes("ifr") || expression.includes("supervised") || expression.includes("autonomous"))) return evidenceResult(false, true, "APPROVED_POLICY_REQUIRED");
   if (merged.automationMode === "supervised" || expression.includes("supervised_automation")) {
     const complete = merged.supervisedAutomationApproved === true && (merged.humanInterventionCapable ?? false) && (merged.approvedCapabilityEvidence ?? merged.approvedCapabilityEvidence === true);
     return evidenceResult(complete, true, complete ? "SUPERVISED_AUTOMATION_EVIDENCE_ACCEPTED" : "SUPERVISED_AUTOMATION_EVIDENCE_INCOMPLETE");
