@@ -31,6 +31,31 @@ npm run build --workspace packages/safety-kernel
 
 Result: PASS — typecheck and build completed successfully.
 
+## Round 2 review fixes
+
+Every class fixture now runs through `evaluateMission`; normal VFR and explicit-evidence IC IFR cases are asserted ready, while the research swarm is evaluated as blocked. IFR negative cases remove policy approval, equipment, segregated airspace, and authorization independently and assert `IFR_EVIDENCE_INCOMPLETE`. Supported blocked fixtures assert their exact release-facing blocker codes/reasons and non-empty synthetic evidence references. Unsupported airspace/reserve/maintenance cases assert `REQUIREMENT_SOURCE_REVIEW_PENDING`, non-empty evidence, and non-empty documented limitations.
+
+Verification:
+
+```text
+npm test --workspace packages/safety-kernel -- golden.test.ts --run
+```
+
+Result: PASS — 1 test file, 3 tests.
+
+```text
+npm test --workspace packages/safety-kernel -- --run
+```
+
+Result: PASS — 11 test files, 110 tests.
+
+```text
+npm run typecheck --workspace packages/safety-kernel
+npm run build --workspace packages/safety-kernel
+```
+
+Result: PASS — typecheck and build completed successfully.
+
 ## Limitations
 
 The fixtures intentionally consume the existing pure APIs and controlled metadata; they do not infer regulatory authority, replace signed evidence, or claim that a passing predicate is institutional approval.

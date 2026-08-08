@@ -22,6 +22,9 @@ describe("class-complete State Aviation golden fixtures", () => {
       const expression = fixture.flightRule === "IFR" ? "ifr" : "state_aviation";
       const applicability = evaluateApplicability(mission, req(String(fixture.id), expression), fixture.ifrEvidence === "explicit-complete" ? { ...policy, ifrApproved: true, aircraftEquipmentCapable: true, segregatedAirspace: true, authorizationEvidence: true } : policy);
       if (fixture.flightRule === "IFR") expect(applicability.result).toBe("pass");
+      const classResult = evaluateMission({ mission, requirements: [req(String(fixture.id), expression)], policy: fixture.flightRule === "IFR" ? ({ ...policy, ifrApproved: true, aircraftEquipmentCapable: true, segregatedAirspace: true, authorizationEvidence: true } as PolicyPackage) : policy, nowUtc });
+      expect(classResult.evaluations[0]?.evidenceRefs.length).toBeGreaterThan(0);
+      if (fixture.researchOnly !== true) expect(classResult.status).toBe("ready");
       if (fixture.researchOnly === true) { const researchMission = { ...mission, aircraft: [...mission.aircraft, { ...mission.aircraft[0], aircraftId: "aircraft-2" }] }; expect(buildHardBlockers(researchMission, { swarm: true, researchOnly: true, operational: false })).toContainEqual(expect.objectContaining({ code: "SWARM_RESEARCH_NON_DISPATCHABLE" })); const researchResult = evaluateMission({ mission: researchMission, requirements: [req(String(fixture.id))], policy, nowUtc }); expect(researchResult.status).toBe("blocked"); expect(researchResult.blockers).toContainEqual(expect.objectContaining({ code: "SWARM_RESEARCH_NON_DISPATCHABLE" })); }
     }
   });
@@ -36,11 +39,24 @@ describe("class-complete State Aviation golden fixtures", () => {
       const evaluationPolicy = fixture.policyStatus === "unsigned" ? undefined : fixture.automationMode === "autonomous" ? { ...policy, automationMode: "autonomous" as const } : policy;
       const result = evaluateMission({ mission, requirements: [evaluatedRequirement], policy: evaluationPolicy, nowUtc });
       if (fixture.expectedReason) { expect(result.evaluations[0]).toMatchObject({ reason: fixture.expectedReason }); expect(result.evaluations[0]?.evidenceRefs).toContain("golden-evidence"); if (fixture.dataSnapshot && typeof fixture.dataSnapshot === "object") expect(result.evaluations[0]?.evidenceRefs).toContain((fixture.dataSnapshot as { snapshotId: string }).snapshotId); }
+      expect(result.evaluations[0]?.evidenceRefs.length).toBeGreaterThan(0);
+      if (fixture.unsupported === true) { expect(fixture.limitation).toEqual(expect.any(String)); expect(String(fixture.limitation).length).toBeGreaterThan(0); expect(result.evaluations[0]).toMatchObject({ reason: "REQUIREMENT_SOURCE_REVIEW_PENDING", evidenceRefs: ["golden-evidence"] }); }
+      if (fixture.kernelCode) expect(result.blockers).toContainEqual(expect.objectContaining({ code: fixture.kernelCode }));
+      if (fixture.evaluationCode) expect(result.blockers).toContainEqual(expect.objectContaining({ code: fixture.evaluationCode }));
       if (fixture.kind === "missing-risk-matrix") expect(evaluateRisk({ hazardIds: ["h-1"], mitigationIds: ["m-1"], status: "complete", probabilityLevel: 1, severity: 1, residualRiskBand: "low", acceptanceAuthorityId: "safety-1", policy, nowUtc })).toMatchObject({ status: "blocked", reason: "APPROVED_RISK_MATRIX_REQUIRED" });
       if (fixture.kind === "unacceptable-residual-risk") { const riskPolicy = { ...policy, riskMatrix: { probabilityLevels: 1, severityLevels: 1, cells: ["low"] }, nasoThresholds: [{ band: "low" }], delegatedAuthorities: [{ role: "safety" as const, userRole: "safety-1", bands: ["low"] }] }; expect(evaluateRisk({ hazardIds: ["h-1"], mitigationIds: ["m-1"], status: "complete", probabilityLevel: 1, severity: 1, residualRiskBand: "high", acceptanceAuthorityId: "safety-1", policy: riskPolicy, nowUtc })).toMatchObject({ status: "blocked", reason: "RESIDUAL_RISK_BAND_MISMATCH" }); }
       expect(result.status).not.toBe("ready");
       expect(result.evaluations.every((evaluation) => Array.isArray(evaluation.evidenceRefs))).toBe(true);
       expect(explainEvaluation(result, "es").conceptIds).toEqual(explainEvaluation(result, "en").conceptIds);
+    }
+  });
+
+  it("fails IFR closed when each prerequisite is removed", () => {
+    const fixture = allClasses.find((item) => item.ifrEvidence === "explicit-complete")!;
+    const mission = baseMission(fixture);
+    for (const missing of ["policy", "equipment", "segregated", "authorization"]) {
+      const facts = { ...policy, ifrApproved: missing !== "policy", aircraftEquipmentCapable: missing !== "equipment", segregatedAirspace: missing !== "segregated", authorizationEvidence: missing !== "authorization" };
+      expect(evaluateMission({ mission, requirements: [req("ifr-negative", "ifr")], policy: facts, nowUtc })).toMatchObject({ status: "blocked", evaluations: [expect.objectContaining({ reason: "IFR_EVIDENCE_INCOMPLETE", evidenceRefs: ["golden-evidence"] })] });
     }
   });
 });
