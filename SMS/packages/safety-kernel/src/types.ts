@@ -84,7 +84,8 @@ export interface GateInvalidationEvent { eventType: "gate.invalidation"; sequenc
 export type GateApprovalEvent = GateDecisionEvent | GateInvalidationEvent;
 /** Material-change facts required to emit deterministic approval invalidations. */
 export interface GateInvalidationInput { missionRevisionId: string; nowUtc: string; actorUserId: string; actorRole: GateActorRole; sequence: number; previousHash: string | null; invalidation: InvalidationResult }
-export interface TransitionInput { missionRevisionId: string; current: MissionState; event: "plan" | "submit-review" | "gates-complete" | "release" | "activate" | "complete" | "suspend" | "abort" | "post-flight" | "close"; actor: { userId: string; role: CrewAssignment["role"] }; nowUtc: string; evaluation?: SafetyEvaluationResult; approvals?: readonly GateApproval[] }
+/** A transition always names and supplies the exact mission revision it governs. */
+export interface TransitionInput { missionRevisionId: string; mission: MissionRevision; current: MissionState; event: "plan" | "submit-review" | "gates-complete" | "release" | "activate" | "complete" | "suspend" | "abort" | "post-flight" | "close"; actor: { userId: string; role: CrewAssignment["role"] }; nowUtc: string; evaluation?: SafetyEvaluationResult; approvals?: readonly GateApproval[] }
 export interface TransitionResult { state: MissionState; auditEvent: { type: string; missionRevisionId: string; actorUserId: string; occurredAtUtc: string } }
 export interface DependencyGraphEntry { field: MaterialChangeField; affectedRequirementIds: readonly string[] }
 export interface DependencyGraph { entries: readonly DependencyGraphEntry[] }

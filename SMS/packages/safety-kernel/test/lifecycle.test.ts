@@ -9,7 +9,12 @@ const mission = (overrides: Partial<MissionRevision> = {}): MissionRevision => (
   aircraft: [{ aircraftId: "ac-1", aircraftClass: "IC", configuration: "unarmed-isr", operatorUserId: "operator-1" }],
   flightRule: "VFR", visualCondition: "VLOS", configuration: "unarmed-isr",
   route: { areaId: "area-1", routeHash: "route-1", terrainStatus: "pass", obstacleStatus: "pass", airspaceStatus: "pass", notamStatus: "pass", visualConditionStatus: "pass" },
-  crew: [{ userId: "operator-1", role: "operator", aircraftId: "ac-1", qualified: true, recencyCurrent: true, dutyStatus: "available" }],
+  crew: [
+    { userId: "maintainer-1", role: "maintainer", qualified: true, recencyCurrent: true, dutyStatus: "available" },
+    { userId: "operator-1", role: "operator", aircraftId: "ac-1", qualified: true, recencyCurrent: true, dutyStatus: "available" },
+    { userId: "safety-1", role: "safety", qualified: true, recencyCurrent: true, dutyStatus: "available" },
+    { userId: "commander-1", role: "commander", qualified: true, recencyCurrent: true, dutyStatus: "available" },
+  ],
   evidenceSnapshotId: "evidence-1", dataSnapshots: [], riskAssessment: { hazardIds: [], mitigationIds: [], status: "complete" },
   ...overrides,
 });
@@ -27,26 +32,78 @@ const fourAcceptedGates: readonly GateApproval[] = [
 
 describe("authoritative mission lifecycle", () => {
   it("does not permit UnderReview to skip the four gates", () => {
-    expect(() => transitionMission({ missionRevisionId: "mr-lifecycle-1", current: "UnderReview", event: "activate", actor, nowUtc, evaluation: readyEvaluation(), approvals: fourAcceptedGates })).toThrow("gate");
+    expect(() => transitionMission({ missionRevisionId: "mr-lifecycle-1", mission: mission({ state: "UnderReview" }), current: "UnderReview", event: "activate", actor, nowUtc, evaluation: readyEvaluation(), approvals: fourAcceptedGates })).toThrow("gate");
   });
 
   it("requires all four valid accepted gates before entering ReadyForRelease", () => {
-    expect(() => transitionMission({ missionRevisionId: "mr-lifecycle-1", current: "UnderReview", event: "gates-complete", actor, nowUtc, evaluation: readyEvaluation(), approvals: fourAcceptedGates.slice(0, 3) })).toThrow("gate");
+    expect(() => transitionMission({ missionRevisionId: "mr-lifecycle-1", mission: mission({ state: "UnderReview" }), current: "UnderReview", event: "gates-complete", actor, nowUtc, evaluation: readyEvaluation(), approvals: fourAcceptedGates.slice(0, 3) })).toThrow("gate");
 
-    const result = transitionMission({ missionRevisionId: "mr-lifecycle-1", current: "UnderReview", event: "gates-complete", actor, nowUtc, evaluation: readyEvaluation(), approvals: fourAcceptedGates });
+    const result = transitionMission({ missionRevisionId: "mr-lifecycle-1", mission: mission({ state: "UnderReview" }), current: "UnderReview", event: "gates-complete", actor, nowUtc, evaluation: readyEvaluation(), approvals: fourAcceptedGates });
     expect(result).toMatchObject({ state: "ReadyForRelease", auditEvent: { missionRevisionId: "mr-lifecycle-1", actorUserId: "commander-1", occurredAtUtc: nowUtc } });
     expect(Object.isFrozen(result)).toBe(true);
   });
 
   it("rejects activation with unresolved hard blockers even when four approvals are supplied", () => {
     const evaluation = readyEvaluation({ status: "blocked", blockers: [{ code: "BLOCKED", conceptId: "test.blocked", severity: "hard", explanationKey: "BLOCKED", evidenceRefs: [] }] });
-    expect(() => transitionMission({ missionRevisionId: "mr-lifecycle-1", current: "Released", event: "activate", actor, nowUtc, evaluation, approvals: fourAcceptedGates })).toThrow("blocker");
+    expect(() => transitionMission({ missionRevisionId: "mr-lifecycle-1", mission: mission(), current: "Released", event: "activate", actor, nowUtc, evaluation, approvals: fourAcceptedGates })).toThrow("blocker");
   });
 
   it("uses caller-supplied deterministic audit time and rejects an invalid timestamp", () => {
-    const result = transitionMission({ missionRevisionId: "mr-lifecycle-1", current: "Released", event: "activate", actor, nowUtc, evaluation: readyEvaluation(), approvals: fourAcceptedGates });
+    const result = transitionMission({ missionRevisionId: "mr-lifecycle-1", mission: mission(), current: "Released", event: "activate", actor, nowUtc, evaluation: readyEvaluation(), approvals: fourAcceptedGates });
     expect(result.auditEvent.occurredAtUtc).toBe(nowUtc);
-    expect(() => transitionMission({ missionRevisionId: "mr-lifecycle-1", current: "Released", event: "activate", actor, nowUtc: "2026-08-08", evaluation: readyEvaluation(), approvals: fourAcceptedGates })).toThrow("UTC ISO-8601");
+    expect(() => transitionMission({ missionRevisionId: "mr-lifecycle-1", mission: mission(), current: "Released", event: "activate", actor, nowUtc: "2026-08-08", evaluation: readyEvaluation(), approvals: fourAcceptedGates })).toThrow("UTC ISO-8601");
+  });
+
+  it("rejects a transition whose supplied mission revision differs from its target", () => {
+    expect(() => transitionMission({
+      missionRevisionId: "mr-lifecycle-1",
+      mission: mission({ id: "mr-other" }),
+      current: "Released",
+      event: "activate",
+      actor,
+      nowUtc,
+      evaluation: readyEvaluation(),
+      approvals: fourAcceptedGates,
+    })).toThrow("mission revision");
+  });
+
+  it("rejects a transition when the mission state differs from current", () => {
+    expect(() => transitionMission({
+      missionRevisionId: "mr-lifecycle-1",
+      mission: mission({ state: "UnderReview" }),
+      current: "Released",
+      event: "activate",
+      actor,
+      nowUtc,
+      evaluation: readyEvaluation(),
+      approvals: fourAcceptedGates,
+    })).toThrow("mission state");
+  });
+
+  it("does not release when a commander purports to accept maintenance", () => {
+    const approvals = fourAcceptedGates.map((approval) => approval.gate === "maintenance"
+      ? { ...approval, actorUserId: "commander-1", actorRole: "commander" as const }
+      : approval);
+
+    expect(() => transitionMission({ missionRevisionId: "mr-lifecycle-1", mission: mission({ state: "UnderReview" }), current: "UnderReview", event: "gates-complete", actor, nowUtc, evaluation: readyEvaluation(), approvals })).toThrow();
+  });
+
+  it("does not release when a raw approval omits required decision metadata", () => {
+    const approvals = fourAcceptedGates.map((approval) => {
+      if (approval.gate !== "safety") return approval;
+      const { policyVersion: _policyVersion, ...missingMetadata } = approval;
+      return missingMetadata as unknown as GateApproval;
+    });
+
+    expect(() => transitionMission({ missionRevisionId: "mr-lifecycle-1", mission: mission({ state: "UnderReview" }), current: "UnderReview", event: "gates-complete", actor, nowUtc, evaluation: readyEvaluation(), approvals })).toThrow();
+  });
+
+  it("does not release when an operator approves the wrong aircraft", () => {
+    const approvals = fourAcceptedGates.map((approval) => approval.gate === "operator"
+      ? { ...approval, aircraftId: "ac-unassigned" }
+      : approval);
+
+    expect(() => transitionMission({ missionRevisionId: "mr-lifecycle-1", mission: mission({ state: "UnderReview" }), current: "UnderReview", event: "gates-complete", actor, nowUtc, evaluation: readyEvaluation(), approvals })).toThrow();
   });
 });
 
@@ -103,8 +160,10 @@ describe("revision-bound release decisions", () => {
       field: "route", previous: releasedMission.route, next: { ...releasedMission.route, routeHash: "route-2" },
     });
     const changedApprovals = fourAcceptedGates.map((approval) => ({ ...approval, missionRevisionId: changedMission.id }));
+    const targetMission = { ...changedMission, state: "Released" as const };
 
     expect(() => transitionMission({
+      mission: targetMission,
       current: "Released" as const,
       event: "activate" as const,
       actor,
@@ -112,7 +171,7 @@ describe("revision-bound release decisions", () => {
       missionRevisionId: changedMission.id,
       evaluation: readyEvaluation({ missionRevisionId: releasedMission.id }),
       approvals: changedApprovals,
-    })).toThrow("evaluation revision");
+    })).toThrow("four-gate");
   });
 
   it("rejects even one gate approval belonging to the prior revision", () => {
@@ -122,8 +181,10 @@ describe("revision-bound release decisions", () => {
     });
     const approvals = fourAcceptedGates.map((approval) => ({ ...approval, missionRevisionId: changedMission.id }));
     approvals[0] = { ...approvals[0]!, missionRevisionId: releasedMission.id };
+    const targetMission = { ...changedMission, state: "ReadyForRelease" as const };
 
     expect(() => transitionMission({
+      mission: targetMission,
       current: "ReadyForRelease",
       event: "release",
       actor,
@@ -131,6 +192,6 @@ describe("revision-bound release decisions", () => {
       missionRevisionId: changedMission.id,
       evaluation: readyEvaluation({ missionRevisionId: changedMission.id }),
       approvals,
-    })).toThrow("gate approval revision");
+    })).toThrow("four-gate");
   });
 });

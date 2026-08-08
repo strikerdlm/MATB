@@ -1,9 +1,8 @@
 import { sameMissionFact } from "./dependencies.js";
+import { evaluateFourGates } from "./gates.js";
 import {
   createTransitionResult,
   parseMissionRevision,
-  type GateApproval,
-  type GateName,
   type MissionRevision,
   type MissionRevisionChange,
   type MissionState,
@@ -13,7 +12,6 @@ import {
   type TransitionResult,
 } from "./types.js";
 
-const GATE_ORDER: readonly GateName[] = ["maintenance", "operator", "safety", "commander"];
 const UTC_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z$/;
 
 const TRANSITIONS: Readonly<Record<MissionState, Readonly<Partial<Record<TransitionInput["event"], MissionState>>>>> = {
@@ -52,32 +50,11 @@ function assertUtc(value: string): void {
   }
 }
 
-function hasFourAcceptedGates(approvals: readonly GateApproval[] | undefined): boolean {
-  if (!approvals) return false;
-  return GATE_ORDER.every((gate) => {
-    const decisions = approvals.filter((approval) => approval.gate === gate);
-    if (gate !== "operator") return decisions.length === 1 && decisions[0]?.decision === "accept" && decisions[0]?.valid === true;
-    const aircraftIds = decisions.map((approval) => approval.aircraftId);
-    return decisions.length > 0 && aircraftIds.every((aircraftId): aircraftId is string => aircraftId !== undefined)
-      && new Set(aircraftIds).size === aircraftIds.length
-      && decisions.every((approval) => approval.decision === "accept" && approval.valid);
-  });
-}
-
-function assertReleaseReady(input: TransitionInput): void {
+function assertReleaseReady(input: TransitionInput, mission: MissionRevision): void {
   if (!input.evaluation) throw new RangeError("release transition requires an evaluation");
-  if (input.evaluation.missionRevisionId !== input.missionRevisionId) {
-    throw new RangeError("evaluation revision does not match the transition target revision");
-  }
-  if (!input.approvals || input.approvals.some((approval) => approval.missionRevisionId !== input.missionRevisionId)) {
-    throw new RangeError("gate approval revision does not match the transition target revision");
-  }
-  if (input.evaluation.status !== "ready" || input.evaluation.blockers.length > 0) {
-    throw new RangeError("unresolved blocker prevents release transition");
-  }
-  if (input.evaluation.invalidatedGates.length > 0 || !hasFourAcceptedGates(input.approvals)) {
-    throw new RangeError("four valid accepted gates are required for release transition");
-  }
+  if (!input.approvals) throw new RangeError("release transition requires gate approvals");
+  const gateResult = evaluateFourGates({ mission, evaluation: input.evaluation, approvals: input.approvals, nowUtc: input.nowUtc });
+  if (gateResult.status !== "ready" || gateResult.blockers.length > 0) throw new RangeError("four-gate evaluation has unresolved blockers preventing release transition");
 }
 
 /** Applies the finite-state lifecycle without clocks, storage, or implicit approval state. */
@@ -85,9 +62,12 @@ export function transitionMission(input: TransitionInput): TransitionResult {
   assertUtc(input.nowUtc);
   if (input.actor.userId.trim().length === 0) throw new RangeError("transition actor user ID must not be empty");
   if (input.missionRevisionId.trim().length === 0) throw new RangeError("transition mission revision ID must not be empty");
+  const mission = parseMissionRevision(input.mission);
+  if (mission.id !== input.missionRevisionId) throw new RangeError("mission revision does not match the transition target revision");
+  if (mission.state !== input.current) throw new RangeError("mission state does not match the transition current state");
   const state = TRANSITIONS[input.current][input.event];
   if (!state) throw new RangeError(`gate-controlled transition ${input.event} is not permitted from ${input.current}`);
-  if (input.event === "gates-complete" || input.event === "release" || input.event === "activate") assertReleaseReady(input);
+  if (input.event === "gates-complete" || input.event === "release" || input.event === "activate") assertReleaseReady(input, mission);
   return createTransitionResult({
     state,
     auditEvent: { type: `mission.${input.event}`, missionRevisionId: input.missionRevisionId, actorUserId: input.actor.userId, occurredAtUtc: input.nowUtc },
