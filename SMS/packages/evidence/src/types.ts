@@ -45,3 +45,27 @@ export interface NormalizedRequirement {
   interpretationStatus: "draft" | "qualified-review" | "approved" | "superseded";
   reviewerIds: string[];
 }
+
+export interface RequirementTranslation {
+  requirementId: string;
+  sourceLanguage: "es";
+  targetLanguage: "en";
+  translatedText: string;
+  translationStatus: "draft" | "reviewed" | "approved";
+  reviewerIds: readonly string[];
+}
+
+export interface SignedPackageManifest {
+  packageId: string;
+  kind: "regulatory" | "policy" | "map" | "weather" | "notam" | "terminology" | "software";
+  issuer: string;
+  version: string;
+  issuedAtUtc: string;
+  effectiveFromUtc: string;
+  expiresAtUtc?: string;
+  geographicScope?: string;
+  contentSha256: string;
+  signature: string;
+  keyId: string;
+  dependencies: string[];
+}

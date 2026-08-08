@@ -5,6 +5,8 @@ export type {
   EvidenceId,
   EvidenceReference,
   NormalizedRequirement,
+  RequirementTranslation,
+  SignedPackageManifest,
   SourceId,
   SourceRecord,
 } from "./types.js";
