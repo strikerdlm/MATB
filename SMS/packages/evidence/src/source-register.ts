@@ -21,12 +21,15 @@ export class SourceRegister {
   }
 
   appendSupersession(relationship: SupersessionRelationship): void {
+    if (relationship === null || typeof relationship !== "object" || Array.isArray(relationship)) {
+      throw new Error("Supersession relationship has invalid fields");
+    }
     if (typeof relationship.relationshipId !== "string" || relationship.relationshipId.trim() === "" || typeof relationship.supersededSourceId !== "string" || relationship.supersededSourceId.trim() === "" || typeof relationship.replacementSourceId !== "string" || relationship.replacementSourceId.trim() === "" || !isUtcTimestamp(relationship.recordedAtUtc)) throw new Error("Supersession relationship has invalid fields");
     if (relationship.supersededSourceId === relationship.replacementSourceId) throw new Error("Supersession relationship cannot target itself");
     if (!this.records.has(relationship.supersededSourceId) || !this.records.has(relationship.replacementSourceId)) throw new Error("Supersession relationship target source does not exist");
     if (this.relationships.has(relationship.relationshipId)) throw new Error("Supersession relationship is immutable");
     if ([...this.relationships.values()].some((item) => item.supersededSourceId === relationship.supersededSourceId)) throw new Error("Source already has a supersession relationship");
-    if (this.records.get(relationship.supersededSourceId)?.review === "rejected" || this.records.get(relationship.replacementSourceId)?.review !== "accepted") throw new Error("Supersession sources have incoherent review status");
+    if (this.records.get(relationship.supersededSourceId)?.review !== "accepted" || this.records.get(relationship.replacementSourceId)?.review !== "accepted") throw new Error("Supersession sources must have accepted review status");
     if (this.isSuperseded(relationship.replacementSourceId)) throw new Error("Supersession replacement is already superseded");
     this.relationships.set(relationship.relationshipId, Object.freeze({ ...relationship }));
   }

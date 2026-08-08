@@ -53,6 +53,8 @@ describe("SourceRegister", () => {
     expect(() => register.appendSupersession({ ...relationship, relationshipId: "rel-bad", replacementSourceId: "source-b" as SourceRecord["sourceId"], recordedAtUtc: "not-a-time" })).toThrow("invalid fields");
     expect(() => register.appendSupersession({ ...relationship, relationshipId: "rel-bad", replacementSourceId: "source-b" as SourceRecord["sourceId"], supersededSourceId: "" as SourceRecord["sourceId"] })).toThrow("invalid fields");
     expect(() => register.appendSupersession(null as unknown as SupersessionRelationship)).toThrow("invalid fields");
+    expect(() => register.appendSupersession([] as unknown as SupersessionRelationship)).toThrow("invalid fields");
+    expect(() => register.appendSupersession("not-an-object" as unknown as SupersessionRelationship)).toThrow("invalid fields");
     const unreviewed = new SourceRegister();
     unreviewed.append({ ...validRecord, review: "unreviewed" });
     unreviewed.append({ ...validRecord, sourceId: "source-c" as SourceRecord["sourceId"] });
@@ -62,6 +64,8 @@ describe("SourceRegister", () => {
   it("rejects malformed source validity timestamps", () => {
     expect(() => new SourceRegister().append({ ...validRecord, validFromUtc: "not-a-time" })).toThrow("valid UTC timestamp");
     expect(() => new SourceRegister().append({ ...validRecord, validUntilUtc: "2026-02-29T00:00:00Z" })).toThrow("valid UTC timestamp");
+    expect(() => new SourceRegister().append({ ...validRecord, validUntilUtc: "2026-04-31T00:00:00Z" })).toThrow("valid UTC timestamp");
+    expect(() => new SourceRegister().append({ ...validRecord, validUntilUtc: "2026-01-01T24:00:00Z" })).toThrow("valid UTC timestamp");
     expect(() => new SourceRegister().append({ ...validRecord, validFromUtc: "2026-08-09T00:00:00Z", validUntilUtc: "2026-08-08T00:00:00Z" })).toThrow("validity interval");
   });
 
