@@ -64,6 +64,19 @@ describe("approved risk and NASO evaluation", () => {
     expect(evaluateRisk({ ...riskInput, policy: { ...approvedPolicy, manifest: { expiresAtUtc: "2026-08-09T00:00:00Z" } as SignedPackageManifest } })).toMatchObject({ status: "blocked", reason: "APPROVED_RISK_POLICY_REQUIRED" });
   });
 
+  it("rejects self-referential, duplicate, or noncanonical manifest inventories", () => {
+    const dependencyA = { packageId: "dep-a", version: "1.0.0", contentSha256: "c".repeat(64) };
+    const dependencyB = { packageId: "dep-b", version: "1.0.0", contentSha256: "d".repeat(64) };
+    const fileA = { path: "a.json", sha256: "c".repeat(64), sizeBytes: 1 };
+    const fileB = { path: "b.json", sha256: "d".repeat(64), sizeBytes: 1 };
+    const withManifest = (manifest: SignedPackageManifest) => evaluateRisk({ ...riskInput, policy: { ...approvedPolicy, manifest } });
+    expect(withManifest({ ...approvedManifest, dependencies: [{ ...dependencyA, packageId: "policy-risk-1" }] })).toMatchObject({ status: "blocked", reason: "APPROVED_RISK_POLICY_REQUIRED" });
+    expect(withManifest({ ...approvedManifest, dependencies: [dependencyB, dependencyA] })).toMatchObject({ status: "blocked", reason: "APPROVED_RISK_POLICY_REQUIRED" });
+    expect(withManifest({ ...approvedManifest, dependencies: [dependencyA, dependencyA] })).toMatchObject({ status: "blocked", reason: "APPROVED_RISK_POLICY_REQUIRED" });
+    expect(withManifest({ ...approvedManifest, files: [fileB, fileA] })).toMatchObject({ status: "blocked", reason: "APPROVED_RISK_POLICY_REQUIRED" });
+    expect(withManifest({ ...approvedManifest, files: [fileA, fileA] })).toMatchObject({ status: "blocked", reason: "APPROVED_RISK_POLICY_REQUIRED" });
+  });
+
   it("blocks a residual band that does not match the approved matrix cell", () => {
     expect(evaluateRisk({ ...riskInput, residualRiskBand: "low" })).toMatchObject({ status: "blocked", reason: "RESIDUAL_RISK_BAND_MISMATCH" });
   });

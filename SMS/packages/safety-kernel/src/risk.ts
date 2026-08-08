@@ -79,6 +79,27 @@ function validManifestFile(value: unknown): boolean {
     && typeof value.sizeBytes === "number" && Number.isSafeInteger(value.sizeBytes) && value.sizeBytes >= 0;
 }
 
+function validCanonicalManifestInventory(manifest: Record<string, unknown>): boolean {
+  if (!Array.isArray(manifest.dependencies) || !Array.isArray(manifest.files) || manifest.files.length === 0 || typeof manifest.packageId !== "string") return false;
+  let previousDependency = "";
+  for (const dependency of manifest.dependencies) {
+    if (!validManifestDependency(dependency)) return false;
+    const fields = dependency as Record<string, unknown>;
+    const packageId = fields.packageId as string;
+    const key = `${packageId}@${fields.version as string}#${fields.contentSha256 as string}`;
+    if (packageId === manifest.packageId || previousDependency >= key) return false;
+    previousDependency = key;
+  }
+  let previousPath = "";
+  for (const file of manifest.files) {
+    if (!validManifestFile(file)) return false;
+    const path = (file as Record<string, unknown>).path as string;
+    if (previousPath >= path) return false;
+    previousPath = path;
+  }
+  return true;
+}
+
 /** Validates policy-manifest shape and its effective window without I/O or signature verification. */
 function validApprovedManifestAt(manifest: unknown, now: number): boolean {
   if (!isRecord(manifest)
@@ -91,10 +112,9 @@ function validApprovedManifestAt(manifest: unknown, now: number): boolean {
     || typeof manifest.contentSha256 !== "string" || !SHA256_PATTERN.test(manifest.contentSha256)
     || typeof manifest.signature !== "string" || !SIGNATURE_PATTERN.test(manifest.signature)
     || !nonBlankString(manifest.keyId)
-    || !Array.isArray(manifest.dependencies) || !manifest.dependencies.every(validManifestDependency)
-    || !Array.isArray(manifest.files) || manifest.files.length === 0 || !manifest.files.every(validManifestFile)
     || manifest.qualification !== "approved"
     || !Array.isArray(manifest.caveats) || !manifest.caveats.every(nonBlankString)) return false;
+  if (!validCanonicalManifestInventory(manifest)) return false;
   const issuedAt = manifestTimestamp(manifest.issuedAtUtc);
   const effectiveFrom = manifestTimestamp(manifest.effectiveFromUtc);
   if (issuedAt === undefined || effectiveFrom === undefined || issuedAt > effectiveFrom || effectiveFrom > now) return false;
