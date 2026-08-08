@@ -1,5 +1,8 @@
 import type { SourceRecord } from "./types.js";
 
+export { SourceRegister } from "./source-register.js";
+export { assertClaimTraceable } from "./claims.js";
+
 export { canonicalJson, sha256File } from "./hash.js";
 export type {
   EvidenceId,
