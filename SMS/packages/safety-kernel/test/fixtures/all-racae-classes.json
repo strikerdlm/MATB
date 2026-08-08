@@ -1,0 +1,9 @@
+[
+  {"id":"ia-vfr-vlos-isr","aircraftClass":"IA","configuration":"unarmed-isr","flightRule":"VFR","visualCondition":"VLOS"},
+  {"id":"ib-vfr-vlos-support","aircraftClass":"IB","configuration":"unarmed-support","flightRule":"VFR","visualCondition":"VLOS"},
+  {"id":"ic-vfr-vlos-isr","aircraftClass":"IC","configuration":"unarmed-isr","flightRule":"VFR","visualCondition":"VLOS"},
+  {"id":"ic-ifr-segregated-authorized","aircraftClass":"IC","configuration":"unarmed-isr","flightRule":"IFR","visualCondition":"BVLOS","ifrEvidence":"explicit-complete"},
+  {"id":"ii-vfr-vlos-support","aircraftClass":"II","configuration":"unarmed-support","flightRule":"VFR","visualCondition":"VLOS"},
+  {"id":"iii-vfr-vlos-isr","aircraftClass":"III","configuration":"unarmed-isr","flightRule":"VFR","visualCondition":"VLOS"},
+  {"id":"research-swarm-non-dispatchable","aircraftClass":"IC","configuration":"unarmed-isr","flightRule":"VFR","visualCondition":"VLOS","researchOnly":true}
+]
