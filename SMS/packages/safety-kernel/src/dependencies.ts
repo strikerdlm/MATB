@@ -33,19 +33,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && Object.getPrototypeOf(value) === Object.prototype;
 }
 
-/** Structural equality for JSON-like mission facts. Unsupported values fail closed. */
-function sameFact(previous: unknown, next: unknown): boolean {
+/** Compares JSON-like mission facts deterministically without retaining either value. */
+export function sameMissionFact(previous: unknown, next: unknown): boolean {
   if (Object.is(previous, next)) return true;
   if (typeof previous !== typeof next || previous === null || next === null) return false;
   if (Array.isArray(previous) || Array.isArray(next)) {
     if (!Array.isArray(previous) || !Array.isArray(next) || previous.length !== next.length) return false;
-    return previous.every((value, index) => sameFact(value, next[index]));
+    return previous.every((value, index) => sameMissionFact(value, next[index]));
   }
   if (isRecord(previous) && isRecord(next)) {
     const previousKeys = Object.keys(previous).sort(compareStable);
     const nextKeys = Object.keys(next).sort(compareStable);
     return previousKeys.length === nextKeys.length
-      && previousKeys.every((key, index) => key === nextKeys[index] && sameFact(previous[key], next[key]));
+      && previousKeys.every((key, index) => key === nextKeys[index] && sameMissionFact(previous[key], next[key]));
   }
   return false;
 }
@@ -67,7 +67,7 @@ function affectedRequirements(field: MaterialChangeField, graph: DependencyGraph
  * release gates that become unapproved. It never persists or carries approvals.
  */
 export function invalidateForChange(input: MaterialChangeInput): InvalidationResult {
-  if (sameFact(input.previous, input.next)) {
+  if (sameMissionFact(input.previous, input.next)) {
     return createInvalidationResult({ material: false, affectedRequirementIds: [], invalidatedGates: [], reason: "NO_EFFECTIVE_CHANGE" });
   }
   if (input.field === "display-note") {
