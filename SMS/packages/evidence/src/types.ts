@@ -20,6 +20,18 @@ export interface SourceRecord {
   licenseOrRestriction: string;
   review: "unreviewed" | "in-review" | "accepted" | "superseded" | "rejected";
   supersededBy?: SourceId;
+  reviewerId?: string;
+  reviewSignature?: string;
+  reviewedAtUtc?: string;
+  validFromUtc?: string;
+  validUntilUtc?: string;
+}
+
+export interface SupersessionRelationship {
+  relationshipId: string;
+  supersededSourceId: SourceId;
+  replacementSourceId: SourceId;
+  recordedAtUtc: string;
 }
 
 export interface EvidenceReference {
