@@ -25,6 +25,7 @@ export type FlightRule = "VFR" | "IFR";
 export type VisualCondition = "VLOS" | "EVLOS" | "BVLOS";
 export type MissionState = "Draft" | "Planned" | "UnderReview" | "ReadyForRelease" | "Released" | "Active" | "Completed" | "Suspended" | "Aborted" | "PostFlightReview" | "Closed";
 export type GateName = "maintenance" | "operator" | "safety" | "commander";
+export type MaterialChangeField = "aircraft" | "gcs" | "payload" | "battery" | "software" | "crew" | "route" | "altitude" | "visual-condition" | "schedule" | "weather" | "notam" | "aip" | "risk" | "mitigation" | "exception" | "policy" | "evidence" | "display-note";
 
 export interface AircraftAssignment { aircraftId: string; aircraftClass: AircraftClass; configuration: MissionRevision["configuration"]; operatorUserId?: string; maintenanceReleaseId?: string }
 export interface CrewAssignment { userId: string; role: "operator" | "observer" | "maintainer" | "safety" | "commander"; aircraftId?: string; qualified: boolean; recencyCurrent: boolean; dutyStatus: "available" | "restricted" | "unavailable" | "unknown" }
@@ -39,13 +40,17 @@ export interface SafetyBlocker { code: string; conceptId: string; severity: "har
 export interface SafetyEvaluationResult { missionRevisionId: string; status: "ready" | "conditional" | "blocked" | "degraded"; evaluations: readonly RuleEvaluation[]; blockers: readonly SafetyBlocker[]; invalidatedGates: readonly GateName[]; kernelVersion: string }
 export interface SafetyEvaluationInput { mission: MissionRevision; requirements: readonly NormalizedRequirement[]; policy: PolicyPackage | undefined; nowUtc: string }
 export interface PolicyPackage { packageId: string; version: string; status: "draft" | "approved" | "expired" | "revoked"; riskMatrix?: { probabilityLevels: number; severityLevels: number; cells: readonly string[] }; nasoThresholds?: readonly { band: string; maxDurationHours?: number }[]; delegatedAuthorities: readonly { role: GateName; userRole: string; bands: readonly string[] }[]; freshness: Record<DataSnapshotRef["kind"], { maxAgeMinutes: number; critical: boolean }>; signature: string; manifest?: SignedPackageManifest }
-export interface TransitionInput { current: MissionState; event: "plan" | "submit-review" | "gates-complete" | "release" | "activate" | "complete" | "suspend" | "abort" | "post-flight" | "close"; actor: { userId: string; role: CrewAssignment["role"] }; evaluation?: SafetyEvaluationResult }
+export interface GateApproval { gate: GateName; decision: "accept" | "block" | "escalate"; valid: boolean }
+export interface TransitionInput { current: MissionState; event: "plan" | "submit-review" | "gates-complete" | "release" | "activate" | "complete" | "suspend" | "abort" | "post-flight" | "close"; actor: { userId: string; role: CrewAssignment["role"] }; nowUtc: string; evaluation?: SafetyEvaluationResult; approvals?: readonly GateApproval[] }
 export interface TransitionResult { state: MissionState; auditEvent: { type: string; actorUserId: string; occurredAtUtc: string } }
-export interface MaterialChangeInput { mission: MissionRevision; field: string; previous: unknown; next: unknown }
+export interface DependencyGraphEntry { field: MaterialChangeField; affectedRequirementIds: readonly string[] }
+export interface DependencyGraph { entries: readonly DependencyGraphEntry[] }
+export interface MaterialChangeInput { mission: MissionRevision; field: MaterialChangeField; previous: unknown; next: unknown; dependencyGraph: DependencyGraph }
+export interface MissionRevisionChange { field: MaterialChangeField; previous: unknown; next: unknown }
 export interface InvalidationResult { material: boolean; affectedRequirementIds: readonly string[]; invalidatedGates: readonly GateName[]; reason: string }
 export interface ApplicabilityResult { applicable: boolean; result: RuleEvaluation["result"]; reason: string; affectedGates: readonly GateName[] }
 export interface FleetSafetyFacts { maintenance: readonly { aircraftId: string; status: "pass" | "blocked" | "unknown" }[]; crew: readonly CrewAssignment[]; energy: readonly { aircraftId: string; status: "pass" | "blocked" | "unknown"; evidenceRef: string }[] }
-export interface GateEvaluationInput { mission: MissionRevision; evaluation: SafetyEvaluationResult; approvals: readonly { gate: GateName; decision: "accept" | "block" | "escalate"; valid: boolean }[]; nowUtc: string }
+export interface GateEvaluationInput { mission: MissionRevision; evaluation: SafetyEvaluationResult; approvals: readonly GateApproval[]; nowUtc: string }
 export interface FourGateResult { status: "ready" | "conditional" | "blocked"; gates: readonly { gate: GateName; status: "accepted" | "blocked" | "pending" | "invalid" }[]; blockers: readonly SafetyBlocker[] }
 export interface LocalizedExplanation { locale: "es" | "en"; conceptIds: readonly string[]; labels: readonly string[]; translationMissing: boolean }
 
@@ -59,10 +64,14 @@ export const MissionRevisionSchema = z.object({ id, missionId: id, revision: z.n
 export const RuleEvaluationSchema = z.object({ requirementId: id, result: z.enum(["pass", "fail", "unknown", "expired", "not-reviewed"]), severity: z.enum(["hard", "soft", "advisory"]), reason: id, evidenceRefs: z.array(id), affectedGates: z.array(z.enum(["maintenance", "operator", "safety", "commander"])) }).strict();
 export const SafetyBlockerSchema = z.object({ code: id, conceptId: id, severity: z.enum(["hard", "policy", "data", "authority"]), explanationKey: id, evidenceRefs: z.array(id) }).strict();
 export const SafetyEvaluationResultSchema = z.object({ missionRevisionId: id, status: z.enum(["ready", "conditional", "blocked", "degraded"]), evaluations: z.array(RuleEvaluationSchema), blockers: z.array(SafetyBlockerSchema), invalidatedGates: z.array(z.enum(["maintenance", "operator", "safety", "commander"])), kernelVersion: z.string().regex(/^0\.\d+\.\d+$/) }).strict();
+export const TransitionResultSchema = z.object({ state: z.enum(["Draft", "Planned", "UnderReview", "ReadyForRelease", "Released", "Active", "Completed", "Suspended", "Aborted", "PostFlightReview", "Closed"]), auditEvent: z.object({ type: id, actorUserId: id, occurredAtUtc: utc }).strict() }).strict();
+export const InvalidationResultSchema = z.object({ material: z.boolean(), affectedRequirementIds: z.array(id), invalidatedGates: z.array(z.enum(["maintenance", "operator", "safety", "commander"])), reason: id }).strict();
 function freeze<T>(value: T): T { if (value && typeof value === "object" && !Object.isFrozen(value)) { Object.freeze(value); for (const child of Object.values(value as Record<string, unknown>)) freeze(child); } return value; }
 export function parseMissionRevision(input: unknown): MissionRevision { return freeze(MissionRevisionSchema.parse(input)); }
 export function parseRuleEvaluation(input: unknown): RuleEvaluation { return freeze(RuleEvaluationSchema.parse(input)); }
 export function parseSafetyBlocker(input: unknown): SafetyBlocker { return freeze(SafetyBlockerSchema.parse(input)); }
 export function parseSafetyEvaluationResult(input: unknown): SafetyEvaluationResult { return freeze(SafetyEvaluationResultSchema.parse(input)); }
 export function createSafetyEvaluationResult(input: SafetyEvaluationResult): SafetyEvaluationResult { return parseSafetyEvaluationResult(input); }
+export function createTransitionResult(input: TransitionResult): TransitionResult { return freeze(TransitionResultSchema.parse(input)); }
+export function createInvalidationResult(input: InvalidationResult): InvalidationResult { return freeze(InvalidationResultSchema.parse(input)); }
 export type { EvidenceReference, NormalizedRequirement, SignedPackageManifest };
