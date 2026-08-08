@@ -92,7 +92,7 @@ export interface SignedPackageManifest {
   issuedAtUtc: string;
   effectiveFromUtc: string;
   expiresAtUtc?: string;
-  geographicScope?: string;
+  geographicScope: string;
   contentSha256: string;
   signature: string;
   keyId: string;

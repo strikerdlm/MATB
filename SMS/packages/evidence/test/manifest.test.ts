@@ -36,4 +36,19 @@ describe("offline evidence package verification", () => {
     expect(() => signManifest({ ...manifest, files: [{ ...manifest.files[0], path: "../escape" }], contentSha256: manifest.contentSha256 }, privateKey)).toThrow("traversal");
   });
   it("rejects a package older than the installed version", async () => { const { manifest } = await fixture(); const older = signManifest({ ...manifest, version: "0.9.0", signature: "" }, privateKey); expect(() => rejectDowngrade(manifest, older)).toThrow("downgrade"); });
+  it("rejects an older effective period even when semantic version increases", async () => {
+    const { manifest } = await fixture();
+    const stale = signManifest({ ...manifest, version: "2.0.0", issuedAtUtc: "2026-08-07T00:00:00Z", effectiveFromUtc: "2026-08-07T00:00:00Z", signature: "" }, privateKey);
+    expect(() => rejectDowngrade(manifest, stale)).toThrow("effective period");
+  });
+  it("requires a caller-supplied exact UTC as-of time", async () => {
+    const { directory, manifest } = await fixture();
+    const report = await verifyPackage(directory, manifest, publicKey, undefined as unknown as string);
+    expect(report.ok).toBe(false); expect(report.checks).toContainEqual(expect.objectContaining({ id: "as-of", status: "fail" }));
+  });
+  it("rejects unsupported manifest kinds and missing geographic scope", async () => {
+    const { manifest } = await fixture();
+    expect(() => signManifest({ ...manifest, kind: "unknown" as SignedPackageManifest["kind"], signature: "" }, privateKey)).toThrow("kind");
+    expect(() => signManifest({ ...manifest, geographicScope: "", signature: "" }, privateKey)).toThrow("geographicScope");
+  });
 });

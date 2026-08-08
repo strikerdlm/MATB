@@ -4,7 +4,7 @@ export { SourceRegister } from "./source-register.js";
 export { assertClaimTraceable } from "./claims.js";
 
 export { canonicalJson, sha256File } from "./hash.js";
-export { manifestContentDigest, rejectDowngrade, signManifest, verifyPackage } from "./manifest.js";
+export { assertSignedPackageManifest, manifestContentDigest, rejectDowngrade, signManifest, verifyPackage } from "./manifest.js";
 export type {
   EvidenceId,
   EvidenceReference,

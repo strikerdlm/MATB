@@ -31,13 +31,19 @@ function assertContainedPath(value: unknown, field: string): asserts value is st
   if (normalized.some((part) => !part || part === "." || part === "..")) throw new Error(`${field} has path traversal`);
 }
 
-function assertManifestShape(manifest: SignedPackageManifest, signatureRequired: boolean): void {
-  if (manifest === null || typeof manifest !== "object") throw new Error("manifest must be an object");
+const MANIFEST_KINDS = ["regulatory", "policy", "map", "weather", "notam", "terminology", "software"] as const;
+
+/** Validate untrusted manifest JSON before it reaches signing, installation, or verification. */
+export function assertSignedPackageManifest(value: unknown, signatureRequired = true): asserts value is SignedPackageManifest {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("manifest must be an object");
+  const manifest = value as SignedPackageManifest;
   if (manifest.schemaVersion !== "1.0") throw new Error("unsupported manifest schemaVersion");
   if (!PACKAGE_ID.test(manifest.packageId)) throw new Error("manifest packageId is invalid");
+  if (!(MANIFEST_KINDS as readonly string[]).includes(manifest.kind)) throw new Error("manifest kind is invalid");
   if (!VERSION.test(manifest.version)) throw new Error("manifest version is invalid");
   if (typeof manifest.issuer !== "string" || manifest.issuer.trim() === "") throw new Error("manifest issuer is required");
   if (typeof manifest.keyId !== "string" || manifest.keyId.trim() === "") throw new Error("manifest keyId is required");
+  if (typeof manifest.geographicScope !== "string" || manifest.geographicScope.trim() === "") throw new Error("manifest geographicScope is required");
   if (!isExactUtc(manifest.issuedAtUtc) || !isExactUtc(manifest.effectiveFromUtc)) throw new Error("manifest timestamps must be exact UTC");
   if (manifest.expiresAtUtc !== undefined && !isExactUtc(manifest.expiresAtUtc)) throw new Error("manifest expiresAtUtc must be exact UTC");
   if (manifest.expiresAtUtc !== undefined && Date.parse(manifest.expiresAtUtc) <= Date.parse(manifest.effectiveFromUtc)) throw new Error("manifest expiry must be after effective time");
@@ -57,6 +63,7 @@ function assertManifestShape(manifest: SignedPackageManifest, signatureRequired:
   if (!(["qualified-review", "approved", "blocked"] as const).includes(manifest.qualification)) throw new Error("manifest qualification is invalid");
   let previous = "";
   for (const file of manifest.files) {
+    if (file === null || typeof file !== "object") throw new Error("manifest file is invalid");
     assertContainedPath(file.path, "manifest file path");
     if (!SHA256.test(file.sha256) || !Number.isSafeInteger(file.sizeBytes) || file.sizeBytes < 0) throw new Error(`manifest file ${file.path} is invalid`);
     if (previous >= file.path) throw new Error("manifest files must be sorted and unique");
@@ -78,7 +85,7 @@ export function manifestSigningPayload(manifest: SignedPackageManifest): Buffer 
 /** Sign a fully specified manifest. Private-key material is caller supplied and never persisted here. */
 export function signManifest(manifest: Omit<SignedPackageManifest, "signature"> | SignedPackageManifest, privateKey: string | Buffer): SignedPackageManifest {
   const unsigned = { ...manifest, signature: "" } as SignedPackageManifest;
-  assertManifestShape(unsigned, false);
+  assertSignedPackageManifest(unsigned, false);
   const computedDigest = manifestContentDigest(unsigned.files);
   if (computedDigest !== unsigned.contentSha256) throw new Error("manifest contentSha256 does not match its file inventory");
   const signature = sign(null, manifestSigningPayload(unsigned), privateKey).toString("base64");
@@ -106,10 +113,10 @@ function resolvePackagePath(root: string, relativePath: string): string {
   return full;
 }
 
-export async function verifyPackage(directory: string, manifest: SignedPackageManifest, publicKey: string | Buffer, asOfUtc = new Date().toISOString(), availableDependencies: readonly SignedPackageManifest[] = []): Promise<VerificationReport> {
+export async function verifyPackage(directory: string, manifest: SignedPackageManifest, publicKey: string | Buffer, asOfUtc: string, availableDependencies: readonly SignedPackageManifest[] = []): Promise<VerificationReport> {
   const checks: VerificationCheck[] = [];
   const fail = (id: string, reason: string): void => { checks.push({ id, status: "fail", reason }); };
-  try { assertManifestShape(manifest, true); checks.push({ id: "manifest-shape", status: "pass" }); } catch (error) { fail("manifest-shape", error instanceof Error ? error.message : String(error)); return { ok: false, checks, packageId: typeof manifest?.packageId === "string" ? manifest.packageId : "unknown" }; }
+  try { assertSignedPackageManifest(manifest, true); checks.push({ id: "manifest-shape", status: "pass" }); } catch (error) { fail("manifest-shape", error instanceof Error ? error.message : String(error)); return { ok: false, checks, packageId: typeof manifest?.packageId === "string" ? manifest.packageId : "unknown" }; }
   if (!isExactUtc(asOfUtc)) { fail("as-of", "asOfUtc must be an exact UTC timestamp"); return { ok: false, checks, packageId: manifest.packageId }; }
   const now = Date.parse(asOfUtc);
   if (now < Date.parse(manifest.effectiveFromUtc)) fail("effective-window", "package is not yet effective");
@@ -145,13 +152,13 @@ function numericVersion(version: string): number[] {
 
 /** Refuse replacement of an installed package by an earlier version or effective period. */
 export function rejectDowngrade(current: SignedPackageManifest, incoming: SignedPackageManifest): void {
-  assertManifestShape(current, true); assertManifestShape(incoming, true);
+  assertSignedPackageManifest(current, true); assertSignedPackageManifest(incoming, true);
   if (current.packageId !== incoming.packageId) throw new Error("downgrade comparison requires matching package IDs");
+  if (Date.parse(incoming.effectiveFromUtc) < Date.parse(current.effectiveFromUtc)) throw new Error("downgrade rejected: incoming effective period is older");
   const installed = numericVersion(current.version); const candidate = numericVersion(incoming.version);
   for (let index = 0; index < installed.length; index += 1) {
     if (candidate[index] < installed[index]) throw new Error("downgrade rejected: incoming version is older");
     if (candidate[index] > installed[index]) return;
   }
-  if (Date.parse(incoming.effectiveFromUtc) < Date.parse(current.effectiveFromUtc)) throw new Error("downgrade rejected: incoming effective period is older");
   if (incoming.contentSha256 !== current.contentSha256) throw new Error("downgrade rejected: same version has different content");
 }

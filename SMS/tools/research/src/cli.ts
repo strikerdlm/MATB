@@ -27,6 +27,13 @@ function parseLines(contents: string): unknown[] {
   return contents.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
 }
 
+/** Offline verification must be reproducible: wall-clock time is never an implicit input. */
+export function requiredVerificationAsOf(environment: NodeJS.ProcessEnv = process.env): string {
+  const asOfUtc = environment.SMS_EVIDENCE_VERIFY_AS_OF;
+  if (asOfUtc === undefined || asOfUtc.trim() === "") throw new Error("SMS_EVIDENCE_VERIFY_AS_OF is required for deterministic offline verification");
+  return asOfUtc;
+}
+
 /** Deterministically validate all registered artifacts without reaching the network. */
 export async function verifyOffline(root = ROOT, registerPath = resolve(root, "docs/source-register/sources.jsonl"), requireSignedPackage = resolve(root) === ROOT): Promise<string[]> {
   let sources: unknown[];
@@ -73,7 +80,8 @@ export async function verifyOffline(root = ROOT, registerPath = resolve(root, "d
       const signature = (await readFile(resolve(provenanceRoot, "evidence-package-manifest.sig"), "utf8")).trim();
       if (signature !== manifest.signature) failures.push("evidence package: detached signature does not match manifest");
       const publicKey = await readFile(resolve(provenanceRoot, "evidence-package-public-key.pem"), "utf8");
-      const report = await verifyPackage(provenanceRoot, manifest, publicKey, process.env.SMS_EVIDENCE_VERIFY_AS_OF ?? new Date().toISOString());
+      const asOfUtc = requiredVerificationAsOf();
+      const report = await verifyPackage(provenanceRoot, manifest, publicKey, asOfUtc);
       if (!report.ok) failures.push(...report.checks.filter((check) => check.status === "fail").map((check) => `evidence package ${check.id}: ${check.reason ?? "failed"}`));
     } catch (error) {
       failures.push(`evidence package: ${error instanceof Error ? error.message : String(error)}`);
