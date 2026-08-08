@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { PINNED_PUBLIC_KEYS, pinnedPublicKeyFor } from "../src/trust-anchor.js";
 
-const manifest = { keyId: "ed25519-sha256-e1885455cc4f4e37" };
+const manifest = { keyId: "ed25519-sha256-7e01102cfa67dbe1" };
 
 describe("production evidence trust anchors", () => {
   it("resolves the compiled key and corroborates the package PEM", async () => {
@@ -21,6 +21,6 @@ describe("production evidence trust anchors", () => {
   it("detects accidental edits to the compiled trust anchor", () => {
     const pinned = PINNED_PUBLIC_KEYS[manifest.keyId];
     expect(pinned.keyId).toBe(manifest.keyId);
-    expect(pinned.fingerprintSha256).toBe("e1885455cc4f4e372d064abc11dd48fce82c60cf514097308bd2abc729f739e0");
+    expect(pinned.fingerprintSha256).toBe("7e01102cfa67dbe127297bb503d92512c237f65dcb38388ec0643973255cc7e8");
   });
 });

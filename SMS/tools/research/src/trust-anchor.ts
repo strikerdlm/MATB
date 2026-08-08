@@ -14,9 +14,9 @@ export interface PinnedPublicKey {
 }
 
 const P0_KEY: PinnedPublicKey = Object.freeze({
-  keyId: "ed25519-sha256-e1885455cc4f4e37",
-  pem: "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEARBwR+nAS4VnMLVJKuddQuOl8dC4ZIX4xAiMj/wwbQyk=\n-----END PUBLIC KEY-----\n",
-  fingerprintSha256: "e1885455cc4f4e372d064abc11dd48fce82c60cf514097308bd2abc729f739e0",
+  keyId: "ed25519-sha256-7e01102cfa67dbe1",
+  pem: "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAuXhYYnQQTrzQqrWIAGkePHapUFAd8yLhfh0hRNvhsjE=\n-----END PUBLIC KEY-----\n",
+  fingerprintSha256: "7e01102cfa67dbe127297bb503d92512c237f65dcb38388ec0643973255cc7e8",
 });
 
 /** Immutable verifier trust store. This object is intentionally not package data. */
