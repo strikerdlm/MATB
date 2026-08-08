@@ -3,7 +3,7 @@
   "private": true,
   "workspaces": ["packages/*", "apps/*", "tools/*"],
   "scripts": {
-    "build": "npm run build --workspace @fac-isr/evidence && npm run build --workspace @fac-isr/research-tools",
+    "build": "npm run build --workspace @fac-isr/evidence && npm run build --workspace @fac-isr/safety-kernel && npm run build --workspace @fac-isr/research-tools",
     "build:research": "npm run build --workspace @fac-isr/research-tools",
     "typecheck": "tsc -b",
     "test": "vitest run",

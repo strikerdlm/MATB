@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseMissionRevision, parseSafetyEvaluationResult, type MissionRevision } from "../src/index.js";
+import { parseMissionRevision, parseSafetyEvaluationResult, type MissionRevision } from "@fac-isr/safety-kernel";
 
 const validMission: MissionRevision = {
   id: "mr-1", missionId: "m-1", revision: 1, profileId: "fac-state-aviation", state: "Planned",
@@ -24,5 +24,7 @@ describe("safety contract validation", () => {
     expect(() => parseMissionRevision({ ...validMission, route: { ...validMission.route, areaId: "x", routeHash: "x", terrainStatus: "pass", obstacleStatus: "pass", airspaceStatus: "pass", notamStatus: "pass", visualConditionStatus: "pass", extra: true } })).toThrow();
     expect(() => parseMissionRevision({ ...validMission, aircraft: [validMission.aircraft[0], validMission.aircraft[0]] })).toThrow();
     expect(() => parseMissionRevision({ ...validMission, dataSnapshots: [{ snapshotId: "s", kind: "weather", packageId: "p", status: "current", capturedAtUtc: "2026-08-08T12:00:00" }] })).toThrow();
+    expect(() => parseMissionRevision({ ...validMission, dataSnapshots: [{ snapshotId: "s", kind: "weather", packageId: "p", status: "current", capturedAtUtc: "2026-02-29T12:00:00Z" }] })).toThrow();
+    expect(() => parseMissionRevision({ ...validMission, riskAssessment: { ...validMission.riskAssessment, reserve: { recoveryPercent: -1, diversionPercent: 10, contingencyPercent: 5 } } })).toThrow();
   });
 });

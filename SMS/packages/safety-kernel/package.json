@@ -4,6 +4,6 @@
   "private": true,
   "type": "module",
   "exports": { ".": { "types": "./src/index.ts", "default": "./dist/index.js" } },
-  "scripts": { "typecheck": "tsc -p ../../tsconfig.base.json", "test": "vitest run" },
+  "scripts": { "build": "tsc -p tsconfig.build.json", "typecheck": "tsc -p ../../tsconfig.base.json", "test": "npm run build && vitest run" },
   "dependencies": { "@fac-isr/evidence": "0.1.0", "zod": "3.25.76" }
 }
