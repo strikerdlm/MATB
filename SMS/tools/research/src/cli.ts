@@ -85,7 +85,7 @@ export async function verifyOffline(root = ROOT, registerPath = resolve(root, "d
       const packagePublicKey = await readFile(resolve(provenanceRoot, "evidence-package-public-key.pem"), "utf8");
       const publicKey = pinnedPublicKeyFor(manifest, packagePublicKey);
       const asOfUtc = requiredVerificationAsOf();
-      const report = await verifyPackage(provenanceRoot, manifest, publicKey, asOfUtc);
+      const report = await verifyPackage(provenanceRoot, manifest, publicKey, asOfUtc, [], ["kernel-golden-case-report.md"]);
       if (!report.ok) failures.push(...report.checks.filter((check) => check.status === "fail").map((check) => `evidence package ${check.id}: ${check.reason ?? "failed"}`));
     } catch (error) {
       failures.push(`evidence package: ${error instanceof Error ? error.message : String(error)}`);

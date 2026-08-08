@@ -118,7 +118,7 @@ function resolvePackagePath(root: string, relativePath: string): string {
   return full;
 }
 
-export async function verifyPackage(directory: string, manifest: SignedPackageManifest, publicKey: string | Buffer, asOfUtc: string, availableDependencies: readonly SignedPackageManifest[] = []): Promise<VerificationReport> {
+export async function verifyPackage(directory: string, manifest: SignedPackageManifest, publicKey: string | Buffer, asOfUtc: string, availableDependencies: readonly SignedPackageManifest[] = [], requiredControlFiles: readonly string[] = []): Promise<VerificationReport> {
   const checks: VerificationCheck[] = [];
   const fail = (id: string, reason: string): void => { checks.push({ id, status: "fail", reason }); };
   try { assertSignedPackageManifest(manifest, true); checks.push({ id: "manifest-shape", status: "pass" }); } catch (error) { fail("manifest-shape", error instanceof Error ? error.message : String(error)); return { ok: false, checks, packageId: typeof manifest?.packageId === "string" ? manifest.packageId : "unknown" }; }
@@ -135,7 +135,11 @@ export async function verifyPackage(directory: string, manifest: SignedPackageMa
   const root = resolve(directory);
   try {
     const expected = new Set(manifest.files.map((file) => file.path));
-    const actual = (await walkFiles(root)).filter((file) => !CONTROL_FILES.has(file));
+    const walked = await walkFiles(root);
+    for (const required of requiredControlFiles) {
+      if (!CONTROL_FILES.has(required) || !walked.includes(required)) fail("required-control-file", `missing required control file: ${required}`);
+    }
+    const actual = walked.filter((file) => !CONTROL_FILES.has(file));
     const extra = actual.filter((file) => !expected.has(file));
     const missing = [...expected].filter((file) => !actual.includes(file));
     if (extra.length || missing.length) fail("file-set", `${missing.length ? `missing: ${missing.join(", ")}` : ""}${extra.length ? `${missing.length ? "; " : ""}extra: ${extra.join(", ")}` : ""}`);

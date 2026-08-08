@@ -31,6 +31,12 @@ npm run build --workspace packages/safety-kernel
 
 Result: PASS — typecheck and build completed successfully.
 
+## Round 4 manifest-verification fix
+
+`verifyPackage` now accepts an optional `requiredControlFiles` list (default empty for generic callers). Offline evidence verification passes the exact required `kernel-golden-case-report.md` basename; the report remains a non-payload control and is not hash-verified. Missing required controls fail explicitly, while payload inventory, hashes, and symlink rejection remain strict.
+
+Verification: evidence suite 37/37; full workspace suite 147/147; workspace typecheck passed; evidence build passed; `SMS_EVIDENCE_VERIFY_AS_OF=2026-08-09T00:00:00Z npm run verify:offline` passed.
+
 ## Round 3 manifest-verification fix
 
 The evidence manifest verifier now treats only the exact `kernel-golden-case-report.md` basename as non-payload provenance metadata, alongside its three existing detached-control files. Payload inventory and per-file hashes remain strict. A manifest regression test confirms the report is allowed while the existing extra-file rejection remains covered.
