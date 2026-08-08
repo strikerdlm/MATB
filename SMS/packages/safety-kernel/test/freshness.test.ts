@@ -16,7 +16,7 @@ const approvedPolicy: PolicyPackage = {
 const weather: DataSnapshotRef = { snapshotId: "weather-1", kind: "weather", packageId: "weather-package", status: "current", capturedAtUtc: "2026-08-08T16:00:00Z" };
 const exception: ControlledExceptionInput = {
   missionRevisionId: "mr-1", sourceRevisionId: "mr-1", snapshot: { ...weather, status: "expired" },
-  alternateVerifiedSource: { ...weather, snapshotId: "weather-alternate", capturedAtUtc: nowUtc },
+  alternateVerifiedSource: { ...weather, snapshotId: "weather-alternate", packageId: "weather-alternate-package", capturedAtUtc: nowUtc },
   consequence: "consequence-weather", mitigation: "mitigation-divert", validityEndUtc: "2026-08-08T18:00:00Z",
   safetyReview: { reviewerId: "safety-reviewer", approved: true }, riskAuthorityId: "safety-officer",
   residualRiskBand: "medium", operatorAcknowledged: true,
@@ -59,5 +59,22 @@ describe("controlled degraded-data exceptions", () => {
     expect(evaluateException({ ...exception, validityEndUtc: nowUtc }, approvedPolicy, nowUtc)).toMatchObject({ status: "expired", reason: "EXCEPTION_EXPIRED" });
     expect(evaluateException({ ...exception, sourceRevisionId: "mr-0" }, approvedPolicy, nowUtc)).toMatchObject({ status: "blocked", reason: "EXCEPTION_REVISION_MISMATCH" });
     expect(Object.isFrozen(evaluateException(exception, approvedPolicy, nowUtc))).toBe(true);
+  });
+
+  it("accepts an explicit noncritical DATA_STALE source but not conflicting or unverified data", () => {
+    const staleTerrain: DataSnapshotRef = { snapshotId: "terrain-stale", kind: "terrain", packageId: "terrain-package", status: "current", capturedAtUtc: "2026-08-08T15:59:59.999Z" };
+    expect(evaluateFreshness(staleTerrain, approvedPolicy, nowUtc)).toEqual({ status: "unknown", reason: "DATA_STALE" });
+    expect(evaluateException({ ...exception, snapshot: staleTerrain }, approvedPolicy, nowUtc)).toEqual({ status: "accepted", reason: "EXCEPTION_ACCEPTED" });
+    expect(evaluateException({ ...exception, snapshot: { ...staleTerrain, status: "conflicting" } }, approvedPolicy, nowUtc)).toMatchObject({ status: "blocked", reason: "EXCEPTION_DEGRADED_DATA_REQUIRED" });
+  });
+
+  it("requires an alternate source with distinct immutable snapshot and package provenance", () => {
+    expect(evaluateException({ ...exception, alternateVerifiedSource: { ...exception.snapshot, status: "current" } }, approvedPolicy, nowUtc)).toMatchObject({ status: "blocked", reason: "EXCEPTION_ALTERNATE_SOURCE_NOT_DISTINCT" });
+    expect(evaluateException({ ...exception, alternateVerifiedSource: { ...exception.alternateVerifiedSource!, packageId: exception.snapshot.packageId } }, approvedPolicy, nowUtc)).toMatchObject({ status: "blocked", reason: "EXCEPTION_ALTERNATE_SOURCE_NOT_DISTINCT" });
+  });
+
+  it("requires a valid matrix and a band actually present in its cells", () => {
+    expect(evaluateException(exception, { ...approvedPolicy, riskMatrix: undefined }, nowUtc)).toMatchObject({ status: "blocked", reason: "APPROVED_RISK_MATRIX_REQUIRED" });
+    expect(evaluateException(exception, { ...approvedPolicy, riskMatrix: { probabilityLevels: 1, severityLevels: 1, cells: ["low"] } }, nowUtc)).toMatchObject({ status: "blocked", reason: "EXCEPTION_RISK_BAND_REQUIRED" });
   });
 });

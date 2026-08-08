@@ -43,7 +43,13 @@ export type OperationalDataSnapshot<K extends OperationalSnapshotKind> = DataSna
 export interface ReserveFacts { recoveryPercent: number; diversionPercent: number; contingencyPercent: number }
 export interface RiskAssessmentInput { hazardIds: readonly string[]; probability?: number; severity?: number; residualRiskBand?: string; acceptanceAuthorityId?: string; mitigationIds: readonly string[]; status: "draft" | "complete" | "blocked" | "accepted"; reserve?: ReserveFacts }
 /** Input facts for an approved-matrix-only risk decision. Duration is in hours. */
-export interface RiskEvaluationInput extends RiskAssessmentInput { policy: PolicyPackage | undefined; durationHours?: number }
+export interface RiskEvaluationInput extends RiskAssessmentInput {
+  policy: PolicyPackage | undefined;
+  /** Explicit policy-approved matrix row; probability values are never mapped by the kernel. */
+  probabilityLevel: number;
+  nowUtc: string;
+  durationHours?: number;
+}
 export interface RiskEvaluation { status: "accepted" | "blocked"; band?: string; reason: string }
 export interface FreshnessResult { status: "current" | "unknown" | "expired" | "blocked"; reason: string }
 /** A revision-bound, explicit authorization for one stale or missing data source. */

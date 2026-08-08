@@ -15,7 +15,7 @@ const approvedPolicy: PolicyPackage = {
 const riskInput: RiskEvaluationInput = {
   hazardIds: ["hazard-weather"], probability: 0.5, severity: 2, residualRiskBand: "medium",
   acceptanceAuthorityId: "safety-officer", mitigationIds: ["mitigation-divert"], status: "complete", durationHours: 4,
-  policy: approvedPolicy,
+  probabilityLevel: 1, nowUtc: "2026-08-08T17:00:00Z", policy: approvedPolicy,
 };
 
 describe("approved risk and NASO evaluation", () => {
@@ -33,6 +33,21 @@ describe("approved risk and NASO evaluation", () => {
     expect(evaluateRisk(riskInput)).toEqual({ status: "accepted", band: "medium", reason: "RISK_ACCEPTED" });
     expect(evaluateRisk({ ...riskInput, durationHours: 4.0001 })).toMatchObject({ status: "blocked", band: "medium", reason: "NASO_DURATION_EXCEEDED" });
     expect(evaluateRisk({ ...riskInput, acceptanceAuthorityId: "commander" })).toMatchObject({ status: "blocked", reason: "RISK_ACCEPTANCE_AUTHORITY_MISSING" });
+  });
+
+  it("requires an explicit in-range probability level without inferring it from probability", () => {
+    expect(evaluateRisk({ ...riskInput, probability: 0.01 })).toEqual({ status: "accepted", band: "medium", reason: "RISK_ACCEPTED" });
+    expect(evaluateRisk({ ...riskInput, probabilityLevel: 0 })).toMatchObject({ status: "blocked", reason: "RISK_MATRIX_ASSIGNMENT_REQUIRED" });
+    expect(evaluateRisk({ ...riskInput, probabilityLevel: 3 })).toMatchObject({ status: "blocked", reason: "RISK_MATRIX_ASSIGNMENT_REQUIRED" });
+  });
+
+  it("blocks an approved signed policy at or after its manifest expiry", () => {
+    const policy = {
+      ...approvedPolicy,
+      manifest: { expiresAtUtc: "2026-08-08T17:00:00Z" },
+    } as PolicyPackage;
+    expect(evaluateRisk({ ...riskInput, policy })).toMatchObject({ status: "blocked", reason: "APPROVED_RISK_POLICY_REQUIRED" });
+    expect(evaluateRisk({ ...riskInput, policy: { ...policy, manifest: { expiresAtUtc: "invalid" } } as PolicyPackage })).toMatchObject({ status: "blocked", reason: "APPROVED_RISK_POLICY_REQUIRED" });
   });
 
   it("blocks a residual band that does not match the approved matrix cell", () => {

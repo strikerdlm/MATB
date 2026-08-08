@@ -22,8 +22,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function parseUtc(value: string): number {
+  const timestamp = utcTimestamp(value);
+  if (timestamp === undefined) throw new RangeError("timestamp must be a valid UTC ISO-8601 instant");
+  return timestamp;
+}
+
+function utcTimestamp(value: unknown): number | undefined {
+  if (typeof value !== "string") return undefined;
   const match = UTC_PATTERN.exec(value);
-  if (!match) throw new RangeError("timestamp must be a valid UTC ISO-8601 instant");
+  if (!match) return undefined;
   const [, year, month, day, hour, minute, second, fraction = ""] = match;
   const timestamp = Date.parse(value);
   const date = new Date(timestamp);
@@ -35,13 +42,22 @@ function parseUtc(value: string): number {
     || date.getUTCMinutes() !== Number(minute)
     || date.getUTCSeconds() !== Number(second)
     || date.getUTCMilliseconds() !== Number(fraction.padEnd(3, "0") || 0)) {
-    throw new RangeError("timestamp must be a valid UTC ISO-8601 instant");
+    return undefined;
   }
   return timestamp;
 }
 
 function approvedPolicy(policy: PolicyPackage | undefined): policy is PolicyPackage {
   return isRecord(policy) && policy.status === "approved" && typeof policy.signature === "string" && policy.signature.trim().length > 0;
+}
+
+function policyCurrentAt(policy: PolicyPackage | undefined, now: number): policy is PolicyPackage {
+  if (!approvedPolicy(policy)) return false;
+  if (policy.manifest === undefined) return true;
+  if (!isRecord(policy.manifest)) return false;
+  const expiresAtUtc = policy.manifest.expiresAtUtc;
+  const expiresAt = utcTimestamp(expiresAtUtc);
+  return expiresAt !== undefined && expiresAt > now;
 }
 
 function validMatrix(policy: PolicyPackage): boolean {
@@ -56,11 +72,14 @@ function validMatrix(policy: PolicyPackage): boolean {
 
 function matrixBand(input: RiskEvaluationInput, policy: PolicyPackage): string | undefined {
   const matrix = policy.riskMatrix;
-  if (!matrix || input.probability === undefined || input.severity === undefined) return undefined;
-  if (!Number.isFinite(input.probability) || input.probability <= 0 || input.probability > 1
+  if (!matrix || input.severity === undefined) return undefined;
+  if (!Number.isInteger(input.probabilityLevel) || input.probabilityLevel <= 0 || input.probabilityLevel > matrix.probabilityLevels
     || !Number.isInteger(input.severity) || input.severity <= 0 || input.severity > matrix.severityLevels) return undefined;
-  const probabilityLevel = Math.ceil(input.probability * matrix.probabilityLevels);
-  return matrix.cells[(probabilityLevel - 1) * matrix.severityLevels + input.severity - 1];
+  return matrix.cells[(input.probabilityLevel - 1) * matrix.severityLevels + input.severity - 1];
+}
+
+function matrixIncludesBand(policy: PolicyPackage, band: string): boolean {
+  return validMatrix(policy) && policy.riskMatrix?.cells.includes(band) === true;
 }
 
 function nasoThreshold(policy: PolicyPackage, band: string): { band: string; maxDurationHours?: number } | undefined {
@@ -85,7 +104,8 @@ function delegatedAuthority(policy: PolicyPackage, authorityId: string, band: st
 
 /** Evaluates only thresholds and authorities explicitly supplied by a signed, approved policy package. */
 export function evaluateRisk(input: RiskEvaluationInput): RiskEvaluation {
-  if (!approvedPolicy(input.policy)) return createRiskEvaluation({ status: "blocked", reason: "APPROVED_RISK_POLICY_REQUIRED" });
+  const now = parseUtc(input.nowUtc);
+  if (!policyCurrentAt(input.policy, now)) return createRiskEvaluation({ status: "blocked", reason: "APPROVED_RISK_POLICY_REQUIRED" });
   if (!validMatrix(input.policy)) return createRiskEvaluation({ status: "blocked", reason: "APPROVED_RISK_MATRIX_REQUIRED" });
   if (input.status === "draft" || input.status === "blocked" || input.hazardIds.length === 0) return createRiskEvaluation({ status: "blocked", reason: "RISK_ASSESSMENT_INCOMPLETE" });
   const band = matrixBand(input, input.policy);
@@ -104,9 +124,7 @@ export function evaluateRisk(input: RiskEvaluationInput): RiskEvaluation {
 /** Determines freshness from explicit UTC evidence facts and the active policy; it never reads a clock. */
 export function evaluateFreshness(snapshot: DataSnapshotRef, policy: PolicyPackage | undefined, nowUtc: string): FreshnessResult {
   const now = parseUtc(nowUtc);
-  if (!approvedPolicy(policy)) return createFreshnessResult({ status: "blocked", reason: "APPROVED_FRESHNESS_POLICY_REQUIRED" });
-  const manifestExpiry = policy.manifest?.expiresAtUtc;
-  if (manifestExpiry !== undefined && (typeof manifestExpiry !== "string" || parseUtc(manifestExpiry) <= now)) return createFreshnessResult({ status: "blocked", reason: "APPROVED_FRESHNESS_POLICY_REQUIRED" });
+  if (!policyCurrentAt(policy, now)) return createFreshnessResult({ status: "blocked", reason: "APPROVED_FRESHNESS_POLICY_REQUIRED" });
   const rule = isRecord(policy.freshness) && isRecord(snapshot) && typeof snapshot.kind === "string" ? policy.freshness[snapshot.kind] : undefined;
   if (!isRecord(rule) || typeof rule.maxAgeMinutes !== "number" || !Number.isFinite(rule.maxAgeMinutes) || rule.maxAgeMinutes < 0 || typeof rule.critical !== "boolean") return createFreshnessResult({ status: "blocked", reason: "FRESHNESS_THRESHOLD_REQUIRED" });
   const capturedAt = parseUtc(snapshot.capturedAtUtc);
@@ -127,11 +145,16 @@ function hasId(value: string | undefined): value is string {
 /** Evaluates an exception as a current, revision-bound fact; it cannot be copied to a different revision. */
 export function evaluateException(exception: ControlledExceptionInput, policy: PolicyPackage | undefined, nowUtc: string): ExceptionResult {
   const now = parseUtc(nowUtc);
-  if (!approvedPolicy(policy)) return createExceptionResult({ status: "blocked", reason: "APPROVED_EXCEPTION_POLICY_REQUIRED" });
+  if (!policyCurrentAt(policy, now)) return createExceptionResult({ status: "blocked", reason: "APPROVED_EXCEPTION_POLICY_REQUIRED" });
+  if (!validMatrix(policy)) return createExceptionResult({ status: "blocked", reason: "APPROVED_RISK_MATRIX_REQUIRED" });
   if (exception.sourceRevisionId !== exception.missionRevisionId) return createExceptionResult({ status: "blocked", reason: "EXCEPTION_REVISION_MISMATCH" });
   const sourceFreshness = evaluateFreshness(exception.snapshot, policy, nowUtc);
-  if (sourceFreshness.status !== "expired" && exception.snapshot.status !== "missing") return createExceptionResult({ status: "blocked", reason: "EXCEPTION_DEGRADED_DATA_REQUIRED" });
+  const staleOrMissing = sourceFreshness.status === "expired"
+    || (exception.snapshot.status === "missing" && sourceFreshness.status === "unknown" && sourceFreshness.reason === "DATA_MISSING")
+    || (exception.snapshot.status === "current" && sourceFreshness.status === "unknown" && sourceFreshness.reason === "DATA_STALE");
+  if (!staleOrMissing) return createExceptionResult({ status: "blocked", reason: "EXCEPTION_DEGRADED_DATA_REQUIRED" });
   if (!exception.alternateVerifiedSource) return createExceptionResult({ status: "blocked", reason: "EXCEPTION_ALTERNATE_SOURCE_REQUIRED" });
+  if (exception.alternateVerifiedSource.snapshotId === exception.snapshot.snapshotId || exception.alternateVerifiedSource.packageId === exception.snapshot.packageId) return createExceptionResult({ status: "blocked", reason: "EXCEPTION_ALTERNATE_SOURCE_NOT_DISTINCT" });
   if (evaluateFreshness(exception.alternateVerifiedSource, policy, nowUtc).status !== "current") return createExceptionResult({ status: "blocked", reason: "EXCEPTION_ALTERNATE_SOURCE_UNVERIFIED" });
   if (!hasId(exception.consequence)) return createExceptionResult({ status: "blocked", reason: "EXCEPTION_CONSEQUENCE_REQUIRED" });
   if (!hasId(exception.mitigation)) return createExceptionResult({ status: "blocked", reason: "EXCEPTION_MITIGATION_REQUIRED" });
@@ -139,7 +162,8 @@ export function evaluateException(exception: ControlledExceptionInput, policy: P
   if (parseUtc(exception.validityEndUtc) <= now) return createExceptionResult({ status: "expired", reason: "EXCEPTION_EXPIRED" });
   if (!exception.safetyReview?.approved || !hasId(exception.safetyReview.reviewerId)) return createExceptionResult({ status: "blocked", reason: "EXCEPTION_SAFETY_REVIEW_REQUIRED" });
   if (!exception.operatorAcknowledged) return createExceptionResult({ status: "blocked", reason: "EXCEPTION_OPERATOR_ACKNOWLEDGEMENT_REQUIRED" });
-  if (!hasId(exception.residualRiskBand) || !nasoThreshold(policy, exception.residualRiskBand)) return createExceptionResult({ status: "blocked", reason: "EXCEPTION_NASO_BAND_REQUIRED" });
+  if (!hasId(exception.residualRiskBand) || !matrixIncludesBand(policy, exception.residualRiskBand)) return createExceptionResult({ status: "blocked", reason: "EXCEPTION_RISK_BAND_REQUIRED" });
+  if (!nasoThreshold(policy, exception.residualRiskBand)) return createExceptionResult({ status: "blocked", reason: "EXCEPTION_NASO_BAND_REQUIRED" });
   if (!hasId(exception.riskAuthorityId) || !delegatedAuthority(policy, exception.riskAuthorityId, exception.residualRiskBand)) return createExceptionResult({ status: "blocked", reason: "EXCEPTION_RISK_AUTHORITY_REQUIRED" });
   return createExceptionResult({ status: "accepted", reason: "EXCEPTION_ACCEPTED" });
 }
