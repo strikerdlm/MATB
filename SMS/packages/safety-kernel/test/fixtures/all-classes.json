@@ -1,0 +1,11 @@
+[
+  { "mtowKg": 0.015, "aircraftClass": "IA" },
+  { "mtowKg": 6.999, "aircraftClass": "IA" },
+  { "mtowKg": 7, "aircraftClass": "IB" },
+  { "mtowKg": 14.999, "aircraftClass": "IB" },
+  { "mtowKg": 15, "aircraftClass": "IC" },
+  { "mtowKg": 149.999, "aircraftClass": "IC" },
+  { "mtowKg": 150.001, "aircraftClass": "II" },
+  { "mtowKg": 600, "aircraftClass": "II" },
+  { "mtowKg": 600.001, "aircraftClass": "III" }
+]
