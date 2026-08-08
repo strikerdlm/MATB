@@ -93,7 +93,7 @@ describe("RACAE 94 normalized evidence", () => {
       "fac.racae94.one-pilot-one-uas": [[39, "(a)"]],
       "fac.racae94.swarm-reserved": [[42, undefined]],
       "fac.racae94.risk-telemetry-retention": [[66, "(a)"], [66, "(b)"], [66, "(c)"], [66, "(d)"]],
-      "fac.racae94.emergency-response-plan": [[68, "(k)"], [69, "(k)(1)"]],
+      "fac.racae94.emergency-response-plan": [[68, "(k)"], [69, "(k)(1)"], [69, "(k)(2)"], [69, "(k)(3)"], [69, "(k)(4)"], [69, "(k)(5)"], [69, "(k)(6)"]],
       "fac.racae94.rest-policy-document": [[69, "(b)"], [69, "(b)(1)"], [69, "(b)(3)"], [69, "(b)(4)"]],
       "fac.racae94.fatigue-screen-exposure": [[69, "(a)"], [69, "(b)(2)"]],
     };
@@ -130,6 +130,7 @@ describe("RACAE 94 normalized evidence", () => {
     expect(artifact.requirements.find((item) => item.predicate === "fac.racae94.rest-policy-document")?.Spanish).toContain("publicar");
     expect(artifact.requirements.find((item) => item.predicate === "fac.racae94.autonomous-flight.prohibited")?.Spanish).toContain("aspersión aérea de cultivos");
     expect(artifact.requirements.find((item) => item.sourceRefs[0].locator.section === "94.250")?.unresolvedRationale).toContain("Reserved");
+    expect(artifact.requirements.find((item) => item.predicate === "fac.racae94.emergency-response-plan")?.requirementId).toBe("req-1e538e91a9efe63d824b");
   });
 
   it("keeps RACAE 219 explicitly blocked and free of invented controls", async () => {
