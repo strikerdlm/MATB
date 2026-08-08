@@ -1,0 +1,23 @@
+[
+  {
+    "name": "accepted hard requirement",
+    "requirementIds": ["req-a", "req-z"],
+    "sourceEvidence": "accepted",
+    "status": "ready"
+  },
+  {
+    "name": "unknown hard requirement",
+    "requirementIds": ["req-unknown"],
+    "sourceEvidence": "missing",
+    "status": "blocked",
+    "blockerCode": "REQUIREMENT_UNKNOWN"
+  },
+  {
+    "name": "expired mission data",
+    "requirementIds": ["req-current"],
+    "sourceEvidence": "accepted",
+    "dataSnapshot": { "snapshotId": "weather-1", "kind": "weather", "packageId": "package-weather", "status": "current", "capturedAtUtc": "2026-08-08T14:00:00Z" },
+    "status": "blocked",
+    "blockerCode": "REQUIREMENT_EXPIRED"
+  }
+]

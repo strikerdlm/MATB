@@ -141,6 +141,22 @@ describe("RACAE 94 normalized evidence", () => {
     expect(artifact.reason).toContain("not available");
   });
 
+  it("keeps controlled translation provenance attached to checked-in requirements and release payload", async () => {
+    const normalized = JSON.parse(await readFile(resolve(root, "docs/regulations/normalized/racae94-amendment-2.json"), "utf8")) as {
+      requirements: Array<{ requirementId: string }>;
+    };
+    const translations = JSON.parse(await readFile(resolve(root, "docs/translations/controlled-terms.json"), "utf8")) as {
+      terms: Array<{ requirementId: string }>;
+    };
+    const packagedTranslations = JSON.parse(await readFile(resolve(root, "docs/provenance/package-content/docs/translations/controlled-terms.json"), "utf8")) as {
+      terms: Array<{ requirementId: string }>;
+    };
+    const requirementIds = new Set(normalized.requirements.map((requirement) => requirement.requirementId));
+    expect(translations.terms).toHaveLength(5);
+    expect(packagedTranslations).toEqual(translations);
+    for (const term of translations.terms) expect(requirementIds.has(term.requirementId)).toBe(true);
+  });
+
   it("validates citations against the immutable register without requiring production review promotion", () => {
     const requirement = normalizeRequirement(input());
     expect(() => validateRequirementCitations([requirement], register())).not.toThrow();

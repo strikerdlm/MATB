@@ -1,6 +1,7 @@
 import { constants as fsConstants } from "node:fs";
 import { createHash } from "node:crypto";
 import { lstat, mkdir, mkdtemp, open, readFile, rename, rm } from "node:fs/promises";
+import type { FileHandle } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } from "node:path";
 import { assertSignedPackageManifest, canonicalJson, manifestContentDigest, signManifest } from "@fac-isr/evidence";
 import type { ManifestFile, SignedPackageManifest } from "@fac-isr/evidence";
@@ -11,6 +12,10 @@ const PACKAGE_CONTROL_FILES = new Set([
   "evidence-package-manifest.sig",
   "evidence-package-public-key.pem",
 ]);
+const MAX_PATH_BYTES = 4096;
+const MAX_COMPONENT_BYTES = 255;
+const DIRECTORY_FLAGS = fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW;
+const publishLocks = new Map<string, Promise<void>>();
 
 export interface PackageSourceFile {
   /** Relative to sourceRoot; never accepted as an absolute or traversing path. */
@@ -28,8 +33,23 @@ export interface AssemblePackageInput {
   privateKey: string | Buffer;
 }
 
+/** Validate a package/source-relative path before it can reach path or fs APIs. */
+function assertPortableRelativePath(value: unknown, field: string): asserts value is string {
+  if (typeof value !== "string" || value.length === 0 || isAbsolute(value) || value.includes("\\") || value.includes("\0")) throw new Error(`${field} must be a non-empty relative POSIX path without backslash or NUL`);
+  if (Buffer.byteLength(value, "utf8") > MAX_PATH_BYTES) throw new Error(`${field} exceeds ${MAX_PATH_BYTES} UTF-8 bytes`);
+  const components = value.split("/");
+  for (const component of components) {
+    if (component === "" || component === "." || component === "..") throw new Error(`${field} has empty, dot, or dotdot component`);
+    if (Buffer.byteLength(component, "utf8") > MAX_COMPONENT_BYTES) throw new Error(`${field} component exceeds ${MAX_COMPONENT_BYTES} UTF-8 bytes`);
+    // Keep package paths portable to the Linux edge node and Windows staging
+    // workstation; these characters are invalid or ambiguous on one of them.
+    if (/[\u0000-\u001f\u007f<>:"|?*]/u.test(component) || /[. ]$/u.test(component)) throw new Error(`${field} contains a platform-invalid component`);
+    if (/^(con|prn|aux|nul|clock\$|com[1-9]|lpt[1-9])(?:\..*)?$/iu.test(component)) throw new Error(`${field} contains a reserved platform name`);
+  }
+}
+
 function contained(root: string, candidate: string, field: string): string {
-  if (!candidate || isAbsolute(candidate) || candidate.includes("\\")) throw new Error(`${field} must be a non-empty relative POSIX path`);
+  assertPortableRelativePath(candidate, field);
   const target = resolve(root, candidate);
   const fromRoot = relative(root, target);
   if (fromRoot === "" || fromRoot === ".." || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) throw new Error(`${field} escapes its root`);
@@ -38,7 +58,7 @@ function contained(root: string, candidate: string, field: string): string {
 
 function packagePath(input: PackageSourceFile): string {
   const output = input.packagePath ?? input.sourcePath;
-  if (output.split("/").some((part) => !part || part === "." || part === "..")) throw new Error("packagePath contains traversal");
+  assertPortableRelativePath(output, "packagePath");
   return output;
 }
 
@@ -62,6 +82,27 @@ function assertDestinationPaths(paths: readonly string[]): void {
 function pathsOverlap(left: string, right: string): boolean {
   const relation = relative(left, right);
   return relation === "" || (relation !== ".." && !relation.startsWith(`..${sep}`) && !isAbsolute(relation));
+}
+
+function assertHostPath(value: string, field: string): void {
+  if (value.includes("\0") || value.includes("\\") || Buffer.byteLength(value, "utf8") > MAX_PATH_BYTES) throw new Error(`${field} contains an invalid or overlong host path`);
+}
+
+interface CapturedError {
+  error: unknown;
+}
+
+/** Close every handle, retaining the first close failure instead of aborting the sweep. */
+async function closeHandlesBestEffort(handles: readonly FileHandle[]): Promise<CapturedError | undefined> {
+  let first: CapturedError | undefined;
+  for (const handle of handles) {
+    try {
+      await handle.close();
+    } catch (error) {
+      if (first === undefined) first = { error };
+    }
+  }
+  return first;
 }
 
 /** Reject a path whose existing components include a symlink. */
@@ -94,53 +135,162 @@ async function readSafeSource(source: string, label: string): Promise<Buffer> {
   const before = await lstat(source);
   if (before.isSymbolicLink() || !before.isFile()) throw new Error(`package source is not a regular non-symlink file: ${label}`);
   const handle = await open(source, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+  let contents: Buffer | undefined;
+  let operationFailure: CapturedError | undefined;
   try {
     const opened = await handle.stat();
     if (!sameFile(before, opened)) throw new Error(`package source changed while opening: ${label}`);
-    const contents = await handle.readFile();
+    contents = await handle.readFile();
     const after = await handle.stat();
     if (!sameFile(opened, after)) throw new Error(`package source changed while reading: ${label}`);
-    return contents;
-  } finally {
-    await handle.close();
+  } catch (error) {
+    operationFailure = { error };
+  }
+  const closeFailure = await closeHandlesBestEffort([handle]);
+  if (operationFailure !== undefined) throw operationFailure.error;
+  if (closeFailure !== undefined) throw closeFailure.error;
+  if (contents === undefined) throw new Error(`package source read produced no contents: ${label}`);
+  return contents;
+}
+
+function fdPath(handle: FileHandle): string {
+  if (process.platform !== "linux") throw new Error("evidence package assembly requires Linux /proc directory-FD anchoring");
+  return `/proc/self/fd/${handle.fd}`;
+}
+
+/** Require a directory that is private to this process's uid and writable by its owner. */
+function assertTrustedDirectoryInfo(info: Awaited<ReturnType<typeof lstat>>, field: string): void {
+  const uid = typeof process.getuid === "function" ? process.getuid() : undefined;
+  const mode = Number(info.mode) & 0o777;
+  if (uid === undefined || !info.isDirectory() || info.uid !== uid || (mode & 0o022) !== 0 || (mode & 0o200) === 0) {
+    throw new Error(`${field} must be an existing directory owned by the process uid, owner-writable, and not group/other-writable`);
   }
 }
 
-/** Create each destination directory one component at a time without following symlinks. */
-async function ensureSafeDirectory(root: string, directory: string, field: string): Promise<void> {
-  const rootAbsolute = resolve(root);
-  const directoryAbsolute = resolve(directory);
-  const fromRoot = relative(rootAbsolute, directoryAbsolute);
-  if (fromRoot === ".." || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) throw new Error(`${field} escapes its root`);
-  let current = rootAbsolute;
-  for (const component of fromRoot.split(sep).filter(Boolean)) {
-    current = resolve(current, component);
-    try {
-      const info = await lstat(current);
-      if (info.isSymbolicLink()) throw new Error(`${field} may not contain symbolic links: ${current}`);
-      if (!info.isDirectory()) throw new Error(`${field} component is not a directory: ${current}`);
-    } catch (error) {
-      if (!(error instanceof Error) || !/ENOENT/.test(String((error as NodeJS.ErrnoException).code))) throw error;
-      try {
-        await mkdir(current, { recursive: false, mode: 0o700 });
-      } catch (mkdirError) {
-        // A concurrent creator is acceptable only if its resulting component
-        // is a real directory; a symlink is never accepted.
-        if (!(mkdirError instanceof Error) || !/EEXIST/.test(String((mkdirError as NodeJS.ErrnoException).code))) throw mkdirError;
+/** Open every absolute path component with O_NOFOLLOW, retaining the final FD. */
+async function openDirectoryPath(path: string, field: string): Promise<FileHandle> {
+  const absolute = resolve(path);
+  assertHostPath(absolute, field);
+  const root = parse(absolute).root;
+  let current = await open(root, DIRECTORY_FLAGS);
+  try {
+    const segments = absolute.slice(root.length).split(sep).filter(Boolean);
+    for (const segment of segments) {
+      const next = await open(join(fdPath(current), segment), DIRECTORY_FLAGS);
+      const closeError = await closeHandlesBestEffort([current]);
+      if (closeError !== undefined) {
+        // `next` was opened successfully, so close it before preserving the
+        // first failure from the old directory handle.
+        await closeHandlesBestEffort([next]);
+        throw closeError.error;
       }
-      const info = await lstat(current);
-      if (info.isSymbolicLink()) throw new Error(`${field} may not contain symbolic links: ${current}`);
-      if (!info.isDirectory()) throw new Error(`${field} component is not a directory: ${current}`);
+      current = next;
     }
+    return current;
+  } catch (error) {
+    await closeHandlesBestEffort([current]);
+    throw error;
   }
 }
 
-async function writeSafeDestination(outputDirectory: string, destinationPath: string, contents: Buffer): Promise<void> {
-  const destination = contained(outputDirectory, destinationPath, "packagePath");
-  const parent = dirname(destination);
-  await ensureSafeDirectory(outputDirectory, parent, "package output parent");
-  const handle = await open(destination, fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_NOFOLLOW, 0o600);
-  try { await handle.writeFile(contents); } finally { await handle.close(); }
+/** Require a real directory owned by this process's uid and not writable by group/other. */
+async function openTrustedPublishParent(path: string): Promise<FileHandle> {
+  const handle = await openDirectoryPath(path, "outputDirectory parent");
+  try {
+    const info = await handle.stat();
+    assertTrustedDirectoryInfo(info, "outputDirectory parent");
+  } catch (error) {
+    await closeHandlesBestEffort([handle]);
+    throw error;
+  }
+  return handle;
+}
+
+/** Open/create one destination directory from an already-open directory FD. */
+async function openChildDirectory(parent: FileHandle, component: string, field: string): Promise<FileHandle> {
+  assertPortableRelativePath(component, field);
+  const childPath = join(fdPath(parent), component);
+  try {
+    await mkdir(childPath, { recursive: false, mode: 0o700 });
+  } catch (error) {
+    if (!(error instanceof Error) || (error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+  }
+  const child = await open(childPath, DIRECTORY_FLAGS);
+  try {
+    const info = await child.stat();
+    assertTrustedDirectoryInfo(info, field);
+  } catch (error) {
+    // A stat or trust-boundary failure must not leak the child. Preserve the
+    // first (validation) error if closing the rejected handle also fails.
+    await closeHandlesBestEffort([child]);
+    throw error;
+  }
+  return child;
+}
+
+/** Write using directory-FD anchoring so path checks cannot be bypassed by a symlink swap. */
+async function writeSafeDestination(root: FileHandle, destinationPath: string, contents: Buffer): Promise<void> {
+  assertPortableRelativePath(destinationPath, "packagePath");
+  const components = destinationPath.split("/");
+  const fileName = components.pop();
+  if (fileName === undefined) throw new Error("packagePath must name a file");
+  let current = root;
+  const opened: FileHandle[] = [];
+  let operationFailure: CapturedError | undefined;
+  try {
+    for (const component of components) {
+      current = await openChildDirectory(current, component, "package output parent");
+      opened.push(current);
+    }
+    const destination = join(fdPath(current), fileName);
+    const handle = await open(destination, fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_NOFOLLOW, 0o600);
+    let writeFailure: CapturedError | undefined;
+    try {
+      await handle.writeFile(contents);
+    } catch (error) {
+      writeFailure = { error };
+    }
+    const closeError = await closeHandlesBestEffort([handle]);
+    operationFailure = writeFailure ?? closeError;
+    if (operationFailure !== undefined) throw operationFailure.error;
+  } catch (error) {
+    if (operationFailure === undefined) operationFailure = { error };
+  }
+  const closeError = await closeHandlesBestEffort([...opened].reverse());
+  if (operationFailure !== undefined) throw operationFailure.error;
+  if (closeError !== undefined) throw closeError.error;
+}
+
+async function removeOwnedStaging(
+  parentHandle: FileHandle,
+  stagingName: string,
+  stagingIdentity: Awaited<ReturnType<typeof lstat>>,
+): Promise<CapturedError | undefined> {
+  try {
+    const stagingPath = join(fdPath(parentHandle), stagingName);
+    const current = await lstat(stagingPath);
+    const uid = typeof process.getuid === "function" ? process.getuid() : undefined;
+    if (uid !== undefined && current.isDirectory() && current.uid === uid && current.dev === stagingIdentity.dev && current.ino === stagingIdentity.ino) {
+      await rm(stagingPath, { recursive: true, force: true });
+    }
+  } catch (error) {
+    if (error instanceof Error && /ENOENT/.test(String((error as NodeJS.ErrnoException).code))) return undefined;
+    return { error };
+  }
+  return undefined;
+}
+
+async function acquirePublishLock(key: string): Promise<() => void> {
+  const predecessor = publishLocks.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const own = new Promise<void>((resolveOwn) => { release = resolveOwn; });
+  const tail = predecessor.then(() => own);
+  publishLocks.set(key, tail);
+  await predecessor;
+  return () => {
+    release();
+    if (publishLocks.get(key) === tail) publishLocks.delete(key);
+  };
 }
 
 /**
@@ -149,17 +299,17 @@ async function writeSafeDestination(outputDirectory: string, destinationPath: st
  * this module neither reads environment variables nor searches the repository for keys.
  */
 export async function assembleEvidencePackage(input: AssemblePackageInput): Promise<SignedPackageManifest> {
+  assertHostPath(input.sourceRoot, "sourceRoot");
+  assertHostPath(input.outputDirectory, "outputDirectory");
   const sourceRoot = resolve(input.sourceRoot);
   const outputDirectory = resolve(input.outputDirectory);
+  const outputName = basename(outputDirectory);
+  if (outputName === "") throw new Error("outputDirectory must name a child of its parent directory");
   if (!Array.isArray(input.files) || input.files.length === 0) throw new Error("package must contain at least one file");
   if (pathsOverlap(sourceRoot, outputDirectory) || pathsOverlap(outputDirectory, sourceRoot)) throw new Error("outputDirectory must not equal, contain, or be contained by sourceRoot");
-  try { await lstat(outputDirectory); throw new Error("outputDirectory already exists; refusing to erase caller-selected output"); } catch (error) {
-    if (!(error instanceof Error) || !/ENOENT/.test(String((error as NodeJS.ErrnoException).code))) throw error;
-  }
   await assertNoSymlinkComponents(sourceRoot, "sourceRoot");
   const sourceRootInfo = await lstat(sourceRoot);
   if (!sourceRootInfo.isDirectory()) throw new Error("sourceRoot must be a directory");
-  await assertNoSymlinkComponents(dirname(outputDirectory), "outputDirectory parent");
 
   // Resolve and validate every destination before reading sources or creating
   // any output. This catches exact collisions and file/directory prefixes,
@@ -178,25 +328,66 @@ export async function assembleEvidencePackage(input: AssemblePackageInput): Prom
   // Build privately, then publish with a same-parent rename. Only this
   // generated staging directory is ever removed on failure; caller output is
   // never recursively deleted or overwritten.
-  const stagingDirectory = await mkdtemp(join(dirname(outputDirectory), `.${basename(outputDirectory)}.staging-`));
+  const releasePublishLock = await acquirePublishLock(outputDirectory);
+  let parentHandle: FileHandle | undefined;
+  let stagingHandle: FileHandle | undefined;
+  let stagingName: string | undefined;
+  let stagingIdentity: Awaited<ReturnType<typeof lstat>> | undefined;
   let published = false;
+  let result: SignedPackageManifest | undefined;
+  let operationFailure: CapturedError | undefined;
   try {
-    await assertNoSymlinkComponents(stagingDirectory, "package staging directory");
-    for (const file of staged) await writeSafeDestination(stagingDirectory, file.path, file.contents);
-    await writeSafeDestination(stagingDirectory, "evidence-package-manifest.json", Buffer.from(`${canonicalJson(signed)}\n`, "utf8"));
-    await writeSafeDestination(stagingDirectory, "evidence-package-manifest.sig", Buffer.from(`${signed.signature}\n`, "utf8"));
+    // Keep the trusted parent open from preflight through publish. Its private
+    // ownership/mode boundary prevents an untrusted process from replacing
+    // the directory between the destination check and the atomic rename.
+    parentHandle = await openTrustedPublishParent(dirname(outputDirectory));
+    const outputPath = join(fdPath(parentHandle), outputName);
+    try { await lstat(outputPath); throw new Error("outputDirectory already exists; refusing to overwrite caller-selected output"); } catch (error) {
+      if (!(error instanceof Error) || !/ENOENT/.test(String((error as NodeJS.ErrnoException).code))) throw error;
+    }
+
+    const stagingPath = await mkdtemp(join(fdPath(parentHandle), `.${outputName}.staging-`));
+    stagingName = basename(stagingPath);
+    stagingIdentity = await lstat(join(fdPath(parentHandle), stagingName));
+    // Re-open and re-check the generated staging directory through the trusted
+    // parent FD before writing anything into it.
+    stagingHandle = await openChildDirectory(parentHandle, stagingName, "package staging directory");
+    for (const file of staged) await writeSafeDestination(stagingHandle, file.path, file.contents);
+    await writeSafeDestination(stagingHandle, "evidence-package-manifest.json", Buffer.from(`${canonicalJson(signed)}\n`, "utf8"));
+    await writeSafeDestination(stagingHandle, "evidence-package-manifest.sig", Buffer.from(`${signed.signature}\n`, "utf8"));
     // This check closes the ordinary caller-race window. `rename` is atomic
     // because staging and destination share a parent; a competing existing
     // destination is refused rather than intentionally replaced.
-    try { await lstat(outputDirectory); throw new Error("outputDirectory already exists; refusing to overwrite caller-selected output"); } catch (error) {
+    try { await lstat(outputPath); throw new Error("outputDirectory already exists; refusing to overwrite caller-selected output"); } catch (error) {
       if (!(error instanceof Error) || !/ENOENT/.test(String((error as NodeJS.ErrnoException).code))) throw error;
     }
-    await rename(stagingDirectory, outputDirectory);
+    await rename(join(fdPath(parentHandle), stagingName), outputPath);
     published = true;
-    return signed;
+    result = signed;
+  } catch (error) {
+    operationFailure = { error };
   } finally {
-    if (!published) await rm(stagingDirectory, { recursive: true, force: true });
+    let cleanupFailure: CapturedError | undefined;
+    try {
+      if (stagingHandle !== undefined) cleanupFailure = await closeHandlesBestEffort([stagingHandle]);
+      if (!published && parentHandle !== undefined && stagingName !== undefined && stagingIdentity !== undefined) {
+        const stagingFailure = await removeOwnedStaging(parentHandle, stagingName, stagingIdentity);
+        if (cleanupFailure === undefined) cleanupFailure = stagingFailure;
+      }
+      if (parentHandle !== undefined) {
+        const parentFailure = await closeHandlesBestEffort([parentHandle]);
+        if (cleanupFailure === undefined) cleanupFailure = parentFailure;
+      }
+    } finally {
+      // The lock is process-local, but it must be released even when a close
+      // or staging cleanup fails; otherwise later retries wait forever.
+      releasePublishLock();
+    }
+    if (operationFailure === undefined && cleanupFailure !== undefined) operationFailure = cleanupFailure;
   }
+  if (operationFailure !== undefined) throw operationFailure.error;
+  if (result === undefined) throw new Error("evidence package assembly produced no result");
+  return result;
 }
 
 export async function readSignedManifest(path: string): Promise<SignedPackageManifest> {

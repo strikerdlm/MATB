@@ -1,0 +1,6 @@
+[
+  { "name": "armed configuration", "configuration": "armed", "code": "CONFIGURATION_OUT_OF_SCOPE" },
+  { "name": "strike configuration", "configuration": "strike", "code": "CONFIGURATION_OUT_OF_SCOPE" },
+  { "name": "missing operator", "configuration": "unarmed-isr", "code": "MISSING_OPERATOR_PER_AIRCRAFT" },
+  { "name": "research swarm", "configuration": "unarmed-isr", "code": "SWARM_RESEARCH_NON_DISPATCHABLE" }
+]
