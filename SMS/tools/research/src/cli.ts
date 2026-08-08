@@ -5,6 +5,7 @@ import { assertSourceRecord, sha256File, verifyPackage } from "@fac-isr/evidence
 import type { SourceRecord } from "@fac-isr/evidence";
 import { acquireOfficialSource, copyObsidianNote, extractText, resolveWorkspacePath, verifyChecksum } from "./acquire.js";
 import { readSignedManifest } from "./package.js";
+import { pinnedPublicKeyFor } from "./trust-anchor.js";
 
 /** CLI is intentionally run from the SMS workspace root (`cd SMS`). */
 const ROOT = resolve(process.cwd());
@@ -79,7 +80,10 @@ export async function verifyOffline(root = ROOT, registerPath = resolve(root, "d
       const manifest = await readSignedManifest(resolve(provenanceRoot, "evidence-package-manifest.json"));
       const signature = (await readFile(resolve(provenanceRoot, "evidence-package-manifest.sig"), "utf8")).trim();
       if (signature !== manifest.signature) failures.push("evidence package: detached signature does not match manifest");
-      const publicKey = await readFile(resolve(provenanceRoot, "evidence-package-public-key.pem"), "utf8");
+      // The PEM in provenance is checked as corroborating metadata only. The
+      // verifier uses the compiled-in trust anchor returned by this resolver.
+      const packagePublicKey = await readFile(resolve(provenanceRoot, "evidence-package-public-key.pem"), "utf8");
+      const publicKey = pinnedPublicKeyFor(manifest, packagePublicKey);
       const asOfUtc = requiredVerificationAsOf();
       const report = await verifyPackage(provenanceRoot, manifest, publicKey, asOfUtc);
       if (!report.ok) failures.push(...report.checks.filter((check) => check.status === "fail").map((check) => `evidence package ${check.id}: ${check.reason ?? "failed"}`));

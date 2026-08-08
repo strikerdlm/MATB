@@ -41,6 +41,11 @@ describe("offline evidence package verification", () => {
     const stale = signManifest({ ...manifest, version: "2.0.0", issuedAtUtc: "2026-08-07T00:00:00Z", effectiveFromUtc: "2026-08-07T00:00:00Z", signature: "" }, privateKey);
     expect(() => rejectDowngrade(manifest, stale)).toThrow("effective period");
   });
+  it("rejects prerelease versions instead of collapsing them into a release", async () => {
+    const { manifest } = await fixture();
+    expect(() => signManifest({ ...manifest, version: "1.0.0-alpha", signature: "" }, privateKey)).toThrow("version");
+    expect(() => rejectDowngrade(manifest, { ...manifest, version: "1.0.0-alpha" } as SignedPackageManifest)).toThrow("version");
+  });
   it("requires a caller-supplied exact UTC as-of time", async () => {
     const { directory, manifest } = await fixture();
     const report = await verifyPackage(directory, manifest, publicKey, undefined as unknown as string);

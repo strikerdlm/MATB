@@ -1,7 +1,7 @@
 import { generateKeyPairSync } from "node:crypto";
-import { lstat, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { verifyPackage } from "@fac-isr/evidence";
 import { assembleEvidencePackage, explicitPrivateKey, readSignedManifest } from "../src/package.js";
@@ -37,6 +37,23 @@ describe("deterministic evidence package assembly", () => {
     const root = await mkdtemp(join(tmpdir(), "fac-evidence-source-")); const outputParent = await mkdtemp(join(tmpdir(), "fac-evidence-output-")); const output = join(outputParent, "package"); paths.push(root, outputParent); await writeFile(join(root, "rule.json"), "{}\n");
     await expect(assembleEvidencePackage({ sourceRoot: root, outputDirectory: output, files: [{ sourcePath: "rule.json" }], privateKey, manifest: { schemaVersion: "1.0", packageId: "fac-package-test", kind: "invalid" as "regulatory", issuer: "test issuer", version: "1.0.0", issuedAtUtc: "2026-08-08T00:00:00Z", effectiveFromUtc: "2026-08-08T00:00:00Z", geographicScope: "Colombia", keyId: "test", dependencies: [], qualification: "qualified-review", caveats: ["test only"] } })).rejects.toThrow("kind");
     await expect(lstat(output)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+  it("preflights file/directory prefix collisions and reserved control paths", async () => {
+    const root = await mkdtemp(join(tmpdir(), "fac-evidence-collision-source-")); const outputParent = await mkdtemp(join(tmpdir(), "fac-evidence-collision-output-")); const output = join(outputParent, "package"); paths.push(root, outputParent);
+    await writeFile(join(root, "one.txt"), "one\n"); await writeFile(join(root, "two.txt"), "two\n");
+    const base = { sourceRoot: root, outputDirectory: output, privateKey, manifest: { schemaVersion: "1.0" as const, packageId: "fac-package-test", kind: "regulatory" as const, issuer: "test issuer", version: "1.0.0", issuedAtUtc: "2026-08-08T00:00:00Z", effectiveFromUtc: "2026-08-08T00:00:00Z", geographicScope: "Colombia", keyId: "test", dependencies: [], qualification: "qualified-review" as const, caveats: ["test only"] } };
+    await expect(assembleEvidencePackage({ ...base, files: [{ sourcePath: "one.txt", packagePath: "foo" }, { sourcePath: "two.txt", packagePath: "foo/bar" }] })).rejects.toThrow("prefix collision");
+    await expect(lstat(output)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(assembleEvidencePackage({ ...base, files: [{ sourcePath: "one.txt", packagePath: "evidence-package-manifest.json" }] })).rejects.toThrow("reserved");
+    await expect(lstat(output)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+  it("cleans a partially written private staging package after a destination failure", async () => {
+    const root = await mkdtemp(join(tmpdir(), "fac-evidence-atomic-source-")); const outputParent = await mkdtemp(join(tmpdir(), "fac-evidence-atomic-output-")); const output = join(outputParent, "package"); paths.push(root, outputParent);
+    await writeFile(join(root, "good.txt"), "good\n"); await writeFile(join(root, "bad.txt"), "bad\n");
+    const tooLong = "x".repeat(256);
+    await expect(assembleEvidencePackage({ sourceRoot: root, outputDirectory: output, files: [{ sourcePath: "good.txt", packagePath: "content/good.txt" }, { sourcePath: "bad.txt", packagePath: tooLong }], privateKey, manifest: { schemaVersion: "1.0", packageId: "fac-package-test", kind: "regulatory", issuer: "test issuer", version: "1.0.0", issuedAtUtc: "2026-08-08T00:00:00Z", effectiveFromUtc: "2026-08-08T00:00:00Z", geographicScope: "Colombia", keyId: "test", dependencies: [], qualification: "qualified-review", caveats: ["test only"] } })).rejects.toThrow();
+    await expect(lstat(output)).rejects.toMatchObject({ code: "ENOENT" });
+    expect((await readdir(outputParent)).filter((name) => name.startsWith(`.${basename(output)}.staging-`))).toEqual([]);
   });
   it("rejects symlink source files rather than following them into the package", async () => {
     const root = await mkdtemp(join(tmpdir(), "fac-evidence-source-")); const outputParent = await mkdtemp(join(tmpdir(), "fac-evidence-output-")); const output = join(outputParent, "package"); paths.push(root, outputParent);

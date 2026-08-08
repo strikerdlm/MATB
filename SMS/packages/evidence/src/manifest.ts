@@ -6,7 +6,10 @@ import type { ManifestFile, SignedPackageManifest } from "./types.js";
 
 const SHA256 = /^[a-f0-9]{64}$/;
 const PACKAGE_ID = /^[a-z0-9][a-z0-9._-]{2,127}$/;
-const VERSION = /^(0|[1-9]\d*)(?:\.(0|[1-9]\d*)){0,2}(?:-[0-9A-Za-z.-]+)?$/;
+// Evidence package versions are immutable release versions. Prerelease
+// labels are intentionally rejected until a complete SemVer comparator and
+// promotion policy exist; this prevents 1.0.0-alpha being treated as 1.0.0.
+const VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const UTC = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{3})?Z$/;
 const CONTROL_FILES = new Set(["evidence-package-manifest.json", "evidence-package-manifest.sig", "evidence-package-public-key.pem"]);
 
@@ -145,9 +148,8 @@ export async function verifyPackage(directory: string, manifest: SignedPackageMa
   return { ok: !checks.some((check) => check.status === "fail"), checks, packageId: manifest.packageId };
 }
 
-function numericVersion(version: string): number[] {
-  const core = version.split("-", 1)[0].split(".").map(Number);
-  return [core[0] ?? 0, core[1] ?? 0, core[2] ?? 0];
+function releaseVersion(version: string): number[] {
+  return version.split(".").map(Number);
 }
 
 /** Refuse replacement of an installed package by an earlier version or effective period. */
@@ -155,7 +157,7 @@ export function rejectDowngrade(current: SignedPackageManifest, incoming: Signed
   assertSignedPackageManifest(current, true); assertSignedPackageManifest(incoming, true);
   if (current.packageId !== incoming.packageId) throw new Error("downgrade comparison requires matching package IDs");
   if (Date.parse(incoming.effectiveFromUtc) < Date.parse(current.effectiveFromUtc)) throw new Error("downgrade rejected: incoming effective period is older");
-  const installed = numericVersion(current.version); const candidate = numericVersion(incoming.version);
+  const installed = releaseVersion(current.version); const candidate = releaseVersion(incoming.version);
   for (let index = 0; index < installed.length; index += 1) {
     if (candidate[index] < installed[index]) throw new Error("downgrade rejected: incoming version is older");
     if (candidate[index] > installed[index]) return;
