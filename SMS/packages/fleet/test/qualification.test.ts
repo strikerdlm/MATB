@@ -100,7 +100,9 @@ describe("crew duty and rest", () => {
       "2026-08-09T08:00:00Z",
     );
     expect(result.status).toBe("unknown");
-    expect(result.blockers.map(({ code }) => code)).toEqual(["DUTY_POLICY_INVALID"]);
+    expect(result.blockers).toEqual([
+      expect.objectContaining({ code: "DUTY_POLICY_INVALID", severity: "data" }),
+    ]);
   });
 
   it("still detects excessive duty when only the rest timestamp is invalid", () => {
@@ -113,6 +115,32 @@ describe("crew duty and rest", () => {
     expect(result.blockers.map(({ code }) => code)).toEqual([
       "DUTY_TIME_DATA_INVALID",
       "DUTY_LIMIT_EXCEEDED",
+    ]);
+  });
+
+  it("retains an excessive-duty blocker when duty evidence is missing", () => {
+    const result = evaluateDutyAndRest(
+      { ...duty, evidenceRefs: [] },
+      policy,
+      "2026-08-09T08:00:00.001Z",
+    );
+    expect(result.status).toBe("unavailable");
+    expect(result.blockers.map(({ code }) => code)).toEqual([
+      "DUTY_EVIDENCE_REQUIRED",
+      "DUTY_LIMIT_EXCEEDED",
+    ]);
+  });
+
+  it("retains workload restrictions when duty evidence is missing", () => {
+    const result = evaluateDutyAndRest(
+      { ...duty, cumulativeWorkloadMinutes: 301, evidenceRefs: [] },
+      policy,
+      "2026-08-09T07:59:00Z",
+    );
+    expect(result.status).toBe("unknown");
+    expect(result.blockers.map(({ code }) => code)).toEqual([
+      "DUTY_EVIDENCE_REQUIRED",
+      "WORKLOAD_LIMIT_EXCEEDED",
     ]);
   });
 });

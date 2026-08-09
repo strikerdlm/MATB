@@ -163,7 +163,7 @@ export function evaluateDutyAndRest(
   const validPolicyIdentity = isCanonicalIdentifier(policy.policyId)
     && isCanonicalIdentifier(policy.edition);
   const usablePolicy = validPolicyIdentity && validPolicyNumbers && policyEvidence.length > 0;
-  const usableDutyFacts = validDutyNumbers && dutyEvidence.length > 0;
+  const usableDutyFacts = validDutyNumbers;
 
   if (
     startedAt === undefined
@@ -178,7 +178,7 @@ export function evaluateDutyAndRest(
 
   if (!validPolicyIdentity || !validPolicyNumbers) {
     statuses.push("unknown");
-    blockers.push(createBlocker("DUTY_POLICY_INVALID", "policy", policyEvidence));
+    blockers.push(createBlocker("DUTY_POLICY_INVALID", "data", policyEvidence));
   }
 
   if (!validDutyNumbers) {
@@ -196,7 +196,6 @@ export function evaluateDutyAndRest(
     && now !== undefined
     && startedAt <= now
     && usablePolicy
-    && dutyEvidence.length > 0
   ) {
     const dutyMinutes = (now - startedAt) / 60_000;
     if (dutyMinutes > policy.maxDutyMinutes) {
@@ -210,7 +209,6 @@ export function evaluateDutyAndRest(
     && previousDutyEndedAt !== undefined
     && previousDutyEndedAt <= startedAt
     && usablePolicy
-    && dutyEvidence.length > 0
   ) {
     const restMinutes = (startedAt - previousDutyEndedAt) / 60_000;
     if (restMinutes < policy.minimumRestMinutes) {
