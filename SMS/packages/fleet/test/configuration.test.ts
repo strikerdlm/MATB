@@ -9,6 +9,7 @@ describe("configuration compatibility", () => {
   it("hard-blocks armed and strike configurations", () => {
     expect(evaluateConfiguration({ ...system, configuration: "armed" }, payload, gcs, battery, evidence).status).toBe("blocked");
     expect(evaluateConfiguration({ ...system, configuration: "strike" }, payload, gcs, battery, evidence).status).toBe("blocked");
+    expect(evaluateConfiguration({ ...system, configuration: "armed" }, payload, gcs, battery, { ...evidence, current: false, approved: false }).status).toBe("blocked");
   });
   it("passes compatible approved configuration and blocks mismatched IDs/hashes", () => {
     expect(evaluateConfiguration(system, payload, gcs, battery, evidence)).toMatchObject({ status: "pass", evidenceRefs: ["sys-ev", "payload-ev", "gcs-ev"] });

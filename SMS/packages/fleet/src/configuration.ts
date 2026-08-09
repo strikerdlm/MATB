@@ -12,6 +12,7 @@ export function evaluateConfiguration(system: UASSystem, payload: PayloadConfigu
   if (!Number.isFinite(payload.massKg) || payload.massKg < 0 || !Number.isFinite(payload.powerW) || payload.powerW < 0 || !Number.isFinite(payload.thermalLimitC)) reasons.push("PAYLOAD_LIMITS_INVALID");
   if (payload.massKg > payload.approvedMassKg || payload.powerW > payload.approvedPowerW || payload.thermalLimitC > payload.approvedThermalLimitC) reasons.push("PAYLOAD_APPROVED_LIMIT_EXCEEDED");
   const evidenceRefs = [...system.evidenceRefs, ...payload.evidenceRefs, ...gcs.evidenceRefs];
+  if (reasons.includes("CONFIGURATION_OUT_OF_SCOPE")) return { status: "blocked", reasons, evidenceRefs };
   if (!evidence.current || !evidence.approved) return { status: "unknown", reasons: ["CONFIGURATION_EVIDENCE_NOT_CURRENT_OR_APPROVED"], evidenceRefs: [...evidence.evidenceRefs] };
   const requiredRefs = [...system.evidenceRefs, ...payload.evidenceRefs, ...gcs.evidenceRefs];
   if (evidence.evidenceRefs.length === 0 || !requiredRefs.every((ref) => evidence.evidenceRefs.includes(ref)) || !requiredRefs.every((ref) => evidence.acceptedEvidenceRefs.includes(ref))) reasons.push("CONFIGURATION_EVIDENCE_NOT_ACCEPTED");
