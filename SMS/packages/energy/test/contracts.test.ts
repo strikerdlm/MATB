@@ -23,5 +23,13 @@ describe("energy contracts", () => {
   });
   it("provides deterministic display-to-SI conversions", () => {
     expect(nauticalMilesToMeters(1)).toBe(1852); expect(feetToMeters(1)).toBeCloseTo(0.3048); expect(knotsToMetersPerSecond(1)).toBeCloseTo(0.514444); expect(wattHoursToJoules(1)).toBe(3600);
+    expect(() => nauticalMilesToMeters(-1)).toThrow(); expect(() => feetToMeters(Number.NaN)).toThrow(); expect(() => knotsToMetersPerSecond(-1)).toThrow(); expect(() => wattHoursToJoules(Infinity)).toThrow();
+  });
+  it("requires matching altitude and groundspeed display/SI pairs", () => {
+    const base = { id: "seg-1", kind: "cruise", distanceNm: 1, distanceM: 1852, durationS: 60 };
+    expect(parseEnergySegment({ ...base, altitudeChangeFt: 100, altitudeChangeM: 30.48, expectedGroundspeedKt: 10, expectedGroundspeedMps: 5.144444444444445 }).id).toBe("seg-1");
+    expect(() => parseEnergySegment({ ...base, altitudeChangeFt: 100 })).toThrow("altitude");
+    expect(() => parseEnergySegment({ ...base, expectedGroundspeedMps: 5 })).toThrow("groundspeed");
+    expect(() => parseEnergySegment({ ...base, altitudeChangeFt: 100, altitudeChangeM: 1 })).toThrow("feet");
   });
 });
