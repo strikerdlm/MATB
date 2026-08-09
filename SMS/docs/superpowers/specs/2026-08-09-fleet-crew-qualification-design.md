@@ -71,7 +71,7 @@ The only self-declared personnel fact accepted by the evaluator is one of the fo
 
 ### UTC and numeric validity
 
-UTC inputs must be real ISO-8601 instants ending in `Z`. Numeric limits and accumulated minutes must be finite and nonnegative. Invalid reference time, policy, duty, qualification, or recency data produces an `unknown` status and a data-severity blocker. The evaluator never guesses or normalizes malformed facts.
+UTC inputs must be real ISO-8601 instants ending in `Z`. Numeric limits and accumulated minutes must be finite and nonnegative. Invalid reference time, policy, duty, qualification, or recency data produces an `unknown` status and a data-severity blocker. The evaluator never guesses or normalizes malformed facts. Independently valid dimensions are still evaluated so one malformed timestamp cannot hide a known expiry or limit violation.
 
 ### Qualification and recency
 
@@ -116,7 +116,7 @@ For every required aircraft:
 - More than one operator row produces `MULTIPLE_OPERATORS_ASSIGNED_TO_AIRCRAFT`.
 - A sole operator whose qualification projection is false produces `QUALIFIED_OPERATOR_REQUIRED`.
 - One user assigned as operator to more than one distinct aircraft produces one `OPERATOR_ASSIGNED_TO_MULTIPLE_AIRCRAFT` blocker for that user.
-- Blank identities produce `CREW_ASSIGNMENT_INVALID` and are never silently ignored.
+- Blank or whitespace-wrapped assignment and required-aircraft identities produce `CREW_ASSIGNMENT_INVALID`; malformed identities are rejected rather than normalized or silently ignored.
 
 Blocker order is deterministic: malformed assignment data, per-aircraft coverage in sorted aircraft order, then duplicate users in sorted user order.
 

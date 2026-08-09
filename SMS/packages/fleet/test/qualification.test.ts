@@ -92,6 +92,29 @@ describe("crew duty and rest", () => {
       "2026-08-09T07:59:00Z",
     ).status).toBe("unknown");
   });
+
+  it("does not apply limits from a malformed policy", () => {
+    const result = evaluateDutyAndRest(
+      duty,
+      { ...policy, policyId: "", maxDutyMinutes: 1 },
+      "2026-08-09T08:00:00Z",
+    );
+    expect(result.status).toBe("unknown");
+    expect(result.blockers.map(({ code }) => code)).toEqual(["DUTY_POLICY_INVALID"]);
+  });
+
+  it("still detects excessive duty when only the rest timestamp is invalid", () => {
+    const result = evaluateDutyAndRest(
+      { ...duty, previousDutyEndedAtUtc: "invalid" },
+      policy,
+      "2026-08-09T08:00:00.001Z",
+    );
+    expect(result.status).toBe("unavailable");
+    expect(result.blockers.map(({ code }) => code)).toEqual([
+      "DUTY_TIME_DATA_INVALID",
+      "DUTY_LIMIT_EXCEEDED",
+    ]);
+  });
 });
 
 describe("crew assignment qualification", () => {
@@ -185,6 +208,20 @@ describe("crew assignment qualification", () => {
     expect(result.blockers).toContainEqual(expect.objectContaining({ code: "QUALIFICATION_TIME_DATA_INVALID" }));
   });
 
+  it("still detects qualification expiry when only recency time is invalid", () => {
+    const result = evaluateCrewAssignment({
+      ...input,
+      qualification: {
+        ...qualification,
+        validUntilUtc: "2026-08-09T07:59:59.999Z",
+        recencyValidUntilUtc: "invalid",
+      },
+    });
+    expect(result.status).toBe("unavailable");
+    expect(result.blockers.map(({ code }) => code)).toContain("QUALIFICATION_TIME_DATA_INVALID");
+    expect(result.blockers.map(({ code }) => code)).toContain("QUALIFICATION_EXPIRED");
+  });
+
   it("gives a definitive unavailable fact precedence over missing data", () => {
     expect(evaluateCrewAssignment({
       ...input,
@@ -209,6 +246,16 @@ describe("crew assignment qualification", () => {
     expect(serialized).not.toContain("diagnosis");
     expect(serialized).not.toContain("clinicalReasoning");
     expect(serialized).not.toContain("private");
+  });
+
+  it("rejects whitespace-wrapped assignment identities", () => {
+    const result = evaluateCrewAssignment({
+      ...input,
+      assignment: { ...input.assignment, userId: " U-1 ", aircraftId: " A-1 " },
+      qualification: { ...qualification, userId: " U-1 " },
+    });
+    expect(result.status).toBe("unknown");
+    expect(result.blockers).toContainEqual(expect.objectContaining({ code: "CREW_ASSIGNMENT_INVALID" }));
   });
 });
 
@@ -268,5 +315,22 @@ describe("operator staffing", () => {
     ], ["A-1"]);
     expect(blockers[0]).toEqual(expect.objectContaining({ code: "CREW_ASSIGNMENT_INVALID" }));
     expect(blockers[1]).toEqual(expect.objectContaining({ code: "CREW_ASSIGNMENT_INVALID" }));
+  });
+
+  it("rejects whitespace-wrapped assignment identities instead of normalizing them", () => {
+    const blockers = requireOneOperatorPerAircraft([
+      { aircraftId: " A-1 ", role: "operator", userId: "U-1", qualified: true },
+      { aircraftId: "A-2", role: "operator", userId: " U-1 ", qualified: true },
+    ], ["A-1", "A-2"]);
+    expect(blockers.slice(0, 2).map(({ code }) => code)).toEqual([
+      "CREW_ASSIGNMENT_INVALID",
+      "CREW_ASSIGNMENT_INVALID",
+    ]);
+  });
+
+  it("reports malformed required-aircraft identities", () => {
+    expect(requireOneOperatorPerAircraft([], [" "])).toContainEqual(
+      expect.objectContaining({ code: "CREW_ASSIGNMENT_INVALID" }),
+    );
   });
 });

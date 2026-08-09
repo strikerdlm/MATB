@@ -95,6 +95,10 @@ function isFiniteNonnegative(value: number): boolean {
   return Number.isFinite(value) && value >= 0;
 }
 
+function isCanonicalIdentifier(value: string): boolean {
+  return value !== "" && value === value.trim();
+}
+
 function collectEvidence(...groups: readonly (readonly string[])[]): string[] {
   const refs: string[] = [];
   const seen = new Set<string>();
@@ -156,6 +160,10 @@ export function evaluateDutyAndRest(
     dutyPeriod.cumulativeWorkloadMinutes,
     dutyPeriod.cumulativeScreenExposureMinutes,
   ].every(isFiniteNonnegative);
+  const validPolicyIdentity = isCanonicalIdentifier(policy.policyId)
+    && isCanonicalIdentifier(policy.edition);
+  const usablePolicy = validPolicyIdentity && validPolicyNumbers && policyEvidence.length > 0;
+  const usableDutyFacts = validDutyNumbers && dutyEvidence.length > 0;
 
   if (
     startedAt === undefined
@@ -168,7 +176,7 @@ export function evaluateDutyAndRest(
     blockers.push(createBlocker("DUTY_TIME_DATA_INVALID", "data", evidenceRefs));
   }
 
-  if (policy.policyId.trim() === "" || policy.edition.trim() === "" || !validPolicyNumbers) {
+  if (!validPolicyIdentity || !validPolicyNumbers) {
     statuses.push("unknown");
     blockers.push(createBlocker("DUTY_POLICY_INVALID", "policy", policyEvidence));
   }
@@ -185,25 +193,33 @@ export function evaluateDutyAndRest(
 
   if (
     startedAt !== undefined
-    && previousDutyEndedAt !== undefined
     && now !== undefined
-    && previousDutyEndedAt <= startedAt
     && startedAt <= now
-    && validPolicyNumbers
+    && usablePolicy
+    && dutyEvidence.length > 0
   ) {
     const dutyMinutes = (now - startedAt) / 60_000;
-    const restMinutes = (startedAt - previousDutyEndedAt) / 60_000;
     if (dutyMinutes > policy.maxDutyMinutes) {
       statuses.push("unavailable");
       blockers.push(createBlocker("DUTY_LIMIT_EXCEEDED", "policy", evidenceRefs));
     }
+  }
+
+  if (
+    startedAt !== undefined
+    && previousDutyEndedAt !== undefined
+    && previousDutyEndedAt <= startedAt
+    && usablePolicy
+    && dutyEvidence.length > 0
+  ) {
+    const restMinutes = (startedAt - previousDutyEndedAt) / 60_000;
     if (restMinutes < policy.minimumRestMinutes) {
       statuses.push("unavailable");
       blockers.push(createBlocker("MINIMUM_REST_NOT_MET", "policy", evidenceRefs));
     }
   }
 
-  if (validPolicyNumbers && validDutyNumbers) {
+  if (usablePolicy && usableDutyFacts) {
     if (dutyPeriod.cumulativeWorkloadMinutes > policy.maxCumulativeWorkloadMinutes) {
       statuses.push("restricted");
       blockers.push(createBlocker("WORKLOAD_LIMIT_EXCEEDED", "policy", evidenceRefs));
@@ -233,9 +249,10 @@ export function evaluateCrewAssignment(input: CrewAssignmentEvaluationInput): Cr
   const now = parseUtc(input.nowUtc);
 
   if (
-    input.assignment.userId.trim() === ""
+    !isCanonicalIdentifier(input.assignment.userId)
     || !crewRoles.includes(input.assignment.role)
-    || input.assignment.requiredQualificationEdition.trim() === ""
+    || !isCanonicalIdentifier(input.assignment.requiredQualificationEdition)
+    || (input.assignment.aircraftId !== undefined && !isCanonicalIdentifier(input.assignment.aircraftId))
   ) {
     statuses.push("unknown");
     blockers.push(createBlocker("CREW_ASSIGNMENT_INVALID", "data", assignmentEvidence));
@@ -283,15 +300,14 @@ export function evaluateCrewAssignment(input: CrewAssignmentEvaluationInput): Cr
     if (qualificationValidUntil === undefined || recencyValidUntil === undefined) {
       statuses.push("unknown");
       blockers.push(createBlocker("QUALIFICATION_TIME_DATA_INVALID", "data", qualificationEvidence));
-    } else if (now !== undefined) {
-      if (now >= qualificationValidUntil) {
-        statuses.push("unavailable");
-        blockers.push(createBlocker("QUALIFICATION_EXPIRED", "policy", qualificationEvidence));
-      }
-      if (now >= recencyValidUntil) {
-        statuses.push("unavailable");
-        blockers.push(createBlocker("RECENCY_EXPIRED", "policy", qualificationEvidence));
-      }
+    }
+    if (now !== undefined && qualificationValidUntil !== undefined && now >= qualificationValidUntil) {
+      statuses.push("unavailable");
+      blockers.push(createBlocker("QUALIFICATION_EXPIRED", "policy", qualificationEvidence));
+    }
+    if (now !== undefined && recencyValidUntil !== undefined && now >= recencyValidUntil) {
+      statuses.push("unavailable");
+      blockers.push(createBlocker("RECENCY_EXPIRED", "policy", qualificationEvidence));
     }
   }
 
@@ -336,8 +352,8 @@ export function requireOneOperatorPerAircraft(
 
   for (const assignment of assignments) {
     if (
-      assignment.aircraftId.trim() === ""
-      || assignment.userId.trim() === ""
+      !isCanonicalIdentifier(assignment.aircraftId)
+      || !isCanonicalIdentifier(assignment.userId)
       || !crewRoles.includes(assignment.role)
     ) {
       blockers.push(createBlocker(
@@ -350,10 +366,20 @@ export function requireOneOperatorPerAircraft(
     validAssignments.push(assignment);
   }
 
+  const validRequiredAircraftIds: string[] = [];
+  if (requiredAircraftIds !== undefined) {
+    for (const aircraftId of requiredAircraftIds) {
+      if (!isCanonicalIdentifier(aircraftId)) {
+        blockers.push(createBlocker("CREW_ASSIGNMENT_INVALID", "data", []));
+      } else {
+        validRequiredAircraftIds.push(aircraftId);
+      }
+    }
+  }
   const aircraftIds = [...new Set(
-    (requiredAircraftIds ?? validAssignments.map(({ aircraftId }) => aircraftId))
-      .map((aircraftId) => aircraftId.trim())
-      .filter((aircraftId) => aircraftId !== ""),
+    requiredAircraftIds === undefined
+      ? validAssignments.map(({ aircraftId }) => aircraftId)
+      : validRequiredAircraftIds,
   )].sort();
 
   for (const aircraftId of aircraftIds) {

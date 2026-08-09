@@ -127,7 +127,7 @@ export interface DutyEvaluation {
 }
 ```
 
-Add strict UTC parsing, finite-nonnegative numeric checks, stable blocker construction, first-seen evidence reduction, and status precedence. Compute duty and rest in milliseconds to preserve the exact one-millisecond boundary in the tests. Use `>` for maximum limits and `<` for minimum rest.
+Add strict UTC parsing, finite-nonnegative numeric checks, stable blocker construction, first-seen evidence reduction, and status precedence. Compute duty and rest in milliseconds to preserve the exact one-millisecond boundary in the tests. Use `>` for maximum limits and `<` for minimum rest. Evaluate duty and rest independently so a malformed rest timestamp cannot hide a known excessive-duty condition, and never apply numeric limits from a malformed or unevidenced policy.
 
 - [ ] **Step 4: Run the focused test and verify GREEN**
 
@@ -313,7 +313,7 @@ export interface StaffingAssignment {
 }
 ```
 
-Validate blank identifiers first. Build the required aircraft set from `requiredAircraftIds` when supplied, otherwise from assignment aircraft IDs. Sort unique aircraft IDs and user IDs before emitting coverage and duplicate-user blockers. A valid aircraft has exactly one operator row and that row has `qualified: true`.
+Validate blank and whitespace-wrapped assignment and required-aircraft identifiers first; reject them rather than normalizing them. Build the required aircraft set from `requiredAircraftIds` when supplied, otherwise from assignment aircraft IDs. Sort unique aircraft IDs and user IDs before emitting coverage and duplicate-user blockers. A valid aircraft has exactly one operator row and that row has `qualified: true`.
 
 Add `export * from "./qualification.js";` to `src/index.ts`.
 
