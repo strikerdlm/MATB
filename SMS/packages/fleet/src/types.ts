@@ -15,6 +15,7 @@ export interface BatteryInput { serialNumber: string; aircraftCompatibility: rea
 export interface ConfigurationEvidence { current: boolean; approved: boolean; accepted?: boolean; evidenceRefs: readonly string[]; acceptedEvidenceRefs: readonly string[] }
 export interface CapabilityRequirement { useCase: "operational" | "airworthiness" | "release" | "research"; conditions: Record<string, unknown>; hard?: boolean }
 export interface ConfigurationResult { status: "pass" | "blocked" | "unknown"; reasons: readonly string[]; evidenceRefs: readonly string[] }
+export interface MaintenanceEvaluation { status: "pass" | "blocked" | "unknown"; blockers: readonly string[]; evidenceRefs: readonly string[] }
 export interface CapabilityResult { status: "pass" | "blocked" | "unknown"; reason: string; evidenceRefs: readonly string[] }
 export interface CapabilityBaseline { id: string; vendor: string; model: string; capabilities: readonly string[] }
 export interface CapabilityComparison { differences: readonly string[] }
