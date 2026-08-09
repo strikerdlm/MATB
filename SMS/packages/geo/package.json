@@ -16,6 +16,8 @@
   },
   "dependencies": {
     "@fac-isr/evidence": "0.1.0",
+    "mgrs": "^1.0.0",
+    "proj4": "^2.15.0",
     "zod": "3.25.76"
   }
 }

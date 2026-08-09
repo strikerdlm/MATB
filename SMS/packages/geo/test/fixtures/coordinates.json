@@ -1,0 +1,5 @@
+{
+  "bogota": { "lat": 4.711, "lon": -74.0721, "datum": "EPSG:4326" },
+  "southernHemisphere": { "lat": -33.4489, "lon": -70.6693, "datum": "EPSG:4326" },
+  "northernEast": { "lat": 40.7128, "lon": -73.9857, "datum": "EPSG:4326" }
+}
