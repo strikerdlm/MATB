@@ -1,7 +1,7 @@
 import type { NormalizedRequirement } from "@fac-isr/evidence";
 import { buildHardBlockers, evaluateApplicability } from "./applicability.js";
 import { CONCEPT_IDS, CONCEPT_LABELS, type ConceptId } from "./terminology.js";
-import { createSafetyEvaluationResult, type GateName, type LocalizedExplanation, type RuleEvaluation, type SafetyBlocker, type SafetyEvaluationInput, type SafetyEvaluationResult } from "./types.js";
+import { createSafetyEvaluationResult, type FleetCrewFact, type FleetEnergyFact, type FleetSafetyFact, type FleetSafetyFacts, type GateName, type LocalizedExplanation, type RuleEvaluation, type SafetyBlocker, type SafetyEvaluationInput, type SafetyEvaluationResult } from "./types.js";
 
 const KERNEL_VERSION = "0.1.0";
 const GATE_ORDER: readonly GateName[] = ["maintenance", "operator", "safety", "commander"];
@@ -118,6 +118,112 @@ function blockerFor(evaluation: RuleEvaluation): SafetyBlocker {
   };
 }
 
+type FleetFactDomain = "fleet" | "capability" | "battery" | "maintenance" | "crew" | "energy";
+
+const FLEET_GATES: Readonly<Record<FleetFactDomain, readonly GateName[]>> = {
+  fleet: ["safety", "commander"],
+  capability: ["safety", "commander"],
+  battery: ["maintenance", "safety", "commander"],
+  maintenance: ["maintenance", "safety", "commander"],
+  crew: ["operator", "safety", "commander"],
+  energy: ["safety", "commander"],
+};
+
+const FLEET_CODES: Readonly<Record<FleetFactDomain, { blocked: string; unknown: string; accepted: string }>> = {
+  fleet: { blocked: "FLEET_CONFIGURATION_BLOCKED", unknown: "FLEET_FACTS_UNKNOWN", accepted: "FLEET_CONFIGURATION_ACCEPTED" },
+  capability: { blocked: "CAPABILITY_NOT_APPROVED", unknown: "CAPABILITY_EVIDENCE_UNKNOWN", accepted: "CAPABILITY_EVIDENCE_ACCEPTED" },
+  battery: { blocked: "BATTERY_NOT_RELEASED", unknown: "BATTERY_EVIDENCE_UNKNOWN", accepted: "BATTERY_EVIDENCE_ACCEPTED" },
+  maintenance: { blocked: "MAINTENANCE_RELEASE_BLOCKED", unknown: "MAINTENANCE_EVIDENCE_UNKNOWN", accepted: "MAINTENANCE_EVIDENCE_ACCEPTED" },
+  crew: { blocked: "CREW_QUALIFICATION_BLOCKED", unknown: "CREW_EVIDENCE_UNKNOWN", accepted: "CREW_EVIDENCE_ACCEPTED" },
+  energy: { blocked: "INSUFFICIENT_RESERVE", unknown: "ENERGY_EVIDENCE_UNKNOWN", accepted: "ENERGY_RESERVE_ACCEPTED" },
+};
+
+interface FleetRuleResult {
+  evaluation: RuleEvaluation;
+  blocker?: SafetyBlocker;
+}
+
+function factEvidenceRefs(fact: FleetSafetyFact | FleetCrewFact | undefined): readonly string[] {
+  if (fact?.evidenceRefs !== undefined) return fact.evidenceRefs;
+  return fact?.evidenceRef === undefined ? [] : [fact.evidenceRef];
+}
+
+function fleetFactResult(
+  requirementId: string,
+  domain: FleetFactDomain,
+  fact: FleetSafetyFact | FleetCrewFact | undefined,
+): FleetRuleResult {
+  const codes = FLEET_CODES[domain];
+  const evidenceRefs = factEvidenceRefs(fact);
+  const accepted = fact !== undefined && fact.status === "pass" && evidenceRefs.length > 0;
+  const status = accepted ? "pass" : fact?.status === "blocked" ? "fail" : "unknown";
+  const reason = accepted ? codes.accepted : status === "fail" ? codes.blocked : codes.unknown;
+  const evaluation: RuleEvaluation = {
+    requirementId,
+    result: status,
+    severity: "hard",
+    reason,
+    evidenceRefs,
+    affectedGates: FLEET_GATES[domain],
+  };
+  if (status === "pass") return { evaluation };
+  return {
+    evaluation,
+    blocker: {
+      code: reason,
+      conceptId: status === "fail" ? CONCEPT_IDS.requirementFailed : CONCEPT_IDS.requirementUnknown,
+      severity: status === "fail" ? "hard" : "data",
+      explanationKey: fact?.blockers?.[0] ?? reason,
+      evidenceRefs,
+    },
+  };
+}
+
+function energyFactResult(requirementId: string, fact: FleetEnergyFact | undefined): FleetRuleResult {
+  const reserveFieldsKnown = fact !== undefined
+    && Number.isFinite(fact.recoveryPercent)
+    && Number.isFinite(fact.diversionPercent)
+    && Number.isFinite(fact.contingencyPercent);
+  return fleetFactResult(
+    requirementId,
+    "energy",
+    reserveFieldsKnown ? fact : fact === undefined ? undefined : { ...fact, status: "unknown", blockers: [...(fact.blockers ?? []), "ENERGY_RESERVE_FACTS_UNKNOWN"] },
+  );
+}
+
+function factForAircraft(facts: readonly FleetSafetyFact[], aircraftId: string): FleetSafetyFact | undefined {
+  return facts.find((fact) => fact.aircraftId === aircraftId);
+}
+
+function crewFactForAircraft(facts: FleetSafetyFacts, aircraftId: string): FleetCrewFact | undefined {
+  const crewEvaluations = facts.crewEvaluations ?? [];
+  const fact = crewEvaluations.find((item) => item.aircraftId === aircraftId)
+    ?? (crewEvaluations.length === 1 && crewEvaluations[0]?.aircraftId === undefined ? crewEvaluations[0] : undefined);
+  return fact;
+}
+
+function evaluateFleetFacts(mission: SafetyEvaluationInput["mission"], facts: FleetSafetyFacts): { evaluations: RuleEvaluation[]; blockers: SafetyBlocker[] } {
+  const evaluations: RuleEvaluation[] = [];
+  const blockers: SafetyBlocker[] = [];
+  const multipleAircraft = mission.aircraft.length > 1;
+  const requirementId = (base: string, aircraftId: string): string => multipleAircraft ? base + "." + aircraftId : base;
+  const add = (result: FleetRuleResult): void => {
+    evaluations.push(result.evaluation);
+    if (result.blocker !== undefined) blockers.push(result.blocker);
+  };
+
+  for (const aircraft of mission.aircraft) {
+    const aircraftId = aircraft.aircraftId;
+    if (facts.fleet !== undefined) add(fleetFactResult(requirementId("fleet.configuration", aircraftId), "fleet", factForAircraft(facts.fleet, aircraftId)));
+    if (facts.capability !== undefined) add(fleetFactResult(requirementId("fleet.capability", aircraftId), "capability", factForAircraft(facts.capability, aircraftId)));
+    if (facts.battery !== undefined) add(fleetFactResult(requirementId("fleet.battery", aircraftId), "battery", factForAircraft(facts.battery, aircraftId)));
+    add(fleetFactResult(requirementId("maintenance.release", aircraftId), "maintenance", factForAircraft(facts.maintenance, aircraftId)));
+    if (facts.crewEvaluations !== undefined) add(fleetFactResult(requirementId("crew.qualification", aircraftId), "crew", crewFactForAircraft(facts, aircraftId)));
+    add(energyFactResult(requirementId("energy.reserve", aircraftId), factForAircraft(facts.energy, aircraftId) as FleetEnergyFact | undefined));
+  }
+  return { evaluations, blockers };
+}
+
 function evaluationStatus(evaluations: readonly RuleEvaluation[], hardBlockers: readonly SafetyBlocker[]): SafetyEvaluationResult["status"] {
   if (hardBlockers.length > 0 || evaluations.some((evaluation) => requiresAction(evaluation) && evaluation.severity === "hard")) return "blocked";
   if (evaluations.some((evaluation) => requiresAction(evaluation) && evaluation.severity === "soft")) return "conditional";
@@ -137,11 +243,19 @@ function invalidatedGates(evaluations: readonly RuleEvaluation[], hardBlockers: 
 /** Evaluates a frozen mission revision without locale, I/O, or mutable state. */
 export function evaluateMission(input: SafetyEvaluationInput): SafetyEvaluationResult {
   parseUtc(input.nowUtc);
-  const evaluations = [...input.requirements]
+  const requirementEvaluations = [...input.requirements]
     .sort((left, right) => compareStable(left.requirementId, right.requirementId))
     .map((requirement) => evaluateRequirement(input, requirement));
-  const hardBlockers = buildHardBlockers(input.mission);
-  const ruleBlockers = evaluations.filter(requiresAction).map(blockerFor);
+  const fleetResult = input.fleetSafetyFacts === undefined
+    ? { evaluations: [], blockers: [] }
+    : evaluateFleetFacts(input.mission, input.fleetSafetyFacts);
+  const evaluations = [...requirementEvaluations, ...fleetResult.evaluations]
+    .sort((left, right) => compareStable(left.requirementId, right.requirementId));
+  const hardBlockers = [
+    ...buildHardBlockers(input.mission, input.fleetSafetyFacts === undefined ? {} : { crew: input.fleetSafetyFacts.crew }),
+    ...fleetResult.blockers,
+  ];
+  const ruleBlockers = requirementEvaluations.filter(requiresAction).map(blockerFor);
   return createSafetyEvaluationResult({
     missionRevisionId: input.mission.id,
     status: evaluationStatus(evaluations, hardBlockers),
