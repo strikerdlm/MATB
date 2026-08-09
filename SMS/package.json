@@ -6,6 +6,7 @@
     "build": "npm run build --workspace @fac-isr/evidence && npm run build --workspace @fac-isr/safety-kernel && npm run build --workspace @fac-isr/research-tools",
     "build:research": "npm run build --workspace @fac-isr/research-tools",
     "typecheck": "tsc -b",
+    "pretest": "npm run build",
     "test": "vitest run",
     "lint": "eslint .",
     "preverify:offline": "npm run build:research",
@@ -15,6 +16,7 @@
   "engines": { "node": ">=22.0.0" },
   "author": "Dr Diego Malpica — Aerospace Medicine and Human Performance — Subdirectorate of Aerospace Sciences — Colombian Aerospace Force",
   "devDependencies": {
+    "@types/node": "^22.20.1",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }
