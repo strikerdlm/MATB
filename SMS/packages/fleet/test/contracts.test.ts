@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseCapability, parseDiscrepancy, parseMaintenanceRelease, parseUASSystem } from "../src/types.js";
 
-const validUas = { id: "uas-1", manufacturer: "Example", model: "X", aircraftClass: "IC", mtowKg: 15, configuration: "unarmed-isr", approvedConfigurationId: "cfg-1" };
+const validUas = { id: "uas-1", manufacturer: "Example", model: "X", aircraftClass: "IC", mtowKg: 15, configuration: "unarmed-isr", approvedConfigurationId: "cfg-1", evidenceRefs: ["ev-uas"] };
 const validClaim = { id: "claim-1", subjectId: "uas-1", capability: "vlos", value: true, operatingConditions: {}, evidenceRefs: ["evidence-1"], confidence: "qualified", validFromUtc: "2026-08-08T00:00:00Z" };
 
 describe("fleet contracts", () => {
