@@ -11,7 +11,9 @@ const PACKAGE_ID = /^[a-z0-9][a-z0-9._-]{2,127}$/;
 // promotion policy exist; this prevents 1.0.0-alpha being treated as 1.0.0.
 const VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const UTC = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{3})?Z$/;
-const CONTROL_FILES = new Set(["evidence-package-manifest.json", "evidence-package-manifest.sig", "evidence-package-public-key.pem"]);
+// Detached controls and the Task 7 provenance report are metadata outside the
+// signed payload inventory; all payload files remain inventory/hash checked.
+const CONTROL_FILES = new Set(["evidence-package-manifest.json", "evidence-package-manifest.sig", "evidence-package-public-key.pem", "kernel-golden-case-report.md"]);
 
 export interface VerificationCheck { id: string; status: "pass" | "fail" | "warn"; reason?: string; }
 export interface VerificationReport { ok: boolean; checks: readonly VerificationCheck[]; packageId: string; }
@@ -116,7 +118,7 @@ function resolvePackagePath(root: string, relativePath: string): string {
   return full;
 }
 
-export async function verifyPackage(directory: string, manifest: SignedPackageManifest, publicKey: string | Buffer, asOfUtc: string, availableDependencies: readonly SignedPackageManifest[] = []): Promise<VerificationReport> {
+export async function verifyPackage(directory: string, manifest: SignedPackageManifest, publicKey: string | Buffer, asOfUtc: string, availableDependencies: readonly SignedPackageManifest[] = [], requiredControlFiles: readonly string[] = []): Promise<VerificationReport> {
   const checks: VerificationCheck[] = [];
   const fail = (id: string, reason: string): void => { checks.push({ id, status: "fail", reason }); };
   try { assertSignedPackageManifest(manifest, true); checks.push({ id: "manifest-shape", status: "pass" }); } catch (error) { fail("manifest-shape", error instanceof Error ? error.message : String(error)); return { ok: false, checks, packageId: typeof manifest?.packageId === "string" ? manifest.packageId : "unknown" }; }
@@ -133,7 +135,11 @@ export async function verifyPackage(directory: string, manifest: SignedPackageMa
   const root = resolve(directory);
   try {
     const expected = new Set(manifest.files.map((file) => file.path));
-    const actual = (await walkFiles(root)).filter((file) => !CONTROL_FILES.has(file));
+    const walked = await walkFiles(root);
+    for (const required of requiredControlFiles) {
+      if (!CONTROL_FILES.has(required) || !walked.includes(required)) fail("required-control-file", `missing required control file: ${required}`);
+    }
+    const actual = walked.filter((file) => !CONTROL_FILES.has(file));
     const extra = actual.filter((file) => !expected.has(file));
     const missing = [...expected].filter((file) => !actual.includes(file));
     if (extra.length || missing.length) fail("file-set", `${missing.length ? `missing: ${missing.join(", ")}` : ""}${extra.length ? `${missing.length ? "; " : ""}extra: ${extra.join(", ")}` : ""}`);

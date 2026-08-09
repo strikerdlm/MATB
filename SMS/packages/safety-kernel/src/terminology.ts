@@ -11,6 +11,7 @@ export const CONCEPT_IDS = Object.freeze({
   requirementFailed: "evaluation.requirement.failed",
   requirementExpired: "evaluation.requirement.expired",
   requirementNotReviewed: "evaluation.requirement.not-reviewed",
+  gateAuthority: "release.gate.authority.invalid",
 } as const);
 
 export type ConceptId = typeof CONCEPT_IDS[keyof typeof CONCEPT_IDS];
@@ -36,6 +37,7 @@ export const CONCEPT_LABELS: Readonly<Record<ConceptId, ControlledConceptLabel>>
   [CONCEPT_IDS.requirementFailed]: { es: "Requisito de seguridad incumplido", en: "Safety requirement failed" },
   [CONCEPT_IDS.requirementExpired]: { es: "Evidencia del requisito vencida", en: "Requirement evidence expired" },
   [CONCEPT_IDS.requirementNotReviewed]: { es: "Requisito pendiente de revisión", en: "Requirement pending review" },
+  [CONCEPT_IDS.gateAuthority]: { es: "Autoridad de compuerta de liberación inválida", en: "Invalid release-gate authority" },
 });
 
 export function explainConcept(conceptId: ConceptId, locale: "es" | "en"): string {
