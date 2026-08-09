@@ -9,6 +9,9 @@ describe("capability evidence", () => {
   });
   it("requires current accepted evidence and matches conditions", () => {
     expect(evaluateCapability(claim, {}, snapshot).status).toBe("pass");
+    expect(evaluateCapability({ ...claim, operatingConditions: { windApproved: false } }, { windApproved: true }, snapshot).status).toBe("blocked");
+    expect(evaluateCapability({ ...claim, confidence: "vendor-claimed" }, {}, snapshot, "airworthiness").status).toBe("unknown");
+    expect(evaluateCapability({ ...claim, capability: "c2" }, { useCase: "release", conditions: {}, hard: true }, { ...snapshot, approved: false }).status).toBe("unknown");
     expect(evaluateCapability(claim, {}, { ...snapshot, current: false }).status).toBe("unknown");
     expect(evaluateCapability({ ...claim, evidenceRefs: ["missing"] }, {}, snapshot).status).toBe("unknown");
   });
