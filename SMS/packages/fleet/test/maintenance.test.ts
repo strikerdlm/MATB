@@ -18,6 +18,9 @@ describe("maintenance release", () => {
   it("classifies discrepancies with explicit approved deferrals", () => {
     const discrepancy = { id: "d-1", description: "minor", severity: "minor" as const, disposition: "open" as const, evidenceRefs: ["ev"] };
     expect(classifyDiscrepancy(discrepancy, [])).toBe("blocking");
-    expect(classifyDiscrepancy(discrepancy, ["d-1"])).toBe("deferred");
+    expect(classifyDiscrepancy(discrepancy, [{ id: "d-1", authorizedBy: "safety", evidenceRefs: ["ev"], validUntilUtc: "2027-01-01T00:00:00Z" }], "2026-08-09T00:00:00Z", ["ev"])).toBe("deferred");
+    expect(classifyDiscrepancy(discrepancy, [{ id: "d-1", authorizedBy: " ", evidenceRefs: [], validUntilUtc: "2027-01-01T00:00:00Z" }], "2026-08-09T00:00:00Z", [])).toBe("blocking");
+    expect(evaluateMaintenanceRelease({ ...input, release: { ...release, openDiscrepancies: [discrepancy] }, evidenceRefs: [], acceptedEvidenceRefs: [] }).status).toBe("blocked");
+    expect(evaluateMaintenanceRelease({ ...input, release: { ...release, authorizedBy: " " } }).status).toBe("blocked");
   });
 });
