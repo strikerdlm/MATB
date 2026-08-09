@@ -1,310 +1,419 @@
-import type { CrewAssignment, SafetyBlocker } from "@fac-isr/safety-kernel";
+import type { SafetyBlocker } from "@fac-isr/safety-kernel";
 
-export type CrewAvailability = "available" | "restricted" | "unavailable" | "unknown";
-export type SelfDeclaredSafetyStatus = "able" | "not-able" | "not-recorded";
-
-export interface QualificationRecord {
-  id: string;
-  edition: string;
-  validFromUtc: string;
-  expiresAtUtc: string;
-  evidenceRefs: readonly string[];
-}
-
-export interface RecencyRecord {
-  validUntilUtc: string;
-  evidenceRefs: readonly string[];
-  current?: boolean;
-}
+export type OperationalCrewStatus = "available" | "restricted" | "unavailable" | "unknown";
 
 export interface DutyPeriod {
-  id: string;
-  userId: string;
-  startUtc: string;
-  endUtc?: string;
-  priorDutyEndUtc?: string;
-  cumulativeDutyMinutes?: number;
-  cumulativeWorkloadMinutes?: number;
-  screenExposureMinutes?: number;
-  selfDeclaredSafetyStatus?: SelfDeclaredSafetyStatus;
+  startedAtUtc: string;
+  previousDutyEndedAtUtc: string;
+  cumulativeWorkloadMinutes: number;
+  cumulativeScreenExposureMinutes: number;
   evidenceRefs: readonly string[];
 }
 
 export interface DutyPolicy {
+  policyId: string;
+  edition: string;
   maxDutyMinutes: number;
   minimumRestMinutes: number;
-  maxCumulativeWorkloadMinutes?: number;
-  maxScreenExposureMinutes?: number;
-  requireSafetyDeclaration?: boolean;
-  evidenceRefs: readonly string[];
-}
-
-export interface CrewAssignmentInput {
-  userId: string;
-  aircraftId: string;
-  role: CrewAssignment["role"];
-  nowUtc: string;
-  requiredQualificationEdition?: string;
-  qualification: QualificationRecord;
-  recency: RecencyRecord;
-  dutyPeriod: DutyPeriod;
-  dutyPolicy: DutyPolicy;
-  evidenceRefs: readonly string[];
-}
-
-export interface CrewEvaluation {
-  status: CrewAvailability;
-  blockers: readonly string[];
+  maxCumulativeWorkloadMinutes: number;
+  maxScreenExposureMinutes: number;
   evidenceRefs: readonly string[];
 }
 
 export interface DutyEvaluation {
-  status: CrewAvailability;
-  reason: string;
-  blockers: readonly string[];
+  status: OperationalCrewStatus;
+  blockers: readonly SafetyBlocker[];
+  evidenceRefs: readonly string[];
+}
+
+export type CrewRole = "operator" | "observer" | "maintainer" | "safety" | "commander";
+
+export interface QualificationRecord {
+  userId: string;
+  role: CrewRole;
+  edition: string;
+  validUntilUtc: string;
+  recencyValidUntilUtc: string;
+  evidenceRefs: readonly string[];
+}
+
+export interface CrewAssignmentEvaluationInput {
+  assignment: {
+    userId: string;
+    role: CrewRole;
+    aircraftId?: string;
+    requiredQualificationEdition: string;
+    evidenceRefs: readonly string[];
+  };
+  qualification?: QualificationRecord;
+  dutyPeriod?: DutyPeriod;
+  dutyPolicy?: DutyPolicy;
+  operationalSafetyStatus: OperationalCrewStatus;
+  nowUtc: string;
+}
+
+export interface CrewEvaluation {
+  status: OperationalCrewStatus;
+  blockers: readonly SafetyBlocker[];
   evidenceRefs: readonly string[];
 }
 
 export interface StaffingAssignment {
   aircraftId: string;
-  role: CrewAssignment["role"];
+  role: CrewRole;
   userId: string;
-  qualified?: boolean;
-  recencyCurrent?: boolean;
-  dutyStatus?: CrewAssignment["dutyStatus"];
+  qualified: boolean;
   evidenceRefs?: readonly string[];
 }
 
-const UTC_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z$/;
-const CREW_ROLES = new Set<CrewAssignment["role"]>(["operator", "observer", "maintainer", "safety", "commander"]);
+const statusRank: Record<OperationalCrewStatus, number> = {
+  available: 0,
+  restricted: 1,
+  unknown: 2,
+  unavailable: 3,
+};
 
-function parseUtc(value: unknown): number | undefined {
-  if (typeof value !== "string") return undefined;
-  const match = UTC_PATTERN.exec(value);
+function parseUtc(value: string): number | undefined {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z$/.exec(value);
   if (!match) return undefined;
   const [, year, month, day, hour, minute, second, fraction = ""] = match;
   const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return undefined;
-  if (date.getUTCFullYear() !== Number(year)
+  if (
+    !Number.isFinite(date.getTime())
+    || date.getUTCFullYear() !== Number(year)
     || date.getUTCMonth() + 1 !== Number(month)
     || date.getUTCDate() !== Number(day)
     || date.getUTCHours() !== Number(hour)
     || date.getUTCMinutes() !== Number(minute)
     || date.getUTCSeconds() !== Number(second)
-    || date.getUTCMilliseconds() !== Number(fraction.padEnd(3, "0") || 0)) return undefined;
+    || date.getUTCMilliseconds() !== Number(fraction.padEnd(3, "0") || 0)
+  ) return undefined;
   return date.getTime();
 }
 
-function finiteNonnegative(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+function isFiniteNonnegative(value: number): boolean {
+  return Number.isFinite(value) && value >= 0;
 }
 
-function nonempty(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length > 0;
+function isCanonicalIdentifier(value: string): boolean {
+  return value !== "" && value === value.trim();
 }
 
-function refsFrom(...sources: readonly (readonly string[] | undefined)[]): string[] {
+function collectEvidence(...groups: readonly (readonly string[])[]): string[] {
   const refs: string[] = [];
-  for (const source of sources) {
-    for (const ref of source ?? []) {
-      if (nonempty(ref) && !refs.includes(ref)) refs.push(ref);
+  const seen = new Set<string>();
+  for (const group of groups) {
+    for (const value of group) {
+      const ref = value.trim();
+      if (ref === "" || seen.has(ref)) continue;
+      seen.add(ref);
+      refs.push(ref);
     }
   }
   return refs;
 }
 
-function validRefs(value: unknown): value is readonly string[] {
-  return Array.isArray(value) && value.length > 0 && value.every(nonempty);
-}
-
-function unknownDuty(reason: string, evidenceRefs: readonly string[] = []): DutyEvaluation {
-  return { status: "unknown", reason, blockers: [reason], evidenceRefs: refsFrom(evidenceRefs) };
-}
-
-function dutyResult(
-  status: CrewAvailability,
-  blockers: readonly string[],
+function createBlocker(
+  code: string,
+  severity: SafetyBlocker["severity"],
   evidenceRefs: readonly string[],
-): DutyEvaluation {
+): SafetyBlocker {
+  const key = code.toLowerCase().replaceAll("_", "-");
   return {
-    status,
-    reason: blockers[0] ?? "DUTY_WITHIN_POLICY",
-    blockers,
-    evidenceRefs: refsFrom(evidenceRefs),
+    code,
+    conceptId: `crew.${key}`,
+    severity,
+    explanationKey: `crew.${key}`,
+    evidenceRefs: collectEvidence(evidenceRefs),
   };
 }
+
+function resolveStatus(statuses: readonly OperationalCrewStatus[]): OperationalCrewStatus {
+  return statuses.reduce<OperationalCrewStatus>(
+    (result, status) => statusRank[status] > statusRank[result] ? status : result,
+    "available",
+  );
+}
+
+const crewRoles: readonly CrewRole[] = ["operator", "observer", "maintainer", "safety", "commander"];
 
 export function evaluateDutyAndRest(
   dutyPeriod: DutyPeriod,
   policy: DutyPolicy,
   nowUtc: string,
 ): DutyEvaluation {
-  const evidenceRefs = refsFrom(dutyPeriod.evidenceRefs, policy.evidenceRefs);
-  const now = parseUtc(nowUtc);
-  const start = parseUtc(dutyPeriod.startUtc);
-  if (now === undefined || start === undefined) return unknownDuty("DUTY_TIMESTAMP_INVALID", evidenceRefs);
-  if (!nonempty(dutyPeriod.id) || !nonempty(dutyPeriod.userId)) return unknownDuty("DUTY_ID_INVALID", evidenceRefs);
-  if (!validRefs(dutyPeriod.evidenceRefs) || !validRefs(policy.evidenceRefs)) return unknownDuty("DUTY_EVIDENCE_REQUIRED", evidenceRefs);
-  if (!finiteNonnegative(policy.maxDutyMinutes) || policy.maxDutyMinutes <= 0 || !finiteNonnegative(policy.minimumRestMinutes)) {
-    return unknownDuty("DUTY_POLICY_INVALID", evidenceRefs);
-  }
-  if (policy.maxCumulativeWorkloadMinutes !== undefined && !finiteNonnegative(policy.maxCumulativeWorkloadMinutes)) {
-    return unknownDuty("WORKLOAD_POLICY_INVALID", evidenceRefs);
-  }
-  if (policy.maxScreenExposureMinutes !== undefined && !finiteNonnegative(policy.maxScreenExposureMinutes)) {
-    return unknownDuty("SCREEN_POLICY_INVALID", evidenceRefs);
-  }
-  if (now < start) return unknownDuty("DUTY_NOT_STARTED", evidenceRefs);
-
-  const end = dutyPeriod.endUtc === undefined ? undefined : parseUtc(dutyPeriod.endUtc);
-  if (dutyPeriod.endUtc !== undefined && end === undefined) return unknownDuty("DUTY_TIMESTAMP_INVALID", evidenceRefs);
-  if (end !== undefined && end <= start) return unknownDuty("DUTY_INTERVAL_INVALID", evidenceRefs);
-
-  const blockers: string[] = [];
-  const dutyMinutes = (now - start) / 60_000;
-  if (dutyMinutes >= policy.maxDutyMinutes) blockers.push("DUTY_LIMIT_EXCEEDED");
-  if (end !== undefined && now >= end) blockers.push("DUTY_PERIOD_ENDED");
-
-  if (dutyPeriod.priorDutyEndUtc !== undefined) {
-    const priorEnd = parseUtc(dutyPeriod.priorDutyEndUtc);
-    if (priorEnd === undefined || priorEnd > start) return unknownDuty("REST_TIMESTAMP_INVALID", evidenceRefs);
-    const restMinutes = (start - priorEnd) / 60_000;
-    if (restMinutes < policy.minimumRestMinutes) blockers.push("MINIMUM_REST_NOT_MET");
-  }
-
-  if (dutyPeriod.cumulativeDutyMinutes !== undefined && !finiteNonnegative(dutyPeriod.cumulativeDutyMinutes)) {
-    return unknownDuty("DUTY_TOTAL_INVALID", evidenceRefs);
-  }
-  if (dutyPeriod.cumulativeWorkloadMinutes !== undefined && !finiteNonnegative(dutyPeriod.cumulativeWorkloadMinutes)) {
-    return unknownDuty("WORKLOAD_TOTAL_INVALID", evidenceRefs);
-  }
-  if (dutyPeriod.screenExposureMinutes !== undefined && !finiteNonnegative(dutyPeriod.screenExposureMinutes)) {
-    return unknownDuty("SCREEN_TOTAL_INVALID", evidenceRefs);
-  }
-  if (policy.maxCumulativeWorkloadMinutes !== undefined
-    && dutyPeriod.cumulativeWorkloadMinutes !== undefined
-    && dutyPeriod.cumulativeWorkloadMinutes > policy.maxCumulativeWorkloadMinutes) {
-    blockers.push("CUMULATIVE_WORKLOAD_LIMIT_EXCEEDED");
-  }
-  if (policy.maxScreenExposureMinutes !== undefined
-    && dutyPeriod.screenExposureMinutes !== undefined
-    && dutyPeriod.screenExposureMinutes > policy.maxScreenExposureMinutes) {
-    blockers.push("SCREEN_EXPOSURE_LIMIT_EXCEEDED");
-  }
-
-  const safetyStatus = dutyPeriod.selfDeclaredSafetyStatus ?? "not-recorded";
-  if (safetyStatus === "not-able") blockers.push("SAFETY_SELF_DECLARATION_NOT_ABLE");
-  if (policy.requireSafetyDeclaration && safetyStatus === "not-recorded") blockers.push("SAFETY_SELF_DECLARATION_REQUIRED");
-
-  if (blockers.some((code) => code === "DUTY_LIMIT_EXCEEDED" || code === "DUTY_PERIOD_ENDED" || code === "SAFETY_SELF_DECLARATION_NOT_ABLE")) {
-    return dutyResult("unavailable", blockers, evidenceRefs);
-  }
-  if (blockers.length > 0) return dutyResult("restricted", blockers, evidenceRefs);
-  return dutyResult("available", [], evidenceRefs);
-}
-
-function evaluateQualification(input: CrewAssignmentInput): { status: CrewAvailability; blockers: string[] } {
-  const now = parseUtc(input.nowUtc);
-  const validFrom = parseUtc(input.qualification.validFromUtc);
-  const expires = parseUtc(input.qualification.expiresAtUtc);
-  const recencyUntil = parseUtc(input.recency.validUntilUtc);
-  if (now === undefined || validFrom === undefined || expires === undefined || recencyUntil === undefined) {
-    return { status: "unknown", blockers: ["QUALIFICATION_TIMESTAMP_INVALID"] };
-  }
-  if (!nonempty(input.qualification.id) || !nonempty(input.qualification.edition)) {
-    return { status: "unknown", blockers: ["QUALIFICATION_ID_INVALID"] };
-  }
-  if (!validRefs(input.qualification.evidenceRefs) || !validRefs(input.recency.evidenceRefs)) {
-    return { status: "unknown", blockers: ["QUALIFICATION_EVIDENCE_REQUIRED"] };
-  }
-  if (expires <= validFrom || now < validFrom) return { status: "unavailable", blockers: ["QUALIFICATION_NOT_CURRENT"] };
-  if (now >= expires) return { status: "unavailable", blockers: ["QUALIFICATION_EXPIRED"] };
-  if (input.requiredQualificationEdition !== undefined
-    && input.requiredQualificationEdition !== input.qualification.edition) {
-    return { status: "unavailable", blockers: ["QUALIFICATION_EDITION_MISMATCH"] };
-  }
-  if (input.recency.current === false || now >= recencyUntil) {
-    return { status: "unavailable", blockers: [input.recency.current === false ? "RECENCY_NOT_CURRENT" : "RECENCY_EXPIRED"] };
-  }
-  return { status: "available", blockers: [] };
-}
-
-export function evaluateCrewAssignment(input: CrewAssignmentInput): CrewEvaluation {
-  const evidenceRefs = refsFrom(
-    input.evidenceRefs,
-    input.qualification?.evidenceRefs,
-    input.recency?.evidenceRefs,
-    input.dutyPeriod?.evidenceRefs,
-    input.dutyPolicy?.evidenceRefs,
-  );
-  if (!nonempty(input.userId) || !nonempty(input.aircraftId) || !CREW_ROLES.has(input.role) || !validRefs(input.evidenceRefs)) {
-    return { status: "unknown", blockers: ["CREW_ASSIGNMENT_DATA_INVALID"], evidenceRefs };
-  }
-  if (input.role !== "operator") return { status: "unavailable", blockers: ["CREW_ROLE_NOT_OPERATOR"], evidenceRefs };
-  if (input.dutyPeriod.userId !== input.userId) return { status: "unavailable", blockers: ["DUTY_USER_MISMATCH"], evidenceRefs };
-
-  const qualification = evaluateQualification(input);
-  if (qualification.status === "unknown") return { status: "unknown", blockers: qualification.blockers, evidenceRefs };
-
-  const duty = evaluateDutyAndRest(input.dutyPeriod, input.dutyPolicy, input.nowUtc);
-  const blockers = [...qualification.blockers, ...duty.blockers];
-  const statuses: CrewAvailability[] = [qualification.status, duty.status];
-  if (statuses.includes("unknown")) return { status: "unknown", blockers, evidenceRefs };
-  if (statuses.includes("unavailable")) return { status: "unavailable", blockers, evidenceRefs };
-  if (statuses.includes("restricted")) return { status: "restricted", blockers, evidenceRefs };
-  return { status: "available", blockers, evidenceRefs };
-}
-
-function staffingBlocker(code: string, evidenceRefs: readonly string[]): SafetyBlocker {
-  return {
-    code,
-    conceptId: "crew.assignment",
-    severity: "hard",
-    explanationKey: `crew.${code.toLowerCase()}`,
-    evidenceRefs: refsFrom(evidenceRefs),
-  };
-}
-
-function isEligibleOperator(assignment: StaffingAssignment): boolean {
-  return assignment.role === "operator"
-    && assignment.qualified !== false
-    && assignment.recencyCurrent !== false
-    && (assignment.dutyStatus === undefined || assignment.dutyStatus === "available");
-}
-
-export function requireOneOperatorPerAircraft(assignments: readonly StaffingAssignment[]): SafetyBlocker[] {
-  const aircraftIds: string[] = [];
-  const operatorsByUser = new Map<string, Set<string>>();
-  const byAircraft = new Map<string, StaffingAssignment[]>();
-  for (const assignment of assignments) {
-    if (!nonempty(assignment.aircraftId) || !nonempty(assignment.userId)) continue;
-    if (!aircraftIds.includes(assignment.aircraftId)) aircraftIds.push(assignment.aircraftId);
-    const aircraftAssignments = byAircraft.get(assignment.aircraftId) ?? [];
-    aircraftAssignments.push(assignment);
-    byAircraft.set(assignment.aircraftId, aircraftAssignments);
-    if (assignment.role === "operator") {
-      const assignedAircraft = operatorsByUser.get(assignment.userId) ?? new Set<string>();
-      assignedAircraft.add(assignment.aircraftId);
-      operatorsByUser.set(assignment.userId, assignedAircraft);
-    }
-  }
-
   const blockers: SafetyBlocker[] = [];
-  const assignmentRefs = assignments.flatMap((assignment) => assignment.evidenceRefs ?? []);
-  for (const assignedAircraft of operatorsByUser.values()) {
-    if (assignedAircraft.size > 1) blockers.push(staffingBlocker("OPERATOR_ASSIGNED_TO_MULTIPLE_AIRCRAFT", assignmentRefs));
+  const statuses: OperationalCrewStatus[] = [];
+  const dutyEvidence = collectEvidence(dutyPeriod.evidenceRefs);
+  const policyEvidence = collectEvidence(policy.evidenceRefs);
+  const evidenceRefs = collectEvidence(dutyEvidence, policyEvidence);
+  const startedAt = parseUtc(dutyPeriod.startedAtUtc);
+  const previousDutyEndedAt = parseUtc(dutyPeriod.previousDutyEndedAtUtc);
+  const now = parseUtc(nowUtc);
+  const validPolicyNumbers = [
+    policy.maxDutyMinutes,
+    policy.minimumRestMinutes,
+    policy.maxCumulativeWorkloadMinutes,
+    policy.maxScreenExposureMinutes,
+  ].every(isFiniteNonnegative);
+  const validDutyNumbers = [
+    dutyPeriod.cumulativeWorkloadMinutes,
+    dutyPeriod.cumulativeScreenExposureMinutes,
+  ].every(isFiniteNonnegative);
+  const validPolicyIdentity = isCanonicalIdentifier(policy.policyId)
+    && isCanonicalIdentifier(policy.edition);
+  const usablePolicy = validPolicyIdentity && validPolicyNumbers && policyEvidence.length > 0;
+  const usableDutyFacts = validDutyNumbers;
+
+  if (
+    startedAt === undefined
+    || previousDutyEndedAt === undefined
+    || now === undefined
+    || previousDutyEndedAt > startedAt
+    || startedAt > now
+  ) {
+    statuses.push("unknown");
+    blockers.push(createBlocker("DUTY_TIME_DATA_INVALID", "data", evidenceRefs));
   }
-  for (const aircraftId of aircraftIds) {
-    const operators = (byAircraft.get(aircraftId) ?? []).filter((assignment) => assignment.role === "operator");
-    const eligible = operators.filter(isEligibleOperator);
-    if (eligible.length === 0) {
-      blockers.push(staffingBlocker(
-        operators.length === 0 ? "MISSING_OPERATOR_PER_AIRCRAFT" : "OPERATOR_NOT_AVAILABLE",
-        operators.flatMap((assignment) => assignment.evidenceRefs ?? []),
-      ));
-    } else if (eligible.length > 1) {
-      blockers.push(staffingBlocker("MULTIPLE_OPERATORS_PER_AIRCRAFT", eligible.flatMap((assignment) => assignment.evidenceRefs ?? [])));
+
+  if (!validPolicyIdentity || !validPolicyNumbers) {
+    statuses.push("unknown");
+    blockers.push(createBlocker("DUTY_POLICY_INVALID", "data", policyEvidence));
+  }
+
+  if (!validDutyNumbers) {
+    statuses.push("unknown");
+    blockers.push(createBlocker("DUTY_DATA_INVALID", "data", dutyEvidence));
+  }
+
+  if (dutyEvidence.length === 0 || policyEvidence.length === 0) {
+    statuses.push("unknown");
+    blockers.push(createBlocker("DUTY_EVIDENCE_REQUIRED", "data", evidenceRefs));
+  }
+
+  if (
+    startedAt !== undefined
+    && now !== undefined
+    && startedAt <= now
+    && usablePolicy
+  ) {
+    const dutyMinutes = (now - startedAt) / 60_000;
+    if (dutyMinutes > policy.maxDutyMinutes) {
+      statuses.push("unavailable");
+      blockers.push(createBlocker("DUTY_LIMIT_EXCEEDED", "policy", evidenceRefs));
     }
   }
+
+  if (
+    startedAt !== undefined
+    && previousDutyEndedAt !== undefined
+    && previousDutyEndedAt <= startedAt
+    && usablePolicy
+  ) {
+    const restMinutes = (startedAt - previousDutyEndedAt) / 60_000;
+    if (restMinutes < policy.minimumRestMinutes) {
+      statuses.push("unavailable");
+      blockers.push(createBlocker("MINIMUM_REST_NOT_MET", "policy", evidenceRefs));
+    }
+  }
+
+  if (usablePolicy && usableDutyFacts) {
+    if (dutyPeriod.cumulativeWorkloadMinutes > policy.maxCumulativeWorkloadMinutes) {
+      statuses.push("restricted");
+      blockers.push(createBlocker("WORKLOAD_LIMIT_EXCEEDED", "policy", evidenceRefs));
+    }
+    if (dutyPeriod.cumulativeScreenExposureMinutes > policy.maxScreenExposureMinutes) {
+      statuses.push("restricted");
+      blockers.push(createBlocker("SCREEN_EXPOSURE_LIMIT_EXCEEDED", "policy", evidenceRefs));
+    }
+  }
+
+  return { status: resolveStatus(statuses), blockers, evidenceRefs };
+}
+
+export function evaluateCrewAssignment(input: CrewAssignmentEvaluationInput): CrewEvaluation {
+  const blockers: SafetyBlocker[] = [];
+  const statuses: OperationalCrewStatus[] = [];
+  const assignmentEvidence = collectEvidence(input.assignment.evidenceRefs);
+  const qualificationEvidence = collectEvidence(input.qualification?.evidenceRefs ?? []);
+  const dutyEvidence = collectEvidence(input.dutyPeriod?.evidenceRefs ?? []);
+  const policyEvidence = collectEvidence(input.dutyPolicy?.evidenceRefs ?? []);
+  const evidenceRefs = collectEvidence(
+    assignmentEvidence,
+    qualificationEvidence,
+    dutyEvidence,
+    policyEvidence,
+  );
+  const now = parseUtc(input.nowUtc);
+
+  if (
+    !isCanonicalIdentifier(input.assignment.userId)
+    || !crewRoles.includes(input.assignment.role)
+    || !isCanonicalIdentifier(input.assignment.requiredQualificationEdition)
+    || (input.assignment.aircraftId !== undefined && !isCanonicalIdentifier(input.assignment.aircraftId))
+  ) {
+    statuses.push("unknown");
+    blockers.push(createBlocker("CREW_ASSIGNMENT_INVALID", "data", assignmentEvidence));
+  }
+
+  if (input.assignment.role === "operator" && (input.assignment.aircraftId?.trim() ?? "") === "") {
+    statuses.push("unavailable");
+    blockers.push(createBlocker("OPERATOR_AIRCRAFT_ASSIGNMENT_REQUIRED", "hard", assignmentEvidence));
+  }
+
+  if (assignmentEvidence.length === 0) {
+    statuses.push("unknown");
+    blockers.push(createBlocker("ASSIGNMENT_EVIDENCE_REQUIRED", "data", assignmentEvidence));
+  }
+
+  if (now === undefined) {
+    statuses.push("unknown");
+    blockers.push(createBlocker("CREW_REFERENCE_TIME_INVALID", "data", evidenceRefs));
+  }
+
+  if (input.qualification === undefined) {
+    statuses.push("unknown");
+    blockers.push(createBlocker("QUALIFICATION_RECORD_MISSING", "data", evidenceRefs));
+  } else {
+    const qualification = input.qualification;
+    if (qualification.userId !== input.assignment.userId) {
+      statuses.push("unavailable");
+      blockers.push(createBlocker("QUALIFICATION_USER_MISMATCH", "hard", qualificationEvidence));
+    }
+    if (qualification.role !== input.assignment.role) {
+      statuses.push("unavailable");
+      blockers.push(createBlocker("QUALIFICATION_ROLE_MISMATCH", "hard", qualificationEvidence));
+    }
+    if (qualification.edition !== input.assignment.requiredQualificationEdition) {
+      statuses.push("unavailable");
+      blockers.push(createBlocker("QUALIFICATION_EDITION_STALE", "policy", qualificationEvidence));
+    }
+    if (qualificationEvidence.length === 0) {
+      statuses.push("unknown");
+      blockers.push(createBlocker("QUALIFICATION_EVIDENCE_REQUIRED", "data", qualificationEvidence));
+    }
+
+    const qualificationValidUntil = parseUtc(qualification.validUntilUtc);
+    const recencyValidUntil = parseUtc(qualification.recencyValidUntilUtc);
+    if (qualificationValidUntil === undefined || recencyValidUntil === undefined) {
+      statuses.push("unknown");
+      blockers.push(createBlocker("QUALIFICATION_TIME_DATA_INVALID", "data", qualificationEvidence));
+    }
+    if (now !== undefined && qualificationValidUntil !== undefined && now >= qualificationValidUntil) {
+      statuses.push("unavailable");
+      blockers.push(createBlocker("QUALIFICATION_EXPIRED", "policy", qualificationEvidence));
+    }
+    if (now !== undefined && recencyValidUntil !== undefined && now >= recencyValidUntil) {
+      statuses.push("unavailable");
+      blockers.push(createBlocker("RECENCY_EXPIRED", "policy", qualificationEvidence));
+    }
+  }
+
+  if (input.dutyPeriod === undefined || input.dutyPolicy === undefined) {
+    statuses.push("unknown");
+    blockers.push(createBlocker("DUTY_FACTS_REQUIRED", "data", evidenceRefs));
+  } else {
+    const duty = evaluateDutyAndRest(input.dutyPeriod, input.dutyPolicy, input.nowUtc);
+    statuses.push(duty.status);
+    blockers.push(...duty.blockers);
+  }
+
+  switch (input.operationalSafetyStatus) {
+    case "available":
+      break;
+    case "restricted":
+      statuses.push("restricted");
+      blockers.push(createBlocker("OPERATIONAL_SAFETY_STATUS_RESTRICTED", "policy", assignmentEvidence));
+      break;
+    case "unavailable":
+      statuses.push("unavailable");
+      blockers.push(createBlocker("OPERATIONAL_SAFETY_STATUS_UNAVAILABLE", "hard", assignmentEvidence));
+      break;
+    case "unknown":
+      statuses.push("unknown");
+      blockers.push(createBlocker("OPERATIONAL_SAFETY_STATUS_UNKNOWN", "data", assignmentEvidence));
+      break;
+    default:
+      statuses.push("unknown");
+      blockers.push(createBlocker("OPERATIONAL_SAFETY_STATUS_INVALID", "data", assignmentEvidence));
+  }
+
+  return { status: resolveStatus(statuses), blockers, evidenceRefs };
+}
+
+export function requireOneOperatorPerAircraft(
+  assignments: readonly StaffingAssignment[],
+  requiredAircraftIds?: readonly string[],
+): SafetyBlocker[] {
+  const blockers: SafetyBlocker[] = [];
+  const validAssignments: StaffingAssignment[] = [];
+
+  for (const assignment of assignments) {
+    if (
+      !isCanonicalIdentifier(assignment.aircraftId)
+      || !isCanonicalIdentifier(assignment.userId)
+      || !crewRoles.includes(assignment.role)
+    ) {
+      blockers.push(createBlocker(
+        "CREW_ASSIGNMENT_INVALID",
+        "data",
+        assignment.evidenceRefs ?? [],
+      ));
+      continue;
+    }
+    validAssignments.push(assignment);
+  }
+
+  const validRequiredAircraftIds: string[] = [];
+  if (requiredAircraftIds !== undefined) {
+    for (const aircraftId of requiredAircraftIds) {
+      if (!isCanonicalIdentifier(aircraftId)) {
+        blockers.push(createBlocker("CREW_ASSIGNMENT_INVALID", "data", []));
+      } else {
+        validRequiredAircraftIds.push(aircraftId);
+      }
+    }
+  }
+  const aircraftIds = [...new Set(
+    requiredAircraftIds === undefined
+      ? validAssignments.map(({ aircraftId }) => aircraftId)
+      : validRequiredAircraftIds,
+  )].sort();
+
+  for (const aircraftId of aircraftIds) {
+    const aircraftAssignments = validAssignments.filter((assignment) => assignment.aircraftId === aircraftId);
+    const operatorAssignments = aircraftAssignments.filter((assignment) => assignment.role === "operator");
+    const evidenceRefs = collectEvidence(
+      ...aircraftAssignments.map((assignment) => assignment.evidenceRefs ?? []),
+    );
+    if (operatorAssignments.length === 0) {
+      blockers.push(createBlocker("OPERATOR_ASSIGNMENT_MISSING", "hard", evidenceRefs));
+    } else if (operatorAssignments.length > 1) {
+      blockers.push(createBlocker("MULTIPLE_OPERATORS_ASSIGNED_TO_AIRCRAFT", "hard", evidenceRefs));
+    } else if (!operatorAssignments[0].qualified) {
+      blockers.push(createBlocker("QUALIFIED_OPERATOR_REQUIRED", "hard", evidenceRefs));
+    }
+  }
+
+  const operatorUserIds = [...new Set(
+    validAssignments
+      .filter((assignment) => assignment.role === "operator")
+      .map((assignment) => assignment.userId),
+  )].sort();
+
+  for (const userId of operatorUserIds) {
+    const userAssignments = validAssignments.filter(
+      (assignment) => assignment.role === "operator" && assignment.userId === userId,
+    );
+    const assignedAircraftIds = new Set(userAssignments.map(({ aircraftId }) => aircraftId));
+    if (assignedAircraftIds.size > 1) {
+      blockers.push(createBlocker(
+        "OPERATOR_ASSIGNED_TO_MULTIPLE_AIRCRAFT",
+        "hard",
+        collectEvidence(...userAssignments.map((assignment) => assignment.evidenceRefs ?? [])),
+      ));
+    }
+  }
+
   return blockers;
 }

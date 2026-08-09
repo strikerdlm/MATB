@@ -2,6 +2,7 @@ export * from "./types.js";
 export * from "./applicability.js";
 export * from "./terminology.js";
 export * from "./evaluate.js";
+export * from "./fleet-inputs.js";
 export * from "./dependencies.js";
 export * from "./lifecycle.js";
 export * from "./risk.js";

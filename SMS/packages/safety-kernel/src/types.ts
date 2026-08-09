@@ -71,7 +71,7 @@ export interface MissionRevision { id: string; missionId: string; revision: numb
 export interface RuleEvaluation { requirementId: string; result: "pass" | "fail" | "unknown" | "expired" | "not-reviewed"; severity: "hard" | "soft" | "advisory"; reason: string; evidenceRefs: readonly string[]; affectedGates: readonly GateName[] }
 export interface SafetyBlocker { code: string; conceptId: string; severity: "hard" | "policy" | "data" | "authority"; explanationKey: string; evidenceRefs: readonly string[] }
 export interface SafetyEvaluationResult { missionRevisionId: string; status: "ready" | "conditional" | "blocked" | "degraded"; evaluations: readonly RuleEvaluation[]; blockers: readonly SafetyBlocker[]; invalidatedGates: readonly GateName[]; kernelVersion: string }
-export interface SafetyEvaluationInput { mission: MissionRevision; requirements: readonly NormalizedRequirement[]; policy: PolicyPackage | undefined; nowUtc: string; fleetFacts?: FleetSafetyFacts }
+export interface SafetyEvaluationInput { mission: MissionRevision; requirements: readonly NormalizedRequirement[]; policy: PolicyPackage | undefined; nowUtc: string; fleetSafetyFacts?: FleetSafetyFacts }
 export interface PolicyPackage { packageId: string; version: string; status: "draft" | "approved" | "expired" | "revoked"; riskMatrix?: { probabilityLevels: number; severityLevels: number; cells: readonly string[] }; nasoThresholds?: readonly { band: string; maxDurationHours?: number }[]; delegatedAuthorities: readonly { role: GateName; userRole: string; bands: readonly string[] }[]; freshness: Record<DataSnapshotRef["kind"], { maxAgeMinutes: number; critical: boolean }>; signature: string; manifest?: SignedPackageManifest }
 export type GateDecision = "accept" | "block" | "escalate";
 export type GateActorRole = "maintainer" | "operator" | "safety" | "commander";
@@ -113,7 +113,11 @@ export type MissionRevisionChange =
 export type MaterialChangeInput = Readonly<{ dependencyGraph: DependencyGraph }> & MissionRevisionChange;
 export interface InvalidationResult { material: boolean; affectedRequirementIds: readonly string[]; invalidatedGates: readonly GateName[]; reason: string }
 export interface ApplicabilityResult { applicable: boolean; result: RuleEvaluation["result"]; reason: string; affectedGates: readonly GateName[] }
-export interface FleetSafetyFacts { maintenance: readonly { aircraftId: string; status: "pass" | "blocked" | "unknown"; evidenceRefs?: readonly string[] }[]; crew: readonly CrewAssignment[]; energy: readonly { aircraftId: string; status: "pass" | "blocked" | "unknown"; evidenceRef: string }[] }
+export type FleetFactStatus = "pass" | "blocked" | "unknown";
+export interface FleetSafetyFact { aircraftId: string; status: FleetFactStatus; blockers?: readonly string[]; evidenceRefs?: readonly string[]; evidenceRef?: string }
+export interface FleetCrewFact { aircraftId?: string; status: FleetFactStatus; blockers: readonly string[]; evidenceRefs: readonly string[]; evidenceRef?: string }
+export interface FleetEnergyFact extends FleetSafetyFact { recoveryPercent?: number; diversionPercent?: number; contingencyPercent?: number; uncertaintyPercent?: number; limitingAssumption?: string }
+export interface FleetSafetyFacts { fleet?: readonly FleetSafetyFact[]; capability?: readonly FleetSafetyFact[]; battery?: readonly FleetSafetyFact[]; maintenance: readonly FleetSafetyFact[]; crew: readonly CrewAssignment[]; crewEvaluations?: readonly FleetCrewFact[]; energy: readonly FleetEnergyFact[] }
 export interface GateEvaluationInput { mission: MissionRevision; evaluation: SafetyEvaluationResult; approvals: readonly GateApproval[]; nowUtc: string }
 export interface FourGateResult { status: "ready" | "conditional" | "blocked"; gates: readonly { gate: GateName; status: "accepted" | "blocked" | "pending" | "invalid" }[]; blockers: readonly SafetyBlocker[] }
 export interface LocalizedExplanation { locale: "es" | "en"; conceptIds: readonly string[]; labels: readonly string[]; translationMissing: boolean }
