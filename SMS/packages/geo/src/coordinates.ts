@@ -1,3 +1,5 @@
+/// <reference path="./external.d.ts" />
+
 import mgrs from "mgrs";
 import proj4 from "proj4";
 

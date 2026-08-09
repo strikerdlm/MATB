@@ -36,7 +36,7 @@ function assertContainedPath(value: unknown, field: string): asserts value is st
   if (normalized.some((part) => !part || part === "." || part === "..")) throw new Error(`${field} has path traversal`);
 }
 
-const MANIFEST_KINDS = ["regulatory", "policy", "map", "weather", "notam", "terminology", "software"] as const;
+const MANIFEST_KINDS = ["regulatory", "policy", "map", "terrain", "airspace", "aip", "weather", "notam", "terminology", "software"] as const;
 
 /** Validate untrusted manifest JSON before it reaches signing, installation, or verification. */
 export function assertSignedPackageManifest(value: unknown, signatureRequired = true): asserts value is SignedPackageManifest {

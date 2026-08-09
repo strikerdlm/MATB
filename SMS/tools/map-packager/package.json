@@ -1,0 +1,15 @@
+{
+  "name": "@fac-isr/map-packager",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npm run build --workspace @fac-isr/evidence && npm run build --workspace @fac-isr/geo && tsc -p tsconfig.build.json",
+    "test": "npm run build --silent && vitest run",
+    "typecheck": "tsc -p ../../tsconfig.base.json"
+  },
+  "dependencies": {
+    "@fac-isr/evidence": "0.1.0",
+    "@fac-isr/geo": "0.1.0"
+  }
+}

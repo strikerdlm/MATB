@@ -66,4 +66,10 @@ describe("offline evidence package verification", () => {
     expect(() => signManifest({ ...manifest, kind: "unknown" as SignedPackageManifest["kind"], signature: "" }, privateKey)).toThrow("kind");
     expect(() => signManifest({ ...manifest, geographicScope: "", signature: "" }, privateKey)).toThrow("geographicScope");
   });
+  it("accepts the geospatial package kinds used by offline map verification", async () => {
+    const { manifest } = await fixture();
+    for (const kind of ["terrain", "airspace", "aip"] as const) {
+      expect(signManifest({ ...manifest, kind, signature: "" }, privateKey).kind).toBe(kind);
+    }
+  });
 });
