@@ -1,5 +1,6 @@
 import type { NormalizedRequirement } from "@fac-isr/evidence";
 import { buildHardBlockers, evaluateApplicability } from "./applicability.js";
+import { evaluateFleetFacts } from "./fleet-inputs.js";
 import { CONCEPT_IDS, CONCEPT_LABELS, type ConceptId } from "./terminology.js";
 import { createSafetyEvaluationResult, type GateName, type LocalizedExplanation, type RuleEvaluation, type SafetyBlocker, type SafetyEvaluationInput, type SafetyEvaluationResult } from "./types.js";
 
@@ -137,11 +138,19 @@ function invalidatedGates(evaluations: readonly RuleEvaluation[], hardBlockers: 
 /** Evaluates a frozen mission revision without locale, I/O, or mutable state. */
 export function evaluateMission(input: SafetyEvaluationInput): SafetyEvaluationResult {
   parseUtc(input.nowUtc);
-  const evaluations = [...input.requirements]
+  const requirementEvaluations = [...input.requirements]
     .sort((left, right) => compareStable(left.requirementId, right.requirementId))
     .map((requirement) => evaluateRequirement(input, requirement));
-  const hardBlockers = buildHardBlockers(input.mission);
-  const ruleBlockers = evaluations.filter(requiresAction).map(blockerFor);
+  const fleet = input.fleetFacts === undefined ? { evaluations: [], blockers: [] } : evaluateFleetFacts(input.mission, input.fleetFacts);
+  const evaluations = [...requirementEvaluations, ...fleet.evaluations].sort((left, right) => compareStable(left.requirementId, right.requirementId));
+  const assignedOperatorIds = input.fleetFacts === undefined
+    ? undefined
+    : Object.fromEntries(input.fleetFacts.crew
+      .filter((member) => member.role === "operator" && member.aircraftId !== undefined)
+      .map((member) => [member.aircraftId!, member.userId]));
+  const hardBlockers = [...buildHardBlockers(input.mission, input.fleetFacts === undefined ? {} : { crew: input.fleetFacts.crew, assignedOperatorIds }), ...fleet.blockers];
+  const fleetRequirementIds = new Set(fleet.evaluations.map((evaluation) => evaluation.requirementId));
+  const ruleBlockers = evaluations.filter((evaluation) => requiresAction(evaluation) && !fleetRequirementIds.has(evaluation.requirementId)).map(blockerFor);
   return createSafetyEvaluationResult({
     missionRevisionId: input.mission.id,
     status: evaluationStatus(evaluations, hardBlockers),
