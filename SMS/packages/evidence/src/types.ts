@@ -86,7 +86,7 @@ export interface PackageDependency {
 export interface SignedPackageManifest {
   schemaVersion: "1.0";
   packageId: string;
-  kind: "regulatory" | "policy" | "map" | "weather" | "notam" | "terminology" | "software";
+  kind: "regulatory" | "policy" | "map" | "terrain" | "airspace" | "aip" | "weather" | "notam" | "terminology" | "software";
   issuer: string;
   version: string;
   issuedAtUtc: string;

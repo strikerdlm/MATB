@@ -8,3 +8,4 @@ export * from "./lifecycle.js";
 export * from "./risk.js";
 export * from "./gates.js";
 export * from "./audit.js";
+export * from "./fleet-inputs.js";
