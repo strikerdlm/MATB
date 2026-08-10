@@ -37,6 +37,14 @@ describe("offline evidence package verification", () => {
     const missing = await verifyPackage(directory, corrected, publicKey, "2026-08-09T00:00:00Z", [], ["kernel-golden-case-report.md"]);
     expect(missing.ok).toBe(false); expect(missing.checks).toContainEqual(expect.objectContaining({ id: "required-control-file", status: "fail" }));
   });
+  it("allows the research data dictionary as non-payload provenance metadata", async () => {
+    const { directory, manifest } = await fixture();
+    await writeFile(join(directory, "research-data-dictionary.md"), "research boundary\n");
+    const file = { ...manifest.files[0], sizeBytes: 20 };
+    const corrected = signManifest({ ...manifest, files: [file], contentSha256: manifestContentDigest([file]), signature: "" }, privateKey);
+    const report = await verifyPackage(directory, corrected, publicKey, "2026-08-09T00:00:00Z", [], ["research-data-dictionary.md"]);
+    expect(report).toMatchObject({ ok: true });
+  });
   it("rejects invalid signature and effective-window violations", async () => {
     const { directory, manifest } = await fixture(); expect((await verifyPackage(directory, { ...manifest, signature: "AAAA" }, publicKey, "2026-08-09T00:00:00Z")).ok).toBe(false);
     expect((await verifyPackage(directory, manifest, publicKey, "2025-08-09T00:00:00Z")).ok).toBe(false); expect((await verifyPackage(directory, manifest, publicKey, "2028-08-09T00:00:00Z")).ok).toBe(false);

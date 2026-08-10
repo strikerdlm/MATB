@@ -1,0 +1,26 @@
+:root {
+  color-scheme: dark;
+  font-family: "Atkinson Hyperlegible", "Trebuchet MS", sans-serif;
+  --navy: #081B25;
+  --navy-deep: #05151e;
+  --surface: #0d2430;
+  --surface-raised: #102d39;
+  --line: rgba(230, 238, 240, .2);
+  --line-strong: rgba(230, 238, 240, .42);
+  --text: #E6EEF0;
+  --muted: #9fb0b6;
+  --cyan: #44B8C7;
+  --green: #4FA878;
+  --amber: #F2AA3C;
+  --red: #D64E4B;
+  --display: "Archivo Narrow", "Arial Narrow", sans-serif;
+  --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  --rail: 194px;
+  --top: 68px;
+  --strip: 247px;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { min-height: 100%; margin: 0; }
+body { background: var(--navy); color: var(--text); }
+button { font: inherit; }

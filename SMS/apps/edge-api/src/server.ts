@@ -4,12 +4,15 @@ import { openDatabase, type EdgeDatabase } from "./db/migrate.js";
 import { SCHEMA_VERSION } from "./db/schema.js";
 import { AuditLedger } from "./audit/ledger.js";
 import { registerChecklistRoutes } from "./routes/checklists.js";
+import { registerExportRoutes } from "./routes/exports.js";
 import { registerGateRoutes } from "./routes/gates.js";
 import { registerMissionRoutes } from "./routes/missions.js";
+import { registerPackageRoutes } from "./routes/packages.js";
 import { registerPostflightRoutes } from "./routes/postflight.js";
 import { registerTelemetryRoutes } from "./routes/telemetry.js";
 import { MissionService } from "./services/mission-service.js";
 import { TelemetryService } from "./services/telemetry-service.js";
+import { SafeModeService } from "./services/safe-mode.js";
 
 interface ReadinessCheck {
   readonly status: "ok" | "pending";
@@ -33,6 +36,7 @@ export interface EdgeServer extends FastifyInstance {
   readonly auditLedger: AuditLedger;
   readonly missionService: MissionService;
   readonly telemetryService: TelemetryService;
+  readonly safeModeService: SafeModeService;
 }
 
 function buildReadinessReport(database: EdgeDatabase): ReadinessReport {
@@ -56,6 +60,7 @@ export async function buildServer(input: EdgeConfigInput = {}): Promise<EdgeServ
   const auditLedger = new AuditLedger({ database: edgeDatabase });
   const missionService = new MissionService({ auditLedger, database: edgeDatabase });
   const telemetryService = new TelemetryService();
+  const safeModeService = new SafeModeService({ database: edgeDatabase, packageDirectory: edgeConfig.packageDirectory, auditLedger, missionService });
   const app = Fastify({ logger: false }) as unknown as EdgeServer;
   Object.defineProperties(app, {
     edgeConfig: { value: edgeConfig, enumerable: false },
@@ -63,6 +68,7 @@ export async function buildServer(input: EdgeConfigInput = {}): Promise<EdgeServ
     auditLedger: { value: auditLedger, enumerable: false },
     missionService: { value: missionService, enumerable: false },
     telemetryService: { value: telemetryService, enumerable: false },
+    safeModeService: { value: safeModeService, enumerable: false },
   });
 
   app.addHook("onClose", async () => {
@@ -85,6 +91,8 @@ export async function buildServer(input: EdgeConfigInput = {}): Promise<EdgeServ
   registerGateRoutes(app, missionService);
   registerPostflightRoutes(app, missionService);
   registerTelemetryRoutes(app, telemetryService);
+  registerPackageRoutes(app, safeModeService);
+  registerExportRoutes(app, safeModeService);
 
   return app;
 }
