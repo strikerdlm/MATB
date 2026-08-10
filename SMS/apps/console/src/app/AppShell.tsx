@@ -6,6 +6,9 @@ import type { GateDescriptor } from "../components/GateStatus.js";
 import { MapWorkspace, type MapFinding, type MapRoute } from "../components/MapWorkspace.js";
 import { TelemetryPanel } from "../components/TelemetryPanel.js";
 import { RiskPanel } from "../components/RiskPanel.js";
+import { SmsDashboard } from "../components/SmsDashboard.js";
+import { ResearchProtocolPanel } from "../components/ResearchProtocolPanel.js";
+import { ResearchSessionPanel } from "../components/ResearchSessionPanel.js";
 import { routeMode } from "./routes.js";
 
 export interface AppShellProps {
@@ -28,6 +31,7 @@ const navItems: readonly { icon: IconName; labelKey: keyof ReturnType<typeof get
   { icon: "folder", labelKey: "documents", path: "/documents" },
   { icon: "edit", labelKey: "notes", path: "/notes" },
   { icon: "settings", labelKey: "configuration", path: "/sms" },
+  { icon: "pulse", labelKey: "research", path: "/research" },
 ];
 
 const missionSafetyFixture = {
@@ -53,6 +57,8 @@ const mapPackageFixture = { packageId: "MAP-COLOMBIA-2024Q2", version: "1.2.0", 
 const mapRouteFixture: MapRoute = { routeId: "ISR_SWEEP_120", distanceNm: 214, waypoints: [{ id: "WP01", label: "Puerto Santander", x: 20, y: 65 }, { id: "WP02", label: "Tibú", x: 280, y: 118 }, { id: "WP03", label: "Sardinata", x: 398, y: 158 }, { id: "WP04", label: "La Gabarra", x: 555, y: 198 }, { id: "WP05", label: "Convención", x: 680, y: 318 }] };
 const mapFindingsFixture: readonly MapFinding[] = [{ id: "F-01", label: "Wildlife strike risk", severity: "high", x: 398, y: 158 }, { id: "F-02", label: "Terrain clearance review", severity: "medium", x: 555, y: 198 }];
 const telemetryFixture = { aircraft: { aircraftId: "FAC-1287", platform: "ISR-1", approvedMinimumReservePercent: 30 }, telemetry: { capturedAtLocal: "18 May 2024 09:25:31", latitude: "08° 23.456′ N", longitude: "072° 45.789′ W", altitude: "FL098", groundspeed: "210 KT", heading: "123°", verticalRate: "+500 FPM", energyPercent: 62, batteryHealth: "NOMINAL", linkLatencyMs: 70, linkLossPercent: 0, gnss: "3D FIX", activeLeg: "WP03 → WP04", deviation: "Within tolerance", reservePercent: 38 }, degraded: false } as const;
+const researchProtocolFixture = { id: "PROTOCOL-MATB-01", version: "1.0.0", title: "MATB workload and interface study", ethicsApprovalId: "ETHICS-2026-041", status: "current", permittedSensors: ["matb", "hrv"], permittedInstruments: ["NASA-TLX", "SAGAT"] } as const;
+const researchSessionFixture = { participantCode: "P-017", conditionAssignment: "baseline", startedAtUtc: "2026-08-10T15:00:00.000Z", instrumentProgress: "NASA-TLX · 1/1 · SAGAT · 2/3" } as const;
 
 export function AppShell({ initialPath = "/missions", initialLocale = "en" }: AppShellProps): JSX.Element {
   const [path, setPath] = useState(initialPath);
@@ -121,7 +127,7 @@ export function AppShell({ initialPath = "/missions", initialLocale = "en" }: Ap
           governingRequirements={{ safety: { title: "Configuration out of scope", sourceExcerptEs: "La configuración declarada no está dentro del alcance autorizado.", translationEn: "The declared configuration is outside the authorized scope.", sourceEdition: "FAC ISR SMS 2024.2", sourceSection: "§ 4.3.1", freshness: "Current · 18 May 2024 09:25", evidenceHash: "sha256:ev-saf-00077", reviewerStatus: "Safety review required" } }}
         />
 
-        <section className="workspace" aria-label={labels.mapWorkspace}>
+        {activePath === "/sms" ? <SmsDashboard /> : activePath === "/research" ? <section className="research-workspace"><ResearchProtocolPanel authorized protocol={researchProtocolFixture} /><ResearchSessionPanel authorized session={researchSessionFixture} /></section> : <section className="workspace" aria-label={labels.mapWorkspace}>
           <MapWorkspace packageDirectory={mapPackageFixture} route={mapRouteFixture} findings={mapFindingsFixture} mode={routeMode(path)} />
           <aside className="evidence-rail" aria-label="Mission evidence and telemetry">
             <TelemetryPanel {...telemetryFixture} locale={locale} />
@@ -129,7 +135,7 @@ export function AppShell({ initialPath = "/missions", initialLocale = "en" }: Ap
             <EvidencePanel labels={labels} />
             <NotesPanel labels={labels} />
           </aside>
-        </section>
+        </section>}
 
         <footer className="system-footer"><FooterMetric icon="crosshair" label="System status" value={labels.statusNominal} /><FooterMetric icon="wifi" label="Network" value={labels.networkDisconnected} /><FooterMetric icon="check" label="Data integrity" value={labels.verified} /><FooterMetric icon="clock" label="Time (local)" value="18 May 2024 09:32" mono /><FooterMetric icon="download" label="Power" value="100%" /></footer>
       </main>
