@@ -170,10 +170,12 @@ async function run(command, args, { cwd = smsRoot, allowFailure = false, env = {
     child.stderr.on("data", (chunk) => stderr.push(chunk));
     child.once("error", reject);
     child.once("close", (code, signal) => {
+      const stdoutBuffer = Buffer.concat(stdout);
       const result = {
         code: code ?? 1,
         signal,
-        stdout: Buffer.concat(stdout).toString("utf8"),
+        stdout: stdoutBuffer.toString("utf8"),
+        stdoutBuffer,
         stderr: Buffer.concat(stderr).toString("utf8"),
       };
       if (result.code === 0 || allowFailure) resolvePromise(result);
@@ -518,7 +520,20 @@ function manifestShape(manifest, signatureRequired = true) {
   if (!Array.isArray(manifest.knownLimitations) || manifest.knownLimitations.length === 0) throw new Error("known limitations are required");
 }
 
-async function assertArtifactInventory(repositoryRoot, manifest) {
+async function sourceCommitArtifact(repositoryRoot, sourceCommit, artifactPath) {
+  const repositoryTopLevel = (await run("git", ["rev-parse", "--show-toplevel"], { cwd: repositoryRoot })).stdout.trim();
+  if (await realpath(repositoryTopLevel) !== await realpath(repositoryRoot)) {
+    throw new Error("source-commit verification requires the repository root");
+  }
+  const tree = (await run("git", ["ls-tree", sourceCommit, "--", artifactPath], { cwd: repositoryRoot })).stdout.trim();
+  const metadata = /^(100644|100755) blob [a-f0-9]{40}\t(.+)$/.exec(tree);
+  if (metadata === null || metadata[2] !== artifactPath) throw new Error(`release artifact is absent or not a regular file at source commit: ${artifactPath}`);
+  return (await run("git", ["show", `${sourceCommit}:${artifactPath}`], { cwd: repositoryRoot })).stdoutBuffer;
+}
+
+async function assertArtifactInventory(repositoryRoot, manifest, options = {}) {
+  const artifactSource = options.artifactSource ?? "worktree";
+  if (artifactSource !== "worktree" && artifactSource !== "source-commit") throw new Error(`unsupported artifact source: ${String(artifactSource)}`);
   const seen = new Set();
   let previous = "";
   for (const artifact of manifest.artifacts) {
@@ -530,8 +545,19 @@ async function assertArtifactInventory(repositoryRoot, manifest) {
     previous = artifact.path;
     seen.add(artifact.path);
     const path = containedPath(repositoryRoot, artifact.path, "release artifact path");
-    const info = await lstat(path);
-    if (!info.isFile() || info.isSymbolicLink() || info.size !== artifact.sizeBytes || await sha256File(path) !== artifact.sha256) {
+    let sizeBytes;
+    let digest;
+    if (artifactSource === "source-commit" && !artifact.path.startsWith(`${RELEASE_DIRECTORY}/`)) {
+      const content = await sourceCommitArtifact(repositoryRoot, manifest.sourceCommit, artifact.path);
+      sizeBytes = content.byteLength;
+      digest = sha256(content);
+    } else {
+      const info = await lstat(path);
+      if (!info.isFile() || info.isSymbolicLink()) throw new Error(`release artifact is not a regular file: ${artifact.path}`);
+      sizeBytes = info.size;
+      digest = await sha256File(path);
+    }
+    if (sizeBytes !== artifact.sizeBytes || digest !== artifact.sha256) {
       throw new Error(`release artifact hash or size mismatch: ${artifact.path}`);
     }
     if (/(^|\/)(?:[^/]*private[^/]*|[^/]+\.(?:key|p12|pfx))$/iu.test(artifact.path)) {
@@ -549,7 +575,7 @@ async function assertArtifactInventory(repositoryRoot, manifest) {
   return manifest.artifacts.map((artifact) => artifact.path);
 }
 
-export async function verifyRelease(repositoryRoot = defaultRepositoryRoot) {
+export async function verifyRelease(repositoryRoot = defaultRepositoryRoot, options = {}) {
   const root = resolve(repositoryRoot);
   const checks = [];
   const add = (id, status, detail, evidence = []) => checks.push({ id, status, detail, evidence });
@@ -585,8 +611,9 @@ export async function verifyRelease(repositoryRoot = defaultRepositoryRoot) {
     }
 
     try {
-      const evidence = await assertArtifactInventory(root, manifest);
-      add("artifact-inventory", "pass", `${manifest.artifacts.length} release artifacts match exact sizes and SHA-256 hashes`, evidence);
+      const evidence = await assertArtifactInventory(root, manifest, options);
+      const sourceDetail = options.artifactSource === "source-commit" ? ` at source commit ${manifest.sourceCommit.slice(0, 12)}` : " in the worktree";
+      add("artifact-inventory", "pass", `${manifest.artifacts.length} release artifacts match exact sizes and SHA-256 hashes${sourceDetail}`, evidence);
     } catch (error) {
       add("artifact-inventory", "fail", error instanceof Error ? error.message : String(error));
     }

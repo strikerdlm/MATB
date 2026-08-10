@@ -14,4 +14,7 @@ export interface ReleaseVerificationReport {
   readonly checks: readonly ReleaseVerificationCheck[];
 }
 
-export function verifyRelease(repositoryRoot?: string): Promise<ReleaseVerificationReport>;
+export function verifyRelease(
+  repositoryRoot?: string,
+  options?: { readonly artifactSource?: "worktree" | "source-commit" },
+): Promise<ReleaseVerificationReport>;

@@ -77,7 +77,7 @@ describe("signed SMS release manifest", () => {
   });
 
   it("verifies the pinned key, detached signature, SBOM, and artifact inventory", async () => {
-    const report = await verifyRelease(repositoryRoot);
+    const report = await verifyRelease(repositoryRoot, { artifactSource: "source-commit" });
 
     expect(report.ok, JSON.stringify(report.checks, null, 2)).toBe(true);
     expect(report.operationalReady).toBe(false);
