@@ -195,3 +195,7 @@ export class SessionManager {
     });
   }
 }
+
+export function lockSession(manager: SessionManager, sessionId: string, reason: string): void {
+  manager.lockSession(sessionId, reason);
+}

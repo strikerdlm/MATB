@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AuthenticationError,
+  authenticateLocal,
   LocalAuthenticator,
   LocalIdentityStore,
 } from "../src/auth/identity.js";
@@ -8,6 +9,7 @@ import { authorize } from "../src/auth/roles.js";
 import {
   isSessionLocked,
   isSessionReauthenticationRequired,
+  lockSession,
   SessionManager,
 } from "../src/auth/session.js";
 import type { UserRole } from "../src/auth/roles.js";
@@ -66,6 +68,27 @@ describe("local identity and role separation", () => {
       action: "gate:maintenance:accept",
       missionId: "mission-1",
     }).allowed).toBe(false);
+  });
+
+  it("exposes the plan-level authentication contract", async () => {
+    const store = createStore();
+    const sessions = createSessions();
+    store.register({
+      userId: "operator-1",
+      displayName: "Operator",
+      roles: ["operator"],
+      missionIds: ["mission-1"],
+      password: "correct horse battery staple",
+    });
+    const authenticator = new LocalAuthenticator(store, sessions);
+
+    const session = await authenticateLocal({
+      userId: "operator-1",
+      password: "correct horse battery staple",
+    }, authenticator);
+    lockSession(sessions, session.sessionId, "operator requested lock");
+
+    expect(sessions.getSession(session.sessionId)?.lockedAtUtc).toBe(nowUtc);
   });
 
   it("requires the matching role and mission assignment for gate decisions", async () => {

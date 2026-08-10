@@ -219,3 +219,10 @@ export class LocalAuthenticator {
     return this.sessionManager.reauthenticate(sessionId, identity);
   }
 }
+
+export async function authenticateLocal(
+  credentials: LocalCredentials,
+  authenticator: LocalAuthenticator,
+): Promise<Session> {
+  return authenticator.authenticateLocal(credentials);
+}
