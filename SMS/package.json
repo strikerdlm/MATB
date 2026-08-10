@@ -1,24 +1,42 @@
 {
   "name": "fac-isr-sms",
+  "version": "0.1.0",
   "private": true,
-  "workspaces": ["packages/*", "apps/*", "tools/*"],
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "tools/*"
+  ],
   "scripts": {
-    "build": "npm run build --workspace @fac-isr/evidence && npm run build --workspace @fac-isr/safety-kernel && npm run build --workspace @fac-isr/research-tools",
+    "build": "npm run build:packages && npm run build:tools && npm run build:apps",
+    "build:packages": "npm run build --workspace @fac-isr/evidence && npm run build --workspace @fac-isr/energy && npm run build --workspace @fac-isr/geo && npm run build --workspace @fac-isr/telemetry && npm run build --workspace @fac-isr/sms && npm run build --workspace @fac-isr/human-performance && npm run build --workspace @fac-isr/research && npm run build --workspace @fac-isr/safety-kernel && npm run build --workspace @fac-isr/fleet",
+    "build:tools": "npm run build --workspace @fac-isr/research-tools && npm run build --workspace @fac-isr/map-packager",
+    "build:apps": "npm run build --workspace @fac-isr/edge-api && npm run build --workspace @fac-isr/console",
     "build:research": "npm run build --workspace @fac-isr/research-tools",
     "typecheck": "tsc -b",
     "pretest": "npm run build",
     "test": "vitest run",
     "lint": "eslint .",
-    "preverify:offline": "npm run build:research",
-    "verify:offline": "node tools/research/dist/cli.js verify-offline",
+    "build:offline": "node scripts/build-offline-bundle.mjs",
+    "verify:offline": "node scripts/verify-offline.mjs",
+    "preverify:evidence-offline": "npm run build:research",
+    "verify:evidence-offline": "node tools/research/dist/cli.js verify-offline",
     "preverify:no-c2": "npm run build:research",
-    "verify:no-c2": "node tools/research/dist/cli.js verify-no-c2"
+    "verify:no-c2": "node tools/research/dist/cli.js verify-no-c2",
+    "verify:data-separation": "npm test --workspace @fac-isr/research -- contracts.test.ts boundary.test.ts --run",
+    "verify:all": "npm run typecheck && npm run lint && npm test -- --run && npm run verify:no-c2 && npm run verify:data-separation"
   },
-  "engines": { "node": ">=22.0.0" },
+  "engines": {
+    "node": "22.x"
+  },
   "author": "Dr Diego Malpica — Aerospace Medicine and Human Performance — Subdirectorate of Aerospace Sciences — Colombian Aerospace Force",
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@types/node": "^22.20.1",
+    "eslint": "10.8.1",
+    "globals": "17.9.0",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "typescript-eslint": "8.66.0",
+    "vitest": "3.2.6"
   }
 }

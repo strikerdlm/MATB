@@ -1,0 +1,16 @@
+.git
+.github
+node_modules
+**/node_modules
+dist
+**/dist
+test
+**/test
+docs
+**/*.key
+**/*.p12
+**/*.pfx
+**/*private*.pem
+.env
+.env.*
+npm-debug.log*

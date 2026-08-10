@@ -2,12 +2,14 @@ import { createHash } from "node:crypto";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { acquireOfficialSource, copyObsidianNote, verifyChecksum } from "../src/acquire.js";
 import { verifyOffline } from "../src/cli.js";
 
 const rac94Sha = "312458744b5e4f5097492d4b1c58b0e05229cc5e738058c757d4464e0f155976";
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
+const smsRoot = fileURLToPath(new URL("../../../", import.meta.url));
 
 async function tempRoot(prefix: string): Promise<string> { return mkdtemp(join(tmpdir(), prefix)); }
 
@@ -18,7 +20,7 @@ describe("research acquisition", () => {
     const root = await tempRoot("fac-isr-research-");
     try {
       const source = join(root, "racae.pdf");
-      await writeFile(source, await readFile(join(process.cwd(), "../../docs/regulations/original/racae_94_enmienda_2_reglas_de_vuelo_y_operacion_uasrpas_0.pdf")));
+      await writeFile(source, await readFile(join(smsRoot, "docs/regulations/original/racae_94_enmienda_2_reglas_de_vuelo_y_operacion_uasrpas_0.pdf")));
       const record = await acquireOfficialSource({
         sourceId: "racae-94-enm2" as never, title: "RACAE 94 Enmienda 2", authority: "AAAES", authorityRank: 1,
         canonicalUri: "https://aaaes.fac.mil.co/racae.pdf", targetPath: "docs/racae.pdf", workspaceRoot: root, stagingFile: source,

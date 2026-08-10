@@ -1,5 +1,3 @@
-import type { SourceRecord } from "./types.js";
-
 export { SourceRegister } from "./source-register.js";
 export { assertClaimTraceable } from "./claims.js";
 

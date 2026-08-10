@@ -1,0 +1,43 @@
+name: fac-isr-sms-edge
+
+services:
+  edge:
+    image: ${SMS_EDGE_IMAGE:-fac-isr-sms-edge:offline}
+    user: "10001:10001"
+    read_only: true
+    init: true
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,uid=10001,gid=10001,mode=0700
+    environment:
+      SMS_BIND_ADDRESS: 0.0.0.0
+      SMS_PORT: 8443
+      SMS_DATABASE_URL: /var/lib/fac-isr/data/edge.sqlite
+      SMS_PACKAGE_DIRECTORY: /opt/sms/packages
+      SMS_TLS_CERT_PATH: /run/secrets/tls/server.crt
+      SMS_TLS_KEY_PATH: /run/secrets/tls/server.key
+    volumes:
+      # SMS_DATA_DIR must reside on an institutionally approved encrypted volume.
+      - ${SMS_DATA_DIR:?set SMS_DATA_DIR}:/var/lib/fac-isr/data:rw
+      - ${SMS_PACKAGE_DIR:?set SMS_PACKAGE_DIR}:/opt/sms/packages:ro
+      - ${SMS_TLS_DIR:?set SMS_TLS_DIR}/server.crt:/run/secrets/tls/server.crt:ro
+      - ${SMS_TLS_DIR:?set SMS_TLS_DIR}/server.key:/run/secrets/tls/server.key:ro
+    ports:
+      - "127.0.0.1:${SMS_EDGE_PORT:-8443}:8443"
+    networks:
+      - edge_internal
+    healthcheck:
+      test: ["CMD", "/opt/sms/bin/healthcheck", "--live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+networks:
+  edge_internal:
+    internal: true

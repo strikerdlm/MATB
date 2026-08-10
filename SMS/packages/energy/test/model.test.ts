@@ -6,7 +6,7 @@ import {
   type EnergyModelInput,
   type ReadOnlyEnergyTelemetry,
 } from "../src/index.js";
-import { parseBattery, parseEnergySegment } from "../src/types.js";
+import { parseEnergySegment } from "../src/types.js";
 import { validEnergyInput } from "./fixtures.js";
 
 describe("deterministic mission energy model", () => {

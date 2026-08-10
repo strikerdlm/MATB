@@ -1,4 +1,4 @@
-import { parseCoordinate, distanceM } from "./coordinates.js";
+import { parseCoordinate } from "./coordinates.js";
 import type { Wgs84Coordinate } from "./coordinates.js";
 import type { GeoFinding, GeoSafetyResult, RoutePlan } from "./types.js";
 

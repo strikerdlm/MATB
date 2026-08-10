@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { SourceRegister } from "@fac-isr/evidence";
 import type { SourceRecord } from "@fac-isr/evidence";
 import { describe, expect, it } from "vitest";
@@ -11,7 +12,7 @@ import {
 import type { NormalizationInput, ReviewedNormalizedRequirement } from "../src/normalize.js";
 
 const extractionSha = "77cc55931dd862884751fc2510ef4d16def1546e8712195fff2500f2ea482a69";
-const root = resolve(process.cwd(), "../..");
+const root = fileURLToPath(new URL("../../../", import.meta.url));
 
 function source(overrides: Partial<SourceRecord> = {}): SourceRecord {
   return {

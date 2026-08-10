@@ -1,5 +1,5 @@
 import type { NormalizedRequirement, SourceId } from "./types.js";
-import { SourceRegister } from "./source-register.js";
+import type { SourceRegister } from "./source-register.js";
 import { isUtcTimestamp } from "./source-validation.js";
 
 /** Ensures every source-backed requirement is supported by accepted evidence. */
