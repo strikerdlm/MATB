@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import Fastify, { type FastifyInstance } from "fastify";
 import { createConfig, type EdgeConfig, type EdgeConfigInput } from "./config.js";
 import { openDatabase, type EdgeDatabase } from "./db/migrate.js";
@@ -54,14 +55,28 @@ function buildReadinessReport(database: EdgeDatabase): ReadinessReport {
   return { status: ready ? "ready" : "not_ready", checks };
 }
 
+async function loadTlsMaterial(config: EdgeConfig): Promise<{ readonly cert: Buffer; readonly key: Buffer } | undefined> {
+  if (config.tls === undefined) return undefined;
+  try {
+    const [cert, key] = await Promise.all([
+      readFile(config.tls.certPath),
+      readFile(config.tls.keyPath),
+    ]);
+    return { cert, key };
+  } catch (error) {
+    throw new Error(`TLS material could not be loaded: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 export async function buildServer(input: EdgeConfigInput = {}): Promise<EdgeServer> {
   const edgeConfig = createConfig(input);
+  const https = await loadTlsMaterial(edgeConfig);
   const edgeDatabase = openDatabase(edgeConfig.databaseUrl, edgeConfig.lockTimeoutMs);
   const auditLedger = new AuditLedger({ database: edgeDatabase });
   const missionService = new MissionService({ auditLedger, database: edgeDatabase });
   const telemetryService = new TelemetryService();
   const safeModeService = new SafeModeService({ database: edgeDatabase, packageDirectory: edgeConfig.packageDirectory, auditLedger, missionService });
-  const app = Fastify({ logger: false }) as unknown as EdgeServer;
+  const app = Fastify({ logger: false, ...(https === undefined ? {} : { https }) }) as unknown as EdgeServer;
   Object.defineProperties(app, {
     edgeConfig: { value: edgeConfig, enumerable: false },
     edgeDatabase: { value: edgeDatabase, enumerable: false },

@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 interface RootPackageJson {
+  readonly version?: string;
   readonly scripts?: Record<string, string>;
   readonly engines?: Record<string, string>;
 }
@@ -39,6 +40,10 @@ describe("release verification command", () => {
     expect(readPackageJson().engines?.node).toBe("22.x");
   });
 
+  it("has a semantic release identity for SBOM package URLs", () => {
+    expect(readPackageJson().version).toMatch(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/);
+  });
+
   it("discovers package, app, tool, and root integration tests", () => {
     const workspace = readWorkspaceConfig();
 
@@ -56,6 +61,8 @@ describe("release verification command", () => {
     expect(workflow).toContain("node-version: 22");
     expect(workflow).toContain("npm ci");
     expect(workflow).toContain("npm run verify:all");
+    expect(workflow).toContain("npm run build:offline -- --output dist/offline-bundle");
+    expect(workflow).toContain("npm run verify:offline -- --bundle dist/offline-bundle --no-network");
     expect(workflow).toContain("working-directory: SMS");
   });
 });

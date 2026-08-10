@@ -39,4 +39,14 @@ describe("offline edge server", () => {
       },
     });
   });
+
+  it("fails closed when configured TLS material cannot be loaded", async () => {
+    await expect(buildServer({
+      databaseUrl: ":memory:",
+      tls: {
+        certPath: "/missing/server.crt",
+        keyPath: "/missing/server.key",
+      },
+    })).rejects.toThrow(/TLS material/i);
+  });
 });

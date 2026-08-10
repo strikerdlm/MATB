@@ -2,6 +2,8 @@ name: SMS verification
 
 on:
   push:
+    branches:
+      - main
     paths:
       - "SMS/**"
       - ".github/workflows/sms-ci.yml"
@@ -38,3 +40,7 @@ jobs:
         run: npm ci
       - name: Run release verification
         run: npm run verify:all
+      - name: Build disconnected transfer bundle
+        run: npm run build:offline -- --output dist/offline-bundle
+      - name: Verify disconnected transfer bundle
+        run: npm run verify:offline -- --bundle dist/offline-bundle --no-network
