@@ -1,25 +1,9 @@
 import type { JSX } from "react";
-import { GateStatus, type GateDescriptor, type GateDecisionEvent, type GateRole, type GoverningRequirement } from "./GateStatus.js";
+import { GateStatus } from "./GateStatus.js";
+import type { GateDescriptor, GateDecisionEvent, GateRole, GoverningRequirement } from "./gate-types.js";
+import type { MissionSafetyLocale, MissionSafetyMission, MissionSafetyResult } from "./mission-safety-types.js";
 import { useMissionSafety, type MissionSafetyInput } from "../hooks/useMissionSafety.js";
-
-export type MissionSafetyLocale = "en" | "es";
-
-export interface MissionSafetyMission {
-  readonly missionId: string;
-  readonly phase: string;
-  readonly aircraftClass: string;
-  readonly flightRule: string;
-  readonly visualCondition: string;
-  readonly configuration: string;
-  readonly lastUpdatedLocal: string;
-  readonly freshness: { readonly telemetry: string; readonly evidence: string };
-  readonly operatorState: string;
-}
-
-export interface MissionSafetyResult {
-  readonly status: "ready" | "conditional" | "blocked" | "degraded";
-  readonly blockers: readonly { readonly code: string; readonly explanation: string; readonly severity: string }[];
-}
+export type { MissionSafetyLocale, MissionSafetyMission, MissionSafetyResult } from "./mission-safety-types.js";
 
 export interface MissionSafetyStripProps {
   readonly mission: MissionSafetyMission;

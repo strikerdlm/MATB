@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import type { GateDescriptor } from "../components/GateStatus.js";
-import type { MissionSafetyMission, MissionSafetyResult } from "../components/MissionSafetyStrip.js";
+import type { GateDescriptor } from "../components/gate-types.js";
+import type { MissionSafetyMission, MissionSafetyResult } from "../components/mission-safety-types.js";
 
 export interface MissionSafetyInput {
   readonly mission: MissionSafetyMission;
