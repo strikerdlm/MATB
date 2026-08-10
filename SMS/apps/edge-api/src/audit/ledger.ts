@@ -25,7 +25,7 @@ export interface AuditEvent {
 
 /** Caller-supplied business facts. Sequence, predecessor, and hash are ledger-owned. */
 export interface AuditEventInput {
-  readonly eventId: string;
+  readonly eventId?: string;
   readonly type: string;
   readonly actorUserId: string;
   readonly missionRevisionId?: string;
@@ -167,8 +167,8 @@ function normalizeEvent(
   if (!Number.isInteger(sequence) || sequence < 0) throw new RangeError("audit sequence must be non-negative");
   if (!/^[a-f0-9]{64}$/.test(previousHash)) throw new TypeError("previousHash must be a SHA-256 digest");
 
-  const eventId = requiredText(input.eventId, "eventId");
   const type = requiredText(input.type, "type");
+  const eventId = input.eventId === undefined ? `${type}:${sequence}` : requiredText(input.eventId, "eventId");
   const actorUserId = requiredText(input.actorUserId, "actorUserId");
   const missionRevisionId = optionalText(input.missionRevisionId, "missionRevisionId");
   const occurredAtUtc = canonicalUtc(input.occurredAtUtc ?? now());
@@ -476,7 +476,7 @@ export class AuditLedger {
       this.readOnlySafeMode = true;
       throw new AuditWriteError("audit chain is corrupted; approval writes are disabled");
     }
-    const eventId = requiredText(input.eventId, "eventId");
+    const eventId = input.eventId === undefined ? `${input.type}:${existing.length}` : requiredText(input.eventId, "eventId");
     if (existing.some((event) => event.eventId === eventId)) throw new Error("audit event ID already exists");
     const event = normalizeEvent(
       input,

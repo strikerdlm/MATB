@@ -2,6 +2,12 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { createConfig, type EdgeConfig, type EdgeConfigInput } from "./config.js";
 import { openDatabase, type EdgeDatabase } from "./db/migrate.js";
 import { SCHEMA_VERSION } from "./db/schema.js";
+import { AuditLedger } from "./audit/ledger.js";
+import { registerChecklistRoutes } from "./routes/checklists.js";
+import { registerGateRoutes } from "./routes/gates.js";
+import { registerMissionRoutes } from "./routes/missions.js";
+import { registerPostflightRoutes } from "./routes/postflight.js";
+import { MissionService } from "./services/mission-service.js";
 
 interface ReadinessCheck {
   readonly status: "ok" | "pending";
@@ -22,6 +28,8 @@ interface ReadinessReport {
 export interface EdgeServer extends FastifyInstance {
   readonly edgeConfig: EdgeConfig;
   readonly edgeDatabase: EdgeDatabase;
+  readonly auditLedger: AuditLedger;
+  readonly missionService: MissionService;
 }
 
 function buildReadinessReport(database: EdgeDatabase): ReadinessReport {
@@ -42,10 +50,14 @@ function buildReadinessReport(database: EdgeDatabase): ReadinessReport {
 export async function buildServer(input: EdgeConfigInput = {}): Promise<EdgeServer> {
   const edgeConfig = createConfig(input);
   const edgeDatabase = openDatabase(edgeConfig.databaseUrl, edgeConfig.lockTimeoutMs);
+  const auditLedger = new AuditLedger({ database: edgeDatabase });
+  const missionService = new MissionService({ auditLedger, database: edgeDatabase });
   const app = Fastify({ logger: false }) as unknown as EdgeServer;
   Object.defineProperties(app, {
     edgeConfig: { value: edgeConfig, enumerable: false },
     edgeDatabase: { value: edgeDatabase, enumerable: false },
+    auditLedger: { value: auditLedger, enumerable: false },
+    missionService: { value: missionService, enumerable: false },
   });
 
   app.addHook("onClose", async () => {
@@ -62,6 +74,11 @@ export async function buildServer(input: EdgeConfigInput = {}): Promise<EdgeServ
     const report = buildReadinessReport(edgeDatabase);
     return reply.code(report.status === "ready" ? 200 : 503).send(report);
   });
+
+  registerMissionRoutes(app, missionService);
+  registerChecklistRoutes(app, missionService);
+  registerGateRoutes(app, missionService);
+  registerPostflightRoutes(app, missionService);
 
   return app;
 }
