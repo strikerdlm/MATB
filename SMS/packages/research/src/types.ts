@@ -8,6 +8,7 @@ export interface ResearchSession {
   readonly conditionAssignment: string;
   readonly startedAtUtc: string;
   readonly endedAtUtc?: string;
+  readonly permittedSensors?: readonly string[];
   readonly nonDispatchable: true;
   readonly events: readonly ResearchEvent[];
 }
@@ -85,10 +86,12 @@ export function parseResearchEvent(input: unknown): ResearchEvent {
 
 export function parseResearchSession(input: unknown): ResearchSession {
   if (!isRecord(input)) throw new TypeError("research session must be an object");
-  strictKeys(input, ["id", "protocolId", "ethicsApprovalId", "participantCode", "conditionAssignment", "startedAtUtc", "endedAtUtc", "nonDispatchable", "events"]);
+  strictKeys(input, ["id", "protocolId", "ethicsApprovalId", "participantCode", "conditionAssignment", "startedAtUtc", "endedAtUtc", "permittedSensors", "nonDispatchable", "events"]);
   if (input.nonDispatchable !== true) throw new TypeError("research sessions are non-dispatchable");
   const events = input.events;
   if (!Array.isArray(events)) throw new TypeError("events must be an array");
-  const session = { id: requiredText(input.id, "id"), protocolId: requiredText(input.protocolId, "protocolId"), ethicsApprovalId: requiredText(input.ethicsApprovalId, "ethicsApprovalId"), participantCode: requiredText(input.participantCode, "participantCode") as ParticipantCode, conditionAssignment: requiredText(input.conditionAssignment, "conditionAssignment"), startedAtUtc: utc(input.startedAtUtc, "startedAtUtc"), ...(input.endedAtUtc === undefined ? {} : { endedAtUtc: utc(input.endedAtUtc, "endedAtUtc") }), nonDispatchable: true as const, events: events.map(parseResearchEvent) };
+  const permittedSensors = input.permittedSensors === undefined ? undefined : input.permittedSensors;
+  if (permittedSensors !== undefined && (!Array.isArray(permittedSensors) || permittedSensors.some((sensor) => typeof sensor !== "string" || sensor.trim() === ""))) throw new TypeError("permittedSensors is invalid");
+  const session = { id: requiredText(input.id, "id"), protocolId: requiredText(input.protocolId, "protocolId"), ethicsApprovalId: requiredText(input.ethicsApprovalId, "ethicsApprovalId"), participantCode: requiredText(input.participantCode, "participantCode") as ParticipantCode, conditionAssignment: requiredText(input.conditionAssignment, "conditionAssignment"), startedAtUtc: utc(input.startedAtUtc, "startedAtUtc"), ...(input.endedAtUtc === undefined ? {} : { endedAtUtc: utc(input.endedAtUtc, "endedAtUtc") }), ...(permittedSensors === undefined ? {} : { permittedSensors: [...permittedSensors as string[]] }), nonDispatchable: true as const, events: events.map(parseResearchEvent) };
   return freeze(session);
 }

@@ -184,6 +184,7 @@ export function openConsentedSession(input: OpenConsentedSessionInput): Research
     conditionAssignment,
     startedAtUtc,
     ...(endedAtUtc === undefined ? {} : { endedAtUtc }),
+    permittedSensors: [...protocol.permittedSensors],
     nonDispatchable: true,
     events: [],
   });
