@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAtUtc": "2026-08-10T15:33:04.000Z",
+  "sourceCommit": "14e3c4e50f7b6cb4cfda94554352f5bc888264f0",
+  "dependencyAudit": {
+    "scanner": {
+      "name": "npm audit",
+      "version": "10.9.8",
+      "auditReportVersion": 2
+    },
+    "status": "pass",
+    "exitCode": 0,
+    "vulnerabilityCounts": {
+      "critical": 0,
+      "high": 0,
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "total": 0
+    },
+    "findings": {},
+    "disposition": "no locked dependency advisories reported"
+  },
+  "approvedImageScanner": {
+    "status": "not-configured",
+    "disposition": "release-blocker",
+    "reason": "No institutionally approved OCI vulnerability scanner and signed database snapshot were supplied to this build."
+  },
+  "malwareScanner": {
+    "status": "not-configured",
+    "disposition": "release-blocker",
+    "reason": "No institutionally approved malware scanner and signed definition set were supplied to this build."
+  }
+}

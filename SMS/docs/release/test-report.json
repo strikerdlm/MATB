@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "1.0",
+  "sourceCommit": "14e3c4e50f7b6cb4cfda94554352f5bc888264f0",
+  "completedAtUtc": "2026-08-10T15:33:04.000Z",
+  "timestampBasis": "source commit time",
+  "status": "pass",
+  "exclusions": [
+    "test/integration/release-manifest.test.ts is verified after signing to avoid a bootstrap cycle"
+  ],
+  "checks": [
+    {
+      "command": "npm run typecheck",
+      "status": "pass",
+      "exitCode": 0,
+      "outputSha256": "586e8eb96ad2fd6ee226294cc5d673b6bc4209d9eece3db23e515ddb7c30a408"
+    },
+    {
+      "command": "npm run lint",
+      "status": "pass",
+      "exitCode": 0,
+      "outputSha256": "d7b833407039d09e40052dea88e186f944bedf73560d92facc1c9a704cf00a99"
+    },
+    {
+      "command": "node node_modules/vitest/vitest.mjs run --exclude test/integration/release-manifest.test.ts",
+      "status": "pass",
+      "exitCode": 0,
+      "outputSha256": "8788e67ca55f531b03bb51ac1d718deb35c2fc34a969b19c3d22e07b3aa2e21d"
+    },
+    {
+      "command": "npm run verify:no-c2",
+      "status": "pass",
+      "exitCode": 0,
+      "outputSha256": "d4a134829732b94f331330507ee9d7404d781e1535cad1170ccb80ad7dcc47fe"
+    },
+    {
+      "command": "npm run verify:data-separation",
+      "status": "pass",
+      "exitCode": 0,
+      "outputSha256": "7e1a20f59e0f1983e681145270ec57d779aa5da080852615626b84f43c52ba1c"
+    }
+  ]
+}
