@@ -34,6 +34,10 @@ export interface Protocol {
   readonly permittedSensors: readonly string[];
   readonly retentionDays: number;
   readonly status: "draft" | "approved" | "expired" | "closed";
+  /** Human-readable statement of the variables collected by the protocol. */
+  readonly dataMinimizationStatement?: string;
+  /** Human-readable withdrawal and retention behavior approved for the protocol. */
+  readonly withdrawalPolicy?: string;
 }
 
 export interface EthicsApproval {
@@ -51,11 +55,12 @@ export interface ConsentRecord {
   readonly consentVersion: string;
   readonly consentedAtUtc: string;
   readonly withdrawnAtUtc?: string;
+  readonly withdrawalReason?: string;
 }
 
 export interface ConditionAssignment { readonly sessionId: string; readonly conditionId: string; readonly assignedAtUtc: string; readonly randomizationBlock?: string }
 export interface InstrumentDefinition { readonly id: string; readonly name: "SAGAT" | "NASA-TLX" | "ISA" | "Bedford" | "SART" | "custom"; readonly version: string; readonly responseSchema: Record<string, unknown>; readonly status: "approved-template" | "protocol-specific" | "retired" }
-export interface InstrumentResponse { readonly sessionId: string; readonly instrumentId: string; readonly administeredAtUtc: string; readonly values: Record<string, number | string | null>; readonly missingReason?: string }
+export interface InstrumentResponse { readonly sessionId: string; readonly instrumentId: string; readonly administeredAtUtc: string; readonly values: Record<string, number | string | null>; readonly missingReason?: string; readonly instrumentVersion?: string }
 export interface AggregateReview { readonly id: string; readonly protocolIds: readonly string[]; readonly minimumCellSize: number; readonly permittedUses: readonly ("training" | "interface-change" | "sms-assurance")[]; readonly findings: readonly string[]; readonly limitations: readonly string[]; readonly reviewerId: string }
 export interface ResearchAdapter { readonly adapterId: string; connect(session: ResearchSession, signal: AbortSignal): Promise<void>; readEvent(signal: AbortSignal): Promise<ResearchEvent | null>; close(): Promise<void> }
 
