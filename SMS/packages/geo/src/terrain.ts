@@ -181,7 +181,7 @@ export function evaluateClearance(
   }
 
   let points: RoutePoint[];
-  try { points = routePoints(route); } catch (error) {
+  try { points = routePoints(route); } catch {
     return { status: "unknown", findings: [finding("ROUTE_GEOMETRY_UNKNOWN", "hard", "geo.route.geometry.unknown", sourcePackageIds)], sourcePackageIds, calculationVersion };
   }
   if (points.length === 0) return { status: "unknown", findings: [finding("ROUTE_GEOMETRY_UNKNOWN", "hard", "geo.route.geometry.unknown", sourcePackageIds)], sourcePackageIds, calculationVersion };

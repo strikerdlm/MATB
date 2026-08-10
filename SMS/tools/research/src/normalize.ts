@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { canonicalJson, SourceRegister } from "@fac-isr/evidence";
-import type { EvidenceReference, NormalizedRequirement, RequirementTranslation, SourceId } from "@fac-isr/evidence";
+import { canonicalJson } from "@fac-isr/evidence";
+import type { EvidenceReference, NormalizedRequirement, RequirementTranslation, SourceId, SourceRegister } from "@fac-isr/evidence";
 
 const SHA256 = /^[a-f0-9]{64}$/;
 const SECTION = /^94\.\d{3}$/;

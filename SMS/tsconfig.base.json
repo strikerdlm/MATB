@@ -16,6 +16,7 @@
     "apps/*/src/**/*.ts",
     "apps/*/test/**/*.ts",
     "tools/*/src/**/*.ts",
-    "tools/*/test/**/*.ts"
+    "tools/*/test/**/*.ts",
+    "test/**/*.ts"
   ]
 }

@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { TelemetryService, TelemetryServiceError } from "../services/telemetry-service.js";
+import { TelemetryServiceError } from "../services/telemetry-service.js";
+import type { TelemetryService } from "../services/telemetry-service.js";
 
 export function registerTelemetryRoutes(app: FastifyInstance, service: TelemetryService): void {
   app.post("/api/telemetry/replay", async (request, reply) => {

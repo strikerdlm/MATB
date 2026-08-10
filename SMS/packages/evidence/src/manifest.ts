@@ -1,5 +1,5 @@
 import { createHash, sign, verify } from "node:crypto";
-import { lstat, readdir, stat } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { canonicalJson, sha256File } from "./hash.js";
 import type { ManifestFile, SignedPackageManifest } from "./types.js";

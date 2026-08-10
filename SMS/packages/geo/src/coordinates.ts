@@ -79,7 +79,7 @@ function dmsValue(value: number, positive: "N" | "E", negative: "S" | "W"): DmsV
   const hemisphere = value < 0 ? negative : positive;
   const absolute = Math.abs(value);
   let degrees = Math.floor(absolute);
-  let minutesFloat = (absolute - degrees) * 60;
+  const minutesFloat = (absolute - degrees) * 60;
   let minutes = Math.floor(minutesFloat);
   let seconds = (minutesFloat - minutes) * 60;
   if (seconds >= 59.9999999995) {
