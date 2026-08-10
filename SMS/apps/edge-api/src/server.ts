@@ -7,7 +7,9 @@ import { registerChecklistRoutes } from "./routes/checklists.js";
 import { registerGateRoutes } from "./routes/gates.js";
 import { registerMissionRoutes } from "./routes/missions.js";
 import { registerPostflightRoutes } from "./routes/postflight.js";
+import { registerTelemetryRoutes } from "./routes/telemetry.js";
 import { MissionService } from "./services/mission-service.js";
+import { TelemetryService } from "./services/telemetry-service.js";
 
 interface ReadinessCheck {
   readonly status: "ok" | "pending";
@@ -30,6 +32,7 @@ export interface EdgeServer extends FastifyInstance {
   readonly edgeDatabase: EdgeDatabase;
   readonly auditLedger: AuditLedger;
   readonly missionService: MissionService;
+  readonly telemetryService: TelemetryService;
 }
 
 function buildReadinessReport(database: EdgeDatabase): ReadinessReport {
@@ -52,12 +55,14 @@ export async function buildServer(input: EdgeConfigInput = {}): Promise<EdgeServ
   const edgeDatabase = openDatabase(edgeConfig.databaseUrl, edgeConfig.lockTimeoutMs);
   const auditLedger = new AuditLedger({ database: edgeDatabase });
   const missionService = new MissionService({ auditLedger, database: edgeDatabase });
+  const telemetryService = new TelemetryService();
   const app = Fastify({ logger: false }) as unknown as EdgeServer;
   Object.defineProperties(app, {
     edgeConfig: { value: edgeConfig, enumerable: false },
     edgeDatabase: { value: edgeDatabase, enumerable: false },
     auditLedger: { value: auditLedger, enumerable: false },
     missionService: { value: missionService, enumerable: false },
+    telemetryService: { value: telemetryService, enumerable: false },
   });
 
   app.addHook("onClose", async () => {
@@ -79,6 +84,7 @@ export async function buildServer(input: EdgeConfigInput = {}): Promise<EdgeServ
   registerChecklistRoutes(app, missionService);
   registerGateRoutes(app, missionService);
   registerPostflightRoutes(app, missionService);
+  registerTelemetryRoutes(app, telemetryService);
 
   return app;
 }

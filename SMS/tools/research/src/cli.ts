@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { appendFile, mkdir, readdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { assertSourceRecord, sha256File, verifyPackage } from "@fac-isr/evidence";
@@ -94,6 +94,34 @@ export async function verifyOffline(root = ROOT, registerPath = resolve(root, "d
   return failures;
 }
 
+/** Static boundary check for the edge and telemetry source; status telemetry has no control path. */
+export async function verifyNoC2(root = ROOT): Promise<string[]> {
+  const roots = [resolve(root, "apps/edge-api/src"), resolve(root, "packages/telemetry/src")];
+  const forbidden = [/\bsendCommand\b/i, /\barm\b/i, /\blaunch\b/i, /\bredirect\b/i, /\bpayloadControl\b/i, /\bgcsCommand\b/i];
+  const failures: string[] = [];
+  async function visit(directory: string): Promise<void> {
+    let entries;
+    try {
+      entries = await readdir(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const path = resolve(directory, entry.name);
+      if (entry.isDirectory()) {
+        await visit(path);
+      } else if (entry.isFile() && path.endsWith(".ts")) {
+        const contents = await readFile(path, "utf8");
+        for (const pattern of forbidden) {
+          if (pattern.test(contents)) failures.push(`${path}: forbidden control identifier ${pattern}`);
+        }
+      }
+    }
+  }
+  for (const directory of roots) await visit(directory);
+  return failures;
+}
+
 async function main(): Promise<void> {
   const command = process.argv[2];
   if (command === "record-query") {
@@ -165,6 +193,12 @@ async function main(): Promise<void> {
     const failures = await verifyOffline();
     if (failures.length > 0) { process.stderr.write(`${failures.join("\n")}\n`); process.exitCode = 1; return; }
     process.stdout.write("PASS offline source verification\n");
+    return;
+  }
+  if (command === "verify-no-c2") {
+    const failures = await verifyNoC2();
+    if (failures.length > 0) { process.stderr.write(`${failures.join("\n")}\n`); process.exitCode = 1; return; }
+    process.stdout.write("PASS no-control-path source verification\n");
     return;
   }
   throw new Error(`unknown research command: ${command ?? "(missing)"}`);

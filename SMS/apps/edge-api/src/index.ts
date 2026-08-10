@@ -4,4 +4,5 @@ export * from "./audit/index.js";
 export * from "./db/migrate.js";
 export * from "./db/schema.js";
 export * from "./services/mission-service.js";
+export * from "./services/telemetry-service.js";
 export * from "./server.js";
