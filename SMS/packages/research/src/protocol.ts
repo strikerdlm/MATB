@@ -179,7 +179,9 @@ export function openConsentedSession(input: OpenConsentedSessionInput): Research
   return parseResearchSession({
     id: sessionId,
     protocolId,
+    protocolVersion: protocol.version,
     ethicsApprovalId: ethicsApproval.id,
+    consentVersion: consent.consentVersion,
     participantCode,
     conditionAssignment,
     startedAtUtc,

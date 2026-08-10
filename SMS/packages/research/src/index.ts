@@ -4,3 +4,6 @@ export * from "./consent.js";
 export * from "./instruments.js";
 export * from "./matb-adapter.js";
 export * from "./sensor-adapters.js";
+export * from "./replay.js";
+export * from "./export.js";
+export * from "./aggregate.js";

@@ -3,7 +3,9 @@ export type ParticipantCode = string & { readonly __brand: "ParticipantCode" };
 export interface ResearchSession {
   readonly id: string;
   readonly protocolId: string;
+  readonly protocolVersion?: string;
   readonly ethicsApprovalId: string;
+  readonly consentVersion?: string;
   readonly participantCode: ParticipantCode;
   readonly conditionAssignment: string;
   readonly startedAtUtc: string;
@@ -62,7 +64,18 @@ export interface ConsentRecord {
 export interface ConditionAssignment { readonly sessionId: string; readonly conditionId: string; readonly assignedAtUtc: string; readonly randomizationBlock?: string }
 export interface InstrumentDefinition { readonly id: string; readonly name: "SAGAT" | "NASA-TLX" | "ISA" | "Bedford" | "SART" | "custom"; readonly version: string; readonly responseSchema: Record<string, unknown>; readonly status: "approved-template" | "protocol-specific" | "retired" }
 export interface InstrumentResponse { readonly sessionId: string; readonly instrumentId: string; readonly administeredAtUtc: string; readonly values: Record<string, number | string | null>; readonly missingReason?: string; readonly instrumentVersion?: string }
-export interface AggregateReview { readonly id: string; readonly protocolIds: readonly string[]; readonly minimumCellSize: number; readonly permittedUses: readonly ("training" | "interface-change" | "sms-assurance")[]; readonly findings: readonly string[]; readonly limitations: readonly string[]; readonly reviewerId: string }
+export interface AggregateReview {
+  readonly id: string;
+  readonly protocolIds: readonly string[];
+  readonly minimumCellSize: number;
+  readonly permittedUses: readonly ("training" | "interface-change" | "sms-assurance")[];
+  readonly findings: readonly string[];
+  readonly limitations: readonly string[];
+  readonly reviewerId: string;
+  readonly ethicsApprovalIds?: readonly string[];
+  readonly analysisScope?: string;
+  readonly approvedAtUtc?: string;
+}
 export interface ResearchAdapter { readonly adapterId: string; connect(session: ResearchSession, signal: AbortSignal): Promise<void>; readEvent(signal: AbortSignal): Promise<ResearchEvent | null>; close(): Promise<void> }
 
 function isRecord(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === "object" && !Array.isArray(value); }
@@ -86,12 +99,14 @@ export function parseResearchEvent(input: unknown): ResearchEvent {
 
 export function parseResearchSession(input: unknown): ResearchSession {
   if (!isRecord(input)) throw new TypeError("research session must be an object");
-  strictKeys(input, ["id", "protocolId", "ethicsApprovalId", "participantCode", "conditionAssignment", "startedAtUtc", "endedAtUtc", "permittedSensors", "nonDispatchable", "events"]);
+  strictKeys(input, ["id", "protocolId", "protocolVersion", "ethicsApprovalId", "participantCode", "consentVersion", "conditionAssignment", "startedAtUtc", "endedAtUtc", "permittedSensors", "nonDispatchable", "events"]);
   if (input.nonDispatchable !== true) throw new TypeError("research sessions are non-dispatchable");
   const events = input.events;
   if (!Array.isArray(events)) throw new TypeError("events must be an array");
   const permittedSensors = input.permittedSensors === undefined ? undefined : input.permittedSensors;
   if (permittedSensors !== undefined && (!Array.isArray(permittedSensors) || permittedSensors.some((sensor) => typeof sensor !== "string" || sensor.trim() === ""))) throw new TypeError("permittedSensors is invalid");
-  const session = { id: requiredText(input.id, "id"), protocolId: requiredText(input.protocolId, "protocolId"), ethicsApprovalId: requiredText(input.ethicsApprovalId, "ethicsApprovalId"), participantCode: requiredText(input.participantCode, "participantCode") as ParticipantCode, conditionAssignment: requiredText(input.conditionAssignment, "conditionAssignment"), startedAtUtc: utc(input.startedAtUtc, "startedAtUtc"), ...(input.endedAtUtc === undefined ? {} : { endedAtUtc: utc(input.endedAtUtc, "endedAtUtc") }), ...(permittedSensors === undefined ? {} : { permittedSensors: [...permittedSensors as string[]] }), nonDispatchable: true as const, events: events.map(parseResearchEvent) };
+  const protocolVersion = input.protocolVersion === undefined ? undefined : requiredText(input.protocolVersion, "protocolVersion");
+  const consentVersion = input.consentVersion === undefined ? undefined : requiredText(input.consentVersion, "consentVersion");
+  const session = { id: requiredText(input.id, "id"), protocolId: requiredText(input.protocolId, "protocolId"), ...(protocolVersion === undefined ? {} : { protocolVersion }), ethicsApprovalId: requiredText(input.ethicsApprovalId, "ethicsApprovalId"), ...(consentVersion === undefined ? {} : { consentVersion }), participantCode: requiredText(input.participantCode, "participantCode") as ParticipantCode, conditionAssignment: requiredText(input.conditionAssignment, "conditionAssignment"), startedAtUtc: utc(input.startedAtUtc, "startedAtUtc"), ...(input.endedAtUtc === undefined ? {} : { endedAtUtc: utc(input.endedAtUtc, "endedAtUtc") }), ...(permittedSensors === undefined ? {} : { permittedSensors: [...permittedSensors as string[]] }), nonDispatchable: true as const, events: events.map(parseResearchEvent) };
   return freeze(session);
 }
