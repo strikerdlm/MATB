@@ -8,6 +8,11 @@ type SqlRow = Record<string, unknown>;
 export class EdgeDatabase {
   public constructor(private readonly database: SqlDatabase) {}
 
+  /** Exposes the configured local connection to services that own their tables. */
+  public sql(): SqlDatabase {
+    return this.database;
+  }
+
   public migrate(): void {
     const highestVersion = this.schemaVersion();
     if (highestVersion > SCHEMA_VERSION) {

@@ -15,6 +15,7 @@
     "typecheck": "tsc -p ../../tsconfig.base.json"
   },
   "dependencies": {
+    "@fac-isr/evidence": "0.1.0",
     "fastify": "^5.6.1"
   }
 }
