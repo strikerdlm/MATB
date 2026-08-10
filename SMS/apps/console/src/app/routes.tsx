@@ -9,6 +9,7 @@ export const CONSOLE_ROUTES = [
 ] as const;
 
 export type ConsoleRoute = (typeof CONSOLE_ROUTES)[number];
+export type ConsoleViewMode = "planning" | "review" | "monitoring";
 
 export function routeTitle(path: string): string {
   if (path.includes("/review")) return "Safety review";
@@ -18,4 +19,10 @@ export function routeTitle(path: string): string {
   if (path === "/sms") return "Safety management";
   if (path === "/research") return "Research instruments";
   return "Mission overview";
+}
+
+export function routeMode(path: string): ConsoleViewMode {
+  if (path.includes("/plan")) return "planning";
+  if (path.includes("/monitor")) return "monitoring";
+  return "review";
 }
