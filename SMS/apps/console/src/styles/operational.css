@@ -59,6 +59,37 @@
 .gate-details b { color: var(--text); font-weight: 400; }
 .gate-action { margin-top: auto; padding: 8px 8px 7px; border: 1px solid currentColor; text-align: center; text-transform: uppercase; font: 10px var(--mono); letter-spacing: .04em; }
 .gate-pass .gate-action { color: var(--green); }.gate-blocker .gate-action { color: var(--red); }.gate-pending .gate-action { color: var(--amber); }
+.strip-facts { display: grid; gap: 3px; margin: 0 0 13px; color: var(--muted); font: 9px/1.2 var(--mono); }
+.strip-facts b { color: var(--text); font-weight: 500; }
+.gate-controls { display: flex; align-items: center; gap: 5px; margin-top: 8px; color: var(--muted); font: 8px/1.2 var(--mono); }
+.gate-role { flex: 1 1 auto; min-width: 0; }
+.gate-controls button { padding: 4px 6px; color: var(--text); background: transparent; border: 1px solid var(--line-strong); cursor: pointer; font: 8px var(--mono); white-space: nowrap; }
+.gate-controls button:hover, .gate-controls button:focus-visible { color: var(--cyan); border-color: var(--cyan); }
+.gate-controls button:disabled { opacity: .42; cursor: not-allowed; }
+.gate-requirement { margin-top: 8px; border-top: 1px solid var(--line); color: var(--muted); font: 9px/1.3 var(--mono); }
+.gate-requirement summary { padding: 7px 0 5px; color: var(--cyan); cursor: pointer; text-transform: uppercase; letter-spacing: .04em; }
+.requirement-detail { padding: 0 0 8px; }
+.requirement-detail strong { color: var(--text); font: 12px var(--display); text-transform: uppercase; }
+.requirement-detail p { margin: 6px 0; }
+.requirement-detail dl { display: grid; gap: 4px; margin: 8px 0 0; }
+.requirement-detail dl div { display: grid; grid-template-columns: 58px 1fr; gap: 6px; }
+.requirement-detail dt { color: var(--muted); }.requirement-detail dd { margin: 0; color: var(--text); }
+.checklist-panel, .alert-timeline { min-width: 0; border-bottom: 1px solid var(--line); }
+.checklist-list { display: grid; gap: 10px; padding: 12px; }
+.checklist-item { min-width: 0; margin: 0; padding: 10px; border: 1px solid var(--line-strong); }
+.checklist-item legend { max-width: 100%; padding: 0 4px; color: var(--text); font: 13px/1.3 var(--display); }
+.checklist-item legend .mono { display: inline-block; margin-right: 6px; color: var(--cyan); font-size: 9px; }
+.checklist-options { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.checklist-options button { padding: 6px 9px; color: var(--text); background: transparent; border: 1px solid var(--line-strong); cursor: pointer; font: 9px var(--mono); text-transform: uppercase; }
+.checklist-options button:hover, .checklist-options button:focus-visible, .checklist-options button.is-selected { color: var(--cyan); border-color: var(--cyan); background: rgba(68,184,199,.08); }
+.checklist-meta { display: grid; gap: 4px; margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--line); font: 9px var(--mono); }
+.checklist-meta div { display: grid; grid-template-columns: 90px 1fr; gap: 7px; }.checklist-meta dt { color: var(--muted); }.checklist-meta dd { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.alert-timeline ol { display: grid; gap: 0; margin: 0; padding: 0 12px; list-style: none; }
+.alert-timeline li { display: grid; grid-template-columns: 74px 1fr; gap: 9px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.alert-timeline li:last-child { border-bottom: 0; }
+.alert-marker { align-self: start; padding: 4px 5px; border: 1px solid currentColor; text-align: center; font: 8px var(--mono); }
+.alert-info .alert-marker { color: var(--cyan); }.alert-warning .alert-marker { color: var(--amber); }.alert-degraded .alert-marker { color: var(--amber); }.alert-blocker .alert-marker { color: var(--red); }
+.alert-timeline strong { display: block; color: var(--text); font: 13px var(--display); text-transform: uppercase; }.alert-timeline p { margin: 4px 0; color: var(--muted); font-size: 10px; }.alert-timeline time { color: var(--muted); font-size: 8px; }
 .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 273px; min-height: 0; }
 .map-panel { min-width: 0; display: grid; grid-template-rows: 49px minmax(280px, 1fr) 67px; border-right: 1px solid var(--line); }
 .panel-heading, .rail-title { padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); }

@@ -14,3 +14,8 @@ createRoot(root).render(
 );
 
 export { AppShell } from "./app/AppShell.js";
+export { MissionSafetyStrip } from "./components/MissionSafetyStrip.js";
+export { GateStatus } from "./components/GateStatus.js";
+export { ChecklistPanel } from "./components/ChecklistPanel.js";
+export { AlertTimeline } from "./components/AlertTimeline.js";
+export { useMissionSafety } from "./hooks/useMissionSafety.js";
