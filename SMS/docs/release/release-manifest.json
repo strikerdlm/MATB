@@ -1,0 +1,200 @@
+{
+  "schemaVersion": "1.0",
+  "releaseId": "fac-isr-sms@0.1.0",
+  "version": "0.1.0",
+  "issuer": "FAC ISR SMS development release automation",
+  "author": {
+    "softwareAuthor": "Dr Diego Malpica — Aerospace Medicine and Human Performance — Subdirectorate of Aerospace Sciences — Colombian Aerospace Force",
+    "sourceCommitAuthor": {
+      "name": "strikerdlm",
+      "email": "dlmalpica@me.com"
+    }
+  },
+  "sourceCommit": "14e3c4e50f7b6cb4cfda94554352f5bc888264f0",
+  "sourceCommittedAtUtc": "2026-08-10T15:33:04.000Z",
+  "generatedAtUtc": "2026-08-10T15:33:04.000Z",
+  "timestampBasis": "source commit time",
+  "repository": "https://github.com/strikerdlm/MATB",
+  "toolchain": {
+    "node": "22.23.2",
+    "npm": "10.9.8",
+    "docker": "Docker version 29.1.3, build 29.1.3-0ubuntu3~24.04.2",
+    "platform": "linux/amd64"
+  },
+  "keyId": "ed25519-sha256-439e8dafc3465a44",
+  "publicKeySha256": "439e8dafc3465a44cf6d8711e30649029cf48a9a42f853c83bb8fd3b33952bc3",
+  "signature": "Xz5TyelWyq4Zy7zqG4bWOFZv2CrHWCxle+tXIaGDegxh0qkQZeUKJqUwlDvScC0c7uLFFtc1foaFgniwLK7dBw==",
+  "qualification": "blocked",
+  "operationalReady": false,
+  "artifacts": [
+    {
+      "path": ".github/workflows/sms-ci.yml",
+      "sha256": "da90fafc0f124b66c6b165d14adf263da9caa79303d4f8110dc7280a366f0e5a",
+      "sizeBytes": 1238,
+      "mediaType": "application/yaml"
+    },
+    {
+      "path": "SMS/.dockerignore",
+      "sha256": "3391130c2354eb2b50c2513b22f6db1926bdc19b4a1b925531dacf29e410177e",
+      "sizeBytes": 144,
+      "mediaType": "application/octet-stream"
+    },
+    {
+      "path": "SMS/Dockerfile",
+      "sha256": "59cf22b4804c41ab2347822021aa6d62e67668b96101616d8e23e85c443e33c2",
+      "sizeBytes": 3334,
+      "mediaType": "application/octet-stream"
+    },
+    {
+      "path": "SMS/apps/edge-api/src/server.ts",
+      "sha256": "40f9ab7ce3bdb6df5eee7719fd1016b3e44d2333a15eb921fd0271c1b284855b",
+      "sizeBytes": 4858,
+      "mediaType": "text/typescript"
+    },
+    {
+      "path": "SMS/docker/compose.edge.yml",
+      "sha256": "8f2a23769396903cdd862660d0d67ed45c90d0c0fbfe28300c917380ba475b56",
+      "sizeBytes": 1336,
+      "mediaType": "application/yaml"
+    },
+    {
+      "path": "SMS/docker/entrypoint.sh",
+      "sha256": "310a2f43eff37d97fcf63abd11aeec1c42256fca26516a7250072e9834f0d4a1",
+      "sizeBytes": 954,
+      "mediaType": "text/x-shellscript"
+    },
+    {
+      "path": "SMS/docker/healthcheck.sh",
+      "sha256": "4a627a862413c2e39626096f04a069d7651a943cc9bb128e0aece876c54ae773",
+      "sizeBytes": 91,
+      "mediaType": "text/x-shellscript"
+    },
+    {
+      "path": "SMS/docs/provenance/evidence-package-manifest.json",
+      "sha256": "077250e7255d70dfd00b79eb827b4f8b57d1471b9f76e06ec5f76e3324c9f14b",
+      "sizeBytes": 3706,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "SMS/docs/provenance/evidence-package-manifest.sig",
+      "sha256": "01754a0fdd24b60ef8030aadff982db0167cb7673f6211243bf9b2917a496a80",
+      "sizeBytes": 89,
+      "mediaType": "application/octet-stream"
+    },
+    {
+      "path": "SMS/docs/provenance/evidence-package-public-key.pem",
+      "sha256": "7e01102cfa67dbe127297bb503d92512c237f65dcb38388ec0643973255cc7e8",
+      "sizeBytes": 113,
+      "mediaType": "application/x-pem-file"
+    },
+    {
+      "path": "SMS/docs/release/sbom.cdx.json",
+      "sha256": "57384daa9b608ef3cc935c6196fa005e7c6deb259fa09105f70fee625f524477",
+      "sizeBytes": 383069,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "SMS/docs/release/security-scan.json",
+      "sha256": "c26ed719e7f64a1bcd500df18477ca57bbd22f3dce2b0271d26b352e69cf9dbb",
+      "sizeBytes": 986,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "SMS/docs/release/test-report.json",
+      "sha256": "84b382e90e4d670db4d6e27b9f0e7012cdea1ed2c54f3383606145770fe8ab27",
+      "sizeBytes": 1353,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "SMS/package-lock.json",
+      "sha256": "91ed60e7e72cf484bb88dcc2a76a902ea9329ec682e45ad0ccacc6a6c814b61c",
+      "sizeBytes": 149331,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "SMS/package.json",
+      "sha256": "7c5ef955bbd5d829bd68c1bddcfa414b2324d15cba34f1c0c1593d1e163e43f5",
+      "sizeBytes": 2328,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "SMS/scripts/build-offline-bundle.mjs",
+      "sha256": "2048b9e0294133c3b73bc45e5a9a28344024ae99d2c71bc54fe876b460c6bea0",
+      "sizeBytes": 20238,
+      "mediaType": "text/javascript"
+    },
+    {
+      "path": "SMS/scripts/edge-healthcheck.mjs",
+      "sha256": "6327d940655267bb5422589cdd14fce169434229e63f92cb490ff70f180ab287",
+      "sizeBytes": 1916,
+      "mediaType": "text/javascript"
+    },
+    {
+      "path": "SMS/scripts/generate-sbom.d.mts",
+      "sha256": "bb982a40214a994a2b7b02706e2316ed91015e438f6bb85a71d722268c99399d",
+      "sizeBytes": 536,
+      "mediaType": "application/octet-stream"
+    },
+    {
+      "path": "SMS/scripts/generate-sbom.mjs",
+      "sha256": "83b2e2d5022141c5af7708acad45fc3d2aeea2acd6b59dededd468af83d63f14",
+      "sizeBytes": 36101,
+      "mediaType": "text/javascript"
+    },
+    {
+      "path": "SMS/scripts/start-edge.mjs",
+      "sha256": "f0d02baf81e380ce8967f6a14fe288cee899ffb428ca649b7fb728f625fef66e",
+      "sizeBytes": 2600,
+      "mediaType": "text/javascript"
+    },
+    {
+      "path": "SMS/scripts/verify-offline.mjs",
+      "sha256": "2cc20139938781358db5349b346110449493f64214c8bddeddc44186f659a6ac",
+      "sizeBytes": 30254,
+      "mediaType": "text/javascript"
+    },
+    {
+      "path": "SMS/test/integration/release-manifest.test.ts",
+      "sha256": "b751a016bae9af3268b4f32c879dfa30201b5fb28cbb6452849da6e2daa67b61",
+      "sizeBytes": 5347,
+      "mediaType": "text/typescript"
+    }
+  ],
+  "sbomPath": "SMS/docs/release/sbom.cdx.json",
+  "sbomSha256": "57384daa9b608ef3cc935c6196fa005e7c6deb259fa09105f70fee625f524477",
+  "sbomSummary": {
+    "componentCount": 257,
+    "licenseCoverage": 244,
+    "sourceCoverage": 244
+  },
+  "scanReportPath": "SMS/docs/release/security-scan.json",
+  "scanReportSha256": "c26ed719e7f64a1bcd500df18477ca57bbd22f3dce2b0271d26b352e69cf9dbb",
+  "testReportPath": "SMS/docs/release/test-report.json",
+  "testReportSha256": "84b382e90e4d670db4d6e27b9f0e7012cdea1ed2c54f3383606145770fe8ab27",
+  "packages": [
+    {
+      "packageId": "fac-isr-p0-racae-evidence",
+      "kind": "regulatory",
+      "version": "1.0.0",
+      "contentSha256": "d6e6ee36081ab51f7ac4bc934bce00b8107c046f952e5fdd2b9d07ba268e568d",
+      "manifestSha256": "077250e7255d70dfd00b79eb827b4f8b57d1471b9f76e06ec5f76e3324c9f14b",
+      "signatureSha256": "01754a0fdd24b60ef8030aadff982db0167cb7673f6211243bf9b2917a496a80",
+      "keyId": "ed25519-sha256-7e01102cfa67dbe1",
+      "qualification": "qualified-review"
+    }
+  ],
+  "verification": {
+    "prerequisiteStatus": "pass",
+    "dependencyAuditStatus": "pass",
+    "approvedImageScannerStatus": "not-configured",
+    "malwareScannerStatus": "not-configured"
+  },
+  "knownLimitations": [
+    "The development release key is not an institutional FAC/AAAES approval signature.",
+    "An institutionally approved OCI vulnerability scan and signed scanner database snapshot are not attached.",
+    "An institutionally approved malware scan and signed definition set are not attached.",
+    "Approved terrain, map, AIP, terminology-policy, and operational policy packages are not bundled.",
+    "Receiving-node no-downgrade state and encrypted storage must be independently attested.",
+    "Qualified cybersecurity, operational, ERP, and FAC/AAAES acceptance reviews remain outstanding."
+  ]
+}

@@ -19,6 +19,7 @@ const OPERATIONAL_WARNING_IDS = new Set([
   "map-baseline",
   "no-downgrade",
   "policy-package",
+  "release-qualification",
   "release-signature",
   "terrain-package",
 ]);
@@ -220,6 +221,55 @@ async function verifyEvidencePackage(bundleRoot, asOfUtc) {
   return manifest;
 }
 
+async function verifyReleaseAttestation(bundleRoot, bundleManifest) {
+  const releaseRoot = resolve(bundleRoot, "provenance/release");
+  const manifestPath = resolve(releaseRoot, "release-manifest.json");
+  const manifest = parseJson(await readFile(manifestPath, "utf8"), "release manifest");
+  const detached = (await readFile(resolve(releaseRoot, "release-manifest.sig"), "utf8")).trim();
+  const publicKey = await readFile(resolve(releaseRoot, "release-public-key.pem"), "utf8");
+  if (manifest.schemaVersion !== "1.0" || typeof manifest.releaseId !== "string" || !/^[a-f0-9]{40}$/.test(manifest.sourceCommit)
+    || typeof manifest.keyId !== "string" || !SHA256.test(manifest.publicKeySha256) || !Array.isArray(manifest.artifacts)) {
+    throw new Error("release manifest shape is invalid");
+  }
+  if (detached !== manifest.signature) throw new Error("detached release signature differs from the manifest");
+  const fingerprint = createHash("sha256").update(publicKey).digest("hex");
+  if (fingerprint !== manifest.publicKeySha256 || manifest.keyId !== `ed25519-sha256-${fingerprint.slice(0, 16)}`) {
+    throw new Error("release public key fingerprint does not match its key ID");
+  }
+  const { signature, ...payload } = manifest;
+  if (!verifySignature(null, Buffer.from(canonicalJson(payload), "utf8"), publicKey, Buffer.from(signature, "base64"))) {
+    throw new Error("release manifest signature is invalid");
+  }
+  if (bundleManifest.commit !== manifest.sourceCommit) throw new Error("bundle source commit differs from the signed release");
+  const control = bundleManifest.releaseAttestation;
+  if (control?.path !== "provenance/release/release-manifest.json" || control.keyId !== manifest.keyId
+    || control.sha256 !== await sha256File(manifestPath)) {
+    throw new Error("bundle release-attestation metadata differs from the signed manifest");
+  }
+  for (const [pathField, hashField] of [
+    ["sbomPath", "sbomSha256"],
+    ["scanReportPath", "scanReportSha256"],
+    ["testReportPath", "testReportSha256"],
+  ]) {
+    const releasePath = manifest[pathField];
+    const record = manifest.artifacts.find((artifact) => artifact.path === releasePath);
+    const name = typeof releasePath === "string" ? releasePath.split("/").at(-1) : undefined;
+    if (record === undefined || name === undefined || record.sha256 !== manifest[hashField]) {
+      throw new Error(`${pathField} is not locked by the release artifact inventory`);
+    }
+    if (await sha256File(resolve(releaseRoot, name)) !== record.sha256) throw new Error(`bundled release evidence hash mismatch: ${name}`);
+  }
+  const sbom = parseJson(await readFile(resolve(releaseRoot, "sbom.cdx.json"), "utf8"), "signed release SBOM");
+  const scan = parseJson(await readFile(resolve(releaseRoot, "security-scan.json"), "utf8"), "signed security scan report");
+  const tests = parseJson(await readFile(resolve(releaseRoot, "test-report.json"), "utf8"), "signed test report");
+  if (sbom.bomFormat !== "CycloneDX" || !Array.isArray(sbom.components) || sbom.components.length === 0) throw new Error("signed release SBOM is incomplete");
+  if (scan.sourceCommit !== manifest.sourceCommit || tests.sourceCommit !== manifest.sourceCommit || tests.status !== "pass") {
+    throw new Error("signed scan or test evidence does not match the release source");
+  }
+  const approvedScans = scan.approvedImageScanner?.status === "pass" && scan.malwareScanner?.status === "pass";
+  return { manifest, approvedScans };
+}
+
 export async function verifyBundle(bundleRoot, options) {
   const checks = [];
   const add = (id, status, detail, evidence = []) => checks.push({ id, status, detail, evidence });
@@ -403,7 +453,23 @@ export async function verifyBundle(bundleRoot, options) {
     add("encrypted-storage", "fail", error instanceof Error ? error.message : String(error));
   }
 
-  add("release-signature", "warn", "P6.2 bundle manifest is checksum-locked but unsigned; P6.3 release signing is required before transfer", ["bundle-manifest.json"]);
+  if (manifest?.releaseAttestation === null || manifest?.releaseAttestation === undefined) {
+    add("release-signature", "warn", "no current signed software release attestation is bundled", ["bundle-manifest.json"]);
+    add("release-qualification", "warn", "development bundle has no signed release qualification evidence");
+  } else {
+    try {
+      const release = await verifyReleaseAttestation(bundleRoot, manifest);
+      add("release-signature", "pass", `${release.manifest.releaseId} Ed25519 signature and evidence hashes verified`, ["provenance/release/release-manifest.json"]);
+      if (release.manifest.qualification === "approved" && release.manifest.operationalReady === true && release.approvedScans) {
+        add("release-qualification", "pass", "signed release records approved qualification and scanner evidence", ["provenance/release/release-manifest.json"]);
+      } else {
+        add("release-qualification", "warn", "signed development release remains blocked on approved scans and qualified institutional acceptance", ["provenance/release/release-manifest.json"]);
+      }
+    } catch (error) {
+      add("release-signature", "fail", error instanceof Error ? error.message : String(error), ["provenance/release"]);
+      add("release-qualification", "fail", "release qualification cannot be trusted because signature verification failed", ["provenance/release"]);
+    }
+  }
 
   const ok = !checks.some((check) => check.status === "fail");
   const operationalReady = ok && !checks.some((check) => check.status === "warn" && OPERATIONAL_WARNING_IDS.has(check.id));

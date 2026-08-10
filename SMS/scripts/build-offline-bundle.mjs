@@ -72,7 +72,7 @@ async function run(command, args, { capture = false, cwd = smsRoot } = {}) {
       child.stderr.on("data", (chunk) => stderr.push(chunk));
     }
     child.once("error", reject);
-    child.once("exit", (code, signal) => {
+    child.once("close", (code, signal) => {
       const result = {
         code: code ?? 1,
         signal,
@@ -233,9 +233,61 @@ async function writeInstallFiles(stage, imageRef, releaseId) {
 
 The compose network is internal and publishes TLS only on loopback. The root filesystem is read-only, Linux capabilities are dropped, package mounts are read-only, and the service runs as UID/GID 10001. Host encryption, backup encryption, key custody, and qualified operational package acceptance remain receiving-site controls.
 
-This bundle is not an operational acceptance artifact. Planned map/terrain sources and the unsigned P6.2 release manifest keep \`operationalReady\` false until later qualified release tasks are completed.
+This bundle is not an operational acceptance artifact. Planned map/terrain sources, approved scanner evidence, receiving-site attestations, and qualified institutional review keep \`operationalReady\` false until the corresponding release tasks are completed.
 `;
   await writeFile(resolve(stage, "install/README.md"), instructions, { encoding: "utf8", mode: 0o644 });
+}
+
+async function copyCurrentReleaseAttestation(stage, currentCommit) {
+  try {
+    const verification = await run(process.execPath, [
+      resolve(smsRoot, "scripts/generate-sbom.mjs"),
+      "verify",
+      "--json",
+    ], { capture: true });
+    const report = JSON.parse(verification.stdout);
+    if (report.ok !== true) throw new Error("release verifier did not pass");
+    const source = resolve(smsRoot, "docs/release");
+    const manifest = JSON.parse(await readFile(resolve(source, "release-manifest.json"), "utf8"));
+    if (manifest.sourceCommit !== report.sourceCommit || !/^[a-f0-9]{40}$/.test(manifest.sourceCommit)) {
+      throw new Error("release source commit is inconsistent");
+    }
+    const changes = await run("git", ["diff", "--name-only", manifest.sourceCommit, currentCommit], {
+      capture: true,
+      cwd: resolve(smsRoot, ".."),
+    });
+    const unexpected = changes.stdout.split(/\r?\n/u).filter(Boolean).filter((path) => !path.startsWith("SMS/docs/release/"));
+    const dirty = await run("git", ["diff", "--name-only", "--", "SMS", ".github/workflows/sms-ci.yml"], {
+      capture: true,
+      cwd: resolve(smsRoot, ".."),
+    });
+    const dirtyUnexpected = dirty.stdout.split(/\r?\n/u).filter(Boolean).filter((path) => !path.startsWith("SMS/docs/release/"));
+    if (unexpected.length > 0 || dirtyUnexpected.length > 0) {
+      throw new Error(`release attestation is stale for current software (${[...unexpected, ...dirtyUnexpected].join(", ")})`);
+    }
+    const destination = resolve(stage, "provenance/release");
+    await mkdir(destination, { recursive: true, mode: 0o755 });
+    for (const name of [
+      "release-manifest.json",
+      "release-manifest.sig",
+      "release-public-key.pem",
+      "sbom.cdx.json",
+      "security-scan.json",
+      "test-report.json",
+    ]) {
+      await cp(resolve(source, name), resolve(destination, name), { errorOnExist: true, force: false });
+    }
+    return {
+      releaseId: manifest.releaseId,
+      sourceCommit: manifest.sourceCommit,
+      keyId: manifest.keyId,
+      qualification: manifest.qualification,
+      manifestSha256: await sha256File(resolve(source, "release-manifest.json")),
+    };
+  } catch (error) {
+    process.stdout.write(`WARN current signed release attestation not bundled: ${error instanceof Error ? error.message : String(error)}\n`);
+    return undefined;
+  }
 }
 
 async function buildBundle(output, imageRef) {
@@ -250,11 +302,13 @@ async function buildBundle(output, imageRef) {
     }
 
     const commitResult = await run("git", ["rev-parse", "HEAD"], { capture: true, cwd: resolve(smsRoot, "..") });
-    const commit = commitResult.stdout.trim();
-    if (!/^[a-f0-9]{40}$/.test(commit)) throw new Error("could not resolve the build commit");
+    const attestationCommit = commitResult.stdout.trim();
+    if (!/^[a-f0-9]{40}$/.test(attestationCommit)) throw new Error("could not resolve the build commit");
+    const releaseAttestation = await copyCurrentReleaseAttestation(stage, attestationCommit);
+    const commit = releaseAttestation?.sourceCommit ?? attestationCommit;
     const timeResult = await run("git", ["show", "-s", "--format=%cI", commit], { capture: true, cwd: resolve(smsRoot, "..") });
     const builtAtUtc = new Date(timeResult.stdout.trim()).toISOString();
-    const releaseId = `sms-${commit.slice(0, 12)}`;
+    const releaseId = releaseAttestation?.releaseId ?? `sms-${commit.slice(0, 12)}`;
 
     process.stdout.write(`Building ${imageRef} for linux/amd64...\n`);
     await run("docker", [
@@ -323,6 +377,7 @@ async function buildBundle(output, imageRef) {
       schemaVersion: "1.0",
       releaseId,
       commit,
+      attestationCommit,
       builtAtUtc,
       nodeVersion: "22.23.2",
       image: {
@@ -333,9 +388,18 @@ async function buildBundle(output, imageRef) {
         manifestDigest,
       },
       packageIds: [regulatory.packageId],
+      releaseAttestation: releaseAttestation === undefined ? null : {
+        path: "provenance/release/release-manifest.json",
+        sha256: releaseAttestation.manifestSha256,
+        keyId: releaseAttestation.keyId,
+        qualification: releaseAttestation.qualification,
+      },
       files: fileRecords,
       limitations: [
-        "Release manifest signing is implemented in P6.3; this P6.2 checksum manifest is unsigned.",
+        releaseAttestation === undefined
+          ? "No current signed release attestation is carried; the bundle is a development integrity artifact only."
+          : "The bundled development release signature is not an institutional FAC/AAAES approval signature.",
+        "Approved OCI vulnerability and malware scanner evidence remains required.",
         "Approved terrain, map, AIP, terminology-policy, and operational policy packages must be staged separately.",
         "Qualified FAC/AAAES operational acceptance is not represented by this bundle.",
       ],
