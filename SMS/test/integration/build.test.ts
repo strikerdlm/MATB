@@ -58,6 +58,7 @@ describe("release verification command", () => {
 
     expect(workflow).toMatch(/actions\/checkout@[a-f0-9]{40}/);
     expect(workflow).toMatch(/actions\/setup-node@[a-f0-9]{40}/);
+    expect(workflow).toContain("fetch-depth: 0");
     expect(workflow).toContain("node-version: 22");
     expect(workflow).toContain("npm ci");
     expect(workflow).toContain("npm run verify:all");
