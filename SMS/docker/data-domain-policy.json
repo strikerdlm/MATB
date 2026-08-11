@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "1.0",
+  "domains": {
+    "operational": {
+      "databasePathEnv": "SMS_DATABASE_URL",
+      "hostDataDirectoryEnv": "SMS_DATA_DIR",
+      "encryptionKeyIdEnv": "SMS_OPERATIONAL_DATA_KEY_ID"
+    },
+    "research": {
+      "databasePathEnv": "SMS_RESEARCH_DATABASE_URL",
+      "hostDataDirectoryEnv": "SMS_RESEARCH_DATA_DIR",
+      "encryptionKeyIdEnv": "SMS_RESEARCH_DATA_KEY_ID"
+    }
+  },
+  "allowedFlows": [
+    {
+      "from": "research",
+      "to": "operational",
+      "payload": "approved-deidentified-aggregate-review",
+      "automatic": false
+    }
+  ],
+  "forbiddenFlows": [
+    "research-record-to-operational-storage",
+    "operational-identity-to-research-storage",
+    "research-result-to-operational-qualification"
+  ]
+}
