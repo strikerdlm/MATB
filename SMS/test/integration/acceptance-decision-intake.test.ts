@@ -198,6 +198,8 @@ describe("institutional acceptance decision intake", () => {
     expect(checklist).toContain("Every required reviewer role");
     expect(checklist).toContain("does not close a known limitation");
     expect(checklist).toContain("does not set `operationalReady`");
+    expect(checklist).toContain("Every generation or regeneration must use a new empty output directory");
+    expect(checklist.match(/dist\/acceptance-reviewer-packets\/2026-08-12T160000000Z/gu)).toHaveLength(3);
   });
 
   it("applies one decision while changing only the ledger and matching review state", async () => {

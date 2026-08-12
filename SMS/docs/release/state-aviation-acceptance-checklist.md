@@ -26,12 +26,12 @@ The release authority must confirm that all nine review scopes below are uncondi
 
 ## Coordinator decision intake procedure
 
-The coordinator must replace the paths and exact UTC values below with controlled paths and coordinator-selected exact UTC times for the review being recorded. Keep reviewer decision input outside the release evidence tree; referenced institutional artifacts must be unclassified and placed below the controlled `docs/release/acceptance-artifacts/` directory.
+The coordinator must replace the paths and exact UTC values below with controlled paths and coordinator-selected exact UTC times for the review being recorded. Every generation or regeneration must use a new empty output directory; the versioned directory below belongs only to the packet set generated at the example time. Keep reviewer decision input outside the release evidence tree; referenced institutional artifacts must be unclassified and placed below the controlled `docs/release/acceptance-artifacts/` directory.
 
 ```bash
-npm run acceptance:packets -- --output dist/acceptance-reviewer-packets --as-of 2026-08-12T16:00:00.000Z
-npm run acceptance:record -- --packet dist/acceptance-reviewer-packets/risk-authority/packet-manifest.json --decision /controlled/intake/risk-authority-decision.json --as-of 2026-08-12T18:00:00.000Z
-npm run acceptance:record -- --packet dist/acceptance-reviewer-packets/risk-authority/packet-manifest.json --decision /controlled/intake/risk-authority-decision.json --as-of 2026-08-12T18:00:00.000Z --apply
+npm run acceptance:packets -- --output dist/acceptance-reviewer-packets/2026-08-12T160000000Z --as-of 2026-08-12T16:00:00.000Z
+npm run acceptance:record -- --packet dist/acceptance-reviewer-packets/2026-08-12T160000000Z/risk-authority/packet-manifest.json --decision /controlled/intake/risk-authority-decision.json --as-of 2026-08-12T18:00:00.000Z
+npm run acceptance:record -- --packet dist/acceptance-reviewer-packets/2026-08-12T160000000Z/risk-authority/packet-manifest.json --decision /controlled/intake/risk-authority-decision.json --as-of 2026-08-12T18:00:00.000Z --apply
 npm run acceptance:record -- --recover --as-of 2026-08-12T18:00:00.000Z
 ```
 
