@@ -18,6 +18,9 @@ export interface OperationalReadinessReport {
 
 export interface OperationalReadinessOptions {
   readonly asOfUtc?: string;
+  readonly recordRelativePath?: string;
+  readonly signatureLogRelativePath?: string;
+  readonly allowTransactionJournal?: boolean;
 }
 
 export function verifyOperationalReadiness(root?: string, options?: OperationalReadinessOptions): Promise<OperationalReadinessReport>;

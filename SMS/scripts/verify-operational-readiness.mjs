@@ -1,37 +1,21 @@
 #!/usr/bin/env node
 
-import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import {
+  KNOWN_LIMITATION_CATEGORIES,
+  REQUIRED_REVIEW_SCOPES,
+  REVIEW_STATUSES,
+  exactUtc,
+  nonEmptyString,
+  readJsonLines,
+  resolveContainedExistingFile,
+  sha256File,
+} from "./acceptance-contracts.mjs";
 
 const RECORD_PATH = "docs/release/operational-readiness-record.json";
 const SHA256 = /^[a-f0-9]{64}$/u;
-const EXACT_UTC = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{3}))?Z$/u;
-const REQUIRED_REVIEW_SCOPES = Object.freeze([
-  "cybersecurity-deployment",
-  "emergency-response",
-  "human-factors-protocol",
-  "official-geospatial-data",
-  "operational-checklist",
-  "racae-interpretation-translation",
-  "research-separation",
-  "risk-authority",
-  "training-safety-promotion",
-]);
-const REVIEW_STATUSES = Object.freeze(["pending", "accepted", "accepted-with-conditions", "rejected"]);
-const KNOWN_LIMITATION_CATEGORIES = Object.freeze([
-  "aircraft-capability",
-  "terrain-obstacle",
-  "official-data-dependency",
-  "telemetry-field",
-  "profile-boundary",
-  "translation-gap",
-  "research-limitation",
-  "human-factors",
-  "cybersecurity-deployment",
-  "performance-validation",
-]);
 const READINESS_DOCUMENT_FIELDS = Object.freeze([
   ["acceptanceChecklistPath", "acceptance checklist"],
   ["knownLimitationsPath", "known-limitations register"],
@@ -40,31 +24,6 @@ const READINESS_DOCUMENT_FIELDS = Object.freeze([
 
 async function readJson(path) {
   return JSON.parse(await readFile(path, "utf8"));
-}
-
-async function readJsonLines(path) {
-  const contents = await readFile(path, "utf8");
-  return contents.split(/\r?\n/u).filter((line) => line.trim() !== "").map((line) => JSON.parse(line));
-}
-
-function nonEmptyString(value) {
-  return typeof value === "string" && value.trim() !== "";
-}
-
-function exactUtc(value) {
-  if (typeof value !== "string") return false;
-  const match = EXACT_UTC.exec(value);
-  if (match === null) return false;
-  const [, year, month, day, hour, minute, second, milliseconds = "000"] = match;
-  const date = new Date(value);
-  return Number.isFinite(date.getTime())
-    && date.getUTCFullYear() === Number(year)
-    && date.getUTCMonth() + 1 === Number(month)
-    && date.getUTCDate() === Number(day)
-    && date.getUTCHours() === Number(hour)
-    && date.getUTCMinutes() === Number(minute)
-    && date.getUTCSeconds() === Number(second)
-    && date.getUTCMilliseconds() === Number(milliseconds);
 }
 
 function signatureRecordFailure(signature) {
@@ -110,26 +69,11 @@ function knownLimitationFailure(limitation) {
   return undefined;
 }
 
-function containedEvidencePath(root, value) {
-  if (!nonEmptyString(value) || isAbsolute(value) || value.includes("\\") || value.includes("\0")) {
-    throw new Error("evidence path must be a relative POSIX path");
-  }
-  if (value.split("/").some((component) => component === "" || component === "." || component === "..")) {
-    throw new Error("evidence path contains traversal");
-  }
-  const target = resolve(root, value);
-  const fromRoot = relative(root, target);
-  if (fromRoot === "" || fromRoot === ".." || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) {
-    throw new Error("evidence path escapes the repository root");
-  }
-  return target;
-}
-
 async function signatureEvidenceFailure(root, signature) {
   for (const evidence of signature.evidenceHashes) {
     try {
-      const contents = await readFile(containedEvidencePath(root, evidence.path));
-      const actual = createHash("sha256").update(contents).digest("hex");
+      const evidencePath = await resolveContainedExistingFile(root, evidence.path, "evidence");
+      const actual = await sha256File(evidencePath);
       if (actual !== evidence.sha256) return `${evidence.path} SHA-256 does not match`;
     } catch (error) {
       return error instanceof Error ? error.message : String(error);
@@ -147,7 +91,11 @@ export async function verifyOperationalReadiness(root = process.cwd(), options =
   let signatures = [];
 
   try {
-    record = await readJson(resolve(repositoryRoot, RECORD_PATH));
+    record = await readJson(await resolveContainedExistingFile(
+      repositoryRoot,
+      options.recordRelativePath ?? RECORD_PATH,
+      "readiness record",
+    ));
   } catch (error) {
     return {
       ok: false,
@@ -192,7 +140,7 @@ export async function verifyOperationalReadiness(root = process.cwd(), options =
   }
   for (const [field, label] of READINESS_DOCUMENT_FIELDS) {
     try {
-      const contents = await readFile(containedEvidencePath(repositoryRoot, record[field]), "utf8");
+      const contents = await readFile(await resolveContainedExistingFile(repositoryRoot, record[field], "evidence"), "utf8");
       if (contents.trim() === "") throw new Error(`${label} is empty`);
     } catch (error) {
       violations.push({
@@ -203,7 +151,11 @@ export async function verifyOperationalReadiness(root = process.cwd(), options =
   }
 
   try {
-    signatures = await readJsonLines(containedEvidencePath(repositoryRoot, record.signatureLogPath));
+    signatures = await readJsonLines(await resolveContainedExistingFile(
+      repositoryRoot,
+      options.signatureLogRelativePath ?? record.signatureLogPath,
+      "evidence",
+    ));
   } catch (error) {
     violations.push({ code: "SIGNATURE_LOG_INVALID", detail: error instanceof Error ? error.message : String(error) });
   }
