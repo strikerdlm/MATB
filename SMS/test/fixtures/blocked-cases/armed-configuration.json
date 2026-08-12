@@ -1,0 +1,6 @@
+{
+  "id": "armed-configuration",
+  "kind": "configuration",
+  "configuration": "armed",
+  "expectedCode": "CONFIGURATION_OUT_OF_SCOPE"
+}

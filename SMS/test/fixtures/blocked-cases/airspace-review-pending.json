@@ -1,0 +1,7 @@
+{
+  "id": "airspace-review-pending",
+  "kind": "qualified-review",
+  "routeStatus": "blocked",
+  "expectedReason": "REQUIREMENT_SOURCE_REVIEW_PENDING",
+  "limitation": "Dedicated route-airspace blocker remains pending qualified policy normalization; the requirement fails closed as not reviewed."
+}

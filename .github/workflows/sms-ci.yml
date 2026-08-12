@@ -40,9 +40,13 @@ jobs:
           cache-dependency-path: SMS/package-lock.json
       - name: Install locked dependencies
         run: npm ci
-      - name: Run release verification
-        run: npm run verify:all
+      - name: Install Chromium for console verification
+        run: npx playwright install --with-deps chromium
       - name: Build disconnected transfer bundle
         run: npm run build:offline -- --output dist/offline-bundle
+      - name: Run release verification
+        run: npm run verify:all
+        env:
+          SMS_OCI_IMAGE: fac-isr-sms-edge:offline
       - name: Verify disconnected transfer bundle
         run: npm run verify:offline -- --bundle dist/offline-bundle --no-network

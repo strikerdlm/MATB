@@ -1,0 +1,12 @@
+{
+  "id": "stale-weather",
+  "kind": "data",
+  "snapshot": {
+    "snapshotId": "weather-expired",
+    "kind": "weather",
+    "packageId": "weather-package",
+    "status": "expired",
+    "capturedAtUtc": "2026-08-10T10:00:00.000Z"
+  },
+  "expectedReason": "MISSION_DATA_EXPIRED"
+}

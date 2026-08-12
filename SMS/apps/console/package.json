@@ -12,7 +12,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.build.json && vite build",
+    "prepreview:test": "npm run build",
+    "preview:test": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
     "test": "vitest run",
+    "test:e2e": "playwright test e2e/console.spec.ts --config playwright.config.ts",
+    "test:a11y": "playwright test e2e/accessibility.spec.ts --config playwright.config.ts",
     "typecheck": "tsc -p ../../tsconfig.base.json"
   },
   "dependencies": {
@@ -20,6 +24,8 @@
     "react-dom": "^19.1.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
+    "@playwright/test": "^1.62.1",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.3.1",

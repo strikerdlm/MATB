@@ -1,4 +1,6 @@
 node_modules/
 dist/
 coverage/
+apps/console/playwright-report/
+apps/console/test-results/
 *.tsbuildinfo

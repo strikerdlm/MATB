@@ -1,0 +1,6 @@
+{
+  "id": "missing-operator",
+  "kind": "operator",
+  "operatorAssigned": false,
+  "expectedCode": "MISSING_OPERATOR_PER_AIRCRAFT"
+}
