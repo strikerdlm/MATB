@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { generateAcceptanceReviewPackets } from "../../scripts/generate-acceptance-review-packets.mjs";
+import * as decisionRecorder from "../../scripts/record-acceptance-decision.mjs";
 import { validateAcceptanceDecision } from "../../scripts/record-acceptance-decision.mjs";
 
 const temporaryDirectories: string[] = [];
@@ -55,7 +56,7 @@ type Decision = {
   sourcePacketSha256: string;
   releaseId: string;
   scope: string;
-  reviewer: { identityType: string; role: string };
+  reviewer: { identity: string; identityType: string; organizationUnit: string; role: string };
   decision: string;
   signedAtUtc: string;
   evidenceHashes: unknown[];
@@ -75,6 +76,13 @@ type Fixture = {
   packet: Packet;
   artifactPath: string;
 };
+
+type JsonSnapshot = { readonly bytes: Buffer; readonly sha256: string; readonly value: unknown };
+type JsonSnapshotReader = (
+  path: string,
+  label: string,
+  afterBytesRead?: () => void | Promise<void>,
+) => Promise<JsonSnapshot>;
 
 async function installPacket(root: string): Promise<{ path: string; packet: Packet; bytes: string }> {
   const output = await temporaryRoot();
@@ -175,6 +183,48 @@ describe("institutional acceptance decision intake", () => {
       projectedStatus: "pending",
     });
     expect(await authoritativeHashes(value.root)).toEqual(before);
+  });
+
+  it("projects a valid human rejection without changing authoritative acceptance evidence", async () => {
+    const value = await fixture();
+    value.decision.decision = "reject";
+    await writeDecision(value);
+    const before = await authoritativeHashes(value.root);
+
+    const report = await validateAcceptanceDecision(value.root, value.packetPath, value.decisionPath, { asOfUtc });
+
+    expect(report.projectedStatus).toBe("rejected");
+    expect(await authoritativeHashes(value.root)).toEqual(before);
+  });
+
+  it("projects the final required human role as accepted without changing authoritative acceptance evidence", async () => {
+    const value = await fixture();
+    await addCurrentRoleHead(value);
+    value.decision.signatureId = "commander-20260812";
+    value.decision.reviewer.role = "commander";
+    await writeDecision(value);
+    const before = await authoritativeHashes(value.root);
+
+    const report = await validateAcceptanceDecision(value.root, value.packetPath, value.decisionPath, { asOfUtc });
+
+    expect(report.projectedStatus).toBe("accepted");
+    expect(await authoritativeHashes(value.root)).toEqual(before);
+  });
+
+  it.each(["packet", "artifact"])("uses one byte snapshot when a %s file changes after its handle reads", async (kind) => {
+    const path = join(await temporaryRoot(), `${kind}.json`);
+    const original = '{"revision":"original"}\n';
+    const replacement = '{"revision":"replacement"}\n';
+    await writeFile(path, original, "utf8");
+    const snapshotReader = (decisionRecorder as { readRegularJsonSnapshot?: JsonSnapshotReader }).readRegularJsonSnapshot;
+
+    expect(snapshotReader).toBeTypeOf("function");
+    const snapshot = await snapshotReader!(path, `${kind} input`, async () => writeFile(path, replacement, "utf8"));
+
+    expect(snapshot.value).toEqual({ revision: "original" });
+    expect(snapshot.sha256).toBe(sha256(original));
+    expect(snapshot.bytes.toString("utf8")).toBe(original);
+    expect(await readFile(path, "utf8")).toBe(replacement);
   });
 
   it.each([

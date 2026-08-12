@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import { lstat, readFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { open } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -28,15 +29,27 @@ function fail(message) {
   throw new Error(message);
 }
 
-async function readRegularJson(path, label) {
-  const stat = await lstat(path);
-  if (stat.isSymbolicLink()) fail(`${label} must not be a symbolic link`);
-  if (!stat.isFile()) fail(`${label} must be a regular file`);
+/** Read and parse one regular-file byte snapshot, never following a final symbolic link. */
+export async function readRegularJsonSnapshot(path, label, afterBytesRead) {
+  let handle;
   try {
-    return { value: JSON.parse(await readFile(path, "utf8")), bytes: await readFile(path, "utf8") };
+    handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    fail(`${label} is not valid JSON: ${detail}`);
+    if (error?.code === "ELOOP") fail(`${label} must not be a symbolic link`);
+    throw error;
+  }
+  try {
+    if (!(await handle.stat()).isFile()) fail(`${label} must be a regular file`);
+    const bytes = await handle.readFile();
+    await afterBytesRead?.();
+    try {
+      return { value: JSON.parse(bytes.toString("utf8")), bytes, sha256: sha256Bytes(bytes) };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      fail(`${label} is not valid JSON: ${detail}`);
+    }
+  } finally {
+    await handle.close();
   }
 }
 
@@ -68,17 +81,10 @@ async function validateInstitutionalArtifact(root, artifact) {
     fail("institutional artifact must be below docs/release/acceptance-artifacts/");
   }
   const path = await resolveContainedExistingFile(root, artifact.path, "institutional artifact");
-  const actualHash = await sha256File(path);
-  if (actualHash !== artifact.sha256) fail("institutional artifact SHA-256 does not match");
-  let metadata;
-  try {
-    metadata = JSON.parse(await readFile(path, "utf8"));
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    fail(`institutional artifact is not valid JSON: ${detail}`);
-  }
+  const snapshot = await readRegularJsonSnapshot(path, "institutional artifact");
+  if (snapshot.sha256 !== artifact.sha256) fail("institutional artifact SHA-256 does not match");
   for (const [field, expected] of Object.entries(CONTROLLED_ARTIFACT)) {
-    if (metadata?.[field] !== expected) fail("institutional artifact must contain unclassified controlled safety metadata");
+    if (snapshot.value?.[field] !== expected) fail("institutional artifact must contain unclassified controlled safety metadata");
   }
 }
 
@@ -117,7 +123,7 @@ export async function validateAcceptanceDecision(root, packetPath, decisionPath,
   const repositoryRoot = resolve(root);
   if (!exactUtc(options?.asOfUtc)) fail("asOfUtc must be an exact UTC timestamp");
 
-  const decisionInput = await readRegularJson(decisionPath, "decision input");
+  const decisionInput = await readRegularJsonSnapshot(decisionPath, "decision input");
   const decision = decisionInput.value;
   if (decision?.recordType !== "institutional-decision") fail("only institutional-decision records are recordable");
   const schemaFailure = signatureRecordFailure(decision);
@@ -125,15 +131,15 @@ export async function validateAcceptanceDecision(root, packetPath, decisionPath,
   if (!validSystemOfRecordRef(decision.systemOfRecordRef)) fail("systemOfRecordRef must be trimmed, 1-512 characters, and contain no ASCII control characters");
 
   const expectedPacketPath = await resolveContainedExistingFile(repositoryRoot, decision.sourcePacketPath, "source packet");
-  const packetInput = await readRegularJson(packetPath, "packet input");
+  const packetInput = await readRegularJsonSnapshot(packetPath, "packet input");
   if (resolve(packetPath) !== expectedPacketPath) fail("packet input does not match decision sourcePacketPath");
   const packet = packetInput.value;
   const packetId = rebuildPacketId(packet);
   if (decision.sourcePacketId !== packetId) fail("decision source packet identifier does not match packet");
-  if (decision.sourcePacketSha256 !== sha256Bytes(Buffer.from(packetInput.bytes, "utf8"))) fail("decision source packet SHA-256 does not match packet");
+  if (decision.sourcePacketSha256 !== packetInput.sha256) fail("decision source packet SHA-256 does not match packet");
 
   const recordPath = await resolveContainedExistingFile(repositoryRoot, RECORD_PATH, "readiness record");
-  const record = (await readRegularJson(recordPath, "readiness record")).value;
+  const record = (await readRegularJsonSnapshot(recordPath, "readiness record")).value;
   const review = Array.isArray(record?.requiredReviews)
     ? record.requiredReviews.find((candidate) => candidate?.scope === decision.scope)
     : undefined;
@@ -167,8 +173,9 @@ export async function validateAcceptanceDecision(root, packetPath, decisionPath,
     fail("decision supersedesSignatureId must identify the exact current role head");
   }
 
+  const reviewForProjection = Object.fromEntries(Object.entries(review).filter(([field]) => field !== "status"));
   const projected = deriveReviewDecisionState({
-    ...review,
+    ...reviewForProjection,
     signatureIds: [...review.signatureIds, decision.signatureId],
   }, [...signatures, decision]);
   if (projected.violations.length > 0) fail(`projected decision chain is invalid: ${projected.violations[0].detail}`);

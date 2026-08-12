@@ -13,6 +13,19 @@ export interface DecisionValidationOptions {
   readonly asOfUtc: string;
 }
 
+export interface JsonSnapshot {
+  readonly bytes: Buffer;
+  readonly sha256: string;
+  readonly value: unknown;
+}
+
+/** Testable regular-file snapshot reader used by decision, packet, record, and artifact validation. */
+export function readRegularJsonSnapshot(
+  path: string,
+  label: string,
+  afterBytesRead?: () => void | Promise<void>,
+): Promise<JsonSnapshot>;
+
 export function validateAcceptanceDecision(
   root: string,
   packetPath: string,

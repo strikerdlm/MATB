@@ -66,6 +66,8 @@ export interface ReviewDecisionState {
   readonly violations: readonly { readonly code: string; readonly scope: string; readonly detail: string }[];
 }
 
+export function canonicalJson(value: object | string | number | boolean | null): string;
+export function canonicalJson(value: undefined): undefined;
 export function canonicalJson(value: unknown): string | undefined;
 export function sha256Bytes(bytes: string | NodeJS.ArrayBufferView): string;
 export function sha256File(path: string): Promise<string>;
