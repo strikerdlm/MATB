@@ -105,13 +105,13 @@ export async function verifyOperationalReadiness(root = process.cwd(), options =
     try {
       await lstat(resolve(repositoryRoot, "docs/release/.acceptance-transaction.json"));
       violations.push({
-        code: "ACCEPTANCE_TRANSACTION_ACTIVE",
-        detail: "an active acceptance transaction journal must be resolved before readiness verification",
+        code: "ACCEPTANCE_TRANSACTION_INCOMPLETE",
+        detail: "an incomplete acceptance transaction must be explicitly recovered before readiness verification",
       });
     } catch (error) {
       if (error?.code !== "ENOENT") {
         violations.push({
-          code: "ACCEPTANCE_TRANSACTION_ACTIVE",
+          code: "ACCEPTANCE_TRANSACTION_INCOMPLETE",
           detail: `cannot verify acceptance transaction journal: ${error instanceof Error ? error.message : String(error)}`,
         });
       }

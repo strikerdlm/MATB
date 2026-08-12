@@ -356,6 +356,18 @@ describe("institutional operational-readiness evidence", () => {
     expect(report.violations).toContainEqual(expect.objectContaining({ code: "KNOWN_LIMITATIONS_INVALID" }));
   });
 
+  it("fails closed while an acceptance transaction journal exists", async () => {
+    const signatures = acceptedSignatures();
+    const root = await fixture(acceptedRecord(signatures), signatures);
+    await writeFile(join(root, "docs/release/.acceptance-transaction.json"), "{}\n", "utf8");
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.ok).toBe(false);
+    expect(report.operationalReady).toBe(false);
+    expect(report.violations).toContainEqual(expect.objectContaining({ code: "ACCEPTANCE_TRANSACTION_INCOMPLETE" }));
+  });
+
   it("rejects a non-boolean operational-readiness state", async () => {
     const signatures = acceptedSignatures();
     const root = await fixture({ ...acceptedRecord(signatures), operationalReady: "true" }, signatures);
@@ -704,8 +716,8 @@ describe("institutional operational-readiness evidence", () => {
 
     expect(blocked.violations).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: "SIGNATURE_EVIDENCE_INVALID" }),
-      expect.objectContaining({ code: "ACCEPTANCE_TRANSACTION_ACTIVE" }),
+      expect.objectContaining({ code: "ACCEPTANCE_TRANSACTION_INCOMPLETE" }),
     ]));
-    expect(allowed.violations).not.toContainEqual(expect.objectContaining({ code: "ACCEPTANCE_TRANSACTION_ACTIVE" }));
+    expect(allowed.violations).not.toContainEqual(expect.objectContaining({ code: "ACCEPTANCE_TRANSACTION_INCOMPLETE" }));
   });
 });

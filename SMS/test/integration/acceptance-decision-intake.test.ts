@@ -1,11 +1,17 @@
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { appendFile, cp, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { generateAcceptanceReviewPackets } from "../../scripts/generate-acceptance-review-packets.mjs";
 import * as decisionRecorder from "../../scripts/record-acceptance-decision.mjs";
-import { validateAcceptanceDecision } from "../../scripts/record-acceptance-decision.mjs";
+import {
+  recordAcceptanceDecision,
+  recoverAcceptanceTransaction,
+  validateAcceptanceDecision,
+} from "../../scripts/record-acceptance-decision.mjs";
+import { verifyOperationalReadiness } from "../../scripts/verify-operational-readiness.mjs";
 
 const temporaryDirectories: string[] = [];
 const smsRoot = process.cwd();
@@ -134,6 +140,19 @@ async function writeDecision(fixture: Fixture): Promise<void> {
   await writeFile(fixture.decisionPath, `${JSON.stringify(fixture.decision, null, 2)}\n`, "utf8");
 }
 
+async function refreshPacketAndDecision(value: Fixture): Promise<void> {
+  const installed = await installPacket(value.root);
+  value.packetPath = installed.path;
+  value.packet = installed.packet;
+  value.decision.sourcePacketId = installed.packet.packetId;
+  value.decision.sourcePacketPath = `docs/release/acceptance-packets/${installed.packet.packetId}.json`;
+  value.decision.sourcePacketSha256 = sha256(installed.bytes);
+  value.decision.releaseId = installed.packet.releaseId;
+  value.decision.scope = installed.packet.scope;
+  value.decision.evidenceHashes = installed.packet.evidence;
+  await writeDecision(value);
+}
+
 async function fixture(): Promise<Fixture> {
   const root = await copiedSmsRoot();
   const artifactPath = "docs/release/acceptance-artifacts/risk-authority-decision.json";
@@ -169,6 +188,209 @@ async function addCurrentRoleHead(value: Fixture): Promise<void> {
 }
 
 describe("institutional acceptance decision intake", () => {
+  it("applies one decision while changing only the ledger and matching review state", async () => {
+    const value = await fixture();
+    const recordPath = join(value.root, authoritativePaths[0]);
+    const ledgerPath = join(value.root, authoritativePaths[1]);
+    const beforeRecord = JSON.parse(await readFile(recordPath, "utf8"));
+
+    const result = await recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, {
+      asOfUtc,
+      apply: true,
+    });
+    const afterRecord = JSON.parse(await readFile(recordPath, "utf8"));
+
+    expect(result).toMatchObject({ ok: true, mode: "applied", projectedStatus: "pending" });
+    expect(result.transactionId).toMatch(/^[a-f0-9]{64}$/u);
+    expect(afterRecord.requiredReviews.find(({ scope }: { scope: string }) => scope === "risk-authority").signatureIds)
+      .toEqual(["risk-authority-20260812"]);
+    for (const field of ["knownLimitations", "operationalReady", "qualification", "recordStatus", "readinessDecision"] as const) {
+      expect(afterRecord[field]).toEqual(beforeRecord[field]);
+    }
+    expect((await readFile(ledgerPath, "utf8")).trim().split("\n")).toHaveLength(1);
+    await expect(lstat(join(value.root, "docs/release/.acceptance-transaction.json"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("derives accepted only after applying the final required role decision", async () => {
+    const value = await fixture();
+
+    const first = await recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, { asOfUtc, apply: true });
+    expect(first.projectedStatus).toBe("pending");
+
+    await refreshPacketAndDecision(value);
+    value.decision.signatureId = "risk-commander-20260812";
+    value.decision.reviewer.role = "commander";
+    value.decision.signedAtUtc = "2026-08-12T15:30:00.000Z";
+    await writeDecision(value);
+    const second = await recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, { asOfUtc, apply: true });
+
+    expect(second.projectedStatus).toBe("accepted");
+    const record = JSON.parse(await readFile(join(value.root, authoritativePaths[0]), "utf8"));
+    expect(record.requiredReviews.find(({ scope }: { scope: string }) => scope === "risk-authority")).toMatchObject({
+      status: "accepted",
+      signatureIds: ["risk-authority-20260812", "risk-commander-20260812"],
+    });
+  });
+
+  it("appends a superseding role decision without deleting its predecessor", async () => {
+    const value = await fixture();
+    await recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, { asOfUtc, apply: true });
+
+    await refreshPacketAndDecision(value);
+    value.decision.signatureId = "risk-authority-20260812-revised";
+    value.decision.supersedesSignatureId = "risk-authority-20260812";
+    value.decision.signedAtUtc = "2026-08-12T15:30:00.000Z";
+    await writeDecision(value);
+    await recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, { asOfUtc, apply: true });
+
+    const lines = (await readFile(join(value.root, authoritativePaths[1]), "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+    expect(lines.map(({ signatureId }) => signatureId)).toEqual([
+      "risk-authority-20260812",
+      "risk-authority-20260812-revised",
+    ]);
+    const record = JSON.parse(await readFile(join(value.root, authoritativePaths[0]), "utf8"));
+    expect(record.requiredReviews.find(({ scope }: { scope: string }) => scope === "risk-authority").signatureIds)
+      .toEqual(["risk-authority-20260812", "risk-authority-20260812-revised"]);
+  });
+
+  it("fails closed when another acceptance update owns the lock", async () => {
+    const value = await fixture();
+    const lockPath = join(value.root, "docs/release/.acceptance-update.lock");
+    await writeFile(lockPath, "another-transaction\n", { encoding: "utf8", mode: 0o600 });
+    const before = await authoritativeHashes(value.root);
+
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, { asOfUtc, apply: true }))
+      .rejects.toThrow(/lock|active/u);
+
+    expect(await authoritativeHashes(value.root)).toEqual(before);
+    expect(await readFile(lockPath, "utf8")).toBe("another-transaction\n");
+  });
+
+  it("preserves a mixed crash state for explicit rollback recovery", async () => {
+    const value = await fixture();
+    const before = await authoritativeHashes(value.root);
+
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, {
+      asOfUtc,
+      apply: true,
+      failpoint: "after-ledger-replace",
+    })).rejects.toThrow(/failpoint/u);
+
+    const journalPath = join(value.root, "docs/release/.acceptance-transaction.json");
+    expect((await lstat(journalPath)).isFile()).toBe(true);
+    const journal = JSON.parse(await readFile(journalPath, "utf8"));
+    expect(journal).toMatchObject({
+      schemaVersion: "1.0",
+      ledger: {
+        path: "docs/release/verification-signatures.jsonl",
+        originalPath: `docs/release/.acceptance-transactions/${journal.transactionId}/ledger.original`,
+        candidatePath: `docs/release/.acceptance-transactions/${journal.transactionId}/ledger.candidate`,
+      },
+      record: {
+        path: "docs/release/operational-readiness-record.json",
+        originalPath: `docs/release/.acceptance-transactions/${journal.transactionId}/record.original`,
+        candidatePath: `docs/release/.acceptance-transactions/${journal.transactionId}/record.candidate`,
+      },
+    });
+    expect(journal.transactionId).toBe(sha256(
+      `{"candidateLedgerSha256":"${journal.ledger.candidateSha256}","candidateRecordSha256":"${journal.record.candidateSha256}","candidateSignatureId":"risk-authority-20260812"}`,
+    ));
+    for (const path of [journal.ledger.originalPath, journal.ledger.candidatePath, journal.record.originalPath, journal.record.candidatePath]) {
+      expect((await lstat(join(value.root, path))).isFile()).toBe(true);
+    }
+    const record = JSON.parse(await readFile(join(value.root, authoritativePaths[0]), "utf8"));
+    expect(record.operationalReady).toBe(false);
+    const verification = await verifyOperationalReadiness(value.root, { asOfUtc });
+    expect(verification.violations).toContainEqual(expect.objectContaining({ code: "ACCEPTANCE_TRANSACTION_INCOMPLETE" }));
+
+    const recovery = await recoverAcceptanceTransaction(value.root, { asOfUtc });
+    expect(recovery).toMatchObject({ ok: true, action: "rolled-back" });
+    expect(await authoritativeHashes(value.root)).toEqual(before);
+  });
+
+  it("finalizes recovery when both authoritative files have candidate hashes", async () => {
+    const value = await fixture();
+
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, {
+      asOfUtc,
+      apply: true,
+      failpoint: "after-record-replace",
+    })).rejects.toThrow(/failpoint/u);
+    const candidate = await authoritativeHashes(value.root);
+
+    const recovery = await recoverAcceptanceTransaction(value.root, { asOfUtc });
+
+    expect(recovery).toMatchObject({ ok: true, action: "finalized" });
+    expect(await authoritativeHashes(value.root)).toEqual(candidate);
+    await expect(lstat(join(value.root, "docs/release/.acceptance-transaction.json"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("cleans recovery metadata when both authoritative files retain original hashes", async () => {
+    const value = await fixture();
+    const before = await authoritativeHashes(value.root);
+
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, {
+      asOfUtc,
+      apply: true,
+      failpoint: "after-packet-install",
+    })).rejects.toThrow(/failpoint/u);
+
+    const recovery = await recoverAcceptanceTransaction(value.root, { asOfUtc });
+    expect(recovery).toMatchObject({ ok: true, action: "cleaned-original" });
+    expect(await authoritativeHashes(value.root)).toEqual(before);
+  });
+
+  it("refuses recovery when an authoritative hash is neither original nor candidate", async () => {
+    const value = await fixture();
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, {
+      asOfUtc,
+      apply: true,
+      failpoint: "after-ledger-replace",
+    })).rejects.toThrow(/failpoint/u);
+    await writeFile(join(value.root, authoritativePaths[0]), "{}\n", "utf8");
+
+    await expect(recoverAcceptanceTransaction(value.root, { asOfUtc })).rejects.toThrow(/unrecognized|manual investigation/u);
+
+    expect((await lstat(join(value.root, "docs/release/.acceptance-transaction.json"))).isFile()).toBe(true);
+  });
+
+  it("recovers from the CLI without packet or decision arguments", async () => {
+    const value = await fixture();
+    const before = await authoritativeHashes(value.root);
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, {
+      asOfUtc,
+      apply: true,
+      failpoint: "after-ledger-replace",
+    })).rejects.toThrow(/failpoint/u);
+
+    const result = spawnSync(process.execPath, [
+      join(smsRoot, "scripts/record-acceptance-decision.mjs"),
+      "--recover",
+      "--as-of",
+      asOfUtc,
+      "--json",
+    ], { cwd: value.root, encoding: "utf8" });
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({ ok: true, action: "rolled-back" });
+    expect(await authoritativeHashes(value.root)).toEqual(before);
+  });
+
+  it("rejects mutually exclusive apply and recovery CLI modes", async () => {
+    const value = await fixture();
+
+    const result = spawnSync(process.execPath, [
+      join(smsRoot, "scripts/record-acceptance-decision.mjs"),
+      "--recover",
+      "--apply",
+      "--as-of",
+      asOfUtc,
+    ], { cwd: value.root, encoding: "utf8" });
+
+    expect(result.status).toBe(2);
+    expect(result.stderr).toMatch(/mutually exclusive/u);
+  });
+
   it("validates an exact qualified human decision in dry-run without changing authoritative acceptance evidence", async () => {
     const value = await fixture();
     const before = await authoritativeHashes(value.root);
