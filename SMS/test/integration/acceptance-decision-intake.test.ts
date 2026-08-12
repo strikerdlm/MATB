@@ -308,6 +308,78 @@ describe("institutional acceptance decision intake", () => {
     expect(await authoritativeHashes(value.root)).toEqual(before);
   });
 
+  it("retries mixed-state recovery when an exact rollback stage survived interruption", async () => {
+    const value = await fixture();
+    const before = await authoritativeHashes(value.root);
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, {
+      asOfUtc,
+      apply: true,
+      failpoint: "after-ledger-replace",
+    })).rejects.toThrow(/failpoint/u);
+    const journal = JSON.parse(await readFile(join(value.root, "docs/release/.acceptance-transaction.json"), "utf8"));
+    const survivingStage = join(
+      value.root,
+      `docs/release/.acceptance-${journal.transactionId}-ledger-rollback`,
+    );
+    await writeFile(survivingStage, await readFile(join(value.root, journal.ledger.originalPath)));
+
+    const recovery = await recoverAcceptanceTransaction(value.root, { asOfUtc });
+
+    expect(recovery).toMatchObject({ ok: true, action: "rolled-back" });
+    expect(await authoritativeHashes(value.root)).toEqual(before);
+    await expect(lstat(survivingStage)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("removes the durable journal before cleanup can discard transaction evidence", async () => {
+    const value = await fixture();
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, {
+      asOfUtc,
+      apply: true,
+      failpoint: "after-record-replace",
+    })).rejects.toThrow(/failpoint/u);
+    const journalPath = join(value.root, "docs/release/.acceptance-transaction.json");
+    const journal = JSON.parse(await readFile(journalPath, "utf8"));
+    const transactionPath = join(value.root, "docs/release/.acceptance-transactions", journal.transactionId);
+
+    await expect(recoverAcceptanceTransaction(value.root, {
+      asOfUtc,
+      failpoint: "after-journal-remove",
+    })).rejects.toThrow(/after-journal-remove/u);
+
+    await expect(lstat(journalPath)).rejects.toMatchObject({ code: "ENOENT" });
+    expect((await lstat(transactionPath)).isDirectory()).toBe(true);
+    expect((await lstat(join(value.root, "docs/release/.acceptance-update.lock"))).isFile()).toBe(true);
+    const verification = await verifyOperationalReadiness(value.root, { asOfUtc });
+    expect(verification.violations).not.toContainEqual(expect.objectContaining({ code: "ACCEPTANCE_TRANSACTION_INCOMPLETE" }));
+    await refreshPacketAndDecision(value);
+    value.decision.signatureId = "risk-commander-after-cleanup-interruption";
+    value.decision.reviewer.role = "commander";
+    await writeDecision(value);
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, { asOfUtc, apply: true }))
+      .rejects.toThrow(/lock/u);
+  });
+
+  it("refuses a corrupted original snapshot without changing authoritative mixed state", async () => {
+    const value = await fixture();
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, {
+      asOfUtc,
+      apply: true,
+      failpoint: "after-ledger-replace",
+    })).rejects.toThrow(/failpoint/u);
+    const journalPath = join(value.root, "docs/release/.acceptance-transaction.json");
+    const journal = JSON.parse(await readFile(journalPath, "utf8"));
+    const corruptSnapshotPath = join(value.root, journal.ledger.originalPath);
+    await writeFile(corruptSnapshotPath, "corrupted rollback evidence\n", "utf8");
+    const mixed = await authoritativeHashes(value.root);
+
+    await expect(recoverAcceptanceTransaction(value.root, { asOfUtc }))
+      .rejects.toThrow(/snapshot|hash|manual investigation/u);
+
+    expect(await authoritativeHashes(value.root)).toEqual(mixed);
+    expect((await lstat(journalPath)).isFile()).toBe(true);
+    expect(await readFile(corruptSnapshotPath, "utf8")).toBe("corrupted rollback evidence\n");
+  });
+
   it("finalizes recovery when both authoritative files have candidate hashes", async () => {
     const value = await fixture();
 

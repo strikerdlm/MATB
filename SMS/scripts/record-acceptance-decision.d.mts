@@ -32,6 +32,11 @@ export interface RecoveryReport {
   readonly transactionId: string;
 }
 
+export interface RecoveryOptions {
+  readonly asOfUtc: string;
+  readonly failpoint?: "after-journal-remove";
+}
+
 export interface JsonSnapshot {
   readonly bytes: Buffer;
   readonly sha256: string;
@@ -61,5 +66,5 @@ export function recordAcceptanceDecision(
 
 export function recoverAcceptanceTransaction(
   root: string,
-  options: { readonly asOfUtc: string },
+  options: RecoveryOptions,
 ): Promise<RecoveryReport>;

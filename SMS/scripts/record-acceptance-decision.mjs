@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { constants } from "node:fs";
-import { lstat, mkdir, open, readFile, rename, rm } from "node:fs/promises";
+import { lstat, mkdir, open, rename, rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -353,9 +353,21 @@ async function installStagedFile(root, stagedRelativePath, authoritativeRelative
   await fsyncDirectory(resolve(root, RELEASE_DIRECTORY));
 }
 
-async function stageReplacement(root, sourceRelativePath, destinationRelativePath) {
-  const bytes = await readFile(resolve(root, sourceRelativePath));
-  await writeExclusiveSynced(resolve(root, destinationRelativePath), bytes);
+async function stageReplacement(root, sourceRelativePath, destinationRelativePath, expectedHash) {
+  const source = await readRegularBytesSnapshot(resolve(root, sourceRelativePath), "transaction snapshot");
+  if (source.sha256 !== expectedHash) {
+    fail(`transaction snapshot hash does not match the journal; manual investigation is required: ${sourceRelativePath}`);
+  }
+  const destinationPath = resolve(root, destinationRelativePath);
+  try {
+    await writeExclusiveSynced(destinationPath, source.bytes);
+  } catch (error) {
+    if (error?.code !== "EEXIST") throw error;
+    const existing = await readRegularBytesSnapshot(destinationPath, "transaction replacement stage");
+    if (existing.sha256 !== expectedHash) {
+      fail(`transaction replacement stage hash is unrecognized; manual investigation is required: ${destinationRelativePath}`);
+    }
+  }
   return destinationRelativePath;
 }
 
@@ -363,10 +375,17 @@ async function restoreOriginals(root, journal) {
   const ledgerTemporary = `${RELEASE_DIRECTORY}/.acceptance-${journal.transactionId}-ledger-rollback`;
   const recordTemporary = `${RELEASE_DIRECTORY}/.acceptance-${journal.transactionId}-record-rollback`;
   try {
-    await stageReplacement(root, journal.ledger.originalPath, ledgerTemporary);
-    await stageReplacement(root, journal.record.originalPath, recordTemporary);
+    await stageReplacement(root, journal.ledger.originalPath, ledgerTemporary, journal.ledger.originalSha256);
+    await stageReplacement(root, journal.record.originalPath, recordTemporary, journal.record.originalSha256);
     await installStagedFile(root, ledgerTemporary, journal.ledger.path);
     await installStagedFile(root, recordTemporary, journal.record.path);
+    const [ledger, record] = await Promise.all([
+      readRegularBytesSnapshot(resolve(root, journal.ledger.path), "restored signature log"),
+      readRegularBytesSnapshot(resolve(root, journal.record.path), "restored readiness record"),
+    ]);
+    if (ledger.sha256 !== journal.ledger.originalSha256 || record.sha256 !== journal.record.originalSha256) {
+      fail("restored acceptance state does not match the journaled original hashes; manual investigation is required");
+    }
   } finally {
     await rm(resolve(root, ledgerTemporary), { force: true });
     await rm(resolve(root, recordTemporary), { force: true });
@@ -378,15 +397,16 @@ async function validateRecoveryState(root, asOfUtc) {
   if (!report.ok) fail(`recovered acceptance state is invalid: ${JSON.stringify(report.violations)}`);
 }
 
-async function cleanupTransaction(root, journal) {
+async function cleanupTransaction(root, journal, failpoint) {
+  await rm(resolve(root, JOURNAL_PATH));
+  await fsyncDirectory(resolve(root, RELEASE_DIRECTORY));
+  if (failpoint === "after-journal-remove") throw new AcceptanceFailpointError(failpoint);
   for (const suffix of ["ledger-install", "record-install", "ledger-rollback", "record-rollback"]) {
     await rm(resolve(root, `${RELEASE_DIRECTORY}/.acceptance-${journal.transactionId}-${suffix}`), { force: true });
   }
   await rm(resolve(root, TRANSACTION_DIRECTORY, journal.transactionId), { recursive: true, force: true });
   await fsyncDirectory(resolve(root, TRANSACTION_DIRECTORY));
   await rm(resolve(root, LOCK_PATH), { force: true });
-  await fsyncDirectory(resolve(root, RELEASE_DIRECTORY));
-  await rm(resolve(root, JOURNAL_PATH), { force: true });
   await fsyncDirectory(resolve(root, RELEASE_DIRECTORY));
 }
 
@@ -473,10 +493,10 @@ export async function recordAcceptanceDecision(root, packetPath, decisionPath, o
 
     const ledgerInstall = `${RELEASE_DIRECTORY}/.acceptance-${transactionId}-ledger-install`;
     const recordInstall = `${RELEASE_DIRECTORY}/.acceptance-${transactionId}-record-install`;
-    await stageReplacement(repositoryRoot, journal.ledger.candidatePath, ledgerInstall);
+    await stageReplacement(repositoryRoot, journal.ledger.candidatePath, ledgerInstall, journal.ledger.candidateSha256);
     await installStagedFile(repositoryRoot, ledgerInstall, journal.ledger.path);
     if (options.failpoint === "after-ledger-replace") throw new AcceptanceFailpointError(options.failpoint);
-    await stageReplacement(repositoryRoot, journal.record.candidatePath, recordInstall);
+    await stageReplacement(repositoryRoot, journal.record.candidatePath, recordInstall, journal.record.candidateSha256);
     await installStagedFile(repositoryRoot, recordInstall, journal.record.path);
     if (options.failpoint === "after-record-replace") throw new AcceptanceFailpointError(options.failpoint);
 
@@ -485,8 +505,8 @@ export async function recordAcceptanceDecision(root, packetPath, decisionPath, o
     return { ...validation, mode: "applied", transactionId };
   } catch (error) {
     if (error instanceof AcceptanceFailpointError) throw error;
-    const journalExists = journalCreated || await pathExists(resolve(repositoryRoot, JOURNAL_PATH));
-    if (journalExists) {
+    const journalExists = await pathExists(resolve(repositoryRoot, JOURNAL_PATH));
+    if (journalCreated && journalExists) {
       try {
         await restoreOriginals(repositoryRoot, journal);
         await validateRecoveryState(repositoryRoot, options.asOfUtc);
@@ -496,7 +516,7 @@ export async function recordAcceptanceDecision(root, packetPath, decisionPath, o
         const rollbackDetail = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
         throw new Error(`acceptance apply failed (${applyDetail}) and rollback could not complete: ${rollbackDetail}`, { cause: rollbackError });
       }
-    } else {
+    } else if (!journalCreated && !journalExists) {
       if (transactionCreated) await rm(transactionPath, { recursive: true, force: true });
       if (lockPath !== undefined) {
         await rm(lockPath, { force: true });
@@ -544,7 +564,7 @@ export async function recoverAcceptanceTransaction(root, options) {
     action = "rolled-back";
   }
   await validateRecoveryState(repositoryRoot, options.asOfUtc);
-  await cleanupTransaction(repositoryRoot, journal);
+  await cleanupTransaction(repositoryRoot, journal, options.failpoint);
   return { ok: true, action, transactionId: journal.transactionId };
 }
 
