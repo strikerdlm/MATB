@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFile } from "node:fs/promises";
+import { lstat, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -12,10 +12,13 @@ import {
   readJsonLines,
   resolveContainedExistingFile,
   sha256File,
+  signatureRecordFailure,
+  deriveReviewDecisionState,
 } from "./acceptance-contracts.mjs";
 
+export { signatureRecordFailure, deriveReviewDecisionState } from "./acceptance-contracts.mjs";
+
 const RECORD_PATH = "docs/release/operational-readiness-record.json";
-const SHA256 = /^[a-f0-9]{64}$/u;
 const READINESS_DOCUMENT_FIELDS = Object.freeze([
   ["acceptanceChecklistPath", "acceptance checklist"],
   ["knownLimitationsPath", "known-limitations register"],
@@ -24,38 +27,6 @@ const READINESS_DOCUMENT_FIELDS = Object.freeze([
 
 async function readJson(path) {
   return JSON.parse(await readFile(path, "utf8"));
-}
-
-function signatureRecordFailure(signature) {
-  if (signature?.schemaVersion !== "1.0") return "schemaVersion must be 1.0";
-  if (!nonEmptyString(signature?.signatureId)) return "signatureId is required";
-  if (signature?.reviewer?.identityType !== "human") return "reviewer.identityType must be human";
-  if (!nonEmptyString(signature?.reviewer?.identity)) return "reviewer identity is required";
-  if (!nonEmptyString(signature?.reviewer?.organizationUnit)) return "reviewer organization/unit is required";
-  if (!nonEmptyString(signature?.reviewer?.role)) return "reviewer role is required";
-  if (!REQUIRED_REVIEW_SCOPES.includes(signature?.scope)) return "scope is not an approved institutional review scope";
-  if (!["accept", "accept-with-conditions", "reject"].includes(signature?.decision)) return "decision is invalid";
-  if (!exactUtc(signature?.signedAtUtc)) return "signedAtUtc must be an exact UTC timestamp";
-  if (!Array.isArray(signature?.evidenceHashes) || signature.evidenceHashes.length === 0
-    || signature.evidenceHashes.some((evidence) => !nonEmptyString(evidence?.path) || !SHA256.test(evidence?.sha256))) {
-    return "at least one path and SHA-256 evidence record is required";
-  }
-  if (!Array.isArray(signature?.conflicts) || signature.conflicts.some((conflict) => !nonEmptyString(conflict))) {
-    return "conflicts must be an array of non-empty strings";
-  }
-  if (!Array.isArray(signature?.conditions) || signature.conditions.some((condition) => !nonEmptyString(condition))) {
-    return "conditions must be an array of non-empty strings";
-  }
-  if (signature.decision === "accept-with-conditions" && signature.conditions.length === 0) {
-    return "accept-with-conditions requires at least one open condition";
-  }
-  if (signature.decision === "accept" && signature.conditions.length > 0) {
-    return "unconditional acceptance cannot retain conditions";
-  }
-  if (!exactUtc(signature?.reviewDueAtUtc) || Date.parse(signature.reviewDueAtUtc) <= Date.parse(signature.signedAtUtc)) {
-    return "reviewDueAtUtc must be an exact UTC timestamp after signedAtUtc";
-  }
-  return undefined;
 }
 
 function knownLimitationFailure(limitation) {
@@ -70,7 +41,12 @@ function knownLimitationFailure(limitation) {
 }
 
 async function signatureEvidenceFailure(root, signature) {
-  for (const evidence of signature.evidenceHashes) {
+  const evidenceRecords = [
+    ...signature.evidenceHashes,
+    { path: signature.sourcePacketPath, sha256: signature.sourcePacketSha256 },
+    signature.institutionalArtifact,
+  ];
+  for (const evidence of evidenceRecords) {
     try {
       const evidencePath = await resolveContainedExistingFile(root, evidence.path, "evidence");
       const actual = await sha256File(evidencePath);
@@ -107,6 +83,23 @@ export async function verifyOperationalReadiness(root = process.cwd(), options =
       blockers: [{ code: "READINESS_RECORD_INVALID", detail: error instanceof Error ? error.message : String(error) }],
       violations: [{ code: "READINESS_RECORD_INVALID", detail: error instanceof Error ? error.message : String(error) }],
     };
+  }
+
+  if (options.allowTransactionJournal !== true) {
+    try {
+      await lstat(resolve(repositoryRoot, "docs/release/.acceptance-transaction.json"));
+      violations.push({
+        code: "ACCEPTANCE_TRANSACTION_ACTIVE",
+        detail: "an active acceptance transaction journal must be resolved before readiness verification",
+      });
+    } catch (error) {
+      if (error?.code !== "ENOENT") {
+        violations.push({
+          code: "ACCEPTANCE_TRANSACTION_ACTIVE",
+          detail: `cannot verify acceptance transaction journal: ${error instanceof Error ? error.message : String(error)}`,
+        });
+      }
+    }
   }
 
   if (record.schemaVersion !== "1.0") violations.push({ code: "READINESS_SCHEMA_INVALID", detail: "schemaVersion must be 1.0" });
@@ -246,9 +239,31 @@ export async function verifyOperationalReadiness(root = process.cwd(), options =
       });
     }
   }
-  const signatureById = new Map(signatures
-    .filter((signature) => typeof signature?.signatureId === "string")
-    .map((signature) => [signature.signatureId, signature]));
+  const reviewSignatureReferenceCounts = new Map();
+  const matchingReviewSignatureReferenceCounts = new Map();
+  for (const review of reviews) {
+    for (const signatureId of Array.isArray(review?.signatureIds) ? review.signatureIds : []) {
+      reviewSignatureReferenceCounts.set(signatureId, (reviewSignatureReferenceCounts.get(signatureId) ?? 0) + 1);
+      const signature = signatures.find((candidate) => candidate?.signatureId === signatureId);
+      if (signature?.scope === review?.scope) {
+        matchingReviewSignatureReferenceCounts.set(signatureId, (matchingReviewSignatureReferenceCounts.get(signatureId) ?? 0) + 1);
+      }
+    }
+  }
+  for (const signature of signatures) {
+    if (typeof signature?.signatureId !== "string") continue;
+    const references = reviewSignatureReferenceCounts.get(signature.signatureId) ?? 0;
+    const matchingReferences = matchingReviewSignatureReferenceCounts.get(signature.signatureId) ?? 0;
+    if (references !== 1 || matchingReferences !== 1) {
+      violations.push({
+        code: "SIGNATURE_UNLINKED",
+        scope: typeof signature?.scope === "string" ? signature.scope : undefined,
+        detail: `institutional decision ${signature.signatureId} must appear exactly once in its matching review`,
+      });
+    }
+  }
+  const reviewStates = new Map();
+  const roleMissingFindings = [];
   for (const review of reviews) {
     if ((review?.status === "accepted" || review?.status === "accepted-with-conditions")
       && (!Array.isArray(review.signatureIds) || review.signatureIds.length === 0)) {
@@ -258,44 +273,32 @@ export async function verifyOperationalReadiness(root = process.cwd(), options =
         detail: `accepted institutional review ${String(review?.scope ?? "unknown")} has no linked signature`,
       });
     }
-    for (const signatureId of Array.isArray(review?.signatureIds) ? review.signatureIds : []) {
-      const signature = signatureById.get(signatureId);
-      if (signature === undefined) {
-        violations.push({
-          code: "REVIEW_SIGNATURE_NOT_FOUND",
-          scope: typeof review?.scope === "string" ? review.scope : undefined,
-          detail: `institutional review ${String(review?.scope ?? "unknown")} references absent signature ${String(signatureId)}`,
-        });
-        continue;
-      }
-      const expectedDecision = review?.status === "accepted"
-        ? "accept"
-        : review?.status === "accepted-with-conditions"
-          ? "accept-with-conditions"
-          : review?.status === "rejected"
-            ? "reject"
-            : undefined;
-      if (signature.scope !== review?.scope || (expectedDecision !== undefined && signature.decision !== expectedDecision)) {
-        violations.push({
-          code: "REVIEW_SIGNATURE_DECISION_INVALID",
-          scope: typeof review?.scope === "string" ? review.scope : undefined,
-          detail: `${String(signatureId)} does not attest the recorded scope and decision`,
-        });
-      }
+    const state = deriveReviewDecisionState(review, signatures);
+    if (typeof review?.scope === "string") reviewStates.set(review.scope, state);
+    violations.push(...state.violations);
+    for (const role of state.missingRoles) {
+      roleMissingFindings.push({
+        code: "REVIEW_ROLE_MISSING",
+        scope: typeof review?.scope === "string" ? review.scope : undefined,
+        detail: `institutional review ${String(review?.scope ?? "unknown")} lacks a current decision from ${role}`,
+      });
     }
   }
   const pendingReviewScopes = reviews
-    .filter((review) => review?.status === "pending")
+    .filter((review) => reviewStates.get(review?.scope)?.status === "pending")
     .map((review) => review.scope)
     .filter((scope) => typeof scope === "string")
     .sort();
-  const blockers = pendingReviewScopes.map((scope) => ({
+  const blockers = [
+    ...roleMissingFindings,
+    ...pendingReviewScopes.map((scope) => ({
     code: "INSTITUTIONAL_REVIEW_PENDING",
     scope,
     detail: `qualified human acceptance is not recorded for ${scope}`,
-  }));
+    })),
+  ];
   const rejectedReviewScopes = reviews
-    .filter((review) => review?.status === "rejected")
+    .filter((review) => reviewStates.get(review?.scope)?.status === "rejected")
     .map((review) => review.scope)
     .filter((scope) => typeof scope === "string")
     .sort();
@@ -305,7 +308,7 @@ export async function verifyOperationalReadiness(root = process.cwd(), options =
     detail: `qualified human review rejected ${scope}`,
   })));
   const conditionalReviewScopes = reviews
-    .filter((review) => review?.status === "accepted-with-conditions")
+    .filter((review) => reviewStates.get(review?.scope)?.status === "accepted-with-conditions")
     .map((review) => review.scope)
     .filter((scope) => typeof scope === "string")
     .sort();

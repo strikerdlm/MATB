@@ -41,6 +41,138 @@ export const ACCEPTANCE_STATE_PATHS = Object.freeze([
   "docs/release/verification-matrix.md",
   "docs/release/release-manifest.json",
 ]);
+const SHA256 = /^[a-f0-9]{64}$/u;
+const ACCEPTANCE_DECISIONS = new Set(["accept", "accept-with-conditions", "reject"]);
+
+/** Return the schema error for an institutional decision, if any. */
+export function signatureRecordFailure(decision) {
+  if (decision?.schemaVersion !== "1.0") return "schemaVersion must be 1.0";
+  if (decision?.recordType !== "institutional-decision") return "recordType must be institutional-decision";
+  if (!nonEmptyString(decision?.signatureId)) return "signatureId is required";
+  if (!nonEmptyString(decision?.sourcePacketId) || !SHA256.test(decision.sourcePacketId)) return "sourcePacketId must be a SHA-256 identifier";
+  if (decision?.sourcePacketPath !== `docs/release/acceptance-packets/${decision.sourcePacketId}.json`) return "sourcePacketPath must identify the source packet";
+  if (!SHA256.test(decision?.sourcePacketSha256)) return "sourcePacketSha256 must be a SHA-256 hash";
+  if (decision?.supersedesSignatureId !== null && !nonEmptyString(decision?.supersedesSignatureId)) return "supersedesSignatureId must be a signature identifier or null";
+  if (!nonEmptyString(decision?.releaseId)) return "releaseId is required";
+  if (decision?.reviewer?.identityType !== "human") return "reviewer.identityType must be human";
+  if (!nonEmptyString(decision?.reviewer?.identity)) return "reviewer identity is required";
+  if (!nonEmptyString(decision?.reviewer?.organizationUnit)) return "reviewer organization/unit is required";
+  if (!nonEmptyString(decision?.reviewer?.role)) return "reviewer role is required";
+  if (!REQUIRED_REVIEW_SCOPES.includes(decision?.scope)) return "scope is not an approved institutional review scope";
+  if (!ACCEPTANCE_DECISIONS.has(decision?.decision)) return "decision is invalid";
+  if (!exactUtc(decision?.signedAtUtc)) return "signedAtUtc must be an exact UTC timestamp";
+  if (!Array.isArray(decision?.evidenceHashes) || decision.evidenceHashes.length === 0
+    || decision.evidenceHashes.some((evidence) => !nonEmptyString(evidence?.path) || !SHA256.test(evidence?.sha256))) {
+    return "at least one path and SHA-256 evidence record is required";
+  }
+  if (!Array.isArray(decision?.conflicts) || decision.conflicts.some((conflict) => !nonEmptyString(conflict))) return "conflicts must be an array of non-empty strings";
+  if (!Array.isArray(decision?.conditions) || decision.conditions.some((condition) => !nonEmptyString(condition))) return "conditions must be an array of non-empty strings";
+  if (decision.decision === "accept-with-conditions" && decision.conditions.length === 0) return "accept-with-conditions requires at least one open condition";
+  if (decision.decision === "accept" && decision.conditions.length > 0) return "unconditional acceptance cannot retain conditions";
+  if (!exactUtc(decision?.reviewDueAtUtc) || Date.parse(decision.reviewDueAtUtc) <= Date.parse(decision.signedAtUtc)) return "reviewDueAtUtc must be an exact UTC timestamp after signedAtUtc";
+  if (!nonEmptyString(decision?.systemOfRecordRef)) return "systemOfRecordRef is required";
+  if (!nonEmptyString(decision?.institutionalArtifact?.path) || !SHA256.test(decision?.institutionalArtifact?.sha256)) return "institutionalArtifact must contain a path and SHA-256 hash";
+  return undefined;
+}
+
+/** Derive a review's current state from its append-only, role-specific decision chains. */
+export function deriveReviewDecisionState(review, decisions) {
+  const scope = typeof review?.scope === "string" ? review.scope : "unknown";
+  const violations = [];
+  const requiredRoles = Array.isArray(review?.requiredReviewerRoles) ? review.requiredReviewerRoles : [];
+  const signatureIds = Array.isArray(review?.signatureIds) ? review.signatureIds : [];
+  if (!requiredRoles.every(nonEmptyString) || new Set(requiredRoles).size !== requiredRoles.length) {
+    violations.push({ code: "REVIEW_ROLE_INVALID", scope, detail: "requiredReviewerRoles must contain unique non-empty roles" });
+  }
+  if (!signatureIds.every(nonEmptyString) || new Set(signatureIds).size !== signatureIds.length) {
+    violations.push({ code: "REVIEW_SIGNATURE_IDS_INVALID", scope, detail: "signatureIds must contain unique non-empty identifiers" });
+  }
+  const decisionList = Array.isArray(decisions) ? decisions : [];
+  const byId = new Map();
+  for (const decision of decisionList) {
+    if (typeof decision?.signatureId === "string" && !byId.has(decision.signatureId)) byId.set(decision.signatureId, decision);
+  }
+  const linked = [];
+  for (const signatureId of signatureIds) {
+    const decision = byId.get(signatureId);
+    if (decision === undefined) {
+      violations.push({ code: "REVIEW_SIGNATURE_NOT_FOUND", scope, detail: `institutional review ${scope} references absent signature ${signatureId}` });
+    } else {
+      linked.push(decision);
+    }
+  }
+  for (const decision of decisionList) {
+    if (decision?.scope === scope && !signatureIds.includes(decision?.signatureId)) {
+      violations.push({ code: "SIGNATURE_UNLINKED", scope, detail: `institutional decision ${String(decision?.signatureId ?? "unknown")} is not linked from ${scope}` });
+    }
+  }
+  for (const decision of linked) {
+    const failure = signatureRecordFailure(decision);
+    if (failure !== undefined) violations.push({ code: "SIGNATURE_RECORD_INVALID", scope, detail: `${String(decision?.signatureId ?? "unknown")}: ${failure}` });
+    if (decision?.scope !== scope) violations.push({ code: "DECISION_CHAIN_SCOPE_MISMATCH", scope, detail: `${String(decision?.signatureId ?? "unknown")} does not attest ${scope}` });
+    if (!requiredRoles.includes(decision?.reviewer?.role)) violations.push({ code: "REVIEW_ROLE_UNKNOWN", scope, detail: `${String(decision?.signatureId ?? "unknown")} has a reviewer role not required for ${scope}` });
+  }
+  const linkedIds = new Set(linked.map((decision) => decision.signatureId));
+  const children = new Map();
+  for (const decision of linked) {
+    const parentId = decision?.supersedesSignatureId;
+    if (parentId === null) continue;
+    const parent = byId.get(parentId);
+    if (parent === undefined) {
+      violations.push({ code: "DECISION_CHAIN_PARENT_MISSING", scope, detail: `${decision.signatureId} supersedes absent decision ${parentId}` });
+      continue;
+    }
+    if (!linkedIds.has(parentId)) violations.push({ code: "DECISION_CHAIN_PARENT_UNLINKED", scope, detail: `${decision.signatureId} supersedes an unlinked decision ${parentId}` });
+    if (parent.scope !== decision.scope) violations.push({ code: "DECISION_CHAIN_SCOPE_MISMATCH", scope, detail: `${decision.signatureId} supersedes a decision from ${String(parent.scope)}` });
+    if (parent?.reviewer?.role !== decision?.reviewer?.role) violations.push({ code: "DECISION_CHAIN_ROLE_MISMATCH", scope, detail: `${decision.signatureId} supersedes a decision from another reviewer role` });
+    if (exactUtc(parent?.signedAtUtc) && exactUtc(decision?.signedAtUtc) && Date.parse(decision.signedAtUtc) <= Date.parse(parent.signedAtUtc)) {
+      violations.push({ code: "DECISION_CHAIN_TIME_INVALID", scope, detail: `${decision.signatureId} must be signed after ${parentId}` });
+    }
+    const followers = children.get(parentId) ?? [];
+    followers.push(decision);
+    children.set(parentId, followers);
+  }
+  for (const [parentId, followers] of children) {
+    if (followers.length > 1) violations.push({ code: "DECISION_CHAIN_FORK", scope, detail: `${parentId} has ${followers.length} superseding decisions` });
+  }
+  const visiting = new Set();
+  const visited = new Set();
+  const hasCycle = (id) => {
+    if (visiting.has(id)) return true;
+    if (visited.has(id)) return false;
+    visiting.add(id);
+    const parentId = byId.get(id)?.supersedesSignatureId;
+    const cycle = typeof parentId === "string" && linkedIds.has(parentId) && hasCycle(parentId);
+    visiting.delete(id);
+    visited.add(id);
+    return cycle;
+  };
+  for (const decision of linked) {
+    if (hasCycle(decision.signatureId)) {
+      violations.push({ code: "DECISION_CHAIN_CYCLE", scope, detail: `decision chain for ${decision.signatureId} contains a cycle` });
+      break;
+    }
+  }
+  const roleHeads = requiredRoles.flatMap((role) => {
+    const roleDecisions = linked.filter((decision) => decision?.scope === scope && decision?.reviewer?.role === role);
+    return roleDecisions
+      .filter((decision) => !(children.get(decision.signatureId) ?? []).some((child) => child?.reviewer?.role === role))
+      .map((decision) => ({ role, signatureId: decision.signatureId, decision: decision.decision }));
+  });
+  const missingRoles = requiredRoles.filter((role) => !roleHeads.some((head) => head.role === role));
+  const headDecisions = roleHeads.map(({ decision }) => decision);
+  const status = headDecisions.includes("reject")
+    ? "rejected"
+    : missingRoles.length > 0
+      ? "pending"
+      : headDecisions.includes("accept-with-conditions")
+        ? "accepted-with-conditions"
+        : "accepted";
+  if (REVIEW_STATUSES.includes(review?.status) && review.status !== status) {
+    violations.push({ code: "REVIEW_STATUS_DERIVATION_MISMATCH", scope, detail: `recorded status ${review.status} does not match derived status ${status}` });
+  }
+  return { status, missingRoles, roleHeads, violations };
+}
 
 export function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
@@ -93,7 +225,7 @@ export async function readJsonLines(path) {
       return [JSON.parse(line)];
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      throw new Error(`JSON line ${index + 1} is invalid: ${detail}`);
+      throw new Error(`JSON line ${index + 1} is invalid: ${detail}`, { cause: error });
     }
   });
 }
