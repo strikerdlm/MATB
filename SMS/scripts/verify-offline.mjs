@@ -14,8 +14,21 @@ const CONTROL_FILES = new Set([
   "evidence-package-manifest.sig",
   "evidence-package-public-key.pem",
 ]);
+const REQUIRED_ACCEPTANCE_SCOPES = new Set([
+  "cybersecurity-deployment",
+  "emergency-response",
+  "human-factors-protocol",
+  "official-geospatial-data",
+  "operational-checklist",
+  "racae-interpretation-translation",
+  "research-separation",
+  "risk-authority",
+  "training-safety-promotion",
+]);
+const ACCEPTANCE_REVIEW_STATUSES = new Set(["pending", "accepted", "accepted-with-conditions", "rejected"]);
 const OPERATIONAL_WARNING_IDS = new Set([
   "encrypted-storage",
+  "institutional-acceptance",
   "map-baseline",
   "no-downgrade",
   "policy-package",
@@ -127,6 +140,56 @@ function exactUtc(value) {
 
 function packageVersion(value) {
   return typeof value === "string" && /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(value);
+}
+
+function nonEmptyString(value) {
+  return typeof value === "string" && value.trim() !== "";
+}
+
+async function bundledSignatureFailure(bundleRoot, signature, asOfUtc) {
+  if (signature?.schemaVersion !== "1.0") return "signature schemaVersion must be 1.0";
+  if (!nonEmptyString(signature?.signatureId)) return "signatureId is required";
+  if (signature?.reviewer?.identityType !== "human") return "reviewer identity must be human";
+  if (!nonEmptyString(signature?.reviewer?.identity)
+    || !nonEmptyString(signature?.reviewer?.organizationUnit)
+    || !nonEmptyString(signature?.reviewer?.role)) {
+    return "human reviewer identity, organization/unit, and role are required";
+  }
+  if (!REQUIRED_ACCEPTANCE_SCOPES.has(signature?.scope)) return "signature scope is invalid";
+  if (!["accept", "accept-with-conditions", "reject"].includes(signature?.decision)) return "signature decision is invalid";
+  if (!exactUtc(signature?.signedAtUtc) || Date.parse(signature.signedAtUtc) > Date.parse(asOfUtc)) {
+    return "signature time must be exact UTC and not after bundle verification time";
+  }
+  if (!Array.isArray(signature?.evidenceHashes) || signature.evidenceHashes.length === 0) {
+    return "at least one hash-addressed evidence file is required";
+  }
+  for (const evidence of signature.evidenceHashes) {
+    if (!nonEmptyString(evidence?.path) || !SHA256.test(evidence?.sha256)) return "signature evidence path or SHA-256 is invalid";
+    try {
+      const path = containedPath(bundleRoot, evidence.path, "institutional signature evidence");
+      if (await sha256File(path) !== evidence.sha256) return `institutional signature evidence hash does not match: ${evidence.path}`;
+    } catch (error) {
+      return `institutional signature evidence is unavailable: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+  if (!Array.isArray(signature?.conflicts) || signature.conflicts.some((conflict) => !nonEmptyString(conflict))) {
+    return "signature conflicts must be an array of non-empty strings";
+  }
+  if (!Array.isArray(signature?.conditions) || signature.conditions.some((condition) => !nonEmptyString(condition))) {
+    return "signature conditions must be an array of non-empty strings";
+  }
+  if (signature.decision === "accept-with-conditions" && signature.conditions.length === 0) {
+    return "conditional acceptance must state at least one condition";
+  }
+  if (signature.decision === "accept" && signature.conditions.length > 0) {
+    return "unconditional acceptance cannot retain conditions";
+  }
+  if (!exactUtc(signature?.reviewDueAtUtc)
+    || Date.parse(signature.reviewDueAtUtc) <= Date.parse(signature.signedAtUtc)
+    || Date.parse(signature.reviewDueAtUtc) <= Date.parse(asOfUtc)) {
+    return "signature review date must be exact UTC, future, and after signing";
+  }
+  return undefined;
 }
 
 async function scanTar(path, wanted = new Set()) {
@@ -451,6 +514,101 @@ export async function verifyBundle(bundleRoot, options) {
     add("encrypted-storage", "warn", "encrypted storage is required by the install profile but must be attested on the receiving host", ["install/README.md"]);
   } catch (error) {
     add("encrypted-storage", "fail", error instanceof Error ? error.message : String(error));
+  }
+
+  const acceptanceEvidence = [
+    "reports/acceptance/operational-readiness-record.json",
+    "reports/acceptance/state-aviation-acceptance-checklist.md",
+    "reports/acceptance/known-limitations.md",
+    "reports/acceptance/verification-signatures.jsonl",
+  ];
+  try {
+    const record = parseJson(await readFile(resolve(bundleRoot, acceptanceEvidence[0]), "utf8"), "operational-readiness record");
+    const checklist = await readFile(resolve(bundleRoot, acceptanceEvidence[1]), "utf8");
+    const limitations = await readFile(resolve(bundleRoot, acceptanceEvidence[2]), "utf8");
+    const signatureLedger = await readFile(resolve(bundleRoot, acceptanceEvidence[3]), "utf8");
+    if (record.schemaVersion !== "1.0" || typeof record.operationalReady !== "boolean"
+      || !Array.isArray(record.requiredReviews) || !Array.isArray(record.knownLimitations)
+      || checklist.trim() === "" || limitations.trim() === "") {
+      throw new Error("institutional acceptance evidence shape is invalid");
+    }
+    const signatures = signatureLedger.split(/\r?\n/u)
+      .filter((line) => line.trim() !== "")
+      .map((line, index) => parseJson(line, `institutional signature line ${index + 1}`));
+    if (signatures.some((signature) => signature?.reviewer?.identityType !== "human")) {
+      throw new Error("institutional acceptance requires human reviewer identities; automation signatures are forbidden");
+    }
+    const acceptanceControl = manifest?.acceptanceEvidence;
+    if (acceptanceControl !== undefined && (
+      acceptanceControl.recordPath !== acceptanceEvidence[0]
+      || acceptanceControl.checklistPath !== acceptanceEvidence[1]
+      || acceptanceControl.knownLimitationsPath !== acceptanceEvidence[2]
+      || acceptanceControl.signatureLogPath !== acceptanceEvidence[3]
+      || acceptanceControl.qualification !== record.qualification
+      || acceptanceControl.operationalReady !== record.operationalReady
+      || acceptanceControl.signatureCount !== signatures.length
+    )) {
+      throw new Error("bundle acceptance metadata contradicts the bundled readiness record or signature ledger");
+    }
+    const scopeCounts = new Map();
+    for (const review of record.requiredReviews) {
+      if (!REQUIRED_ACCEPTANCE_SCOPES.has(review?.scope) || !ACCEPTANCE_REVIEW_STATUSES.has(review?.status)) {
+        throw new Error(`institutional acceptance review is invalid: ${String(review?.scope ?? "unknown")}`);
+      }
+      scopeCounts.set(review.scope, (scopeCounts.get(review.scope) ?? 0) + 1);
+    }
+    const missingScopes = [...REQUIRED_ACCEPTANCE_SCOPES].filter((scope) => scopeCounts.get(scope) !== 1);
+    if (missingScopes.length > 0 || scopeCounts.size !== REQUIRED_ACCEPTANCE_SCOPES.size) {
+      throw new Error(`institutional acceptance scopes are missing or duplicated: ${missingScopes.join(", ") || "unexpected scope"}`);
+    }
+    const signatureById = new Map();
+    for (const signature of signatures) {
+      if (typeof signature?.signatureId !== "string" || signature.signatureId === "" || signatureById.has(signature.signatureId)) {
+        throw new Error(`institutional human signature identifier is absent or duplicated: ${String(signature?.signatureId ?? "unknown")}`);
+      }
+      const signatureFailure = await bundledSignatureFailure(bundleRoot, signature, asOfUtc);
+      if (signatureFailure !== undefined) throw new Error(`${signature.signatureId}: ${signatureFailure}`);
+      signatureById.set(signature.signatureId, signature);
+    }
+    for (const review of record.requiredReviews) {
+      const signatureIds = Array.isArray(review.signatureIds) ? review.signatureIds : [];
+      if (review.status !== "pending" && signatureIds.length === 0) {
+        throw new Error(`institutional review ${review.scope} has no linked human signature`);
+      }
+      const expectedDecision = review.status === "accepted"
+        ? "accept"
+        : review.status === "accepted-with-conditions"
+          ? "accept-with-conditions"
+          : review.status === "rejected"
+            ? "reject"
+            : undefined;
+      for (const signatureId of signatureIds) {
+        const signature = signatureById.get(signatureId);
+        if (signature === undefined) throw new Error(`institutional review ${review.scope} references an absent linked signature`);
+        if (signature.scope !== review.scope || (expectedDecision !== undefined && signature.decision !== expectedDecision)) {
+          throw new Error(`institutional linked signature does not attest ${review.scope} and its recorded decision`);
+        }
+      }
+    }
+    const blockedReviews = record.requiredReviews.filter((review) => review.status !== "accepted");
+    const openLimitations = record.knownLimitations.filter((limitation) => limitation?.status === "open" && limitation?.releaseBlocking === true);
+    if (record.operationalReady && (blockedReviews.length > 0 || openLimitations.length > 0)) {
+      throw new Error(`operational readiness is overclaimed while ${blockedReviews.length} reviews are pending or conditional and ${openLimitations.length} limitations remain release-blocking`);
+    }
+    if ((record.operationalReady && record.qualification !== "accepted")
+      || (!record.operationalReady && record.qualification !== "blocked")) {
+      throw new Error("institutional acceptance qualification contradicts operationalReady");
+    }
+    add(
+      "institutional-acceptance",
+      record.operationalReady ? "pass" : "warn",
+      record.operationalReady
+        ? "institutional acceptance record declares the exact release operationally ready"
+        : `institutional acceptance evidence is present and explicitly blocked by ${blockedReviews.length} reviews and ${openLimitations.length} limitations`,
+      acceptanceEvidence,
+    );
+  } catch (error) {
+    add("institutional-acceptance", "fail", error instanceof Error ? error.message : String(error), acceptanceEvidence);
   }
 
   if (manifest?.releaseAttestation === null || manifest?.releaseAttestation === undefined) {
