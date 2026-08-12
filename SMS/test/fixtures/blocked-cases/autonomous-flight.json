@@ -1,0 +1,6 @@
+{
+  "id": "autonomous-flight",
+  "kind": "automation",
+  "automationMode": "autonomous",
+  "expectedReason": "AUTONOMOUS_FLIGHT_PROHIBITED"
+}

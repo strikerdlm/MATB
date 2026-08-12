@@ -80,6 +80,7 @@ export function AppShell({ initialPath = "/missions", initialLocale = "en" }: Ap
         <nav aria-label="Mission navigation" className="nav-list">
           {navItems.map((item) => (
             <button
+              aria-label={labels[item.labelKey]}
               className={`nav-item ${activePath === item.path.split("#")[0] ? "is-active" : ""}`}
               key={item.path}
               onClick={() => setPath(item.path)}
