@@ -84,6 +84,14 @@ describe("institutional acceptance review packets", () => {
     expect((await readdir(join(root, "selected"))).length).toBe(1);
   });
 
+  it("rejects a subset containing two approved review scopes", async () => {
+    const root = await temporaryRoot();
+    await expect(generateAcceptanceReviewPackets(smsRoot, join(root, "two-scopes"), {
+      ...options,
+      scopes: ["risk-authority", "emergency-response"],
+    })).rejects.toThrow(/exactly one/u);
+  });
+
   it("rejects an unknown scope", async () => {
     const root = await temporaryRoot();
     await expect(generateAcceptanceReviewPackets(smsRoot, join(root, "unknown"), {

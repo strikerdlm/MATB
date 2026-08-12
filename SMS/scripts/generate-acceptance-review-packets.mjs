@@ -40,13 +40,11 @@ function requireExactAsOfUtc(options) {
 }
 
 function selectedScopes(scopes) {
-  const requested = scopes ?? REQUIRED_REVIEW_SCOPES;
-  if (!Array.isArray(requested) || requested.length === 0) throw new Error("scopes must contain at least one approved scope");
-  if (new Set(requested).size !== requested.length) throw new Error("scopes must not contain duplicates");
-  for (const scope of requested) {
-    if (!REQUIRED_REVIEW_SCOPES.includes(scope)) throw new Error(`scope is not approved: ${String(scope)}`);
-  }
-  return REQUIRED_REVIEW_SCOPES.filter((scope) => requested.includes(scope));
+  if (scopes === undefined) return REQUIRED_REVIEW_SCOPES;
+  if (!Array.isArray(scopes) || scopes.length !== 1) throw new Error("scopes must specify exactly one approved scope");
+  const [scope] = scopes;
+  if (!REQUIRED_REVIEW_SCOPES.includes(scope)) throw new Error(`scope is not approved: ${String(scope)}`);
+  return [scope];
 }
 
 async function hashInventory(root, paths) {
