@@ -18,10 +18,16 @@ import {
 } from "node:fs/promises";
 import { dirname, extname, join, relative, resolve, sep } from "node:path";
 import { spawn } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const smsRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const SHA256 = /^[a-f0-9]{64}$/;
+const ACCEPTANCE_EVIDENCE_FILES = Object.freeze([
+  "operational-readiness-record.json",
+  "state-aviation-acceptance-checklist.md",
+  "known-limitations.md",
+  "verification-signatures.jsonl",
+]);
 
 function parseArguments(argv) {
   const options = { output: undefined, imageRef: undefined, help: false };
@@ -176,6 +182,28 @@ async function copyRegulatoryPackage(stage) {
     }],
   }, null, 2)}\n`, { encoding: "utf8", mode: 0o644 });
   return manifest;
+}
+
+export async function copyAcceptanceEvidence(stage) {
+  const source = resolve(smsRoot, "docs/release");
+  const destination = resolve(stage, "reports/acceptance");
+  await mkdir(destination, { recursive: true, mode: 0o755 });
+  for (const name of ACCEPTANCE_EVIDENCE_FILES) {
+    await cp(resolve(source, name), resolve(destination, name), { errorOnExist: true, force: false });
+  }
+  const record = JSON.parse(await readFile(resolve(destination, "operational-readiness-record.json"), "utf8"));
+  const signatures = (await readFile(resolve(destination, "verification-signatures.jsonl"), "utf8"))
+    .split(/\r?\n/u)
+    .filter((line) => line.trim() !== "");
+  return {
+    recordPath: "reports/acceptance/operational-readiness-record.json",
+    checklistPath: "reports/acceptance/state-aviation-acceptance-checklist.md",
+    knownLimitationsPath: "reports/acceptance/known-limitations.md",
+    signatureLogPath: "reports/acceptance/verification-signatures.jsonl",
+    qualification: record.qualification,
+    operationalReady: record.operationalReady,
+    signatureCount: signatures.length,
+  };
 }
 
 async function writeSbom(stage, builtAtUtc) {
@@ -348,6 +376,7 @@ async function buildBundle(output, imageRef) {
     if (!SHA256.test(archiveSha256)) throw new Error("OCI archive digest is invalid");
 
     const regulatory = await copyRegulatoryPackage(stage);
+    const acceptanceEvidence = await copyAcceptanceEvidence(stage);
     await cp(resolve(smsRoot, "docs/provenance/map-package-register.jsonl"), resolve(stage, "provenance/map-package-register.jsonl"), { errorOnExist: true, force: false });
     await cp(resolve(smsRoot, "docs/provenance/kernel-golden-case-report.md"), resolve(stage, "provenance/kernel-golden-case-report.md"), { errorOnExist: true, force: false });
     await cp(resolve(smsRoot, "scripts/verify-offline.mjs"), resolve(stage, "bin/verify-offline.mjs"), { errorOnExist: true, force: false });
@@ -388,6 +417,7 @@ async function buildBundle(output, imageRef) {
         manifestDigest,
       },
       packageIds: [regulatory.packageId],
+      acceptanceEvidence,
       releaseAttestation: releaseAttestation === undefined ? null : {
         path: "provenance/release/release-manifest.json",
         sha256: releaseAttestation.manifestSha256,
@@ -458,4 +488,6 @@ async function main() {
   }
 }
 
-await main();
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  await main();
+}

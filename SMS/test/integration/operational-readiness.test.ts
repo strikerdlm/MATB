@@ -1,0 +1,538 @@
+import { spawnSync } from "node:child_process";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { verifyOperationalReadiness } from "../../scripts/verify-operational-readiness.mjs";
+
+const requiredReviewScopes = [
+  "cybersecurity-deployment",
+  "emergency-response",
+  "human-factors-protocol",
+  "official-geospatial-data",
+  "operational-checklist",
+  "racae-interpretation-translation",
+  "research-separation",
+  "risk-authority",
+  "training-safety-promotion",
+] as const;
+
+const releaseDocumentPaths = {
+  acceptanceChecklistPath: "docs/release/state-aviation-acceptance-checklist.md",
+  knownLimitationsPath: "docs/release/known-limitations.md",
+  verificationMatrixPath: "docs/release/verification-matrix.md",
+} as const;
+
+const temporaryDirectories: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true, force: true })));
+});
+
+async function fixture(record: unknown, signatures: readonly unknown[]): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), "fac-isr-readiness-"));
+  temporaryDirectories.push(root);
+  await mkdir(join(root, "docs/release"), { recursive: true });
+  await mkdir(join(root, "evidence"), { recursive: true });
+  await writeFile(join(root, "docs/release/operational-readiness-record.json"), `${JSON.stringify(record, null, 2)}\n`, "utf8");
+  await writeFile(join(root, "docs/release/verification-signatures.jsonl"), signatures.map((signature) => JSON.stringify(signature)).join("\n"), "utf8");
+  await writeFile(join(root, "docs/release/state-aviation-acceptance-checklist.md"), "# Acceptance checklist\n", "utf8");
+  await writeFile(join(root, "docs/release/known-limitations.md"), "# Known limitations\n", "utf8");
+  await writeFile(join(root, "docs/release/verification-matrix.md"), "# Verification matrix\n", "utf8");
+  await writeFile(join(root, "evidence/verification.txt"), "verified\n", "utf8");
+  return root;
+}
+
+function humanSignature(scope: typeof requiredReviewScopes[number]): Record<string, unknown> {
+  return {
+    schemaVersion: "1.0",
+    signatureId: `human-${scope}`,
+    reviewer: {
+      identity: `reviewer-${scope}`,
+      identityType: "human",
+      organizationUnit: "Colombian Aerospace Force",
+      role: `qualified reviewer for ${scope}`,
+    },
+    scope,
+    decision: "accept",
+    signedAtUtc: "2026-08-12T00:00:00.000Z",
+    evidenceHashes: [{ path: "evidence/verification.txt", sha256: "672eb8316fec83f94119a4193f9fc552513d56a147502f8be4830e017d817831" }],
+    conflicts: [],
+    conditions: [],
+    reviewDueAtUtc: "2099-09-12T00:00:00.000Z",
+  };
+}
+
+function acceptedRecord(signatures: readonly Record<string, unknown>[]): Record<string, unknown> {
+  return {
+    schemaVersion: "1.0",
+    operationalReady: true,
+    ...releaseDocumentPaths,
+    signatureLogPath: "docs/release/verification-signatures.jsonl",
+    knownLimitations: [],
+    requiredReviews: requiredReviewScopes.map((scope, index) => ({
+      scope,
+      status: "accepted",
+      signatureIds: [signatures[index]?.signatureId],
+    })),
+  };
+}
+
+function knownLimitation(overrides: Readonly<Record<string, unknown>> = {}): Record<string, unknown> {
+  return {
+    id: "LIM-TEST-001",
+    category: "aircraft-capability",
+    status: "open",
+    releaseBlocking: true,
+    summary: "Representative hardware acceptance is pending.",
+    degradedDataProcedure: "Remain in non-operational evaluation mode.",
+    requiredHumanAction: "Complete and sign the receiving-hardware acceptance protocol.",
+    ...overrides,
+  };
+}
+
+describe("institutional operational-readiness evidence", () => {
+  it("reports every absent human review as pending without claiming operational readiness", () => {
+    const result = spawnSync(process.execPath, ["scripts/verify-operational-readiness.mjs", "--json"], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+
+    expect(result.status, result.stderr).toBe(0);
+    const report = JSON.parse(result.stdout) as {
+      readonly ok: boolean;
+      readonly operationalReady: boolean;
+      readonly qualification: string;
+      readonly signatureCount: number;
+      readonly pendingReviewScopes: readonly string[];
+      readonly blockers: readonly { readonly code: string; readonly scope?: string; readonly limitationId?: string }[];
+    };
+    expect(report).toMatchObject({ ok: true, operationalReady: false, qualification: "blocked", signatureCount: 0 });
+    expect(new Set(report.pendingReviewScopes)).toEqual(new Set(requiredReviewScopes));
+    expect(report.blockers.filter(({ code }) => code === "INSTITUTIONAL_REVIEW_PENDING")).toHaveLength(requiredReviewScopes.length);
+    expect(report.blockers.filter(({ code }) => code === "KNOWN_LIMITATION_OPEN")).toHaveLength(10);
+  });
+
+  it("keeps the release gate fail-closed when operational readiness is required", () => {
+    const result = spawnSync(process.execPath, ["scripts/verify-operational-readiness.mjs", "--require-ready"], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("operationalReady=false");
+  });
+
+  it("records every required limitation class and an explicit critical-data exception process", async () => {
+    const record = JSON.parse(await readFile(join(process.cwd(), "docs/release/operational-readiness-record.json"), "utf8")) as {
+      knownLimitations: Array<Record<string, unknown>>;
+    };
+    const categories = new Set(record.knownLimitations.map(({ category }) => category));
+
+    expect(categories).toEqual(new Set([
+      "aircraft-capability",
+      "cybersecurity-deployment",
+      "human-factors",
+      "official-data-dependency",
+      "performance-validation",
+      "profile-boundary",
+      "research-limitation",
+      "telemetry-field",
+      "terrain-obstacle",
+      "translation-gap",
+    ]));
+    expect(record.knownLimitations.find(({ category }) => category === "official-data-dependency"))
+      .toEqual(expect.objectContaining({
+        status: "open",
+        releaseBlocking: true,
+        controlledExceptionProcess: expect.stringContaining("delegated authority"),
+      }));
+    expect(record.knownLimitations.every(({ requiredHumanAction }) => typeof requiredHumanAction === "string" && requiredHumanAction.trim() !== "")).toBe(true);
+  });
+
+  it("rejects automated identities as institutional acceptance signatures", async () => {
+    const signatures = requiredReviewScopes.map((scope) => ({
+      schemaVersion: "1.0",
+      signatureId: `automated-${scope}`,
+      reviewer: {
+        identity: "fac-isr-sms-ci",
+        identityType: "automation",
+        organizationUnit: "FAC ISR SMS software verification",
+        role: "automated verifier",
+      },
+      scope,
+      decision: "accept",
+      signedAtUtc: "2026-08-12T00:00:00.000Z",
+      evidenceHashes: [{ path: "dist/reports/verification-report.json", sha256: "a".repeat(64) }],
+      conflicts: [],
+      conditions: [],
+      reviewDueAtUtc: "2026-09-12T00:00:00.000Z",
+    }));
+    const root = await fixture({
+      schemaVersion: "1.0",
+      operationalReady: true,
+      ...releaseDocumentPaths,
+      signatureLogPath: "docs/release/verification-signatures.jsonl",
+      requiredReviews: requiredReviewScopes.map((scope) => ({
+        scope,
+        status: "accepted",
+        signatureIds: [`automated-${scope}`],
+      })),
+    }, signatures);
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.ok).toBe(false);
+    expect(report.operationalReady).toBe(false);
+    expect(report.violations).toContainEqual(expect.objectContaining({ code: "AUTOMATED_ACCEPTANCE_FORBIDDEN" }));
+  });
+
+  it("rejects accepted review statuses that have no linked signatures", async () => {
+    const root = await fixture({
+      schemaVersion: "1.0",
+      operationalReady: true,
+      ...releaseDocumentPaths,
+      signatureLogPath: "docs/release/verification-signatures.jsonl",
+      requiredReviews: requiredReviewScopes.map((scope) => ({
+        scope,
+        status: "accepted",
+        signatureIds: [],
+      })),
+    }, []);
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.ok).toBe(false);
+    expect(report.operationalReady).toBe(false);
+    expect(report.violations.filter(({ code }) => code === "MISSING_REVIEW_SIGNATURE")).toHaveLength(requiredReviewScopes.length);
+  });
+
+  it("rejects a review that links to a nonexistent signature record", async () => {
+    const root = await fixture({
+      schemaVersion: "1.0",
+      operationalReady: true,
+      ...releaseDocumentPaths,
+      signatureLogPath: "docs/release/verification-signatures.jsonl",
+      requiredReviews: [{ scope: "risk-authority", status: "accepted", signatureIds: ["missing-signature"] }],
+    }, []);
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.ok).toBe(false);
+    expect(report.operationalReady).toBe(false);
+    expect(report.violations).toContainEqual(expect.objectContaining({ code: "REVIEW_SIGNATURE_NOT_FOUND", scope: "risk-authority" }));
+  });
+
+  it("rejects readiness when any required institutional review scope is absent", async () => {
+    const signature = humanSignature("risk-authority");
+    const root = await fixture({
+      schemaVersion: "1.0",
+      operationalReady: true,
+      ...releaseDocumentPaths,
+      signatureLogPath: "docs/release/verification-signatures.jsonl",
+      requiredReviews: [{ scope: "risk-authority", status: "accepted", signatureIds: [signature.signatureId] }],
+    }, [signature]);
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.ok).toBe(false);
+    expect(report.operationalReady).toBe(false);
+    expect(report.violations.filter(({ code }) => code === "REQUIRED_REVIEW_SCOPE_MISSING")).toHaveLength(requiredReviewScopes.length - 1);
+  });
+
+  it("rejects duplicate institutional review scopes", async () => {
+    const signatures = requiredReviewScopes.map(humanSignature);
+    const record = acceptedRecord(signatures);
+    const root = await fixture({
+      ...record,
+      requiredReviews: [
+        ...(record.requiredReviews as readonly unknown[]),
+        { scope: "risk-authority", status: "accepted", signatureIds: ["human-risk-authority"] },
+      ],
+    }, signatures);
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.ok).toBe(false);
+    expect(report.operationalReady).toBe(false);
+    expect(report.violations).toContainEqual(expect.objectContaining({ code: "REQUIRED_REVIEW_SCOPE_DUPLICATE", scope: "risk-authority" }));
+  });
+
+  it("rejects an unrecognized institutional review status", async () => {
+    const signatures = requiredReviewScopes.map(humanSignature);
+    const record = acceptedRecord(signatures);
+    const reviews = record.requiredReviews as readonly Record<string, unknown>[];
+    const root = await fixture({
+      ...record,
+      requiredReviews: reviews.map((review) => review.scope === "risk-authority"
+        ? { ...review, status: "waived" }
+        : review),
+    }, signatures);
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.ok).toBe(false);
+    expect(report.operationalReady).toBe(false);
+    expect(report.violations).toContainEqual(expect.objectContaining({ code: "REVIEW_STATUS_INVALID", scope: "risk-authority" }));
+  });
+
+  it("rejects duplicate institutional signature identifiers", async () => {
+    const signatures = requiredReviewScopes.map(humanSignature);
+    signatures[1] = { ...signatures[1], signatureId: signatures[0]?.signatureId };
+    const root = await fixture(acceptedRecord(signatures), signatures);
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.ok).toBe(false);
+    expect(report.operationalReady).toBe(false);
+    expect(report.violations).toContainEqual(expect.objectContaining({ code: "SIGNATURE_ID_DUPLICATE" }));
+  });
+
+  it("rejects a readiness record without a structured limitations register", async () => {
+    const signatures = requiredReviewScopes.map(humanSignature);
+    const { knownLimitations: _knownLimitations, ...record } = acceptedRecord(signatures);
+    const root = await fixture(record, signatures);
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.ok).toBe(false);
+    expect(report.operationalReady).toBe(false);
+    expect(report.violations).toContainEqual(expect.objectContaining({ code: "KNOWN_LIMITATIONS_INVALID" }));
+  });
+
+  it("rejects a non-boolean operational-readiness state", async () => {
+    const signatures = requiredReviewScopes.map(humanSignature);
+    const root = await fixture({ ...acceptedRecord(signatures), operationalReady: "true" }, signatures);
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.ok).toBe(false);
+    expect(report.operationalReady).toBe(false);
+    expect(report.violations).toContainEqual(expect.objectContaining({ code: "READINESS_STATE_INVALID" }));
+  });
+
+  it("rejects a release-document reference that escapes the repository", async () => {
+    const signatures = requiredReviewScopes.map(humanSignature);
+    const root = await fixture({
+      ...acceptedRecord(signatures),
+      acceptanceChecklistPath: "../forged-acceptance.md",
+    }, signatures);
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.ok).toBe(false);
+    expect(report.operationalReady).toBe(false);
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      code: "READINESS_DOCUMENT_INVALID",
+      detail: expect.stringMatching(/traversal|relative/u),
+    }));
+  });
+
+  it("rejects a signature-ledger reference that escapes the repository", async () => {
+    const signatures = requiredReviewScopes.map(humanSignature);
+    const root = await fixture({
+      ...acceptedRecord(signatures),
+      signatureLogPath: "../forged-signatures.jsonl",
+    }, signatures);
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.ok).toBe(false);
+    expect(report.operationalReady).toBe(false);
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      code: "SIGNATURE_LOG_INVALID",
+      detail: expect.stringMatching(/traversal|relative/u),
+    }));
+  });
+
+  it.each([
+    ["identifier", knownLimitation({ id: "" })],
+    ["category", knownLimitation({ category: "miscellaneous" })],
+    ["status", knownLimitation({ status: "deferred" })],
+    ["release impact", knownLimitation({ releaseBlocking: "yes" })],
+    ["summary", knownLimitation({ summary: "" })],
+    ["degraded-data procedure", knownLimitation({ degradedDataProcedure: "" })],
+    ["required human action", knownLimitation({ requiredHumanAction: "" })],
+  ] as const)("rejects a known limitation with an invalid %s", async (_name, limitation) => {
+    const signatures = requiredReviewScopes.map(humanSignature);
+    const root = await fixture({ ...acceptedRecord(signatures), knownLimitations: [limitation] }, signatures);
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.ok).toBe(false);
+    expect(report.operationalReady).toBe(false);
+    expect(report.violations).toContainEqual(expect.objectContaining({ code: "KNOWN_LIMITATION_INVALID" }));
+  });
+
+  it("rejects duplicate known-limitation identifiers", async () => {
+    const signatures = requiredReviewScopes.map(humanSignature);
+    const root = await fixture({
+      ...acceptedRecord(signatures),
+      knownLimitations: [knownLimitation(), knownLimitation({ summary: "A second limitation reused the identifier." })],
+    }, signatures);
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.ok).toBe(false);
+    expect(report.operationalReady).toBe(false);
+    expect(report.violations).toContainEqual(expect.objectContaining({ code: "KNOWN_LIMITATION_ID_DUPLICATE", limitationId: "LIM-TEST-001" }));
+  });
+
+  it.each([
+    ["schema version", { ...humanSignature("risk-authority"), schemaVersion: "2.0" }],
+    ["signature identity", { ...humanSignature("risk-authority"), signatureId: "" }],
+    ["reviewer identity", { ...humanSignature("risk-authority"), reviewer: { ...(humanSignature("risk-authority").reviewer as object), identity: "" } }],
+    ["organization unit", { ...humanSignature("risk-authority"), reviewer: { ...(humanSignature("risk-authority").reviewer as object), organizationUnit: "" } }],
+    ["reviewer role", { ...humanSignature("risk-authority"), reviewer: { ...(humanSignature("risk-authority").reviewer as object), role: "" } }],
+    ["review scope", { ...humanSignature("risk-authority"), scope: "unapproved-scope" }],
+    ["decision", { ...humanSignature("risk-authority"), decision: "observe" }],
+    ["signature time", { ...humanSignature("risk-authority"), signedAtUtc: "12 August 2026" }],
+    ["evidence hashes", { ...humanSignature("risk-authority"), evidenceHashes: [] }],
+    ["conflict disclosure", { ...humanSignature("risk-authority"), conflicts: "none" }],
+    ["conflict entry", { ...humanSignature("risk-authority"), conflicts: [1] }],
+    ["acceptance conditions", { ...humanSignature("risk-authority"), conditions: "none" }],
+    ["acceptance condition entry", { ...humanSignature("risk-authority"), conditions: [""] }],
+    ["empty conditional acceptance", { ...humanSignature("risk-authority"), decision: "accept-with-conditions", conditions: [] }],
+    ["conditions on unconditional acceptance", { ...humanSignature("risk-authority"), conditions: ["Unresolved constraint."] }],
+    ["review date", { ...humanSignature("risk-authority"), reviewDueAtUtc: "2026-08-11T00:00:00.000Z" }],
+  ] as const)("rejects an institutional signature with invalid %s", async (_name, candidate) => {
+    const signatures = requiredReviewScopes.map((scope) => scope === "risk-authority" ? candidate : humanSignature(scope));
+    const root = await fixture(acceptedRecord(signatures), signatures);
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.ok).toBe(false);
+    expect(report.operationalReady).toBe(false);
+    expect(report.violations).toContainEqual(expect.objectContaining({ code: "SIGNATURE_RECORD_INVALID" }));
+  });
+
+  it.each([
+    ["mismatched hash", [{ path: "evidence/verification.txt", sha256: "b".repeat(64) }]],
+    ["escaping path", [{ path: "../outside-evidence.txt", sha256: "672eb8316fec83f94119a4193f9fc552513d56a147502f8be4830e017d817831" }]],
+  ] as const)("rejects signature evidence with a %s", async (_name, evidenceHashes) => {
+    const candidate = { ...humanSignature("risk-authority"), evidenceHashes };
+    const signatures = requiredReviewScopes.map((scope) => scope === "risk-authority" ? candidate : humanSignature(scope));
+    const root = await fixture(acceptedRecord(signatures), signatures);
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.ok).toBe(false);
+    expect(report.operationalReady).toBe(false);
+    expect(report.violations).toContainEqual(expect.objectContaining({ code: "SIGNATURE_EVIDENCE_INVALID", scope: "risk-authority" }));
+  });
+
+  it("rejects an institutional signature after its review date", async () => {
+    const signatures = requiredReviewScopes.map(humanSignature);
+    const root = await fixture(acceptedRecord(signatures), signatures);
+
+    const report = await verifyOperationalReadiness(root, { asOfUtc: "2100-01-01T00:00:00.000Z" });
+
+    expect(report.ok).toBe(false);
+    expect(report.operationalReady).toBe(false);
+    expect(report.violations.filter(({ code }) => code === "SIGNATURE_REVIEW_EXPIRED")).toHaveLength(requiredReviewScopes.length);
+  });
+
+  it("rejects an institutional signature dated after the verification time", async () => {
+    const signatures = requiredReviewScopes.map(humanSignature);
+    const root = await fixture(acceptedRecord(signatures), signatures);
+
+    const report = await verifyOperationalReadiness(root, { asOfUtc: "2026-08-11T00:00:00.000Z" });
+
+    expect(report.ok).toBe(false);
+    expect(report.operationalReady).toBe(false);
+    expect(report.violations.filter(({ code }) => code === "SIGNATURE_TIME_INVALID")).toHaveLength(requiredReviewScopes.length);
+  });
+
+  it.each([
+    ["different review scope", { ...humanSignature("risk-authority"), scope: "operational-checklist" }],
+    ["rejection decision", { ...humanSignature("risk-authority"), decision: "reject" }],
+  ] as const)("rejects an accepted review linked to a signature with a %s", async (_name, candidate) => {
+    const signatures = requiredReviewScopes.map((scope) => scope === "risk-authority" ? candidate : humanSignature(scope));
+    const root = await fixture(acceptedRecord(signatures), signatures);
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.ok).toBe(false);
+    expect(report.operationalReady).toBe(false);
+    expect(report.violations).toContainEqual(expect.objectContaining({ code: "REVIEW_SIGNATURE_DECISION_INVALID", scope: "risk-authority" }));
+  });
+
+  it("keeps a structurally valid record blocked while a release-blocking limitation is open", async () => {
+    const signatures = requiredReviewScopes.map(humanSignature);
+    const root = await fixture({
+      ...acceptedRecord(signatures),
+      operationalReady: false,
+      knownLimitations: [knownLimitation()],
+    }, signatures);
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.ok).toBe(true);
+    expect(report.operationalReady).toBe(false);
+    expect(report.qualification).toBe("blocked");
+    expect(report.blockers).toContainEqual(expect.objectContaining({ code: "KNOWN_LIMITATION_OPEN", limitationId: "LIM-TEST-001" }));
+  });
+
+  it("keeps a structurally valid record blocked when a human review rejects its scope", async () => {
+    const signatures = requiredReviewScopes.map((scope) => scope === "risk-authority"
+      ? { ...humanSignature(scope), decision: "reject" }
+      : humanSignature(scope));
+    const root = await fixture({
+      schemaVersion: "1.0",
+      operationalReady: false,
+      ...releaseDocumentPaths,
+      signatureLogPath: "docs/release/verification-signatures.jsonl",
+      knownLimitations: [],
+      requiredReviews: requiredReviewScopes.map((scope, index) => ({
+        scope,
+        status: scope === "risk-authority" ? "rejected" : "accepted",
+        signatureIds: [signatures[index]?.signatureId],
+      })),
+    }, signatures);
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.ok).toBe(true);
+    expect(report.operationalReady).toBe(false);
+    expect(report.qualification).toBe("blocked");
+    expect(report.blockers).toContainEqual(expect.objectContaining({ code: "INSTITUTIONAL_REVIEW_REJECTED", scope: "risk-authority" }));
+  });
+
+  it("keeps a conditional human acceptance blocked until its conditions are closed", async () => {
+    const signatures = requiredReviewScopes.map((scope) => scope === "risk-authority"
+      ? { ...humanSignature(scope), decision: "accept-with-conditions", conditions: ["Complete live command-post exercise."] }
+      : humanSignature(scope));
+    const root = await fixture({
+      schemaVersion: "1.0",
+      operationalReady: false,
+      ...releaseDocumentPaths,
+      signatureLogPath: "docs/release/verification-signatures.jsonl",
+      knownLimitations: [],
+      requiredReviews: requiredReviewScopes.map((scope, index) => ({
+        scope,
+        status: scope === "risk-authority" ? "accepted-with-conditions" : "accepted",
+        signatureIds: [signatures[index]?.signatureId],
+      })),
+    }, signatures);
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.ok).toBe(true);
+    expect(report.operationalReady).toBe(false);
+    expect(report.blockers).toContainEqual(expect.objectContaining({ code: "ACCEPTANCE_CONDITION_OPEN", scope: "risk-authority" }));
+  });
+
+  it("rejects an operational-readiness claim while any release blocker remains open", async () => {
+    const signatures = requiredReviewScopes.map(humanSignature);
+    const root = await fixture({
+      ...acceptedRecord(signatures),
+      knownLimitations: [knownLimitation()],
+    }, signatures);
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.ok).toBe(false);
+    expect(report.operationalReady).toBe(false);
+    expect(report.violations).toContainEqual(expect.objectContaining({ code: "READINESS_OVERCLAIMED" }));
+  });
+});
