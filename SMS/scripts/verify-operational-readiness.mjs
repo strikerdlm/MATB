@@ -17,7 +17,7 @@ import {
   isControlledAcceptanceArtifactPath,
 } from "./acceptance-contracts.mjs";
 
-export { signatureRecordFailure, deriveReviewDecisionState } from "./acceptance-contracts.mjs";
+export { signatureRecordFailure, deriveReviewDecisionState, isControlledAcceptanceArtifactPath } from "./acceptance-contracts.mjs";
 
 const RECORD_PATH = "docs/release/operational-readiness-record.json";
 const READINESS_DOCUMENT_FIELDS = Object.freeze([

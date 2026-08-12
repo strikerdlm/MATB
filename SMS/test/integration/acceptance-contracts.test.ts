@@ -10,6 +10,7 @@ import {
   resolveContainedExistingFile,
   sha256Bytes,
 } from "../../scripts/acceptance-contracts.mjs";
+import { isControlledAcceptanceArtifactPath as verifierArtifactPath } from "../../scripts/verify-operational-readiness.mjs";
 
 const packetFixture = "fixture packet\n";
 const artifactFixture = "fixture institutional artifact\n";
@@ -58,6 +59,10 @@ describe("acceptance contracts", () => {
     const value = { z: [{ b: 2, a: 1 }], a: "value" };
     expect(canonicalJson(value)).toBe('{"a":"value","z":[{"a":1,"b":2}]}');
     expect(sha256Bytes(Buffer.from("verified\n"))).toBe("672eb8316fec83f94119a4193f9fc552513d56a147502f8be4830e017d817831");
+  });
+
+  it("exposes the declared controlled-artifact predicate from the readiness verifier", () => {
+    expect(verifierArtifactPath("docs/release/acceptance-artifacts/decision.json")).toBe(true);
   });
 
   it.each([
