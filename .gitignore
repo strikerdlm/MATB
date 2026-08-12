@@ -4,4 +4,5 @@ __pycache__/
 webui/frontend/test-results/
 webui/frontend/playwright-report/
 .suas-e2e/
+/.worktrees/
 /exports/

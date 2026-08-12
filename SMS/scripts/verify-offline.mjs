@@ -5,6 +5,12 @@ import { createReadStream } from "node:fs";
 import { lstat, open, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
+import {
+  ACCEPTANCE_EVIDENCE_PATHS,
+  ACCEPTANCE_STATE_PATHS,
+  deriveReviewDecisionState,
+  signatureRecordFailure,
+} from "./acceptance-contracts.mjs";
 
 const SHA256 = /^[a-f0-9]{64}$/;
 const OCI_DIGEST = /^sha256:([a-f0-9]{64})$/;
@@ -14,8 +20,21 @@ const CONTROL_FILES = new Set([
   "evidence-package-manifest.sig",
   "evidence-package-public-key.pem",
 ]);
+const REQUIRED_ACCEPTANCE_SCOPES = new Set([
+  "cybersecurity-deployment",
+  "emergency-response",
+  "human-factors-protocol",
+  "official-geospatial-data",
+  "operational-checklist",
+  "racae-interpretation-translation",
+  "research-separation",
+  "risk-authority",
+  "training-safety-promotion",
+]);
+const ACCEPTANCE_REVIEW_STATUSES = new Set(["pending", "accepted", "accepted-with-conditions", "rejected"]);
 const OPERATIONAL_WARNING_IDS = new Set([
   "encrypted-storage",
+  "institutional-acceptance",
   "map-baseline",
   "no-downgrade",
   "policy-package",
@@ -80,6 +99,16 @@ function containedPath(root, path, field) {
   return target;
 }
 
+function containedDirectoryPath(root, directory, path, field) {
+  const target = containedPath(root, path, field);
+  const directoryRoot = resolve(root, directory);
+  const fromDirectory = relative(directoryRoot, target);
+  if (fromDirectory === "" || fromDirectory === ".." || fromDirectory.startsWith(`..${sep}`) || isAbsolute(fromDirectory)) {
+    throw new Error(`${field} must be below ${directory}/`);
+  }
+  return target;
+}
+
 async function walkFiles(root, current = root) {
   const entries = await readdir(current, { withFileTypes: true });
   const files = [];
@@ -127,6 +156,238 @@ function exactUtc(value) {
 
 function packageVersion(value) {
   return typeof value === "string" && /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(value);
+}
+
+function nonEmptyString(value) {
+  return typeof value === "string" && value.trim() !== "";
+}
+
+async function bundledSignatureFailure(bundleRoot, signature, asOfUtc) {
+  if (signature?.schemaVersion !== "1.0") return "signature schemaVersion must be 1.0";
+  if (!nonEmptyString(signature?.signatureId)) return "signatureId is required";
+  if (signature?.reviewer?.identityType !== "human") return "reviewer identity must be human";
+  if (!nonEmptyString(signature?.reviewer?.identity)
+    || !nonEmptyString(signature?.reviewer?.organizationUnit)
+    || !nonEmptyString(signature?.reviewer?.role)) {
+    return "human reviewer identity, organization/unit, and role are required";
+  }
+  if (!REQUIRED_ACCEPTANCE_SCOPES.has(signature?.scope)) return "signature scope is invalid";
+  if (!["accept", "accept-with-conditions", "reject"].includes(signature?.decision)) return "signature decision is invalid";
+  if (!exactUtc(signature?.signedAtUtc) || Date.parse(signature.signedAtUtc) > Date.parse(asOfUtc)) {
+    return "signature time must be exact UTC and not after bundle verification time";
+  }
+  if (!Array.isArray(signature?.evidenceHashes) || signature.evidenceHashes.length === 0) {
+    return "at least one hash-addressed evidence file is required";
+  }
+  for (const evidence of signature.evidenceHashes) {
+    if (!nonEmptyString(evidence?.path) || !SHA256.test(evidence?.sha256)) return "signature evidence path or SHA-256 is invalid";
+    try {
+      const path = containedPath(bundleRoot, evidence.path, "institutional signature evidence");
+      if (await sha256File(path) !== evidence.sha256) return `institutional signature evidence hash does not match: ${evidence.path}`;
+    } catch (error) {
+      return `institutional signature evidence is unavailable: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+  if (!Array.isArray(signature?.conflicts) || signature.conflicts.some((conflict) => !nonEmptyString(conflict))) {
+    return "signature conflicts must be an array of non-empty strings";
+  }
+  if (!Array.isArray(signature?.conditions) || signature.conditions.some((condition) => !nonEmptyString(condition))) {
+    return "signature conditions must be an array of non-empty strings";
+  }
+  if (signature.decision === "accept-with-conditions" && signature.conditions.length === 0) {
+    return "conditional acceptance must state at least one condition";
+  }
+  if (signature.decision === "accept" && signature.conditions.length > 0) {
+    return "unconditional acceptance cannot retain conditions";
+  }
+  if (!exactUtc(signature?.reviewDueAtUtc)
+    || Date.parse(signature.reviewDueAtUtc) <= Date.parse(signature.signedAtUtc)
+    || Date.parse(signature.reviewDueAtUtc) <= Date.parse(asOfUtc)) {
+    return "signature review date must be exact UTC, future, and after signing";
+  }
+  return undefined;
+}
+
+function sameCanonical(left, right) {
+  return canonicalJson(left) === canonicalJson(right);
+}
+
+function rebuildPacketId(packet, label) {
+  if (packet?.schemaVersion !== "1.0" || packet?.recordType !== "review-packet" || !SHA256.test(packet?.packetId)) {
+    throw new Error(`${label} shape is invalid`);
+  }
+  const { packetId, ...unsigned } = packet;
+  const actual = createHash("sha256").update(canonicalJson(unsigned)).digest("hex");
+  if (actual !== packetId) throw new Error(`${label} packet identifier does not match its canonical manifest`);
+  return packetId;
+}
+
+function sortedRoleHeads(heads) {
+  return [...heads].sort((left, right) => left.scope.localeCompare(right.scope) || left.role.localeCompare(right.role));
+}
+
+async function verifyAcceptanceWorkflow(bundleRoot, workflow, record, signatures, builtAtUtc, asOfUtc) {
+  if (!Array.isArray(workflow?.currentPackets) || !Array.isArray(workflow?.evidenceMappings)
+    || !Array.isArray(workflow?.recordedDecisions) || !Array.isArray(workflow?.roleHeads)) {
+    throw new Error("acceptance workflow metadata is incomplete");
+  }
+
+  const mappingsBySource = new Map();
+  const mappingDestinations = new Set();
+  for (const mapping of workflow.evidenceMappings) {
+    if (!ACCEPTANCE_EVIDENCE_PATHS.includes(mapping?.sourcePath) || !SHA256.test(mapping?.sha256)
+      || typeof mapping?.bundlePath !== "string" || !mapping.bundlePath.startsWith("reports/acceptance/review-evidence/")) {
+      throw new Error("acceptance evidence mapping is malformed");
+    }
+    if (mappingsBySource.has(mapping.sourcePath) || mappingDestinations.has(mapping.bundlePath)) {
+      throw new Error("acceptance evidence mapping source or destination is duplicated");
+    }
+    const path = containedDirectoryPath(
+      bundleRoot,
+      "reports/acceptance/review-evidence",
+      mapping.bundlePath,
+      "acceptance evidence mapping",
+    );
+    if (await sha256File(path) !== mapping.sha256) throw new Error(`acceptance evidence mapping hash mismatch: ${mapping.sourcePath}`);
+    mappingsBySource.set(mapping.sourcePath, mapping);
+    mappingDestinations.add(mapping.bundlePath);
+  }
+  const expectedSources = [...ACCEPTANCE_EVIDENCE_PATHS].sort();
+  if (!sameCanonical(workflow.evidenceMappings.map((mapping) => mapping.sourcePath), expectedSources)) {
+    throw new Error("acceptance evidence mappings must be the complete unique sorted source inventory");
+  }
+  const mappedEvidence = workflow.evidenceMappings.map((mapping) => ({ path: mapping.sourcePath, sha256: mapping.sha256 }));
+  const bundledStatePaths = new Map([
+    ["docs/release/operational-readiness-record.json", "reports/acceptance/operational-readiness-record.json"],
+    ["docs/release/verification-signatures.jsonl", "reports/acceptance/verification-signatures.jsonl"],
+    ["docs/release/state-aviation-acceptance-checklist.md", "reports/acceptance/state-aviation-acceptance-checklist.md"],
+    ["docs/release/known-limitations.md", "reports/acceptance/known-limitations.md"],
+  ]);
+  const acceptanceState = [];
+  for (const sourcePath of ACCEPTANCE_STATE_PATHS) {
+    const mappedPath = bundledStatePaths.get(sourcePath) ?? mappingsBySource.get(sourcePath)?.bundlePath;
+    if (mappedPath === undefined) throw new Error(`acceptance-state evidence mapping is absent: ${sourcePath}`);
+    acceptanceState.push({ path: sourcePath, sha256: await sha256File(containedPath(bundleRoot, mappedPath, "acceptance-state evidence")) });
+  }
+  acceptanceState.sort((left, right) => left.path.localeCompare(right.path));
+  const acceptanceStateFingerprint = createHash("sha256").update(canonicalJson(acceptanceState)).digest("hex");
+
+  const currentScopes = new Set();
+  const currentPacketScopes = workflow.currentPackets.map((packet) => packet?.scope);
+  if (!sameCanonical(currentPacketScopes, [...REQUIRED_ACCEPTANCE_SCOPES].sort())) {
+    throw new Error("current packet inventory must contain every institutional acceptance scope in sorted order");
+  }
+  for (const current of workflow.currentPackets) {
+    if (currentScopes.has(current.scope) || !SHA256.test(current.packetId) || !SHA256.test(current.sha256)
+      || current.path !== `reports/acceptance/reviewer-packets/${current.scope}/packet-manifest.json`) {
+      throw new Error(`current packet metadata is invalid: ${String(current?.scope ?? "unknown")}`);
+    }
+    currentScopes.add(current.scope);
+    const path = containedPath(bundleRoot, current.path, "current acceptance packet");
+    if (await sha256File(path) !== current.sha256) throw new Error(`current packet hash mismatch: ${current.scope}`);
+    const packet = parseJson(await readFile(path, "utf8"), `current packet ${current.scope}`);
+    if (rebuildPacketId(packet, `current packet ${current.scope}`) !== current.packetId || packet.scope !== current.scope
+      || packet.releaseId !== record.releaseId || packet.readinessRecordId !== record.recordId
+      || packet.asOfUtc !== builtAtUtc || packet.acceptanceStateFingerprint !== acceptanceStateFingerprint
+      || !sameCanonical(packet.evidence, mappedEvidence)) {
+      if (packet.acceptanceStateFingerprint !== acceptanceStateFingerprint) {
+        throw new Error(`current packet acceptance-state fingerprint differs: ${current.scope}`);
+      }
+      if (packet.releaseId !== record.releaseId || packet.readinessRecordId !== record.recordId) {
+        throw new Error(`current packet release or readiness identifier differs: ${current.scope}`);
+      }
+      throw new Error(`current packet metadata or evidence differs: ${current.scope}`);
+    }
+    const review = record.requiredReviews.find((candidate) => candidate?.scope === current.scope);
+    const state = review === undefined ? undefined : deriveReviewDecisionState(review, signatures);
+    const expectedCoverage = review?.requiredReviewerRoles?.map((role) => {
+      const head = state?.roleHeads.find((candidate) => candidate.role === role);
+      return head === undefined ? { role, signatureId: null, decision: null } : { role, signatureId: head.signatureId, decision: head.decision };
+    });
+    if (review === undefined || state.violations.length > 0 || packet.currentStatus !== state.status
+      || !sameCanonical(packet.requiredReviewerRoles, review.requiredReviewerRoles)
+      || !sameCanonical(packet.roleCoverage, expectedCoverage)) {
+      throw new Error(`current packet role state differs from the acceptance record: ${current.scope}`);
+    }
+  }
+
+  if (workflow.recordedDecisions.length !== signatures.length) {
+    throw new Error("recorded decision inventory does not match the signature ledger");
+  }
+  const decisionsById = new Map(signatures.map((decision) => [decision?.signatureId, decision]));
+  const recordedIds = new Set();
+  for (const metadata of workflow.recordedDecisions) {
+    const decision = decisionsById.get(metadata?.signatureId);
+    if (decision === undefined || recordedIds.has(metadata.signatureId)) throw new Error("recorded decision metadata is absent or duplicated");
+    recordedIds.add(metadata.signatureId);
+    const failure = signatureRecordFailure(decision);
+    if (failure !== undefined) throw new Error(`${metadata.signatureId}: ${failure}`);
+    if (decision.releaseId !== record.releaseId) {
+      throw new Error(`${metadata.signatureId}: decision release differs from the bundled readiness record`);
+    }
+    if (Date.parse(decision.signedAtUtc) > Date.parse(asOfUtc) || Date.parse(decision.reviewDueAtUtc) <= Date.parse(asOfUtc)) {
+      throw new Error(`${metadata.signatureId}: institutional decision time is outside the verification window`);
+    }
+    if (metadata.scope !== decision.scope || metadata.role !== decision.reviewer.role
+      || metadata.sourcePacketPath !== decision.sourcePacketPath
+      || metadata.sourcePacketSha256 !== decision.sourcePacketSha256
+      || metadata.artifactSourcePath !== decision.institutionalArtifact.path
+      || metadata.artifactSha256 !== decision.institutionalArtifact.sha256) {
+      throw new Error(`${metadata.signatureId}: recorded decision metadata contradicts the signature ledger`);
+    }
+    for (const evidence of decision.evidenceHashes) {
+      const mapping = mappingsBySource.get(evidence.path);
+      if (mapping === undefined || mapping.sha256 !== evidence.sha256) {
+        throw new Error(`${metadata.signatureId}: decision evidence mapping is absent or inconsistent`);
+      }
+    }
+    if (typeof metadata.packetBundlePath !== "string" || !metadata.packetBundlePath.startsWith("reports/acceptance/recorded-decisions/")) {
+      throw new Error(`${metadata.signatureId}: historical packet bundle path is invalid`);
+    }
+    const packetPath = containedDirectoryPath(
+      bundleRoot,
+      "reports/acceptance/recorded-decisions",
+      metadata.packetBundlePath,
+      "historical acceptance packet",
+    );
+    if (await sha256File(packetPath) !== metadata.sourcePacketSha256) throw new Error(`${metadata.signatureId}: historical packet hash mismatch`);
+    const packet = parseJson(await readFile(packetPath, "utf8"), `historical packet ${metadata.signatureId}`);
+    if (rebuildPacketId(packet, `historical packet ${metadata.signatureId}`) !== decision.sourcePacketId
+      || packet.scope !== decision.scope || packet.releaseId !== record.releaseId
+      || packet.readinessRecordId !== record.recordId || !sameCanonical(packet.evidence, decision.evidenceHashes)) {
+      throw new Error(`${metadata.signatureId}: historical packet differs from the recorded decision`);
+    }
+    if (typeof metadata.artifactBundlePath !== "string" || !metadata.artifactBundlePath.startsWith("reports/acceptance/recorded-decisions/")) {
+      throw new Error(`${metadata.signatureId}: institutional artifact bundle path is invalid`);
+    }
+    const artifactPath = containedDirectoryPath(
+      bundleRoot,
+      "reports/acceptance/recorded-decisions",
+      metadata.artifactBundlePath,
+      "institutional acceptance artifact",
+    );
+    if (await sha256File(artifactPath) !== metadata.artifactSha256) throw new Error(`${metadata.signatureId}: institutional artifact hash mismatch`);
+    const artifact = parseJson(await readFile(artifactPath, "utf8"), `institutional artifact ${metadata.signatureId}`);
+    if (artifact?.schemaVersion !== "1.0" || artifact?.recordType !== "institutional-acceptance-artifact"
+      || artifact?.classification !== "unclassified-controlled" || artifact?.contentType !== "controlled-safety-metadata") {
+      throw new Error(`${metadata.signatureId}: institutional artifact classification is invalid`);
+    }
+  }
+
+  const reviewStates = new Map();
+  const expectedHeads = [];
+  for (const review of record.requiredReviews) {
+    const state = deriveReviewDecisionState(review, signatures);
+    if (state.violations.length > 0) throw new Error(`acceptance decision chain is invalid for ${String(review?.scope)}`);
+    reviewStates.set(review.scope, state);
+    expectedHeads.push(...state.roleHeads.map((head) => ({ scope: review.scope, ...head })));
+  }
+  const expectedSortedHeads = sortedRoleHeads(expectedHeads);
+  if (!sameCanonical(workflow.roleHeads, sortedRoleHeads(workflow.roleHeads))
+    || !sameCanonical(workflow.roleHeads, expectedSortedHeads)) {
+    throw new Error("acceptance workflow role heads do not equal the exact sorted derived role heads");
+  }
+  return reviewStates;
 }
 
 async function scanTar(path, wanted = new Set()) {
@@ -451,6 +712,116 @@ export async function verifyBundle(bundleRoot, options) {
     add("encrypted-storage", "warn", "encrypted storage is required by the install profile but must be attested on the receiving host", ["install/README.md"]);
   } catch (error) {
     add("encrypted-storage", "fail", error instanceof Error ? error.message : String(error));
+  }
+
+  const acceptanceEvidence = [
+    "reports/acceptance/operational-readiness-record.json",
+    "reports/acceptance/state-aviation-acceptance-checklist.md",
+    "reports/acceptance/known-limitations.md",
+    "reports/acceptance/verification-signatures.jsonl",
+  ];
+  try {
+    try {
+      await lstat(resolve(bundleRoot, "reports/acceptance/.acceptance-transaction.json"));
+      throw new Error("an incomplete acceptance transaction journal is present");
+    } catch (error) {
+      if (error instanceof Error && error.code !== "ENOENT") throw error;
+    }
+    const record = parseJson(await readFile(resolve(bundleRoot, acceptanceEvidence[0]), "utf8"), "operational-readiness record");
+    const checklist = await readFile(resolve(bundleRoot, acceptanceEvidence[1]), "utf8");
+    const limitations = await readFile(resolve(bundleRoot, acceptanceEvidence[2]), "utf8");
+    const signatureLedger = await readFile(resolve(bundleRoot, acceptanceEvidence[3]), "utf8");
+    if (record.schemaVersion !== "1.0" || typeof record.operationalReady !== "boolean"
+      || !Array.isArray(record.requiredReviews) || !Array.isArray(record.knownLimitations)
+      || checklist.trim() === "" || limitations.trim() === "") {
+      throw new Error("institutional acceptance evidence shape is invalid");
+    }
+    const signatures = signatureLedger.split(/\r?\n/u)
+      .filter((line) => line.trim() !== "")
+      .map((line, index) => parseJson(line, `institutional signature line ${index + 1}`));
+    if (signatures.some((signature) => signature?.reviewer?.identityType !== "human")) {
+      throw new Error("institutional acceptance requires human reviewer identities; automation signatures are forbidden");
+    }
+    const acceptanceControl = manifest?.acceptanceEvidence;
+    if (acceptanceControl !== undefined && (
+      acceptanceControl.recordPath !== acceptanceEvidence[0]
+      || acceptanceControl.checklistPath !== acceptanceEvidence[1]
+      || acceptanceControl.knownLimitationsPath !== acceptanceEvidence[2]
+      || acceptanceControl.signatureLogPath !== acceptanceEvidence[3]
+      || acceptanceControl.qualification !== record.qualification
+      || acceptanceControl.operationalReady !== record.operationalReady
+      || acceptanceControl.signatureCount !== signatures.length
+    )) {
+      throw new Error("bundle acceptance metadata contradicts the bundled readiness record or signature ledger");
+    }
+    const scopeCounts = new Map();
+    for (const review of record.requiredReviews) {
+      if (!REQUIRED_ACCEPTANCE_SCOPES.has(review?.scope) || !ACCEPTANCE_REVIEW_STATUSES.has(review?.status)) {
+        throw new Error(`institutional acceptance review is invalid: ${String(review?.scope ?? "unknown")}`);
+      }
+      scopeCounts.set(review.scope, (scopeCounts.get(review.scope) ?? 0) + 1);
+    }
+    const missingScopes = [...REQUIRED_ACCEPTANCE_SCOPES].filter((scope) => scopeCounts.get(scope) !== 1);
+    if (missingScopes.length > 0 || scopeCounts.size !== REQUIRED_ACCEPTANCE_SCOPES.size) {
+      throw new Error(`institutional acceptance scopes are missing or duplicated: ${missingScopes.join(", ") || "unexpected scope"}`);
+    }
+    const modernWorkflow = acceptanceControl?.workflow;
+    const signatureById = new Map();
+    for (const signature of signatures) {
+      if (typeof signature?.signatureId !== "string" || signature.signatureId === "" || signatureById.has(signature.signatureId)) {
+        throw new Error(`institutional human signature identifier is absent or duplicated: ${String(signature?.signatureId ?? "unknown")}`);
+      }
+      if (modernWorkflow === undefined) {
+        const signatureFailure = await bundledSignatureFailure(bundleRoot, signature, asOfUtc);
+        if (signatureFailure !== undefined) throw new Error(`${signature.signatureId}: ${signatureFailure}`);
+      }
+      signatureById.set(signature.signatureId, signature);
+    }
+    let reviewStates;
+    if (modernWorkflow === undefined) {
+      if (acceptanceControl !== undefined) throw new Error("bundle acceptance workflow metadata is absent");
+      for (const review of record.requiredReviews) {
+        const signatureIds = Array.isArray(review.signatureIds) ? review.signatureIds : [];
+        if (review.status !== "pending" && signatureIds.length === 0) {
+          throw new Error(`institutional review ${review.scope} has no linked human signature`);
+        }
+        const expectedDecision = review.status === "accepted"
+          ? "accept"
+          : review.status === "accepted-with-conditions"
+            ? "accept-with-conditions"
+            : review.status === "rejected"
+              ? "reject"
+              : undefined;
+        for (const signatureId of signatureIds) {
+          const signature = signatureById.get(signatureId);
+          if (signature === undefined) throw new Error(`institutional review ${review.scope} references an absent linked signature`);
+          if (signature.scope !== review.scope || (expectedDecision !== undefined && signature.decision !== expectedDecision)) {
+            throw new Error(`institutional linked signature does not attest ${review.scope} and its recorded decision`);
+          }
+        }
+      }
+    } else {
+      reviewStates = await verifyAcceptanceWorkflow(bundleRoot, modernWorkflow, record, signatures, manifest.builtAtUtc, asOfUtc);
+    }
+    const blockedReviews = record.requiredReviews.filter((review) => (reviewStates?.get(review.scope)?.status ?? review.status) !== "accepted");
+    const openLimitations = record.knownLimitations.filter((limitation) => limitation?.status === "open" && limitation?.releaseBlocking === true);
+    if (record.operationalReady && (blockedReviews.length > 0 || openLimitations.length > 0)) {
+      throw new Error(`operational readiness is overclaimed while ${blockedReviews.length} reviews are pending or conditional and ${openLimitations.length} limitations remain release-blocking`);
+    }
+    if ((record.operationalReady && record.qualification !== "accepted")
+      || (!record.operationalReady && record.qualification !== "blocked")) {
+      throw new Error("institutional acceptance qualification contradicts operationalReady");
+    }
+    add(
+      "institutional-acceptance",
+      record.operationalReady ? "pass" : "warn",
+      record.operationalReady
+        ? "institutional acceptance record declares the exact release operationally ready"
+        : `institutional acceptance evidence is present and explicitly blocked by ${blockedReviews.length} reviews and ${openLimitations.length} limitations`,
+      acceptanceEvidence,
+    );
+  } catch (error) {
+    add("institutional-acceptance", "fail", error instanceof Error ? error.message : String(error), acceptanceEvidence);
   }
 
   if (manifest?.releaseAttestation === null || manifest?.releaseAttestation === undefined) {

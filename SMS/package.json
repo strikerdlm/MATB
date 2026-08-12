@@ -29,7 +29,10 @@
     "preverify:data-separation": "npm run build --workspace @fac-isr/research && npm run build --workspace @fac-isr/edge-api",
     "verify:data-separation": "node scripts/verify-data-separation.mjs",
     "verify:matrix": "node scripts/generate-verification-report.mjs",
-    "verify:all": "npm run typecheck && npm run lint && npm run verify:matrix"
+    "verify:acceptance": "node scripts/verify-operational-readiness.mjs",
+    "acceptance:packets": "node scripts/generate-acceptance-review-packets.mjs",
+    "acceptance:record": "node scripts/record-acceptance-decision.mjs",
+    "verify:all": "npm run typecheck && npm run lint && npm run verify:matrix && npm run verify:acceptance"
   },
   "engines": {
     "node": "22.x"

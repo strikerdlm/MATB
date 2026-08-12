@@ -32,10 +32,12 @@ describe("release verification command", () => {
       lint: expect.any(String),
       "verify:all": expect.any(String),
       "verify:matrix": expect.any(String),
+      "verify:acceptance": expect.any(String),
       "verify:no-c2": expect.any(String),
       "verify:data-separation": expect.any(String),
     });
     expect(readPackageJson().scripts?.["verify:all"]).toContain("verify:matrix");
+    expect(readPackageJson().scripts?.["verify:all"]).toContain("verify:acceptance");
   });
 
   it("pins CI and local verification to Node 22", () => {

@@ -1,0 +1,171 @@
+{
+  "schemaVersion": "1.0",
+  "recordId": "fac-isr-sms@0.1.0-state-aviation-readiness",
+  "releaseId": "fac-isr-sms@0.1.0",
+  "recordStatus": "awaiting-institutional-acceptance",
+  "qualification": "blocked",
+  "operationalReady": false,
+  "readinessDecision": null,
+  "acceptanceChecklistPath": "docs/release/state-aviation-acceptance-checklist.md",
+  "knownLimitationsPath": "docs/release/known-limitations.md",
+  "verificationMatrixPath": "docs/release/verification-matrix.md",
+  "signatureLogPath": "docs/release/verification-signatures.jsonl",
+  "knownLimitations": [
+    {
+      "id": "LIM-CAP-001",
+      "category": "aircraft-capability",
+      "status": "open",
+      "releaseBlocking": true,
+      "summary": "Aircraft and platform compatibility is demonstrated only with software fixtures and simulated unarmed ISR/support scenarios; no aircraft installation is qualified.",
+      "degradedDataProcedure": "Keep the release in controlled non-operational evaluation and do not authorize aircraft dispatch or maintenance release from its output.",
+      "requiredHumanAction": "Approve the exact platform configuration and complete representative hardware-in-the-loop and aircraft-interface acceptance."
+    },
+    {
+      "id": "LIM-GEO-001",
+      "category": "terrain-obstacle",
+      "status": "open",
+      "releaseBlocking": true,
+      "summary": "Institutionally approved terrain and obstacle coverage is not bundled or accepted.",
+      "degradedDataProcedure": "Treat geographic displays as planning context and prohibit terrain- or obstacle-dependent release decisions.",
+      "requiredHumanAction": "Ingest signed official packages and complete qualified provenance, coverage, resolution, datum, currency, and boundary validation."
+    },
+    {
+      "id": "LIM-DATA-001",
+      "category": "official-data-dependency",
+      "status": "open",
+      "releaseBlocking": true,
+      "summary": "Official map, AIP, and NOTAM acquisition, currency, reconciliation, and expiry controls are not institutionally accepted.",
+      "degradedDataProcedure": "Missing, expired, stale, out-of-coverage, or unverifiable critical data blocks the affected dispatch or decision; no automatic override is permitted.",
+      "requiredHumanAction": "Approve the official-data lifecycle or use the documented controlled exception with delegated authority, alternate official evidence, residual-risk decision, conditions, exact scope, expiry, and human signatures.",
+      "controlledExceptionProcess": "A delegated authority may authorize only a time-bounded, scope-bounded exception after a qualified reviewer hashes alternate official evidence and the risk authority records residual risk, compensating controls, stop criteria, monitoring, conditions, and expiry. The data defect and exception remain conspicuous."
+    },
+    {
+      "id": "LIM-TEL-001",
+      "category": "telemetry-field",
+      "status": "open",
+      "releaseBlocking": true,
+      "summary": "Telemetry field completeness, units, timing, provenance, and failure behavior are not qualified against a representative aircraft source.",
+      "degradedDataProcedure": "Enter the documented unknown/degraded state for stale, malformed, missing, or conflicting fields and prohibit flight-critical reliance.",
+      "requiredHumanAction": "Complete and sign representative adapter, fault-injection, timing, provenance, and hardware-in-the-loop validation."
+    },
+    {
+      "id": "LIM-PROFILE-001",
+      "category": "profile-boundary",
+      "status": "open",
+      "releaseBlocking": true,
+      "summary": "The implemented profile is limited to Colombian state-aviation unarmed ISR/support safety monitoring; weapons, strike, autonomous flight, swarm control, and aircraft command-and-control are outside scope.",
+      "degradedDataProcedure": "Block out-of-profile use and keep all command-and-control paths absent.",
+      "requiredHumanAction": "Design, verify, and institutionally accept a separate profile before any scope expansion."
+    },
+    {
+      "id": "LIM-TRANS-001",
+      "category": "translation-gap",
+      "status": "open",
+      "releaseBlocking": true,
+      "summary": "English translations and software summaries have not received final qualified bilingual legal review.",
+      "degradedDataProcedure": "Use the official Spanish source as controlling and prohibit final regulatory determinations based only on English assistance.",
+      "requiredHumanAction": "Complete the controlled translation crosswalk and obtain qualified FAC regulatory and bilingual legal signatures."
+    },
+    {
+      "id": "LIM-RES-001",
+      "category": "research-limitation",
+      "status": "open",
+      "releaseBlocking": true,
+      "summary": "Research workflows use synthetic or deidentified evidence and are not approved for human-subject or operational decision use.",
+      "degradedDataProcedure": "Keep research data segregated, access-controlled, and non-dispatchable; do not use exploratory outputs for operational decisions.",
+      "requiredHumanAction": "Obtain protocol or ethics, privacy, data-governance, retention, export, and participant-protection approval before real participant use."
+    },
+    {
+      "id": "LIM-HF-001",
+      "category": "human-factors",
+      "status": "open",
+      "releaseBlocking": true,
+      "summary": "Automated accessibility tests do not constitute representative operational usability acceptance.",
+      "degradedDataProcedure": "Limit use to evaluation and retain independent human verification for every safety-relevant interpretation.",
+      "requiredHumanAction": "Complete the approved human-factors protocol with representative users, receiving hardware, environments, workload, and recovery tasks."
+    },
+    {
+      "id": "LIM-SEC-001",
+      "category": "cybersecurity-deployment",
+      "status": "open",
+      "releaseBlocking": true,
+      "summary": "Repository security checks do not replace receiving-site approved scanning, penetration testing, key custody, encryption, and deployment attestation.",
+      "degradedDataProcedure": "Keep the bundle off operational networks and use only controlled development or evaluation infrastructure.",
+      "requiredHumanAction": "Complete institutional cybersecurity and receiving-node deployment review for the exact release and evidence hashes."
+    },
+    {
+      "id": "LIM-PERF-001",
+      "category": "performance-validation",
+      "status": "open",
+      "releaseBlocking": true,
+      "summary": "Multi-aircraft and accelerated 12-hour tests are synthetic and are not wall-clock soak or representative hardware-in-the-loop qualification.",
+      "degradedDataProcedure": "Limit concurrency and duration to controlled evaluation with monitoring and a manual stop/recovery procedure.",
+      "requiredHumanAction": "Complete and accept receiving-hardware load, fault-recovery, endurance, and wall-clock soak evidence."
+    }
+  ],
+  "requiredReviews": [
+    {
+      "scope": "racae-interpretation-translation",
+      "title": "RACAE interpretation and controlled translation",
+      "status": "pending",
+      "requiredReviewerRoles": ["qualified FAC regulatory reviewer", "designated bilingual legal reviewer"],
+      "signatureIds": []
+    },
+    {
+      "scope": "operational-checklist",
+      "title": "Representative operational checklist validation",
+      "status": "pending",
+      "requiredReviewerRoles": ["operator", "remote pilot", "maintainer", "safety officer", "commander"],
+      "signatureIds": []
+    },
+    {
+      "scope": "risk-authority",
+      "title": "Active risk matrix and delegated-authority acceptance",
+      "status": "pending",
+      "requiredReviewerRoles": ["designated risk authority", "commander"],
+      "signatureIds": []
+    },
+    {
+      "scope": "emergency-response",
+      "title": "ERP tabletop and functional exercises",
+      "status": "pending",
+      "requiredReviewerRoles": ["ERP exercise director", "safety officer", "commander"],
+      "signatureIds": []
+    },
+    {
+      "scope": "cybersecurity-deployment",
+      "title": "Cybersecurity and receiving-node deployment review",
+      "status": "pending",
+      "requiredReviewerRoles": ["institutional cybersecurity reviewer", "deployment authority"],
+      "signatureIds": []
+    },
+    {
+      "scope": "official-geospatial-data",
+      "title": "Map, terrain, obstacle, AIP, and NOTAM data acceptance",
+      "status": "pending",
+      "requiredReviewerRoles": ["qualified geospatial reviewer", "operational data authority"],
+      "signatureIds": []
+    },
+    {
+      "scope": "human-factors-protocol",
+      "title": "Human-factors usability protocol approval",
+      "status": "pending",
+      "requiredReviewerRoles": ["human-factors authority", "ethics or protocol authority"],
+      "signatureIds": []
+    },
+    {
+      "scope": "research-separation",
+      "title": "Research and operational data-separation review",
+      "status": "pending",
+      "requiredReviewerRoles": ["research governance reviewer", "data protection reviewer"],
+      "signatureIds": []
+    },
+    {
+      "scope": "training-safety-promotion",
+      "title": "Training and safety-promotion readiness",
+      "status": "pending",
+      "requiredReviewerRoles": ["training authority", "safety-promotion owner"],
+      "signatureIds": []
+    }
+  ]
+}
