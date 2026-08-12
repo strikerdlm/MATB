@@ -4,6 +4,7 @@ import { appendFile, cp, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { canonicalJson } from "../../scripts/acceptance-contracts.mjs";
 import { generateAcceptanceReviewPackets } from "../../scripts/generate-acceptance-review-packets.mjs";
 import * as decisionRecorder from "../../scripts/record-acceptance-decision.mjs";
 import {
@@ -49,10 +50,11 @@ async function authoritativeHashes(root: string): Promise<readonly { readonly pa
 }
 
 type Packet = {
-  readonly packetId: string;
-  readonly releaseId: string;
-  readonly scope: string;
-  readonly evidence: unknown[];
+  packetId: string;
+  releaseId: string;
+  scope: string;
+  evidence: Array<{ path: string; sha256: string }>;
+  [key: string]: unknown;
 };
 
 type Decision = {
@@ -150,6 +152,31 @@ async function refreshPacketAndDecision(value: Fixture): Promise<void> {
   value.decision.releaseId = installed.packet.releaseId;
   value.decision.scope = installed.packet.scope;
   value.decision.evidenceHashes = installed.packet.evidence;
+  await writeDecision(value);
+}
+
+async function reauthorPacket(
+  value: Fixture,
+  mutate: (packetWithoutId: Record<string, unknown>) => void,
+): Promise<void> {
+  const packetWithoutId = structuredClone(value.packet) as Record<string, unknown>;
+  delete packetWithoutId.packetId;
+  mutate(packetWithoutId);
+  const packet = {
+    ...packetWithoutId,
+    packetId: sha256(canonicalJson(packetWithoutId)),
+  } as Packet;
+  const packetBytes = `${JSON.stringify(packet, null, 2)}\n`;
+  const packetPath = join(value.root, "docs/release/acceptance-packets", `${packet.packetId}.json`);
+  await writeFile(packetPath, packetBytes, "utf8");
+  value.packet = packet;
+  value.packetPath = packetPath;
+  value.decision.sourcePacketId = packet.packetId;
+  value.decision.sourcePacketPath = `docs/release/acceptance-packets/${packet.packetId}.json`;
+  value.decision.sourcePacketSha256 = sha256(packetBytes);
+  value.decision.releaseId = packet.releaseId;
+  value.decision.scope = packet.scope;
+  value.decision.evidenceHashes = packet.evidence;
   await writeDecision(value);
 }
 
@@ -344,7 +371,33 @@ describe("institutional acceptance decision intake", () => {
     await expect(lstat(survivingStage)).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  it("removes the durable journal before cleanup can discard transaction evidence", async () => {
+  it("leaves a journal that explicit recovery can reacquire after durable lock removal", async () => {
+    const value = await fixture();
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, {
+      asOfUtc,
+      apply: true,
+      failpoint: "after-record-replace",
+    })).rejects.toThrow(/failpoint/u);
+    const journalPath = join(value.root, "docs/release/.acceptance-transaction.json");
+
+    await expect(recoverAcceptanceTransaction(value.root, {
+      asOfUtc,
+      failpoint: "after-lock-remove",
+    })).rejects.toThrow(/after-lock-remove/u);
+
+    expect((await lstat(journalPath)).isFile()).toBe(true);
+    await expect(lstat(join(value.root, "docs/release/.acceptance-update.lock"))).rejects.toMatchObject({ code: "ENOENT" });
+    const verification = await verifyOperationalReadiness(value.root, { asOfUtc });
+    expect(verification.violations).toContainEqual(expect.objectContaining({ code: "ACCEPTANCE_TRANSACTION_INCOMPLETE" }));
+    await expect(recoverAcceptanceTransaction(value.root, { asOfUtc })).resolves.toMatchObject({
+      ok: true,
+      action: "finalized",
+    });
+    await expect(lstat(journalPath)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(lstat(join(value.root, "docs/release/.acceptance-update.lock"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("does not leave a blocking lock after the durable journal commit point", async () => {
     const value = await fixture();
     await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, {
       asOfUtc,
@@ -362,7 +415,7 @@ describe("institutional acceptance decision intake", () => {
 
     await expect(lstat(journalPath)).rejects.toMatchObject({ code: "ENOENT" });
     expect((await lstat(transactionPath)).isDirectory()).toBe(true);
-    expect((await lstat(join(value.root, "docs/release/.acceptance-update.lock"))).isFile()).toBe(true);
+    await expect(lstat(join(value.root, "docs/release/.acceptance-update.lock"))).rejects.toMatchObject({ code: "ENOENT" });
     const verification = await verifyOperationalReadiness(value.root, { asOfUtc });
     expect(verification.violations).not.toContainEqual(expect.objectContaining({ code: "ACCEPTANCE_TRANSACTION_INCOMPLETE" }));
     await refreshPacketAndDecision(value);
@@ -370,7 +423,7 @@ describe("institutional acceptance decision intake", () => {
     value.decision.reviewer.role = "commander";
     await writeDecision(value);
     await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, { asOfUtc, apply: true }))
-      .rejects.toThrow(/lock/u);
+      .resolves.toMatchObject({ ok: true, mode: "applied", projectedStatus: "accepted" });
   });
 
   it("refuses a corrupted original snapshot without changing authoritative mixed state", async () => {
@@ -491,6 +544,35 @@ describe("institutional acceptance decision intake", () => {
       projectedStatus: "pending",
     });
     expect(await authoritativeHashes(value.root)).toEqual(before);
+  });
+
+  it.each([
+    {
+      name: "an incomplete evidence source set",
+      mutate: (packet: Record<string, unknown>) => {
+        packet.evidence = (packet.evidence as unknown[]).slice(1);
+      },
+    },
+    {
+      name: "re-authored generator-owned checklist and blocker content",
+      mutate: (packet: Record<string, unknown>) => {
+        packet.checklistHeading = "## Invented acceptance checklist section";
+        packet.blockers = [];
+      },
+    },
+  ])("rejects a self-consistent packet with $name before it can enter the ledger", async ({ mutate }) => {
+    const value = await fixture();
+    await reauthorPacket(value, mutate);
+    const before = await authoritativeHashes(value.root);
+
+    await expect(validateAcceptanceDecision(value.root, value.packetPath, value.decisionPath, { asOfUtc }))
+      .rejects.toThrow(/canonical|generator|packet/u);
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, { asOfUtc, apply: true }))
+      .rejects.toThrow(/canonical|generator|packet/u);
+
+    expect(await authoritativeHashes(value.root)).toEqual(before);
+    expect((await readFile(join(value.root, authoritativePaths[1]), "utf8")).trim()).toBe("");
+    await expect(lstat(join(value.root, "docs/release/.acceptance-transaction.json"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("projects a valid human rejection without changing authoritative acceptance evidence", async () => {

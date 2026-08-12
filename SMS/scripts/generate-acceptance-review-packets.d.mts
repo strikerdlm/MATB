@@ -42,6 +42,12 @@ export interface UnsignedDecisionTemplate {
   readonly institutionalArtifact: { readonly path: null; readonly sha256: null };
 }
 
+export function buildAcceptanceReviewPacketManifest(
+  root: string,
+  scope: string,
+  options: { readonly asOfUtc: string },
+): Promise<ReviewPacketManifest>;
+
 export function generateAcceptanceReviewPackets(
   root: string,
   output: string,

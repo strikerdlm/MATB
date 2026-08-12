@@ -34,7 +34,7 @@ export interface RecoveryReport {
 
 export interface RecoveryOptions {
   readonly asOfUtc: string;
-  readonly failpoint?: "after-journal-remove";
+  readonly failpoint?: "after-lock-remove" | "after-journal-remove";
 }
 
 export interface JsonSnapshot {

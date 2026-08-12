@@ -16,6 +16,7 @@ import {
   sha256File,
   signatureRecordFailure,
 } from "./acceptance-contracts.mjs";
+import { buildAcceptanceReviewPacketManifest } from "./generate-acceptance-review-packets.mjs";
 import { verifyOperationalReadiness } from "./verify-operational-readiness.mjs";
 
 const RECORD_PATH = "docs/release/operational-readiness-record.json";
@@ -59,14 +60,6 @@ export async function readRegularJsonSnapshot(path, label, afterBytesRead) {
   }
 }
 
-async function inventory(root, paths) {
-  const records = await Promise.all(paths.map(async (path) => ({
-    path,
-    sha256: await sha256File(await resolveContainedExistingFile(root, path, "acceptance evidence")),
-  })));
-  return records.sort((left, right) => left.path.localeCompare(right.path));
-}
-
 function sameCanonical(left, right) {
   return canonicalJson(left) === canonicalJson(right);
 }
@@ -103,16 +96,16 @@ function rebuildPacketId(packet) {
   return packetId;
 }
 
-function requirePacketAgreement(packet, record, review, decision, options, acceptanceState, evidence) {
+function requirePacketAgreement(packet, canonicalPacket, record, review, decision, options) {
+  if (!sameCanonical(packet, canonicalPacket)) {
+    fail("source packet does not match the generator-owned canonical manifest for the current repository state");
+  }
   if (packet.releaseId !== record.releaseId || decision.releaseId !== packet.releaseId) fail("decision release does not match the current packet");
   if (packet.readinessRecordId !== record.recordId) fail("packet readiness record does not match the current repository state");
   if (packet.scope !== review.scope || decision.scope !== packet.scope) fail("decision scope does not match the current packet");
   if (packet.asOfUtc !== options.asOfUtc) fail("packet as-of time does not match validation time");
   if (!sameCanonical(packet.requiredReviewerRoles, review.requiredReviewerRoles)) fail("packet reviewer roles do not match the current review");
-  if (packet.acceptanceStateFingerprint !== sha256Bytes(canonicalJson(acceptanceState))) {
-    fail("packet acceptance-state fingerprint does not match the current repository state");
-  }
-  if (!sameCanonical(packet.evidence, evidence) || !sameCanonical(decision.evidenceHashes, packet.evidence)) {
+  if (!sameCanonical(decision.evidenceHashes, packet.evidence)) {
     fail("decision evidence does not exactly match the current packet evidence");
   }
 }
@@ -157,11 +150,10 @@ export async function validateAcceptanceDecision(root, packetPath, decisionPath,
   const signatureLogPath = await resolveContainedExistingFile(repositoryRoot, record.signatureLogPath, "signature log");
   const signatures = await readJsonLines(signatureLogPath);
   if (signatures.some((signature) => signature?.signatureId === decision.signatureId)) fail("decision signatureId already exists");
-  const [acceptanceState, evidence] = await Promise.all([
-    inventory(repositoryRoot, ACCEPTANCE_STATE_PATHS),
-    inventory(repositoryRoot, packet.evidence?.map((item) => item?.path) ?? []),
-  ]);
-  requirePacketAgreement(packet, record, review, decision, options, acceptanceState, evidence);
+  const canonicalPacket = await buildAcceptanceReviewPacketManifest(repositoryRoot, decision.scope, {
+    asOfUtc: options.asOfUtc,
+  });
+  requirePacketAgreement(packet, canonicalPacket, record, review, decision, options);
   await verifyEvidence(repositoryRoot, decision.evidenceHashes);
   await validateInstitutionalArtifact(repositoryRoot, decision.institutionalArtifact);
 
@@ -398,6 +390,9 @@ async function validateRecoveryState(root, asOfUtc) {
 }
 
 async function cleanupTransaction(root, journal, failpoint) {
+  await rm(resolve(root, LOCK_PATH), { force: true });
+  await fsyncDirectory(resolve(root, RELEASE_DIRECTORY));
+  if (failpoint === "after-lock-remove") throw new AcceptanceFailpointError(failpoint);
   await rm(resolve(root, JOURNAL_PATH));
   await fsyncDirectory(resolve(root, RELEASE_DIRECTORY));
   if (failpoint === "after-journal-remove") throw new AcceptanceFailpointError(failpoint);
@@ -406,8 +401,6 @@ async function cleanupTransaction(root, journal, failpoint) {
   }
   await rm(resolve(root, TRANSACTION_DIRECTORY, journal.transactionId), { recursive: true, force: true });
   await fsyncDirectory(resolve(root, TRANSACTION_DIRECTORY));
-  await rm(resolve(root, LOCK_PATH), { force: true });
-  await fsyncDirectory(resolve(root, RELEASE_DIRECTORY));
 }
 
 function validateJournal(journal) {

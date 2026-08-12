@@ -123,6 +123,85 @@ async function ensureOutputDirectory(output) {
   if ((await readdir(output)).length !== 0) throw new Error("output directory must not already contain files");
 }
 
+async function packetContext(root, asOfUtc) {
+  const repositoryRoot = resolve(root);
+  const recordPath = await resolveContainedExistingFile(repositoryRoot, RECORD_PATH, "readiness record");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  const checklistPath = await resolveContainedExistingFile(repositoryRoot, record.acceptanceChecklistPath, "acceptance checklist");
+  const [checklist, signatures, evidence, acceptanceState, readiness] = await Promise.all([
+    readFile(checklistPath, "utf8"),
+    readJsonLines(await resolveContainedExistingFile(repositoryRoot, record.signatureLogPath, "signature log")),
+    hashInventory(repositoryRoot, ACCEPTANCE_EVIDENCE_PATHS),
+    hashInventory(repositoryRoot, ACCEPTANCE_STATE_PATHS),
+    verifyOperationalReadiness(repositoryRoot, { asOfUtc }),
+  ]);
+  return {
+    record,
+    checklist,
+    signatures,
+    evidence,
+    acceptanceStateFingerprint: sha256Bytes(canonicalJson(acceptanceState)),
+    blockers: readiness.blockers.filter((blocker) => blocker.code !== "REVIEW_ROLE_MISSING"),
+  };
+}
+
+function packetFromContext(context, scope) {
+  const review = Array.isArray(context.record.requiredReviews)
+    ? context.record.requiredReviews.find((candidate) => candidate?.scope === scope)
+    : undefined;
+  if (review === undefined) throw new Error(`readiness record does not contain required review: ${scope}`);
+  const state = deriveReviewDecisionState(review, context.signatures);
+  const roleCoverage = review.requiredReviewerRoles.map((role) => {
+    const head = state.roleHeads.find((candidate) => candidate.role === role);
+    return head === undefined
+      ? { role, signatureId: null, decision: null }
+      : { role, signatureId: head.signatureId, decision: head.decision };
+  });
+  const checklistHeading = SCOPE_HEADINGS[scope];
+  const manifestWithoutId = {
+    schemaVersion: "1.0",
+    recordType: "review-packet",
+    releaseId: context.record.releaseId,
+    readinessRecordId: context.record.recordId,
+    asOfUtc: context.asOfUtc,
+    scope,
+    title: review.title,
+    requiredReviewerRoles: review.requiredReviewerRoles,
+    currentStatus: state.status,
+    roleCoverage,
+    checklistHeading,
+    blockers: context.blockers,
+    acceptanceStateFingerprint: context.acceptanceStateFingerprint,
+    evidence: context.evidence,
+  };
+  const manifest = {
+    schemaVersion: "1.0",
+    recordType: "review-packet",
+    packetId: sha256Bytes(canonicalJson(manifestWithoutId)),
+    releaseId: manifestWithoutId.releaseId,
+    readinessRecordId: manifestWithoutId.readinessRecordId,
+    asOfUtc: manifestWithoutId.asOfUtc,
+    scope: manifestWithoutId.scope,
+    title: manifestWithoutId.title,
+    requiredReviewerRoles: manifestWithoutId.requiredReviewerRoles,
+    currentStatus: manifestWithoutId.currentStatus,
+    roleCoverage: manifestWithoutId.roleCoverage,
+    checklistHeading: manifestWithoutId.checklistHeading,
+    blockers: manifestWithoutId.blockers,
+    acceptanceStateFingerprint: manifestWithoutId.acceptanceStateFingerprint,
+    evidence: manifestWithoutId.evidence,
+  };
+  return { manifest, excerpt: checklistExcerpt(context.checklist, checklistHeading) };
+}
+
+/** Reconstruct one generator-owned packet manifest from authoritative repository state. */
+export async function buildAcceptanceReviewPacketManifest(root, scope, options) {
+  const asOfUtc = requireExactAsOfUtc(options);
+  const [selectedScope] = selectedScopes([scope]);
+  const context = await packetContext(root, asOfUtc);
+  return packetFromContext({ ...context, asOfUtc }, selectedScope).manifest;
+}
+
 /** Generate deterministic, unsigned institutional-review packets without mutating acceptance evidence. */
 export async function generateAcceptanceReviewPackets(root, output, options) {
   const repositoryRoot = resolve(root);
@@ -136,67 +215,12 @@ export async function generateAcceptanceReviewPackets(root, output, options) {
   if (isWithin(releaseDirectory, effectiveOutputDirectory)) {
     throw new Error("output directory must not be inside docs/release");
   }
-  const recordPath = await resolveContainedExistingFile(repositoryRoot, RECORD_PATH, "readiness record");
-  const record = JSON.parse(await readFile(recordPath, "utf8"));
-  const checklistPath = await resolveContainedExistingFile(repositoryRoot, record.acceptanceChecklistPath, "acceptance checklist");
-  const checklist = await readFile(checklistPath, "utf8");
-  const signatures = await readJsonLines(await resolveContainedExistingFile(repositoryRoot, record.signatureLogPath, "signature log"));
-  const [evidence, acceptanceState, readiness] = await Promise.all([
-    hashInventory(repositoryRoot, ACCEPTANCE_EVIDENCE_PATHS),
-    hashInventory(repositoryRoot, ACCEPTANCE_STATE_PATHS),
-    verifyOperationalReadiness(repositoryRoot, { asOfUtc }),
-  ]);
-  const acceptanceStateFingerprint = sha256Bytes(canonicalJson(acceptanceState));
-  const blockers = readiness.blockers.filter((blocker) => blocker.code !== "REVIEW_ROLE_MISSING");
+  const context = await packetContext(repositoryRoot, asOfUtc);
 
   await ensureOutputDirectory(outputDirectory);
   const packets = [];
   for (const scope of scopes) {
-    const review = Array.isArray(record.requiredReviews)
-      ? record.requiredReviews.find((candidate) => candidate?.scope === scope)
-      : undefined;
-    if (review === undefined) throw new Error(`readiness record does not contain required review: ${scope}`);
-    const state = deriveReviewDecisionState(review, signatures);
-    const roleCoverage = review.requiredReviewerRoles.map((role) => {
-      const head = state.roleHeads.find((candidate) => candidate.role === role);
-      return head === undefined
-        ? { role, signatureId: null, decision: null }
-        : { role, signatureId: head.signatureId, decision: head.decision };
-    });
-    const checklistHeading = SCOPE_HEADINGS[scope];
-    const manifestWithoutId = {
-      schemaVersion: "1.0",
-      recordType: "review-packet",
-      releaseId: record.releaseId,
-      readinessRecordId: record.recordId,
-      asOfUtc,
-      scope,
-      title: review.title,
-      requiredReviewerRoles: review.requiredReviewerRoles,
-      currentStatus: state.status,
-      roleCoverage,
-      checklistHeading,
-      blockers,
-      acceptanceStateFingerprint,
-      evidence,
-    };
-    const manifest = {
-      schemaVersion: "1.0",
-      recordType: "review-packet",
-      packetId: sha256Bytes(canonicalJson(manifestWithoutId)),
-      releaseId: manifestWithoutId.releaseId,
-      readinessRecordId: manifestWithoutId.readinessRecordId,
-      asOfUtc: manifestWithoutId.asOfUtc,
-      scope: manifestWithoutId.scope,
-      title: manifestWithoutId.title,
-      requiredReviewerRoles: manifestWithoutId.requiredReviewerRoles,
-      currentStatus: manifestWithoutId.currentStatus,
-      roleCoverage: manifestWithoutId.roleCoverage,
-      checklistHeading: manifestWithoutId.checklistHeading,
-      blockers: manifestWithoutId.blockers,
-      acceptanceStateFingerprint: manifestWithoutId.acceptanceStateFingerprint,
-      evidence: manifestWithoutId.evidence,
-    };
+    const { manifest, excerpt } = packetFromContext({ ...context, asOfUtc }, scope);
     const packetJson = jsonWithNewline(manifest);
     const template = {
       schemaVersion: "1.0",
@@ -222,7 +246,7 @@ export async function generateAcceptanceReviewPackets(root, output, options) {
     await mkdir(packetDirectory, { recursive: true });
     await Promise.all([
       writeFile(resolve(packetDirectory, "packet-manifest.json"), packetJson, "utf8"),
-      writeFile(resolve(packetDirectory, "review-instructions.md"), instructions(manifest, checklistExcerpt(checklist, checklistHeading)), "utf8"),
+      writeFile(resolve(packetDirectory, "review-instructions.md"), instructions(manifest, excerpt), "utf8"),
       writeFile(resolve(packetDirectory, "decision-template.json"), jsonWithNewline(template), "utf8"),
     ]);
     packets.push({ manifest, template });
