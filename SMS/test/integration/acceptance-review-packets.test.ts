@@ -53,6 +53,15 @@ async function copiedSmsRoot(): Promise<string> {
 }
 
 describe("institutional acceptance review packets", () => {
+  it("publishes the coordinator packet-generation command", async () => {
+    const packageJson = JSON.parse(await readFile(join(smsRoot, "package.json"), "utf8"));
+
+    expect(packageJson.scripts).toMatchObject({
+      "acceptance:packets": "node scripts/generate-acceptance-review-packets.mjs",
+      "acceptance:record": "node scripts/record-acceptance-decision.mjs",
+    });
+  });
+
   it("generates deterministic complete packets without changing authoritative acceptance evidence", async () => {
     const root = await temporaryRoot();
     const before = await authoritativeHashes(smsRoot);

@@ -188,6 +188,18 @@ async function addCurrentRoleHead(value: Fixture): Promise<void> {
 }
 
 describe("institutional acceptance decision intake", () => {
+  it("documents the coordinator decision workflow and its safety boundaries", async () => {
+    const checklist = await readFile(join(smsRoot, "docs/release/state-aviation-acceptance-checklist.md"), "utf8");
+
+    expect(checklist).toContain("npm run acceptance:packets -- --output");
+    expect(checklist).toContain("npm run acceptance:record -- --packet");
+    expect(checklist).toContain("--apply");
+    expect(checklist).toContain("--recover");
+    expect(checklist).toContain("Every required reviewer role");
+    expect(checklist).toContain("does not close a known limitation");
+    expect(checklist).toContain("does not set `operationalReady`");
+  });
+
   it("applies one decision while changing only the ledger and matching review state", async () => {
     const value = await fixture();
     const recordPath = join(value.root, authoritativePaths[0]);
