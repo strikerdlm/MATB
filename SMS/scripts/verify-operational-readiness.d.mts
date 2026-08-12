@@ -18,6 +18,10 @@ export interface OperationalReadinessReport {
 
 export interface OperationalReadinessOptions {
   readonly asOfUtc?: string;
+  readonly recordRelativePath?: string;
+  readonly signatureLogRelativePath?: string;
+  readonly allowTransactionJournal?: boolean;
 }
 
+export { signatureRecordFailure, deriveReviewDecisionState, isControlledAcceptanceArtifactPath } from "./acceptance-contracts.mjs";
 export function verifyOperationalReadiness(root?: string, options?: OperationalReadinessOptions): Promise<OperationalReadinessReport>;

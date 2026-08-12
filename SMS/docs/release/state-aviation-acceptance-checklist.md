@@ -24,6 +24,21 @@ Before recording a decision, each reviewer must:
 
 The release authority must confirm that all nine review scopes below are unconditionally accepted, every linked signature and evidence hash validates, every release-blocking limitation is closed, and the independent `--require-ready` verification succeeds before changing operational status.
 
+## Coordinator decision intake procedure
+
+The coordinator must replace the paths and exact UTC values below with controlled paths and coordinator-selected exact UTC times for the review being recorded. Every generation or regeneration must use a new empty output directory; the versioned directory below belongs only to the packet set generated at the example time. Keep reviewer decision input outside the release evidence tree; referenced institutional artifacts must be unclassified and placed below the controlled `docs/release/acceptance-artifacts/` directory.
+
+```bash
+npm run acceptance:packets -- --output dist/acceptance-reviewer-packets/2026-08-12T160000000Z --as-of 2026-08-12T16:00:00.000Z
+npm run acceptance:record -- --packet dist/acceptance-reviewer-packets/2026-08-12T160000000Z/risk-authority/packet-manifest.json --decision /controlled/intake/risk-authority-decision.json --as-of 2026-08-12T18:00:00.000Z
+npm run acceptance:record -- --packet dist/acceptance-reviewer-packets/2026-08-12T160000000Z/risk-authority/packet-manifest.json --decision /controlled/intake/risk-authority-decision.json --as-of 2026-08-12T18:00:00.000Z --apply
+npm run acceptance:record -- --recover --as-of 2026-08-12T18:00:00.000Z
+```
+
+The first `acceptance:record` command is the mandatory dry run. Review its validation result before using `--apply`. Every required reviewer role records a separate decision, and the coordinator must regenerate the packets after every apply so that later decisions bind to the current acceptance-state fingerprint. Use `--recover` only to resolve an incomplete recorded transaction before any new apply attempt.
+
+Recording a reviewer decision does not close a known limitation and does not set `operationalReady`. Qualification still requires every role-specific decision chain, limitation closure evidence, independent verification, and the competent institutional release authority's decision.
+
 ## 1. RACAE interpretation and controlled translation
 
 Required reviewers: qualified FAC regulatory reviewer and designated bilingual legal reviewer.

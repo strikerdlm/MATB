@@ -6,6 +6,24 @@ export interface BundledAcceptanceEvidence {
   readonly qualification: "accepted" | "blocked";
   readonly operationalReady: boolean;
   readonly signatureCount: number;
+  readonly workflow: BundledAcceptanceWorkflow;
 }
 
-export function copyAcceptanceEvidence(stage: string): Promise<BundledAcceptanceEvidence>;
+export interface BundledAcceptanceWorkflow {
+  readonly currentPackets: readonly { readonly scope: string; readonly packetId: string; readonly path: string; readonly sha256: string }[];
+  readonly evidenceMappings: readonly { readonly sourcePath: string; readonly bundlePath: string; readonly sha256: string }[];
+  readonly recordedDecisions: readonly {
+    readonly signatureId: string;
+    readonly scope: string;
+    readonly role: string;
+    readonly sourcePacketPath: string;
+    readonly packetBundlePath: string;
+    readonly sourcePacketSha256: string;
+    readonly artifactSourcePath: string;
+    readonly artifactBundlePath: string;
+    readonly artifactSha256: string;
+  }[];
+  readonly roleHeads: readonly { readonly scope: string; readonly role: string; readonly signatureId: string; readonly decision: string }[];
+}
+
+export function copyAcceptanceEvidence(stage: string, options: { readonly asOfUtc: string }): Promise<BundledAcceptanceEvidence>;

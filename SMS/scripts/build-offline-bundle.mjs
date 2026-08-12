@@ -16,9 +16,16 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
-import { dirname, extname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import {
+  ACCEPTANCE_EVIDENCE_PATHS,
+  deriveReviewDecisionState,
+  readJsonLines,
+  resolveContainedExistingFile,
+} from "./acceptance-contracts.mjs";
+import { generateAcceptanceReviewPackets } from "./generate-acceptance-review-packets.mjs";
 
 const smsRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const SHA256 = /^[a-f0-9]{64}$/;
@@ -184,17 +191,93 @@ async function copyRegulatoryPackage(stage) {
   return manifest;
 }
 
-export async function copyAcceptanceEvidence(stage) {
+async function copyHashAddressedEvidence(stage, sourcePath, destinationDirectory, expectedSha256, label) {
+  const source = await resolveContainedExistingFile(smsRoot, sourcePath, label);
+  const actualSha256 = await sha256File(source);
+  if (actualSha256 !== expectedSha256) throw new Error(`${label} hash mismatch: ${sourcePath}`);
+  const bundlePath = `reports/acceptance/${destinationDirectory}/${actualSha256}-${basename(sourcePath)}`;
+  const destination = resolve(stage, bundlePath);
+  if (await pathExists(destination)) {
+    const info = await lstat(destination);
+    if (!info.isFile() || info.isSymbolicLink() || await sha256File(destination) !== actualSha256) {
+      throw new Error(`${label} destination collision: ${bundlePath}`);
+    }
+    return bundlePath;
+  }
+  await cp(source, destination, { errorOnExist: true, force: false });
+  if (await sha256File(destination) !== actualSha256) throw new Error(`${label} changed while it was copied: ${sourcePath}`);
+  return bundlePath;
+}
+
+export async function copyAcceptanceEvidence(stage, options) {
+  if (typeof options?.asOfUtc !== "string") throw new Error("acceptance evidence asOfUtc is required");
   const source = resolve(smsRoot, "docs/release");
   const destination = resolve(stage, "reports/acceptance");
   await mkdir(destination, { recursive: true, mode: 0o755 });
+  try {
+    await lstat(resolve(source, ".acceptance-transaction.json"));
+    throw new Error("an incomplete acceptance transaction journal must be recovered before bundling");
+  } catch (error) {
+    if (error instanceof Error && error.code !== "ENOENT") throw error;
+  }
   for (const name of ACCEPTANCE_EVIDENCE_FILES) {
     await cp(resolve(source, name), resolve(destination, name), { errorOnExist: true, force: false });
   }
   const record = JSON.parse(await readFile(resolve(destination, "operational-readiness-record.json"), "utf8"));
-  const signatures = (await readFile(resolve(destination, "verification-signatures.jsonl"), "utf8"))
-    .split(/\r?\n/u)
-    .filter((line) => line.trim() !== "");
+  const signatures = await readJsonLines(resolve(destination, "verification-signatures.jsonl"));
+  const packetDirectory = resolve(destination, "reviewer-packets");
+  const generated = await generateAcceptanceReviewPackets(smsRoot, packetDirectory, { asOfUtc: options.asOfUtc });
+  const currentPackets = await Promise.all(generated.packets.map(async ({ manifest }) => {
+    const path = `reports/acceptance/reviewer-packets/${manifest.scope}/packet-manifest.json`;
+    return { scope: manifest.scope, packetId: manifest.packetId, path, sha256: await sha256File(resolve(stage, path)) };
+  }));
+  currentPackets.sort((left, right) => left.scope.localeCompare(right.scope));
+
+  await mkdir(resolve(destination, "review-evidence"), { recursive: true, mode: 0o755 });
+  await mkdir(resolve(destination, "recorded-decisions"), { recursive: true, mode: 0o755 });
+  const evidenceMappings = [];
+  for (const sourcePath of [...ACCEPTANCE_EVIDENCE_PATHS].sort()) {
+    const sourceFile = await resolveContainedExistingFile(smsRoot, sourcePath, "acceptance review evidence");
+    const sha256 = await sha256File(sourceFile);
+    const bundlePath = await copyHashAddressedEvidence(stage, sourcePath, "review-evidence", sha256, "acceptance review evidence");
+    evidenceMappings.push({ sourcePath, bundlePath, sha256 });
+  }
+
+  const recordedDecisions = [];
+  for (const decision of [...signatures].sort((left, right) => String(left.signatureId).localeCompare(String(right.signatureId)))) {
+    const packetBundlePath = await copyHashAddressedEvidence(
+      stage,
+      decision.sourcePacketPath,
+      "recorded-decisions",
+      decision.sourcePacketSha256,
+      "recorded source packet",
+    );
+    const artifactBundlePath = await copyHashAddressedEvidence(
+      stage,
+      decision.institutionalArtifact?.path,
+      "recorded-decisions",
+      decision.institutionalArtifact?.sha256,
+      "recorded institutional artifact",
+    );
+    recordedDecisions.push({
+      signatureId: decision.signatureId,
+      scope: decision.scope,
+      role: decision.reviewer?.role,
+      sourcePacketPath: decision.sourcePacketPath,
+      packetBundlePath,
+      sourcePacketSha256: decision.sourcePacketSha256,
+      artifactSourcePath: decision.institutionalArtifact.path,
+      artifactBundlePath,
+      artifactSha256: decision.institutionalArtifact.sha256,
+    });
+  }
+  const roleHeads = [];
+  for (const review of record.requiredReviews ?? []) {
+    const state = deriveReviewDecisionState(review, signatures);
+    if (state.violations.length > 0) throw new Error(`cannot bundle invalid acceptance decision chain for ${String(review?.scope)}`);
+    roleHeads.push(...state.roleHeads.map((head) => ({ scope: review.scope, ...head })));
+  }
+  roleHeads.sort((left, right) => left.scope.localeCompare(right.scope) || left.role.localeCompare(right.role));
   return {
     recordPath: "reports/acceptance/operational-readiness-record.json",
     checklistPath: "reports/acceptance/state-aviation-acceptance-checklist.md",
@@ -203,6 +286,7 @@ export async function copyAcceptanceEvidence(stage) {
     qualification: record.qualification,
     operationalReady: record.operationalReady,
     signatureCount: signatures.length,
+    workflow: { currentPackets, evidenceMappings, recordedDecisions, roleHeads },
   };
 }
 
@@ -376,10 +460,11 @@ async function buildBundle(output, imageRef) {
     if (!SHA256.test(archiveSha256)) throw new Error("OCI archive digest is invalid");
 
     const regulatory = await copyRegulatoryPackage(stage);
-    const acceptanceEvidence = await copyAcceptanceEvidence(stage);
+    const acceptanceEvidence = await copyAcceptanceEvidence(stage, { asOfUtc: builtAtUtc });
     await cp(resolve(smsRoot, "docs/provenance/map-package-register.jsonl"), resolve(stage, "provenance/map-package-register.jsonl"), { errorOnExist: true, force: false });
     await cp(resolve(smsRoot, "docs/provenance/kernel-golden-case-report.md"), resolve(stage, "provenance/kernel-golden-case-report.md"), { errorOnExist: true, force: false });
     await cp(resolve(smsRoot, "scripts/verify-offline.mjs"), resolve(stage, "bin/verify-offline.mjs"), { errorOnExist: true, force: false });
+    await cp(resolve(smsRoot, "scripts/acceptance-contracts.mjs"), resolve(stage, "bin/acceptance-contracts.mjs"), { errorOnExist: true, force: false });
     await chmod(resolve(stage, "bin/verify-offline.mjs"), 0o555);
     await writeFile(resolve(stage, "runtime/schema.json"), `${JSON.stringify({
       schemaVersion: 1,
