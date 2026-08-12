@@ -31,9 +31,11 @@ describe("release verification command", () => {
       test: expect.any(String),
       lint: expect.any(String),
       "verify:all": expect.any(String),
+      "verify:matrix": expect.any(String),
       "verify:no-c2": expect.any(String),
       "verify:data-separation": expect.any(String),
     });
+    expect(readPackageJson().scripts?.["verify:all"]).toContain("verify:matrix");
   });
 
   it("pins CI and local verification to Node 22", () => {
@@ -58,11 +60,15 @@ describe("release verification command", () => {
 
     expect(workflow).toMatch(/actions\/checkout@[a-f0-9]{40}/);
     expect(workflow).toMatch(/actions\/setup-node@[a-f0-9]{40}/);
+    expect(workflow).toContain("fetch-depth: 0");
     expect(workflow).toContain("node-version: 22");
     expect(workflow).toContain("npm ci");
+    expect(workflow).toContain("npx playwright install --with-deps chromium");
     expect(workflow).toContain("npm run verify:all");
     expect(workflow).toContain("npm run build:offline -- --output dist/offline-bundle");
     expect(workflow).toContain("npm run verify:offline -- --bundle dist/offline-bundle --no-network");
+    expect(workflow).toContain("SMS_OCI_IMAGE: fac-isr-sms-edge:offline");
+    expect(workflow.indexOf("npm run build:offline -- --output dist/offline-bundle")).toBeLessThan(workflow.indexOf("npm run verify:all"));
     expect(workflow).toContain("working-directory: SMS");
   });
 });

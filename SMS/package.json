@@ -24,10 +24,12 @@
     "release:verify": "node scripts/generate-sbom.mjs verify",
     "preverify:evidence-offline": "npm run build:research",
     "verify:evidence-offline": "node tools/research/dist/cli.js verify-offline",
-    "preverify:no-c2": "npm run build:research",
-    "verify:no-c2": "node tools/research/dist/cli.js verify-no-c2",
-    "verify:data-separation": "npm test --workspace @fac-isr/research -- contracts.test.ts boundary.test.ts --run",
-    "verify:all": "npm run typecheck && npm run lint && npm test -- --run && npm run verify:no-c2 && npm run verify:data-separation"
+    "preverify:no-c2": "npm run build --workspace @fac-isr/edge-api",
+    "verify:no-c2": "node scripts/verify-no-c2.mjs",
+    "preverify:data-separation": "npm run build --workspace @fac-isr/research && npm run build --workspace @fac-isr/edge-api",
+    "verify:data-separation": "node scripts/verify-data-separation.mjs",
+    "verify:matrix": "node scripts/generate-verification-report.mjs",
+    "verify:all": "npm run typecheck && npm run lint && npm run verify:matrix"
   },
   "engines": {
     "node": "22.x"

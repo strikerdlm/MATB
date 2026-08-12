@@ -14,6 +14,7 @@ import { registerTelemetryRoutes } from "./routes/telemetry.js";
 import { MissionService } from "./services/mission-service.js";
 import { TelemetryService } from "./services/telemetry-service.js";
 import { SafeModeService } from "./services/safe-mode.js";
+import { registerOperationalDataBoundary } from "./data-boundary.js";
 
 interface ReadinessCheck {
   readonly status: "ok" | "pending";
@@ -89,6 +90,8 @@ export async function buildServer(input: EdgeConfigInput = {}): Promise<EdgeServ
   app.addHook("onClose", async () => {
     edgeDatabase.close();
   });
+
+  registerOperationalDataBoundary(app);
 
   app.get("/healthz", async () => ({
     status: "ok",
