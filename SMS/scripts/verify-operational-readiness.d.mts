@@ -23,5 +23,5 @@ export interface OperationalReadinessOptions {
   readonly allowTransactionJournal?: boolean;
 }
 
-export { signatureRecordFailure, deriveReviewDecisionState } from "./acceptance-contracts.mjs";
+export { signatureRecordFailure, deriveReviewDecisionState, isControlledAcceptanceArtifactPath } from "./acceptance-contracts.mjs";
 export function verifyOperationalReadiness(root?: string, options?: OperationalReadinessOptions): Promise<OperationalReadinessReport>;

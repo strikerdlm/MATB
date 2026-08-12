@@ -43,6 +43,14 @@ export const ACCEPTANCE_STATE_PATHS = Object.freeze([
 ]);
 const SHA256 = /^[a-f0-9]{64}$/u;
 const ACCEPTANCE_DECISIONS = new Set(["accept", "accept-with-conditions", "reject"]);
+const ACCEPTANCE_ARTIFACT_DIRECTORY = "docs/release/acceptance-artifacts/";
+
+export function isControlledAcceptanceArtifactPath(candidate) {
+  if (!nonEmptyString(candidate) || !candidate.startsWith(ACCEPTANCE_ARTIFACT_DIRECTORY)
+    || candidate.includes("\\") || candidate.includes("\0")) return false;
+  const descendants = candidate.slice(ACCEPTANCE_ARTIFACT_DIRECTORY.length).split("/");
+  return descendants.length > 0 && descendants.every((component) => component !== "" && component !== "." && component !== "..");
+}
 
 /** Return the schema error for an institutional decision, if any. */
 export function signatureRecordFailure(decision) {
@@ -71,8 +79,7 @@ export function signatureRecordFailure(decision) {
   if (decision.decision === "accept" && decision.conditions.length > 0) return "unconditional acceptance cannot retain conditions";
   if (!exactUtc(decision?.reviewDueAtUtc) || Date.parse(decision.reviewDueAtUtc) <= Date.parse(decision.signedAtUtc)) return "reviewDueAtUtc must be an exact UTC timestamp after signedAtUtc";
   if (!nonEmptyString(decision?.systemOfRecordRef)) return "systemOfRecordRef is required";
-  if (!nonEmptyString(decision?.institutionalArtifact?.path)
-    || !decision.institutionalArtifact.path.startsWith("docs/release/acceptance-artifacts/")
+  if (!isControlledAcceptanceArtifactPath(decision?.institutionalArtifact?.path)
     || !SHA256.test(decision?.institutionalArtifact?.sha256)) {
     return "institutionalArtifact must be a hash-locked acceptance artifact";
   }

@@ -73,5 +73,6 @@ export function nonEmptyString(value: unknown): value is string;
 export function exactUtc(value: unknown): boolean;
 export function readJsonLines(path: string): Promise<unknown[]>;
 export function resolveContainedExistingFile(root: string, candidate: unknown, label?: string): Promise<string>;
+export function isControlledAcceptanceArtifactPath(candidate: unknown): boolean;
 export function signatureRecordFailure(decision: unknown): string | undefined;
 export function deriveReviewDecisionState(review: RequiredReview | unknown, decisions: readonly InstitutionalDecision[] | readonly unknown[]): ReviewDecisionState;

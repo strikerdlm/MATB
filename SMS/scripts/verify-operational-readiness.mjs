@@ -14,6 +14,7 @@ import {
   sha256File,
   signatureRecordFailure,
   deriveReviewDecisionState,
+  isControlledAcceptanceArtifactPath,
 } from "./acceptance-contracts.mjs";
 
 export { signatureRecordFailure, deriveReviewDecisionState } from "./acceptance-contracts.mjs";
@@ -43,7 +44,7 @@ function knownLimitationFailure(limitation) {
 async function signatureEvidenceFailure(root, signature) {
   try {
     const artifactPath = await resolveContainedExistingFile(root, signature.institutionalArtifact.path, "institutional artifact");
-    if (!signature.institutionalArtifact.path.startsWith("docs/release/acceptance-artifacts/")) {
+    if (!isControlledAcceptanceArtifactPath(signature.institutionalArtifact.path)) {
       return "institutional artifact must be below docs/release/acceptance-artifacts/";
     }
     const artifact = JSON.parse(await readFile(artifactPath, "utf8"));

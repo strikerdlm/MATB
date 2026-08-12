@@ -517,6 +517,24 @@ describe("institutional operational-readiness evidence", () => {
     }));
   });
 
+  it("rejects an acceptance-artifact path that escapes through a traversal segment", async () => {
+    const signatures = acceptedSignatures().map((signature) => ({
+      ...signature,
+      institutionalArtifact: {
+        path: "docs/release/acceptance-artifacts/../state-aviation-acceptance-checklist.md",
+        sha256: createHash("sha256").update("# Acceptance checklist\n").digest("hex"),
+      },
+    }));
+    const root = await fixture(acceptedRecord(signatures), signatures);
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      code: "SIGNATURE_RECORD_INVALID",
+      scope: "risk-authority",
+    }));
+  });
+
   it("rejects an institutional signature after its review date", async () => {
     const signatures = acceptedSignatures();
     const root = await fixture(acceptedRecord(signatures), signatures);
