@@ -71,7 +71,11 @@ export function signatureRecordFailure(decision) {
   if (decision.decision === "accept" && decision.conditions.length > 0) return "unconditional acceptance cannot retain conditions";
   if (!exactUtc(decision?.reviewDueAtUtc) || Date.parse(decision.reviewDueAtUtc) <= Date.parse(decision.signedAtUtc)) return "reviewDueAtUtc must be an exact UTC timestamp after signedAtUtc";
   if (!nonEmptyString(decision?.systemOfRecordRef)) return "systemOfRecordRef is required";
-  if (!nonEmptyString(decision?.institutionalArtifact?.path) || !SHA256.test(decision?.institutionalArtifact?.sha256)) return "institutionalArtifact must contain a path and SHA-256 hash";
+  if (!nonEmptyString(decision?.institutionalArtifact?.path)
+    || !decision.institutionalArtifact.path.startsWith("docs/release/acceptance-artifacts/")
+    || !SHA256.test(decision?.institutionalArtifact?.sha256)) {
+    return "institutionalArtifact must be a hash-locked acceptance artifact";
+  }
   return undefined;
 }
 
@@ -153,12 +157,39 @@ export function deriveReviewDecisionState(review, decisions) {
       break;
     }
   }
-  const roleHeads = requiredRoles.flatMap((role) => {
+  const roleHeads = [];
+  for (const role of requiredRoles) {
     const roleDecisions = linked.filter((decision) => decision?.scope === scope && decision?.reviewer?.role === role);
-    return roleDecisions
-      .filter((decision) => !(children.get(decision.signatureId) ?? []).some((child) => child?.reviewer?.role === role))
-      .map((decision) => ({ role, signatureId: decision.signatureId, decision: decision.decision }));
-  });
+    if (roleDecisions.length === 0) continue;
+    const roots = roleDecisions.filter((decision) => decision.supersedesSignatureId === null);
+    const heads = roleDecisions.filter((decision) => !(children.get(decision.signatureId) ?? [])
+      .some((child) => child?.scope === scope && child?.reviewer?.role === role));
+    if (roots.length !== 1) {
+      violations.push({
+        code: roots.length > 1 ? "DECISION_CHAIN_FORK" : "DECISION_CHAIN_ROOT_INVALID",
+        scope,
+        detail: `${role} must have exactly one root decision`,
+      });
+      continue;
+    }
+    if (heads.length !== 1) {
+      violations.push({ code: "DECISION_CHAIN_HEAD_INVALID", scope, detail: `${role} must have exactly one current decision head` });
+      continue;
+    }
+    const connected = new Set();
+    const pending = [roots[0]];
+    while (pending.length > 0) {
+      const current = pending.pop();
+      if (current === undefined || connected.has(current.signatureId)) continue;
+      connected.add(current.signatureId);
+      pending.push(...(children.get(current.signatureId) ?? []).filter((child) => child?.scope === scope && child?.reviewer?.role === role));
+    }
+    if (connected.size !== roleDecisions.length) {
+      violations.push({ code: "DECISION_CHAIN_DISCONNECTED", scope, detail: `${role} has decisions disconnected from its root` });
+      continue;
+    }
+    roleHeads.push({ role, signatureId: heads[0].signatureId, decision: heads[0].decision });
+  }
   const missingRoles = requiredRoles.filter((role) => !roleHeads.some((head) => head.role === role));
   const headDecisions = roleHeads.map(({ decision }) => decision);
   const status = headDecisions.includes("reject")

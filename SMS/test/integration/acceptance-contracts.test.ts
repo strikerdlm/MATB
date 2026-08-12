@@ -103,6 +103,21 @@ describe("acceptance contracts", () => {
         .toContainEqual(expect.objectContaining({ code: "DECISION_CHAIN_FORK" }));
     });
 
+    it("rejects two disconnected root decisions for the same required role", () => {
+      const firstRoot = decision("risk-authority", "commander", "cmd-1");
+      const secondRoot = decision("risk-authority", "commander", "cmd-2", {
+        signedAtUtc: "2026-08-12T16:00:00.000Z",
+      });
+
+      const state = deriveReviewDecisionState(
+        reviewWith(["cmd-1", "cmd-2"], { requiredReviewerRoles: ["commander"], status: "accepted" }),
+        [firstRoot, secondRoot],
+      );
+
+      expect(state.status).not.toBe("accepted");
+      expect(state.violations).toContainEqual(expect.objectContaining({ code: "DECISION_CHAIN_FORK" }));
+    });
+
     it("accepts only when every required role has an unconditional head decision", () => {
       const risk = decision("risk-authority", "designated risk authority", "risk-1");
       const commander = decision("risk-authority", "commander", "cmd-1");

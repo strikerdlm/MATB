@@ -41,6 +41,21 @@ function knownLimitationFailure(limitation) {
 }
 
 async function signatureEvidenceFailure(root, signature) {
+  try {
+    const artifactPath = await resolveContainedExistingFile(root, signature.institutionalArtifact.path, "institutional artifact");
+    if (!signature.institutionalArtifact.path.startsWith("docs/release/acceptance-artifacts/")) {
+      return "institutional artifact must be below docs/release/acceptance-artifacts/";
+    }
+    const artifact = JSON.parse(await readFile(artifactPath, "utf8"));
+    if (artifact?.schemaVersion !== "1.0"
+      || artifact?.recordType !== "institutional-acceptance-artifact"
+      || artifact?.classification !== "unclassified-controlled"
+      || artifact?.contentType !== "controlled-safety-metadata") {
+      return "institutional artifact must contain unclassified controlled safety metadata";
+    }
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
   const evidenceRecords = [
     ...signature.evidenceHashes,
     { path: signature.sourcePacketPath, sha256: signature.sourcePacketSha256 },

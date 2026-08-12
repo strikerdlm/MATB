@@ -24,7 +24,12 @@ const releaseDocumentPaths = {
   verificationMatrixPath: "docs/release/verification-matrix.md",
 } as const;
 const packetFixture = "fixture packet\n";
-const artifactFixture = "fixture institutional artifact\n";
+const artifactFixture = `${JSON.stringify({
+  schemaVersion: "1.0",
+  recordType: "institutional-acceptance-artifact",
+  classification: "unclassified-controlled",
+  contentType: "controlled-safety-metadata",
+})}\n`;
 const packetSha256 = createHash("sha256").update(packetFixture).digest("hex");
 const artifactSha256 = createHash("sha256").update(artifactFixture).digest("hex");
 const requiredRolesByScope: Record<typeof requiredReviewScopes[number], readonly string[]> = {
@@ -105,6 +110,12 @@ function reviewerRole(signature: Record<string, unknown>): unknown {
   return reviewer !== null && typeof reviewer === "object" ? (reviewer as { role?: unknown }).role : undefined;
 }
 
+function replaceRiskAuthorityDecision(candidate: Record<string, unknown>): Record<string, unknown>[] {
+  return acceptedSignatures().map((signature) => signature.scope === "risk-authority" && reviewerRole(signature) === "designated risk authority"
+    ? { ...signature, ...candidate, reviewer: { ...(signature.reviewer as object), ...(candidate.reviewer as object) } }
+    : signature);
+}
+
 function acceptedRecord(signatures: readonly Record<string, unknown>[]): Record<string, unknown> {
   return {
     schemaVersion: "1.0",
@@ -115,10 +126,7 @@ function acceptedRecord(signatures: readonly Record<string, unknown>[]): Record<
     requiredReviews: requiredReviewScopes.map((scope) => ({
       scope,
       status: "accepted",
-      requiredReviewerRoles: Array.from(new Set(signatures
-        .filter((signature) => signature.scope === scope)
-        .map((signature) => (signature.reviewer as { role?: unknown } | undefined)?.role)
-        .filter((role): role is string => typeof role === "string"))),
+      requiredReviewerRoles: requiredRolesByScope[scope],
       signatureIds: signatures
         .filter((signature) => signature.scope === scope)
         .map((signature) => signature.signatureId),
@@ -289,7 +297,7 @@ describe("institutional operational-readiness evidence", () => {
   });
 
   it("rejects duplicate institutional review scopes", async () => {
-    const signatures = requiredReviewScopes.map(humanSignature);
+    const signatures = acceptedSignatures();
     const record = acceptedRecord(signatures);
     const root = await fixture({
       ...record,
@@ -307,7 +315,7 @@ describe("institutional operational-readiness evidence", () => {
   });
 
   it("rejects an unrecognized institutional review status", async () => {
-    const signatures = requiredReviewScopes.map(humanSignature);
+    const signatures = acceptedSignatures();
     const record = acceptedRecord(signatures);
     const reviews = record.requiredReviews as readonly Record<string, unknown>[];
     const root = await fixture({
@@ -325,7 +333,7 @@ describe("institutional operational-readiness evidence", () => {
   });
 
   it("rejects duplicate institutional signature identifiers", async () => {
-    const signatures = requiredReviewScopes.map(humanSignature);
+    const signatures = acceptedSignatures();
     signatures[1] = { ...signatures[1], signatureId: signatures[0]?.signatureId };
     const root = await fixture(acceptedRecord(signatures), signatures);
 
@@ -337,7 +345,7 @@ describe("institutional operational-readiness evidence", () => {
   });
 
   it("rejects a readiness record without a structured limitations register", async () => {
-    const signatures = requiredReviewScopes.map(humanSignature);
+    const signatures = acceptedSignatures();
     const { knownLimitations: _knownLimitations, ...record } = acceptedRecord(signatures);
     const root = await fixture(record, signatures);
 
@@ -349,7 +357,7 @@ describe("institutional operational-readiness evidence", () => {
   });
 
   it("rejects a non-boolean operational-readiness state", async () => {
-    const signatures = requiredReviewScopes.map(humanSignature);
+    const signatures = acceptedSignatures();
     const root = await fixture({ ...acceptedRecord(signatures), operationalReady: "true" }, signatures);
 
     const report = await verifyOperationalReadiness(root);
@@ -360,7 +368,7 @@ describe("institutional operational-readiness evidence", () => {
   });
 
   it("rejects a release-document reference that escapes the repository", async () => {
-    const signatures = requiredReviewScopes.map(humanSignature);
+    const signatures = acceptedSignatures();
     const root = await fixture({
       ...acceptedRecord(signatures),
       acceptanceChecklistPath: "../forged-acceptance.md",
@@ -377,7 +385,7 @@ describe("institutional operational-readiness evidence", () => {
   });
 
   it("rejects a signature-ledger reference that escapes the repository", async () => {
-    const signatures = requiredReviewScopes.map(humanSignature);
+    const signatures = acceptedSignatures();
     const root = await fixture({
       ...acceptedRecord(signatures),
       signatureLogPath: "../forged-signatures.jsonl",
@@ -402,7 +410,7 @@ describe("institutional operational-readiness evidence", () => {
     ["degraded-data procedure", knownLimitation({ degradedDataProcedure: "" })],
     ["required human action", knownLimitation({ requiredHumanAction: "" })],
   ] as const)("rejects a known limitation with an invalid %s", async (_name, limitation) => {
-    const signatures = requiredReviewScopes.map(humanSignature);
+    const signatures = acceptedSignatures();
     const root = await fixture({ ...acceptedRecord(signatures), knownLimitations: [limitation] }, signatures);
 
     const report = await verifyOperationalReadiness(root);
@@ -413,7 +421,7 @@ describe("institutional operational-readiness evidence", () => {
   });
 
   it("rejects duplicate known-limitation identifiers", async () => {
-    const signatures = requiredReviewScopes.map(humanSignature);
+    const signatures = acceptedSignatures();
     const root = await fixture({
       ...acceptedRecord(signatures),
       knownLimitations: [knownLimitation(), knownLimitation({ summary: "A second limitation reused the identifier." })],
@@ -444,7 +452,7 @@ describe("institutional operational-readiness evidence", () => {
     ["conditions on unconditional acceptance", { ...humanSignature("risk-authority"), conditions: ["Unresolved constraint."] }],
     ["review date", { ...humanSignature("risk-authority"), reviewDueAtUtc: "2026-08-11T00:00:00.000Z" }],
   ] as const)("rejects an institutional signature with invalid %s", async (_name, candidate) => {
-    const signatures = requiredReviewScopes.map((scope) => scope === "risk-authority" ? candidate : humanSignature(scope));
+    const signatures = replaceRiskAuthorityDecision(candidate);
     const root = await fixture(acceptedRecord(signatures), signatures);
 
     const report = await verifyOperationalReadiness(root);
@@ -459,7 +467,7 @@ describe("institutional operational-readiness evidence", () => {
     ["escaping path", [{ path: "../outside-evidence.txt", sha256: "672eb8316fec83f94119a4193f9fc552513d56a147502f8be4830e017d817831" }]],
   ] as const)("rejects signature evidence with a %s", async (_name, evidenceHashes) => {
     const candidate = { ...humanSignature("risk-authority"), evidenceHashes };
-    const signatures = requiredReviewScopes.map((scope) => scope === "risk-authority" ? candidate : humanSignature(scope));
+    const signatures = replaceRiskAuthorityDecision(candidate);
     const root = await fixture(acceptedRecord(signatures), signatures);
 
     const report = await verifyOperationalReadiness(root);
@@ -469,33 +477,73 @@ describe("institutional operational-readiness evidence", () => {
     expect(report.violations).toContainEqual(expect.objectContaining({ code: "SIGNATURE_EVIDENCE_INVALID", scope: "risk-authority" }));
   });
 
+  it.each([
+    ["arbitrary plain text", "not institutional metadata\n"],
+    ["classified metadata", `${JSON.stringify({
+      schemaVersion: "1.0",
+      recordType: "institutional-acceptance-artifact",
+      classification: "classified",
+      contentType: "controlled-safety-metadata",
+    })}\n`],
+  ] as const)("rejects an institutional artifact containing %s even when its hash matches", async (_name, contents) => {
+    const sha256 = createHash("sha256").update(contents).digest("hex");
+    const signatures = acceptedSignatures().map((signature) => ({
+      ...signature,
+      institutionalArtifact: { path: "docs/release/acceptance-artifacts/fixture.json", sha256 },
+    }));
+    const root = await fixture(acceptedRecord(signatures), signatures);
+    await writeFile(join(root, "docs/release/acceptance-artifacts/fixture.json"), contents, "utf8");
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      code: "SIGNATURE_EVIDENCE_INVALID",
+      scope: "risk-authority",
+    }));
+  });
+
+  it("rejects an institutional artifact outside the controlled acceptance-artifact directory", async () => {
+    const signatures = acceptedSignatures().map((signature) => ({
+      ...signature,
+      institutionalArtifact: { path: "evidence/verification.txt", sha256: "672eb8316fec83f94119a4193f9fc552513d56a147502f8be4830e017d817831" },
+    }));
+    const root = await fixture(acceptedRecord(signatures), signatures);
+
+    const report = await verifyOperationalReadiness(root);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      code: "SIGNATURE_RECORD_INVALID",
+      scope: "risk-authority",
+    }));
+  });
+
   it("rejects an institutional signature after its review date", async () => {
-    const signatures = requiredReviewScopes.map(humanSignature);
+    const signatures = acceptedSignatures();
     const root = await fixture(acceptedRecord(signatures), signatures);
 
     const report = await verifyOperationalReadiness(root, { asOfUtc: "2100-01-01T00:00:00.000Z" });
 
     expect(report.ok).toBe(false);
     expect(report.operationalReady).toBe(false);
-    expect(report.violations.filter(({ code }) => code === "SIGNATURE_REVIEW_EXPIRED")).toHaveLength(requiredReviewScopes.length);
+    expect(report.violations.filter(({ code }) => code === "SIGNATURE_REVIEW_EXPIRED")).toHaveLength(signatures.length);
   });
 
   it("rejects an institutional signature dated after the verification time", async () => {
-    const signatures = requiredReviewScopes.map(humanSignature);
+    const signatures = acceptedSignatures();
     const root = await fixture(acceptedRecord(signatures), signatures);
 
     const report = await verifyOperationalReadiness(root, { asOfUtc: "2026-08-11T00:00:00.000Z" });
 
     expect(report.ok).toBe(false);
     expect(report.operationalReady).toBe(false);
-    expect(report.violations.filter(({ code }) => code === "SIGNATURE_TIME_INVALID")).toHaveLength(requiredReviewScopes.length);
+    expect(report.violations.filter(({ code }) => code === "SIGNATURE_TIME_INVALID")).toHaveLength(signatures.length);
   });
 
   it.each([
-    ["different review scope", { ...humanSignature("risk-authority"), scope: "operational-checklist" }, "MISSING_REVIEW_SIGNATURE"],
+    ["different review scope", { ...humanSignature("risk-authority"), scope: "operational-checklist" }, "REVIEW_STATUS_DERIVATION_MISMATCH"],
     ["rejection decision", { ...humanSignature("risk-authority"), decision: "reject" }, "REVIEW_STATUS_DERIVATION_MISMATCH"],
   ] as const)("rejects an accepted review linked to a signature with a %s", async (_name, candidate, expectedCode) => {
-    const signatures = requiredReviewScopes.map((scope) => scope === "risk-authority" ? candidate : humanSignature(scope));
+    const signatures = replaceRiskAuthorityDecision(candidate);
     const root = await fixture(acceptedRecord(signatures), signatures);
 
     const report = await verifyOperationalReadiness(root);
@@ -506,7 +554,7 @@ describe("institutional operational-readiness evidence", () => {
   });
 
   it("keeps a structurally valid record blocked while a release-blocking limitation is open", async () => {
-    const signatures = requiredReviewScopes.map(humanSignature);
+    const signatures = acceptedSignatures();
     const root = await fixture({
       ...acceptedRecord(signatures),
       operationalReady: false,
@@ -563,7 +611,7 @@ describe("institutional operational-readiness evidence", () => {
   });
 
   it("rejects an operational-readiness claim while any release blocker remains open", async () => {
-    const signatures = requiredReviewScopes.map(humanSignature);
+    const signatures = acceptedSignatures();
     const root = await fixture({
       ...acceptedRecord(signatures),
       knownLimitations: [knownLimitation()],
@@ -614,7 +662,7 @@ describe("institutional operational-readiness evidence", () => {
       ...acceptedRecord([...signatures, replacement, fork]),
       operationalReady: false,
       requiredReviews: (acceptedRecord([...signatures, replacement, fork]).requiredReviews as readonly Record<string, unknown>[]).map((review) => review.scope === "risk-authority"
-        ? { ...review, status: "pending" }
+        ? { ...review, status: "accepted" }
         : review),
     }, [...signatures, replacement, fork, unlinked]);
 
