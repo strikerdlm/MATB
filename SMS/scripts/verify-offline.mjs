@@ -99,6 +99,16 @@ function containedPath(root, path, field) {
   return target;
 }
 
+function containedDirectoryPath(root, directory, path, field) {
+  const target = containedPath(root, path, field);
+  const directoryRoot = resolve(root, directory);
+  const fromDirectory = relative(directoryRoot, target);
+  if (fromDirectory === "" || fromDirectory === ".." || fromDirectory.startsWith(`..${sep}`) || isAbsolute(fromDirectory)) {
+    throw new Error(`${field} must be below ${directory}/`);
+  }
+  return target;
+}
+
 async function walkFiles(root, current = root) {
   const entries = await readdir(current, { withFileTypes: true });
   const files = [];
@@ -232,7 +242,12 @@ async function verifyAcceptanceWorkflow(bundleRoot, workflow, record, signatures
     if (mappingsBySource.has(mapping.sourcePath) || mappingDestinations.has(mapping.bundlePath)) {
       throw new Error("acceptance evidence mapping source or destination is duplicated");
     }
-    const path = containedPath(bundleRoot, mapping.bundlePath, "acceptance evidence mapping");
+    const path = containedDirectoryPath(
+      bundleRoot,
+      "reports/acceptance/review-evidence",
+      mapping.bundlePath,
+      "acceptance evidence mapping",
+    );
     if (await sha256File(path) !== mapping.sha256) throw new Error(`acceptance evidence mapping hash mismatch: ${mapping.sourcePath}`);
     mappingsBySource.set(mapping.sourcePath, mapping);
     mappingDestinations.add(mapping.bundlePath);
@@ -272,10 +287,14 @@ async function verifyAcceptanceWorkflow(bundleRoot, workflow, record, signatures
     if (await sha256File(path) !== current.sha256) throw new Error(`current packet hash mismatch: ${current.scope}`);
     const packet = parseJson(await readFile(path, "utf8"), `current packet ${current.scope}`);
     if (rebuildPacketId(packet, `current packet ${current.scope}`) !== current.packetId || packet.scope !== current.scope
+      || packet.releaseId !== record.releaseId || packet.readinessRecordId !== record.recordId
       || packet.asOfUtc !== builtAtUtc || packet.acceptanceStateFingerprint !== acceptanceStateFingerprint
       || !sameCanonical(packet.evidence, mappedEvidence)) {
       if (packet.acceptanceStateFingerprint !== acceptanceStateFingerprint) {
         throw new Error(`current packet acceptance-state fingerprint differs: ${current.scope}`);
+      }
+      if (packet.releaseId !== record.releaseId || packet.readinessRecordId !== record.recordId) {
+        throw new Error(`current packet release or readiness identifier differs: ${current.scope}`);
       }
       throw new Error(`current packet metadata or evidence differs: ${current.scope}`);
     }
@@ -303,6 +322,9 @@ async function verifyAcceptanceWorkflow(bundleRoot, workflow, record, signatures
     recordedIds.add(metadata.signatureId);
     const failure = signatureRecordFailure(decision);
     if (failure !== undefined) throw new Error(`${metadata.signatureId}: ${failure}`);
+    if (decision.releaseId !== record.releaseId) {
+      throw new Error(`${metadata.signatureId}: decision release differs from the bundled readiness record`);
+    }
     if (Date.parse(decision.signedAtUtc) > Date.parse(asOfUtc) || Date.parse(decision.reviewDueAtUtc) <= Date.parse(asOfUtc)) {
       throw new Error(`${metadata.signatureId}: institutional decision time is outside the verification window`);
     }
@@ -322,17 +344,28 @@ async function verifyAcceptanceWorkflow(bundleRoot, workflow, record, signatures
     if (typeof metadata.packetBundlePath !== "string" || !metadata.packetBundlePath.startsWith("reports/acceptance/recorded-decisions/")) {
       throw new Error(`${metadata.signatureId}: historical packet bundle path is invalid`);
     }
-    const packetPath = containedPath(bundleRoot, metadata.packetBundlePath, "historical acceptance packet");
+    const packetPath = containedDirectoryPath(
+      bundleRoot,
+      "reports/acceptance/recorded-decisions",
+      metadata.packetBundlePath,
+      "historical acceptance packet",
+    );
     if (await sha256File(packetPath) !== metadata.sourcePacketSha256) throw new Error(`${metadata.signatureId}: historical packet hash mismatch`);
     const packet = parseJson(await readFile(packetPath, "utf8"), `historical packet ${metadata.signatureId}`);
     if (rebuildPacketId(packet, `historical packet ${metadata.signatureId}`) !== decision.sourcePacketId
-      || packet.scope !== decision.scope || !sameCanonical(packet.evidence, decision.evidenceHashes)) {
+      || packet.scope !== decision.scope || packet.releaseId !== record.releaseId
+      || packet.readinessRecordId !== record.recordId || !sameCanonical(packet.evidence, decision.evidenceHashes)) {
       throw new Error(`${metadata.signatureId}: historical packet differs from the recorded decision`);
     }
     if (typeof metadata.artifactBundlePath !== "string" || !metadata.artifactBundlePath.startsWith("reports/acceptance/recorded-decisions/")) {
       throw new Error(`${metadata.signatureId}: institutional artifact bundle path is invalid`);
     }
-    const artifactPath = containedPath(bundleRoot, metadata.artifactBundlePath, "institutional acceptance artifact");
+    const artifactPath = containedDirectoryPath(
+      bundleRoot,
+      "reports/acceptance/recorded-decisions",
+      metadata.artifactBundlePath,
+      "institutional acceptance artifact",
+    );
     if (await sha256File(artifactPath) !== metadata.artifactSha256) throw new Error(`${metadata.signatureId}: institutional artifact hash mismatch`);
     const artifact = parseJson(await readFile(artifactPath, "utf8"), `institutional artifact ${metadata.signatureId}`);
     if (artifact?.schemaVersion !== "1.0" || artifact?.recordType !== "institutional-acceptance-artifact"

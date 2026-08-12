@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -37,7 +37,7 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function sha256(value: string): string {
+function sha256(value: string | Buffer): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
@@ -50,7 +50,7 @@ afterEach(async () => {
 });
 
 async function fixture(
-  files: Readonly<Record<string, string>> = {},
+  files: Readonly<Record<string, string | Buffer>> = {},
   manifestOverrides: Readonly<Record<string, unknown>> = {},
 ): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "fac-isr-offline-fixture-"));
@@ -58,14 +58,19 @@ async function fixture(
   for (const [path, contents] of Object.entries(files)) {
     const target = join(root, path);
     await mkdir(resolve(target, ".."), { recursive: true });
-    await writeFile(target, contents, "utf8");
+    await writeFile(target, contents);
   }
+  const inventory = Object.entries(files).map(([path, contents]) => ({
+    path,
+    sha256: sha256(contents),
+    sizeBytes: Buffer.byteLength(contents),
+  })).sort((left, right) => left.path.localeCompare(right.path));
   await writeFile(join(root, "bundle-manifest.json"), JSON.stringify({
     schemaVersion: "1.0",
     releaseId: "offline-fixture",
     commit: "0".repeat(40),
     builtAtUtc: "2026-08-10T00:00:00Z",
-    files: [],
+    files: inventory,
     image: {
       path: "images/fac-isr-sms-edge.oci.tar",
       archiveSha256: "0".repeat(64),
@@ -75,6 +80,45 @@ async function fixture(
     ...manifestOverrides,
   }), "utf8");
   return root;
+}
+
+function tarEntry(path: string, contents: Buffer): Buffer {
+  const header = Buffer.alloc(512);
+  header.write(path, 0, 100, "utf8");
+  header.write(`${contents.length.toString(8).padStart(11, "0")}\0`, 124, 12, "ascii");
+  const padding = Buffer.alloc(Math.ceil(contents.length / 512) * 512 - contents.length);
+  return Buffer.concat([header, contents, padding]);
+}
+
+function minimalOciArchive(): { archive: Buffer; manifestDigest: string } {
+  const imageManifest = Buffer.from('{"schemaVersion":2}\n', "utf8");
+  const manifestHash = sha256(imageManifest);
+  const manifestDigest = `sha256:${manifestHash}`;
+  const layout = Buffer.from('{"imageLayoutVersion":"1.0.0"}\n', "utf8");
+  const index = Buffer.from(`${JSON.stringify({ schemaVersion: 2, manifests: [{ digest: manifestDigest }] })}\n`, "utf8");
+  return {
+    archive: Buffer.concat([
+      tarEntry("oci-layout", layout),
+      tarEntry("index.json", index),
+      tarEntry(`blobs/sha256/${manifestHash}`, imageManifest),
+      Buffer.alloc(1024),
+    ]),
+    manifestDigest,
+  };
+}
+
+async function addDirectoryFiles(
+  files: Record<string, string | Buffer>,
+  sourceDirectory: string,
+  bundleDirectory: string,
+): Promise<void> {
+  for (const entry of await readdir(sourceDirectory, { withFileTypes: true })) {
+    const source = join(sourceDirectory, entry.name);
+    const bundled = `${bundleDirectory}/${entry.name}`;
+    if (entry.isDirectory()) await addDirectoryFiles(files, source, bundled);
+    else if (entry.isFile()) files[bundled] = await readFile(source);
+    else throw new Error(`unsupported fixture source: ${source}`);
+  }
 }
 
 async function verifyOffline(bundle: string) {
@@ -251,6 +295,76 @@ async function acceptanceWorkflowFixture(): Promise<{
   };
 }
 
+type AcceptanceWorkflowFixture = Awaited<ReturnType<typeof acceptanceWorkflowFixture>>;
+
+async function completeAcceptanceWorkflowBundle(workflow: AcceptanceWorkflowFixture): Promise<string> {
+  const files: Record<string, string | Buffer> = { ...workflow.files };
+  const provenance = join(smsRoot, "docs/provenance");
+  await addDirectoryFiles(files, join(provenance, "package-content"), "packages/regulatory/package-content");
+  for (const name of [
+    "evidence-package-manifest.json",
+    "evidence-package-manifest.sig",
+    "evidence-package-public-key.pem",
+  ]) {
+    files[`packages/regulatory/${name}`] = await readFile(join(provenance, name));
+  }
+  const regulatoryManifest = JSON.parse(String(files["packages/regulatory/evidence-package-manifest.json"]));
+  files["packages/package-index.json"] = jsonWithNewline({
+    schemaVersion: "1.0",
+    packages: [{ version: regulatoryManifest.version }],
+  });
+  files["runtime/schema.json"] = jsonWithNewline({ schemaVersion: 1, journalMode: "WAL", foreignKeys: true });
+  files["provenance/map-package-register.jsonl"] = await readFile(join(provenance, "map-package-register.jsonl"));
+  files["provenance/kernel-golden-case-report.md"] = await readFile(join(provenance, "kernel-golden-case-report.md"));
+  files["install/compose.edge.yml"] = await readFile(join(smsRoot, "docker/compose.edge.yml"));
+  files["install/README.md"] = "Install on an approved encrypted volume and provision TLS before use.\n";
+  files["reports/image-smoke.json"] = jsonWithNewline({ status: "pass", networkMode: "none", readOnlyRoot: true });
+  files["sbom/npm.cdx.json"] = jsonWithNewline({ bomFormat: "CycloneDX", components: [] });
+  files["licenses/THIRD_PARTY_NOTICES.md"] = "# Fixture notices\n";
+  const image = minimalOciArchive();
+  files["images/fac-isr-sms-edge.oci.tar"] = image.archive;
+  return fixture(files, {
+    acceptanceEvidence: workflow.acceptanceEvidence,
+    releaseAttestation: null,
+    image: {
+      path: "images/fac-isr-sms-edge.oci.tar",
+      archiveSha256: sha256(image.archive),
+      manifestDigest: image.manifestDigest,
+      platform: "linux/amd64",
+    },
+  });
+}
+
+function refreshCurrentPacketFingerprints(workflow: AcceptanceWorkflowFixture): void {
+  const metadata = workflow.acceptanceEvidence.workflow as {
+    evidenceMappings: Array<{ sourcePath: string; bundlePath: string; sha256: string }>;
+    currentPackets: Array<{ path: string; packetId: string; sha256: string }>;
+  };
+  const coreStatePaths = new Map([
+    ["docs/release/operational-readiness-record.json", "reports/acceptance/operational-readiness-record.json"],
+    ["docs/release/verification-signatures.jsonl", "reports/acceptance/verification-signatures.jsonl"],
+    ["docs/release/state-aviation-acceptance-checklist.md", "reports/acceptance/state-aviation-acceptance-checklist.md"],
+    ["docs/release/known-limitations.md", "reports/acceptance/known-limitations.md"],
+  ]);
+  const acceptanceState = acceptanceStateSourcePaths.map((sourcePath) => {
+    const bundlePath = coreStatePaths.get(sourcePath)
+      ?? metadata.evidenceMappings.find((mapping) => mapping.sourcePath === sourcePath)?.bundlePath;
+    if (bundlePath === undefined) throw new Error(`fixture acceptance-state mapping is missing: ${sourcePath}`);
+    return { path: sourcePath, sha256: sha256(workflow.files[bundlePath]!) };
+  }).sort((left, right) => left.path.localeCompare(right.path));
+  const fingerprint = sha256(canonicalJson(acceptanceState));
+  for (const current of metadata.currentPackets) {
+    const packet = JSON.parse(workflow.files[current.path]!) as Record<string, unknown>;
+    packet.acceptanceStateFingerprint = fingerprint;
+    delete packet.packetId;
+    const packetId = sha256(canonicalJson(packet));
+    const bytes = jsonWithNewline({ ...packet, packetId });
+    current.packetId = packetId;
+    current.sha256 = sha256(bytes);
+    workflow.files[current.path] = bytes;
+  }
+}
+
 describe("disconnected edge installation", () => {
   it("copies the exact institutional acceptance package into the transfer bundle", async () => {
     const stage = await mkdtemp(join(tmpdir(), "fac-isr-acceptance-stage-"));
@@ -284,7 +398,7 @@ describe("disconnected edge installation", () => {
 
   it("verifies a disconnected archived human decision while readiness remains blocked", async () => {
     const workflow = await acceptanceWorkflowFixture();
-    const bundle = await fixture(workflow.files, { acceptanceEvidence: workflow.acceptanceEvidence });
+    const bundle = await completeAcceptanceWorkflowBundle(workflow);
 
     const result = spawnSync(process.execPath, [join(bundle, "bin/verify-offline.mjs"), "--bundle", bundle, "--no-network", "--json"], {
       cwd: bundle,
@@ -292,6 +406,8 @@ describe("disconnected edge installation", () => {
     });
     const report = JSON.parse(result.stdout) as Awaited<ReturnType<typeof verifyBundle>>;
 
+    expect(result.status, result.stderr).toBe(0);
+    expect(report.ok).toBe(true);
     expect(report.operationalReady).toBe(false);
     expect(report.checks).toContainEqual(expect.objectContaining({
       id: "institutional-acceptance",
@@ -361,6 +477,86 @@ describe("disconnected edge installation", () => {
         const record = JSON.parse(workflow.files[path]!) as Record<string, unknown>;
         record.recordStatus = "tampered-but-still-blocked";
         workflow.files[path] = jsonWithNewline(record);
+      },
+    },
+    {
+      name: "mapped evidence path traversal",
+      detail: /mapping|directory|traversal/iu,
+      mutate: (workflow: AcceptanceWorkflowFixture) => {
+        const metadata = workflow.acceptanceEvidence.workflow as { evidenceMappings: Array<{ sourcePath: string; bundlePath: string }> };
+        const mapping = metadata.evidenceMappings.find((candidate) => candidate.sourcePath === "docs/release/known-limitations.md");
+        if (mapping === undefined) throw new Error("known-limitations mapping is missing");
+        mapping.bundlePath = "reports/acceptance/review-evidence/../known-limitations.md";
+      },
+    },
+    {
+      name: "historical packet path traversal",
+      detail: /historical packet|directory|traversal/iu,
+      mutate: (workflow: AcceptanceWorkflowFixture) => {
+        const metadata = workflow.acceptanceEvidence.workflow as { recordedDecisions: Array<{ packetBundlePath: string }> };
+        const decision = metadata.recordedDecisions[0]!;
+        workflow.files["reports/acceptance/historical-packet-escape.json"] = workflow.files[decision.packetBundlePath]!;
+        decision.packetBundlePath = "reports/acceptance/recorded-decisions/../historical-packet-escape.json";
+      },
+    },
+    {
+      name: "institutional artifact path traversal",
+      detail: /institutional artifact|directory|traversal/iu,
+      mutate: (workflow: AcceptanceWorkflowFixture) => {
+        const metadata = workflow.acceptanceEvidence.workflow as { recordedDecisions: Array<{ artifactBundlePath: string }> };
+        const decision = metadata.recordedDecisions[0]!;
+        workflow.files["reports/acceptance/artifact-escape.json"] = workflow.files[decision.artifactBundlePath]!;
+        decision.artifactBundlePath = "reports/acceptance/recorded-decisions/../artifact-escape.json";
+      },
+    },
+    {
+      name: "current packet release and readiness identifiers",
+      detail: /current packet.*release|readiness/iu,
+      mutate: (workflow: AcceptanceWorkflowFixture) => {
+        const metadata = workflow.acceptanceEvidence.workflow as { currentPackets: Array<{ path: string; packetId: string; sha256: string }> };
+        const current = metadata.currentPackets[0]!;
+        const packet = JSON.parse(workflow.files[current.path]!) as Record<string, unknown>;
+        packet.releaseId = "foreign-release@9.9.9";
+        packet.readinessRecordId = "foreign-readiness-record";
+        delete packet.packetId;
+        const packetId = sha256(canonicalJson(packet));
+        const bytes = jsonWithNewline({ ...packet, packetId });
+        current.packetId = packetId;
+        current.sha256 = sha256(bytes);
+        workflow.files[current.path] = bytes;
+      },
+    },
+    {
+      name: "historical decision release and readiness identifiers",
+      detail: /historical packet.*release|readiness|decision.*release/iu,
+      mutate: (workflow: AcceptanceWorkflowFixture) => {
+        const metadata = workflow.acceptanceEvidence.workflow as {
+          recordedDecisions: Array<{
+            packetBundlePath: string;
+            sourcePacketPath: string;
+            sourcePacketSha256: string;
+          }>;
+        };
+        const recorded = metadata.recordedDecisions[0]!;
+        const packet = JSON.parse(workflow.files[recorded.packetBundlePath]!) as Record<string, unknown>;
+        packet.releaseId = "foreign-release@9.9.9";
+        packet.readinessRecordId = "foreign-readiness-record";
+        delete packet.packetId;
+        const packetId = sha256(canonicalJson(packet));
+        const packetBytes = jsonWithNewline({ ...packet, packetId });
+        const packetHash = sha256(packetBytes);
+        workflow.files[recorded.packetBundlePath] = packetBytes;
+        recorded.sourcePacketPath = `docs/release/acceptance-packets/${packetId}.json`;
+        recorded.sourcePacketSha256 = packetHash;
+
+        const ledgerPath = "reports/acceptance/verification-signatures.jsonl";
+        const decision = JSON.parse(workflow.files[ledgerPath]!) as Record<string, unknown>;
+        decision.releaseId = "foreign-release@9.9.9";
+        decision.sourcePacketId = packetId;
+        decision.sourcePacketPath = recorded.sourcePacketPath;
+        decision.sourcePacketSha256 = packetHash;
+        workflow.files[ledgerPath] = `${JSON.stringify(decision)}\n`;
+        refreshCurrentPacketFingerprints(workflow);
       },
     },
   ];
