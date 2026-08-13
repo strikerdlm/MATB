@@ -479,6 +479,77 @@ describe("institutional acceptance decision intake", () => {
     expect(await authoritativeHashes(value.root)).toEqual(before);
   });
 
+  it("retries the same decision after cleaned-original recovery loses its journal before snapshot cleanup", async () => {
+    const value = await fixture();
+    const beforeHashes = await authoritativeHashes(value.root);
+    const recordPath = join(value.root, authoritativePaths[0]);
+    const beforeRecord = JSON.parse(await readFile(recordPath, "utf8"));
+
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, {
+      asOfUtc,
+      apply: true,
+      failpoint: "after-packet-install",
+    })).rejects.toThrow(/failpoint/u);
+    const journalPath = join(value.root, "docs/release/.acceptance-transaction.json");
+    const journal = JSON.parse(await readFile(journalPath, "utf8"));
+    const transactionPath = join(value.root, "docs/release/.acceptance-transactions", journal.transactionId);
+
+    await expect(recoverAcceptanceTransaction(value.root, {
+      asOfUtc,
+      failpoint: "after-journal-remove",
+    })).rejects.toThrow(/after-journal-remove/u);
+
+    expect(await authoritativeHashes(value.root)).toEqual(beforeHashes);
+    expect((await lstat(transactionPath)).isDirectory()).toBe(true);
+    await expect(lstat(journalPath)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(lstat(join(value.root, "docs/release/.acceptance-update.lock"))).rejects.toMatchObject({ code: "ENOENT" });
+
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, { asOfUtc, apply: true }))
+      .resolves.toMatchObject({
+        ok: true,
+        mode: "applied",
+        transactionId: journal.transactionId,
+      });
+
+    const afterRecord = JSON.parse(await readFile(recordPath, "utf8"));
+    expect(afterRecord.requiredReviews.find(({ scope }: { scope: string }) => scope === "risk-authority").signatureIds)
+      .toEqual(["risk-authority-20260812"]);
+    for (const field of ["knownLimitations", "operationalReady", "qualification", "recordStatus", "readinessDecision"] as const) {
+      expect(afterRecord[field]).toEqual(beforeRecord[field]);
+    }
+    await expect(lstat(transactionPath)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("refuses and preserves corrupt journal-free evidence for the same transaction identifier", async () => {
+    const value = await fixture();
+    const beforeHashes = await authoritativeHashes(value.root);
+
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, {
+      asOfUtc,
+      apply: true,
+      failpoint: "after-packet-install",
+    })).rejects.toThrow(/failpoint/u);
+    const journalPath = join(value.root, "docs/release/.acceptance-transaction.json");
+    const journal = JSON.parse(await readFile(journalPath, "utf8"));
+    const transactionPath = join(value.root, "docs/release/.acceptance-transactions", journal.transactionId);
+
+    await expect(recoverAcceptanceTransaction(value.root, {
+      asOfUtc,
+      failpoint: "after-journal-remove",
+    })).rejects.toThrow(/after-journal-remove/u);
+    const corruptPath = join(value.root, journal.ledger.originalPath);
+    await writeFile(corruptPath, "foreign transaction evidence\n", "utf8");
+
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, { asOfUtc, apply: true }))
+      .rejects.toThrow(/stale transaction|snapshot|hash|manual investigation/u);
+
+    expect(await authoritativeHashes(value.root)).toEqual(beforeHashes);
+    expect(await readFile(corruptPath, "utf8")).toBe("foreign transaction evidence\n");
+    expect((await lstat(transactionPath)).isDirectory()).toBe(true);
+    await expect(lstat(journalPath)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(lstat(join(value.root, "docs/release/.acceptance-update.lock"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it("refuses recovery when an authoritative hash is neither original nor candidate", async () => {
     const value = await fixture();
     await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, {
