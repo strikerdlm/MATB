@@ -479,6 +479,188 @@ describe("institutional acceptance decision intake", () => {
     expect(await authoritativeHashes(value.root)).toEqual(before);
   });
 
+  it("retries the same decision after cleaned-original recovery loses its journal before snapshot cleanup", async () => {
+    const value = await fixture();
+    const beforeHashes = await authoritativeHashes(value.root);
+    const recordPath = join(value.root, authoritativePaths[0]);
+    const beforeRecord = JSON.parse(await readFile(recordPath, "utf8"));
+
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, {
+      asOfUtc,
+      apply: true,
+      failpoint: "after-packet-install",
+    })).rejects.toThrow(/failpoint/u);
+    const journalPath = join(value.root, "docs/release/.acceptance-transaction.json");
+    const journal = JSON.parse(await readFile(journalPath, "utf8"));
+    const transactionPath = join(value.root, "docs/release/.acceptance-transactions", journal.transactionId);
+
+    await expect(recoverAcceptanceTransaction(value.root, {
+      asOfUtc,
+      failpoint: "after-journal-remove",
+    })).rejects.toThrow(/after-journal-remove/u);
+
+    expect(await authoritativeHashes(value.root)).toEqual(beforeHashes);
+    expect((await lstat(transactionPath)).isDirectory()).toBe(true);
+    await expect(lstat(journalPath)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(lstat(join(value.root, "docs/release/.acceptance-update.lock"))).rejects.toMatchObject({ code: "ENOENT" });
+
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, { asOfUtc, apply: true }))
+      .resolves.toMatchObject({
+        ok: true,
+        mode: "applied",
+        transactionId: journal.transactionId,
+      });
+
+    const afterRecord = JSON.parse(await readFile(recordPath, "utf8"));
+    expect(afterRecord.requiredReviews.find(({ scope }: { scope: string }) => scope === "risk-authority").signatureIds)
+      .toEqual(["risk-authority-20260812"]);
+    for (const field of ["knownLimitations", "operationalReady", "qualification", "recordStatus", "readinessDecision"] as const) {
+      expect(afterRecord[field]).toEqual(beforeRecord[field]);
+    }
+    expect((await lstat(transactionPath)).isDirectory()).toBe(true);
+    for (const path of [journal.ledger.originalPath, journal.ledger.candidatePath, journal.record.originalPath, journal.record.candidatePath]) {
+      expect((await lstat(join(value.root, path))).isFile()).toBe(true);
+    }
+    await expect(lstat(journalPath)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(lstat(join(value.root, "docs/release/.acceptance-update.lock"))).rejects.toMatchObject({ code: "ENOENT" });
+
+    await refreshPacketAndDecision(value);
+    value.decision.signatureId = "risk-commander-after-reused-evidence";
+    value.decision.reviewer.role = "commander";
+    value.decision.signedAtUtc = "2026-08-12T15:30:00.000Z";
+    await writeDecision(value);
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, { asOfUtc, apply: true }))
+      .resolves.toMatchObject({ ok: true, mode: "applied", projectedStatus: "accepted" });
+    expect((await lstat(transactionPath)).isDirectory()).toBe(true);
+  });
+
+  it("preserves foreign content added to reused evidence before a pre-journal failure", async () => {
+    const value = await fixture();
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, {
+      asOfUtc,
+      apply: true,
+      failpoint: "after-packet-install",
+    })).rejects.toThrow(/failpoint/u);
+    const journalPath = join(value.root, "docs/release/.acceptance-transaction.json");
+    const journal = JSON.parse(await readFile(journalPath, "utf8"));
+    const transactionPath = join(value.root, "docs/release/.acceptance-transactions", journal.transactionId);
+    await expect(recoverAcceptanceTransaction(value.root, {
+      asOfUtc,
+      failpoint: "after-journal-remove",
+    })).rejects.toThrow(/after-journal-remove/u);
+    const foreignPath = join(transactionPath, "foreign-evidence.txt");
+    const foreignBytes = Buffer.from("independently owned evidence\n", "utf8");
+    const retryOptions = {
+      asOfUtc,
+      apply: true as const,
+      afterTransactionPrepared: async () => {
+        await writeFile(foreignPath, foreignBytes);
+        throw new Error("injected pre-journal failure");
+      },
+    };
+
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, retryOptions))
+      .rejects.toThrow(/injected pre-journal failure/u);
+
+    expect(await readFile(foreignPath)).toEqual(foreignBytes);
+    expect((await lstat(transactionPath)).isDirectory()).toBe(true);
+    await expect(lstat(journalPath)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("preserves foreign content added to reused evidence through post-journal cleanup", async () => {
+    const value = await fixture();
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, {
+      asOfUtc,
+      apply: true,
+      failpoint: "after-packet-install",
+    })).rejects.toThrow(/failpoint/u);
+    const journalPath = join(value.root, "docs/release/.acceptance-transaction.json");
+    const journal = JSON.parse(await readFile(journalPath, "utf8"));
+    const transactionPath = join(value.root, "docs/release/.acceptance-transactions", journal.transactionId);
+    await expect(recoverAcceptanceTransaction(value.root, {
+      asOfUtc,
+      failpoint: "after-journal-remove",
+    })).rejects.toThrow(/after-journal-remove/u);
+    const foreignPath = join(transactionPath, "foreign-evidence.txt");
+    const foreignBytes = Buffer.from("independently owned evidence\n", "utf8");
+    const retryOptions = {
+      asOfUtc,
+      apply: true as const,
+      afterTransactionPrepared: async () => {
+        await writeFile(foreignPath, foreignBytes);
+      },
+    };
+
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, retryOptions))
+      .resolves.toMatchObject({ ok: true, mode: "applied", transactionId: journal.transactionId });
+
+    expect(await readFile(foreignPath)).toEqual(foreignBytes);
+    expect((await lstat(transactionPath)).isDirectory()).toBe(true);
+    await expect(lstat(journalPath)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("preserves reused evidence through explicit recovery after a retry crash", async () => {
+    const value = await fixture();
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, {
+      asOfUtc,
+      apply: true,
+      failpoint: "after-packet-install",
+    })).rejects.toThrow(/failpoint/u);
+    const journalPath = join(value.root, "docs/release/.acceptance-transaction.json");
+    const initialJournal = JSON.parse(await readFile(journalPath, "utf8"));
+    const transactionPath = join(value.root, "docs/release/.acceptance-transactions", initialJournal.transactionId);
+    await expect(recoverAcceptanceTransaction(value.root, {
+      asOfUtc,
+      failpoint: "after-journal-remove",
+    })).rejects.toThrow(/after-journal-remove/u);
+
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, {
+      asOfUtc,
+      apply: true,
+      failpoint: "after-packet-install",
+    })).rejects.toThrow(/after-packet-install/u);
+    const foreignPath = join(transactionPath, "foreign-evidence.txt");
+    const foreignBytes = Buffer.from("independently owned recovery evidence\n", "utf8");
+    await writeFile(foreignPath, foreignBytes);
+
+    await expect(recoverAcceptanceTransaction(value.root, { asOfUtc }))
+      .resolves.toMatchObject({ ok: true, action: "cleaned-original", transactionId: initialJournal.transactionId });
+
+    expect(await readFile(foreignPath)).toEqual(foreignBytes);
+    expect((await lstat(transactionPath)).isDirectory()).toBe(true);
+    await expect(lstat(journalPath)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("refuses and preserves corrupt journal-free evidence for the same transaction identifier", async () => {
+    const value = await fixture();
+    const beforeHashes = await authoritativeHashes(value.root);
+
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, {
+      asOfUtc,
+      apply: true,
+      failpoint: "after-packet-install",
+    })).rejects.toThrow(/failpoint/u);
+    const journalPath = join(value.root, "docs/release/.acceptance-transaction.json");
+    const journal = JSON.parse(await readFile(journalPath, "utf8"));
+    const transactionPath = join(value.root, "docs/release/.acceptance-transactions", journal.transactionId);
+
+    await expect(recoverAcceptanceTransaction(value.root, {
+      asOfUtc,
+      failpoint: "after-journal-remove",
+    })).rejects.toThrow(/after-journal-remove/u);
+    const corruptPath = join(value.root, journal.ledger.originalPath);
+    await writeFile(corruptPath, "foreign transaction evidence\n", "utf8");
+
+    await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, { asOfUtc, apply: true }))
+      .rejects.toThrow(/stale transaction|snapshot|hash|manual investigation/u);
+
+    expect(await authoritativeHashes(value.root)).toEqual(beforeHashes);
+    expect(await readFile(corruptPath, "utf8")).toBe("foreign transaction evidence\n");
+    expect((await lstat(transactionPath)).isDirectory()).toBe(true);
+    await expect(lstat(journalPath)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(lstat(join(value.root, "docs/release/.acceptance-update.lock"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it("refuses recovery when an authoritative hash is neither original nor candidate", async () => {
     const value = await fixture();
     await expect(recordAcceptanceDecision(value.root, value.packetPath, value.decisionPath, {

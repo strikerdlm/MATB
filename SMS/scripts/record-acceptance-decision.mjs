@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { constants } from "node:fs";
-import { lstat, mkdir, open, rename, rm } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, rename, rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -399,12 +399,17 @@ async function cleanupTransaction(root, journal, failpoint) {
   for (const suffix of ["ledger-install", "record-install", "ledger-rollback", "record-rollback"]) {
     await rm(resolve(root, `${RELEASE_DIRECTORY}/.acceptance-${journal.transactionId}-${suffix}`), { force: true });
   }
-  await rm(resolve(root, TRANSACTION_DIRECTORY, journal.transactionId), { recursive: true, force: true });
-  await fsyncDirectory(resolve(root, TRANSACTION_DIRECTORY));
+  if (journal.transactionEvidenceCreated) {
+    await rm(resolve(root, TRANSACTION_DIRECTORY, journal.transactionId), { recursive: true, force: true });
+    await fsyncDirectory(resolve(root, TRANSACTION_DIRECTORY));
+  }
 }
 
 function validateJournal(journal) {
   if (journal?.schemaVersion !== "1.0" || !/^[a-f0-9]{64}$/u.test(journal?.transactionId ?? "")) {
+    fail("acceptance transaction journal is invalid; manual investigation is required");
+  }
+  if (typeof journal.transactionEvidenceCreated !== "boolean") {
     fail("acceptance transaction journal is invalid; manual investigation is required");
   }
   const expected = {
@@ -420,6 +425,43 @@ function validateJournal(journal) {
     }
   }
   return journal;
+}
+
+async function prepareTransactionSnapshots(root, transactionPath, snapshots) {
+  try {
+    await mkdir(transactionPath, { mode: 0o700 });
+  } catch (error) {
+    if (error?.code !== "EEXIST") throw error;
+    const transactionEntry = await lstat(transactionPath);
+    if (!transactionEntry.isDirectory() || transactionEntry.isSymbolicLink()) {
+      fail("stale acceptance transaction evidence is not an owned directory; manual investigation is required");
+    }
+    const expectedNames = Object.keys(snapshots).sort();
+    const actualNames = (await readdir(transactionPath)).sort();
+    if (!sameCanonical(actualNames, expectedNames)) {
+      fail("stale acceptance transaction evidence has an unrecognized inventory; manual investigation is required");
+    }
+    for (const name of expectedNames) {
+      const snapshot = await readRegularBytesSnapshot(resolve(transactionPath, name), "stale acceptance transaction snapshot");
+      if (snapshot.sha256 !== snapshots[name].sha256) {
+        fail("stale acceptance transaction snapshot hash is unrecognized; manual investigation is required");
+      }
+    }
+    return false;
+  }
+
+  try {
+    for (const [name, snapshot] of Object.entries(snapshots)) {
+      await writeExclusiveSynced(resolve(transactionPath, name), snapshot.bytes);
+    }
+    await fsyncDirectory(transactionPath);
+    await fsyncDirectory(resolve(root, TRANSACTION_DIRECTORY));
+    return true;
+  } catch (error) {
+    await rm(transactionPath, { recursive: true, force: true });
+    await fsyncDirectory(resolve(root, TRANSACTION_DIRECTORY));
+    throw error;
+  }
 }
 
 /** Apply one validated institutional decision through a crash-consistent journal. */
@@ -459,14 +501,13 @@ export async function recordAcceptanceDecision(root, packetPath, decisionPath, o
     await assertSourcesUnchanged(baseline.sourceSnapshots);
 
     await mkdir(resolve(repositoryRoot, TRANSACTION_DIRECTORY), { recursive: true, mode: 0o700 });
-    await mkdir(transactionPath, { mode: 0o700 });
-    transactionCreated = true;
-    await writeExclusiveSynced(resolve(transactionPath, "ledger.original"), baseline.ledgerInput.bytes);
-    await writeExclusiveSynced(resolve(transactionPath, "ledger.candidate"), candidateLedger);
-    await writeExclusiveSynced(resolve(transactionPath, "record.original"), baseline.recordInput.bytes);
-    await writeExclusiveSynced(resolve(transactionPath, "record.candidate"), candidateRecord);
-    await fsyncDirectory(transactionPath);
-    await fsyncDirectory(resolve(repositoryRoot, TRANSACTION_DIRECTORY));
+    transactionCreated = await prepareTransactionSnapshots(repositoryRoot, transactionPath, {
+      "ledger.original": { bytes: baseline.ledgerInput.bytes, sha256: journal.ledger.originalSha256 },
+      "ledger.candidate": { bytes: candidateLedger, sha256: journal.ledger.candidateSha256 },
+      "record.original": { bytes: baseline.recordInput.bytes, sha256: journal.record.originalSha256 },
+      "record.candidate": { bytes: candidateRecord, sha256: journal.record.candidateSha256 },
+    });
+    await options.afterTransactionPrepared?.();
 
     const candidateRecordRelative = journal.record.candidatePath;
     const candidateLedgerRelative = journal.ledger.candidatePath;
@@ -478,6 +519,7 @@ export async function recordAcceptanceDecision(root, packetPath, decisionPath, o
     });
     if (!candidateReport.ok) fail(`candidate acceptance state is invalid: ${JSON.stringify(candidateReport.violations)}`);
 
+    journal.transactionEvidenceCreated = transactionCreated;
     await writeExclusiveSynced(resolve(repositoryRoot, JOURNAL_PATH), `${JSON.stringify(journal, null, 2)}\n`);
     journalCreated = true;
     await fsyncDirectory(resolve(repositoryRoot, RELEASE_DIRECTORY));

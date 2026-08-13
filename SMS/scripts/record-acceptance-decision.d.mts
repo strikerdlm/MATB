@@ -19,6 +19,8 @@ export interface RecordDecisionOptions {
   readonly asOfUtc: string;
   readonly apply: true;
   readonly failpoint?: AcceptanceFailpoint;
+  /** Fault-injection seam for deterministic transaction-boundary testing. */
+  readonly afterTransactionPrepared?: () => void | Promise<void>;
 }
 
 export type AcceptanceApplyReport = Omit<AcceptanceDecisionValidation, "mode"> & {
