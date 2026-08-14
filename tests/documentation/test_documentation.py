@@ -3,6 +3,8 @@ import json
 import subprocess
 import sys
 
+import pytest
+
 from scripts.verify_documentation import (
     ROOT_ANCHORS,
     REQUIRED_MODULE_PATHS,
@@ -39,6 +41,42 @@ def test_openmatb_example_runs_offline(tmp_path: Path) -> None:
     records = [json.loads(line) for line in (tmp_path / "metrics.jsonl").read_text().splitlines()]
     assert [record["workload_level"] for record in records] == ["LOW", "MEDIUM", "HIGH"]
     assert json.loads((tmp_path / "suhir.json").read_text())["participant_id"] == "SYNTH-P01"
+
+
+def test_sms_package_tour_is_deterministic() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    if not (repo_root / "SMS/packages/evidence/dist/index.js").exists():
+        pytest.skip("run npm run build:packages before the SMS example smoke test")
+    first = subprocess.run(
+        ["node", "../examples/sms-platform/package-tour.mjs"],
+        cwd=repo_root / "SMS",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    second = subprocess.run(
+        ["node", "../examples/sms-platform/package-tour.mjs"],
+        cwd=repo_root / "SMS",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert first.returncode == 0, first.stderr
+    assert first.stdout == second.stdout
+    result = json.loads(first.stdout)
+    assert set(result) == {
+        "evidence",
+        "energy",
+        "fleet",
+        "geo",
+        "telemetry",
+        "safetyKernel",
+        "sms",
+        "humanPerformance",
+        "research",
+    }
+    assert result["safetyKernel"]["status"] == "blocked"
+    assert result["research"]["nonDispatchable"] is True
 
 
 def test_relative_links_resolve_and_code_fences_are_ignored(tmp_path: Path) -> None:
