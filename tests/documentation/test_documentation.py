@@ -1,4 +1,6 @@
 from pathlib import Path
+import json
+import subprocess
 import sys
 
 from scripts.verify_documentation import (
@@ -16,6 +18,27 @@ from scripts.verify_documentation import (
     verify_repository,
     validate_command_contracts,
 )
+
+
+def test_openmatb_example_runs_offline(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [
+            sys.executable,
+            "examples/openmatb-research/run_example.py",
+            "--output-dir",
+            str(tmp_path),
+        ],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert len(list((tmp_path / "scenarios").glob("*.txt"))) == 3
+    records = [json.loads(line) for line in (tmp_path / "metrics.jsonl").read_text().splitlines()]
+    assert [record["workload_level"] for record in records] == ["LOW", "MEDIUM", "HIGH"]
+    assert json.loads((tmp_path / "suhir.json").read_text())["participant_id"] == "SYNTH-P01"
 
 
 def test_relative_links_resolve_and_code_fences_are_ignored(tmp_path: Path) -> None:
