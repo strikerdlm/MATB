@@ -149,6 +149,26 @@ def test_safety_ignores_explanatory_markdown_prohibitions(tmp_path: Path) -> Non
     assert find_safety_violations([guide]) == []
 
 
+def test_suas_walkthrough_keeps_lease_out_of_urls() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    for name in ("api_walkthrough.sh", "api_walkthrough.ps1"):
+        text = (repo_root / "examples/suas-simulator" / name).read_text(encoding="utf-8")
+        assert "X-Simulation-Controller" in text
+        assert "?lease=" not in text
+        assert "controller_lease" not in "\n".join(
+            line for line in text.splitlines() if "echo" in line.lower() or "write-host" in line.lower()
+        )
+
+
+def test_http_walkthroughs_use_synthetic_identity() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    texts = [
+        path.read_text(encoding="utf-8")
+        for path in (repo_root / "examples/research-console").glob("api_walkthrough.*")
+    ]
+    assert texts and all("SYNTH-P01" in text for text in texts)
+
+
 def test_safety_rejects_provider_prefixed_credential_and_token_fields(tmp_path: Path) -> None:
     bad = tmp_path / "provider-credentials.json"
     bad.write_text(
