@@ -30,6 +30,10 @@ REQUIRED_MODULE_PATHS = (
     "SMS/tools/map-packager/", "SMS/tools/research/", "aircraft_monitor/",
 )
 PAIR_DIRS = ("openmatb-research", "research-console", "sms-platform", "legacy-monitor")
+MARKDOWN_EXCLUDED_DIRS = frozenset({
+    ".git", ".worktrees", ".superpowers", "node_modules", "dist", "build", ".next",
+    "coverage", ".pytest_cache", "__pycache__", ".venv", "venv", "site-packages", "vendor",
+})
 LINK_RE = re.compile(r"(?<!!)\[[^]]*]\(([^)]+)\)")
 ANCHOR_RE = re.compile(r'<a\s+id=["\']([^"\']+)["\']\s*></a>', re.IGNORECASE)
 
@@ -100,6 +104,35 @@ def find_broken_links(root: Path, markdown_files: list[Path]) -> list[str]:
                 continue
             if parsed.fragment and resolved.is_file() and parsed.fragment not in markdown_anchors(resolved):
                 errors.append(f"{source.relative_to(root)}:{line}: missing anchor #{parsed.fragment}")
+    return errors
+
+
+def repository_markdown_files(root: Path) -> list[Path]:
+    root = root.resolve()
+    return sorted(
+        path for path in root.rglob("*.md")
+        if not (set(path.relative_to(root).parts) & MARKDOWN_EXCLUDED_DIRS)
+    )
+
+
+def validate_language_switch(english: Path, spanish: Path) -> list[str]:
+    errors: list[str] = []
+
+    def has_visible_link(path: Path, target_name: str) -> bool:
+        if not path.is_file():
+            return False
+        for destination, line in markdown_links(path):
+            if line > 40:
+                continue
+            target = urlsplit(destination).path
+            if target in {target_name, f"./{target_name}"}:
+                return True
+        return False
+
+    if not has_visible_link(english, spanish.name):
+        errors.append("README.md: missing visible language switch to README.es.md")
+    if not has_visible_link(spanish, english.name):
+        errors.append("README.es.md: missing visible language switch to README.md")
     return errors
 
 
@@ -215,7 +248,7 @@ def validate_command_contracts(root: Path) -> list[str]:
                             ).get("scripts", {})
                         except (OSError, UnicodeError, json.JSONDecodeError, AttributeError):
                             pass
-                    if name not in local_scripts and name not in {"dev", "build", "test", "typecheck", "start"}:
+                    if name not in local_scripts:
                         errors.append(f"{path.relative_to(root)}: unknown local package script: {name}")
                 elif kind == "sms" or "SMS" in path.parts or "sms-platform" in path.parts or path.parent == root:
                     if name not in scripts and name not in {"dev", "build", "test", "typecheck", "start"}:
@@ -223,29 +256,135 @@ def validate_command_contracts(root: Path) -> list[str]:
     return errors
 
 
-def find_safety_violations(example_files: list[Path]) -> list[str]:
-    patterns = (
-        (re.compile(r"private[_-]?key", re.IGNORECASE), "private key field"),
-        (re.compile(r"BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY"), "private key material"),
-        (re.compile(r'operationalReady["\s:=]+true', re.IGNORECASE), "operationalReady true"),
-        (re.compile(r"[?&]lease=", re.IGNORECASE), "controller lease in URL"),
+FIELD_ASSIGNMENT_RE = re.compile(
+    r'''(?P<key>["']?[A-Za-z][\w-]*["']?)\s*[:=]\s*'''
+    r'''(?P<value>"[^"]*"|'[^']*'|[^,\n}\]]+)'''
+)
+PRIVATE_KEY_MATERIAL_RE = re.compile(r"BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY", re.IGNORECASE)
+URL_LEASE_RE = re.compile(r"[?&]lease=", re.IGNORECASE)
+MARKDOWN_FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
+
+
+def _safety_text(path: Path) -> str:
+    """Return executable/structured Markdown content, excluding explanatory prose."""
+    text = path.read_text(encoding="utf-8")
+    if path.suffix.lower() != ".md":
+        return text
+    fenced: list[str] = []
+    inline: list[str] = []
+    active: str | None = None
+    for line in text.splitlines():
+        marker = MARKDOWN_FENCE_RE.match(line)
+        if marker:
+            token = marker.group(1)[0]
+            active = None if active == token else token if active is None else active
+            continue
+        if active is not None:
+            fenced.append(line)
+        else:
+            inline.extend(re.findall(r"`([^`]+)`", line))
+    return "\n".join((*fenced, *inline))
+
+
+def _field_name(raw: str) -> str:
+    return raw.strip().strip("\"'").lower().replace("-", "_")
+
+
+def _field_value(raw: str) -> str:
+    return raw.strip().strip("\"'").strip()
+
+
+def _is_placeholder(value: str) -> bool:
+    normalized = value.strip().lower()
+    return (
+        not normalized
+        or normalized in {
+            "null", "none", "false", "unsigned", "placeholder", "example", "example.com",
+            "synthetic", "redacted", "dummy", "test", "changeme", "replace-me", "n/a",
+        }
+        or (normalized.startswith("<") and normalized.endswith(">"))
+        or bool(re.fullmatch(r"\$[A-Z_][A-Z0-9_]*", value.strip()))
     )
+
+
+def _is_acceptance_asset(path: Path) -> bool:
+    names = {part.lower() for part in path.parts}
+    stem = path.stem.lower()
+    return bool({"acceptance", "review", "packet", "decision"} & names) or any(
+        token in stem for token in ("acceptance", "review", "packet", "decision")
+    )
+
+
+def find_safety_violations(example_files: list[Path]) -> list[str]:
+    credential_fields = {
+        "api_key", "apikey", "api_token", "apitoken", "access_token", "accesstoken",
+        "auth", "auth_header", "authorization", "auth_token", "authtoken", "bearer", "bearer_token",
+        "client_secret", "clientsecret", "credential", "credentials", "password", "passwd", "secret", "token",
+    }
+    pii_fields = {
+        "participant_name", "participantname", "full_name", "fullname", "email", "email_address",
+        "phone", "phone_number", "address", "date_of_birth", "dateofbirth", "national_id",
+        "nationalid", "government_id", "governmentid", "employee_id", "employeeid",
+    }
+    signature_fields = {
+        "signature", "institutional_signature", "institutionalsignature", "signed_by", "signedby",
+        "signer", "reviewer_signature", "reviewersignature", "approval_signature", "approvalsignature",
+    }
+    lease_fields = {
+        "lease", "controller_lease", "controllerlease", "simulation_controller", "simulationcontroller",
+        "x_simulation_controller", "xsimulationcontroller",
+    }
     errors: list[str] = []
     for path in example_files:
-        if not path.is_file() or path.suffix.lower() not in {".json", ".csv", ".txt", ".sh", ".ps1", ".mjs"}:
+        if not path.is_file():
             continue
-        text = path.read_text(encoding="utf-8")
-        for pattern, label in patterns:
-            if pattern.search(text):
-                errors.append(f"{path}: prohibited {label}")
+        try:
+            text = _safety_text(path)
+        except (OSError, UnicodeError):
+            continue
+        if not text:
+            if _is_acceptance_asset(path):
+                errors.append(f"{path}: acceptance asset must declare operationalReady=false")
+            continue
+        if PRIVATE_KEY_MATERIAL_RE.search(text):
+            errors.append(f"{path}: prohibited private key material")
+        if URL_LEASE_RE.search(text):
+            errors.append(f"{path}: prohibited controller lease in URL")
+
+        readiness_found = False
+        readiness_false = False
+        for match in FIELD_ASSIGNMENT_RE.finditer(text):
+            field = _field_name(match.group("key"))
+            value = _field_value(match.group("value"))
+            normalized_value = value.lower()
+            if field == "operationalready":
+                readiness_found = True
+                readiness_false = normalized_value == "false"
+                if normalized_value != "false":
+                    errors.append(f"{path}: operationalReady must be false")
+            if field in {"private_key", "privatekey"} and not _is_placeholder(value):
+                errors.append(f"{path}: prohibited private key field")
+            if field in credential_fields and not _is_placeholder(value):
+                errors.append(f"{path}: prohibited credential or token field: {field}")
+            if field in pii_fields and not _is_placeholder(value):
+                errors.append(f"{path}: prohibited PII-like identity field: {field}")
+            if field in signature_fields and not _is_placeholder(value):
+                errors.append(f"{path}: prohibited institutional signature field: {field}")
+            if field in lease_fields and not _is_placeholder(value):
+                errors.append(f"{path}: prohibited controller lease field: {field}")
+            if field == "signed" and normalized_value == "true":
+                errors.append(f"{path}: acceptance asset must remain unsigned")
+        if _is_acceptance_asset(path) and (not readiness_found or not readiness_false):
+            errors.append(f"{path}: acceptance asset must declare operationalReady=false")
     return errors
 
 
 def verify_repository(root: Path) -> list[str]:
     root = root.resolve()
-    markdown = [root / "README.md", root / "README.es.md", *sorted((root / "examples").rglob("README*.md"))]
+    markdown = repository_markdown_files(root)
     existing_markdown = [path for path in markdown if path.is_file()]
     errors = compare_root_anchors(root / "README.md", root / "README.es.md")
+    errors += validate_language_switch(root / "README.md", root / "README.es.md")
     for guide in (root / "README.md", root / "README.es.md"):
         if guide.is_file():
             anchors = ANCHOR_RE.findall(strip_fenced_code(guide.read_text(encoding="utf-8")))
