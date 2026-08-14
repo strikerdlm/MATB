@@ -1,514 +1,1033 @@
-# 🛩️ MATB — Military Aviation Research Platform
+# MATB — Human-Factors Research and Aviation Safety Assurance
 
-A Python research platform for **multi-attribute task battery (MATB)** human-factors studies in military aviation. It builds OpenMATB-compatible counterbalanced scenarios, converts session logs into analysis-ready metrics, and applies a probabilistic mission-outcome model. It also includes a native, Linux/headless-safe sUAS command-and-control research simulator with a browser UI and sealed replay artifacts.
+[English](README.md) | [Español](README.es.md)
 
-> **Author:** Dr. Diego Malpica, MD — Aerospace Medicine, Colombian Aerospace Force (FAC).
-> Research targets: *Aerospace Medicine and Human Performance*, *Human Factors*, *Frontiers in Neuroergonomics*.
+> Research and safety-assurance software only. MATB is not a clinical device,
+> certified operational system, aircraft-control channel, weapon system, or a
+> substitute for accountable human approval.
 
----
+MATB brings several independently installable workflows into one repository:
+OpenMATB-compatible study tooling, a local research console, a deterministic
+small-uncrewed-aircraft-system (sUAS) simulator, an offline-first FAC ISR Safety
+Management System (SMS), and a retained terminal aircraft-monitor demonstration.
+Choose one workflow below; you do not need to install the others.
 
-## What this is (and what it is not)
+<a id="identity-and-safety"></a>
+## 1. Identity, intended use, and safety boundary
 
-This repository has evolved from a terminal aircraft-monitoring demo into an OpenMATB-compatible research platform. The active research surface is the `matb_integration` bridge plus the research console, **not** the original Rich dashboard (which is retained as a legacy/secondary tool — see [Legacy dashboard](#legacy-aircraft-monitoring-dashboard)). The OpenMATB task runner is no longer vendored here; use a separate working OpenMATB checkout/install when collecting operator-in-the-loop sessions.
+The active Python research surface generates scenarios and provenance, converts
+OpenMATB CSV logs, computes descriptive/frequentist/Bayesian results, fits a
+within-participant Suhir DEPDF model, and supports an exploratory
+neurocognitive screen. OpenMATB itself is external and is not vendored here.
 
-It is a **research instrument**, not a clinical or certified safety tool. Statistical and modelling outputs use comparative, evidence-based framing (effect sizes, confidence/credible intervals).
+The Research Console is a loopback FastAPI/Next.js application with local
+SQLite and artifact storage. Its sUAS surface is a synthetic, non-kinetic,
+supervisory simulator. It has no real aircraft, weapon, targeting, autonomous
+dispatch, real-world map, external telemetry, or command-and-control (C2) path.
 
----
+The `SMS/` workspace evaluates controlled evidence, read-only telemetry, safety
+gates, organizational SMS records, and institutional-review artifacts. A
+component passing, a build succeeding, or a verification matrix completing is
+not an authorization to operate. Missing, stale, untrusted, or unaccepted hard
+evidence fails closed; accountable institutional reviewers remain the decision
+authority.
 
-## Architecture
+Use only pseudonymous research identities. Keep study data, controlled evidence,
+signing material, TLS material, controller leases, and institutional decisions
+out of the repository and under the owning institution's custody controls.
 
-```
+<a id="choose-a-workflow"></a>
+## 2. Choose one workflow
+
+| Goal | Start here | Runtime | Example | Expected output |
+| --- | --- | --- | --- | --- |
+| Generate OpenMATB scenarios, convert logs, or try DEPDF analysis | `matb_integration/` | Python; external OpenMATB only for participant task presentation | [OpenMATB research tour](examples/openmatb-research/README.md) | Three scenarios/manifests, synthetic JSONL metrics, and one DEPDF JSON |
+| Ingest sessions, track visits, visualize data, analyze, and export | `webui/` | Python 3.12+, Node 20+, local browser | [Research Console walkthrough](examples/research-console/README.md) | Local SQLite records and `research-bundle.zip` |
+| Run a deterministic, observer-safe sUAS research session | `matb_integration/suas/` and `webui/` | Python 3.12+; Node 20+ for browser service | [sUAS simulator walkthrough](examples/suas-simulator/README.md) | Replay-verifiable events, metrics, debrief, manifest, and checksums |
+| Evaluate offline safety-management package contracts | `SMS/` | Node 22.x; Docker only for the offline image/bundle | [SMS capability tour](examples/sms-platform/README.md) | Deterministic JSON with a deliberately blocked safety-kernel result |
+| Demonstrate the older terminal monitor | `aircraft_monitor/` | Python and a terminal | [Legacy monitor guide](examples/legacy-monitor/README.md) | Headless UAV, fighter, combined, or experiment event stream |
+
+The [examples index](examples/README.md) compares fast offline examples with the
+service, browser, Docker, and external-runtime procedures.
+
+<a id="architecture-and-data-flow"></a>
+## 3. Architecture and data movement
+
+```text
 MATB/
-├── matb_integration/         # Python bridge layer (no OpenMATB install needed to use it)
-│   ├── scenario_builder.py   #   ResearchProtocol → OpenMATB .txt; Latin-square counterbalancing
-│   ├── scenario_manifest.py  #   Deterministic scenario provenance + CSV validation helpers
-│   ├── log_converter.py      #   OpenMATB CSV → structured JSONL metrics (d′, TLX, Bedford, ISA, SAGAT)
-│   ├── suhir/                #   Suhir (2018) DEPDF probabilistic mission-outcome model  [PR #5]
-│   ├── questionnaires/       #   EN/ES NASA-TLX, ISA, Bedford, SAGAT assets
-│   └── analysis/             #   descriptive analysis helpers
-├── webui/                    # MATB Research Console (FastAPI backend + Next.js UI)  [PR #6]
-│   ├── backend/              #   ingestion + tracker + provenance + exports + auto DEPDF fit
-│   └── frontend/             #   tracker, upload, visualization, analysis, screen UI
-├── scenarios/military_aviation/   # Pre-baked LOW / MEDIUM / HIGH scenarios
-├── aircraft_monitor/         # Legacy Rich terminal dashboard (secondary)
-├── tests/                    # Bridge + protocol + SAGAT + analysis tests
-├── setup.sh                  # One-shot clone-to-running install
-└── docs/                     # Research evidence review, specs, plans
+├── matb_integration/       Python scenario, conversion, analysis, screen, and sUAS libraries
+├── scenarios/              committed OpenMATB and synthetic sUAS scenarios
+├── webui/                  FastAPI backend and Next.js Research Console
+├── SMS/                    Node/TypeScript safety-management monorepo
+├── aircraft_monitor/       retained Rich terminal demonstrations
+├── examples/               deterministic synthetic workflow tours
+├── scripts/                native sUAS install/launch and documentation verification
+├── tests/                  Python, integration, sUAS, and documentation suites
+└── docs/                   scientific, implementation, design, and verification detail
 ```
 
-| Component | Role | Status |
-|---|---|---|
-| External OpenMATB runtime | Operator-in-the-loop MATB task runner | Not vendored; broken `openmatb @ 2d9e20a` submodule removed after the GitHub source resolved 404 |
-| `matb_integration/scenario_builder.py` | Generate counterbalanced LOW/MED/HIGH scenarios + adjacent manifests | Built, tested |
-| `matb_integration/scenario_manifest.py` | Scenario provenance hashing + CSV validation against expected probes/questionnaires | Built, tested |
-| `matb_integration/log_converter.py` | CSV → JSONL metrics (SDT d′, TLX, Bedford, ISA, SAGAT) | Built, tested |
-| `matb_integration/suhir/` | DEPDF human-nonfailure + mission-outcome model | Built — **PR #5** (not yet on `main`) |
-| `webui/backend/` | FastAPI ingestion + study tracker + scenario validation + research bundle exports + auto-fit + analysis endpoints | Built — **PR #6** (stacked on #5) |
-| `webui/frontend/` | Next.js tracker/analysis UI (HRV design system) | Phase 1B built; Phase 3A/3B analysis screen built; Screen page built |
-| `matb_integration/analysis/stats/` | Frequentist + Bayesian statistics engines (MixedLM, rmcorr, DEPDF drift; PyMC NUTS hierarchical re-fits) | **Phase 3 — done (3A + 3B)** |
-| `aircraft_monitor/` | Legacy Rich dashboard | Retained, not the active surface |
+The four primary flows are deliberately separate:
 
-**Data flow:** external OpenMATB session → CSV logs → `log_converter` → JSONL metrics → (`suhir` DEPDF fit) → analysis / research console.
+```text
+External OpenMATB -> session CSV + scenario manifest -> metrics -> DEPDF/statistics -> research bundle
+Browser -> FastAPI Research Console -> local SQLite/artifacts -> tracker/analysis/export
+Synthetic YAML -> deterministic sUAS engine -> observer-safe state -> replay/debrief artifacts
+Signed local evidence + read-only telemetry -> edge API/safety kernel -> console/audit -> offline verification
+```
 
-## Native sUAS C2 simulator (Linux/headless first-class)
+The research database is not an operational database. `SMS/packages/research/`
+and the SMS operational domain have explicit separation checks. Telemetry is
+read-only, and neither application exposes a vehicle-command channel.
 
-The repository includes a self-contained synthetic small-UAS operations
-simulator under `matb_integration/suas/` and `webui/`. It models supervisory
-mission actions, fleet state, contacts, alerts, workload/protocol gates,
-observer streams, controller lease handoff, checkpoint recovery, debrief
-metrics, and deterministic replay verification. It is deliberately a
-research instrument: it has no weapons, real-world map data, vehicle control,
-external telemetry, or autonomous targeting path.
+<a id="prerequisites"></a>
+## 4. Prerequisite matrix
 
-Linux servers do not need Windows, X11, a desktop session, Docker, or a GPU.
-The shipped launcher runs the FastAPI backend and built Next.js UI on loopback
-and writes an owner-only SQLite/artifact directory. Windows is not a
-requirement; a Windows developer can use WSL2 or Docker, but the supported
-offline launcher is POSIX shell (Linux/macOS/WSL) and should be treated as the
-deployment contract.
+| Dependency | Version or role | OpenMATB tools | Research Console | sUAS | `SMS/` | Legacy monitor |
+| --- | --- | --- | --- | --- | --- | --- |
+| Git | Clone/source control | Required | Required | Required | Required | Required |
+| Python | 3.12+ is required by the sUAS installer; use the same version for repository Python workflows | Required | Required | Required | No | Required |
+| Node.js | Launcher checks 20+; frontend uses npm | No | 20+ required | 20+ for browser service | **22.x required** | No |
+| npm | Lockfile-based dependency/build tool | No | Required for frontend | Required for browser service | Required | No |
+| External OpenMATB | Separate task runner with its own dependencies | Workflow-specific | Only to collect real task sessions | No | No | No |
+| Xvfb | Virtual X display for external OpenMATB/Pyglet on headless Linux | Workflow-specific | No | No—the native UI is browser/headless | No | No in `--headless` mode |
+| Chromium | Browser use; Playwright Chromium is needed only for browser E2E/a11y gates | Optional | Browser required; Playwright asset optional | Browser required for UI; optional for CLI | Optional console test asset | No |
+| Docker | Linux container engine and staged base image | No | No | No | Workflow-specific for offline image/bundle | No |
+| WSL2 | POSIX boundary on Windows | For `setup.sh` or Linux/Xvfb procedure | For the combined POSIX launcher only | Required on Windows for `install_suas.sh`/`run_suas.sh` | For POSIX scripts, Linux permissions, and Docker verification | Not required |
 
-### Install and launch offline
+Native Windows supports the PowerShell/Python/Node examples. It does not turn
+POSIX shell launchers, Linux container entrypoints, `chmod`/UID behavior, or
+Xvfb into native Windows procedures. Use WSL2 for those paths. PowerShell API
+walkthroughs require PowerShell 7+ because they use `Invoke-RestMethod -Form`.
 
-From the repository root (Python 3.12+ and Node.js 20+):
+Check only the tools needed for the selected workflow.
 
 ```bash
-MATB_VENV="$PWD/.venv-suas" bash scripts/install_suas.sh
-MATB_VENV="$PWD/.venv-suas" bash scripts/run_suas.sh
+git --version
+python3 --version
+node --version
+npm --version
 ```
 
-Open `http://127.0.0.1:3100/mission/setup` from an operator workstation or
-headless browser. The backend health endpoint is
-`http://127.0.0.1:8000/health`. Use `--data-dir`, `--backend-port`, and
-`--frontend-port` to relocate the local store or avoid port collisions. The
-launcher refuses unsafe data roots and refuses non-loopback binds unless
-`MATB_FRONTEND_ORIGINS` is explicitly configured.
+```powershell
+git --version
+python --version
+node --version
+npm --version
+$PSVersionTable.PSVersion
+```
 
-For development, run the backend and frontend separately as documented in
-[`webui/backend/README.md`](webui/backend/README.md) and
-[`webui/frontend/README.md`](webui/frontend/README.md). The scenario directory
-defaults to `scenarios/suas/`; set `MATB_SIMULATION_SCENARIO_DIR` to use a
-validated fixture directory elsewhere.
+<a id="quick-start-openmatb"></a>
+## 5. OpenMATB research quick start
 
-### Native API surface
+This quick start is fully synthetic. The external OpenMATB runtime is necessary
+only when presenting generated tasks to a participant.
 
-- `GET /simulation/scenarios` lists validated YAML scenarios.
-- `POST /simulation/sessions` prepares a pseudonymized participant/visit and
-  returns a controller lease once. Keep that lease out of logs and URLs; send
-  it only as `X-Simulation-Controller` on mutations.
-- `POST /simulation/sessions/{id}/start|pause|resume|finish|recover` controls
-  lifecycle. A valid controller WebSocket disconnect pauses a running session;
-  it never resumes automatically.
-- `POST /simulation/sessions/{id}/commands` accepts non-kinetic supervisory
-  commands. `GET .../state` is observer-readable and redacts private probe
-  truth.
-- `WS /simulation/sessions/{id}/stream` is an ordered, bounded stream. A
-  lease-bearing connection is the sole controller; a lease-free connection is
-  read-only. The first frame is a complete resynchronizing snapshot and the
-  `after_sequence` cursor supports reconnects.
-- `GET .../debrief` and `GET .../artifacts` are available only after a terminal
-  finish/abort and expose relative paths plus hashes, never absolute paths or
-  leases.
+<h3>Prerequisites</h3>
 
-The safety boundary is intentional: this platform can exercise operator
-workload, situation awareness, communications, and supervisory decisions, but
-it cannot command a real aircraft or weapon system.
+Use Git and Python 3.12+. For participant presentation, provide a separate
+OpenMATB checkout. Linux/headless presentation also needs Xvfb and a working
+Pyglet display; native Windows runs the external desktop runtime directly.
 
----
+<h3>Install</h3>
 
-## Step-by-step: how to run it
-
-### 1. Install this MATB repository
+Linux Bash or WSL2, from the clone root:
 
 ```bash
-git clone https://github.com/strikerdlm/MATB
-cd MATB
-bash setup.sh
+REPO_ROOT="$(pwd)"
+python3 -m venv "$REPO_ROOT/.venv-openmatb"
+"$REPO_ROOT/.venv-openmatb/bin/python" -m pip install -r "$REPO_ROOT/requirements.txt"
 ```
 
-`setup.sh` creates this repository's `.venv` and installs MATB bridge /
-analysis dependencies. It does **not** install the OpenMATB desktop task
-runner, because OpenMATB is intentionally external.
-
-### 2. Install the external OpenMATB runner
-
-Use a separate OpenMATB checkout or install directory. In the examples below,
-replace `/path/to/openmatb` with your actual OpenMATB path.
+`setup.sh` is an equivalent POSIX-only repository setup entry point:
 
 ```bash
-OPENMATB_DIR=/path/to/openmatb
-cd "$OPENMATB_DIR"
-
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+REPO_ROOT="$(pwd)"
+MATB_VENV="$REPO_ROOT/.venv-openmatb" bash "$REPO_ROOT/setup.sh"
 ```
 
-If `python main.py` later reports `ModuleNotFoundError: pyglet`, you are not
-inside the OpenMATB virtual environment. Activate it again with:
+Native Windows PowerShell 7+:
+
+```powershell
+$RepoRoot = (Get-Location).Path
+python -m venv (Join-Path $RepoRoot ".venv-openmatb")
+& (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") -m pip install -r (Join-Path $RepoRoot "requirements.txt")
+```
+
+<h3>Configure</h3>
+
+Synthetic generation needs no configuration. To install assets into an
+external checkout derived from the clone location:
 
 ```bash
-cd "$OPENMATB_DIR"
-. .venv/bin/activate
+REPO_ROOT="$(pwd)"
+OPENMATB_DIR="$REPO_ROOT/../openmatb"
+"$REPO_ROOT/.venv-openmatb/bin/python" "$REPO_ROOT/install_to_openmatb.py" "$OPENMATB_DIR"
 ```
 
-### 3. Build counterbalanced scenarios (optional — pre-baked ones ship in `scenarios/`)
+```powershell
+$RepoRoot = (Get-Location).Path
+$OpenMatbDir = (Resolve-Path (Join-Path $RepoRoot "..\openmatb")).Path
+& (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") (Join-Path $RepoRoot "install_to_openmatb.py") $OpenMatbDir
+```
+
+The external checkout must contain `includes/`. Configure its own environment
+and scenario selector according to that runtime. Do not point the installer at
+this repository.
+
+<h3>Run</h3>
+
+Generate the committed protocol shape without starting OpenMATB:
 
 ```bash
-cd /path/to/MATB
-python3 -m matb_integration.scenario_builder \
-  --output-dir scenarios/military_aviation \
-  --block-duration 900 --seed 42
+REPO_ROOT="$(pwd)"
+"$REPO_ROOT/.venv-openmatb/bin/python" -m matb_integration.scenario_builder \
+  --output-dir "$REPO_ROOT/examples/output/generated-scenarios" --block-duration 900 --seed 42
 ```
 
-Produces `LOW_workload.txt` / `MEDIUM_workload.txt` / `HIGH_workload.txt`
-(≈ 2.9 / 7.5 / 12.1 events·min⁻¹) plus adjacent
-`*.txt.manifest.json` files. Each manifest records the generator version,
-participant/visit tags when available, workload level, block duration, seed,
-scenario SHA-256, expected ISA/SAGAT counts, and questionnaire inclusion. Per-participant
-block order is a Latin-square permutation (`block_order_for_participant`).
+```powershell
+$RepoRoot = (Get-Location).Path
+& (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") -m matb_integration.scenario_builder `
+  --output-dir (Join-Path $RepoRoot "examples\output\generated-scenarios") --block-duration 900 --seed 42
+```
 
-### 4. Install MATB scenarios into OpenMATB
+For external Linux/OpenMATB use, run its `main.py` inside its own environment.
+Use `DISPLAY` and Xvfb only on a Linux/headless host. Native Windows does not
+use Xvfb.
 
-Copy this repo's scenarios and questionnaires into the external OpenMATB tree:
+<h3>Try the synthetic example</h3>
 
 ```bash
-cd /path/to/MATB
-OPENMATB_DIR=/path/to/openmatb python3 install_to_openmatb.py "$OPENMATB_DIR"
+REPO_ROOT="$(pwd)"
+bash "$REPO_ROOT/examples/openmatb-research/run.sh" "$REPO_ROOT/examples/output/openmatb-research"
 ```
 
-This creates, among others:
+```powershell
+$RepoRoot = (Get-Location).Path
+& (Join-Path $RepoRoot "examples\openmatb-research\run.ps1") -OutputDir (Join-Path $RepoRoot "examples\output\openmatb-research")
+```
 
-- `$OPENMATB_DIR/includes/scenarios/military_aviation/low_workload.txt`
-- `$OPENMATB_DIR/includes/scenarios/military_aviation/medium_workload.txt`
-- `$OPENMATB_DIR/includes/scenarios/military_aviation/high_workload.txt`
+<h3>Expected result</h3>
 
-### 5. Configure OpenMATB to avoid startup flicker
+The tour writes three `scenarios/*.txt` files with adjacent manifests,
+`metrics.jsonl`, and `suhir.json`, then prints `External OpenMATB was not
+started.` The fixture contains only `SYNTH-P01`; it is not participant data.
 
-OpenMATB uses Pyglet for its desktop window. On Wayland/XWayland, remote
-desktop, VMs, X11 forwarding, and some multi-monitor setups, the fullscreen
-scenario selector can visibly flicker. The stable first-run setup is:
-
-- start windowed (`fullscreen=False`);
-- skip the selector by setting `scenario_path` directly;
-- skip the startup session-number modal while debugging
-  (`display_session_number=False`).
-
-Apply those settings with:
+<h3>Verify</h3>
 
 ```bash
-OPENMATB_DIR=/path/to/openmatb
-cd "$OPENMATB_DIR"
-cp config.ini config.ini.bak
-python - <<'PY'
-from pathlib import Path
-
-path = Path("config.ini")
-lines = path.read_text().splitlines()
-updates = {
-    "fullscreen": "False",
-    "scenario_path": "military_aviation/low_workload.txt",
-    "display_session_number": "False",
-}
-
-out = []
-for line in lines:
-    stripped = line.strip()
-    if "=" in stripped and not stripped.startswith("#"):
-        key = stripped.split("=", 1)[0].strip()
-        if key in updates:
-            line = f"{key}={updates[key]}"
-    out.append(line)
-
-path.write_text("\n".join(out) + "\n")
-PY
+REPO_ROOT="$(pwd)"
+"$REPO_ROOT/.venv-openmatb/bin/python" -m pytest \
+  "$REPO_ROOT/tests/test_scenario_builder.py" \
+  "$REPO_ROOT/tests/test_scenario_manifest.py" \
+  "$REPO_ROOT/tests/test_log_converter.py" \
+  "$REPO_ROOT/tests/analysis_stats" "$REPO_ROOT/tests/suhir" "$REPO_ROOT/tests/screen" -q
 ```
 
-To switch workload levels later, edit `scenario_path` to:
-
-```ini
-scenario_path=military_aviation/medium_workload.txt
+```powershell
+$RepoRoot = (Get-Location).Path
+& (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") -m pytest `
+  (Join-Path $RepoRoot "tests\test_scenario_builder.py") `
+  (Join-Path $RepoRoot "tests\test_scenario_manifest.py") `
+  (Join-Path $RepoRoot "tests\test_log_converter.py") `
+  (Join-Path $RepoRoot "tests\analysis_stats") (Join-Path $RepoRoot "tests\suhir") (Join-Path $RepoRoot "tests\screen") -q
 ```
 
-or:
+<h3>Stop and clean up</h3>
 
-```ini
-scenario_path=military_aviation/high_workload.txt
-```
-
-After you confirm the app is stable on the target machine, you may try
-`fullscreen=True` again for participant data collection. If flicker returns,
-keep `fullscreen=False`.
-
-### 6. Run an OpenMATB session
+Stop external OpenMATB or Xvfb with Ctrl-C. Delete only the selected synthetic
+output, never an external runtime or session store.
 
 ```bash
-# Local desktop:
-OPENMATB_DIR=/path/to/openmatb
-cd "$OPENMATB_DIR"
-. .venv/bin/activate
-python main.py
+REPO_ROOT="$(pwd)"
+rm -rf -- "$REPO_ROOT/examples/output/openmatb-research" "$REPO_ROOT/examples/output/generated-scenarios"
 ```
 
-For Linux/headless CI or servers, use Xvfb and keep `fullscreen=False`:
-
-```bash
-OPENMATB_DIR=/path/to/openmatb
-Xvfb :100 -screen 0 1920x1080x24 &
-
-cd "$OPENMATB_DIR"
-. .venv/bin/activate
-DISPLAY=:100 python main.py
+```powershell
+$RepoRoot = (Get-Location).Path
+Remove-Item -Recurse -Force (Join-Path $RepoRoot "examples\output\openmatb-research"), (Join-Path $RepoRoot "examples\output\generated-scenarios") -ErrorAction SilentlyContinue
 ```
 
-OpenMATB writes a timestamped session CSV under `$OPENMATB_DIR/sessions/`.
+<h3>Troubleshooting</h3>
 
-### 7. Convert a session CSV to metrics
+An `includes/ not found` error means the selected external checkout is wrong.
+`ModuleNotFoundError` usually means the repository or external-runtime venv is
+inactive. On Linux, display/flicker/Pyglet failures belong to the external
+OpenMATB/X11 boundary: validate `DISPLAY`, use Xvfb on headless hosts, and begin
+windowed. See the [complete OpenMATB example](examples/openmatb-research/README.md).
+
+<a id="quick-start-research-console"></a>
+## 6. Research Console quick start
+
+<h3>Prerequisites</h3>
+
+Use Python 3.12+, Node 20+, npm, and a browser. Initial dependency installation
+needs network access or prepared Python/npm caches; the installed service is
+local and offline-capable.
+
+<h3>Install</h3>
+
+Linux or WSL2 combined launcher:
 
 ```bash
-cd /path/to/MATB
-python3 -m matb_integration.log_converter "$OPENMATB_DIR/sessions/<run>.csv" \
-  --participant P01 --level LOW --block low_workload \
-  -o exports/P01_low.jsonl
+REPO_ROOT="$(pwd)"
+MATB_VENV="$REPO_ROOT/.venv-console" bash "$REPO_ROOT/scripts/install_suas.sh"
 ```
 
-Emits one JSONL record with SYSMON d′ (Hautus log-linear), COMM SDT d′,
-NASA-TLX subscales + raw, Bedford, ISA time-series, and SAGAT probe accuracy.
+Native Windows PowerShell 7+ development installation:
 
-### 8. Fit the Suhir DEPDF (needs all three workload levels of a visit)
-
-```bash
-cd /path/to/MATB
-python3 -m matb_integration.suhir.cli fit \
-  --participant P01 \
-  --low LOW.csv --medium MEDIUM.csv --high HIGH.csv \
-  --source raw_tlx --out exports/P01_suhir.json
+```powershell
+$RepoRoot = (Get-Location).Path
+python -m venv (Join-Path $RepoRoot ".venv-console")
+& (Join-Path $RepoRoot ".venv-console\Scripts\python.exe") -m pip install -r (Join-Path $RepoRoot "requirements-dev.txt")
+Set-Location (Join-Path $RepoRoot "webui\frontend")
+npm ci
+Set-Location $RepoRoot
 ```
 
-Fits the baseline parameters G₀ / P₀ / τ₀ from the three graded-workload
-time-to-failure series and writes a parameters JSON. See
-[`matb_integration/suhir/README.md`](matb_integration/suhir/README.md).
+<h3>Configure</h3>
 
-### 9. Run the research console backend
-
-Use a repository-local virtual environment for the headless backend. The
-frontend is documented in the next section.
+Choose a dedicated data root. The POSIX launcher sets `MATB_DB_PATH`,
+`MATB_SIMULATION_OUTPUT_DIR`, `MATB_SIMULATION_SCENARIO_DIR`, and
+`MATB_FRONTEND_ORIGINS`. For native development:
 
 ```bash
-cd /path/to/MATB
-python3 -m venv ~/.venvs/matb-webui
-~/.venvs/matb-webui/bin/pip install -r webui/backend/requirements.txt
-cd webui/backend
-~/.venvs/matb-webui/bin/uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+REPO_ROOT="$(pwd)"
+export MATB_DB_PATH="$REPO_ROOT/examples/output/research-console-service/matb.db"
+export MATB_FRONTEND_ORIGINS="http://127.0.0.1:3100"
 ```
 
-Endpoints: `GET /health`; `POST /participants`, `GET /participants`,
-`GET /participants/{id}/visits`; `POST /ingest` (multipart upload of a session
-CSV and optional scenario manifest, tagged with participant/visit/level);
-`GET /tracker` (the completeness grid); `GET /block` (metrics + manifest validation
-summary); `GET /metrics/long`, `GET /fits` (returns `hcf_value` and F-aware P^h curves);
-`POST /analysis/run`, `GET /analysis/latest`; `POST /analysis/bayes/run` (202, async
-background job), `GET /analysis/bayes/status` (job lifecycle + artifact when done);
-`POST /screen` (raw trial payload → scoring → store → refresh all DepdfFit HCF values;
-409 on duplicate unless `overwrite=true`; 422 on malformed payloads), `GET /screen`
-(per-participant scores, cohort F values, gate status); `GET /exports/research-context`
-and `POST /exports/research-bundle` (ZIP containing analysis context, provenance,
-scenario manifests, caveats, and frontend ECharts option JSON).
-Ingesting all three levels of a visit auto-runs the DEPDF fit.
-See [`webui/backend/README.md`](webui/backend/README.md).
-
-### 10. Run the research console frontend
-
-In a second terminal:
-
-```bash
-cd /path/to/MATB/webui/frontend
-npm install
-npm run dev
+```powershell
+$RepoRoot = (Get-Location).Path
+$DataRoot = Join-Path $RepoRoot "examples\output\research-console-service"
+New-Item -ItemType Directory -Force -Path $DataRoot | Out-Null
+$env:MATB_DB_PATH = Join-Path $DataRoot "matb.db"
+$env:MATB_FRONTEND_ORIGINS = "http://127.0.0.1:3100"
+$env:NEXT_PUBLIC_API_URL = "http://127.0.0.1:8000"
 ```
 
-Open `http://localhost:3100`. The frontend defaults to the backend at
-`http://localhost:8000`. If you run the backend somewhere else, set the API URL
-explicitly:
+<h3>Run</h3>
+
+Linux/WSL2 starts both built services and applies owner-only POSIX permissions:
 
 ```bash
-NEXT_PUBLIC_API_URL=http://127.0.0.1:8000 npm run dev
+REPO_ROOT="$(pwd)"
+MATB_VENV="$REPO_ROOT/.venv-console" bash "$REPO_ROOT/scripts/run_suas.sh" \
+  --data-dir "$REPO_ROOT/examples/output/research-console-service"
 ```
 
-Recommended first workflow in the console:
+Native Windows uses two PowerShell terminals. Backend:
 
-1. Go to `Participants` and create `P01`.
-2. Go to `Upload` and ingest the LOW, MEDIUM, and HIGH OpenMATB CSVs for the
-   same participant / visit.
-3. Go to `Tracker` to verify completeness.
-4. Go to `Visualization` or `Analysis` after data are ingested.
-
-### 11. Run the statistics engine CLI (Phase 3A/3B)
-
-```bash
-cd /path/to/MATB
-
-# Frequentist (Phase 3A):
-python3 -m matb_integration.analysis.stats.cli run \
-  --metrics-json m.json --fits-json f.json -o artifact.json
-
-# Bayesian sensitivity (Phase 3B):
-python3 -m matb_integration.analysis.stats.cli bayes \
-  --metrics-json m.json --fits-json f.json -o bayes.json \
-  [--seed SEED] [--draws DRAWS] [--tune TUNE] [--chains CHAINS]
+```powershell
+$RepoRoot = (Get-Location).Path
+Set-Location (Join-Path $RepoRoot "webui\backend")
+& (Join-Path $RepoRoot ".venv-console\Scripts\python.exe") -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-`m.json` and `f.json` are the JSON bodies returned by `GET /metrics/long` and
-`GET /fits` respectively. The frequentist command writes a fully-provenance-stamped
-JSON artifact; the Bayesian command writes a separate artifact (BAYES_VERSION 1.0.0)
-with 95% ETIs, R̂, ESS, and per-model diagnostics — never extending the frequentist
-artifact.
+Frontend:
 
-### 12. Run the baseline neurocognitive screen (Phase 10 #20)
+```powershell
+$RepoRoot = (Get-Location).Path
+Set-Location (Join-Path $RepoRoot "webui\frontend")
+npm run dev -- --hostname 127.0.0.1 --port 3100
+```
 
-Navigate to `http://localhost:3100/screen` in a browser:
+Open `http://127.0.0.1:3100/`.
 
-1. Select an unscreened participant from the picker.
-2. The four-subtest battery launches fullscreen in es-CO Spanish (~10–12 min):
-   Simple RT (30 trials), Choice RT (30 trials, 2-choice arrows), 2-back letters
-   (60 trials, consonants only), pursuit tracking (90 s sum-of-sines).
-3. The backend scores raw trials, computes validity (≥ 80% usable per subtest),
-   derives a cohort-z composite F/F₀ = 1 + 0.05·z̄ (clamped [0.85, 1.15]),
-   and refreshes `hcf_value` / `hcf_source` on all existing DepdfFit rows.
-4. Subsequent DEPDF fits automatically use the stored F; the P^h curve switches
-   from Eq. 5.16 (F = F₀) to full Eq. 5.1.
+<h3>Try the synthetic example</h3>
 
-Use `?fast=1` query parameter for a reduced-trial dev/e2e run (same scoring logic).
-
-### 13. Run the tests
+With the service running:
 
 ```bash
-# bridge + protocol + suhir + sagat + screen library tests:
-conda activate matb
-python -m pytest tests/ -v   # 241 collected (237 pass, 4 skip)
+REPO_ROOT="$(pwd)"
+BASE_URL=http://127.0.0.1:8000 OUTPUT_DIR="$REPO_ROOT/examples/output/research-console-tour" \
+  bash "$REPO_ROOT/examples/research-console/api_walkthrough.sh"
+```
 
-# research-console backend tests (includes provenance/export + screen/HCF tests):
-cd webui/backend && python -m pytest -q   # 46 collected
+```powershell
+$RepoRoot = (Get-Location).Path
+& (Join-Path $RepoRoot "examples\research-console\api_walkthrough.ps1") `
+  -BaseUrl http://127.0.0.1:8000 -OutputDir (Join-Path $RepoRoot "examples\output\research-console-tour")
+```
 
-# frontend tests:
-cd ../frontend && npm test -- --run   # 36 pass
+<h3>Expected result</h3>
+
+Health succeeds; synthetic participant `SYNTH-P01` has one LOW visit block;
+tracker/context JSON is printed; and `research-bundle.zip` is written. Missing
+manifest status is deliberate and must not be interpreted as a complete study.
+
+<h3>Verify</h3>
+
+```bash
+curl --fail http://127.0.0.1:8000/health
+```
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/health
+```
+
+Backend and frontend suites are listed under operations below.
+
+<h3>Stop and clean up</h3>
+
+Press Ctrl-C in the combined launcher or both native-development terminals.
+After services stop, remove only the dedicated example directories:
+
+```bash
+REPO_ROOT="$(pwd)"
+rm -rf -- "$REPO_ROOT/examples/output/research-console-service" "$REPO_ROOT/examples/output/research-console-tour"
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+Remove-Item -Recurse -Force (Join-Path $RepoRoot "examples\output\research-console-service"), (Join-Path $RepoRoot "examples\output\research-console-tour") -ErrorAction SilentlyContinue
+```
+
+<h3>Troubleshooting</h3>
+
+A 409 on rerun means the CSV hash or visit/workload cell already exists; use a
+fresh dedicated database. If 8000 or 3100 is occupied, stop the other process
+or pass different launcher ports and align `NEXT_PUBLIC_API_URL`. PowerShell
+execution-policy or quoting failures can be avoided by using PowerShell 7 and
+the call operator `&` with `Join-Path`. See the [Research Console guide](examples/research-console/README.md).
+
+<a id="quick-start-suas"></a>
+## 7. Synthetic sUAS quick start
+
+<h3>Prerequisites</h3>
+
+The CLI needs Python 3.12+. The browser service adds Node 20+, npm, and a
+browser. `install_suas.sh` and `run_suas.sh` are Linux/WSL2 contracts; native
+Windows PowerShell may run the CLI and may call a service hosted in WSL2.
+
+<h3>Install</h3>
+
+Linux/WSL2 service installation:
+
+```bash
+REPO_ROOT="$(pwd)"
+MATB_VENV="$REPO_ROOT/.venv-suas" bash "$REPO_ROOT/scripts/install_suas.sh"
+```
+
+Native Windows CLI-only installation:
+
+```powershell
+$RepoRoot = (Get-Location).Path
+python -m venv (Join-Path $RepoRoot ".venv-suas")
+& (Join-Path $RepoRoot ".venv-suas\Scripts\python.exe") -m pip install -r (Join-Path $RepoRoot "requirements-dev.txt")
+```
+
+<h3>Configure</h3>
+
+The service defaults to validated scenarios in `scenarios/suas/`, loopback
+ports 8000/3100, and a dedicated output root. A non-loopback bind is refused
+unless `MATB_FRONTEND_ORIGINS` is explicitly set. Do not expose the development
+service to an untrusted network.
+
+```bash
+REPO_ROOT="$(pwd)"
+export MATB_SIMULATION_SCENARIO_DIR="$REPO_ROOT/scenarios/suas"
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+$env:MATB_SIMULATION_SCENARIO_DIR = Join-Path $RepoRoot "scenarios\suas"
+```
+
+<h3>Run</h3>
+
+Linux/WSL2 browser service:
+
+```bash
+REPO_ROOT="$(pwd)"
+MATB_VENV="$REPO_ROOT/.venv-suas" bash "$REPO_ROOT/scripts/run_suas.sh" \
+  --data-dir "$REPO_ROOT/examples/output/suas-service"
+```
+
+On native Windows, start that command inside WSL2, then open the loopback URL
+from Windows or use the PowerShell walkthrough. The POSIX launcher owns service
+startup, shutdown, process groups, and Unix permissions.
+
+<h3>Try the synthetic example</h3>
+
+Fast CLI-only Linux/WSL2 tour:
+
+```bash
+REPO_ROOT="$(pwd)"
+bash "$REPO_ROOT/examples/suas-simulator/cli_demo.sh" "$REPO_ROOT/examples/output/suas-simulator"
+```
+
+Native Windows equivalent, using the same committed scenario:
+
+```powershell
+$RepoRoot = (Get-Location).Path
+$Python = Join-Path $RepoRoot ".venv-suas\Scripts\python.exe"
+$Scenario = Join-Path $RepoRoot "scenarios\suas\reference_area_search.yaml"
+$Output = Join-Path $RepoRoot "examples\output\suas-simulator"
+& $Python -m matb_integration.suas.cli validate $Scenario
+& $Python -m matb_integration.suas.cli record $Scenario --block PRACTICE --ticks 10 --session-id SYNTH-SUAS-01 --output $Output
+& $Python -m matb_integration.suas.cli verify $Output
+```
+
+The service API tour is available in Bash and PowerShell; it uses a lease only
+in the `X-Simulation-Controller` header and never submits an aircraft command.
+
+<h3>Expected result</h3>
+
+The CLI output directory contains `events.jsonl`, `manifest.json`,
+`metrics.json`, `debrief.json`, `replay-verification.json`, and
+`checksums.sha256`. The service exposes observer-safe state and sealed terminal
+artifact metadata. A controller disconnect pauses; it never auto-resumes.
+
+<h3>Verify</h3>
+
+```bash
+REPO_ROOT="$(pwd)"
+"$REPO_ROOT/.venv-suas/bin/python" -m matb_integration.suas.cli verify "$REPO_ROOT/examples/output/suas-simulator"
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+& (Join-Path $RepoRoot ".venv-suas\Scripts\python.exe") -m matb_integration.suas.cli verify (Join-Path $RepoRoot "examples\output\suas-simulator")
+```
+
+<h3>Stop and clean up</h3>
+
+Press Ctrl-C in the launcher. After it exits, remove only the chosen demo roots:
+
+```bash
+REPO_ROOT="$(pwd)"
+rm -rf -- "$REPO_ROOT/examples/output/suas-service" "$REPO_ROOT/examples/output/suas-simulator"
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+Remove-Item -Recurse -Force (Join-Path $RepoRoot "examples\output\suas-simulator") -ErrorAction SilentlyContinue
+```
+
+<h3>Troubleshooting</h3>
+
+Recording refuses a nonempty output directory; select a fresh directory.
+Missing frontend build or venv errors mean `install_suas.sh` was not completed.
+WSL2 users should keep the clone and data in a WSL filesystem for predictable
+permissions and verify Windows-to-WSL loopback forwarding. See the
+[sUAS walkthrough](examples/suas-simulator/README.md).
+
+<a id="quick-start-sms"></a>
+## 8. FAC ISR SMS quick start
+
+<h3>Prerequisites</h3>
+
+Use Node.js 22.x and npm. Docker with Linux-container support is needed only
+for `build:offline` and container verification, not for the package tour.
+
+<h3>Install</h3>
+
+```bash
+REPO_ROOT="$(pwd)"
+cd "$REPO_ROOT/SMS"
+npm ci
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+Set-Location (Join-Path $RepoRoot "SMS")
+npm ci
+```
+
+`npm ci` may need the network on a development workstation; an isolated host
+must have the locked dependency cache staged beforehand.
+
+<h3>Configure</h3>
+
+The package tour requires no credentials, signing material, telemetry, or
+service configuration. For the Docker deployment, institutions supply
+`SMS_DATA_DIR`, read-only `SMS_PACKAGE_DIR`, and `SMS_TLS_DIR` through approved
+custody. `SMS_EDGE_PORT` changes only the loopback host port. Do not create
+demonstration keys or place controlled material in the repository.
+
+<h3>Run</h3>
+
+```bash
+REPO_ROOT="$(pwd)"
+bash "$REPO_ROOT/examples/sms-platform/run.sh"
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+& (Join-Path $RepoRoot "examples\sms-platform\run.ps1")
+```
+
+The runners install locked dependencies, compile all nine packages, and print
+the deterministic package tour.
+
+<h3>Try the synthetic example</h3>
+
+After the first build, repeat the network-free executable directly:
+
+```bash
+REPO_ROOT="$(pwd)"
+cd "$REPO_ROOT/SMS"
+node ../examples/sms-platform/package-tour.mjs
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+Set-Location (Join-Path $RepoRoot "SMS")
+node ..\examples\sms-platform\package-tour.mjs
+```
+
+<h3>Expected result</h3>
+
+One JSON document contains the nine package keys. The synthetic hard
+requirement deliberately leaves `safetyKernel.status` blocked, and
+`research.nonDispatchable` remains true. No service, decision, release, or
+operational readiness is created.
+
+<h3>Verify</h3>
+
+```bash
+REPO_ROOT="$(pwd)"
+cd "$REPO_ROOT/SMS"
+npm test
 npm run typecheck
-npm run build
-
-# native sUAS gates (Linux/headless):
-cd /path/to/MATB
-PYTHONPATH=. .venv-suas/bin/pytest tests/suas -q                 # 161 pass
-PYTHONPATH=. .venv-suas/bin/pytest tests/suas -q -m 'slow or performance'
-bash tests/scripts/test_suas_scripts.sh
-bash scripts/test_suas_offline.sh
-# browser protocol/accessibility/reconnect/responsive suite:
-cd webui/frontend
-MATB_VENV=/path/to/MATB/.venv-suas npm run test:e2e
+npm run verify:no-c2
+npm run verify:data-separation
 ```
 
----
+```powershell
+$RepoRoot = (Get-Location).Path
+Set-Location (Join-Path $RepoRoot "SMS")
+npm test
+npm run typecheck
+npm run verify:no-c2
+npm run verify:data-separation
+```
 
-## Capabilities (current)
+Run Docker/offline verification only on Linux, WSL2, or a Linux-container
+runtime with all pinned inputs staged. An offline *runtime* does not imply an
+unstaged build can access missing dependencies or images.
 
-- **OpenMATB-compatible four-task workflow:** generated scenarios target system monitoring (SYSMON), tracking (TRACK), communications (COMM), and resource management (RESMAN), with operator input and per-task logging handled by an external task runner.
-- **Graded mental-workload blocks** (LOW/MEDIUM/HIGH) calibrated to the Pontiggia et al. (2024) event-rate range, generated and per-participant counterbalanced.
-- **Workload & SA instruments:** instantaneous ISA (1–10), post-block NASA-TLX (6 subscales) and Bedford (1–10), and SAGAT freeze-probe situational-awareness capture. Spanish questionnaire assets included (NASA-TLX Spanish is psychometrically validated; ISA/Bedford Spanish are functional-equivalence translations — see `docs/research/scales/scale_validation_es.md`).
-- **Analysis-ready metrics:** signal-detection d′ (log-linear correction), reaction times, hit/miss/false-alarm counts, TLX subscales, Bedford, ISA series, SAGAT accuracy — all as structured JSONL.
-- **Probabilistic mission-outcome model (suhir):** Suhir's double-exponential human-nonfailure DEPDF (Eq. 5.1/5.16), FOAT calibration (Eq. 5.19–5.21), Weibull degradation, and mission-outcome composition (Eq. 5.10), validated against the book's own Table 5.1 and Example 5.1.
-- **Research console backend:** file ingestion with integrity guards (sha256 dedup, cross-cell mislabel prevention, overwrite confirmation, validation), a derived study-completeness grid, and auto DEPDF fitting per completed visit.
-- **Scenario provenance + validation:** every generated scenario file can carry an adjacent deterministic manifest. The research console stores manifest SHA-256, validation status, validation issues, and compact manifest summaries per ingested block; CSVs without a manifest are retained but explicitly flagged.
-- **Reproducibility exports:** backend and frontend can export a research bundle ZIP with participants, visits, tracker cells, tidy metrics, DEPDF fits, latest frequentist/Bayesian artifacts, block validation metadata, scenario manifests, caveats, and publication-grade ECharts option JSON for the analysis figures.
-- **Baseline neurocognitive screen:** browser-administered 4-subtest battery (~10–12 min) in es-CO Spanish — Simple RT, Choice RT, 2-back working memory, and pursuit tracking. Raw trials scored server-side (`matb_integration/screen/`; stdlib-only); validity gates (≥ 80% usable per subtest); cohort-z composite F/F₀ clamped [0.85, 1.15]. A confirmed screen refreshes `hcf_value` on all existing DepdfFit rows and switches the P^h curve from Eq. 5.16 to full Eq. 5.1. Mapping is exploratory-labeled (no validated external standard). Endpoints: `POST /screen`, `GET /screen`.
+<h3>Stop and clean up</h3>
 
----
+The package tour starts no service. If you started a development server, use
+Ctrl-C. Generated `SMS/node_modules/` and `SMS/packages/*/dist/` are local
+products; inspect `git status` and remove only those known generated paths when
+you intentionally want a clean install. Never delete controlled data or a
+shared Docker volume as part of example cleanup.
 
-## Latest developments
+<h3>Troubleshooting</h3>
 
-- **Suhir DEPDF mission-outcome layer** (`matb_integration/suhir/`, PR #5): turns the platform into a calibration rig for Ephraim Suhir's *Human-in-the-Loop* (2018) probabilistic model — the graded LOW/MED/HIGH scenarios serve as the elevated-workload levels his FOAT calibration requires. Design + plan in `docs/superpowers/specs/` and `docs/superpowers/plans/`.
-- **Removed broken OpenMATB submodule** (`openmatb @ 2d9e20a`): the vendored gitlink pointed to a GitHub source that now returns 404, so the submodule and `.gitmodules` were deleted. SAGAT probe banks now live in `matb_integration/questionnaires/`; `install_to_openmatb.py` copies repo-owned assets into a separate OpenMATB checkout/install when one is available.
-- **MATB Research Console — backend** (`webui/backend/`, PR #6): FastAPI + SQLModel (SQLite) console for the planned longitudinal study (**12 participants × 6 visits × 3 workload levels**, every 3 days over 15 days). Ingests OpenMATB CSVs (reusing `matb_integration` as a library — no metric logic duplicated), tracks completeness, and auto-fits the DEPDF per visit.
-- **Scenario provenance + research bundles** (`matb_integration/scenario_manifest.py`, `webui/backend/app/routers/exports.py`): scenario generation now writes adjacent deterministic manifests; ingestion stores per-block manifest hashes and validation issues; tracker/block views expose validation summaries; `/exports/research-context` and `/exports/research-bundle` assemble analysis-ready JSON, caveats, scenario manifests, and frontend figure option JSON into a reproducible ZIP.
-- **Headless frontend QA + responsive shell** (`webui/frontend/src/components/layout/`): browser-verified on a headless server at `127.0.0.1:3100` with the backend at `127.0.0.1:8000`; CORS now allows both `localhost` and `127.0.0.1` dev origins, the app includes an icon route, Analysis avoids expected 404 noise on empty datasets, and the mobile shell stacks the nav above content instead of forcing horizontal page overflow.
-- **Phase 3A — frequentist statistics engine** (`matb_integration/analysis/stats/`): standalone library (pandas + statsmodels + scipy) implementing Q1 workload-level effects (MixedLM, 2-df Wald omnibus, Holm pairwise contrasts gated on BH-FDR), Q2 visit trajectories (level-adjusted slope), Q3 repeated-measures correlation (Bakdash & Marusich 2017 ANCOVA rmcorr, validated to 1e-9 against the published oracle), and Q4 DEPDF parameter drift (g0/p0/tau0 ~ visit). First-class `ok | insufficient_data | not_estimable` statuses, effect sizes with 95% CI, rmANOVA complete-case sensitivity, full provenance (input fingerprint, library versions, engine v1.0.0). CLI and backend endpoints included; `/analysis` frontend screen with confirmatory family table, Q1–Q4 cards, and provenance footer. Live end-to-end verified with a 48-CSV synthetic cohort.
-- **Phase 3B — async Bayesian sensitivity** (`matb_integration/analysis/stats/bayes.py`): PyMC NUTS hierarchical re-fits of Q2 (per confirmatory metric, level indicators included) and Q4 (per DEPDF parameter). Pinned priors: coefficients Normal(0, 2.5·sd(y)); SDs HalfNormal(sd(y)). Outputs 95% equal-tailed intervals (ETI) with per-model diagnostics (R̂, ESS, divergences, seed/chains/draws/tune); "not converged" if max R̂ > 1.01 or any divergence. Separate artifact (BAYES_VERSION 1.0.0) — never extends the frequentist artifact; gates (gate_q2/gate_q4) reused. Backend: `POST /analysis/bayes/run` returns 202 and spawns a background worker (caches by fingerprint+bayes_version; re-POST returns the active job); `GET /analysis/bayes/status` reports queued|running|done|failed with the artifact attached on completion. Frontend: Bayesian section on `/analysis` with 2-s polling, posterior tables (mean/ETI/R̂/ESS per parameter), red "not converged" badge, and sampler+priors provenance footnote. Live e2e 2026-06-04 on the 48-CSV cohort: job done in ~36 s; Bayesian d′ visit slope +0.124 ETI [0.080, 0.160], converged, consistent with frequentist +0.127; degenerate synthetic responses correctly flagged not-converged (R̂ up to 3.3, hundreds of divergences); cache hit on re-POST confirmed.
-- **Phase 10 #20 — baseline neurocognitive screen** (`matb_integration/screen/`, `webui/frontend/src/components/screen/`): 4-subtest browser battery in es-CO Spanish (~10–12 min). Subtests: Simple RT (30 trials; < 150 ms anticipations discarded), Choice RT (30 trials, 2-choice arrows, accuracy ≥ 60% gate), 2-back letters (60 trials, consonants only; d′ via Hautus helper; SOA gaps derived server-side), pursuit tracking (90 s sum-of-sines, normalized RMS error). Scoring in `matb_integration/screen/` (stdlib-only, raw-trials-first, re-derivable). Pre-registered validity: ≥ 80% usable per subtest; cohort-z composite F/F₀ = 1 + 0.05·z̄ clamped [0.85, 1.15]; gates: ≥ 3 screened, ≥ 2 valid values per metric. F enters DEPDF at evaluation only; every screen ingest refreshes `hcf_value`/`hcf_source` on all existing DepdfFit rows; new fits pick it up automatically. This closes the F = F₀ assumption. Framing: mapping is exploratory — no validated external standard. Live e2e 2026-06-04: bot's sub-150 ms presses invalidated Simple RT; F correctly computed from 3 remaining valid metrics; cohort gate held fits at F₀ below 3 screens, then refreshed all 16 fits; F > 1 raised P^h, F < 1 lowered it. Tests: 46 backend, 36 frontend.
-- **Phase 1B frontend** (complete as of Phase 10 #20): a Next.js/TypeScript UI mirroring the HRV "Mission Control" design system. Includes Tracker, Participants, Upload, Visualization, Analysis, and Screen pages.
+An engine warning means Node is not 22.x. Docker-daemon or missing-base-image
+errors belong to the staged build boundary. Evidence verification can fail on
+hash mismatch, tamper, missing source artifacts, or expiry; restore approved
+evidence or obtain a current authorized release—never bypass freshness,
+signature, or hash checks. Readiness remaining false after tests pass is an
+expected separation of technical verification from institutional acceptance.
+See the [SMS guide](examples/sms-platform/README.md).
 
-### Readiness
+<a id="quick-start-legacy-monitor"></a>
+## 9. Legacy monitor quick start
 
-- **Pilot an OpenMATB session with d′ + NASA-TLX/Bedford/ISA + Latin-square counterbalancing:** ready when pointed at a working external OpenMATB install; no real-participant data collected yet.
-- **DEPDF analysis + research-console ingestion/tracking:** built and tested (in open PRs).
-- **Inferential statistics (Phase 3 — complete):** frequentist (Phase 3A) and Bayesian sensitivity (Phase 3B) both built and live end-to-end verified; CLI artifacts match backend runs to fingerprint level.
-- **Full Q1-grade study (physiology sync + participant data):** not yet — LSL physiology integration and a real data-collection run remain.
+<h3>Prerequisites</h3>
 
----
+Use Python 3.12+ and a terminal. The published launchers force headless mode,
+seed 42, and the minimum supported 0.05-second event delay.
 
-## Legacy aircraft-monitoring dashboard
-
-The original Rich terminal dashboard remains in `aircraft_monitor/` for demos and as the historical base of the project. It is no longer the active research surface.
+<h3>Install</h3>
 
 ```bash
-pip install -r requirements.txt
-python -m aircraft_monitor                 # combined demo
-python -m aircraft_monitor.demo_uav        # UAV demo
-python -m aircraft_monitor.demo_fighter    # fighter demo
-python -m aircraft_monitor experiment --headless --research-modality uas --seed 42
+REPO_ROOT="$(pwd)"
+python3 -m venv "$REPO_ROOT/.venv-legacy"
+"$REPO_ROOT/.venv-legacy/bin/python" -m pip install -r "$REPO_ROOT/requirements.txt"
 ```
 
-It runs headless automatically when stdout is not a TTY; `AIRCRAFT_MONITOR_HEADLESS=true|false` forces the mode. Generated files default to `./exports/` (override with `--research-output-dir` or `AIRCRAFT_MONITOR_OUTPUT_DIR`).
+```powershell
+$RepoRoot = (Get-Location).Path
+python -m venv (Join-Path $RepoRoot ".venv-legacy")
+& (Join-Path $RepoRoot ".venv-legacy\Scripts\python.exe") -m pip install -r (Join-Path $RepoRoot "requirements.txt")
+```
 
----
+<h3>Configure</h3>
 
-## Research background & roadmap
+No network or external service is required. For manual experiment runs, use
+pseudonymous IDs and a dedicated output directory. The example launchers
+already use `SYNTH-P01` and `SYNTH-S01`.
 
-The platform follows the AF-MATB (Miller et al., 2014) and USAARL MATB (Vogl et al., 2024) lineage. A peer-review-grade evidence audit is maintained in [`docs/research/military-aviation-platform/research_evidence_review.md`](docs/research/military-aviation-platform/research_evidence_review.md).
+<h3>Run</h3>
 
-### Common human-factors core
+With the selected venv active, choose one mode:
 
-| Construct | Best parameterization | Primary measures |
-|---|---|---|
-| Mental workload | Event rate, concurrent panels, alert frequency, response window, automation level, mission-phase complexity | NASA-TLX, instantaneous ISA 1–10, response latency, missed events, dual-task decrement, optional HR/HRV/EEG/eye-tracking |
-| Situation awareness | Freeze-point query probes, map/radar uncertainty, hidden failures, stale datalink, conflict prediction | SAGAT perception/comprehension/projection probes, contact recall, threat prioritization, route prediction |
-| Trust in automation | Reliability, false-alarm/missed-detection rate, confidence display, handoff transparency | Automation use, override rate, agreement, trust questionnaire, recovery after failure |
-| Attention management | Visual salience, alert modality, panel density, competing messages, task-switch frequency | Time to first response, detection rate, communication errors, dwell time |
-| Decision quality | Ambiguous threats, ROE, fuel/range tradeoffs, lost-link procedures, re-tasking pressure | Correct-action rate, time to decision, unsafe-action count, mission score |
-| Fatigue / sustained ops | Trial duration, vigilance periods, monotonous monitoring, circadian/sleep-loss protocols | Performance slope, lapses, delayed responses, subjective sleepiness |
+```bash
+REPO_ROOT="$(pwd)"
+PATH="$REPO_ROOT/.venv-legacy/bin:$PATH" bash "$REPO_ROOT/examples/legacy-monitor/run.sh" combined
+```
 
-Situation awareness is treated as a three-level construct — perception, comprehension, projection [Endsley, 1995a/b; Wickens, 2002]. The platform targets four operational modalities (UAS/RPA, swarm s-UAS, fighter, transport/tanker/ISR/MUM-T); the detailed parameter matrices for each are in the evidence-review document.
+```powershell
+$RepoRoot = (Get-Location).Path
+$env:PATH = "$(Join-Path $RepoRoot '.venv-legacy\Scripts');$env:PATH"
+& (Join-Path $RepoRoot "examples\legacy-monitor\run.ps1") -Mode combined
+```
 
-### Phased roadmap (status)
+Available modes are `uav`, `fighter`, `combined`, and `experiment`.
 
-| Phase | Goal | Status |
-|---|---|---|
-| 1 | Research instrumentation (JSONL logger, seeds, trial metadata, workload prompts) | Done |
-| — | **OpenMATB-compatible integration** (4-task scenarios, ISA/TLX/Bedford/SAGAT assets, log conversion; runtime external) | **Done for scenario/log workflow; engine not vendored** |
-| — | **Scenario builder + log converter** (counterbalancing, d′, SDT, JSONL) | **Done** |
-| — | **Suhir DEPDF mission-outcome model** | **Done (PR #5)** |
-| — | **Research console — data model + ingestion + tracker (backend)** | **Done (PR #6)** |
-| — | **Research console — frontend (tracker + viz + analysis)** | **Done (Phase 1B)** |
-| — | **Frequentist statistics engine (MixedLM, rmcorr, DEPDF drift, CLI + endpoints)** | **Done (Phase 3A)** |
-| — | **Bayesian sensitivity layer (PyMC, async)** | **Done (Phase 3B)** |
-| 9 | Multimodal physiology (LSL) + reproducibility (scenario manifests, research bundles, practice criterion) | **P0 scenario manifests + research bundle export — Done**; LSL and practice criterion planned |
-| 10 | Population-specific stressor packs (fighter/RPA/transport-MUM-T) + BIDS-derivative export + baseline neurocognitive screen | **#20 screen — Done**; #10–11 LSL, #13–14 practice criterion, #15–17 stressor packs, #18 BIDS planned |
-| 11 | Adaptive automation engine (performance/physiology-driven handoffs, transparency cues) | Planned (#19) |
+<h3>Try the synthetic example</h3>
 
----
+```bash
+REPO_ROOT="$(pwd)"
+PATH="$REPO_ROOT/.venv-legacy/bin:$PATH" bash "$REPO_ROOT/examples/legacy-monitor/run.sh" experiment "$REPO_ROOT/examples/output/legacy-monitor"
+```
 
-## References
+```powershell
+$RepoRoot = (Get-Location).Path
+$env:PATH = "$(Join-Path $RepoRoot '.venv-legacy\Scripts');$env:PATH"
+& (Join-Path $RepoRoot "examples\legacy-monitor\run.ps1") -Mode experiment -OutputDir (Join-Path $RepoRoot "examples\output\legacy-monitor")
+```
 
-- Endsley, M. R. (1995a). Measurement of situation awareness in dynamic systems. *Human Factors*, 37(1), 65–84. https://doi.org/10.1518/001872095779049499
-- Endsley, M. R. (1995b). Toward a theory of situation awareness in dynamic systems. *Human Factors*, 37(1), 32–64. https://doi.org/10.1518/001872095779049543
-- Levulis, S. J., DeLucia, P. R., & Kim, S. Y. (2018). Effects of touch, voice, and multimodal input … manned-unmanned teaming. *Human Factors*, 60(8), 1117–1129. https://doi.org/10.1177/0018720818788995
-- Miller, W. D. et al. (2014). *The U.S. Air Force-developed adaptation of the Multi-Attribute Task Battery (AF-MATB)*. DTIC ADA611870.
-- NASA (2011). *The Multi-Attribute Task Battery II (MATB-II)*. https://ntrs.nasa.gov/api/citations/20110014456/downloads/20110014456.pdf
-- Onnasch, L., Wickens, C. D., Li, H., & Manzey, D. (2014). Human performance consequences of stages and levels of automation. *Human Factors*, 56(3), 476–488. https://doi.org/10.1177/0018720813501549
-- Pontiggia, A., Gomez-Merino, D., & Quiquempoix, M. (2024). MATB for assessing different mental workload levels. *Frontiers in Physiology*, 15, 1408242. https://doi.org/10.3389/fphys.2024.1408242
-- Suhir, E. (2018). *Human-in-the-Loop: Probabilistic Modeling of an Aerospace Mission Outcome*. CRC Press.
-- Vogl, J., McCurry, C. D., Bommer, S., & Atchley, J. A. (2024). The USAARL Multi-Attribute Task Battery. *Frontiers in Neuroergonomics*, 5, 1435588. https://doi.org/10.3389/fnrgo.2024.1435588
-- Wickens, C. D. (2002). Situation awareness and workload in aviation. *Current Directions in Psychological Science*, 11(4), 128–133. https://doi.org/10.1111/1467-8721.00184
+<h3>Expected result</h3>
 
-The full modality parameter matrices and the complete reference list live in the [evidence-review document](docs/research/military-aviation-platform/research_evidence_review.md).
+The terminal ends with `Simulation complete!`. Experiment mode writes JSONL
+events and summary output only under the caller-selected directory. Other modes
+do not receive a research-output directory.
 
-## License
+<h3>Verify</h3>
 
-MIT License — see [LICENSE](LICENSE).
+```bash
+REPO_ROOT="$(pwd)"
+"$REPO_ROOT/.venv-legacy/bin/python" -m pytest "$REPO_ROOT/tests" -q
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+& (Join-Path $RepoRoot ".venv-legacy\Scripts\python.exe") -m pytest (Join-Path $RepoRoot "tests") -q
+```
+
+<h3>Stop and clean up</h3>
+
+Ctrl-C returns normally. Remove only the dedicated experiment directory:
+
+```bash
+REPO_ROOT="$(pwd)"
+rm -rf -- "$REPO_ROOT/examples/output/legacy-monitor"
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+Remove-Item -Recurse -Force (Join-Path $RepoRoot "examples\output\legacy-monitor") -ErrorAction SilentlyContinue
+```
+
+<h3>Troubleshooting</h3>
+
+If the launcher resolves the wrong Python, activate the selected venv or put
+its `bin`/`Scripts` directory first on `PATH`. Use `--headless` on noninteractive
+terminals. See the [legacy guide](examples/legacy-monitor/README.md).
+
+<a id="module-catalog"></a>
+## 10. Module catalog
+
+Each table points to the smallest runnable example. Detailed scientific,
+endpoint, release, and evidence explanations stay in their specialist guides.
+
+### Python/OpenMATB research modules
+
+| Module | Purpose | User | Inputs → outputs | Runtime | Example | Verification | Limitation |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `matb_integration/scenario_builder.py` | Generate LOW/MEDIUM/HIGH counterbalanced scenarios | Study designer | Protocol, duration, seed → OpenMATB text scenarios | Python | [OpenMATB tour](examples/openmatb-research/README.md) | `pytest tests/matb_integration -q` | Generated tasks require external OpenMATB for presentation |
+| `matb_integration/scenario_manifest.py` | Hash scenarios and validate session provenance | Data steward | Scenario/tags/expected probes → adjacent manifest and validation issues | Python | OpenMATB tour | Same suite | Hash integrity does not establish protocol validity or consent |
+| `matb_integration/log_converter.py` | Convert OpenMATB CSV into canonical metrics | Research analyst | CSV + pseudonym/workload → JSONL metrics | Python | OpenMATB tour | Same suite | Input quality and missing tasks constrain inference |
+| `matb_integration/questionnaires/` | EN/ES NASA-TLX, Bedford, ISA, and SAGAT assets | Study designer | Controlled text/YAML → configured questionnaire/probe content | External OpenMATB or sUAS loader | OpenMATB and sUAS tours | Questionnaire/SAGAT tests | Scales must be administered under an approved protocol |
+| `matb_integration/analysis/` | Descriptive outputs plus frequentist MixedLM/rmcorr/rmANOVA/FDR and Bayesian PyMC sensitivity engines | Statistician | `/metrics/long` and `/fits` JSON arrays → versioned artifacts | Python; PyMC sampling is optional/slow | [OpenMATB analysis commands](examples/openmatb-research/README.md) | Analysis tests | Small/incomplete datasets may be not estimable; Bayesian diagnostics govern interpretation |
+| `matb_integration/suhir/` | Fit Suhir DEPDF parameters and mission-outcome research summaries | Human-factors researcher | Three workload records → G0/P0/tau0 and curves | Python/SciPy | OpenMATB tour | Suhir tests; [DEPDF guide](matb_integration/suhir/README.md) | Within-participant comparative model; three levels exactly identify parameters; not certified |
+| `matb_integration/screen/` | Score reaction/2-back/tracking tasks and map exploratory HCF/F/F0 | Researcher | Raw trials/cohort → scores and exploratory mapping | Python through backend | Research Console `/screen` | Screen/backend tests | Not a diagnostic, selection, or validated predictive instrument |
+
+### Research Console
+
+| Module | Purpose | User | Inputs → outputs | Runtime | Example | Verification | Limitation |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `webui/backend/` tracker and ingestion | Pseudonymous participant/visit grid, CSV/manifest checks, fits | Data steward | CSV + optional manifest → SQLite block/provenance rows | FastAPI, Python 3.12+, port 8000 | [Console walkthrough](examples/research-console/README.md) | `cd webui/backend && python -m pytest -q` | Duplicate/fill guards are data-quality controls, not consent |
+| `webui/backend/` analysis and export | Cache frequentist/Bayesian results and build reproducible bundles | Analyst | Stored metrics/fits/figures → analysis records and ZIP | FastAPI/background PyMC | Console walkthrough | Backend analysis/export tests | Export remains research data under owner custody |
+| `webui/frontend/` tracker, ingestion, and visualization | Browser grid, upload, descriptive charts | Research staff | Backend JSON → interactive local UI/PNG | Next.js, Node 20+, port 3100 | Console walkthrough | `npm test`, `npm run typecheck`, `npm run build` | Descriptive plots are not inferential conclusions |
+| `webui/frontend/` screen, analysis, and export | Administer baseline screen, review analyses, request bundle | Research staff | Raw trials/backend artifacts → UI summaries/export request | Browser/Next.js | Console walkthrough | Screen is exploratory; browser is not a clinical device |
+
+Endpoint and screen contracts are maintained in the [backend guide](webui/backend/README.md)
+and [frontend guide](webui/frontend/README.md).
+
+### Synthetic sUAS simulator
+
+| Module | Purpose | User | Inputs → outputs | Runtime | Example | Verification | Limitation |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `matb_integration/suas/scenarios/` | Validate YAML schemas, manifests, and workload profiles | Scenario author | Synthetic YAML → immutable scenario definition | Python 3.12+ | [sUAS CLI tour](examples/suas-simulator/README.md) | `python -m matb_integration.suas.cli validate ...` | Synthetic coordinates and conditions only |
+| `matb_integration/suas/engine/` | Deterministic clock, route, energy, link, sensor, separation, and reducer logic | Simulator developer | Scenario + supervisory commands → world state/events | Python, no service required | sUAS CLI tour | `pytest tests/suas -q` | No real vehicle adapter or autonomous dispatch |
+| `matb_integration/suas/` session/lifecycle | Prepare, start, pause, resume, finish, interrupt, and explicitly recover sessions | Research operator | Pseudonym + visit + scenario → audited lifecycle | Python/FastAPI | sUAS API tour | Backend and sUAS tests | Recovery is marked as deviation; interruption never auto-resumes |
+| `webui/backend/app/routers/simulation.py` controller lease | Enforce one mutation controller | Operator | One-time lease header → authorized lifecycle mutation | Loopback FastAPI | sUAS API tour | Lease is sensitive; never log it or place it in a URL |
+| `webui/backend/app/websocket/simulation.py` observer stream | Ordered resync plus redacted, lease-free observer state | Observer/researcher | Sequence cursor → snapshot/envelopes | WebSocket | Browser tour | Observer cannot mutate; hidden truth/probes stay private |
+| `matb_integration/suas/recording/` replay | Append events/checkpoints and deterministically replay them | Auditor/researcher | Events + manifest → replay verification | Python CLI | sUAS CLI tour | Verification proves internal consistency, not real-world validity |
+| `matb_integration/suas/metrics/` debrief | Compute terminal research metrics and debrief | Researcher | Sealed terminal state/events → metrics/debrief JSON | Python | sUAS CLI tour | Debrief is a research artifact, not an operational judgment |
+| `matb_integration/suas/recording/artifacts.py` | Seal manifest, checksums, public metadata, and private artifacts | Data custodian | Session records → relative-path hashed artifact set | Python/local filesystem | sUAS CLI tour | Keep artifact root owner-only; hashes do not deidentify content |
+
+### FAC ISR SMS applications
+
+| Module | Purpose | User | Inputs → outputs | Runtime | Example | Verification | Limitation |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `SMS/apps/edge-api/` | Local Fastify package intake, gates, missions, postflight, audit, safe mode, and data boundaries | Safety reviewer/deployment custodian | Verified local packages + read-only telemetry → SQLite/audit/API results | Node 22.x; hardened Linux container for offline deployment | [SMS tour](examples/sms-platform/README.md) | Workspace tests and `/healthz` | Non-C2, internet-disabled runtime; no dispatch authority |
+| `SMS/apps/console/` | Accessible React console for evidence, risk, telemetry, checklists, and research boundaries | Human reviewer | Edge API results → review views | Node/Vite; ports 5173 dev or 4173 controlled preview | SMS guide | unit, a11y, Playwright E2E | Displaying a pass does not record human acceptance |
+
+### FAC ISR SMS packages
+
+| Module | Purpose | User | Inputs → outputs | Runtime | Example | Verification | Limitation |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `SMS/packages/evidence/` | Canonical JSON, SHA-256, source records, claims, manifests, downgrade rejection | Evidence custodian | Controlled local sources → verifiable claims/manifests | Node 22.x | SMS package tour | workspace tests | Trust, authority, scope, and freshness remain external controls |
+| `SMS/packages/energy/` | Unit-labelled mission-energy and reserve evaluation | Performance analyst | Evidence-backed aircraft/segment facts → deterministic energy result | Node 22.x | SMS package tour | workspace/property tests | Component result is not authorization |
+| `SMS/packages/fleet/` | Configuration, capability, maintenance release, and crew qualification facts | Fleet reviewer | Accepted evidence + fleet state → capability evaluation | Node 22.x | SMS package tour | workspace tests | Missing qualification/release evidence fails closed |
+| `SMS/packages/geo/` | Coordinates, routes, terrain, visibility, weather, airspace, offline packages, flight-plan drafts | Geo reviewer | Controlled geo package → deterministic geo facts/draft | Node 22.x | SMS package tour | workspace tests | No transmitter or official geospatial authority |
+| `SMS/packages/human-performance/` | Duty, qualification, fatigue, workload, alert-load, CRM boundaries | Human-factors reviewer | Explicit policy + status → bounded assessment | Node 22.x | SMS package tour | privacy/contracts tests | Not a medical diagnosis or fitness decision |
+| `SMS/packages/research/` | Protocol, ethics/consent, instruments, MATB/sensors, replay, aggregation, deidentified export | Research steward | Pseudonymous consented events → non-dispatchable research export | Node 22.x | SMS package tour | boundary/export tests | Strictly separated from operational release |
+| `SMS/packages/safety-kernel/` | Deterministic applicability, freshness, dependencies, risk, lifecycle, gates, audit | Accountable reviewer | Evidence-backed facts → pass/blocked/unknown decisions | Node 22.x | SMS package tour | golden/property/integration tests | Unknown hard evidence fails closed; never grants acceptance |
+| `SMS/packages/sms/` | Hazards, SPIs, audits, CAPA, ERP, management of change | Safety organization | Organizational records → controlled SMS evaluations | Node 22.x | SMS package tour | workspace tests | Incomplete accountable evidence remains blocked |
+| `SMS/packages/telemetry/` | Canonicalize and replay delayed/dropout telemetry with retention provenance | Observer/analyst | Read-only events → canonical/replayed stream | Node 22.x | SMS package tour | contract/replay tests | Deliberately has no command path |
+
+### FAC ISR SMS tools, release, and acceptance
+
+| Module/workflow | Purpose | User | Inputs → outputs | Runtime | Example | Verification | Limitation |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `SMS/tools/map-packager/` | Inspect/build manifests and controlled sign/verify of offline geo packages | Geo/release custodian | Directory + metadata + controlled signing/verification input → package manifest | Node 22.x | SMS guide CLI inventory | tool tests and `verify` | Signing requires externally controlled material and authority |
+| `SMS/tools/research/` | Record acquisition queries, acquire/copy/extract sources, verify hashes/offline/no-C2 | Evidence researcher | Registered source artifacts → provenance/query records | Node 22.x | SMS guide CLI inventory | tool tests; `verify:evidence-offline` | Search leads are not evidence until acquired and verified |
+| `build:offline` / `verify:offline` | Build/test Linux image and assemble/verify a disconnected transfer bundle | Deployment custodian | Locked dependencies, pinned image, local evidence → OCI archive/bundle | Linux containers/Docker | [SMS offline guide](examples/sms-platform/README.md) | `npm run verify:offline` | Build inputs must be staged; offline describes runtime/transfer boundary |
+| `release:manifest` / `release:sign` / `release:verify` | Generate SBOM, scan/test report, canonical manifest, controlled signature, integrity result | Release custodian | Versioned artifacts + external signing input → release evidence | Node 22.x | SMS guide | `npm run release:verify` | Signature/integrity is not operational acceptance |
+| `verify:no-c2` / `verify:data-separation` | Inspect absence of command paths and research/operations separation | Security/research reviewer | Built source/workspaces → verification result | Node 22.x | SMS guide | named npm scripts | Scope is repository software, not every deployment control |
+| `verify:matrix` / `verify:acceptance` | Execute evidence matrix and validate controlled acceptance state | Independent reviewer | Release/evidence records + exact UTC → report/readiness state | Node 22.x | SMS guide | named npm scripts | Matrix can pass while readiness remains false |
+| `acceptance:packets` | Generate deterministic unsigned reviewer packets | Review coordinator | Empty output directory + exact `--as-of` UTC + optional approved scope → packets | Node 22.x | SMS guide | `npm run verify:acceptance` | Packets are not decisions and remain unsigned |
+| `acceptance:record` | Intake a human-supplied, controlled institutional decision | Authorized records custodian | Current packet + real authorized decision → controlled record | Node 22.x; explicit separate action | No synthetic decision example | dry run then institutional process | Never fabricate reviewer, outcome, timestamp, evidence, or signature |
+
+The user-invoked SMS build and verification inventory from `SMS/package.json`
+is below. Parameterized release and packet commands still require the arguments
+and custody described in the [SMS guide](examples/sms-platform/README.md).
+
+```bash
+cd SMS
+npm run build
+npm run build:packages
+npm run build:tools
+npm run build:apps
+npm run build:research
+npm test
+npm run typecheck
+npm run lint
+npm run build:offline
+npm run verify:offline
+npm run verify:evidence-offline
+npm run verify:no-c2
+npm run verify:data-separation
+npm run release:manifest
+npm run release:sign
+npm run release:verify
+npm run verify:matrix
+npm run acceptance:packets
+npm run verify:acceptance
+npm run verify:all
+```
+
+The remaining manifest scripts are automatic npm lifecycle hooks: `pretest`
+builds before `test`; `preverify:evidence-offline` builds the research tool;
+`preverify:no-c2` builds the edge API; and `preverify:data-separation` builds
+the research package and edge API. The `acceptance:record` script (invoked only
+as `npm run acceptance:record` by an authorized custodian) is inventory, not a
+routine instruction: it is a separate, potentially mutating decision-intake
+action that requires a current packet and genuine institution-controlled human
+input. Do not invoke it merely because it is documented.
+
+### Legacy aircraft monitor
+
+| Module/mode | Purpose | User | Inputs → outputs | Runtime | Example | Verification | Limitation |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `aircraft_monitor/` `uav` | Deterministic UAV terminal demonstration | Developer/educator | Seeded model → terminal event stream | Python/Rich | [Legacy guide](examples/legacy-monitor/README.md) | Python tests | Legacy synthetic demonstration, not live monitoring |
+| `aircraft_monitor/` `fighter` | Deterministic fighter terminal demonstration | Developer/educator | Seeded model → terminal event stream | Python/Rich | Legacy guide | Python tests | Contains simulated combat vocabulary but no weapon/control path |
+| `aircraft_monitor/` `combined` | Joint terminal demonstration | Developer/educator | Both seeded models → combined stream | Python/Rich | Legacy guide | Python tests | Not the active research collection surface |
+| `aircraft_monitor/` `experiment` | MATB-inspired human-factors protocol | Research developer | Pseudonym, session, modality, seed → JSONL/summary | Python/Rich | Legacy guide | Research tests | Use synthetic or approved pseudonyms; not OpenMATB |
+
+<a id="operations-and-maintenance"></a>
+## 11. Operations and maintenance
+
+### Verification suites
+
+Run only the suites for the workflow you changed, then the documentation gate:
+
+```bash
+python -m pytest tests/test_scenario_builder.py tests/test_scenario_manifest.py \
+  tests/test_log_converter.py tests/analysis_stats tests/suhir tests/screen -q
+python -m pytest tests/suas -q
+cd webui/backend && python -m pytest -q
+cd ../../webui/frontend && npm test && npm run typecheck && npm run build
+cd ../../SMS && npm test && npm run typecheck && npm run lint
+cd .. && python -m pytest tests/documentation/test_documentation.py -q
+python scripts/verify_documentation.py
+```
+
+Browser E2E/a11y suites additionally require installed Chromium/Playwright
+assets. The SMS offline build additionally requires Docker, the pinned base
+image, locked dependencies, and institution-controlled inputs.
+
+### Ports and process boundaries
+
+| Service | Default | Boundary |
+| --- | --- | --- |
+| Research/sUAS FastAPI | `127.0.0.1:8000` | Loopback; health at `/health` |
+| Research/sUAS Next.js | `127.0.0.1:3100` | Loopback; tracker `/`, sUAS `/mission/setup` |
+| SMS edge deployment | `127.0.0.1:8443` host default | HTTPS in controlled container deployment |
+| SMS Vite console | 5173 dev / 4173 controlled preview | Development/reviewer UI only |
+
+Keep loopback defaults. A non-loopback research/sUAS bind requires explicit
+`MATB_FRONTEND_ORIGINS`; it also requires the institution's network,
+authentication, privacy, and threat controls beyond this development launcher.
+
+### Configuration
+
+| Variable | Scope | Meaning |
+| --- | --- | --- |
+| `MATB_VENV` | POSIX install/launcher | Repository-local Python environment path |
+| `MATB_DB_PATH` | Research/sUAS backend | Dedicated SQLite path |
+| `MATB_SIMULATION_OUTPUT_DIR` | sUAS | Owner-only sealed artifact root |
+| `MATB_SIMULATION_SCENARIO_DIR` | sUAS | Validated YAML scenario directory |
+| `MATB_FRONTEND_ORIGINS` | Research/sUAS | Explicit allowed browser origins |
+| `NEXT_PUBLIC_API_URL` | Research frontend | Browser-visible FastAPI base URL |
+| `PLAYWRIGHT_CHROMIUM_EXECUTABLE` | Browser tests | Approved Chromium executable |
+| `SMS_DATA_DIR`, `SMS_PACKAGE_DIR`, `SMS_TLS_DIR` | SMS container | Controlled writable data, read-only packages, and TLS custody roots |
+| `SMS_EDGE_PORT` | SMS container | Loopback host port override |
+| `SMS_EVIDENCE_VERIFY_AS_OF` | SMS evidence verification | Exact authorized UTC verification instant |
+| `SMS_RESEARCH_DATABASE_URL`, `SMS_RESEARCH_DATA_DIR` | SMS separation | Separate research store locations |
+
+Signing/TLS/key identifiers and inputs are release-custodian concerns. Never
+put their values in source, examples, shell history, logs, or support tickets.
+
+### Generated data and constrained cleanup
+
+Expected generated paths include selected `examples/output/...` directories,
+Python venvs, SQLite databases, sUAS logs/artifacts, research bundle ZIPs,
+`webui/frontend/.next/`, Node `node_modules/`, TypeScript `dist/` trees, and SMS
+offline/release outputs. Before deleting anything, stop writers, resolve the
+exact path, confirm it is a dedicated example/build path, and preserve study,
+controlled evidence, release, or acceptance records according to policy.
+
+Offline-capable means the installed runtime can operate without Internet. It
+does not mean the first dependency install, a Docker build without a staged
+base image, or verification without registered evidence can succeed offline.
+
+<a id="troubleshooting"></a>
+## 12. Troubleshooting by symptom
+
+| Symptom | Check and safe response |
+| --- | --- |
+| Installer rejects Python or Node | Use Python 3.12+ for sUAS/repository Python, Node 20+ for the Research Console launcher, and Node 22.x for `SMS/`; recreate only that workflow's venv/install. |
+| Python module is missing | Confirm the selected venv's Python is running (`python -c "import sys; print(sys.executable)"`) and install the matching requirements; do not install globally to mask it. |
+| External OpenMATB cannot be found | It is not vendored. Point `install_to_openmatb.py` at a separate checkout containing `includes/`. |
+| OpenMATB flickers or Pyglet/display fails | This is the external desktop/X11 boundary. Start windowed, validate Pyglet in its venv, and on headless Linux validate Xvfb and `DISPLAY`. sUAS needs neither X11 nor Pyglet. |
+| PowerShell script is blocked or a path with spaces fails | Use PowerShell 7+, invoke scripts with `&`, build paths with `Join-Path`, and use an institution-approved execution policy; do not disable security controls globally. |
+| WSL2 cannot reach a service or changes permissions | Run POSIX launchers and data roots in the WSL filesystem, confirm the service binds loopback/selected port, and verify Windows-to-WSL loopback behavior. Do not replace `chmod`/UID controls with broad permissions. |
+| Port 8000 or 3100 is occupied | Stop the known process or pass unique `--backend-port`/`--frontend-port`; update `NEXT_PUBLIC_API_URL` and allowed origins consistently. |
+| Browser/E2E test cannot find Chromium | Install the repository-supported Playwright browser asset or set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to an approved local binary. Unit/API/CLI tests do not require it. |
+| Docker is unavailable | Use the Node package tour and non-container suites, or provision an approved Linux-container runtime. Do not call an unbuilt/unverified directory an offline bundle. |
+| Evidence is expired, missing, or reports tamper/hash mismatch | Stop the workflow, preserve the diagnostic, and obtain current authorized evidence through custody procedures. Never weaken freshness, signature, source-authority, or hash checks. |
+| Tests pass but readiness remains blocked | Expected: automation verifies technical contracts; `operationalReady=false` remains until every scoped institutional review is current and an authorized human decision is recorded. |
+
+<a id="security-privacy-and-governance"></a>
+## 13. Security, privacy, research, and governance
+
+- No-C2 and non-kinetic are architectural boundaries: telemetry is read-only,
+  simulations are synthetic, and no package may become an aircraft/weapon
+  command, targeting, autonomous-flight, or dispatch path.
+- Use pseudonymous participant/session identifiers. Store linkage keys, consent,
+  health information, raw identity, and exports only in institution-controlled
+  locations with least privilege, retention, and deletion rules.
+- NASA-TLX, Bedford, ISA, SAGAT, screen mappings, statistical models, and DEPDF
+  results are research instruments. They are not clinical findings, individual
+  fitness decisions, airworthiness findings, or operational authorizations.
+- Controlled evidence must retain source authority, exact scope, provenance,
+  SHA-256/integrity data, version, and freshness. Time-dependent verification
+  uses an explicit exact UTC instant; never substitute local ambiguous time.
+- Release signatures, SBOMs, manifests, no-C2/data-separation checks, technical
+  tests, and matrices are necessary evidence, not acceptance. A qualified human
+  institution must review applicable regulation/translation, operational risk,
+  emergency response, cybersecurity/deployment, official geo data,
+  human-factors, research separation, training, and safety-promotion scopes.
+- Generate reviewer packets unsigned. Run decision intake only with a current
+  packet and authentic, authorized, controlled human decision. Never fabricate
+  identities, approvals, timestamps, evidence, outcomes, or signatures.
+
+For advanced detail, use the [research evidence review](docs/research/military-aviation-platform/research_evidence_review.md),
+[scale validation](docs/research/scales/sagat_validation.md),
+[sUAS verification](docs/implementation/suas-c2-v1-verification.md),
+[SMS verification matrix](SMS/docs/release/verification-matrix.md),
+[known limitations](SMS/docs/release/known-limitations.md), and
+[state-aviation acceptance checklist](SMS/docs/release/state-aviation-acceptance-checklist.md).
+
+<a id="repository-map"></a>
+## 14. Repository map
+
+| Path | Maintained role |
+| --- | --- |
+| `matb_integration/` | Research protocol bridge, metrics, statistics, DEPDF, screen, and deterministic sUAS libraries |
+| `scenarios/military_aviation/` | OpenMATB-compatible study scenarios |
+| `scenarios/suas/` | Synthetic sUAS YAML scenarios |
+| `webui/backend/` | Research/sUAS FastAPI service, persistence, analysis, and exports |
+| `webui/frontend/` | Research tracker/analysis and sUAS browser console |
+| `SMS/apps/`, `SMS/packages/`, `SMS/tools/` | Offline SMS applications, contracts, and release/evidence tools |
+| `SMS/docs/` | Controlled provenance, regulatory research, release evidence, and acceptance guidance |
+| `aircraft_monitor/` | Retained synthetic terminal demonstration |
+| `examples/` | Safe, deterministic, pseudonymous walkthroughs |
+| `tests/` | Python integration, simulator, application, and documentation checks |
+| `docs/` | Scientific reviews and design/implementation records |
+
+<a id="glossary"></a>
+## 15. Glossary
+
+| Term | Meaning here |
+| --- | --- |
+| C2 | Command and control; intentionally absent from MATB operational boundaries |
+| DEPDF | Double-exponential probability distribution function used for comparative human-nonfailure modeling |
+| HCF / F/F0 | Exploratory human-capacity-factor mapping from the research screen |
+| Manifest | Canonical metadata and hashes binding content to provenance |
+| MATB | Multi-Attribute Task Battery human-factors paradigm |
+| Non-dispatchable | Research data/result that cannot enter an operational-release decision |
+| OpenMATB | External task-presentation runtime; not part of this repository |
+| Operational readiness | Institution-controlled state that automation alone cannot grant |
+| Pseudonym | Study identifier that omits direct identity; still potentially linkable research data |
+| SMS | Safety Management System; here, the `SMS/` assurance workspace |
+| sUAS | Small uncrewed aircraft system; here, a synthetic supervisory research simulator |
+
+<a id="references"></a>
+## 16. References and deeper guides
+
+- [Examples and workflow chooser](examples/README.md)
+- [Research Console overview](webui/README.md), [backend API](webui/backend/README.md), and [frontend screens](webui/frontend/README.md)
+- [Suhir DEPDF guide](matb_integration/suhir/README.md)
+- [Research evidence review](docs/research/military-aviation-platform/research_evidence_review.md) and [scale validation](docs/research/scales/sagat_validation.md)
+- [Synthetic sUAS design](docs/superpowers/specs/2026-08-01-suas-c2-research-simulator-design.md) and [verification](docs/implementation/suas-c2-v1-verification.md)
+- [SMS capability evidence register](SMS/docs/provenance/capability-evidence-register.jsonl), [verification matrix](SMS/docs/release/verification-matrix.md), and [known limitations](SMS/docs/release/known-limitations.md)
+
+<a id="contributing"></a>
+## 17. Contributing
+
+Keep changes scoped to one workflow, preserve Linux/native-Windows/WSL2
+boundaries, and add tests before behavior changes. Examples must be
+deterministic, synthetic, pseudonymous, offline-safe after dependencies are
+installed, and constrained to caller-selected output directories. Never commit
+generated study data, credentials, private keys, controller leases, controlled
+signatures, or fabricated acceptance decisions.
+
+Before submitting documentation changes, run:
+
+```bash
+python -m pytest tests/documentation/test_documentation.py -q
+python scripts/verify_documentation.py
+```
+
+Then run the relevant Python, frontend, or SMS suites listed above. Explain any
+intentionally unavailable external runtime, browser asset, Docker input, or
+controlled evidence; do not weaken a check to make it green.
+
+<a id="license"></a>
+## 18. License
+
+MATB is provided under the [MIT License](LICENSE). The license does not certify
+fitness for clinical, flight, defense, safety-critical, or operational use and
+does not replace applicable law, institutional governance, ethics review, or
+human acceptance.

@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+import re
 import subprocess
 import sys
 
@@ -12,6 +13,7 @@ from scripts.verify_documentation import (
     find_broken_links,
     find_safety_violations,
     main,
+    markdown_anchors,
     repository_markdown_files,
     validate_json_fixtures,
     validate_language_switch,
@@ -20,6 +22,29 @@ from scripts.verify_documentation import (
     verify_repository,
     validate_command_contracts,
 )
+
+
+def test_english_guide_has_complete_information_architecture() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    text = (repo_root / "README.md").read_text(encoding="utf-8")
+    anchors = markdown_anchors(repo_root / "README.md")
+    assert [anchor for anchor in anchors if anchor in ROOT_ANCHORS] == list(ROOT_ANCHORS)
+    for path in REQUIRED_MODULE_PATHS:
+        assert path in text
+    for workflow in (
+        "openmatb-research",
+        "research-console",
+        "suas-simulator",
+        "sms-platform",
+        "legacy-monitor",
+    ):
+        assert f"examples/{workflow}/README.md" in text
+
+
+def test_root_guide_has_no_historical_pr_status() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    text = (repo_root / "README.md").read_text(encoding="utf-8")
+    assert not re.search(r"\bPR\s*#\d+|pull request\s*#\d+", text, re.IGNORECASE)
 
 
 def test_openmatb_example_runs_offline(tmp_path: Path) -> None:
