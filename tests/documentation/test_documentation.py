@@ -1,6 +1,7 @@
-from pathlib import Path
+from collections import Counter
 import json
 import os
+from pathlib import Path
 import re
 import subprocess
 import sys
@@ -16,6 +17,7 @@ from scripts.verify_documentation import (
     main,
     markdown_anchors,
     repository_markdown_files,
+    strip_fenced_code,
     validate_json_fixtures,
     validate_language_switch,
     validate_platform_pairs,
@@ -285,6 +287,58 @@ def test_each_workflow_has_a_spanish_guide(repo_root: Path) -> None:
         directory = repo_root / "examples" / workflow
         assert (directory / "README.md").is_file()
         assert (directory / "README.es.md").is_file()
+
+
+def _normalized_inline_code_tokens(path: Path) -> Counter[str]:
+    text = strip_fenced_code(path.read_text(encoding="utf-8"))
+    tokens = re.findall(r"(?<!`)`([^`]+)`(?!`)", text)
+    return Counter(re.sub(r"\s+", " ", token.strip()) for token in tokens)
+
+
+def test_bilingual_guides_preserve_inline_code_tokens(repo_root: Path) -> None:
+    pairs = [(repo_root / "README.md", repo_root / "README.es.md")]
+    pairs.append((repo_root / "examples/README.md", repo_root / "examples/README.es.md"))
+    for workflow in (
+        "openmatb-research",
+        "research-console",
+        "suas-simulator",
+        "sms-platform",
+        "legacy-monitor",
+    ):
+        directory = repo_root / "examples" / workflow
+        pairs.append((directory / "README.md", directory / "README.es.md"))
+
+    for english, spanish in pairs:
+        english_tokens = _normalized_inline_code_tokens(english)
+        spanish_tokens = _normalized_inline_code_tokens(spanish)
+        assert spanish_tokens == english_tokens, (
+            f"{spanish.relative_to(repo_root)} changes inline command/API tokens; "
+            f"English-only={english_tokens - spanish_tokens}, "
+            f"Spanish-only={spanish_tokens - english_tokens}"
+        )
+
+
+def test_spanish_workflow_guides_preserve_safety_meaning(repo_root: Path) -> None:
+    sms = (repo_root / "examples/sms-platform/README.es.md").read_text(encoding="utf-8")
+    openmatb = (repo_root / "examples/openmatb-research/README.es.md").read_text(
+        encoding="utf-8"
+    )
+
+    for required in (
+        "paquetes geográficos sin conexión firmados",
+        "decisiones de auditoría de solo anexado",
+        "evidencia dura desconocida produce un bloqueo seguro",
+        "exportaciones desidentificadas separadas de las operaciones",
+        "ingesta de paquetes en modo seguro",
+        "valida artefactos de fuente registrados localmente",
+        "resultados esperados de bloqueo seguro",
+        "formación/promoción de seguridad operacional",
+        "operationalReady=false",
+        "nonDispatchable",
+    ):
+        assert required in sms
+    assert "sistema operacional desplegado" in openmatb
+    assert "sistema operativo" not in openmatb
 
 
 def test_committed_examples_reject_secrets_and_false_readiness(tmp_path: Path) -> None:

@@ -87,7 +87,7 @@ criterio actual de fallo deriva el tiempo hasta el fallo de eventos SYSMON
 `MISS` observados. Los tres niveles incluyen al menos un error determinista.
 Después, el recorrido llama a `fit_participant` con los registros LOW, MEDIUM y
 HIGH para estimar G0, P0 y tau0; es una demostración sintética pequeña, no una
-inferencia sobre una persona ni un sistema operativo.
+inferencia sobre una persona ni un sistema operacional desplegado.
 
 ## Continuar con artefactos de análisis
 
