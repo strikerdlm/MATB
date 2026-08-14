@@ -22,8 +22,6 @@ Native Windows with PowerShell 7+:
 
 The runners change to `SMS/`, run `npm ci`, build all packages, and then run `node ../examples/sms-platform/package-tour.mjs`. You can repeat the final Node command to confirm identical output. Generated `SMS/packages/*/dist` trees and `SMS/node_modules` are local build products and must not be committed.
 
-At this revision, `SMS/packages/energy/tsconfig.build.json` and `SMS/packages/fleet/tsconfig.build.json` inherit `noEmit: true`; therefore `npm run build:packages` can exit successfully without creating those two compiled indexes on a clean checkout. The tour correctly fails instead of silently substituting source imports. Fix that package build contract before relying on either runner in a clean environment.
-
 ## What the result demonstrates
 
 The nine top-level objects map directly to the nine packages. Evidence hashes a controlled local fixture. Energy calculates a reserve from the complete approved-performance input shape. Fleet evaluates a qualified VLOS capability against accepted evidence. Geo builds a stable route segment. Telemetry replays a fixed delayed event as read-only data. The safety kernel rejects a hard requirement with no accepted source evidence. SMS promotes a synthetic hazard and evaluates an SPI while audit, CAPA, ERP, and management-of-change examples remain blocked or incomplete when accountable evidence is absent. Human performance applies an explicit policy. Research opens a consented pseudonymous session, adapts one MATB event, and exports a deidentified record without operational identity or release fields.

@@ -22,8 +22,6 @@ Windows nativo con PowerShell 7+:
 
 Los lanzadores cambian a `SMS/`, ejecutan `npm ci`, compilan todos los paquetes y luego ejecutan `node ../examples/sms-platform/package-tour.mjs`. Repita el último comando para confirmar una salida idéntica. Los árboles generados `SMS/packages/*/dist` y `SMS/node_modules` son productos locales y no deben confirmarse en Git.
 
-En esta revisión, `SMS/packages/energy/tsconfig.build.json` y `SMS/packages/fleet/tsconfig.build.json` heredan `noEmit: true`; por eso `npm run build:packages` puede terminar correctamente sin crear esos dos índices compilados en una copia limpia. El recorrido falla de forma explícita en vez de sustituir silenciosamente importaciones desde el código fuente. Corrija ese contrato de compilación antes de depender de los lanzadores en un entorno limpio.
-
 ## Qué demuestra el resultado
 
 Los nueve objetos superiores corresponden a los nueve paquetes. Evidence calcula el hash de un archivo local controlado. Energy calcula la reserva con la forma completa del modelo de desempeño aprobado. Fleet evalúa una capacidad VLOS calificada frente a evidencia aceptada. Geo crea un segmento estable. Telemetry reproduce un evento fijo y demorado como dato de solo lectura. Safety Kernel rechaza un requisito duro sin evidencia fuente aceptada. SMS promueve un peligro sintético y evalúa un SPI, mientras auditoría, CAPA, ERP y gestión del cambio quedan bloqueados o incompletos al faltar evidencia responsable. Human Performance aplica una política explícita. Research abre una sesión seudonimizada con consentimiento, adapta un evento MATB y exporta un registro desidentificado sin identidad operacional ni campos de liberación.

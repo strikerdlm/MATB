@@ -43,10 +43,49 @@ def test_openmatb_example_runs_offline(tmp_path: Path) -> None:
     assert json.loads((tmp_path / "suhir.json").read_text())["participant_id"] == "SYNTH-P01"
 
 
+@pytest.mark.parametrize("package_name", ["energy", "fleet"])
+def test_sms_package_build_configs_emit_compiled_entry_points(
+    tmp_path: Path, package_name: str
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    output_directory = tmp_path / package_name
+    result = subprocess.run(
+        [
+            "node",
+            "node_modules/typescript/bin/tsc",
+            "--project",
+            f"packages/{package_name}/tsconfig.build.json",
+            "--outDir",
+            str(output_directory),
+        ],
+        cwd=repo_root / "SMS",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert (output_directory / "index.js").is_file()
+
+
 def test_sms_package_tour_is_deterministic() -> None:
     repo_root = Path(__file__).resolve().parents[2]
-    if not (repo_root / "SMS/packages/evidence/dist/index.js").exists():
-        pytest.skip("run npm run build:packages before the SMS example smoke test")
+    package_names = (
+        "evidence",
+        "energy",
+        "fleet",
+        "geo",
+        "telemetry",
+        "safety-kernel",
+        "sms",
+        "human-performance",
+        "research",
+    )
+    missing = [
+        str(path.relative_to(repo_root))
+        for package_name in package_names
+        if not (path := repo_root / f"SMS/packages/{package_name}/dist/index.js").is_file()
+    ]
+    assert missing == [], f"run npm run build:packages; missing compiled entry points: {missing}"
     first = subprocess.run(
         ["node", "../examples/sms-platform/package-tour.mjs"],
         cwd=repo_root / "SMS",
