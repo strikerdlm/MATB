@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+import os
 import re
 import subprocess
 import sys
@@ -45,6 +46,98 @@ def test_root_guide_has_no_historical_pr_status() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     text = (repo_root / "README.md").read_text(encoding="utf-8")
     assert not re.search(r"\bPR\s*#\d+|pull request\s*#\d+", text, re.IGNORECASE)
+
+
+def test_openmatb_bash_wrapper_uses_selected_python(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    invocation_log = tmp_path / "openmatb-python.log"
+    selected_python = _recording_python(tmp_path / "selected-python")
+    output_directory = tmp_path / "output"
+    env = os.environ.copy()
+    env.update(MATB_PYTHON=str(selected_python), MATB_TEST_LOG=str(invocation_log))
+
+    result = subprocess.run(
+        ["bash", "examples/openmatb-research/run.sh", str(output_directory)],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert invocation_log.is_file(), "run.sh ignored MATB_PYTHON"
+    assert invocation_log.read_text(encoding="utf-8").splitlines() == [
+        f"examples/openmatb-research/run_example.py --output-dir {output_directory}"
+    ]
+
+
+def test_openmatb_powershell_wrapper_uses_selected_python() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    text = (repo_root / "examples/openmatb-research/run.ps1").read_text(encoding="utf-8")
+    assert "$env:MATB_PYTHON" in text
+    assert re.search(r"&\s+\$Python\s+.*run_example\.py", text)
+
+
+def test_suas_cli_wrapper_uses_matb_venv_python(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    invocation_log = tmp_path / "suas-python.log"
+    venv = tmp_path / "selected-venv"
+    selected_python = _recording_python(venv / "bin" / "python")
+    output_directory = tmp_path / "output"
+    env = os.environ.copy()
+    env.pop("MATB_PYTHON", None)
+    env.update(MATB_VENV=str(venv), MATB_TEST_LOG=str(invocation_log))
+
+    result = subprocess.run(
+        ["bash", "examples/suas-simulator/cli_demo.sh", str(output_directory)],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert invocation_log.is_file(), "cli_demo.sh ignored MATB_VENV"
+    invocations = invocation_log.read_text(encoding="utf-8").splitlines()
+    assert len(invocations) == 4
+    assert all(line.startswith("-m matb_integration.suas.cli ") for line in invocations)
+    assert invocations[-1] == f"-m matb_integration.suas.cli verify {output_directory}"
+
+
+def test_workflow_guides_select_installed_python_and_scope_legacy_verification() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    root_text = (repo_root / "README.md").read_text(encoding="utf-8")
+    openmatb = root_text.split('<a id="quick-start-openmatb"></a>', 1)[1].split(
+        '<a id="quick-start-research-console"></a>', 1
+    )[0]
+    legacy = root_text.split('<a id="quick-start-legacy-monitor"></a>', 1)[1].split(
+        '<a id="module-catalog"></a>', 1
+    )[0]
+
+    assert "requirements-dev.txt" in openmatb
+    assert "MATB_PYTHON" in openmatb
+    assert 'pytest "$REPO_ROOT/tests"' not in legacy
+    assert 'Join-Path $RepoRoot "tests"' not in legacy
+    assert "tests/test_dashboard_behavior.py" in legacy
+    assert "tests/test_research_protocol.py" in legacy
+
+    for path in (
+        repo_root / "examples/openmatb-research/README.md",
+        repo_root / "examples/openmatb-research/README.es.md",
+    ):
+        text = path.read_text(encoding="utf-8")
+        assert "requirements-dev.txt" in text
+        assert "MATB_PYTHON" in text
+
+    for path in (
+        repo_root / "examples/suas-simulator/README.md",
+        repo_root / "examples/suas-simulator/README.es.md",
+    ):
+        assert "MATB_VENV" in path.read_text(encoding="utf-8").split(
+            "CLI", 1
+        )[-1]
 
 
 def test_openmatb_example_runs_offline(tmp_path: Path) -> None:
@@ -392,6 +485,18 @@ def test_language_switch_requires_reciprocal_visible_links(tmp_path: Path) -> No
     es.write_text("## Español\n", encoding="utf-8")
     errors = validate_language_switch(en, es)
     assert any("README.es.md" in error and "language switch" in error for error in errors)
+
+
+def _recording_python(path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        "printf '%s\\n' \"$*\" >> \"${MATB_TEST_LOG:?}\"\n",
+        encoding="utf-8",
+    )
+    path.chmod(0o755)
+    return path
 
 
 def _populate_contract_root(root: Path) -> None:

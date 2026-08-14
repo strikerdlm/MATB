@@ -43,8 +43,14 @@ For native development, create the same Python 3.12 venv from
 No service or browser is needed for the CLI demo:
 
 ```bash
-bash examples/suas-simulator/cli_demo.sh /tmp/matb-suas-cli
+MATB_VENV="$PWD/.venv-suas" bash examples/suas-simulator/cli_demo.sh \
+  "$PWD/examples/output/suas-simulator"
 ```
+
+The wrapper uses `MATB_PYTHON` when explicitly set, otherwise
+`$MATB_VENV/bin/python`, and validates the resolved executable. Without either
+override it falls back to `python3`; after the documented installation, keep
+`MATB_VENV` set so the CLI uses that installed dependency environment.
 
 It validates `scenarios/suas/reference_area_search.yaml`, advances PRACTICE for
 10 ticks, records `SYNTH-SUAS-01`, and verifies exactly the directory supplied
@@ -79,7 +85,8 @@ session; it never resumes automatically. Explicit checkpoint recovery preserves
 the append-only audit trail and marks recovered runs with a deviation. Terminal
 artifacts are sealed; public artifact metadata has relative paths and hashes,
 while private event/probe material remains unavailable. Verify a CLI artifact
-with `python3 -m matb_integration.suas.cli verify OUTPUT_DIRECTORY`.
+with `$MATB_VENV/bin/python -m matb_integration.suas.cli verify
+OUTPUT_DIRECTORY` on Linux/WSL2.
 
 Use `GET /health` to check the service and `Ctrl-C` to stop the launcher. Keep
 the data directory owner-only and remove only a dedicated demo directory after

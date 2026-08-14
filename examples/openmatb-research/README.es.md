@@ -7,23 +7,57 @@ sintéticos sin iniciar OpenMATB. El ejecutor externo de OpenMATB se instala por
 separado cuando un estudio necesita presentar los escenarios generados; este
 ejemplo no lo incluye ni lo invoca.
 
-## Ejecutar
+## Instalar el entorno de investigación seleccionado
 
-Desde la raíz del repositorio, elija un directorio de salida bajo su control:
-
-```bash
-python3 examples/openmatb-research/run_example.py --output-dir /tmp/matb-tour
-```
-
-También puede usar el lanzador nativo; su primer argumento opcional es el
-directorio de salida:
+El recorrido importa SciPy mediante el ajustador Suhir DEPDF y los comandos de
+continuación usan el stack estadístico. Instale `requirements-dev.txt`, que
+incluye las dependencias base y de análisis, en un entorno local al clon.
 
 ```bash
-examples/openmatb-research/run.sh /tmp/matb-tour
+REPO_ROOT="$(pwd)"
+python3 -m venv "$REPO_ROOT/.venv-openmatb"
+"$REPO_ROOT/.venv-openmatb/bin/python" -m pip install -r "$REPO_ROOT/requirements-dev.txt"
 ```
 
 ```powershell
-.\examples\openmatb-research\run.ps1 -OutputDir C:\Temp\matb-tour
+$RepoRoot = (Get-Location).Path
+python -m venv (Join-Path $RepoRoot ".venv-openmatb")
+& (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") -m pip install -r (Join-Path $RepoRoot "requirements-dev.txt")
+```
+
+## Ejecutar
+
+Desde la raíz del repositorio, elija un directorio de salida bajo su control.
+La invocación directa funciona en ambas plataformas:
+
+```bash
+REPO_ROOT="$(pwd)"
+"$REPO_ROOT/.venv-openmatb/bin/python" examples/openmatb-research/run_example.py \
+  --output-dir "$REPO_ROOT/examples/output/openmatb-research"
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+$Python = Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe"
+& $Python examples\openmatb-research\run_example.py `
+  --output-dir (Join-Path $RepoRoot "examples\output\openmatb-research")
+```
+
+También puede definir `MATB_PYTHON` y usar el lanzador nativo; su primer
+argumento opcional es el directorio de salida. El wrapper valida el ejecutable
+seleccionado y, sin override, usa `python3` en Bash o `python` en PowerShell.
+
+```bash
+REPO_ROOT="$(pwd)"
+MATB_PYTHON="$REPO_ROOT/.venv-openmatb/bin/python" \
+  bash examples/openmatb-research/run.sh "$REPO_ROOT/examples/output/openmatb-research"
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+$env:MATB_PYTHON = Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe"
+& .\examples\openmatb-research\run.ps1 `
+  -OutputDir (Join-Path $RepoRoot "examples\output\openmatb-research")
 ```
 
 El recorrido imprime nombres relativos de artefactos y termina con `External
@@ -62,14 +96,16 @@ la consola: `m.json` es la respuesta de `GET /metrics/long` y `f.json` la de
 `GET /fits`. El comando frecuentista es:
 
 ```bash
-python3 -m matb_integration.analysis.stats.cli run \
+REPO_ROOT="$(pwd)"
+"$REPO_ROOT/.venv-openmatb/bin/python" -m matb_integration.analysis.stats.cli run \
   --metrics-json m.json --fits-json f.json -o artifact.json
 ```
 
 El comando separado de sensibilidad bayesiana usa los mismos dos arreglos JSON:
 
 ```bash
-python3 -m matb_integration.analysis.stats.cli bayes \
+REPO_ROOT="$(pwd)"
+"$REPO_ROOT/.venv-openmatb/bin/python" -m matb_integration.analysis.stats.cli bayes \
   --metrics-json m.json --fits-json f.json -o bayes.json \
   --seed 42 --draws 1000 --tune 1000 --chains 4
 ```

@@ -43,8 +43,14 @@ app.main:app --host 127.0.0.1 --port 8000`; en `webui/frontend`, ejecute
 No requiere servicio ni navegador:
 
 ```bash
-bash examples/suas-simulator/cli_demo.sh /tmp/matb-suas-cli
+MATB_VENV="$PWD/.venv-suas" bash examples/suas-simulator/cli_demo.sh \
+  "$PWD/examples/output/suas-simulator"
 ```
+
+El wrapper usa `MATB_PYTHON` cuando se define explícitamente; de lo contrario
+usa `$MATB_VENV/bin/python` y valida el ejecutable resuelto. Sin ninguno de los
+dos valores usa `python3`; después de la instalación documentada, mantenga
+`MATB_VENV` para que la CLI use ese entorno con dependencias instaladas.
 
 Valida `scenarios/suas/reference_area_search.yaml`, avanza PRACTICE 10 ticks,
 graba `SYNTH-SUAS-01` y verifica exactamente el directorio del primer argumento.
@@ -77,8 +83,9 @@ solo ven estado público redactado. Una desconexión del controlador pausa la
 sesión y no la reanuda automáticamente. La recuperación explícita desde un
 checkpoint conserva la auditoría append-only y marca una desviación. Los
 artefactos terminales son sellados; los metadatos públicos usan rutas relativas
-y hashes, y eventos/probes privados no se exponen. Verifique un artefacto CLI
-con `python3 -m matb_integration.suas.cli verify OUTPUT_DIRECTORY`.
+y hashes, y eventos/probes privados no se exponen. En Linux/WSL2 verifique un
+artefacto CLI con `$MATB_VENV/bin/python -m matb_integration.suas.cli verify
+OUTPUT_DIRECTORY`.
 
 Compruebe el servicio con `GET /health` y termine con `Ctrl-C`. Conserve el
 directorio de datos como propiedad exclusiva y elimine solo un directorio de

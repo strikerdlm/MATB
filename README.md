@@ -135,10 +135,12 @@ Linux Bash or WSL2, from the clone root:
 ```bash
 REPO_ROOT="$(pwd)"
 python3 -m venv "$REPO_ROOT/.venv-openmatb"
-"$REPO_ROOT/.venv-openmatb/bin/python" -m pip install -r "$REPO_ROOT/requirements.txt"
+"$REPO_ROOT/.venv-openmatb/bin/python" -m pip install -r "$REPO_ROOT/requirements-dev.txt"
 ```
 
-`setup.sh` is an equivalent POSIX-only repository setup entry point:
+`setup.sh` is POSIX-only and installs the narrower base `requirements.txt` for
+legacy/OpenMATB asset integration. It is not a substitute for the development
+dependency installation above when running the DEPDF/statistics example.
 
 ```bash
 REPO_ROOT="$(pwd)"
@@ -150,7 +152,7 @@ Native Windows PowerShell 7+:
 ```powershell
 $RepoRoot = (Get-Location).Path
 python -m venv (Join-Path $RepoRoot ".venv-openmatb")
-& (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") -m pip install -r (Join-Path $RepoRoot "requirements.txt")
+& (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") -m pip install -r (Join-Path $RepoRoot "requirements-dev.txt")
 ```
 
 <h3>Configure</h3>
@@ -198,11 +200,13 @@ use Xvfb.
 
 ```bash
 REPO_ROOT="$(pwd)"
-bash "$REPO_ROOT/examples/openmatb-research/run.sh" "$REPO_ROOT/examples/output/openmatb-research"
+MATB_PYTHON="$REPO_ROOT/.venv-openmatb/bin/python" \
+  bash "$REPO_ROOT/examples/openmatb-research/run.sh" "$REPO_ROOT/examples/output/openmatb-research"
 ```
 
 ```powershell
 $RepoRoot = (Get-Location).Path
+$env:MATB_PYTHON = Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe"
 & (Join-Path $RepoRoot "examples\openmatb-research\run.ps1") -OutputDir (Join-Path $RepoRoot "examples\output\openmatb-research")
 ```
 
@@ -453,7 +457,8 @@ Fast CLI-only Linux/WSL2 tour:
 
 ```bash
 REPO_ROOT="$(pwd)"
-bash "$REPO_ROOT/examples/suas-simulator/cli_demo.sh" "$REPO_ROOT/examples/output/suas-simulator"
+MATB_VENV="$REPO_ROOT/.venv-suas" \
+  bash "$REPO_ROOT/examples/suas-simulator/cli_demo.sh" "$REPO_ROOT/examples/output/suas-simulator"
 ```
 
 Native Windows equivalent, using the same committed scenario:
@@ -693,12 +698,19 @@ do not receive a research-output directory.
 
 ```bash
 REPO_ROOT="$(pwd)"
-"$REPO_ROOT/.venv-legacy/bin/python" -m pytest "$REPO_ROOT/tests" -q
+"$REPO_ROOT/.venv-legacy/bin/python" -m aircraft_monitor --help
+"$REPO_ROOT/.venv-legacy/bin/python" -m pytest \
+  "$REPO_ROOT/tests/test_dashboard_behavior.py" \
+  "$REPO_ROOT/tests/test_research_protocol.py" -q
 ```
 
 ```powershell
 $RepoRoot = (Get-Location).Path
-& (Join-Path $RepoRoot ".venv-legacy\Scripts\python.exe") -m pytest (Join-Path $RepoRoot "tests") -q
+$Python = Join-Path $RepoRoot ".venv-legacy\Scripts\python.exe"
+& $Python -m aircraft_monitor --help
+& $Python -m pytest `
+  (Join-Path $RepoRoot "tests\test_dashboard_behavior.py") `
+  (Join-Path $RepoRoot "tests\test_research_protocol.py") -q
 ```
 
 <h3>Stop and clean up</h3>
@@ -883,6 +895,7 @@ authentication, privacy, and threat controls beyond this development launcher.
 
 | Variable | Scope | Meaning |
 | --- | --- | --- |
+| `MATB_PYTHON` | Example wrappers | Exact Python executable selected for OpenMATB or sUAS CLI tours |
 | `MATB_VENV` | POSIX install/launcher | Repository-local Python environment path |
 | `MATB_DB_PATH` | Research/sUAS backend | Dedicated SQLite path |
 | `MATB_SIMULATION_OUTPUT_DIR` | sUAS | Owner-only sealed artifact root |
