@@ -23,6 +23,17 @@ $csv = Get-Item (Join-Path $RepoRoot "examples/openmatb-research/fixtures/low.cs
 Invoke-RestMethod -Method Post -Uri "$BaseUrl/ingest" -Form @{
     participant_id = $participantId; visit_ordinal = "1"; workload_level = "LOW"; file = $csv
 } | Out-Host
+$analysis = Invoke-RestMethod -Method Post -Uri "$BaseUrl/analysis/run"
+$analysisStatuses = [ordered]@{}
+foreach ($property in $analysis.q1.PSObject.Properties) {
+    $analysisStatuses[$property.Name] = $property.Value.status
+}
+$allowedAnalysisStatuses = @("ok", "insufficient_data", "not_estimable")
+$invalidAnalysisStatuses = @($analysisStatuses.Values | Where-Object { $_ -notin $allowedAnalysisStatuses })
+if ($analysisStatuses.Count -eq 0 -or $invalidAnalysisStatuses.Count -ne 0) {
+    throw "Analysis response contains missing or unsupported q1 status"
+}
+[pscustomobject]@{ analysis_status = $analysisStatuses } | ConvertTo-Json -Depth 4 | Write-Host
 Invoke-RestMethod -Uri "$BaseUrl/tracker" | Out-Host
 Invoke-RestMethod -Uri "$BaseUrl/exports/research-context" | Out-Host
 Invoke-WebRequest -Method Post -Uri "$BaseUrl/exports/research-bundle" -ContentType "application/json" `

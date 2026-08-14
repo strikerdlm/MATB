@@ -1,9 +1,22 @@
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 
 import { calculateMissionEnergy } from "../../SMS/packages/energy/dist/index.js";
-import { sha256File } from "../../SMS/packages/evidence/dist/index.js";
-import { evaluateCapability } from "../../SMS/packages/fleet/dist/index.js";
-import { buildRoute } from "../../SMS/packages/geo/dist/index.js";
+import {
+  assertSignedPackageManifest,
+  manifestContentDigest,
+  sha256File,
+} from "../../SMS/packages/evidence/dist/index.js";
+import {
+  evaluateCapability,
+  evaluateCrewAssignment,
+} from "../../SMS/packages/fleet/dist/index.js";
+import {
+  buildRoute,
+  decodeMetar,
+  evaluateRouteAirspace,
+  validateWeatherForRoute,
+} from "../../SMS/packages/geo/dist/index.js";
 import { evaluateOperationalStatus } from "../../SMS/packages/human-performance/dist/index.js";
 import {
   createConsentRecord,
@@ -12,6 +25,7 @@ import {
   openConsentedSession,
   parseResearchSession,
   registerProtocol,
+  replaySession,
 } from "../../SMS/packages/research/dist/index.js";
 import { evaluateMission } from "../../SMS/packages/safety-kernel/dist/index.js";
 import {
@@ -95,9 +109,41 @@ const validEnergyInput = {
   },
 };
 
-const evidenceHash = await sha256File(
-  new URL("./fixtures/controlled-evidence.txt", import.meta.url),
-);
+const controlledEvidenceUrl = new URL("./fixtures/controlled-evidence.txt", import.meta.url);
+const evidenceHash = await sha256File(controlledEvidenceUrl);
+const evidenceFiles = [{
+  path: "controlled-evidence.txt",
+  sha256: evidenceHash,
+  sizeBytes: (await readFile(controlledEvidenceUrl)).byteLength,
+}];
+const unsignedManifest = {
+  schemaVersion: "1.0",
+  packageId: "synthetic-evidence-tour",
+  kind: "regulatory",
+  issuer: "Synthetic documentation tour",
+  version: "1.0.0",
+  issuedAtUtc: "2026-08-14T00:00:00Z",
+  effectiveFromUtc: "2026-08-14T00:00:00Z",
+  expiresAtUtc: "2027-08-14T00:00:00Z",
+  geographicScope: "Synthetic training area",
+  contentSha256: manifestContentDigest(evidenceFiles),
+  keyId: "unsigned-synthetic-tour",
+  dependencies: [],
+  files: evidenceFiles,
+  qualification: "blocked",
+  caveats: ["unsigned synthetic documentation fixture"],
+};
+assertSignedPackageManifest(unsignedManifest, false);
+let unsignedManifestSignatureStatus = "rejected";
+try {
+  assertSignedPackageManifest(unsignedManifest);
+  unsignedManifestSignatureStatus = "unexpectedly-accepted";
+} catch {
+  unsignedManifestSignatureStatus = "rejected";
+}
+if (unsignedManifestSignatureStatus !== "rejected") {
+  throw new Error("Unsigned manifest must be rejected when a signature is required");
+}
 const energyResult = calculateMissionEnergy(validEnergyInput);
 const capability = evaluateCapability(
   {
@@ -119,6 +165,41 @@ const capability = evaluateCapability(
     subjectId: "UAS-SYNTH-1",
   },
 );
+const crewQualification = evaluateCrewAssignment({
+  assignment: {
+    userId: "CREW-SYNTH-1",
+    role: "operator",
+    aircraftId: "UAS-SYNTH-1",
+    requiredQualificationEdition: "2026.1",
+    evidenceRefs: ["EV-ASSIGNMENT-SYNTH-1"],
+  },
+  qualification: {
+    userId: "CREW-SYNTH-1",
+    role: "operator",
+    edition: "2026.1",
+    validUntilUtc: "2027-08-14T00:00:00Z",
+    recencyValidUntilUtc: "2026-09-14T00:00:00Z",
+    evidenceRefs: ["EV-QUALIFICATION-SYNTH-1"],
+  },
+  dutyPeriod: {
+    startedAtUtc: "2026-08-14T00:00:00Z",
+    previousDutyEndedAtUtc: "2026-08-13T12:00:00Z",
+    cumulativeWorkloadMinutes: 120,
+    cumulativeScreenExposureMinutes: 90,
+    evidenceRefs: ["EV-DUTY-SYNTH-1"],
+  },
+  dutyPolicy: {
+    policyId: "CREW-POLICY-SYNTH-1",
+    edition: "2026.1",
+    maxDutyMinutes: 480,
+    minimumRestMinutes: 720,
+    maxCumulativeWorkloadMinutes: 300,
+    maxScreenExposureMinutes: 240,
+    evidenceRefs: ["EV-CREW-POLICY-SYNTH-1"],
+  },
+  operationalSafetyStatus: "available",
+  nowUtc: "2026-08-14T08:00:00Z",
+});
 const route = buildRoute({
   id: "ROUTE-SYNTH-1",
   waypoints: [
@@ -129,6 +210,41 @@ const route = buildRoute({
   visualCondition: "VLOS",
   altitudeReference: "MSL",
   sourcePackageIds: ["MAP-SYNTH-1"],
+});
+const airspaceResult = evaluateRouteAirspace({
+  route,
+  airspaces: [{
+    id: "AIRSPACE-SYNTH-1",
+    code: "SYNTH-CLEAR",
+    polygon: [
+      { lat: 5.10, lon: -73.90 },
+      { lat: 5.10, lon: -73.80 },
+      { lat: 5.20, lon: -73.80 },
+      { lat: 5.20, lon: -73.90 },
+    ],
+    lowerAltitudeM: 0,
+    upperAltitudeM: 5_000,
+    altitudeReference: "MSL",
+    sourcePackageId: "AIRSPACE-PKG-SYNTH-1",
+    authorityClass: "official",
+    effectiveFromUtc: "2026-08-01T00:00:00Z",
+    effectiveToUtc: "2026-09-01T00:00:00Z",
+  }],
+  notams: [],
+  nowUtc: "2026-08-14T00:30:00Z",
+  requireOfficialAirspace: true,
+});
+const weatherResult = validateWeatherForRoute({
+  route,
+  observations: [decodeMetar(
+    "METAR 2026-08-14T00:00:00Z SKBO 140000Z 00005KT 9999 BKN020 15/10 Q1023=",
+    "WEATHER-PKG-SYNTH-1",
+  )],
+  nowUtc: "2026-08-14T00:30:00Z",
+  maxAgeMinutes: 60,
+  minimumVisibilityM: 5_000,
+  minimumCeilingFtAgl: 1_000,
+  maxWindKt: 25,
 });
 const replay = await new ReplayGateway({
   aircraftId: "UAS-SYNTH-1",
@@ -351,8 +467,16 @@ await adapter.close();
 if (researchEvent === null || researchEvent.nonDispatchable !== true) {
   throw new Error("Research tour must remain non-dispatchable");
 }
+const completedResearchSession = parseResearchSession({
+  ...researchSession,
+  events: [researchEvent],
+});
+const replayedResearchEventIds = [];
+for await (const event of replaySession(completedResearchSession)) {
+  replayedResearchEventIds.push(event.eventId);
+}
 const exportedResearch = JSON.parse(exportDeidentified(
-  parseResearchSession({ ...researchSession, events: [researchEvent] }),
+  completedResearchSession,
   "json",
 ));
 
@@ -360,6 +484,10 @@ const summary = {
   evidence: {
     status: "hashed",
     sha256: evidenceHash,
+    unsignedManifest: {
+      shapeStatus: "valid",
+      signatureStatus: unsignedManifestSignatureStatus,
+    },
   },
   energy: {
     status: energyResult.status,
@@ -367,10 +495,13 @@ const summary = {
   },
   fleet: {
     capabilityStatus: capability.status,
+    crewQualificationStatus: crewQualification.status,
   },
   geo: {
     routeSegmentCount: route.segments.length,
     routeSegmentHash: route.segments[0].geometryHash,
+    airspaceStatus: airspaceResult.status,
+    weatherStatus: weatherResult.status,
   },
   telemetry: {
     recordStatuses: replay.map((record) => record.status),
@@ -403,6 +534,7 @@ const summary = {
     nonDispatchable: researchSession.nonDispatchable && researchEvent.nonDispatchable,
     dataDomain: researchEvent.dataDomain,
     eventCount: exportedResearch.events.length,
+    replayedEventIds: replayedResearchEventIds,
     exportSchemaVersion: exportedResearch.schemaVersion,
     exportSha256: createHash("sha256")
       .update(JSON.stringify(exportedResearch))

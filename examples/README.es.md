@@ -31,6 +31,19 @@ python -m pytest tests/documentation/test_documentation.py -q
 python scripts/verify_documentation.py
 ```
 
+Esas comprobaciones ligeras en dependencias se ejecutan desde un checkout limpio;
+las pruebas de humo de compilación del SMS se omiten con un mensaje accionable cuando
+faltan sus dependencias preparadas. Para incluir el objetivo específico de humo de
+compilación y recorrido de paquetes del SMS, prepárelo explícitamente:
+
+```bash
+cd SMS
+npm ci
+npm run build:packages
+cd ..
+python -m pytest tests/documentation/test_documentation.py -q -k sms_package
+```
+
 La secuencia completa de instalación/configuración/ejecución/verificación/limpieza para cada flujo está
 en la guía enlazada. El [README](../README.es.md) raíz incluye la matriz de prerrequisitos, los límites
 entre Windows nativo y WSL2, el catálogo completo de módulos, operaciones, solución de problemas y

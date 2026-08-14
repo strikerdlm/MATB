@@ -25,6 +25,17 @@ curl --fail-with-body \
   -F 'participant_id=SYNTH-P01' -F 'visit_ordinal=1' -F 'workload_level=LOW' \
   -F "file=@$repo_root/examples/openmatb-research/fixtures/low.csv;type=text/csv" \
   "$base_url/ingest"
+analysis_response="$(curl --silent --show-error --fail-with-body -X POST \
+  "$base_url/analysis/run")"
+printf '%s' "$analysis_response" | python3 -c '
+import json, sys
+payload = json.load(sys.stdin)
+statuses = {name: result.get("status") for name, result in payload.get("q1", {}).items()}
+allowed = {"ok", "insufficient_data", "not_estimable"}
+if not statuses or not set(statuses.values()) <= allowed:
+    raise SystemExit("analysis response contains missing or unsupported q1 status")
+print(json.dumps({"analysis_status": statuses}, sort_keys=True))
+'
 curl --fail-with-body "$base_url/tracker"
 curl --fail-with-body "$base_url/exports/research-context"
 curl --fail-with-body -H 'Content-Type: application/json' -d '{"figures":[]}' \

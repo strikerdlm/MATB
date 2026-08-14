@@ -13,3 +13,4 @@ if ($Mode -eq "experiment") {
     $Arguments += @("--participant-id", "SYNTH-P01", "--session-id", "SYNTH-S01", "--research-output-dir", $OutputDir)
 }
 & python -m aircraft_monitor @Arguments
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

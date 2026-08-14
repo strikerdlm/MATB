@@ -86,8 +86,11 @@ BASE_URL=http://127.0.0.1:8000 OUTPUT_DIR=/tmp/matb-console \
 ```
 
 El recorrido comprueba la salud, crea `SYNTH-P01` solo cuando no existe, carga
-`fixtures/low.csv` como visita 1/LOW, consulta el seguimiento y el contexto de
-investigación, y escribe `research-bundle.zip`. Repetirlo contra la misma base
+`fixtures/low.csv` como visita 1/LOW, solicita de forma segura `POST /analysis/run`,
+imprime y valida los valores `analysis_status` por métrica devueltos, consulta el
+seguimiento y el contexto de investigación, y escribe `research-bundle.zip`. Solo
+admite los estados `ok`, `insufficient_data` o `not_estimable` del motor; se espera
+que el recurso de una fila siga siendo insuficiente para muchos ajustes. Repetirlo contra la misma base
 de datos puede devolver 409: se detecta la creación del participante, pero se
 rechazan deliberadamente un SHA-256 de CSV duplicado y una celda de
 visita/carga de trabajo ya ocupada. Limpie el directorio de datos del ejemplo

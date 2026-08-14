@@ -81,8 +81,11 @@ BASE_URL=http://127.0.0.1:8000 OUTPUT_DIR=/tmp/matb-console \
 ```
 
 The tour checks health, creates `SYNTH-P01` only when absent, uploads
-`fixtures/low.csv` as visit 1/LOW, reads the tracker and research context, and
-writes `research-bundle.zip`. Re-running against the same database can return
+`fixtures/low.csv` as visit 1/LOW, safely requests `POST /analysis/run`, prints
+and validates the returned per-metric `analysis_status` values, reads the
+tracker and research context, and writes `research-bundle.zip`. It accepts only
+the engine's `ok`, `insufficient_data`, or `not_estimable` statuses; the
+single-row fixture is expected to remain insufficient for many fits. Re-running against the same database can return
 409: participant creation is detected, but duplicate CSV SHA-256 and an
 already-filled visit/workload cell are intentionally rejected. Clean the
 example data directory (or use a fresh `MATB_DB_PATH`) before repeating a

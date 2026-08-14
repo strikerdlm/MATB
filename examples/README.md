@@ -31,6 +31,19 @@ python -m pytest tests/documentation/test_documentation.py -q
 python scripts/verify_documentation.py
 ```
 
+Those dependency-light checks run from a clean checkout; SMS build smoke tests
+skip with an actionable message when their prepared dependencies are absent.
+To include the SMS-specific build and package-tour smoke target, prepare it
+explicitly:
+
+```bash
+cd SMS
+npm ci
+npm run build:packages
+cd ..
+python -m pytest tests/documentation/test_documentation.py -q -k sms_package
+```
+
 The complete install/configure/run/verify/cleanup sequence for each workflow is
 in the linked guide. The root [README](../README.md) provides the prerequisite
 matrix, native Windows versus WSL2 boundaries, full module catalog, operations,

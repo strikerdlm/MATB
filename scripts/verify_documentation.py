@@ -36,6 +36,12 @@ MARKDOWN_EXCLUDED_DIRS = frozenset({
 })
 LINK_RE = re.compile(r"(?<!!)\[[^]]*]\(([^)]+)\)")
 ANCHOR_RE = re.compile(r'<a\s+id=["\']([^"\']+)["\']\s*></a>', re.IGNORECASE)
+UNFINISHED_PLACEHOLDER_RE = re.compile(r"\b(?:TBD|TODO|FIXME|XXX)\b", re.IGNORECASE)
+PROJECT_ENV_RE = re.compile(r"\b(?:MATB|SMS|NEXT_PUBLIC)_[A-Z][A-Z0-9_]*\b")
+USER_ASSET_SUFFIXES = frozenset({
+    ".csv", ".js", ".json", ".md", ".mjs", ".ps1", ".py", ".sh", ".txt",
+    ".yaml", ".yml",
+})
 
 
 def strip_fenced_code(text: str) -> str:
@@ -113,6 +119,89 @@ def repository_markdown_files(root: Path) -> list[Path]:
         path for path in root.rglob("*.md")
         if not (set(path.relative_to(root).parts) & MARKDOWN_EXCLUDED_DIRS)
     )
+
+
+def _current_user_files(root: Path, *, markdown_only: bool = False) -> list[Path]:
+    """Return current root/example guides and assets, never plans or generated trees."""
+    candidates = [root / "README.md", root / "README.es.md"]
+    examples = root / "examples"
+    if examples.is_dir():
+        candidates.extend(path for path in examples.rglob("*") if path.is_file())
+    return sorted({
+        path for path in candidates
+        if path.is_file()
+        and not (set(path.relative_to(root).parts) & MARKDOWN_EXCLUDED_DIRS)
+        and (path.suffix.lower() == ".md" if markdown_only else path.suffix.lower() in USER_ASSET_SUFFIXES)
+    })
+
+
+def validate_unfinished_placeholders(root: Path) -> list[str]:
+    errors: list[str] = []
+    for path in _current_user_files(root):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            continue
+        for number, line in enumerate(text.splitlines(), 1):
+            match = UNFINISHED_PLACEHOLDER_RE.search(line)
+            if match:
+                errors.append(
+                    f"{path.relative_to(root)}:{number}: unfinished placeholder: {match.group(0)}"
+                )
+    return errors
+
+
+def validate_documented_paths(root: Path) -> list[str]:
+    """Resolve documented pytest targets and supported project module entry points."""
+    errors: list[str] = []
+    for path in _current_user_files(root, markdown_only=True):
+        text = path.read_text(encoding="utf-8").replace("\\\n", " ").replace("`\n", " ")
+        for match in re.finditer(r"\bpytest\b([^\n]*)", text):
+            arguments = match.group(1)
+            targets = re.findall(
+                r"(?<![\w./-])((?:tests|webui/backend/tests)(?:/[A-Za-z0-9_.-]+)*(?:::[A-Za-z0-9_.-]+)?)",
+                arguments,
+            )
+            for target in targets:
+                relative = target.split("::", 1)[0]
+                if not (root / relative).exists():
+                    errors.append(
+                        f"{path.relative_to(root)}: documented pytest path does not exist: {relative}"
+                    )
+        for module in re.findall(
+            r"\bpython(?:3)?\s+-m\s+((?:matb_integration(?:\.[A-Za-z_]\w*)+)|aircraft_monitor)\b",
+            text,
+        ):
+            module_path = root.joinpath(*module.split("."))
+            if not (module_path.with_suffix(".py").is_file() or (module_path / "__main__.py").is_file()):
+                errors.append(
+                    f"{path.relative_to(root)}: documented module entry point does not exist: {module}"
+                )
+    return errors
+
+
+def validate_environment_variables(root: Path) -> list[str]:
+    documented: set[str] = set()
+    for path in _current_user_files(root, markdown_only=True):
+        documented.update(PROJECT_ENV_RE.findall(path.read_text(encoding="utf-8")))
+
+    supported: set[str] = set()
+    ignored_parts = MARKDOWN_EXCLUDED_DIRS | frozenset({"docs", "tests"})
+    for path in root.rglob("*"):
+        if not path.is_file() or path.suffix.lower() == ".md":
+            continue
+        if set(path.relative_to(root).parts) & ignored_parts:
+            continue
+        try:
+            if path.stat().st_size > 1_000_000:
+                continue
+            supported.update(PROJECT_ENV_RE.findall(path.read_text(encoding="utf-8")))
+        except (OSError, UnicodeError):
+            continue
+    return [
+        f"documented project environment variable has no checked-in script/configuration support: {name}"
+        for name in sorted(documented - supported)
+    ]
 
 
 def validate_language_switch(english: Path, spanish: Path) -> list[str]:
@@ -410,6 +499,9 @@ def verify_repository(root: Path) -> list[str]:
     errors += validate_required_coverage(root)
     errors += validate_platform_pairs(root)
     errors += validate_command_contracts(root)
+    errors += validate_documented_paths(root)
+    errors += validate_unfinished_placeholders(root)
+    errors += validate_environment_variables(root)
     errors += find_safety_violations(list((root / "examples").rglob("*")))
     return errors
 

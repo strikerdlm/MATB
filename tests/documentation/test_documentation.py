@@ -24,6 +24,9 @@ from scripts.verify_documentation import (
     validate_required_coverage,
     verify_repository,
     validate_command_contracts,
+    validate_documented_paths,
+    validate_environment_variables,
+    validate_unfinished_placeholders,
 )
 
 
@@ -184,6 +187,9 @@ def test_sms_package_build_configs_emit_compiled_entry_points(
     tmp_path: Path, package_name: str
 ) -> None:
     repo_root = Path(__file__).resolve().parents[2]
+    typescript = repo_root / "SMS/node_modules/typescript/bin/tsc"
+    if not typescript.is_file():
+        pytest.skip("run `cd SMS && npm ci` before the SMS build smoke tests")
     output_directory = tmp_path / package_name
     result = subprocess.run(
         [
@@ -221,7 +227,11 @@ def test_sms_package_tour_is_deterministic() -> None:
         for package_name in package_names
         if not (path := repo_root / f"SMS/packages/{package_name}/dist/index.js").is_file()
     ]
-    assert missing == [], f"run npm run build:packages; missing compiled entry points: {missing}"
+    if missing:
+        pytest.skip(
+            "run `cd SMS && npm ci && npm run build:packages` before the SMS package-tour smoke test; "
+            f"missing compiled entry points: {missing}"
+        )
     first = subprocess.run(
         ["node", "../examples/sms-platform/package-tour.mjs"],
         cwd=repo_root / "SMS",
@@ -252,6 +262,14 @@ def test_sms_package_tour_is_deterministic() -> None:
     }
     assert result["safetyKernel"]["status"] == "blocked"
     assert result["research"]["nonDispatchable"] is True
+    assert result["evidence"]["unsignedManifest"] == {
+        "shapeStatus": "valid",
+        "signatureStatus": "rejected",
+    }
+    assert result["fleet"]["crewQualificationStatus"] == "available"
+    assert result["geo"]["airspaceStatus"] == "pass"
+    assert result["geo"]["weatherStatus"] == "pass"
+    assert result["research"]["replayedEventIds"] == ["MATB-SYNTH-1"]
 
 
 def test_relative_links_resolve_and_code_fences_are_ignored(tmp_path: Path) -> None:
@@ -451,6 +469,32 @@ def test_http_walkthroughs_use_synthetic_identity() -> None:
     assert texts and all("SYNTH-P01" in text for text in texts)
 
 
+def test_research_console_walkthroughs_run_analysis_and_validate_returned_status() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    bash = (repo_root / "examples/research-console/api_walkthrough.sh").read_text(
+        encoding="utf-8"
+    )
+    powershell = (
+        repo_root / "examples/research-console/api_walkthrough.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert '"$base_url/analysis/run"' in bash
+    assert "analysis_status" in bash
+    assert "insufficient_data" in bash
+    assert '"$BaseUrl/analysis/run"' in powershell
+    assert "analysis_status" in powershell
+    assert "insufficient_data" in powershell
+
+
+def test_legacy_powershell_wrapper_propagates_native_python_failure() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    text = (repo_root / "examples/legacy-monitor/run.ps1").read_text(encoding="utf-8")
+    python_call = text.index("& python -m aircraft_monitor")
+    after_python = text[python_call:]
+    assert re.search(r"if\s*\(\$LASTEXITCODE\s*-ne\s*0\)", after_python)
+    assert re.search(r"exit\s+\$LASTEXITCODE", after_python)
+
+
 def test_console_and_suas_guides_require_powershell_7_for_walkthroughs() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     for guide in (
@@ -572,6 +616,43 @@ def test_language_switch_requires_reciprocal_visible_links(tmp_path: Path) -> No
     es.write_text("## Español\n", encoding="utf-8")
     errors = validate_language_switch(en, es)
     assert any("README.es.md" in error and "language switch" in error for error in errors)
+
+
+def test_documented_pytest_paths_and_supported_modules_must_resolve(tmp_path: Path) -> None:
+    (tmp_path / "README.md").write_text(
+        "```bash\npython -m pytest tests/missing -q\n"
+        "python -m matb_integration.missing\n```\n",
+        encoding="utf-8",
+    )
+    errors = validate_documented_paths(tmp_path)
+    assert any("tests/missing" in error and "pytest path" in error for error in errors)
+    assert any("matb_integration.missing" in error and "module entry point" in error for error in errors)
+
+
+def test_unfinished_placeholders_are_rejected_only_in_current_user_docs(tmp_path: Path) -> None:
+    (tmp_path / "README.md").write_text("Setup remains TODO before release.\n", encoding="utf-8")
+    plan = tmp_path / "docs" / "superpowers" / "plans"
+    plan.mkdir(parents=True)
+    (plan / "old-plan.md").write_text("TODO is allowed in historical plans.\n", encoding="utf-8")
+    errors = validate_unfinished_placeholders(tmp_path)
+    assert any("README.md" in error and "TODO" in error for error in errors)
+    assert all("old-plan.md" not in error for error in errors)
+
+
+def test_documented_project_environment_variables_require_checked_in_support(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "README.md").write_text(
+        "Set `MATB_SUPPORTED` or `MATB_GHOST_SETTING`.\n", encoding="utf-8"
+    )
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    (scripts / "run.sh").write_text(
+        'value="${MATB_SUPPORTED:-safe}"\n', encoding="utf-8"
+    )
+    errors = validate_environment_variables(tmp_path)
+    assert not any("MATB_SUPPORTED" in error for error in errors)
+    assert any("MATB_GHOST_SETTING" in error for error in errors)
 
 
 def _recording_python(path: Path) -> Path:
