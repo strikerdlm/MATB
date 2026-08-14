@@ -169,6 +169,31 @@ def test_http_walkthroughs_use_synthetic_identity() -> None:
     assert texts and all("SYNTH-P01" in text for text in texts)
 
 
+def test_console_and_suas_guides_require_powershell_7_for_walkthroughs() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    for guide in (
+        repo_root / "examples/research-console/README.md",
+        repo_root / "examples/research-console/README.es.md",
+        repo_root / "examples/suas-simulator/README.md",
+        repo_root / "examples/suas-simulator/README.es.md",
+    ):
+        assert "PowerShell 7+" in guide.read_text(encoding="utf-8")
+
+
+def test_launcher_guides_distinguish_dependency_install_from_offline_service() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    for guide in (
+        repo_root / "examples/research-console/README.md",
+        repo_root / "examples/research-console/README.es.md",
+        repo_root / "examples/suas-simulator/README.md",
+        repo_root / "examples/suas-simulator/README.es.md",
+    ):
+        text = guide.read_text(encoding="utf-8").lower()
+        assert "network" in text or "red" in text
+        assert "cache" in text or "caché" in text
+        assert "offline-capable" in text or "sin conexión" in text
+
+
 def test_safety_rejects_provider_prefixed_credential_and_token_fields(tmp_path: Path) -> None:
     bad = tmp_path / "provider-credentials.json"
     bad.write_text(

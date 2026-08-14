@@ -34,10 +34,12 @@ cd webui/frontend
 npm run dev -- --hostname 127.0.0.1 --port 3100
 ```
 
-On Windows, use PowerShell to create and activate a Python 3.12 venv, run the
-same backend module from `webui/backend`, and run `npm install` then `npm run
-dev` in `webui/frontend`. Open `http://127.0.0.1:3100`; it calls the loopback
-API at `http://127.0.0.1:8000` unless `NEXT_PUBLIC_API_URL` is set.
+On Windows, use **PowerShell 7+** (not Windows PowerShell 5.1) to create and
+activate a Python 3.12 venv, run the same backend module from `webui/backend`,
+and run `npm install` then `npm run dev` in `webui/frontend`. The API
+walkthrough also requires PowerShell 7+ because it uses `Invoke-RestMethod
+-Form`. Open `http://127.0.0.1:3100`; it calls the loopback API at
+`http://127.0.0.1:8000` unless `NEXT_PUBLIC_API_URL` is set.
 
 The API stores SQLite data at `MATB_DB_PATH` when it is set; otherwise its
 development default applies. Uploaded blocks and export requests become
@@ -46,9 +48,11 @@ export directory owner-controlled.
 
 ## Offline launcher
 
-On Linux or WSL2, the offline launcher creates the Python environment, builds
-the frontend, and starts both services. It is intended for an offline local
-console, not for an Internet-facing service.
+On Linux or WSL2, the launcher creates the Python environment, builds the
+frontend, and starts both services. Its initial `pip` and `npm` dependency
+installation requires network access or a prepared local package cache/mirror.
+After dependencies and frontend build artifacts are installed, the launched
+service is local and offline-capable; it is not an Internet-facing service.
 
 ```bash
 MATB_VENV="$PWD/.venv-suas" bash scripts/install_suas.sh

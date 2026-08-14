@@ -12,8 +12,10 @@ Consulte la [guía del backend](../../webui/backend/README.md) y la
 ## Instalación en Linux y WSL2
 
 Use Python 3.12 y Node.js 20 o posterior. El lanzador POSIX se ejecuta en Linux
-o WSL2; en Windows ejecútelo dentro de WSL2. PowerShell puede llamar la API de
-loopback una vez que WSL2 hospeda el servicio, pero no sustituye al lanzador.
+o WSL2; en Windows ejecútelo dentro de WSL2. **PowerShell 7+** (no Windows
+PowerShell 5.1) puede llamar la API de loopback una vez que WSL2 hospeda el
+servicio y es la shell compatible para los recorridos publicados. No sustituye
+al lanzador.
 
 ```bash
 MATB_VENV="$PWD/.venv-suas" bash scripts/install_suas.sh
@@ -21,11 +23,14 @@ MATB_VENV="$PWD/.venv-suas" bash scripts/run_suas.sh \
   --data-dir "$PWD/examples/output/suas-service"
 ```
 
-El lanzador inicia FastAPI en `127.0.0.1:8000` y la consola en
-`127.0.0.1:3100`, y guarda SQLite, artefactos sellados y logs bajo el directorio
-propiedad del operador. Termine ambos con `Ctrl-C`. Para un bind fuera de
-loopback defina explícitamente `MATB_FRONTEND_ORIGINS`; el valor por defecto es
-loopback intencionalmente.
+La instalación inicial de dependencias con `pip` y `npm` requiere acceso de red
+o una caché/espejo local preparado. Una vez instaladas las dependencias y los
+artefactos de construcción del frontend, el lanzador inicia un servicio local
+capaz de funcionar sin conexión: FastAPI en `127.0.0.1:8000` y la consola en
+`127.0.0.1:3100`. Guarda SQLite, artefactos sellados y logs bajo el directorio
+propiedad del operador, sin telemetría externa. Termine ambos con `Ctrl-C`.
+Para un bind fuera de loopback defina explícitamente `MATB_FRONTEND_ORIGINS`;
+el valor por defecto es loopback intencionalmente.
 
 Para desarrollo nativo, cree el mismo entorno Python 3.12 desde
 `requirements-dev.txt`; en `webui/backend` ejecute `python -m uvicorn

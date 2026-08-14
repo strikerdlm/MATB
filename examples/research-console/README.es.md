@@ -33,10 +33,12 @@ cd webui/frontend
 npm run dev -- --hostname 127.0.0.1 --port 3100
 ```
 
-En Windows, PowerShell puede crear y activar un entorno Python 3.12, ejecutar
-el módulo del backend desde `webui/backend` y ejecutar `npm install` y `npm run
-dev` desde `webui/frontend`. Abra `http://127.0.0.1:3100`; por defecto consulta
-la API local en `http://127.0.0.1:8000`, salvo que se defina
+En Windows use **PowerShell 7+** (no Windows PowerShell 5.1) para crear y
+activar un entorno Python 3.12, ejecutar el módulo del backend desde
+`webui/backend` y ejecutar `npm install` y `npm run dev` desde
+`webui/frontend`. El recorrido de API también requiere PowerShell 7+ porque
+usa `Invoke-RestMethod -Form`. Abra `http://127.0.0.1:3100`; por defecto
+consulta la API local en `http://127.0.0.1:8000`, salvo que se defina
 `NEXT_PUBLIC_API_URL`.
 
 `MATB_DB_PATH` selecciona el archivo SQLite cuando está definido. Las cargas y
@@ -46,7 +48,10 @@ directorios controlados por el propietario.
 ## Lanzador sin conexión
 
 En Linux o WSL2, el lanzador crea el entorno, construye el frontend e inicia
-ambos servicios locales:
+ambos servicios locales. La instalación inicial de dependencias con `pip` y
+`npm` requiere acceso de red o una caché/espejo local preparado. Tras instalar
+las dependencias y los artefactos de construcción, el servicio lanzado es local
+y capaz de funcionar sin conexión:
 
 ```bash
 MATB_VENV="$PWD/.venv-suas" bash scripts/install_suas.sh

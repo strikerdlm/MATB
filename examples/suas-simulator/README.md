@@ -13,8 +13,10 @@ contracts.
 ## Linux and WSL2 installation
 
 Use Python 3.12 and Node.js 20 or later. The POSIX launcher belongs on Linux
-or WSL2; on Windows, run it inside WSL2. PowerShell may call the loopback API
-after WSL2 hosts the service, but it does not replace the launcher.
+or WSL2; on Windows, run it inside WSL2. **PowerShell 7+** (not Windows
+PowerShell 5.1) may call the loopback API after WSL2 hosts the service and is
+the supported shell for the published walkthroughs. It does not replace the
+launcher.
 
 ```bash
 MATB_VENV="$PWD/.venv-suas" bash scripts/install_suas.sh
@@ -22,11 +24,14 @@ MATB_VENV="$PWD/.venv-suas" bash scripts/run_suas.sh \
   --data-dir "$PWD/examples/output/suas-service"
 ```
 
-The launcher starts FastAPI on `127.0.0.1:8000` and the browser console on
-`127.0.0.1:3100`, placing the SQLite database, sealed artifacts, and logs below
-the owner-only data directory. Press `Ctrl-C` for coordinated teardown. For a
-non-loopback bind, explicitly set `MATB_FRONTEND_ORIGINS`; loopback defaults
-are intentional.
+Initial `pip` and `npm` dependency installation requires network access or a
+prepared local package cache/mirror. Once dependencies and frontend build
+artifacts are installed, the launcher starts an offline-capable local service:
+FastAPI on `127.0.0.1:8000` and the browser console on `127.0.0.1:3100`. It
+places the SQLite database, sealed artifacts, and logs below the owner-only
+data directory, without external telemetry. Press `Ctrl-C` for coordinated
+teardown. For a non-loopback bind, explicitly set `MATB_FRONTEND_ORIGINS`;
+loopback defaults are intentional.
 
 For native development, create the same Python 3.12 venv from
 `requirements-dev.txt`, run `python -m uvicorn app.main:app --host 127.0.0.1
