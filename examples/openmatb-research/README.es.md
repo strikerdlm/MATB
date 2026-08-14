@@ -9,8 +9,8 @@ ejemplo no lo incluye ni lo invoca.
 
 ## Instalar el entorno de investigación seleccionado
 
-El recorrido importa SciPy mediante el ajustador Suhir DEPDF y los comandos de
-continuación usan el stack estadístico. Instale `requirements-dev.txt`, que
+El recorrido importa SciPy mediante el ajustador DEPDF de Suhir y los comandos de
+continuación usan el conjunto de herramientas estadísticas. Instale `requirements-dev.txt`, que
 incluye las dependencias base y de análisis, en un entorno local al clon.
 
 ```bash
@@ -44,8 +44,8 @@ $Python = Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe"
 ```
 
 También puede definir `MATB_PYTHON` y usar el lanzador nativo; su primer
-argumento opcional es el directorio de salida. El wrapper valida el ejecutable
-seleccionado y, sin override, usa `python3` en Bash o `python` en PowerShell.
+argumento opcional es el directorio de salida. El envoltorio valida el ejecutable
+seleccionado y, sin un valor de sustitución, usa `python3` en Bash o `python` en PowerShell.
 
 ```bash
 REPO_ROOT="$(pwd)"
@@ -75,13 +75,13 @@ discrepancia detiene el recorrido antes de escribir un ajuste.
 
 ## Qué muestran las sesiones sintéticas
 
-`fixtures/low.csv`, `medium.csv` y `high.csv` usan la cabecera del conversor de
+`fixtures/low.csv`, `medium.csv` y `high.csv` usan el encabezado del conversor de
 OpenMATB y no contienen datos de participantes. Varían progresivamente el
 tiempo de respuesta y los errores SYSMON, ISA `Workload` y los seis campos
 NASA-TLX: `Mental demand`, `Physical demand`, `Time pressure`, `Performance`,
 `Effort` y `Frustration`.
 
-Cada fixture se convierte con `matb_integration.log_converter.convert_session`.
+Cada recurso se convierte con `matb_integration.log_converter.convert_session`.
 Las filas originales analizadas se conservan para el ajustador DEPDF, porque su
 criterio actual de fallo deriva el tiempo hasta el fallo de eventos SYSMON
 `MISS` observados. Los tres niveles incluyen al menos un error determinista.

@@ -2,16 +2,18 @@
 
 [English](README.md)
 
-Este recorrido local y sintético usa solamente `SYNTH-P01` y el fixture LOW
-incluido. No representa a una persona ni un despliegue operativo. Para detalle
-de endpoints y pantallas consulte la [guía del backend](../../webui/backend/README.md)
-y la [guía del frontend](../../webui/frontend/README.md).
+Este es un recorrido local y sintético de la consola de investigación FastAPI.
+Usa únicamente `SYNTH-P01` y el recurso LOW confirmado en el repositorio; no es
+un registro de participante ni un despliegue operacional. Para conocer los
+detalles de endpoints y pantallas, consulte la
+[guía del backend](../../webui/backend/README.md) y la
+[guía del frontend](../../webui/frontend/README.md).
 
 ## Requisitos y desarrollo nativo
 
-Se requieren Python 3.12 y Node.js 20 o posterior. En la raíz cree el entorno
-Python e instale dependencias; después instale las dependencias Node del
-frontend:
+Use Python 3.12 y Node.js 20 o posterior. Desde la raíz del repositorio, cree
+un venv e instale las dependencias del backend; después instale las dependencias
+Node del frontend:
 
 ```bash
 python3 -m venv .venv-suas
@@ -20,8 +22,8 @@ cd webui/frontend
 npm install
 ```
 
-Ejecute la API y la UI en terminales separadas. Los puertos por defecto son
-8000 (API) y 3100 (frontend).
+Ejecute la API en una terminal y la UI del navegador en otra. El puerto
+predeterminado de la API es 8000 y el del frontend es 3100.
 
 ```bash
 cd webui/backend
@@ -41,17 +43,20 @@ usa `Invoke-RestMethod -Form`. Abra `http://127.0.0.1:3100`; por defecto
 consulta la API local en `http://127.0.0.1:8000`, salvo que se defina
 `NEXT_PUBLIC_API_URL`.
 
-`MATB_DB_PATH` selecciona el archivo SQLite cuando está definido. Las cargas y
-exportaciones quedan en la base y en un ZIP descargado; conserve estos datos en
-directorios controlados por el propietario.
+La API almacena datos SQLite en `MATB_DB_PATH` cuando está definido; de lo
+contrario se aplica su valor predeterminado de desarrollo. Los bloques cargados
+y las solicitudes de exportación se convierten, respectivamente, en filas de
+la base de datos y un ZIP descargado. Mantenga cada base de datos de estudio y
+directorio de exportación bajo el control del propietario.
 
 ## Lanzador sin conexión
 
-En Linux o WSL2, el lanzador crea el entorno, construye el frontend e inicia
-ambos servicios locales. La instalación inicial de dependencias con `pip` y
-`npm` requiere acceso de red o una caché/espejo local preparado. Tras instalar
-las dependencias y los artefactos de construcción, el servicio lanzado es local
-y capaz de funcionar sin conexión:
+En Linux o WSL2, el lanzador crea el entorno Python, compila el frontend e
+inicia ambos servicios. La instalación inicial de dependencias con `pip` y
+`npm` requiere acceso a la red o una caché/espejo local de paquetes preparado.
+Después de instalar las dependencias y los artefactos de compilación del
+frontend, el servicio iniciado es local y capaz de funcionar sin conexión; no
+es un servicio expuesto a Internet.
 
 ```bash
 MATB_VENV="$PWD/.venv-suas" bash scripts/install_suas.sh
@@ -59,14 +64,17 @@ MATB_VENV="$PWD/.venv-suas" bash scripts/run_suas.sh \
   --data-dir "$PWD/examples/output/research-console-service"
 ```
 
-Usa 8000 y 3100 en loopback. Termine ordenadamente con `Ctrl-C`. Para un bind
-que no sea loopback, defina antes `MATB_FRONTEND_ORIGINS` con orígenes
-explícitos; no exponga el servicio de desarrollo por accidente.
+El lanzador usa de forma predeterminada los puertos 8000 y 3100 en loopback.
+Presione `Ctrl-C` en su terminal para una detención ordenada. Si elige un enlace
+que no sea loopback, configure primero un valor explícito de
+`MATB_FRONTEND_ORIGINS`; no exponga involuntariamente el servicio de desarrollo
+predeterminado.
 
 ## Recorrido de API
 
-Con un servicio local iniciado, ejecute desde la raíz. `BASE_URL` y
-`OUTPUT_DIR` cambian la dirección y el directorio del ZIP.
+Inicie primero cualquiera de los servicios locales y después ejecute uno de
+estos comandos desde la raíz del repositorio. `BASE_URL` y `OUTPUT_DIR`
+sustituyen la dirección loopback y el directorio de salida del ZIP.
 
 ```bash
 BASE_URL=http://127.0.0.1:8000 OUTPUT_DIR=/tmp/matb-console \
@@ -77,22 +85,33 @@ BASE_URL=http://127.0.0.1:8000 OUTPUT_DIR=/tmp/matb-console \
 .\examples\research-console\api_walkthrough.ps1 -BaseUrl http://127.0.0.1:8000 -OutputDir C:\Temp\matb-console
 ```
 
-El recorrido verifica salud, crea `SYNTH-P01` si falta, carga
-`fixtures/low.csv` como visita 1/LOW, consulta tracker y contexto, y escribe
-`research-bundle.zip`. Repetirlo en la misma base puede devolver 409: la
-creación del participante se detecta, pero el SHA-256 duplicado y una celda
-visita/nivel ya ocupada se rechazan intencionalmente. Use un `MATB_DB_PATH`
-nuevo o limpie el directorio de datos de este ejemplo antes de repetir la carga.
+El recorrido comprueba la salud, crea `SYNTH-P01` solo cuando no existe, carga
+`fixtures/low.csv` como visita 1/LOW, consulta el seguimiento y el contexto de
+investigación, y escribe `research-bundle.zip`. Repetirlo contra la misma base
+de datos puede devolver 409: se detecta la creación del participante, pero se
+rechazan deliberadamente un SHA-256 de CSV duplicado y una celda de
+visita/carga de trabajo ya ocupada. Limpie el directorio de datos del ejemplo
+(o use un `MATB_DB_PATH` nuevo) antes de repetir una ingesta completa.
 
-La carga omite a propósito el manifiesto. Se acepta como `missing_manifest`; un
-manifiesto malformado o inconsistente conserva sus problemas de validación. Un
-solo bloque no es una visita completa ni un conjunto de análisis.
+La carga omite deliberadamente un manifiesto de escenario. Esto se acepta y se
+muestra como `missing_manifest`; un manifiesto malformado o no coincidente se
+conserva con problemas de validación en vez de aceptarse silenciosamente. No
+interprete el recorrido de una sola fila como una visita completa ni como un
+conjunto de datos de análisis.
 
 ## Navegador y limpieza
 
-Con el frontend en 3100, abra `/` (tracker), `/upload`, `/visualization`,
-`/analysis` (análisis frecuentista, bayesiano y exportación), `/screen` y
-`/participants`. Compruebe la API con `GET /health`. Detenga cada proceso con
-`Ctrl-C`; para reiniciar, elimine únicamente la base SQLite o directorio de
-datos dedicado al ejemplo después de detener los servicios, nunca una base de
+Con el frontend en el puerto 3100, visite:
+
+- `http://127.0.0.1:3100/` para el seguimiento;
+- `/upload` para ingerir el CSV y el manifiesto opcional;
+- `/visualization` para gráficos descriptivos;
+- `/analysis` para el análisis frecuentista y bayesiano y la exportación del paquete de investigación;
+- `/screen` para la evaluación inicial; y
+- `/participants` para las identidades seudonimizadas del estudio.
+
+Use `GET /health` (o la primera solicitud del recorrido) para comprobar la API.
+Detenga el desarrollo nativo con `Ctrl-C` en cada terminal. Para restablecer este
+ejemplo, detenga los servicios y elimine únicamente el directorio de datos del
+ejemplo seleccionado o su archivo SQLite dedicado; nunca una base de datos de
 estudio compartida.

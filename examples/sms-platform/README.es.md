@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-Este recorrido ejecutable usa los límites públicos y compilados de los paquetes FAC ISR SMS con datos sintéticos. Imprime un único documento JSON determinista. No inicia un servicio, no comanda una aeronave, no aprueba una misión, no registra una decisión institucional ni establece alistamiento operacional. El requisito duro deliberadamente incompleto mantiene `safetyKernel.status` bloqueado y el evento de investigación permanece no despachable.
+Este recorrido ejecutable usa los límites públicos y compilados de los paquetes FAC ISR SMS con datos sintéticos. Imprime un único documento JSON determinista. No inicia un servicio, no comanda una aeronave, no aprueba una misión, no registra una decisión institucional ni establece preparación operacional. El requisito duro deliberadamente incompleto mantiene `safetyKernel.status` bloqueado y el evento de investigación conserva `nonDispatchable=true`.
 
 ## Prerrequisitos e inicio rápido
 
@@ -107,7 +107,7 @@ npm run verify:no-c2
 npm run verify:data-separation
 ```
 
-`build:offline` compila/prueba el espacio y la imagen Linux, y reúne OCI, SBOM, evidencia de aceptación e inventarios en un paquete transferible. Requiere un daemon Docker, dependencias fijadas y la imagen base disponibles durante la construcción; “fuera de línea” describe el runtime/traspaso producido, no promete que la construcción carezca de insumos previamente preparados. `verify:offline` valida estructura, hashes, imagen, flujo de aceptación y contrato sin red. `verify:evidence-offline` requiere un valor UTC explícito y determinista en `SMS_EVIDENCE_VERIFY_AS_OF`. Las verificaciones sin C2 y de separación no conceden alistamiento.
+`build:offline` compila/prueba el espacio y la imagen Linux, y reúne OCI, SBOM, evidencia de aceptación e inventarios en un paquete transferible. Requiere un daemon Docker, dependencias fijadas y la imagen base disponibles durante la construcción; “fuera de línea” describe el runtime/traspaso producido, no promete que la construcción carezca de insumos previamente preparados. `verify:offline` valida estructura, hashes, imagen, flujo de aceptación y contrato sin red. `verify:evidence-offline` requiere un valor UTC explícito y determinista en `SMS_EVIDENCE_VERIFY_AS_OF`. Las verificaciones sin C2 y de separación no conceden preparación operacional.
 
 ## Herramientas de mapas e investigación
 
@@ -146,14 +146,14 @@ npm run verify:acceptance
 npm run verify:all
 ```
 
-La lista identifica los scripts; los flujos parametrizados aún requieren argumentos. `release:manifest` requiere `-- --version <x.y.z>` igual a `SMS/package.json` y genera SBOM, escaneo de seguridad e informe de pruebas antes del manifiesto canónico. `release:sign` requiere un identificador institucional y una entrada de firma externa; solo el custodio autorizado debe ejecutarlo. `release:verify` comprueba integridad y reporta el alistamiento por separado. Nunca cree material de demostración ni confirme material controlado.
+La lista identifica los scripts; los flujos parametrizados aún requieren argumentos. `release:manifest` requiere `-- --version <x.y.z>` igual a `SMS/package.json` y genera SBOM, escaneo de seguridad de la información e informe de pruebas antes del manifiesto canónico. `release:sign` requiere un identificador institucional y una entrada de firma externa; solo el custodio autorizado debe ejecutarlo. `release:verify` comprueba integridad y reporta la preparación operacional por separado. Nunca cree material de demostración ni confirme material controlado.
 
-`verify:matrix` ejecuta la matriz de evidencia y escribe deliberadamente un informe cuyo alistamiento permanece falso aunque pasen todos los requisitos técnicos. `acceptance:packets` requiere `-- --output <directorio-vacío> --as-of <UTC-exacto>` y opcionalmente un `--scope` aprobado; genera paquetes deterministas no firmados fuera de `SMS/docs/release`. Esos paquetes no son decisiones.
+`verify:matrix` ejecuta la matriz de evidencia y escribe deliberadamente un informe con `operationalReady=false` aunque pasen todos los requisitos técnicos. `acceptance:packets` requiere `-- --output <directorio-vacío> --as-of <UTC-exacto>` y opcionalmente un `--scope` aprobado; genera paquetes deterministas no firmados fuera de `SMS/docs/release`. Esos paquetes no son decisiones.
 
 `acceptance:record` se omite deliberadamente del bloque masivo porque no es una verificación automatizada rutinaria. Su simulación requiere un paquete vigente y una decisión institucional controlada suministrada por una persona; aplicar el registro es una acción mutante separada. Nunca rellene una plantilla con revisores, aprobaciones, tiempos, evidencia o resultados inventados. Revisores institucionales calificados deben resolver los ámbitos RACAE/traducción, lista operacional, autoridad de riesgo, emergencias, ciberseguridad/despliegue, datos geográficos oficiales, factores humanos, separación de investigación y formación/promoción de seguridad.
 
-`verify:acceptance` valida la evidencia registrada a una fecha UTC explícita; `--require-ready` es una compuerta estricta opcional. `verify:all` combina tipos, lint, matriz y aceptación. Una compilación, pruebas, matriz, integridad de liberación o generación de paquetes satisfactoria puede coexistir con alistamiento falso. Solo el flujo institucional humano controlado puede cambiar ese estado.
+`verify:acceptance` valida la evidencia registrada a una fecha UTC explícita; `--require-ready` es una compuerta estricta opcional. `verify:all` combina tipos, lint, matriz y aceptación. Una compilación, pruebas, matriz, integridad de liberación o generación de paquetes satisfactoria puede coexistir con `operationalReady=false`. Solo el flujo institucional humano controlado puede cambiar ese estado.
 
-## Interpretación de seguridad
+## Interpretación de seguridad operacional
 
 Este recorrido es educación sintética para revisores. “Pass” solo indica que un contrato determinista aceptó sus hechos sintéticos. “Blocked”, “unknown”, “expired” e “incomplete” son resultados esperados cuando faltan evidencia, vigencia, autoridad o aceptación humana. Nada del JSON es instrucción de despacho, ruta C2, hallazgo de aeronavegabilidad, hallazgo médico ni autorización de vuelo.

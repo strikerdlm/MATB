@@ -25,6 +25,11 @@ from scripts.verify_documentation import (
 )
 
 
+@pytest.fixture
+def repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
 def test_english_guide_has_complete_information_architecture() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     text = (repo_root / "README.md").read_text(encoding="utf-8")
@@ -263,6 +268,23 @@ def test_translated_headings_share_stable_anchor_order(tmp_path: Path) -> None:
     assert compare_root_anchors(en, es) == []
     es.write_text('<a id="different"></a>\n## Identidad\n', encoding="utf-8")
     assert compare_root_anchors(en, es)
+
+
+def test_root_guides_are_structurally_mirrored(repo_root: Path) -> None:
+    assert compare_root_anchors(repo_root / "README.md", repo_root / "README.es.md") == []
+
+
+def test_each_workflow_has_a_spanish_guide(repo_root: Path) -> None:
+    for workflow in (
+        "openmatb-research",
+        "research-console",
+        "suas-simulator",
+        "sms-platform",
+        "legacy-monitor",
+    ):
+        directory = repo_root / "examples" / workflow
+        assert (directory / "README.md").is_file()
+        assert (directory / "README.es.md").is_file()
 
 
 def test_committed_examples_reject_secrets_and_false_readiness(tmp_path: Path) -> None:

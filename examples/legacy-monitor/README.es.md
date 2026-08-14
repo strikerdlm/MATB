@@ -39,7 +39,7 @@ investigación.
 
 Las ejecuciones correctas imprimen `Simulation complete!`. Presione Ctrl-C
 para detener una ejecución; la aplicación informa que fue terminada por el
-usuario y retorna normalmente.
+usuario y finaliza con normalidad.
 
 Inspeccione un directorio de salida de experimento antes de conservar o
 compartir cualquier archivo:

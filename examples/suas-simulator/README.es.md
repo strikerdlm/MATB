@@ -57,7 +57,9 @@ graba `SYNTH-SUAS-01` y verifica exactamente el directorio del primer argumento.
 El grabador escribe directamente allí `events.jsonl`, `manifest.json`,
 `metrics.json`, `debrief.json`, `replay-verification.json` y
 `checksums.sha256`: no adivina ni busca una carpeta de sesión anidada. Seleccione
-un directorio vacío; para reiniciar elimine solo ese directorio de demostración.
+un directorio vacío: la grabación rechaza un directorio de salida que no esté
+vacío. Para restablecer el ejemplo, elimine solo ese directorio de demostración
+seleccionado.
 
 ## Recorrido de API solo de ciclo de vida
 
