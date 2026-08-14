@@ -129,7 +129,7 @@ logtime,totaltime,scenario_time,type,module,address,value
 14307.620911,150.088269,150.071739,manual,,,end
 ```
 
-Details about how each module log information are available [here](the log file).
+Details about the information logged by each module are available in the log file.
 
 ## Tutorials
 

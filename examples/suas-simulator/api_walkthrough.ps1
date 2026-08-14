@@ -29,5 +29,6 @@ Invoke-RestMethod -Method Post -Uri "$BaseUrl/simulation/sessions/$sessionId/fin
     -ContentType "application/json" -Body '{"disposition":"complete"}' | Out-Host
 Invoke-RestMethod -Uri "$BaseUrl/simulation/sessions/$sessionId/debrief" | Out-Host
 Invoke-RestMethod -Uri "$BaseUrl/simulation/sessions/$sessionId/artifacts" | Out-Host
+Clear-Variable headers
 Clear-Variable controllerLeaseValue
 Clear-Variable controllerHeaderName

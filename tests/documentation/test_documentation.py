@@ -86,6 +86,17 @@ def test_openmatb_powershell_wrapper_uses_selected_python() -> None:
     assert re.search(r"&\s+\$Python\s+.*run_example\.py", text)
 
 
+def test_suas_powershell_walkthrough_clears_lease_bearing_headers() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    text = (repo_root / "examples/suas-simulator/api_walkthrough.ps1").read_text(
+        encoding="utf-8"
+    )
+    last_header_use = text.rindex("-Headers $headers")
+    clear_headers = text.index("Clear-Variable headers")
+    clear_lease = text.index("Clear-Variable controllerLeaseValue")
+    assert last_header_use < clear_headers < clear_lease
+
+
 def test_suas_cli_wrapper_uses_matb_venv_python(tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parents[2]
     invocation_log = tmp_path / "suas-python.log"
