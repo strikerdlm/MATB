@@ -66,6 +66,7 @@ def test_frontend_local_commands_are_checked_against_frontend_context(tmp_path: 
     docs = tmp_path / "README.md"
     docs.write_text("```bash\ncd SMS/apps/console\nnpm run dev\nnpm run typo\n```\n", encoding="utf-8")
     errors = validate_command_contracts(tmp_path)
+    assert not any("unknown local package script: dev" in error for error in errors)
     assert any("unknown local package script: typo" in error for error in errors)
 
 
@@ -123,6 +124,32 @@ def test_safety_ignores_explanatory_markdown_prohibitions(tmp_path: Path) -> Non
         encoding="utf-8",
     )
     assert find_safety_violations([guide]) == []
+
+
+def test_safety_rejects_provider_prefixed_credential_and_token_fields(tmp_path: Path) -> None:
+    bad = tmp_path / "provider-credentials.json"
+    bad.write_text(
+        '{"openai_api_key":"sk-live-123", "github_personal_access_token":"ghp_123", '
+        '"stripe_secret_key":"whsec_123"}',
+        encoding="utf-8",
+    )
+    errors = find_safety_violations([bad])
+    assert any("credential" in error.lower() or "token" in error.lower() for error in errors)
+
+
+def test_safety_rejects_generalized_signed_state_but_allows_unsigned_values(tmp_path: Path) -> None:
+    for filename, payload in (
+        ("is-signed.json", '{"isSigned": true}'),
+        ("signed-yes.json", '{"signed": "yes"}'),
+    ):
+        bad = tmp_path / filename
+        bad.write_text(payload, encoding="utf-8")
+        errors = find_safety_violations([bad])
+        assert any("unsigned" in error.lower() or "signed" in error.lower() for error in errors)
+
+    safe = tmp_path / "unsigned.json"
+    safe.write_text('{"isSigned": false, "signed": "no", "signature": null}', encoding="utf-8")
+    assert find_safety_violations([safe]) == []
 
 
 def test_verify_repository_checks_complete_contract_in_a_temporary_root(tmp_path: Path) -> None:

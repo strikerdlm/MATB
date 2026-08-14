@@ -294,6 +294,20 @@ def _field_value(raw: str) -> str:
     return raw.strip().strip("\"'").strip()
 
 
+def _is_credential_field(field: str) -> bool:
+    compact = field.replace("_", "")
+    markers = (
+        "apikey", "apitoken", "accesstoken", "authtoken", "bearer", "bearertoken",
+        "clientsecret", "credential", "credentials", "password", "passwd", "secret", "token",
+    )
+    return any(marker in compact for marker in markers)
+
+
+def _is_signed_state_field(field: str) -> bool:
+    compact = field.replace("_", "")
+    return compact in {"signed", "issigned", "signaturepresent", "issignaturepresent", "hassignature"}
+
+
 def _is_placeholder(value: str) -> bool:
     normalized = value.strip().lower()
     return (
@@ -334,6 +348,7 @@ def find_safety_violations(example_files: list[Path]) -> list[str]:
         "lease", "controller_lease", "controllerlease", "simulation_controller", "simulationcontroller",
         "x_simulation_controller", "xsimulationcontroller",
     }
+    signed_truthy = {"true", "yes", "y", "1", "on", "signed", "present"}
     errors: list[str] = []
     for path in example_files:
         if not path.is_file():
@@ -364,7 +379,7 @@ def find_safety_violations(example_files: list[Path]) -> list[str]:
                     errors.append(f"{path}: operationalReady must be false")
             if field in {"private_key", "privatekey"} and not _is_placeholder(value):
                 errors.append(f"{path}: prohibited private key field")
-            if field in credential_fields and not _is_placeholder(value):
+            if (field in credential_fields or _is_credential_field(field)) and not _is_placeholder(value):
                 errors.append(f"{path}: prohibited credential or token field: {field}")
             if field in pii_fields and not _is_placeholder(value):
                 errors.append(f"{path}: prohibited PII-like identity field: {field}")
@@ -372,7 +387,7 @@ def find_safety_violations(example_files: list[Path]) -> list[str]:
                 errors.append(f"{path}: prohibited institutional signature field: {field}")
             if field in lease_fields and not _is_placeholder(value):
                 errors.append(f"{path}: prohibited controller lease field: {field}")
-            if field == "signed" and normalized_value == "true":
+            if _is_signed_state_field(field) and normalized_value in signed_truthy:
                 errors.append(f"{path}: acceptance asset must remain unsigned")
         if _is_acceptance_asset(path) and (not readiness_found or not readiness_false):
             errors.append(f"{path}: acceptance asset must declare operationalReady=false")
