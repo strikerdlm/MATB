@@ -1,0 +1,11 @@
+scenario_time,type,module,address,value
+10.0,performance,sysmon,signal_detection,HIT
+10.1,performance,sysmon,response_time,800
+25.3,performance,sysmon,signal_detection,MISS
+90.0,performance,genericscales,Workload,3
+900.0,performance,genericscales,Mental demand,5
+900.0,performance,genericscales,Physical demand,2
+900.0,performance,genericscales,Time pressure,5
+900.0,performance,genericscales,Performance,5
+900.0,performance,genericscales,Effort,5
+900.0,performance,genericscales,Frustration,3

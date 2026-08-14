@@ -51,7 +51,7 @@ evidenceStatus: "candidate-context-only"
    - 5.4 Operational Categories Alignment
    - 5.5 Which Jurisdiction Is More Restrictive?
 6. [Key Findings and Observations](#6-key-findings-and-observations)
-7. [Recommendations from ICAO and JARUS on Medical Standards](#7-recommendations-from-icao-and-jarus-on-medical-standards)
+7. [Recommendations from ICAO and JARUS on Medical Standards](#7-recommendations-from-icao-and-jarus-on-medical-standards-for-rpas-operators)
 8. [Conclusion](#8-conclusion)
 9. [References (APA 7th Edition)](#9-references-apa-7th-edition)
 
