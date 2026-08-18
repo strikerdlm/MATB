@@ -154,7 +154,7 @@ export function LiftoffSetupForm({
           </Button>
         </CardContent>
       </Card>
-      <aside className="space-y-4">
+      <aside aria-label="Liftoff readiness" className="space-y-4">
         <div className={`mission-panel p-5 ${readiness?.ready ? "border-success/40" : "border-warning/40"}`}>
           <div className="flex items-center gap-2">
             {readiness?.ready ? <CheckCircle2 className="h-5 w-5 text-success" /> : <Radio className="h-5 w-5 text-warning" />}
