@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from sqlalchemy.engine import Engine
 from sqlmodel import Field, Session, SQLModel
 
@@ -13,6 +15,19 @@ class StudyMetadata(SQLModel, table=True):
     protocol_id: str
     protocol_version: str
     schedule_sha256: str
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class StudyParticipantContext(SQLModel, table=True):
+    participant_id: str = Field(foreign_key="participant.id", primary_key=True)
+    protocol_id: str
+    task_sequence: str
+    prior_fpv_hours: float = Field(ge=0)
+    gaming_hours_per_week: float = Field(ge=0)
+    created_at: datetime = Field(default_factory=_utcnow)
 
 
 def ensure_study_binding(engine: Engine, protocol: StudyProtocolDefinition) -> None:

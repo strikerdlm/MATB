@@ -65,6 +65,37 @@ async def test_prepare_unknown_identity_and_path_safe_scenario(simulation_client
 
 
 @pytest.mark.anyio
+async def test_prepare_transport_allows_legacy_ordinal_but_runtime_requires_visit(
+    simulation_client,
+    seeded_participant,
+) -> None:
+    client, _manager = simulation_client
+
+    legacy_ordinal = await client.post(
+        "/simulation/sessions",
+        json={
+            "participant_id": "P01",
+            "visit_ordinal": 16,
+            "scenario_id": "reference_area_search",
+            "locale": "en",
+        },
+    )
+    outside_transport_bound = await client.post(
+        "/simulation/sessions",
+        json={
+            "participant_id": "P01",
+            "visit_ordinal": 17,
+            "scenario_id": "reference_area_search",
+            "locale": "en",
+        },
+    )
+
+    assert legacy_ordinal.status_code == 404
+    assert legacy_ordinal.json()["detail"]["code"] == "visit_not_found"
+    assert outside_transport_bound.status_code == 422
+
+
+@pytest.mark.anyio
 async def test_prepare_start_command_state_flow(simulation_client, seeded_participant) -> None:
     client, manager = simulation_client
     prepared = await _prepare(client)

@@ -50,6 +50,9 @@ class SyncASGIClient:
     def post(self, url: str, **kwargs) -> httpx.Response:
         return self.request("POST", url, **kwargs)
 
+    def put(self, url: str, **kwargs) -> httpx.Response:
+        return self.request("PUT", url, **kwargs)
+
 
 @pytest.fixture
 def anyio_backend():
@@ -79,6 +82,7 @@ def engine_fixture():
     )
     import app.models  # noqa: F401  (register tables)
     import app.simulation_models  # noqa: F401  (register simulation tables)
+    import app.study_models  # noqa: F401  (register study metadata/context tables)
     SQLModel.metadata.create_all(engine)
     yield engine
 

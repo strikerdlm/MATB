@@ -7,6 +7,7 @@ from sqlmodel import Session, select
 from matb_integration.suhir.calibration import synth_tau
 from app.ingestion import ingest_csv
 from app.models import DepdfFit, Participant, Visit
+from app.study_protocol import get_protocol
 
 # Ground truth for a guaranteed-valid Suhir fit (mirrors the suhir pipeline test).
 G0_TRUE, P0_TRUE, TAU0_TRUE = 40.0, 0.99, 12.0
@@ -16,8 +17,14 @@ LEVEL_MWL = {"LOW": 44.0, "MEDIUM": 60.0, "HIGH": 80.0}
 def _enroll(engine):
     with Session(engine) as s:
         s.add(Participant(id="P01", enrollment_date=date(2026, 6, 1)))
-        for ordinal, day in enumerate((0, 3, 6, 9, 12, 15), start=1):
-            s.add(Visit(participant_id="P01", visit_ordinal=ordinal, scheduled_day=day))
+        for definition in get_protocol("astra-2026").visits:
+            s.add(
+                Visit(
+                    participant_id="P01",
+                    visit_ordinal=definition.ordinal,
+                    scheduled_day=definition.scheduled_day,
+                )
+            )
         s.commit()
 
 

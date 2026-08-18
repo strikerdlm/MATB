@@ -1,6 +1,6 @@
-"""Derive the expected-vs-actual study completeness grid.
+"""Derive the expected-vs-actual OpenMATB completeness grid.
 
-The expected grid = enrolled participants × 6 visits × 3 workload levels.
+The expected grid = enrolled participants × active protocol visits × 3 workload levels.
 Each cell is present (a Block row exists for that visit+level) or
 expected-but-absent. Nothing about missingness is stored; it is derived.
 """
@@ -11,7 +11,7 @@ from typing import Any
 
 from sqlmodel import Session, select
 
-from app.constants import SCHEDULED_DAYS, WORKLOAD_LEVELS
+from app.constants import WORKLOAD_LEVELS, protocol_visits
 from app.models import Block, Participant, Visit
 
 
@@ -27,14 +27,14 @@ def build_completeness_grid(session: Session) -> list[dict[str, Any]]:
 
     grid: list[dict[str, Any]] = []
     for p in participants:
-        for ordinal, day in enumerate(SCHEDULED_DAYS, start=1):
-            visit = visit_by_key.get((p.id, ordinal))
+        for definition in protocol_visits():
+            visit = visit_by_key.get((p.id, definition.ordinal))
             have = present_levels.get(visit.id, set()) if visit else set()
             for level in WORKLOAD_LEVELS:
                 grid.append({
                     "participant_id": p.id,
-                    "visit_ordinal": ordinal,
-                    "scheduled_day": day,
+                    "visit_ordinal": definition.ordinal,
+                    "scheduled_day": definition.scheduled_day,
                     "workload_level": level,
                     "present": level in have,
                 })
