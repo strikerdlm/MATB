@@ -81,6 +81,7 @@ def engine_fixture():
         poolclass=StaticPool,
     )
     import app.models  # noqa: F401  (register tables)
+    import app.liftoff_models  # noqa: F401  (register Liftoff metadata tables)
     import app.simulation_models  # noqa: F401  (register simulation tables)
     import app.study_models  # noqa: F401  (register study metadata/context tables)
     SQLModel.metadata.create_all(engine)
