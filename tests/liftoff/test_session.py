@@ -165,3 +165,14 @@ def test_prepare_rejects_nonempty_directory_and_configuration_mismatch(tmp_path)
     with pytest.raises(SessionLifecycleError, match="configuration_hash_mismatch"):
         LiftoffSessionRecorder.prepare(tmp_path / "bad", manifest=bad_manifest)
     assert not (tmp_path / "bad").exists()
+
+
+def test_result_screen_uses_fixed_name_derived_from_image_magic(tmp_path):
+    recorder = LiftoffSessionRecorder.prepare(tmp_path, manifest=manifest())
+
+    recorder.attach_results(visible_results(), screenshot=b"\xff\xd8\xffsynthetic-jpeg")
+    artifacts = recorder.seal_partial("test_stop")
+
+    assert (tmp_path / "result-screen.jpg").is_file()
+    assert not (tmp_path / "result-screen.png").exists()
+    assert any(artifact.path.name == "result-screen.jpg" for artifact in artifacts)

@@ -39,6 +39,7 @@ LIFTOFF_PROFILE = ArtifactProfile(
     sealed_names=(
         "results.json",
         "result-screen.png",
+        "result-screen.jpg",
         "questionnaires.json",
         "physiology-link.json",
         "telemetry-quality.json",
@@ -55,6 +56,7 @@ _ARTIFACT_KINDS = {
     "markers.jsonl": "markers",
     "results.json": "visible_results",
     "result-screen.png": "result_screen",
+    "result-screen.jpg": "result_screen",
     "questionnaires.json": "questionnaires",
     "physiology-link.json": "physiology_link",
     "telemetry-quality.json": "telemetry_quality",
@@ -322,7 +324,16 @@ class LiftoffSessionRecorder:
         if screenshot is not None:
             if not isinstance(screenshot, bytes) or not screenshot:
                 raise SessionLifecycleError("invalid_result_screen")
-            self._write_bytes_once("result-screen.png", screenshot)
+            if screenshot.startswith(b"\x89PNG\r\n\x1a\n"):
+                screenshot_name = "result-screen.png"
+            elif screenshot.startswith(b"\xff\xd8\xff"):
+                screenshot_name = "result-screen.jpg"
+            else:
+                raise SessionLifecycleError("invalid_result_screen")
+            other_name = "result-screen.jpg" if screenshot_name.endswith(".png") else "result-screen.png"
+            if (self.run_dir / other_name).exists():
+                raise SessionLifecycleError("artifact_immutable:result-screen")
+            self._write_bytes_once(screenshot_name, screenshot)
             self._result_screen = screenshot
         self._results = results
         return self.run_dir / "results.json"

@@ -38,10 +38,13 @@ class SQLModelLiftoffPersistence:
     def __init__(self, engine: Any) -> None:
         self.engine = engine
 
-    def insert_session(self, row: LiftoffSession) -> None:
+    def insert_session(self, row: LiftoffSession) -> LiftoffSession:
         with Session(self.engine) as db:
             db.add(row)
             db.commit()
+            db.refresh(row)
+            db.expunge(row)
+            return row
 
     def load_session(self, session_id: str) -> LiftoffSession | None:
         with Session(self.engine) as db:
@@ -50,6 +53,25 @@ class SQLModelLiftoffPersistence:
                 return None
             db.expunge(row)
             return row
+
+    def load_result(self, session_id: str) -> LiftoffResult | None:
+        with Session(self.engine) as db:
+            row = db.get(LiftoffResult, session_id)
+            if row is None:
+                return None
+            db.expunge(row)
+            return row
+
+    def list_artifacts(self, session_id: str) -> tuple[LiftoffArtifact, ...]:
+        with Session(self.engine) as db:
+            rows = db.exec(
+                select(LiftoffArtifact)
+                .where(LiftoffArtifact.session_id == session_id)
+                .order_by(LiftoffArtifact.relative_path)
+            ).all()
+            for row in rows:
+                db.expunge(row)
+            return tuple(rows)
 
     def list_attempts(self, participant_id: str, visit_id: int) -> tuple[LiftoffSession, ...]:
         with Session(self.engine) as db:
