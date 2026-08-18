@@ -66,8 +66,23 @@ def _visits(session: Session) -> list[dict[str, Any]]:
 
 
 def _latest_analysis(session: Session) -> dict[str, Any] | None:
+    from matb_integration.analysis.liftoff import LIFTOFF_ANALYSIS_VERSION
+
     row = session.exec(
-        select(AnalysisResult).order_by(AnalysisResult.created_at.desc(), AnalysisResult.id.desc())
+        select(AnalysisResult)
+        .where(AnalysisResult.engine_version != LIFTOFF_ANALYSIS_VERSION)
+        .order_by(AnalysisResult.created_at.desc(), AnalysisResult.id.desc())
+    ).first()
+    return json.loads(row.artifact_json) if row is not None else None
+
+
+def _latest_liftoff_analysis(session: Session) -> dict[str, Any] | None:
+    from matb_integration.analysis.liftoff import LIFTOFF_ANALYSIS_VERSION
+
+    row = session.exec(
+        select(AnalysisResult)
+        .where(AnalysisResult.engine_version == LIFTOFF_ANALYSIS_VERSION)
+        .order_by(AnalysisResult.created_at.desc(), AnalysisResult.id.desc())
     ).first()
     return json.loads(row.artifact_json) if row is not None else None
 
@@ -158,6 +173,7 @@ def build_research_context(session: Session) -> dict[str, Any]:
     liftoff_tracker = build_liftoff_completeness_grid(session)
     liftoff_metrics = collect_liftoff_metric_rows(session)
     liftoff_provenance = _liftoff_provenance(session)
+    liftoff_analysis = _latest_liftoff_analysis(session)
     status_counts: dict[str, int] = {}
     for row in provenance:
         status = row["validation_status"]
@@ -176,6 +192,7 @@ def build_research_context(session: Session) -> dict[str, Any]:
         "liftoff_tracker": liftoff_tracker,
         "liftoff_metrics_long": liftoff_metrics,
         "liftoff_provenance": liftoff_provenance,
+        "liftoff_analysis_latest": liftoff_analysis,
         "validation_status_counts": status_counts,
         "counts": {
             "participants": len(participants),
@@ -252,6 +269,7 @@ def research_bundle(
         zf.writestr("liftoff/tracker.json", _dumps(context["liftoff_tracker"]))
         zf.writestr("liftoff/metrics_long.json", _dumps(context["liftoff_metrics_long"]))
         zf.writestr("liftoff/provenance.json", _dumps(context["liftoff_provenance"]))
+        zf.writestr("liftoff/analysis_latest.json", _dumps(context["liftoff_analysis_latest"]))
         zf.writestr("caveats.md", _caveats_md(context))
 
         for row in context["block_provenance"]:
