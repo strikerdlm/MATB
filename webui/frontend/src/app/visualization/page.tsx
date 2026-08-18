@@ -3,13 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getFits, getMetricsLong, listParticipants } from "@/lib/api";
+import { getFits, getMetricsLong, getStudyProtocol, listParticipants } from "@/lib/api";
 import { METRICS, groupOverview, trajectorySeries } from "@/lib/viz";
 import { TrajectoryChart } from "@/components/charts/TrajectoryChart";
 import { LevelBarsChart } from "@/components/charts/LevelBarsChart";
 import { DepdfPanel } from "@/components/charts/DepdfPanel";
 import { GroupChart } from "@/components/charts/GroupChart";
-import type { FitRow, MetricRow, Participant } from "@/types";
+import type { FitRow, MetricRow, Participant, StudyProtocol } from "@/types";
 
 const SELECT_CLS = "native-select min-w-[12rem]";
 
@@ -17,23 +17,35 @@ export default function VisualizationPage() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [rows, setRows] = useState<MetricRow[]>([]);
   const [fits, setFits] = useState<FitRow[]>([]);
+  const [protocol, setProtocol] = useState<StudyProtocol | null>(null);
   const [pid, setPid] = useState("");
   const [metric, setMetric] = useState("sysmon_d_prime");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([listParticipants(), getMetricsLong(), getFits()])
-      .then(([ps, ms, fs]) => {
+    Promise.all([listParticipants(), getMetricsLong(), getFits(), getStudyProtocol()])
+      .then(([ps, ms, fs, activeProtocol]) => {
         setParticipants(ps);
         setRows(ms);
         setFits(fs);
+        setProtocol(activeProtocol);
         if (ps.length) setPid((cur) => cur || ps[0].id);
       })
       .catch((e) => setError((e as Error).message));
   }, []);
 
-  const trajectory = useMemo(() => trajectorySeries(rows, pid, metric), [rows, pid, metric]);
-  const group = useMemo(() => groupOverview(rows, metric), [rows, metric]);
+  const visitOrdinals = useMemo(
+    () => protocol?.visits.map((visit) => visit.ordinal) ?? [],
+    [protocol],
+  );
+  const trajectory = useMemo(
+    () => trajectorySeries(rows, pid, metric, visitOrdinals),
+    [rows, pid, metric, visitOrdinals],
+  );
+  const group = useMemo(
+    () => groupOverview(rows, metric, visitOrdinals),
+    [rows, metric, visitOrdinals],
+  );
   const participantFits = useMemo(() => fits.filter((f) => f.participant_id === pid), [fits, pid]);
   const participantRows = useMemo(() => rows.filter((r) => r.participant_id === pid), [rows, pid]);
   const hasData = rows.length > 0;

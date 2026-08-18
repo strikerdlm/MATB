@@ -16,9 +16,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.db import get_engine, init_db
+from app.hrv_task_client import HrvTaskClient
+from app.liftoff_persistence import SQLModelLiftoffPersistence
+from app.liftoff_runtime import LiftoffManager
 from app.simulation_persistence import SQLModelSimulationPersistence
 from app.simulation_runtime import SimulationManager
+from app.study_models import ensure_study_binding
+from app.study_protocol import selected_protocol
 from app.websocket.simulation import HubConflict
+from matb_integration.liftoff.receiver import LiftoffUdpReceiver
 
 
 _DEFAULT_FRONTEND_ORIGINS = (
@@ -88,6 +94,23 @@ def _simulation_scenario_root() -> Path:
     return value if value.is_absolute() else _repo_root() / value
 
 
+def _liftoff_artifact_root() -> Path:
+    configured = os.getenv("MATB_LIFTOFF_OUTPUT_DIR")
+    value = Path(configured) if configured else Path("exports") / "liftoff"
+    return value if value.is_absolute() else _repo_root() / value
+
+
+def _liftoff_port() -> int:
+    raw = os.getenv("MATB_LIFTOFF_PORT", "9001")
+    try:
+        port = int(raw)
+    except ValueError as exc:
+        raise ValueError("MATB_LIFTOFF_PORT must be an integer in 1..65535") from exc
+    if not 1 <= port <= 65535:
+        raise ValueError("MATB_LIFTOFF_PORT must be an integer in 1..65535")
+    return port
+
+
 def _simulation_wall_time_scale() -> float:
     """Return an accelerated wall-clock factor only for explicit test mode."""
 
@@ -106,6 +129,31 @@ def _simulation_wall_time_scale() -> float:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    ensure_study_binding(get_engine(), selected_protocol())
+    liftoff_persistence = SQLModelLiftoffPersistence(get_engine())
+    liftoff_persistence.mark_orphaned_sessions()
+    liftoff_receiver = LiftoffUdpReceiver(
+        host=os.getenv("MATB_LIFTOFF_HOST", "127.0.0.1"),
+        port=_liftoff_port(),
+    )
+    await liftoff_receiver.start()
+    hrv_api_url = os.getenv("HRV_API_URL", "").strip()
+    hrv_client = (
+        HrvTaskClient(
+            base_url=hrv_api_url,
+            token=os.getenv("HRV_API_TOKEN", "").strip(),
+        )
+        if hrv_api_url
+        else None
+    )
+    liftoff_manager = LiftoffManager(
+        artifact_root=_liftoff_artifact_root(),
+        receiver=liftoff_receiver,
+        persistence=liftoff_persistence,
+        hrv_client=hrv_client,
+    )
+    liftoff_manager.start_capture()
+    app.state.liftoff_manager = liftoff_manager
     persistence = SQLModelSimulationPersistence(get_engine())
     persistence.mark_orphaned_sessions()
     manager = SimulationManager(
@@ -118,6 +166,8 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        await liftoff_manager.shutdown()
+        await liftoff_receiver.stop()
         await manager.shutdown()
 
 
@@ -153,7 +203,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.routers import analysis, exports, fits, ingest, metrics, participants, screen, simulation, tracker  # noqa: E402
+from app.routers import analysis, exports, fits, ingest, liftoff, metrics, participants, screen, simulation, study, tracker  # noqa: E402
 
 app.include_router(participants.router)
 app.include_router(ingest.router)
@@ -164,6 +214,8 @@ app.include_router(analysis.router)
 app.include_router(screen.router)
 app.include_router(exports.router)
 app.include_router(simulation.router)
+app.include_router(study.router)
+app.include_router(liftoff.router)
 
 
 @app.websocket("/simulation/sessions/{session_id}/stream")

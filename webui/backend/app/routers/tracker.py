@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
 from sqlmodel import Session, select
 
-from app.completeness import build_completeness_grid
+from app.completeness import build_completeness_grid, build_liftoff_completeness_grid
 from app.db import get_session
 from app.models import Block, BlockProvenance, DepdfFit, Visit
 
@@ -19,6 +19,11 @@ router = APIRouter(tags=["tracker"])
 @router.get("/tracker")
 def tracker(session: Session = Depends(get_session)) -> list[dict[str, Any]]:
     return build_completeness_grid(session)
+
+
+@router.get("/tracker/liftoff")
+def liftoff_tracker(session: Session = Depends(get_session)) -> list[dict[str, Any]]:
+    return build_liftoff_completeness_grid(session)
 
 
 @router.get("/block")

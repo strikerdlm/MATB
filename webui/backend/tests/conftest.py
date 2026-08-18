@@ -18,7 +18,10 @@ from app import db as db_module
 from app.main import app
 from app.simulation_persistence import SQLModelSimulationPersistence
 from app.simulation_runtime import SimulationManager
+from app.liftoff_persistence import SQLModelLiftoffPersistence
+from app.liftoff_runtime import LiftoffManager
 from app.models import Participant, Visit
+from matb_integration.liftoff.receiver import ReceiverHealth
 
 # Make `matb_integration` importable (repo root is three levels up from this file).
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -50,6 +53,28 @@ class SyncASGIClient:
     def post(self, url: str, **kwargs) -> httpx.Response:
         return self.request("POST", url, **kwargs)
 
+    def put(self, url: str, **kwargs) -> httpx.Response:
+        return self.request("PUT", url, **kwargs)
+
+
+class FakeLiftoffReceiver:
+    def __init__(self) -> None:
+        self._health = ReceiverHealth()
+
+    def inject_valid_packets(self, count: int) -> None:
+        self._health.received_packets += count
+        self._health.valid_packets += count
+
+    async def wait_ready(self, *, min_valid: int = 20, timeout_seconds: float = 2.0) -> bool:
+        del timeout_seconds
+        return self._health.valid_packets >= min_valid
+
+    def health(self) -> ReceiverHealth:
+        return ReceiverHealth(**{
+            field: getattr(self._health, field)
+            for field in self._health.__dataclass_fields__
+        })
+
 
 @pytest.fixture
 def anyio_backend():
@@ -78,7 +103,9 @@ def engine_fixture():
         poolclass=StaticPool,
     )
     import app.models  # noqa: F401  (register tables)
+    import app.liftoff_models  # noqa: F401  (register Liftoff metadata tables)
     import app.simulation_models  # noqa: F401  (register simulation tables)
+    import app.study_models  # noqa: F401  (register study metadata/context tables)
     SQLModel.metadata.create_all(engine)
     yield engine
 
@@ -122,6 +149,39 @@ async def simulation_client(engine, tmp_path, monkeypatch):
         session.close()
         app.dependency_overrides.clear()
         await manager.shutdown()
+
+
+@pytest.fixture
+async def liftoff_client(engine, tmp_path, monkeypatch):
+    async def _run_direct(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(starlette.concurrency, "run_in_threadpool", _run_direct)
+    monkeypatch.setattr(fastapi.concurrency, "run_in_threadpool", _run_direct)
+    monkeypatch.setattr(fastapi.dependencies.utils, "run_in_threadpool", _run_direct)
+    monkeypatch.setattr(fastapi.routing, "run_in_threadpool", _run_direct)
+
+    with Session(engine) as db:
+        db.add(Participant(id="P01", enrollment_date=date(2026, 6, 1)))
+        db.add(Visit(participant_id="P01", visit_ordinal=1, scheduled_day=0))
+        db.add(Visit(participant_id="P01", visit_ordinal=2, scheduled_day=8))
+        db.add(Visit(participant_id="P01", visit_ordinal=3, scheduled_day=15))
+        db.commit()
+    receiver = FakeLiftoffReceiver()
+    manager = LiftoffManager(
+        artifact_root=tmp_path / "liftoff",
+        receiver=receiver,
+        persistence=SQLModelLiftoffPersistence(engine),
+    )
+    app.state.liftoff_manager = manager
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=True)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            yield client, manager
+    finally:
+        await manager.shutdown()
+        if hasattr(app.state, "liftoff_manager"):
+            del app.state.liftoff_manager
 
 
 @pytest.fixture(name="client")

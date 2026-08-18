@@ -10,7 +10,10 @@ import { AppShell } from "@/components/layout/AppShell";
  */
 export function RouteShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "/";
-  const isMissionRoute = pathname === "/mission" || pathname.startsWith("/mission/debrief");
+  const isMissionRoute = pathname === "/mission"
+    || pathname.startsWith("/mission/debrief")
+    || pathname.startsWith("/liftoff/session")
+    || pathname.startsWith("/liftoff/debrief");
 
   if (isMissionRoute) {
     return <div className="min-h-screen bg-background">{children}</div>;

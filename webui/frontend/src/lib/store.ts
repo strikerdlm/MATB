@@ -1,10 +1,11 @@
 import { create } from "zustand";
-import type { Participant, TrackerCell } from "@/types";
-import { getTracker, listParticipants } from "@/lib/api";
+import type { LiftoffTrackerCell, Participant, TrackerCell } from "@/types";
+import { getLiftoffTracker, getTracker, listParticipants } from "@/lib/api";
 
 interface ConsoleState {
   participants: Participant[];
   tracker: TrackerCell[];
+  liftoffTracker: LiftoffTrackerCell[];
   loading: boolean;
   error: string | null;
   refreshParticipants: () => Promise<void>;
@@ -28,6 +29,7 @@ export const useConsole = create<ConsoleState>((set, get) => {
   return {
     participants: [],
     tracker: [],
+    liftoffTracker: [],
     loading: false,
     error: null,
     refreshParticipants: async () => {
@@ -38,7 +40,10 @@ export const useConsole = create<ConsoleState>((set, get) => {
     },
     refreshTracker: async () => {
       start();
-      try { set({ tracker: await getTracker() }); }
+      try {
+        const [tracker, liftoffTracker] = await Promise.all([getTracker(), getLiftoffTracker()]);
+        set({ tracker, liftoffTracker });
+      }
       catch (e) { set({ error: (e as Error).message }); }
       finally { stop(); }
     },

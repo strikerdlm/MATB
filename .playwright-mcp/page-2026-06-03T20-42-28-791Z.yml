@@ -1,0 +1,45 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e4]:
+      - heading "MATB Research Console" [level=1] [ref=e5]
+      - paragraph [ref=e6]: Longitudinal study tracker
+    - navigation [ref=e7]:
+      - link "Tracker" [ref=e8] [cursor=pointer]:
+        - /url: /
+        - img [ref=e9]
+        - text: Tracker
+      - link "Participants" [ref=e14] [cursor=pointer]:
+        - /url: /participants
+        - img [ref=e15]
+        - text: Participants
+      - link "Upload" [ref=e20] [cursor=pointer]:
+        - /url: /upload
+        - img [ref=e21]
+        - text: Upload
+      - link "Visualization" [ref=e24] [cursor=pointer]:
+        - /url: /visualization
+        - img [ref=e25]
+        - text: Visualization
+      - generic "Coming soon" [ref=e27]:
+        - img [ref=e28]
+        - text: Analysissoon
+  - main [ref=e30]:
+    - generic [ref=e32]:
+      - generic [ref=e33]:
+        - heading "Visualization" [level=2] [ref=e34]
+        - paragraph [ref=e35]: Descriptive views. Inferential statistics arrive with the Analysis module (Phase 3).
+      - generic [ref=e36]:
+        - generic [ref=e37]:
+          - text: Participant
+          - combobox "Participant" [ref=e38]
+        - generic [ref=e39]:
+          - text: Metric
+          - combobox "Metric" [ref=e40]:
+            - option "SYSMON d′" [selected]
+            - option "SYSMON hit rate"
+            - option "SYSMON mean RT"
+            - option "COMM d′"
+            - option "NASA-TLX (raw)"
+            - option "Bedford"
+            - option "ISA (mean)"
+      - paragraph [ref=e41]: No data yet — ingest sessions first.

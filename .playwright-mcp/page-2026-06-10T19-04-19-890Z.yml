@@ -1,0 +1,62 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e4]:
+      - heading "MATB Research Console" [level=1] [ref=e5]
+      - paragraph [ref=e6]: Longitudinal lab
+    - navigation [ref=e7]:
+      - link "Tracker" [ref=e8] [cursor=pointer]:
+        - /url: /
+        - img [ref=e9]
+        - text: Tracker
+      - link "Participants" [ref=e14] [cursor=pointer]:
+        - /url: /participants
+        - img [ref=e15]
+        - text: Participants
+      - link "Upload" [ref=e20] [cursor=pointer]:
+        - /url: /upload
+        - img [ref=e21]
+        - text: Upload
+      - link "Visualization" [ref=e24] [cursor=pointer]:
+        - /url: /visualization
+        - img [ref=e25]
+        - text: Visualization
+      - link "Analysis" [ref=e27] [cursor=pointer]:
+        - /url: /analysis
+        - img [ref=e28]
+        - text: Analysis
+      - link "Screen" [ref=e30] [cursor=pointer]:
+        - /url: /screen
+        - img [ref=e31]
+        - text: Screen
+  - main [ref=e34]:
+    - generic [ref=e36]:
+      - generic [ref=e37]:
+        - generic [ref=e38]:
+          - paragraph [ref=e39]: MATB figure studio
+          - heading "Visualization" [level=2] [ref=e40]
+          - paragraph [ref=e41]: Participant trajectories, cohort intervals, and DEPDF model figures.
+        - generic [ref=e42]:
+          - generic [ref=e43]:
+            - paragraph [ref=e44]: Participants
+            - paragraph [ref=e45]: "0"
+          - generic [ref=e46]:
+            - paragraph [ref=e47]: Rows
+            - paragraph [ref=e48]: "0"
+          - generic [ref=e49]:
+            - paragraph [ref=e50]: Fits
+            - paragraph [ref=e51]: "0"
+      - generic [ref=e52]:
+        - generic [ref=e53]:
+          - text: Participant
+          - combobox "Participant" [ref=e54]
+        - generic [ref=e55]:
+          - text: Metric
+          - combobox "Metric" [ref=e56]:
+            - option "SYSMON d′" [selected]
+            - option "SYSMON hit rate"
+            - option "SYSMON mean RT"
+            - option "COMM d′"
+            - option "NASA-TLX (raw)"
+            - option "Bedford"
+            - option "ISA (mean)"
+      - paragraph [ref=e57]: No data yet. Ingest sessions first.

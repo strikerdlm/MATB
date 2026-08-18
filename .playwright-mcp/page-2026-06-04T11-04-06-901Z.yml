@@ -1,0 +1,557 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - heading "MATB Research Console" [level=1] [ref=e5]
+        - paragraph [ref=e6]: Longitudinal study tracker
+      - navigation [ref=e7]:
+        - link "Tracker" [ref=e8] [cursor=pointer]:
+          - /url: /
+          - img [ref=e9]
+          - text: Tracker
+        - link "Participants" [ref=e14] [cursor=pointer]:
+          - /url: /participants
+          - img [ref=e15]
+          - text: Participants
+        - link "Upload" [ref=e20] [cursor=pointer]:
+          - /url: /upload
+          - img [ref=e21]
+          - text: Upload
+        - link "Visualization" [ref=e24] [cursor=pointer]:
+          - /url: /visualization
+          - img [ref=e25]
+          - text: Visualization
+        - link "Analysis" [ref=e27] [cursor=pointer]:
+          - /url: /analysis
+          - img [ref=e28]
+          - text: Analysis
+    - main [ref=e30]:
+      - generic [ref=e32]:
+        - generic [ref=e33]:
+          - generic [ref=e34]:
+            - heading "Statistical analysis" [level=2] [ref=e35]
+            - paragraph [ref=e36]: Pre-specified engine (Q1–Q4) — LMM, rmcorr, rmANOVA sensitivity, BH-FDR.
+          - button "Run analysis" [ref=e37] [cursor=pointer]:
+            - img [ref=e38]
+            - text: Run analysis
+        - generic [ref=e40]:
+          - generic [ref=e41]:
+            - generic [ref=e42]: Confirmatory family — BH-FDR at q = 0.05 over 4/6 planned tests
+            - table [ref=e43]:
+              - rowgroup [ref=e44]:
+                - row "Metric Test p p (FDR) Survives" [ref=e45]:
+                  - columnheader "Metric" [ref=e46]
+                  - columnheader "Test" [ref=e47]
+                  - columnheader "p" [ref=e48]
+                  - columnheader "p (FDR)" [ref=e49]
+                  - columnheader "Survives" [ref=e50]
+              - rowgroup [ref=e51]:
+                - row "sysmon_d_prime Q1 level omnibus <0.001 <0.001 ✓" [ref=e52]:
+                  - cell "sysmon_d_prime" [ref=e53]
+                  - cell "Q1 level omnibus" [ref=e54]
+                  - cell "<0.001" [ref=e55]
+                  - cell "<0.001" [ref=e56]
+                  - cell "✓" [ref=e57]
+                - row "sysmon_d_prime Q2 visit slope <0.001 <0.001 ✓" [ref=e58]:
+                  - cell "sysmon_d_prime" [ref=e59]
+                  - cell "Q2 visit slope" [ref=e60]
+                  - cell "<0.001" [ref=e61]
+                  - cell "<0.001" [ref=e62]
+                  - cell "✓" [ref=e63]
+                - row "nasatlx_raw_tlx Q1 level omnibus <0.001 <0.001 ✓" [ref=e64]:
+                  - cell "nasatlx_raw_tlx" [ref=e65]
+                  - cell "Q1 level omnibus" [ref=e66]
+                  - cell "<0.001" [ref=e67]
+                  - cell "<0.001" [ref=e68]
+                  - cell "✓" [ref=e69]
+                - row "nasatlx_raw_tlx Q2 visit slope <0.001 <0.001 ✓" [ref=e70]:
+                  - cell "nasatlx_raw_tlx" [ref=e71]
+                  - cell "Q2 visit slope" [ref=e72]
+                  - cell "<0.001" [ref=e73]
+                  - cell "<0.001" [ref=e74]
+                  - cell "✓" [ref=e75]
+                - row "bedford Q1 level omnibus — — —" [ref=e76]:
+                  - cell "bedford" [ref=e77]
+                  - cell "Q1 level omnibus" [ref=e78]
+                  - cell "—" [ref=e79]
+                  - cell "—" [ref=e80]
+                  - cell "—" [ref=e81]
+                - row "bedford Q2 visit slope — — —" [ref=e82]:
+                  - cell "bedford" [ref=e83]
+                  - cell "Q2 visit slope" [ref=e84]
+                  - cell "—" [ref=e85]
+                  - cell "—" [ref=e86]
+                  - cell "—" [ref=e87]
+          - generic [ref=e88]:
+            - heading "Q1 — workload-level effects (LMM)" [level=3] [ref=e89]
+            - generic [ref=e90]:
+              - generic [ref=e91]:
+                - generic [ref=e92]:
+                  - heading "SYSMON d′" [level=3] [ref=e93]
+                  - generic [ref=e94]: ok
+                - paragraph [ref=e95]: "Omnibus Wald chi2 (REML): χ²(2) = 2238.321, p = <0.001 · n = 48 obs / 8 participants"
+                - table [ref=e96]:
+                  - rowgroup [ref=e97]:
+                    - row "Term b 95% CI std p" [ref=e98]:
+                      - columnheader "Term" [ref=e99]
+                      - columnheader "b" [ref=e100]
+                      - columnheader "95% CI" [ref=e101]
+                      - columnheader "std" [ref=e102]
+                      - columnheader "p" [ref=e103]
+                  - rowgroup [ref=e104]:
+                    - row "MEDIUM-LOW -0.791 [-0.839, -0.742] -9.737 <0.001" [ref=e105]:
+                      - cell "MEDIUM-LOW" [ref=e106]
+                      - cell "-0.791" [ref=e107]
+                      - cell "[-0.839, -0.742]" [ref=e108]
+                      - cell "-9.737" [ref=e109]
+                      - cell "<0.001" [ref=e110]
+                    - row "HIGH-LOW -1.145 [-1.194, -1.097] -14.105 <0.001" [ref=e111]:
+                      - cell "HIGH-LOW" [ref=e112]
+                      - cell "-1.145" [ref=e113]
+                      - cell "[-1.194, -1.097]" [ref=e114]
+                      - cell "-14.105" [ref=e115]
+                      - cell "<0.001" [ref=e116]
+                    - row "visit_c 0.127 [0.087, 0.167] 1.564 <0.001" [ref=e117]:
+                      - cell "visit_c" [ref=e118]
+                      - cell "0.127" [ref=e119]
+                      - cell "[0.087, 0.167]" [ref=e120]
+                      - cell "1.564" [ref=e121]
+                      - cell "<0.001" [ref=e122]
+                - generic [ref=e123]:
+                  - paragraph [ref=e124]: Pairwise contrasts (Holm within metric; shown because the omnibus survived FDR)
+                  - table [ref=e125]:
+                    - rowgroup [ref=e126]:
+                      - row "Term b 95% CI std p p (Holm)" [ref=e127]:
+                        - columnheader "Term" [ref=e128]
+                        - columnheader "b" [ref=e129]
+                        - columnheader "95% CI" [ref=e130]
+                        - columnheader "std" [ref=e131]
+                        - columnheader "p" [ref=e132]
+                        - columnheader "p (Holm)" [ref=e133]
+                    - rowgroup [ref=e134]:
+                      - row "MEDIUM-LOW -0.791 [-0.839, -0.742] -9.737 <0.001 <0.001" [ref=e135]:
+                        - cell "MEDIUM-LOW" [ref=e136]
+                        - cell "-0.791" [ref=e137]
+                        - cell "[-0.839, -0.742]" [ref=e138]
+                        - cell "-9.737" [ref=e139]
+                        - cell "<0.001" [ref=e140]
+                        - cell "<0.001" [ref=e141]
+                      - row "HIGH-LOW -1.145 [-1.194, -1.097] -14.105 <0.001 <0.001" [ref=e142]:
+                        - cell "HIGH-LOW" [ref=e143]
+                        - cell "-1.145" [ref=e144]
+                        - cell "[-1.194, -1.097]" [ref=e145]
+                        - cell "-14.105" [ref=e146]
+                        - cell "<0.001" [ref=e147]
+                        - cell "<0.001" [ref=e148]
+                      - row "HIGH-MEDIUM -0.355 [-0.403, -0.306] -4.368 <0.001 <0.001" [ref=e149]:
+                        - cell "HIGH-MEDIUM" [ref=e150]
+                        - cell "-0.355" [ref=e151]
+                        - cell "[-0.403, -0.306]" [ref=e152]
+                        - cell "-4.368" [ref=e153]
+                        - cell "<0.001" [ref=e154]
+                        - cell "<0.001" [ref=e155]
+              - generic [ref=e156]:
+                - generic [ref=e157]:
+                  - heading "SYSMON hit rate(exploratory)" [level=3] [ref=e158]
+                  - generic [ref=e159]: ok
+                - paragraph [ref=e160]: "Omnibus Wald chi2 (REML): χ²(2) = 3013.653, p = <0.001 · n = 48 obs / 8 participants"
+                - table [ref=e161]:
+                  - rowgroup [ref=e162]:
+                    - row "Term b 95% CI std p" [ref=e163]:
+                      - columnheader "Term" [ref=e164]
+                      - columnheader "b" [ref=e165]
+                      - columnheader "95% CI" [ref=e166]
+                      - columnheader "std" [ref=e167]
+                      - columnheader "p" [ref=e168]
+                  - rowgroup [ref=e169]:
+                    - row "MEDIUM-LOW -0.299 [-0.315, -0.283] -11.178 <0.001" [ref=e170]:
+                      - cell "MEDIUM-LOW" [ref=e171]
+                      - cell "-0.299" [ref=e172]
+                      - cell "[-0.315, -0.283]" [ref=e173]
+                      - cell "-11.178" [ref=e174]
+                      - cell "<0.001" [ref=e175]
+                    - row "HIGH-LOW -0.429 [-0.445, -0.413] -16.050 <0.001" [ref=e176]:
+                      - cell "HIGH-LOW" [ref=e177]
+                      - cell "-0.429" [ref=e178]
+                      - cell "[-0.445, -0.413]" [ref=e179]
+                      - cell "-16.050" [ref=e180]
+                      - cell "<0.001" [ref=e181]
+                    - row "visit_c 0.045 [0.032, 0.058] 1.676 <0.001" [ref=e182]:
+                      - cell "visit_c" [ref=e183]
+                      - cell "0.045" [ref=e184]
+                      - cell "[0.032, 0.058]" [ref=e185]
+                      - cell "1.676" [ref=e186]
+                      - cell "<0.001" [ref=e187]
+              - generic [ref=e189]:
+                - heading "SYSMON mean RT (ms)(exploratory)" [level=3] [ref=e190]
+                - generic "only 0 rows (< 24)" [ref=e191]: insufficient data
+              - generic [ref=e193]:
+                - heading "COMM d′(exploratory)" [level=3] [ref=e194]
+                - generic "only 0 rows (< 24)" [ref=e195]: insufficient data
+              - generic [ref=e196]:
+                - generic [ref=e197]:
+                  - heading "NASA-TLX (raw)" [level=3] [ref=e198]
+                  - generic [ref=e199]: ok
+                - paragraph [ref=e200]: "Omnibus Wald chi2 (REML): χ²(2) = 582203220663518.625, p = <0.001 · n = 48 obs / 8 participants"
+                - table [ref=e201]:
+                  - rowgroup [ref=e202]:
+                    - row "Term b 95% CI std p" [ref=e203]:
+                      - columnheader "Term" [ref=e204]
+                      - columnheader "b" [ref=e205]
+                      - columnheader "95% CI" [ref=e206]
+                      - columnheader "std" [ref=e207]
+                      - columnheader "p" [ref=e208]
+                  - rowgroup [ref=e209]:
+                    - row "MEDIUM-LOW 15.000 [15.000, 15.000] 30.706 <0.001" [ref=e210]:
+                      - cell "MEDIUM-LOW" [ref=e211]
+                      - cell "15.000" [ref=e212]
+                      - cell "[15.000, 15.000]" [ref=e213]
+                      - cell "30.706" [ref=e214]
+                      - cell "<0.001" [ref=e215]
+                    - row "HIGH-LOW 35.000 [35.000, 35.000] 71.647 <0.001" [ref=e216]:
+                      - cell "HIGH-LOW" [ref=e217]
+                      - cell "35.000" [ref=e218]
+                      - cell "[35.000, 35.000]" [ref=e219]
+                      - cell "71.647" [ref=e220]
+                      - cell "<0.001" [ref=e221]
+                    - row "visit_c -2.000 [-2.000, -2.000] -4.094 <0.001" [ref=e222]:
+                      - cell "visit_c" [ref=e223]
+                      - cell "-2.000" [ref=e224]
+                      - cell "[-2.000, -2.000]" [ref=e225]
+                      - cell "-4.094" [ref=e226]
+                      - cell "<0.001" [ref=e227]
+                - generic [ref=e228]:
+                  - paragraph [ref=e229]: Pairwise contrasts (Holm within metric; shown because the omnibus survived FDR)
+                  - table [ref=e230]:
+                    - rowgroup [ref=e231]:
+                      - row "Term b 95% CI std p p (Holm)" [ref=e232]:
+                        - columnheader "Term" [ref=e233]
+                        - columnheader "b" [ref=e234]
+                        - columnheader "95% CI" [ref=e235]
+                        - columnheader "std" [ref=e236]
+                        - columnheader "p" [ref=e237]
+                        - columnheader "p (Holm)" [ref=e238]
+                    - rowgroup [ref=e239]:
+                      - row "MEDIUM-LOW 15.000 [15.000, 15.000] 30.706 <0.001 <0.001" [ref=e240]:
+                        - cell "MEDIUM-LOW" [ref=e241]
+                        - cell "15.000" [ref=e242]
+                        - cell "[15.000, 15.000]" [ref=e243]
+                        - cell "30.706" [ref=e244]
+                        - cell "<0.001" [ref=e245]
+                        - cell "<0.001" [ref=e246]
+                      - row "HIGH-LOW 35.000 [35.000, 35.000] 71.647 <0.001 <0.001" [ref=e247]:
+                        - cell "HIGH-LOW" [ref=e248]
+                        - cell "35.000" [ref=e249]
+                        - cell "[35.000, 35.000]" [ref=e250]
+                        - cell "71.647" [ref=e251]
+                        - cell "<0.001" [ref=e252]
+                        - cell "<0.001" [ref=e253]
+                      - row "HIGH-MEDIUM 20.000 [20.000, 20.000] 40.941 <0.001 <0.001" [ref=e254]:
+                        - cell "HIGH-MEDIUM" [ref=e255]
+                        - cell "20.000" [ref=e256]
+                        - cell "[20.000, 20.000]" [ref=e257]
+                        - cell "40.941" [ref=e258]
+                        - cell "<0.001" [ref=e259]
+                        - cell "<0.001" [ref=e260]
+              - generic [ref=e262]:
+                - heading "Bedford" [level=3] [ref=e263]
+                - generic "only 0 rows (< 24)" [ref=e264]: insufficient data
+              - generic [ref=e266]:
+                - heading "ISA (mean)(exploratory)" [level=3] [ref=e267]
+                - generic "only 0 rows (< 24)" [ref=e268]: insufficient data
+          - generic [ref=e269]:
+            - heading "Q2 — trajectories across visits (LMM)" [level=3] [ref=e270]
+            - generic [ref=e271]:
+              - generic [ref=e272]:
+                - generic [ref=e273]:
+                  - heading "SYSMON d′" [level=3] [ref=e274]
+                  - generic [ref=e275]: ok
+                - table [ref=e276]:
+                  - rowgroup [ref=e277]:
+                    - row "Term b 95% CI std p" [ref=e278]:
+                      - columnheader "Term" [ref=e279]
+                      - columnheader "b" [ref=e280]
+                      - columnheader "95% CI" [ref=e281]
+                      - columnheader "std" [ref=e282]
+                      - columnheader "p" [ref=e283]
+                  - rowgroup [ref=e284]:
+                    - row "visit_c 0.127 [0.087, 0.167] 1.564 <0.001" [ref=e285]:
+                      - cell "visit_c" [ref=e286]
+                      - cell "0.127" [ref=e287]
+                      - cell "[0.087, 0.167]" [ref=e288]
+                      - cell "1.564" [ref=e289]
+                      - cell "<0.001" [ref=e290]
+                    - row "MEDIUM-LOW -0.791 [-0.839, -0.742] -9.737 <0.001" [ref=e291]:
+                      - cell "MEDIUM-LOW" [ref=e292]
+                      - cell "-0.791" [ref=e293]
+                      - cell "[-0.839, -0.742]" [ref=e294]
+                      - cell "-9.737" [ref=e295]
+                      - cell "<0.001" [ref=e296]
+                    - row "HIGH-LOW -1.145 [-1.194, -1.097] -14.105 <0.001" [ref=e297]:
+                      - cell "HIGH-LOW" [ref=e298]
+                      - cell "-1.145" [ref=e299]
+                      - cell "[-1.194, -1.097]" [ref=e300]
+                      - cell "-14.105" [ref=e301]
+                      - cell "<0.001" [ref=e302]
+                - group [ref=e303]:
+                  - generic "Interactions (secondary)" [ref=e304]
+              - generic [ref=e305]:
+                - generic [ref=e306]:
+                  - heading "SYSMON hit rate(exploratory)" [level=3] [ref=e307]
+                  - generic [ref=e308]: ok
+                - table [ref=e309]:
+                  - rowgroup [ref=e310]:
+                    - row "Term b 95% CI std p" [ref=e311]:
+                      - columnheader "Term" [ref=e312]
+                      - columnheader "b" [ref=e313]
+                      - columnheader "95% CI" [ref=e314]
+                      - columnheader "std" [ref=e315]
+                      - columnheader "p" [ref=e316]
+                  - rowgroup [ref=e317]:
+                    - row "visit_c 0.045 [0.032, 0.058] 1.676 <0.001" [ref=e318]:
+                      - cell "visit_c" [ref=e319]
+                      - cell "0.045" [ref=e320]
+                      - cell "[0.032, 0.058]" [ref=e321]
+                      - cell "1.676" [ref=e322]
+                      - cell "<0.001" [ref=e323]
+                    - row "MEDIUM-LOW -0.299 [-0.315, -0.283] -11.178 <0.001" [ref=e324]:
+                      - cell "MEDIUM-LOW" [ref=e325]
+                      - cell "-0.299" [ref=e326]
+                      - cell "[-0.315, -0.283]" [ref=e327]
+                      - cell "-11.178" [ref=e328]
+                      - cell "<0.001" [ref=e329]
+                    - row "HIGH-LOW -0.429 [-0.445, -0.413] -16.050 <0.001" [ref=e330]:
+                      - cell "HIGH-LOW" [ref=e331]
+                      - cell "-0.429" [ref=e332]
+                      - cell "[-0.445, -0.413]" [ref=e333]
+                      - cell "-16.050" [ref=e334]
+                      - cell "<0.001" [ref=e335]
+                - group [ref=e336]:
+                  - generic "Interactions (secondary)" [ref=e337]
+              - generic [ref=e339]:
+                - heading "SYSMON mean RT (ms)(exploratory)" [level=3] [ref=e340]
+                - generic "only 0 rows (< 24)" [ref=e341]: insufficient data
+              - generic [ref=e343]:
+                - heading "COMM d′(exploratory)" [level=3] [ref=e344]
+                - generic "only 0 rows (< 24)" [ref=e345]: insufficient data
+              - generic [ref=e346]:
+                - generic [ref=e347]:
+                  - heading "NASA-TLX (raw)" [level=3] [ref=e348]
+                  - generic [ref=e349]: ok
+                - table [ref=e350]:
+                  - rowgroup [ref=e351]:
+                    - row "Term b 95% CI std p" [ref=e352]:
+                      - columnheader "Term" [ref=e353]
+                      - columnheader "b" [ref=e354]
+                      - columnheader "95% CI" [ref=e355]
+                      - columnheader "std" [ref=e356]
+                      - columnheader "p" [ref=e357]
+                  - rowgroup [ref=e358]:
+                    - row "visit_c -2.000 [-2.000, -2.000] -4.094 <0.001" [ref=e359]:
+                      - cell "visit_c" [ref=e360]
+                      - cell "-2.000" [ref=e361]
+                      - cell "[-2.000, -2.000]" [ref=e362]
+                      - cell "-4.094" [ref=e363]
+                      - cell "<0.001" [ref=e364]
+                    - row "MEDIUM-LOW 15.000 [15.000, 15.000] 30.706 <0.001" [ref=e365]:
+                      - cell "MEDIUM-LOW" [ref=e366]
+                      - cell "15.000" [ref=e367]
+                      - cell "[15.000, 15.000]" [ref=e368]
+                      - cell "30.706" [ref=e369]
+                      - cell "<0.001" [ref=e370]
+                    - row "HIGH-LOW 35.000 [35.000, 35.000] 71.647 <0.001" [ref=e371]:
+                      - cell "HIGH-LOW" [ref=e372]
+                      - cell "35.000" [ref=e373]
+                      - cell "[35.000, 35.000]" [ref=e374]
+                      - cell "71.647" [ref=e375]
+                      - cell "<0.001" [ref=e376]
+                - group [ref=e377]:
+                  - generic "Interactions (secondary)" [ref=e378]
+              - generic [ref=e380]:
+                - heading "Bedford" [level=3] [ref=e381]
+                - generic "only 0 rows (< 24)" [ref=e382]: insufficient data
+              - generic [ref=e384]:
+                - heading "ISA (mean)(exploratory)" [level=3] [ref=e385]
+                - generic "only 0 rows (< 24)" [ref=e386]: insufficient data
+          - generic [ref=e387]:
+            - generic [ref=e388]: Q3 — repeated-measures correlation (exploratory; canonical + level-adjusted sensitivity)
+            - table [ref=e389]:
+              - rowgroup [ref=e390]:
+                - row "x y r df 95% CI p r (level-adj) Status" [ref=e391]:
+                  - columnheader "x" [ref=e392]
+                  - columnheader "y" [ref=e393]
+                  - columnheader "r" [ref=e394]
+                  - columnheader "df" [ref=e395]
+                  - columnheader "95% CI" [ref=e396]
+                  - columnheader "p" [ref=e397]
+                  - columnheader "r (level-adj)" [ref=e398]
+                  - columnheader "Status" [ref=e399]
+              - rowgroup [ref=e400]:
+                - row "nasatlx_raw_tlx sysmon_d_prime -0.947 39 [-0.971, -0.902] <0.001 -0.718 ok" [ref=e401]:
+                  - cell "nasatlx_raw_tlx" [ref=e402]
+                  - cell "sysmon_d_prime" [ref=e403]
+                  - cell "-0.947" [ref=e404]
+                  - cell "39" [ref=e405]
+                  - cell "[-0.971, -0.902]" [ref=e406]
+                  - cell "<0.001" [ref=e407]
+                  - cell "-0.718" [ref=e408]
+                  - cell "ok" [ref=e409]:
+                    - generic [ref=e410]: ok
+                - row "nasatlx_raw_tlx sysmon_mean_rt_ms — — — — — insufficient data" [ref=e411]:
+                  - cell "nasatlx_raw_tlx" [ref=e412]
+                  - cell "sysmon_mean_rt_ms" [ref=e413]
+                  - cell "—" [ref=e414]
+                  - cell "—" [ref=e415]
+                  - cell "—" [ref=e416]
+                  - cell "—" [ref=e417]
+                  - cell "—" [ref=e418]
+                  - cell "insufficient data" [ref=e419]:
+                    - generic "only 0 participants with >=2 pairs (< 4)" [ref=e420]: insufficient data
+                - row "nasatlx_raw_tlx comm_d_prime — — — — — insufficient data" [ref=e421]:
+                  - cell "nasatlx_raw_tlx" [ref=e422]
+                  - cell "comm_d_prime" [ref=e423]
+                  - cell "—" [ref=e424]
+                  - cell "—" [ref=e425]
+                  - cell "—" [ref=e426]
+                  - cell "—" [ref=e427]
+                  - cell "—" [ref=e428]
+                  - cell "insufficient data" [ref=e429]:
+                    - generic "only 0 participants with >=2 pairs (< 4)" [ref=e430]: insufficient data
+                - row "bedford sysmon_d_prime — — — — — insufficient data" [ref=e431]:
+                  - cell "bedford" [ref=e432]
+                  - cell "sysmon_d_prime" [ref=e433]
+                  - cell "—" [ref=e434]
+                  - cell "—" [ref=e435]
+                  - cell "—" [ref=e436]
+                  - cell "—" [ref=e437]
+                  - cell "—" [ref=e438]
+                  - cell "insufficient data" [ref=e439]:
+                    - generic "only 0 participants with >=2 pairs (< 4)" [ref=e440]: insufficient data
+                - row "bedford sysmon_mean_rt_ms — — — — — insufficient data" [ref=e441]:
+                  - cell "bedford" [ref=e442]
+                  - cell "sysmon_mean_rt_ms" [ref=e443]
+                  - cell "—" [ref=e444]
+                  - cell "—" [ref=e445]
+                  - cell "—" [ref=e446]
+                  - cell "—" [ref=e447]
+                  - cell "—" [ref=e448]
+                  - cell "insufficient data" [ref=e449]:
+                    - generic "only 0 participants with >=2 pairs (< 4)" [ref=e450]: insufficient data
+                - row "bedford comm_d_prime — — — — — insufficient data" [ref=e451]:
+                  - cell "bedford" [ref=e452]
+                  - cell "comm_d_prime" [ref=e453]
+                  - cell "—" [ref=e454]
+                  - cell "—" [ref=e455]
+                  - cell "—" [ref=e456]
+                  - cell "—" [ref=e457]
+                  - cell "—" [ref=e458]
+                  - cell "insufficient data" [ref=e459]:
+                    - generic "only 0 participants with >=2 pairs (< 4)" [ref=e460]: insufficient data
+                - row "isa_mean sysmon_d_prime — — — — — insufficient data" [ref=e461]:
+                  - cell "isa_mean" [ref=e462]
+                  - cell "sysmon_d_prime" [ref=e463]
+                  - cell "—" [ref=e464]
+                  - cell "—" [ref=e465]
+                  - cell "—" [ref=e466]
+                  - cell "—" [ref=e467]
+                  - cell "—" [ref=e468]
+                  - cell "insufficient data" [ref=e469]:
+                    - generic "only 0 participants with >=2 pairs (< 4)" [ref=e470]: insufficient data
+                - row "isa_mean sysmon_mean_rt_ms — — — — — insufficient data" [ref=e471]:
+                  - cell "isa_mean" [ref=e472]
+                  - cell "sysmon_mean_rt_ms" [ref=e473]
+                  - cell "—" [ref=e474]
+                  - cell "—" [ref=e475]
+                  - cell "—" [ref=e476]
+                  - cell "—" [ref=e477]
+                  - cell "—" [ref=e478]
+                  - cell "insufficient data" [ref=e479]:
+                    - generic "only 0 participants with >=2 pairs (< 4)" [ref=e480]: insufficient data
+                - row "isa_mean comm_d_prime — — — — — insufficient data" [ref=e481]:
+                  - cell "isa_mean" [ref=e482]
+                  - cell "comm_d_prime" [ref=e483]
+                  - cell "—" [ref=e484]
+                  - cell "—" [ref=e485]
+                  - cell "—" [ref=e486]
+                  - cell "—" [ref=e487]
+                  - cell "—" [ref=e488]
+                  - cell "insufficient data" [ref=e489]:
+                    - generic "only 0 participants with >=2 pairs (< 4)" [ref=e490]: insufficient data
+          - generic [ref=e491]:
+            - heading "Q4 — DEPDF parameter drift (exploratory)" [level=3] [ref=e492]
+            - generic [ref=e493]:
+              - generic [ref=e494]:
+                - generic [ref=e495]:
+                  - heading "G₀ (baseline MWL)" [level=3] [ref=e496]
+                  - generic [ref=e497]: ok
+                - table [ref=e498]:
+                  - rowgroup [ref=e499]:
+                    - row "Term b 95% CI std p" [ref=e500]:
+                      - columnheader "Term" [ref=e501]
+                      - columnheader "b" [ref=e502]
+                      - columnheader "95% CI" [ref=e503]
+                      - columnheader "std" [ref=e504]
+                      - columnheader "p" [ref=e505]
+                  - rowgroup [ref=e506]:
+                    - row "visit_c 0.000 [0.000, 0.000] 0.777 0.040" [ref=e507]:
+                      - cell "visit_c" [ref=e508]
+                      - cell "0.000" [ref=e509]
+                      - cell "[0.000, 0.000]" [ref=e510]
+                      - cell "0.777" [ref=e511]
+                      - cell "0.040" [ref=e512]
+              - generic [ref=e513]:
+                - generic [ref=e514]:
+                  - heading "P₀ (baseline nonfailure)" [level=3] [ref=e515]
+                  - generic [ref=e516]: ok
+                - table [ref=e517]:
+                  - rowgroup [ref=e518]:
+                    - row "Term b 95% CI std p" [ref=e519]:
+                      - columnheader "Term" [ref=e520]
+                      - columnheader "b" [ref=e521]
+                      - columnheader "95% CI" [ref=e522]
+                      - columnheader "std" [ref=e523]
+                      - columnheader "p" [ref=e524]
+                  - rowgroup [ref=e525]:
+                    - row "visit_c -0.000 [-0.000, 0.000] -0.762 0.052" [ref=e526]:
+                      - cell "visit_c" [ref=e527]
+                      - cell "-0.000" [ref=e528]
+                      - cell "[-0.000, 0.000]" [ref=e529]
+                      - cell "-0.762" [ref=e530]
+                      - cell "0.052" [ref=e531]
+              - generic [ref=e532]:
+                - generic [ref=e533]:
+                  - heading "τ₀ (baseline MTTF)" [level=3] [ref=e534]
+                  - generic [ref=e535]: ok
+                - table [ref=e536]:
+                  - rowgroup [ref=e537]:
+                    - row "Term b 95% CI std p" [ref=e538]:
+                      - columnheader "Term" [ref=e539]
+                      - columnheader "b" [ref=e540]
+                      - columnheader "95% CI" [ref=e541]
+                      - columnheader "std" [ref=e542]
+                      - columnheader "p" [ref=e543]
+                  - rowgroup [ref=e544]:
+                    - row "visit_c -0.000 [-0.000, 0.000] -0.722 0.136" [ref=e545]:
+                      - cell "visit_c" [ref=e546]
+                      - cell "-0.000" [ref=e547]
+                      - cell "[-0.000, 0.000]" [ref=e548]
+                      - cell "-0.722" [ref=e549]
+                      - cell "0.136" [ref=e550]
+          - generic [ref=e551]:
+            - heading "rmANOVA sensitivity (descriptive)" [level=3] [ref=e552]
+            - paragraph [ref=e553]: SYSMON d′ F(2, 14) = 692.13, p = <0.001, partial η² = 0.990 (n=8)
+            - paragraph [ref=e554]: NASA-TLX (raw) F(2, 14) = 2.4000110048180657e+30, p = <0.001, partial η² = 1.000 (n=8)
+            - paragraph [ref=e555]: Bedford insufficient_data — only 0 complete-case participants (< 3)
+          - generic [ref=e556]:
+            - paragraph [ref=e557]:
+              - text: Engine v1.0.0 · fingerprint
+              - generic [ref=e558]: 74d96dc1fc67…
+              - text: · 144 metric rows · 16 fits · 8 participants · pandas 3.0.3 · statsmodels 0.14.6 · scipy 1.17.1 · numpy 2.4.6
+            - list [ref=e559]:
+              - listitem [ref=e560]: Wald inference on REML fits; small-sample (n=12) p-values are approximate.
+              - listitem [ref=e561]: Random intercepts only; random slopes not estimable at this n.
+              - listitem [ref=e562]: Q2 primary slope is the level-adjusted common slope (additive model); level-specific slopes are exploratory (interaction fit).
+              - listitem [ref=e563]: rmANOVA is complete-case and visit-averaged; descriptive sensitivity only.
+              - listitem [ref=e564]: Q3/Q4 and non-confirmatory metrics are exploratory (no error-rate control).
+              - listitem [ref=e565]: "Q4 on p0: near-boundary [0,1] probability; the linear-LMM slope is descriptive only and may be not_estimable."
+  - alert [ref=e566]

@@ -8,6 +8,7 @@ import { AddParticipantDialog } from "@/components/participants/AddParticipantDi
 
 export default function ParticipantsPage() {
   const { participants, tracker, refreshAll, error } = useConsole();
+  const visitCount = new Set(tracker.map((cell) => cell.visit_ordinal)).size;
   useEffect(() => { void refreshAll(); }, [refreshAll]);
 
   return (
@@ -19,7 +20,7 @@ export default function ParticipantsPage() {
         actions={<AddParticipantDialog onCreated={() => void refreshAll()} />}
         stats={[
           { label: "Crew", value: participants.length },
-          { label: "Visits", value: "06" },
+          { label: "Visits", value: String(visitCount).padStart(2, "0") },
           { label: "Cells", value: tracker.filter((cell) => cell.present).length },
         ]}
       />

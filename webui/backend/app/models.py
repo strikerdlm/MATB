@@ -24,8 +24,8 @@ class Visit(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("participant_id", "visit_ordinal"),)
     id: int | None = Field(default=None, primary_key=True)
     participant_id: str = Field(foreign_key="participant.id", index=True)
-    visit_ordinal: int                              # 1..6 (the timepoint)
-    scheduled_day: int                              # 0/3/6/9/12/15 (target)
+    visit_ordinal: int                              # deployment protocol timepoint
+    scheduled_day: int                              # deployment protocol target day
     actual_date: date | None = None
     status: str = "planned"                         # planned|in_progress|complete
 

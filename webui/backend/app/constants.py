@@ -1,7 +1,11 @@
-"""Study-protocol constants."""
+"""Study-protocol helpers and task constants."""
 
 from __future__ import annotations
 
-SCHEDULED_DAYS: tuple[int, ...] = (0, 3, 6, 9, 12, 15)  # 6 visits over 15 days
-N_VISITS: int = len(SCHEDULED_DAYS)
+from app.study_protocol import VisitDefinition, selected_protocol
+
 WORKLOAD_LEVELS: tuple[str, ...] = ("LOW", "MEDIUM", "HIGH")
+
+
+def protocol_visits() -> tuple[VisitDefinition, ...]:
+    return selected_protocol().visits
