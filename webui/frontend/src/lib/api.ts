@@ -1,5 +1,21 @@
 import type {
-  AnalysisArtifact, BayesJob, BlockDetail, FigureOptionExport, FitRow, IngestResult, MetricRow, Participant, ParticipantCreate, ResearchContext, ScreenIngestResult, ScreenSummary, TrackerCell, Visit,
+  AnalysisArtifact,
+  BayesJob,
+  BlockDetail,
+  FigureOptionExport,
+  FitRow,
+  IngestResult,
+  MetricRow,
+  Participant,
+  ParticipantCreate,
+  ResearchContext,
+  ScreenIngestResult,
+  ScreenSummary,
+  StudyContextCreate,
+  StudyParticipantContext,
+  StudyProtocol,
+  TrackerCell,
+  Visit,
 } from "@/types";
 import { getApiBase } from "@/lib/runtime-config";
 
@@ -45,6 +61,34 @@ export async function listParticipants(): Promise<Participant[]> {
 export async function createParticipant(body: ParticipantCreate): Promise<Participant> {
   const res = await request("/participants", {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new ApiError(res.status, await detail(res));
+  return res.json();
+}
+
+export async function getStudyProtocol(): Promise<StudyProtocol> {
+  const res = await request("/study/protocol", { method: "GET" });
+  if (!res.ok) throw new ApiError(res.status, await detail(res));
+  return res.json();
+}
+
+export async function getStudyContext(participantId: string): Promise<StudyParticipantContext | null> {
+  const path = `/participants/${encodeURIComponent(participantId)}/study-context`;
+  const res = await request(path, { method: "GET" });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new ApiError(res.status, await detail(res));
+  return res.json();
+}
+
+export async function createStudyContext(
+  participantId: string,
+  body: StudyContextCreate,
+): Promise<StudyParticipantContext> {
+  const path = `/participants/${encodeURIComponent(participantId)}/study-context`;
+  const res = await request(path, {
+    method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });

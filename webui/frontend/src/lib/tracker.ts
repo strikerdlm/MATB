@@ -1,7 +1,6 @@
 import type { TrackerCell } from "@/types";
 
 export const LEVELS = ["LOW", "MEDIUM", "HIGH"] as const;
-export const N_VISITS = 6;
 
 export interface Summary { filled: number; total: number; }
 
@@ -11,7 +10,7 @@ export function summarize(cells: TrackerCell[]): Summary {
 
 export interface ParticipantRow {
   participantId: string;
-  cells: TrackerCell[];   // ordered: visit 1..6, each LOW/MEDIUM/HIGH
+  cells: TrackerCell[];   // ordered by protocol visit, then LOW/MEDIUM/HIGH
   filled: number;
   total: number;
 }

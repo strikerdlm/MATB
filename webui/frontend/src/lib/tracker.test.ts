@@ -4,13 +4,18 @@ import type { TrackerCell } from "@/types";
 
 function grid(present: Array<[string, number, string]>, pids = ["P01"]): TrackerCell[] {
   const cells: TrackerCell[] = [];
+  const visits = [
+    { ordinal: 1, scheduledDay: 0 },
+    { ordinal: 2, scheduledDay: 8 },
+    { ordinal: 3, scheduledDay: 15 },
+  ];
   for (const pid of pids)
-    for (let v = 1; v <= 6; v++)
+    for (const visit of visits)
       for (const lvl of LEVELS)
         cells.push({
-          participant_id: pid, visit_ordinal: v, scheduled_day: (v - 1) * 3,
+          participant_id: pid, visit_ordinal: visit.ordinal, scheduled_day: visit.scheduledDay,
           workload_level: lvl,
-          present: present.some(([p, vv, l]) => p === pid && vv === v && l === lvl),
+          present: present.some(([p, vv, l]) => p === pid && vv === visit.ordinal && l === lvl),
         });
   return cells;
 }
@@ -18,7 +23,7 @@ function grid(present: Array<[string, number, string]>, pids = ["P01"]): Tracker
 describe("tracker aggregation", () => {
   it("summarize counts filled vs total", () => {
     const s = summarize(grid([["P01", 1, "LOW"], ["P01", 1, "MEDIUM"]]));
-    expect(s.total).toBe(18);
+    expect(s.total).toBe(9);
     expect(s.filled).toBe(2);
   });
 
@@ -26,7 +31,7 @@ describe("tracker aggregation", () => {
     const rows = byParticipant(grid([["P01", 1, "LOW"]], ["P01", "P02"]));
     expect(rows.map((r) => r.participantId)).toEqual(["P01", "P02"]);
     expect(rows[0].filled).toBe(1);
-    expect(rows[0].total).toBe(18);
+    expect(rows[0].total).toBe(9);
     expect(rows[1].filled).toBe(0);
   });
 
@@ -34,7 +39,7 @@ describe("tracker aggregation", () => {
     const rows = byParticipant(grid([["P01", 2, "HIGH"]]));
     const cell = rows[0].cells.find((c) => c.visit_ordinal === 2 && c.workload_level === "HIGH");
     expect(cell?.present).toBe(true);
-    expect(rows[0].cells.length).toBe(18);
+    expect(rows[0].cells.length).toBe(9);
     expect(rows[0].cells[0]).toMatchObject({ visit_ordinal: 1, workload_level: "LOW" });
     expect(rows[0].cells[5]).toMatchObject({ visit_ordinal: 2, workload_level: "HIGH" });
   });

@@ -60,6 +60,31 @@ export interface ParticipantCreate {
   notes?: string;
 }
 
+export interface StudyVisitDefinition {
+  ordinal: number;
+  code: "T0" | "DM8" | "DM15" | string;
+  scheduled_day: number;
+}
+
+export interface StudyProtocol {
+  protocol_id: string;
+  protocol_version: string;
+  schedule_sha256: string;
+  visits: StudyVisitDefinition[];
+}
+
+export interface StudyContextCreate {
+  task_sequence: "MATB_LIFTOFF" | "LIFTOFF_MATB";
+  prior_fpv_hours: number;
+  gaming_hours_per_week: number;
+}
+
+export interface StudyParticipantContext extends StudyContextCreate {
+  participant_id: string;
+  protocol_id: string;
+  created_at: string;
+}
+
 export interface BlockDetail {
   participant_id: string;
   visit_ordinal: number;

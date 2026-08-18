@@ -12,6 +12,7 @@ export default function TrackerPage() {
   const { tracker, refreshTracker, error } = useConsole();
   const [selected, setSelected] = useState<TrackerCell | null>(null);
   const summary = summarize(tracker);
+  const visitCount = new Set(tracker.map((cell) => cell.visit_ordinal)).size;
 
   useEffect(() => { void refreshTracker(); }, [refreshTracker]);
 
@@ -20,10 +21,10 @@ export default function TrackerPage() {
       <PageHeader
         kicker="Mission grid"
         title="Study Completeness"
-        description="Twelve crews, six sorties, three workload regimes."
+        description="Protocol visits across three OpenMATB workload regimes."
         stats={[
           { label: "Cells", value: `${summary.filled}/${summary.total || 0}` },
-          { label: "Visits", value: "06" },
+          { label: "Visits", value: String(visitCount).padStart(2, "0") },
           { label: "Levels", value: "03" },
         ]}
       />

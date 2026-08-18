@@ -1,7 +1,7 @@
 # MATB Research Console (webui)
 
-Researcher console for the MATB longitudinal study (12 participants × 6 visits ×
-3 workload levels). Backend: `backend/` (FastAPI) and frontend: `frontend/`
+Researcher console for protocol-defined longitudinal MATB studies. ASTRA uses
+12 participants × 3 visits × 3 workload levels. Backend: `backend/` (FastAPI) and frontend: `frontend/`
 (Next.js) are both implemented. The console covers participant setup, CSV +
 scenario-manifest ingestion, completeness tracking, block provenance review,
 descriptive visualization, confirmatory/Bayesian analysis, baseline screen

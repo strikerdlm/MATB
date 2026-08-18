@@ -15,24 +15,24 @@ describe("viz reshapers", () => {
     expect(METRICS.nasatlx_raw_tlx.label).toBeTruthy();
   });
 
-  it("trajectorySeries fills 6 visits per level with null gaps", () => {
+  it("trajectorySeries renders three ASTRA visits without a frontend constant", () => {
     const rows = [row("P01", 1, "LOW", 40), row("P01", 3, "LOW", 44), row("P01", 1, "HIGH", 80)];
-    const t = trajectorySeries(rows, "P01", "nasatlx_raw_tlx");
-    expect(t.visits).toEqual([1, 2, 3, 4, 5, 6]);
-    expect(t.series.LOW).toEqual([40, null, 44, null, null, null]);
-    expect(t.series.HIGH).toEqual([80, null, null, null, null, null]);
-    expect(t.series.MEDIUM).toEqual([null, null, null, null, null, null]);
+    const t = trajectorySeries(rows, "P01", "nasatlx_raw_tlx", [1, 2, 3]);
+    expect(t.visits).toEqual([1, 2, 3]);
+    expect(t.series.LOW).toEqual([40, null, 44]);
+    expect(t.series.HIGH).toEqual([80, null, null]);
+    expect(t.series.MEDIUM).toEqual([null, null, null]);
   });
 
   it("trajectorySeries ignores other participants and metrics", () => {
     const rows = [row("P02", 1, "LOW", 99), { ...row("P01", 1, "LOW", 40), metric: "bedford" }];
-    const t = trajectorySeries(rows, "P01", "nasatlx_raw_tlx");
-    expect(t.series.LOW).toEqual([null, null, null, null, null, null]);
+    const t = trajectorySeries(rows, "P01", "nasatlx_raw_tlx", [1, 2, 3]);
+    expect(t.series.LOW).toEqual([null, null, null]);
   });
 
   it("groupOverview computes mean/sd/n across participants", () => {
     const rows = [row("P01", 1, "LOW", 40), row("P02", 1, "LOW", 60), row("P03", 1, "LOW", 50)];
-    const g = groupOverview(rows, "nasatlx_raw_tlx");
+    const g = groupOverview(rows, "nasatlx_raw_tlx", [1, 2, 3]);
     expect(g.stats.LOW.n[0]).toBe(3);
     expect(g.stats.LOW.mean[0]).toBeCloseTo(50, 6);
     expect(g.stats.LOW.sd[0]).toBeCloseTo(10, 6);        // sample SD of 40/50/60
@@ -41,7 +41,7 @@ describe("viz reshapers", () => {
   });
 
   it("groupOverview sd is null when n < 2", () => {
-    const g = groupOverview([row("P01", 2, "HIGH", 80)], "nasatlx_raw_tlx");
+    const g = groupOverview([row("P01", 2, "HIGH", 80)], "nasatlx_raw_tlx", [1, 2, 3]);
     expect(g.stats.HIGH.mean[1]).toBe(80);
     expect(g.stats.HIGH.sd[1]).toBeNull();
   });
