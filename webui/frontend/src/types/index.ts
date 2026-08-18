@@ -23,6 +23,22 @@ export interface TrackerCell {
   present: boolean;
 }
 
+export interface LiftoffTrackerCell {
+  participant_id: string;
+  visit_ordinal: number;
+  visit_code: string;
+  scheduled_day: number;
+  attempt_count: number;
+  session_id?: string | null;
+  status?: string | null;
+  validity?: string | null;
+  metrics_present: boolean;
+  hrv_measurement_id?: string | null;
+  sync_quality: string;
+  present: boolean;
+  state: "absent" | "pending" | "partial" | "invalid" | "valid_no_hrv" | "valid_poor_sync" | "valid_good_sync";
+}
+
 export interface IngestResult {
   id: number;
   workload_level: string;

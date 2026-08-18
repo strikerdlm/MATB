@@ -14,6 +14,7 @@ import type {
   StudyContextCreate,
   StudyParticipantContext,
   StudyProtocol,
+  LiftoffTrackerCell,
   TrackerCell,
   Visit,
 } from "@/types";
@@ -48,6 +49,12 @@ async function request(path: string, init: RequestInit): Promise<Response> {
 
 export async function getTracker(): Promise<TrackerCell[]> {
   const res = await request("/tracker", { method: "GET" });
+  if (!res.ok) throw new ApiError(res.status, await detail(res));
+  return res.json();
+}
+
+export async function getLiftoffTracker(): Promise<LiftoffTrackerCell[]> {
+  const res = await request("/tracker/liftoff", { method: "GET" });
   if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();
 }
