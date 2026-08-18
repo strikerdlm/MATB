@@ -10,9 +10,11 @@ from .protocol import (
 from .records import MarkerKind, MarkerRecord, TelemetryRecord
 from .receiver import LiftoffUdpReceiver, ReceivedPacket, ReceiverHealth
 from .quality import TelemetryQualityReport, assess_quality
+from .metrics import METRICS_VERSION, VisibleResults, compute_metrics
 
 __all__ = [
     "LIFTOFF_ALL_V1",
+    "METRICS_VERSION",
     "PACKET_SIZE",
     "LiftoffPacket",
     "MarkerKind",
@@ -23,6 +25,8 @@ __all__ = [
     "LiftoffUdpReceiver",
     "TelemetryRecord",
     "TelemetryQualityReport",
+    "VisibleResults",
     "assess_quality",
+    "compute_metrics",
     "decode_packet",
 ]
