@@ -131,6 +131,16 @@ class PhysiologyLinkRequest(BaseModel):
     hrv_file_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
+class PhysiologyLinkView(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["linked", "pending", "missing"]
+    hrv_measurement_id: str | None = None
+    hrv_file_sha256: str | None = None
+    sync_quality: Literal["good", "acceptable", "poor", "missing"]
+    contract_version: str = "task-session-hrv-v1"
+
+
 class AbortRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -200,6 +210,7 @@ __all__ = [
     "LiftoffReadinessView",
     "LiftoffSessionView",
     "PhysiologyLinkRequest",
+    "PhysiologyLinkView",
     "PreparedLiftoffSession",
     "QuestionnairesRequest",
     "TelemetryQualityView",

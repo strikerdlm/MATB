@@ -5,7 +5,15 @@ import json
 
 import pytest
 
-from tests.test_liftoff_endpoints import create_payload, prepared_session
+from app.hrv_task_client import HrvTaskTemporaryError
+from tests.test_liftoff_endpoints import (
+    FakeHrvClient,
+    create_payload,
+    finish_phases,
+    polar_metadata,
+    prepared_session,
+    valid_hrv_response,
+)
 
 
 @pytest.mark.anyio
@@ -69,3 +77,36 @@ async def test_result_upload_rejects_magic_and_hash_mismatch(liftoff_client):
         "liftoff_screenshot_type",
         "liftoff_screenshot_hash",
     }
+
+
+@pytest.mark.anyio
+async def test_hrv_outage_leaves_retryable_pending_link(liftoff_client):
+    client, manager = liftoff_client
+    session, lease = await prepared_session(liftoff_client)
+    await finish_phases(client, session["id"], lease)
+    rr_content = "\n".join(["800"] * 1900)
+    manager.hrv_client = FakeHrvClient(error=HrvTaskTemporaryError("hrv_unavailable"))
+    files = {
+        "rr_file": ("polar.txt", rr_content.encode(), "text/plain"),
+        "metadata_file": ("polar.metadata.json", json.dumps(polar_metadata(session["id"], rr_content)).encode(), "application/json"),
+    }
+
+    response = await client.post(
+        f"/liftoff/sessions/{session['id']}/physiology-link",
+        files=files,
+        headers={"X-Liftoff-Controller": lease},
+    )
+
+    assert response.status_code == 202
+    assert response.json()["status"] == "pending"
+    pending = manager._active[session["id"]].recorder.run_dir / "pending-hrv-request.json"
+    assert pending.is_file()
+    manager.hrv_client = FakeHrvClient(valid_hrv_response(session["id"], "hrv-retry"))
+    retry = await client.post(
+        f"/liftoff/sessions/{session['id']}/physiology-link/retry",
+        json={},
+        headers={"X-Liftoff-Controller": lease},
+    )
+    assert retry.status_code == 200
+    assert retry.json()["hrv_measurement_id"] == "hrv-retry"
+    assert not pending.exists()

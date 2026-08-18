@@ -10,6 +10,7 @@ import hmac
 import json
 from pathlib import Path
 import secrets
+import os
 from typing import Any
 from uuid import uuid4
 
@@ -23,11 +24,23 @@ from app.liftoff_schemas import (
     LiftoffReadinessView,
     LiftoffSessionView,
     PhysiologyLinkRequest,
+    PhysiologyLinkView,
     PreparedLiftoffSession,
     QuestionnairesRequest,
     VisibleResultsRequest,
 )
 from app.study_protocol import selected_protocol
+from app.hrv_task_client import (
+    HRV_COMMIT,
+    HRV_SCHEMA_SHA256,
+    HrvTaskContractError,
+    HrvTaskTemporaryError,
+    PolarRecordingMetadataRequest,
+    TaskSessionHrvRequest,
+    TaskSessionHrvResponse,
+    UtcSegment,
+)
+from matb_integration.recording.artifacts import write_json_artifact
 from matb_integration.liftoff.metrics import VisibleResults
 from matb_integration.liftoff.protocol import LIFTOFF_ALL_V1
 from matb_integration.liftoff.session import LiftoffSessionRecorder, SessionLifecycleError
@@ -114,11 +127,13 @@ class LiftoffManager:
         artifact_root: Path,
         receiver: Any,
         persistence: SQLModelLiftoffPersistence,
+        hrv_client: Any | None = None,
     ) -> None:
         self.artifact_root = Path(artifact_root).resolve()
         self.artifact_root.mkdir(parents=True, exist_ok=True)
         self.receiver = receiver
         self.persistence = persistence
+        self.hrv_client = hrv_client
         self._active: dict[str, _ActiveLiftoffSession] = {}
         self._capture_task: asyncio.Task[None] | None = None
 
@@ -312,6 +327,165 @@ class LiftoffManager:
             hrv_file_sha256=request.hrv_file_sha256,
             sync_quality=request.sync_quality,
         )
+
+    async def analyze_physiology(
+        self,
+        session_id: str,
+        lease: str,
+        *,
+        rr_content: str,
+        metadata: dict[str, object],
+    ) -> PhysiologyLinkView:
+        active = self._require_controller(session_id, lease)
+        row = self.persistence.load_session(session_id)
+        if row is None:
+            raise LiftoffRuntimeError("liftoff_session_not_found")
+        try:
+            timing = PolarRecordingMetadataRequest.model_validate(metadata)
+        except ValueError as exc:
+            raise LiftoffRuntimeError("liftoff_hrv_metadata_invalid") from exc
+        rr_hash = hashlib.sha256(rr_content.encode("utf-8")).hexdigest()
+        if (
+            str(timing.external_session_id) != session_id
+            or timing.participant_id != row.participant_id
+            or timing.rr_file_sha256 != rr_hash
+        ):
+            raise LiftoffRuntimeError("liftoff_hrv_identity_mismatch")
+        request = TaskSessionHrvRequest(
+            external_session_id=timing.external_session_id,
+            participant_id=row.participant_id,
+            rr_filename="polar.txt",
+            rr_content=rr_content,
+            rr_file_sha256=rr_hash,
+            timing=timing,
+            segments=self._hrv_segments(active.recorder),
+        )
+        return await self._submit_hrv_request(session_id, active, request)
+
+    async def retry_physiology(self, session_id: str, lease: str) -> PhysiologyLinkView:
+        active = self._require_controller(session_id, lease)
+        pending_path = active.recorder.run_dir / "pending-hrv-request.json"
+        if not pending_path.is_file():
+            raise LiftoffRuntimeError("liftoff_hrv_pending_not_found")
+        try:
+            request = TaskSessionHrvRequest.model_validate_json(
+                pending_path.read_text(encoding="utf-8")
+            )
+        except (OSError, ValueError) as exc:
+            raise LiftoffRuntimeError("liftoff_hrv_pending_invalid") from exc
+        return await self._submit_hrv_request(session_id, active, request)
+
+    @staticmethod
+    def _hrv_segments(recorder: LiftoffSessionRecorder) -> list[UtcSegment]:
+        marker_path = recorder.run_dir / "markers.jsonl"
+        try:
+            markers = [json.loads(line) for line in marker_path.read_text(encoding="utf-8").splitlines() if line]
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            raise LiftoffRuntimeError("liftoff_markers_invalid") from exc
+        by_kind = {str(marker.get("kind")): marker for marker in markers}
+        pairs = (
+            ("baseline", "baseline_started", "baseline_finished"),
+            ("task", "task_started", "task_finished"),
+            ("recovery", "recovery_started", "recovery_finished"),
+        )
+        try:
+            return [
+                UtcSegment(
+                    label=label,
+                    start_utc=by_kind[start_kind]["received_utc"],
+                    end_utc=by_kind[end_kind]["received_utc"],
+                )
+                for label, start_kind, end_kind in pairs
+            ]
+        except (KeyError, ValueError) as exc:
+            raise LiftoffRuntimeError("liftoff_phase_markers_incomplete") from exc
+
+    async def _submit_hrv_request(
+        self,
+        session_id: str,
+        active: _ActiveLiftoffSession,
+        request: TaskSessionHrvRequest,
+    ) -> PhysiologyLinkView:
+        pending_path = active.recorder.run_dir / "pending-hrv-request.json"
+        try:
+            if self.hrv_client is None:
+                raise HrvTaskTemporaryError("hrv_unavailable")
+            response: TaskSessionHrvResponse = await self.hrv_client.analyze(request)
+        except HrvTaskTemporaryError:
+            write_json_artifact(pending_path, request.model_dump(mode="json"))
+            os.chmod(pending_path, 0o600)
+            return PhysiologyLinkView(status="pending", sync_quality="missing")
+        except HrvTaskContractError as exc:
+            raise LiftoffRuntimeError("liftoff_hrv_contract_rejected") from exc
+        if (
+            str(response.external_session_id) != session_id
+            or response.participant_id != request.participant_id
+            or response.rr_file_sha256 != request.rr_file_sha256
+        ):
+            raise LiftoffRuntimeError("liftoff_hrv_response_mismatch")
+        sync_quality = self._grade_sync(response, request)
+        link = {
+            "status": "linked",
+            "contract_version": response.contract_version,
+            "contract_schema_sha256": HRV_SCHEMA_SHA256,
+            "hrv_commit": HRV_COMMIT,
+            "external_session_id": session_id,
+            "hrv_measurement_id": response.measurement_id,
+            "hrv_file_sha256": response.rr_file_sha256,
+            "sync_quality": sync_quality,
+            "quality": response.quality.model_dump(mode="json"),
+            "segment_indices": [item.model_dump(mode="json") for item in response.segment_indices],
+            "phase_metrics": {
+                key: value.model_dump(mode="json")
+                for key, value in response.phase_metrics.items()
+            },
+            "delta_lnrmssd_baseline_task": response.delta_lnrmssd_baseline_task,
+            "delta_lnrmssd_task_recovery": response.delta_lnrmssd_task_recovery,
+        }
+        active.recorder.attach_physiology_link(link)
+        self.persistence.update_session(
+            session_id,
+            hrv_measurement_id=response.measurement_id,
+            hrv_file_sha256=response.rr_file_sha256,
+            sync_quality=sync_quality,
+        )
+        if pending_path.exists():
+            pending_path.unlink()
+        return PhysiologyLinkView(
+            status="linked",
+            hrv_measurement_id=response.measurement_id,
+            hrv_file_sha256=response.rr_file_sha256,
+            sync_quality=sync_quality,
+        )
+
+    def _grade_sync(
+        self,
+        response: TaskSessionHrvResponse,
+        request: TaskSessionHrvRequest,
+    ) -> str:
+        health = self.receiver.health()
+        denominator = max(1, health.valid_packets + health.overflow_count)
+        loss_pct = 100.0 * health.overflow_count / denominator
+        common_monotonic = (
+            request.timing.first_rr_received_monotonic_ns is not None
+            and request.timing.last_rr_received_monotonic_ns is not None
+        )
+        uncertainty_ms = 0.0 if common_monotonic else 1_001.0
+        if (
+            uncertainty_ms <= 100.0
+            and loss_pct < 1.0
+            and not health.clock_step_detected
+            and response.quality.status == "good"
+        ):
+            return "good"
+        if (
+            uncertainty_ms <= 1_000.0
+            and loss_pct < 5.0
+            and not health.clock_step_detected
+            and response.quality.status != "poor"
+        ):
+            return "acceptable"
+        return "poor"
 
     def seal(self, session_id: str, lease: str) -> LiftoffDebriefView:
         active = self._require_controller(session_id, lease)

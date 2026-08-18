@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.db import get_engine, init_db
+from app.hrv_task_client import HrvTaskClient
 from app.liftoff_persistence import SQLModelLiftoffPersistence
 from app.liftoff_runtime import LiftoffManager
 from app.simulation_persistence import SQLModelSimulationPersistence
@@ -136,10 +137,20 @@ async def lifespan(app: FastAPI):
         port=_liftoff_port(),
     )
     await liftoff_receiver.start()
+    hrv_api_url = os.getenv("HRV_API_URL", "").strip()
+    hrv_client = (
+        HrvTaskClient(
+            base_url=hrv_api_url,
+            token=os.getenv("HRV_API_TOKEN", "").strip(),
+        )
+        if hrv_api_url
+        else None
+    )
     liftoff_manager = LiftoffManager(
         artifact_root=_liftoff_artifact_root(),
         receiver=liftoff_receiver,
         persistence=liftoff_persistence,
+        hrv_client=hrv_client,
     )
     liftoff_manager.start_capture()
     app.state.liftoff_manager = liftoff_manager

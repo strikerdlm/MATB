@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import zipfile
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Request, UploadFile, status
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
 
 from app.liftoff_runtime import LiftoffManager, LiftoffRuntimeError
@@ -20,7 +21,7 @@ from app.liftoff_schemas import (
     LiftoffProtocolView,
     LiftoffReadinessView,
     LiftoffSessionView,
-    PhysiologyLinkRequest,
+    PhysiologyLinkView,
     PreparedLiftoffSession,
     QuestionnairesRequest,
     VisibleResultsRequest,
@@ -81,6 +82,16 @@ def _translate(exc: LiftoffRuntimeError) -> HTTPException:
         return _error(status.HTTP_409_CONFLICT, code)
     if code in {"liftoff_visit_not_in_protocol", "liftoff_artifact_path"}:
         return _error(status.HTTP_422_UNPROCESSABLE_ENTITY, code)
+    if code in {
+        "liftoff_hrv_metadata_invalid",
+        "liftoff_hrv_identity_mismatch",
+        "liftoff_phase_markers_incomplete",
+        "liftoff_hrv_contract_rejected",
+        "liftoff_hrv_response_mismatch",
+    }:
+        return _error(status.HTTP_422_UNPROCESSABLE_ENTITY, code)
+    if code in {"liftoff_hrv_pending_not_found"}:
+        return _error(status.HTTP_404_NOT_FOUND, code)
     return _error(status.HTTP_500_INTERNAL_SERVER_ERROR, code)
 
 
@@ -231,15 +242,57 @@ def submit_questionnaires(
     return {"status": "recorded"}
 
 
-@router.post("/sessions/{session_id}/physiology-link", status_code=status.HTTP_201_CREATED)
-def attach_physiology(
+@router.post("/sessions/{session_id}/physiology-link", response_model=PhysiologyLinkView)
+async def attach_physiology(
     session_id: str,
-    body: PhysiologyLinkRequest,
+    rr_file: UploadFile = File(...),
+    metadata_file: UploadFile = File(...),
     lease: str | None = Header(default=None, alias=_LEASE_HEADER),
     manager: LiftoffManager = Depends(get_liftoff_manager),
-) -> dict[str, str]:
-    _managed(lambda: manager.attach_physiology(session_id, _lease(lease), body))
-    return {"status": "recorded"}
+) -> PhysiologyLinkView | JSONResponse:
+    rr_bytes = await rr_file.read(5_000_001)
+    metadata_bytes = await metadata_file.read(131_073)
+    if len(rr_bytes) > 5_000_000 or len(metadata_bytes) > 131_072:
+        raise _error(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "liftoff_hrv_upload_too_large")
+    try:
+        rr_content = rr_bytes.decode("utf-8")
+        metadata = json.loads(metadata_bytes.decode("utf-8"))
+        if not isinstance(metadata, dict):
+            raise ValueError
+    except (UnicodeDecodeError, ValueError, json.JSONDecodeError) as exc:
+        raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "liftoff_hrv_upload_invalid") from exc
+    try:
+        view = await manager.analyze_physiology(
+            session_id,
+            _lease(lease),
+            rr_content=rr_content,
+            metadata=metadata,
+        )
+    except LiftoffRuntimeError as exc:
+        raise _translate(exc) from exc
+    if view.status == "pending":
+        return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content=view.model_dump(mode="json"))
+    return view
+
+
+@router.post(
+    "/sessions/{session_id}/physiology-link/retry",
+    response_model=PhysiologyLinkView,
+)
+async def retry_physiology(
+    session_id: str,
+    body: EmptyRequest,
+    lease: str | None = Header(default=None, alias=_LEASE_HEADER),
+    manager: LiftoffManager = Depends(get_liftoff_manager),
+) -> PhysiologyLinkView | JSONResponse:
+    del body
+    try:
+        view = await manager.retry_physiology(session_id, _lease(lease))
+    except LiftoffRuntimeError as exc:
+        raise _translate(exc) from exc
+    if view.status == "pending":
+        return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content=view.model_dump(mode="json"))
+    return view
 
 
 @router.post("/sessions/{session_id}/seal", response_model=LiftoffDebriefView)
