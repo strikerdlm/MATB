@@ -18,6 +18,8 @@ from fastapi.responses import JSONResponse
 from app.db import get_engine, init_db
 from app.simulation_persistence import SQLModelSimulationPersistence
 from app.simulation_runtime import SimulationManager
+from app.study_models import ensure_study_binding
+from app.study_protocol import selected_protocol
 from app.websocket.simulation import HubConflict
 
 
@@ -106,6 +108,7 @@ def _simulation_wall_time_scale() -> float:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    ensure_study_binding(get_engine(), selected_protocol())
     persistence = SQLModelSimulationPersistence(get_engine())
     persistence.mark_orphaned_sessions()
     manager = SimulationManager(
@@ -153,7 +156,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.routers import analysis, exports, fits, ingest, metrics, participants, screen, simulation, tracker  # noqa: E402
+from app.routers import analysis, exports, fits, ingest, metrics, participants, screen, simulation, study, tracker  # noqa: E402
 
 app.include_router(participants.router)
 app.include_router(ingest.router)
@@ -164,6 +167,7 @@ app.include_router(analysis.router)
 app.include_router(screen.router)
 app.include_router(exports.router)
 app.include_router(simulation.router)
+app.include_router(study.router)
 
 
 @app.websocket("/simulation/sessions/{session_id}/stream")
