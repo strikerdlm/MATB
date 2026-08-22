@@ -18,7 +18,9 @@ Choose one workflow below; you do not need to install the others.
 The active Python research surface generates scenarios and provenance, converts
 OpenMATB CSV logs, computes descriptive/frequentist/Bayesian results, fits a
 within-participant Suhir DEPDF model, and supports an exploratory
-neurocognitive screen. OpenMATB itself is external and is not vendored here.
+neurocognitive screen. The OpenMATB task runtime is tracked in `openmatb/` for
+local development and task presentation; the asset installer also supports a
+separate compatible checkout when a study requires one.
 
 The Research Console is a loopback FastAPI/Next.js application with local
 SQLite and artifact storage. Its sUAS surface is a synthetic, non-kinetic,
@@ -41,14 +43,14 @@ out of the repository and under the owning institution's custody controls.
 
 | Goal | Start here | Runtime | Example | Expected output |
 | --- | --- | --- | --- | --- |
-| Generate OpenMATB scenarios, convert logs, or try DEPDF analysis | `matb_integration/` | Python; external OpenMATB only for participant task presentation | [OpenMATB research tour](examples/openmatb-research/README.md) | Three scenarios/manifests, synthetic JSONL metrics, and one DEPDF JSON |
+| Generate OpenMATB scenarios, convert logs, or try DEPDF analysis | `matb_integration/` and `openmatb/` | Python; tracked or compatible OpenMATB for participant task presentation | [OpenMATB research tour](examples/openmatb-research/README.md) | Three scenarios/manifests, synthetic JSONL metrics, and one DEPDF JSON |
 | Ingest sessions, track visits, visualize data, analyze, and export | `webui/` | Python 3.12+, Node 20+, local browser | [Research Console walkthrough](examples/research-console/README.md) | Local SQLite records and `research-bundle.zip` |
 | Run a deterministic, observer-safe sUAS research session | `matb_integration/suas/` and `webui/` | Python 3.12+; Node 20+ for browser service | [sUAS simulator walkthrough](examples/suas-simulator/README.md) | Replay-verifiable events, metrics, debrief, manifest, and checksums |
 | Evaluate offline safety-management package contracts | `SMS/` | Node 22.x; Docker only for the offline image/bundle | [SMS capability tour](examples/sms-platform/README.md) | Deterministic JSON with a deliberately blocked safety-kernel result |
 | Demonstrate the older terminal monitor | `aircraft_monitor/` | Python and a terminal | [Legacy monitor guide](examples/legacy-monitor/README.md) | Headless UAV, fighter, combined, or experiment event stream |
 
 The [examples index](examples/README.md) compares fast offline examples with the
-service, browser, Docker, and external-runtime procedures.
+service, browser, Docker, and OpenMATB task-presentation procedures.
 
 <a id="architecture-and-data-flow"></a>
 ## 3. Architecture and data movement
@@ -56,6 +58,7 @@ service, browser, Docker, and external-runtime procedures.
 ```text
 MATB/
 ├── matb_integration/       Python scenario, conversion, analysis, screen, and sUAS libraries
+├── openmatb/               tracked OpenMATB desktop task runtime and plugins
 ├── scenarios/              committed OpenMATB and synthetic sUAS scenarios
 ├── webui/                  FastAPI backend and Next.js Research Console
 ├── SMS/                    Node/TypeScript safety-management monorepo
@@ -69,7 +72,7 @@ MATB/
 The four primary flows are deliberately separate:
 
 ```text
-External OpenMATB -> session CSV + scenario manifest -> metrics -> DEPDF/statistics -> research bundle
+Tracked/compatible OpenMATB -> session CSV + scenario manifest -> metrics -> DEPDF/statistics -> research bundle
 Browser -> FastAPI Research Console -> local SQLite/artifacts -> tracker/analysis/export
 Synthetic YAML -> deterministic sUAS engine -> observer-safe state -> replay/debrief artifacts
 Signed local evidence + read-only telemetry -> edge API/safety kernel -> console/audit -> offline verification
@@ -88,8 +91,8 @@ read-only, and neither application exposes a vehicle-command channel.
 | Python | 3.12+ is required by the sUAS installer; use the same version for repository Python workflows | Required | Required | Required | No | Required |
 | Node.js | Launcher checks 20+; frontend uses npm | No | 20+ required | 20+ for browser service | **22.x required** | No |
 | npm | Lockfile-based dependency/build tool | No | Required for frontend | Required for browser service | Required | No |
-| External OpenMATB | Separate task runner with its own dependencies | Workflow-specific | Only to collect real task sessions | No | No | No |
-| Xvfb | Virtual X display for external OpenMATB/Pyglet on headless Linux | Workflow-specific | No | No—the native UI is browser/headless | No | No in `--headless` mode |
+| OpenMATB runtime | Tracked in `openmatb/`; a separate compatible checkout is optional | Workflow-specific | Only to collect task sessions | No | No | No |
+| Xvfb | Virtual X display for OpenMATB/Pyglet on headless Linux | Workflow-specific | No | No—the native UI is browser/headless | No | No in `--headless` mode |
 | Chromium | Browser use; Playwright Chromium is needed only for browser E2E/a11y gates | Optional | Browser required; Playwright asset optional | Browser required for UI; optional for CLI | Optional console test asset | No |
 | Docker | Linux container engine and staged base image | No | No | No | Workflow-specific for offline image/bundle | No |
 | WSL2 | POSIX boundary on Windows | For `setup.sh` or Linux/Xvfb procedure | For the combined POSIX launcher only | Required on Windows for `install_suas.sh`/`run_suas.sh` | For POSIX scripts, Linux permissions, and Docker verification | Not required |
@@ -119,14 +122,15 @@ $PSVersionTable.PSVersion
 <a id="quick-start-openmatb"></a>
 ## 5. OpenMATB research quick start
 
-This quick start is fully synthetic. The external OpenMATB runtime is necessary
-only when presenting generated tasks to a participant.
+The first example is fully synthetic and does not start a task window. Use the
+tracked `openmatb/` runtime—or a separate compatible checkout—when presenting
+generated tasks to a participant.
 
 <h3>Prerequisites</h3>
 
-Use Git and Python 3.12+. For participant presentation, provide a separate
-OpenMATB checkout. Linux/headless presentation also needs Xvfb and a working
-Pyglet display; native Windows runs the external desktop runtime directly.
+Use Git and Python 3.12+. The tracked runtime is in `openmatb/`; a separate
+compatible checkout is optional. Linux/headless presentation also needs Xvfb
+and a working Pyglet display; native Windows runs the desktop runtime directly.
 
 <h3>Install</h3>
 
@@ -136,6 +140,7 @@ Linux Bash or WSL2, from the clone root:
 REPO_ROOT="$(pwd)"
 python3 -m venv "$REPO_ROOT/.venv-openmatb"
 "$REPO_ROOT/.venv-openmatb/bin/python" -m pip install -r "$REPO_ROOT/requirements-dev.txt"
+"$REPO_ROOT/.venv-openmatb/bin/python" -m pip install -r "$REPO_ROOT/openmatb/requirements.txt"
 ```
 
 `setup.sh` is POSIX-only and installs the narrower base `requirements.txt` for
@@ -153,28 +158,29 @@ Native Windows PowerShell 7+:
 $RepoRoot = (Get-Location).Path
 python -m venv (Join-Path $RepoRoot ".venv-openmatb")
 & (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") -m pip install -r (Join-Path $RepoRoot "requirements-dev.txt")
+& (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") -m pip install -r (Join-Path $RepoRoot "openmatb\requirements.txt")
 ```
 
 <h3>Configure</h3>
 
-Synthetic generation needs no configuration. To install assets into an
-external checkout derived from the clone location:
+Synthetic generation needs no configuration. Install the repository-owned
+scenarios and questionnaires into the tracked runtime:
 
 ```bash
 REPO_ROOT="$(pwd)"
-OPENMATB_DIR="$REPO_ROOT/../openmatb"
+OPENMATB_DIR="$REPO_ROOT/openmatb"
 "$REPO_ROOT/.venv-openmatb/bin/python" "$REPO_ROOT/install_to_openmatb.py" "$OPENMATB_DIR"
 ```
 
 ```powershell
 $RepoRoot = (Get-Location).Path
-$OpenMatbDir = (Resolve-Path (Join-Path $RepoRoot "..\openmatb")).Path
+$OpenMatbDir = (Resolve-Path (Join-Path $RepoRoot "openmatb")).Path
 & (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") (Join-Path $RepoRoot "install_to_openmatb.py") $OpenMatbDir
 ```
 
-The external checkout must contain `includes/`. Configure its own environment
-and scenario selector according to that runtime. Do not point the installer at
-this repository.
+The target must contain `includes/`, which the tracked runtime does. To use a
+separate compatible checkout, replace `OPENMATB_DIR` or `$OpenMatbDir` with its
+root path.
 
 <h3>Run</h3>
 
@@ -192,9 +198,30 @@ $RepoRoot = (Get-Location).Path
   --output-dir (Join-Path $RepoRoot "examples\output\generated-scenarios") --block-duration 900 --seed 42
 ```
 
-For external Linux/OpenMATB use, run its `main.py` inside its own environment.
-Use `DISPLAY` and Xvfb only on a Linux/headless host. Native Windows does not
-use Xvfb.
+For task presentation, edit `openmatb/config.ini` and start with
+`language=en_EN`, `fullscreen=False`, and
+`scenario_path=military_aviation/low_workload.txt`. Then run the tracked task
+window from its directory:
+
+```bash
+REPO_ROOT="$(pwd)"
+cd "$REPO_ROOT/openmatb"
+"$REPO_ROOT/.venv-openmatb/bin/python" main.py
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+Push-Location (Join-Path $RepoRoot "openmatb")
+try {
+  & (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") main.py
+} finally {
+  Pop-Location
+}
+```
+
+For a separate compatible checkout, run its `main.py` from that checkout using
+the selected environment. Use `DISPLAY` and Xvfb only on a Linux/headless host;
+native Windows does not use Xvfb.
 
 <h3>Try the synthetic example</h3>
 
@@ -214,7 +241,9 @@ $env:MATB_PYTHON = Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe"
 
 The tour writes three `scenarios/*.txt` files with adjacent manifests,
 `metrics.jsonl`, and `suhir.json`, then prints `External OpenMATB was not
-started.` The fixture contains only `SYNTH-P01`; it is not participant data.
+started.` That message refers only to the synthetic tour: it does not launch
+the tracked or a separate task runtime. The fixture contains only `SYNTH-P01`;
+it is not participant data.
 
 <h3>Verify</h3>
 
@@ -238,8 +267,8 @@ $RepoRoot = (Get-Location).Path
 
 <h3>Stop and clean up</h3>
 
-Stop external OpenMATB or Xvfb with Ctrl-C. Delete only the selected synthetic
-output, never an external runtime or session store.
+Stop OpenMATB or Xvfb with Ctrl-C. Delete only the selected synthetic output,
+never a task runtime or session store.
 
 ```bash
 REPO_ROOT="$(pwd)"
@@ -253,11 +282,12 @@ Remove-Item -Recurse -Force (Join-Path $RepoRoot "examples\output\openmatb-resea
 
 <h3>Troubleshooting</h3>
 
-An `includes/ not found` error means the selected external checkout is wrong.
-`ModuleNotFoundError` usually means the repository or external-runtime venv is
-inactive. On Linux, display/flicker/Pyglet failures belong to the external
-OpenMATB/X11 boundary: validate `DISPLAY`, use Xvfb on headless hosts, and begin
-windowed. See the [complete OpenMATB example](examples/openmatb-research/README.md).
+An `includes/ not found` error means the selected tracked or compatible
+checkout is wrong. `ModuleNotFoundError` usually means the selected venv is
+inactive or its OpenMATB requirements were not installed. On Linux,
+display/flicker/Pyglet failures belong to the OpenMATB/X11 boundary: validate
+`DISPLAY`, use Xvfb on headless hosts, and begin windowed. See the
+[complete OpenMATB example](examples/openmatb-research/README.md).
 
 <a id="quick-start-research-console"></a>
 ## 6. Research Console quick start
@@ -743,10 +773,10 @@ endpoint, release, and evidence explanations stay in their specialist guides.
 
 | Module | Purpose | User | Inputs → outputs | Runtime | Example | Verification | Limitation |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `matb_integration/scenario_builder.py` | Generate LOW/MEDIUM/HIGH counterbalanced scenarios | Study designer | Protocol, duration, seed → OpenMATB text scenarios | Python | [OpenMATB tour](examples/openmatb-research/README.md) | `pytest tests/test_scenario_builder.py tests/test_scenario_manifest.py tests/test_log_converter.py tests/suhir tests/analysis_stats tests/screen -q` | Generated tasks require external OpenMATB for presentation |
+| `matb_integration/scenario_builder.py` | Generate LOW/MEDIUM/HIGH counterbalanced scenarios | Study designer | Protocol, duration, seed → OpenMATB text scenarios | Python | [OpenMATB tour](examples/openmatb-research/README.md) | `pytest tests/test_scenario_builder.py tests/test_scenario_manifest.py tests/test_log_converter.py tests/suhir tests/analysis_stats tests/screen -q` | Generated tasks require the tracked or a compatible OpenMATB runtime for presentation |
 | `matb_integration/scenario_manifest.py` | Hash scenarios and validate session provenance | Data steward | Scenario/tags/expected probes → adjacent manifest and validation issues | Python | OpenMATB tour | Same suite | Hash integrity does not establish protocol validity or consent |
 | `matb_integration/log_converter.py` | Convert OpenMATB CSV into canonical metrics | Research analyst | CSV + pseudonym/workload → JSONL metrics | Python | OpenMATB tour | Same suite | Input quality and missing tasks constrain inference |
-| `matb_integration/questionnaires/` | EN/ES NASA-TLX, Bedford, ISA, and SAGAT assets | Study designer | Controlled text/YAML → configured questionnaire/probe content | External OpenMATB or sUAS loader | OpenMATB and sUAS tours | Questionnaire/SAGAT tests | Scales must be administered under an approved protocol |
+| `matb_integration/questionnaires/` | EN/ES NASA-TLX, Bedford, ISA, and SAGAT assets | Study designer | Controlled text/YAML → configured questionnaire/probe content | OpenMATB or sUAS loader | OpenMATB and sUAS tours | Questionnaire/SAGAT tests | Scales must be administered under an approved protocol |
 | `matb_integration/analysis/` | Descriptive outputs plus frequentist MixedLM/rmcorr/rmANOVA/FDR and Bayesian PyMC sensitivity engines | Statistician | `/metrics/long` and `/fits` JSON arrays → versioned artifacts | Python; PyMC sampling is optional/slow | [OpenMATB analysis commands](examples/openmatb-research/README.md) | Analysis tests | Small/incomplete datasets may be not estimable; Bayesian diagnostics govern interpretation |
 | `matb_integration/suhir/` | Fit Suhir DEPDF parameters and mission-outcome research summaries | Human-factors researcher | Three workload records → G0/P0/tau0 and curves | Python/SciPy | OpenMATB tour | Suhir tests; [DEPDF guide](matb_integration/suhir/README.md) | Within-participant comparative model; three levels exactly identify parameters; not certified |
 | `matb_integration/screen/` | Score reaction/2-back/tracking tasks and map exploratory HCF/F/F0 | Researcher | Raw trials/cohort → scores and exploratory mapping | Python through backend | Research Console `/screen` | Screen/backend tests | Not a diagnostic, selection, or validated predictive instrument |
@@ -856,6 +886,23 @@ input. Do not invoke it merely because it is documented.
 | `aircraft_monitor/` `combined` | Joint terminal demonstration | Developer/educator | Both seeded models → combined stream | Python/Rich | Legacy guide | Python tests | Not the active research collection surface |
 | `aircraft_monitor/` `experiment` | MATB-inspired human-factors protocol | Research developer | Pseudonym, session, modality, seed → JSONL/summary | Python/Rich | Legacy guide | Research tests | Use synthetic or approved pseudonyms; not OpenMATB |
 
+### Capabilities and research potential
+
+The module catalog above supports current research on workload dose-response,
+situation awareness, repeated-visit learning or fatigue, DEPDF parameter drift,
+supervisory sUAS decisions, evidence freshness, human-performance constraints,
+and research/operations data separation. It combines seeded scenarios,
+provenance manifests, pseudonymous longitudinal tracking, frequentist and
+Bayesian analysis, deterministic replay, debrief artifacts, and fail-closed SMS
+assurance without creating an aircraft-control path.
+
+Promising extensions include synchronized LSL/physiology streams (HRV, ECG,
+EEG, eye tracking), BIDS-like longitudinal derivatives, controlled automation
+reliability and trust studies, protocol-specific aviation/space stressor packs,
+multimodal workload models, participant-specific classifiers with uncertainty,
+and publication-oriented Markdown/Quarto reports. These are research
+opportunities, not claims that every extension is implemented or validated.
+
 <a id="operations-and-maintenance"></a>
 ## 11. Operations and maintenance
 
@@ -931,8 +978,8 @@ base image, or verification without registered evidence can succeed offline.
 | --- | --- |
 | Installer rejects Python or Node | Use Python 3.12+ for sUAS/repository Python, Node 20+ for the Research Console launcher, and Node 22.x for `SMS/`; recreate only that workflow's venv/install. |
 | Python module is missing | Confirm the selected venv's Python is running (`python -c "import sys; print(sys.executable)"`) and install the matching requirements; do not install globally to mask it. |
-| External OpenMATB cannot be found | It is not vendored. Point `install_to_openmatb.py` at a separate checkout containing `includes/`. |
-| OpenMATB flickers or Pyglet/display fails | This is the external desktop/X11 boundary. Start windowed, validate Pyglet in its venv, and on headless Linux validate Xvfb and `DISPLAY`. sUAS needs neither X11 nor Pyglet. |
+| OpenMATB cannot find a scenario | Run `install_to_openmatb.py` against `openmatb/` or a compatible checkout containing `includes/`, then verify `includes/scenarios/military_aviation/`. |
+| OpenMATB flickers or Pyglet/display fails | This is the desktop/X11 boundary. Start windowed, validate Pyglet in the selected venv, and on headless Linux validate Xvfb and `DISPLAY`. sUAS needs neither X11 nor Pyglet. |
 | PowerShell script is blocked or a path with spaces fails | Use PowerShell 7+, invoke scripts with `&`, build paths with `Join-Path`, and use an institution-approved execution policy; do not disable security controls globally. |
 | WSL2 cannot reach a service or changes permissions | Run POSIX launchers and data roots in the WSL filesystem, confirm the service binds loopback/selected port, and verify Windows-to-WSL loopback behavior. Do not replace `chmod`/UID controls with broad permissions. |
 | Port 8000 or 3100 is occupied | Stop the known process or pass unique `--backend-port`/`--frontend-port`; update `NEXT_PUBLIC_API_URL` and allowed origins consistently. |
@@ -978,6 +1025,7 @@ For advanced detail, use the [research evidence review](docs/research/military-a
 | Path | Maintained role |
 | --- | --- |
 | `matb_integration/` | Research protocol bridge, metrics, statistics, DEPDF, screen, and deterministic sUAS libraries |
+| `openmatb/` | Tracked OpenMATB desktop task runtime, plugins, scenarios, and replay support |
 | `scenarios/military_aviation/` | OpenMATB-compatible study scenarios |
 | `scenarios/suas/` | Synthetic sUAS YAML scenarios |
 | `webui/backend/` | Research/sUAS FastAPI service, persistence, analysis, and exports |
@@ -1000,7 +1048,7 @@ For advanced detail, use the [research evidence review](docs/research/military-a
 | Manifest | Canonical metadata and hashes binding content to provenance |
 | MATB | Multi-Attribute Task Battery human-factors paradigm |
 | Non-dispatchable | Research data/result that cannot enter an operational-release decision |
-| OpenMATB | External task-presentation runtime; not part of this repository |
+| OpenMATB | Tracked desktop task-presentation runtime; a compatible separate checkout is also supported |
 | Operational readiness | Institution-controlled state that automation alone cannot grant |
 | Pseudonym | Study identifier that omits direct identity; still potentially linkable research data |
 | SMS | Safety Management System; here, the `SMS/` assurance workspace |
@@ -1034,7 +1082,7 @@ python scripts/verify_documentation.py
 ```
 
 Then run the relevant Python, frontend, or SMS suites listed above. Explain any
-intentionally unavailable external runtime, browser asset, Docker input, or
+intentionally unavailable task runtime, browser asset, Docker input, or
 controlled evidence; do not weaken a check to make it green.
 
 <a id="license"></a>

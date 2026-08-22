@@ -17,8 +17,9 @@ conservada de monitor de aeronaves en terminal. Elija un flujo a continuación; 
 
 La superficie activa de investigación en Python genera escenarios y procedencia, convierte registros
 CSV de OpenMATB, calcula resultados descriptivos, frecuentistas y bayesianos, ajusta un modelo DEPDF
-de Suhir intraparticipante y admite una evaluación neurocognitiva exploratoria. OpenMATB es externo y
-no se incluye en este repositorio.
+de Suhir intraparticipante y admite una evaluación neurocognitiva exploratoria. El entorno de tareas
+OpenMATB está versionado en `openmatb/` para desarrollo local y presentación de tareas; el instalador
+de recursos también admite un checkout compatible independiente cuando un estudio lo requiera.
 
 La Consola de Investigación es una aplicación FastAPI/Next.js enlazada a loopback, con SQLite y
 almacenamiento local de artefactos. Su superficie sUAS es un simulador sintético, no cinético y de
@@ -40,14 +41,14 @@ institucionales fuera del repositorio y bajo los controles de custodia de la ins
 
 | Objetivo | Comience aquí | Entorno de ejecución | Ejemplo | Resultado esperado |
 | --- | --- | --- | --- | --- |
-| Generar escenarios de OpenMATB, convertir registros o probar el análisis DEPDF | `matb_integration/` | Python; OpenMATB externo solo para presentar la tarea a participantes | [Recorrido de investigación OpenMATB](examples/openmatb-research/README.es.md) | Tres escenarios/manifiestos, métricas JSONL sintéticas y un JSON DEPDF |
+| Generar escenarios de OpenMATB, convertir registros o probar el análisis DEPDF | `matb_integration/` y `openmatb/` | Python; OpenMATB versionado o compatible para presentar tareas a participantes | [Recorrido de investigación OpenMATB](examples/openmatb-research/README.es.md) | Tres escenarios/manifiestos, métricas JSONL sintéticas y un JSON DEPDF |
 | Ingerir sesiones, dar seguimiento a visitas, visualizar datos, analizar y exportar | `webui/` | Python 3.12+, Node 20+, navegador local | [Recorrido de la Consola de Investigación](examples/research-console/README.es.md) | Registros SQLite locales y `research-bundle.zip` |
 | Ejecutar una sesión de investigación sUAS determinista y segura para observadores | `matb_integration/suas/` y `webui/` | Python 3.12+; Node 20+ para el servicio de navegador | [Recorrido del simulador sUAS](examples/suas-simulator/README.es.md) | Eventos verificables por reproducción, métricas, informe final, manifiesto y sumas de comprobación |
 | Evaluar contratos de paquetes de gestión de la seguridad operacional sin conexión | `SMS/` | Node 22.x; Docker solo para la imagen/paquete sin conexión | [Recorrido de capacidades del SMS](examples/sms-platform/README.es.md) | JSON determinista con un resultado del núcleo de seguridad operacional bloqueado deliberadamente |
 | Demostrar el monitor de terminal anterior | `aircraft_monitor/` | Python y una terminal | [Guía del monitor heredado](examples/legacy-monitor/README.es.md) | Flujo de eventos de UAV, caza, combinado o experimento en modo sin interfaz gráfica |
 
 El [índice de ejemplos](examples/README.es.md) compara los ejemplos rápidos sin conexión con los
-procedimientos de servicio, navegador, Docker y entorno de ejecución externo.
+procedimientos de servicio, navegador, Docker y presentación de tareas OpenMATB.
 
 <a id="architecture-and-data-flow"></a>
 ## 3. Arquitectura y movimiento de datos
@@ -55,6 +56,7 @@ procedimientos de servicio, navegador, Docker y entorno de ejecución externo.
 ```text
 MATB/
 ├── matb_integration/       Python scenario, conversion, analysis, screen, and sUAS libraries
+├── openmatb/               tracked OpenMATB desktop task runtime and plugins
 ├── scenarios/              committed OpenMATB and synthetic sUAS scenarios
 ├── webui/                  FastAPI backend and Next.js Research Console
 ├── SMS/                    Node/TypeScript safety-management monorepo
@@ -68,7 +70,7 @@ MATB/
 Los cuatro flujos principales se mantienen separados de forma deliberada:
 
 ```text
-External OpenMATB -> session CSV + scenario manifest -> metrics -> DEPDF/statistics -> research bundle
+Tracked/compatible OpenMATB -> session CSV + scenario manifest -> metrics -> DEPDF/statistics -> research bundle
 Browser -> FastAPI Research Console -> local SQLite/artifacts -> tracker/analysis/export
 Synthetic YAML -> deterministic sUAS engine -> observer-safe state -> replay/debrief artifacts
 Signed local evidence + read-only telemetry -> edge API/safety kernel -> console/audit -> offline verification
@@ -87,8 +89,8 @@ de solo lectura y ninguna aplicación expone un canal de mando del vehículo.
 | Python | El instalador de sUAS requiere 3.12+; use la misma versión para los flujos Python del repositorio | Obligatorio | Obligatorio | Obligatorio | No | Obligatorio |
 | Node.js | El lanzador comprueba 20+; el frontend usa npm | No | 20+ obligatorio | 20+ para el servicio de navegador | **22.x obligatorio** | No |
 | npm | Herramienta de dependencias/compilación basada en el archivo de bloqueo | No | Obligatorio para el frontend | Obligatorio para el servicio de navegador | Obligatorio | No |
-| OpenMATB externo | Ejecutor de tareas independiente con sus propias dependencias | Específico del flujo | Solo para recopilar sesiones de tareas reales | No | No | No |
-| Xvfb | Pantalla X virtual para OpenMATB/Pyglet externo en Linux sin interfaz gráfica | Específico del flujo | No | No; la interfaz nativa usa navegador/modo sin interfaz gráfica | No | No en modo `--headless` |
+| Entorno OpenMATB | Versionado en `openmatb/`; un checkout compatible independiente es opcional | Específico del flujo | Solo para recopilar sesiones de tareas | No | No | No |
+| Xvfb | Pantalla X virtual para OpenMATB/Pyglet en Linux sin interfaz gráfica | Específico del flujo | No | No; la interfaz nativa usa navegador/modo sin interfaz gráfica | No | No en modo `--headless` |
 | Chromium | Uso del navegador; Chromium de Playwright solo se necesita para las compuertas E2E/accesibilidad del navegador | Opcional | Navegador obligatorio; recurso de Playwright opcional | Navegador obligatorio para la UI; opcional para CLI | Recurso opcional de prueba de consola | No |
 | Docker | Motor de contenedores Linux e imagen base preparada | No | No | No | Específico del flujo para imagen/paquete sin conexión | No |
 | WSL2 | Límite POSIX en Windows | Para `setup.sh` o el procedimiento Linux/Xvfb | Solo para el lanzador POSIX combinado | Obligatorio en Windows para `install_suas.sh`/`run_suas.sh` | Para scripts POSIX, permisos Linux y verificación Docker | No obligatorio |
@@ -118,14 +120,15 @@ $PSVersionTable.PSVersion
 <a id="quick-start-openmatb"></a>
 ## 5. Inicio rápido de investigación OpenMATB
 
-Este inicio rápido es completamente sintético. El entorno de ejecución externo de OpenMATB solo es
-necesario cuando se presentan las tareas generadas a un participante.
+El primer ejemplo es completamente sintético y no abre una ventana de tareas. Use el entorno
+versionado `openmatb/`, o un checkout compatible independiente, para presentar las tareas generadas
+a un participante.
 
 <h3>Prerrequisitos</h3>
 
-Use Git y Python 3.12+. Para presentar tareas a participantes, proporcione un checkout independiente
-de OpenMATB. La presentación en Linux/sin interfaz gráfica también necesita Xvfb y una pantalla
-Pyglet funcional; Windows nativo ejecuta directamente el entorno de escritorio externo.
+Use Git y Python 3.12+. El entorno versionado está en `openmatb/`; un checkout compatible
+independiente es opcional. La presentación en Linux/sin interfaz gráfica también necesita Xvfb y
+una pantalla Pyglet funcional; Windows nativo ejecuta directamente el entorno de escritorio.
 
 <h3>Instalación</h3>
 
@@ -135,6 +138,7 @@ Bash de Linux o WSL2, desde la raíz del clon:
 REPO_ROOT="$(pwd)"
 python3 -m venv "$REPO_ROOT/.venv-openmatb"
 "$REPO_ROOT/.venv-openmatb/bin/python" -m pip install -r "$REPO_ROOT/requirements-dev.txt"
+"$REPO_ROOT/.venv-openmatb/bin/python" -m pip install -r "$REPO_ROOT/openmatb/requirements.txt"
 ```
 
 `setup.sh` es solo para POSIX e instala el `requirements.txt` base, más limitado, para la integración
@@ -152,27 +156,28 @@ PowerShell 7+ en Windows nativo:
 $RepoRoot = (Get-Location).Path
 python -m venv (Join-Path $RepoRoot ".venv-openmatb")
 & (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") -m pip install -r (Join-Path $RepoRoot "requirements-dev.txt")
+& (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") -m pip install -r (Join-Path $RepoRoot "openmatb\requirements.txt")
 ```
 
 <h3>Configuración</h3>
 
-La generación sintética no necesita configuración. Para instalar recursos en un checkout externo
-derivado de la ubicación del clon:
+La generación sintética no necesita configuración. Instale los escenarios y cuestionarios del
+repositorio en el entorno versionado:
 
 ```bash
 REPO_ROOT="$(pwd)"
-OPENMATB_DIR="$REPO_ROOT/../openmatb"
+OPENMATB_DIR="$REPO_ROOT/openmatb"
 "$REPO_ROOT/.venv-openmatb/bin/python" "$REPO_ROOT/install_to_openmatb.py" "$OPENMATB_DIR"
 ```
 
 ```powershell
 $RepoRoot = (Get-Location).Path
-$OpenMatbDir = (Resolve-Path (Join-Path $RepoRoot "..\openmatb")).Path
+$OpenMatbDir = (Resolve-Path (Join-Path $RepoRoot "openmatb")).Path
 & (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") (Join-Path $RepoRoot "install_to_openmatb.py") $OpenMatbDir
 ```
 
-El checkout externo debe contener `includes/`. Configure su propio entorno y selector de escenarios
-según ese entorno de ejecución. No apunte el instalador a este repositorio.
+El destino debe contener `includes/`, como ocurre en el entorno versionado. Para usar un checkout
+compatible independiente, sustituya `OPENMATB_DIR` o `$OpenMatbDir` por su ruta raíz.
 
 <h3>Ejecución</h3>
 
@@ -190,8 +195,30 @@ $RepoRoot = (Get-Location).Path
   --output-dir (Join-Path $RepoRoot "examples\output\generated-scenarios") --block-duration 900 --seed 42
 ```
 
-Para usar OpenMATB externo en Linux, ejecute su `main.py` dentro de su propio entorno. Use `DISPLAY`
-y Xvfb solo en un host Linux/sin interfaz gráfica. Windows nativo no usa Xvfb.
+Para presentar tareas, edite `openmatb/config.ini` y comience con
+`language=en_EN`, `fullscreen=False` y
+`scenario_path=military_aviation/low_workload.txt`. Después ejecute la ventana
+de tareas versionada desde su directorio:
+
+```bash
+REPO_ROOT="$(pwd)"
+cd "$REPO_ROOT/openmatb"
+"$REPO_ROOT/.venv-openmatb/bin/python" main.py
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+Push-Location (Join-Path $RepoRoot "openmatb")
+try {
+  & (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") main.py
+} finally {
+  Pop-Location
+}
+```
+
+Para usar un checkout compatible independiente, ejecute su `main.py` desde ese
+checkout con el entorno seleccionado. Use `DISPLAY` y Xvfb solo en Linux sin
+interfaz gráfica; Windows nativo no usa Xvfb.
 
 <h3>Prueba del ejemplo sintético</h3>
 
@@ -210,8 +237,9 @@ $env:MATB_PYTHON = Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe"
 <h3>Resultado esperado</h3>
 
 El recorrido escribe tres archivos `scenarios/*.txt` con manifiestos adyacentes, `metrics.jsonl` y
-`suhir.json`; después imprime `External OpenMATB was not started.` El recurso contiene únicamente
-`SYNTH-P01`; no son datos de participantes.
+`suhir.json`; después imprime `External OpenMATB was not started.` Ese mensaje se refiere solamente
+al recorrido sintético: no inicia el entorno versionado ni uno independiente. El recurso contiene
+únicamente `SYNTH-P01`; no son datos de participantes.
 
 <h3>Verificación</h3>
 
@@ -235,8 +263,8 @@ $RepoRoot = (Get-Location).Path
 
 <h3>Detención y limpieza</h3>
 
-Detenga OpenMATB externo o Xvfb con Ctrl-C. Elimine solo la salida sintética seleccionada, nunca un
-entorno de ejecución externo ni un almacén de sesiones.
+Detenga OpenMATB o Xvfb con Ctrl-C. Elimine solo la salida sintética seleccionada, nunca un entorno
+de tareas ni un almacén de sesiones.
 
 ```bash
 REPO_ROOT="$(pwd)"
@@ -250,11 +278,11 @@ Remove-Item -Recurse -Force (Join-Path $RepoRoot "examples\output\openmatb-resea
 
 <h3>Solución de problemas</h3>
 
-Un error `includes/ not found` indica que el checkout externo seleccionado es incorrecto.
-`ModuleNotFoundError` suele indicar que el venv del repositorio o del entorno externo está inactivo.
-En Linux, los fallos de pantalla/parpadeo/Pyglet pertenecen al límite externo OpenMATB/X11: valide
-`DISPLAY`, use Xvfb en hosts sin interfaz gráfica y comience en modo de ventana. Consulte el
-[ejemplo completo de OpenMATB](examples/openmatb-research/README.es.md).
+Un error `includes/ not found` indica que el checkout versionado o compatible seleccionado es
+incorrecto. `ModuleNotFoundError` suele indicar que el venv está inactivo o no tiene instalados los
+requisitos de OpenMATB. En Linux, los fallos de pantalla/parpadeo/Pyglet pertenecen al límite
+OpenMATB/X11: valide `DISPLAY`, use Xvfb en hosts sin interfaz gráfica y comience en modo de ventana.
+Consulte el [ejemplo completo de OpenMATB](examples/openmatb-research/README.es.md).
 
 <a id="quick-start-research-console"></a>
 ## 6. Inicio rápido de la Consola de Investigación
@@ -739,10 +767,10 @@ liberación y evidencia detalladas se mantienen en sus guías especializadas.
 
 | Módulo | Propósito | Usuario | Entradas → salidas | Entorno de ejecución | Ejemplo | Verificación | Limitación |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `matb_integration/scenario_builder.py` | Generar escenarios LOW/MEDIUM/HIGH contrabalanceados | Diseñador del estudio | Protocolo, duración, semilla → escenarios de texto OpenMATB | Python | [Recorrido OpenMATB](examples/openmatb-research/README.es.md) | `pytest tests/test_scenario_builder.py tests/test_scenario_manifest.py tests/test_log_converter.py tests/suhir tests/analysis_stats tests/screen -q` | Las tareas generadas requieren OpenMATB externo para su presentación |
+| `matb_integration/scenario_builder.py` | Generar escenarios LOW/MEDIUM/HIGH contrabalanceados | Diseñador del estudio | Protocolo, duración, semilla → escenarios de texto OpenMATB | Python | [Recorrido OpenMATB](examples/openmatb-research/README.es.md) | `pytest tests/test_scenario_builder.py tests/test_scenario_manifest.py tests/test_log_converter.py tests/suhir tests/analysis_stats tests/screen -q` | Las tareas generadas requieren el entorno OpenMATB versionado o uno compatible para su presentación |
 | `matb_integration/scenario_manifest.py` | Calcular hashes de escenarios y validar la procedencia de la sesión | Custodio de datos | Escenario/etiquetas/sondeos esperados → manifiesto adyacente y problemas de validación | Python | Recorrido OpenMATB | Mismo conjunto | La integridad del hash no establece la validez del protocolo ni el consentimiento |
 | `matb_integration/log_converter.py` | Convertir CSV de OpenMATB en métricas canónicas | Analista de investigación | CSV + seudónimo/carga de trabajo → métricas JSONL | Python | Recorrido OpenMATB | Mismo conjunto | La calidad de la entrada y las tareas ausentes limitan la inferencia |
-| `matb_integration/questionnaires/` | Recursos EN/ES de NASA-TLX, Bedford, ISA y SAGAT | Diseñador del estudio | Texto/YAML controlado → contenido configurado de cuestionario/sondeo | OpenMATB externo o cargador sUAS | Recorridos OpenMATB y sUAS | Pruebas de cuestionarios/SAGAT | Las escalas deben administrarse bajo un protocolo aprobado |
+| `matb_integration/questionnaires/` | Recursos EN/ES de NASA-TLX, Bedford, ISA y SAGAT | Diseñador del estudio | Texto/YAML controlado → contenido configurado de cuestionario/sondeo | OpenMATB o cargador sUAS | Recorridos OpenMATB y sUAS | Pruebas de cuestionarios/SAGAT | Las escalas deben administrarse bajo un protocolo aprobado |
 | `matb_integration/analysis/` | Resultados descriptivos, motores frecuentistas MixedLM/rmcorr/rmANOVA/FDR y motores bayesianos de sensibilidad PyMC | Estadístico | Arreglos JSON `/metrics/long` y `/fits` → artefactos versionados | Python; el muestreo PyMC es opcional/lento | [Comandos de análisis OpenMATB](examples/openmatb-research/README.es.md) | Pruebas de análisis | Los conjuntos pequeños/incompletos pueden no ser estimables; los diagnósticos bayesianos gobiernan la interpretación |
 | `matb_integration/suhir/` | Ajustar parámetros DEPDF de Suhir y resúmenes de investigación de resultados de misión | Investigador de factores humanos | Tres registros de carga de trabajo → G0/P0/tau0 y curvas | Python/SciPy | Recorrido OpenMATB | Pruebas de Suhir; [guía DEPDF](matb_integration/suhir/README.md) | Modelo comparativo intraparticipante; tres niveles identifican exactamente los parámetros; no está certificado |
 | `matb_integration/screen/` | Puntuar tareas de reacción/2-back/seguimiento y mapear HCF/F/F0 exploratorio | Investigador | Ensayos sin procesar/cohorte → puntuaciones y mapeo exploratorio | Python mediante backend | Consola de Investigación `/screen` | Pruebas de evaluación/backend | No es un instrumento diagnóstico, de selección ni predictivo validado |
@@ -851,6 +879,25 @@ por la institución. No lo invoque solo porque está documentado.
 | `aircraft_monitor/` `combined` | Demostración conjunta en terminal | Desarrollador/educador | Ambos modelos con semilla → flujo combinado | Python/Rich | Guía heredada | Pruebas Python | No es la superficie activa de recopilación de investigación |
 | `aircraft_monitor/` `experiment` | Protocolo de factores humanos inspirado en MATB | Desarrollador de investigación | Seudónimo, sesión, modalidad, semilla → JSONL/resumen | Python/Rich | Guía heredada | Pruebas de investigación | Use seudónimos sintéticos o aprobados; no es OpenMATB |
 
+### Capacidades y potencial de investigación
+
+El catálogo anterior admite investigación actual sobre dosis-respuesta de
+carga, conciencia situacional, aprendizaje o fatiga entre visitas, deriva de
+parámetros DEPDF, decisiones supervisivas sUAS, vigencia de evidencia,
+restricciones de desempeño humano y separación entre datos de investigación y
+operación. Combina escenarios con semilla, manifiestos de procedencia,
+seguimiento longitudinal seudónimo, análisis frecuentista y bayesiano,
+reproducción determinista, artefactos de debrief y aseguramiento SMS con bloqueo
+seguro, sin crear una ruta de control de aeronaves.
+
+Entre las extensiones prometedoras están la sincronización LSL/fisiología (HRV,
+ECG, EEG, eye tracking), derivados longitudinales tipo BIDS, estudios controlados
+de confiabilidad y confianza en automatización, paquetes de estresores
+aeronáuticos/espaciales específicos por protocolo, modelos multimodales de
+carga, clasificadores por participante con incertidumbre e informes
+Markdown/Quarto orientados a publicación. Son oportunidades de investigación,
+no afirmaciones de que cada extensión esté implementada o validada.
+
 <a id="operations-and-maintenance"></a>
 ## 11. Operaciones y mantenimiento
 
@@ -926,8 +973,8 @@ preparada o una verificación sin evidencia registrada puedan tener éxito sin c
 | --- | --- |
 | El instalador rechaza Python o Node | Use Python 3.12+ para sUAS/Python del repositorio, Node 20+ para el lanzador de la Consola de Investigación y Node 22.x para `SMS/`; vuelva a crear solo el venv/instalación de ese flujo. |
 | Falta un módulo Python | Confirme que se ejecute el Python del venv seleccionado (`python -c "import sys; print(sys.executable)"`) e instale los requisitos correspondientes; no instale globalmente para ocultarlo. |
-| No se encuentra OpenMATB externo | No se incluye en el repositorio. Apunte `install_to_openmatb.py` a un checkout independiente que contenga `includes/`. |
-| OpenMATB parpadea o Pyglet/la pantalla falla | Este es el límite de escritorio/X11 externo. Comience en modo de ventana, valide Pyglet en su venv y, en Linux sin interfaz gráfica, valide Xvfb y `DISPLAY`. sUAS no necesita X11 ni Pyglet. |
+| OpenMATB no encuentra un escenario | Ejecute `install_to_openmatb.py` contra `openmatb/` o un checkout compatible que contenga `includes/` y verifique `includes/scenarios/military_aviation/`. |
+| OpenMATB parpadea o Pyglet/la pantalla falla | Este es el límite de escritorio/X11. Comience en modo de ventana, valide Pyglet en el venv seleccionado y, en Linux sin interfaz gráfica, valide Xvfb y `DISPLAY`. sUAS no necesita X11 ni Pyglet. |
 | Se bloquea un script de PowerShell o falla una ruta con espacios | Use PowerShell 7+, invoque scripts con `&`, construya rutas con `Join-Path` y use una política de ejecución aprobada por la institución; no desactive globalmente los controles de seguridad de la información. |
 | WSL2 no alcanza un servicio o cambia los permisos | Ejecute los lanzadores POSIX y las raíces de datos en el sistema de archivos WSL, confirme que el servicio se enlace a loopback/al puerto elegido y verifique el comportamiento loopback de Windows a WSL. No reemplace los controles `chmod`/UID con permisos amplios. |
 | El puerto 8000 o 3100 está ocupado | Detenga el proceso conocido o indique valores únicos de `--backend-port`/`--frontend-port`; actualice de forma coherente `NEXT_PUBLIC_API_URL` y los orígenes permitidos. |
@@ -973,6 +1020,7 @@ las [limitaciones conocidas](SMS/docs/release/known-limitations.md) y la
 | Ruta | Función mantenida |
 | --- | --- |
 | `matb_integration/` | Puente del protocolo de investigación, métricas, estadísticas, DEPDF, evaluación y bibliotecas sUAS deterministas |
+| `openmatb/` | Entorno de escritorio OpenMATB versionado, plugins, escenarios y soporte de reproducción |
 | `scenarios/military_aviation/` | Escenarios de estudio compatibles con OpenMATB |
 | `scenarios/suas/` | Escenarios YAML sUAS sintéticos |
 | `webui/backend/` | Servicio FastAPI de investigación/sUAS, persistencia, análisis y exportaciones |
@@ -995,7 +1043,7 @@ las [limitaciones conocidas](SMS/docs/release/known-limitations.md) y la
 | Manifiesto | Metadatos canónicos y hashes que vinculan el contenido con la procedencia |
 | MATB | Paradigma Multi-Attribute Task Battery de factores humanos |
 | nonDispatchable | Datos/resultados de investigación que no pueden ingresar en una decisión de liberación operacional |
-| OpenMATB | Entorno externo de presentación de tareas; no forma parte de este repositorio |
+| OpenMATB | Entorno de escritorio versionado para presentar tareas; también se admite un checkout compatible independiente |
 | Preparación operacional | Estado controlado por la institución que la automatización por sí sola no puede conceder |
 | Seudónimo | Identificador del estudio que omite la identidad directa; sigue siendo un dato de investigación potencialmente vinculable |
 | SMS | Safety Management System; aquí, el espacio de aseguramiento `SMS/` |
@@ -1029,7 +1077,7 @@ python scripts/verify_documentation.py
 ```
 
 Después ejecute los conjuntos pertinentes de Python, frontend o SMS enumerados anteriormente. Explique
-cualquier entorno externo, recurso de navegador, entrada Docker o evidencia controlada que no esté
+cualquier entorno de tareas, recurso de navegador, entrada Docker o evidencia controlada que no esté
 disponible intencionalmente; no debilite una comprobación para que pase.
 
 <a id="license"></a>
