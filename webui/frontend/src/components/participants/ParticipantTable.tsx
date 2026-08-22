@@ -8,7 +8,7 @@ export function ParticipantTable({ participants, tracker }: { participants: Part
   const doneById = new Map(rows.map((r) => [r.participantId, `${r.filled}/${r.total}`]));
 
   if (participants.length === 0)
-    return <p className="rounded-[6px] border border-dashed border-white/15 px-4 py-8 text-center text-sm text-muted-foreground">No participants yet. Add one to generate its 6 visits.</p>;
+    return <p className="rounded-[6px] border border-dashed border-white/15 px-4 py-8 text-center text-sm text-muted-foreground">No participants yet. Add one to generate the active protocol visits.</p>;
 
   return (
     <div className="data-table-wrap overflow-x-auto">
@@ -23,7 +23,7 @@ export function ParticipantTable({ participants, tracker }: { participants: Part
               <td className="px-4 py-2">{p.enrollment_date}</td>
               <td className="px-4 py-2">{p.sex || "—"}</td>
               <td className="px-4 py-2">{p.age_band || "—"}</td>
-              <td className="px-4 py-2 text-right tabular-nums">{doneById.get(p.id) ?? "0/18"}</td>
+              <td className="px-4 py-2 text-right tabular-nums">{doneById.get(p.id) ?? "0/0"}</td>
             </tr>
           ))}
         </tbody>

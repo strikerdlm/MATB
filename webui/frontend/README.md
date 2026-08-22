@@ -61,10 +61,10 @@ read-only behavior, controller disconnect/reconnect, and 1280×720 and
 
 ## Screens
 
-- **Tracker** (`/`) — the 12×6×3 completeness grid; click a filled cell for that
+- **Tracker** (`/`) — the participant × active-visit × 3 completeness grid; click a filled cell for that
   block's metrics (SYSMON d′, hit-rate, RT; COMM d′; NASA-TLX; Bedford; ISA) plus
   the visit's DEPDF fit (G₀/P₀/τ₀) once all three levels are ingested.
-- **Participants** (`/participants`) — list + add (auto-generates the 6 visits).
+- **Participants** (`/participants`) — list + add (auto-generates the active protocol visits; ASTRA uses T0, DM8, and DM15).
 - **Upload** (`/upload`) — tag + ingest an OpenMATB CSV, with guard feedback
   (duplicate / filled-cell / validation). Optionally attach the adjacent
   `*.txt.manifest.json` scenario manifest so the backend can store provenance and

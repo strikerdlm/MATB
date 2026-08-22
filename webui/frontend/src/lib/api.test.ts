@@ -1,5 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createParticipant, getTracker, ingestCsv, IngestError, getMetricsLong, getFits, runAnalysis, getLatestAnalysis, runBayes, getBayesStatus, postScreen, getScreenSummary, getResearchContext, downloadResearchBundle } from "@/lib/api";
+import {
+  createParticipant,
+  createStudyContext,
+  downloadResearchBundle,
+  getBayesStatus,
+  getFits,
+  getLatestAnalysis,
+  getMetricsLong,
+  getResearchContext,
+  getScreenSummary,
+  getStudyContext,
+  getStudyProtocol,
+  getTracker,
+  ingestCsv,
+  IngestError,
+  postScreen,
+  runAnalysis,
+  runBayes,
+} from "@/lib/api";
 
 beforeEach(() => { vi.restoreAllMocks(); });
 
@@ -28,6 +46,66 @@ describe("api client", () => {
     const [, init] = (global.fetch as any).mock.calls[0];
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body)).toMatchObject({ id: "P01" });
+  });
+
+  it("getStudyProtocol GETs the canonical visit definitions", async () => {
+    const protocol = {
+      protocol_id: "astra-2026",
+      protocol_version: "1.0.0",
+      schedule_sha256: "schedule-hash",
+      visits: [
+        { ordinal: 1, code: "T0", scheduled_day: 0 },
+        { ordinal: 2, code: "DM8", scheduled_day: 8 },
+        { ordinal: 3, code: "DM15", scheduled_day: 15 },
+      ],
+    };
+    global.fetch = mockFetch(200, protocol);
+
+    const result = await getStudyProtocol();
+
+    expect(result).toEqual(protocol);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/study/protocol"),
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("getStudyContext returns null on 404", async () => {
+    global.fetch = mockFetch(404, { detail: "study context not found" });
+
+    expect(await getStudyContext("P01")).toBeNull();
+  });
+
+  it("createStudyContext surfaces a second-write conflict", async () => {
+    const body = {
+      task_sequence: "MATB_LIFTOFF" as const,
+      prior_fpv_hours: 12.5,
+      gaming_hours_per_week: 3,
+    };
+    const created = {
+      participant_id: "P01",
+      protocol_id: "astra-2026",
+      ...body,
+      created_at: "2026-08-18T00:00:00Z",
+    };
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: async () => created,
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        json: async () => ({ detail: "study context already exists" }),
+      } as Response);
+
+    expect(await createStudyContext("P01", body)).toEqual(created);
+    await expect(createStudyContext("P01", body)).rejects.toMatchObject({ status: 409 });
+    const [url, init] = (global.fetch as any).mock.calls[0];
+    expect(url).toContain("/participants/P01/study-context");
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(init.body)).toEqual(body);
   });
 
   it("ingestCsv sends multipart form and throws IngestError on 409", async () => {

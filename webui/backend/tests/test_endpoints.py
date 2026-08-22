@@ -4,6 +4,11 @@ import io
 import json
 import zipfile
 
+from sqlmodel import Session, select
+
+from app.liftoff_models import LiftoffSession
+from app.models import Visit
+
 
 def _enroll(client):
     client.post("/participants", json={"id": "P01", "enrollment_date": "2026-06-01"})
@@ -19,7 +24,7 @@ def test_ingest_endpoint_and_tracker(client, sample_csv_bytes):
     assert r.json()["validation"]["status"] == "missing_manifest"
 
     grid = client.get("/tracker").json()
-    assert len(grid) == 18
+    assert len(grid) == 9
     present = [c for c in grid if c["present"]]
     assert present and present[0]["workload_level"] == "LOW"
 
@@ -103,3 +108,37 @@ def test_research_context_and_bundle_exports(client, sample_csv_bytes):
         assert "figures/q1-test.option.json" in names
         manifest = json.loads(zf.read("manifest.json"))
         assert manifest["figure_count"] == 1
+
+
+def test_research_context_includes_liftoff_three_visit_grid(client, engine):
+    _enroll(client)
+    with Session(engine) as session:
+        visit = session.exec(select(Visit).where(Visit.participant_id == "P01", Visit.visit_ordinal == 1)).one()
+        session.add(LiftoffSession(
+            id="liftoff-valid",
+            participant_id="P01",
+            visit_id=visit.id,
+            attempt_number=1,
+            protocol_id="astra-2026",
+            protocol_version="1.0.0",
+            liftoff_build="test",
+            configuration_sha256="a" * 64,
+            track_id="track",
+            telemetry_profile="liftoff-telemetry-all-v1",
+            manifest_json='{"visit_code":"T0","visit_ordinal":1}',
+            status="FINISHED",
+            validity="valid",
+            artifact_root="/tmp/valid",
+            controller_lease_hash="b" * 64,
+            hrv_measurement_id="hrv-123",
+            sync_quality="good",
+            metrics_json='{"metrics_version":"liftoff-metrics-v1","primary":{"median_lap_time_s":61.2,"valid_laps":3},"telemetry":{"active_duration_s":900.0}}',
+        ))
+        session.commit()
+
+    context = client.get("/exports/research-context").json()
+    assert len(context["liftoff_tracker"]) == 3
+    assert context["liftoff_tracker"][0]["visit_code"] == "T0"
+    assert context["liftoff_tracker"][0]["present"] is True
+    assert context["liftoff_metrics_long"]
+    assert context["liftoff_tracker"][0]["hrv_measurement_id"] == "hrv-123"

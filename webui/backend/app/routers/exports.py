@@ -14,10 +14,12 @@ from fastapi.responses import Response
 from sqlmodel import Session, select
 
 from app.completeness import build_completeness_grid
+from app.completeness import build_liftoff_completeness_grid
 from app.db import get_session
 from app.models import AnalysisResult, BayesResult, BlockProvenance, Participant, Visit
+from app.liftoff_models import LiftoffArtifact, LiftoffDeviation, LiftoffSession
 from app.routers.fits import collect_full_fit_rows
-from app.routers.metrics import collect_metric_rows
+from app.routers.metrics import collect_liftoff_metric_rows, collect_metric_rows
 
 router = APIRouter(prefix="/exports", tags=["exports"])
 
@@ -64,8 +66,23 @@ def _visits(session: Session) -> list[dict[str, Any]]:
 
 
 def _latest_analysis(session: Session) -> dict[str, Any] | None:
+    from matb_integration.analysis.liftoff import LIFTOFF_ANALYSIS_VERSION
+
     row = session.exec(
-        select(AnalysisResult).order_by(AnalysisResult.created_at.desc(), AnalysisResult.id.desc())
+        select(AnalysisResult)
+        .where(AnalysisResult.engine_version != LIFTOFF_ANALYSIS_VERSION)
+        .order_by(AnalysisResult.created_at.desc(), AnalysisResult.id.desc())
+    ).first()
+    return json.loads(row.artifact_json) if row is not None else None
+
+
+def _latest_liftoff_analysis(session: Session) -> dict[str, Any] | None:
+    from matb_integration.analysis.liftoff import LIFTOFF_ANALYSIS_VERSION
+
+    row = session.exec(
+        select(AnalysisResult)
+        .where(AnalysisResult.engine_version == LIFTOFF_ANALYSIS_VERSION)
+        .order_by(AnalysisResult.created_at.desc(), AnalysisResult.id.desc())
     ).first()
     return json.loads(row.artifact_json) if row is not None else None
 
@@ -101,6 +118,50 @@ def _block_provenance(session: Session) -> list[dict[str, Any]]:
     return out
 
 
+def _liftoff_provenance(session: Session) -> list[dict[str, Any]]:
+    sessions = session.exec(
+        select(LiftoffSession).order_by(
+            LiftoffSession.participant_id,
+            LiftoffSession.visit_id,
+            LiftoffSession.attempt_number,
+        )
+    ).all()
+    deviations = session.exec(select(LiftoffDeviation)).all()
+    artifacts = session.exec(select(LiftoffArtifact)).all()
+    deviations_by_session: dict[str, list[dict[str, Any]]] = {}
+    for row in deviations:
+        deviations_by_session.setdefault(row.session_id, []).append({
+            "phase": row.phase,
+            "code": row.code,
+            "severity": row.severity,
+            "disposition": row.disposition,
+            "received_utc": row.received_utc.isoformat(),
+        })
+    artifacts_by_session: dict[str, list[dict[str, Any]]] = {}
+    for row in artifacts:
+        artifacts_by_session.setdefault(row.session_id, []).append({
+            "kind": row.kind,
+            "relative_path": row.relative_path,
+            "sha256": row.sha256,
+            "size_bytes": row.size_bytes,
+        })
+    return [{
+        "session_id": row.id,
+        "participant_id": row.participant_id,
+        "visit_id": row.visit_id,
+        "attempt_number": row.attempt_number,
+        "status": row.status,
+        "validity": row.validity,
+        "manifest": json.loads(row.manifest_json),
+        "configuration_sha256": row.configuration_sha256,
+        "hrv_measurement_id": row.hrv_measurement_id,
+        "hrv_file_sha256": row.hrv_file_sha256,
+        "sync_quality": row.sync_quality,
+        "deviations": deviations_by_session.get(row.id, []),
+        "artifacts": artifacts_by_session.get(row.id, []),
+    } for row in sessions]
+
+
 def build_research_context(session: Session) -> dict[str, Any]:
     participants = _participants(session)
     tracker = build_completeness_grid(session)
@@ -109,6 +170,10 @@ def build_research_context(session: Session) -> dict[str, Any]:
     analysis = _latest_analysis(session)
     bayes = _latest_bayes(session)
     provenance = _block_provenance(session)
+    liftoff_tracker = build_liftoff_completeness_grid(session)
+    liftoff_metrics = collect_liftoff_metric_rows(session)
+    liftoff_provenance = _liftoff_provenance(session)
+    liftoff_analysis = _latest_liftoff_analysis(session)
     status_counts: dict[str, int] = {}
     for row in provenance:
         status = row["validation_status"]
@@ -124,6 +189,10 @@ def build_research_context(session: Session) -> dict[str, Any]:
         "analysis_latest": analysis,
         "bayes_latest": bayes,
         "block_provenance": provenance,
+        "liftoff_tracker": liftoff_tracker,
+        "liftoff_metrics_long": liftoff_metrics,
+        "liftoff_provenance": liftoff_provenance,
+        "liftoff_analysis_latest": liftoff_analysis,
         "validation_status_counts": status_counts,
         "counts": {
             "participants": len(participants),
@@ -131,6 +200,9 @@ def build_research_context(session: Session) -> dict[str, Any]:
             "metrics_long": len(metrics),
             "fits": len(fits),
             "block_provenance": len(provenance),
+            "liftoff_tracker_cells": len(liftoff_tracker),
+            "liftoff_metrics_long": len(liftoff_metrics),
+            "liftoff_sessions": len(liftoff_provenance),
         },
     }
 
@@ -194,6 +266,10 @@ def research_bundle(
         zf.writestr("analysis_latest.json", _dumps(context["analysis_latest"]))
         zf.writestr("bayes_latest.json", _dumps(context["bayes_latest"]))
         zf.writestr("provenance/block_validations.json", _dumps(context["block_provenance"]))
+        zf.writestr("liftoff/tracker.json", _dumps(context["liftoff_tracker"]))
+        zf.writestr("liftoff/metrics_long.json", _dumps(context["liftoff_metrics_long"]))
+        zf.writestr("liftoff/provenance.json", _dumps(context["liftoff_provenance"]))
+        zf.writestr("liftoff/analysis_latest.json", _dumps(context["liftoff_analysis_latest"]))
         zf.writestr("caveats.md", _caveats_md(context))
 
         for row in context["block_provenance"]:

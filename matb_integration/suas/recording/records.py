@@ -6,8 +6,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import StrEnum
-from pathlib import Path
 
+from matb_integration.recording.records import ArtifactInfo
 from matb_integration.suas.domain.serialization import canonical_data
 
 
@@ -68,11 +68,3 @@ class SessionRecord:
             canonical_data(self.payload)
         except (TypeError, ValueError) as exc:
             raise ValueError("payload must be JSON-safe") from exc
-
-
-@dataclass(frozen=True, slots=True)
-class ArtifactInfo:
-    kind: str
-    path: Path
-    sha256: str
-    size_bytes: int

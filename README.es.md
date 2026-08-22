@@ -2,717 +2,1087 @@
 
 [English](README.md) | [Español](README.es.md)
 
-> Software exclusivo para investigación y aseguramiento de la seguridad. MATB
-> no es un dispositivo clínico, un sistema operacional certificado, un canal de
-> control de aeronaves, un sistema de armas ni un sustituto de la aprobación
-> humana responsable.
+> Software exclusivo para investigación y aseguramiento de la seguridad operacional. MATB no es un dispositivo clínico,
+> un sistema operacional certificado, un canal de control de aeronaves, un sistema de armas ni un
+> sustituto de la aprobación humana responsable.
 
-MATB reúne flujos relacionados e independientes para medicina aeroespacial,
-factores humanos, seguridad aeronáutica e investigación de supervisión de sUAS.
-No es necesario instalar todos los flujos.
+MATB reúne en un repositorio varios flujos que pueden instalarse de forma independiente:
+herramientas de estudio compatibles con OpenMATB, una consola local de investigación, un simulador
+determinista de sistemas de aeronaves pequeñas no tripuladas (sUAS), un sistema de gestión de la
+seguridad operacional (SMS) FAC ISR con prioridad para el funcionamiento sin conexión y una demostración
+conservada de monitor de aeronaves en terminal. Elija un flujo a continuación; no necesita instalar los demás.
 
-## Empiece aquí: elija un flujo
+<a id="identity-and-safety"></a>
+## 1. Identidad, uso previsto y límite de seguridad operacional
 
-| Objetivo | Comience con | Resultado |
-| --- | --- | --- |
-| Diseñar bloques de carga, ejecutar sesiones MATB, convertir registros o ajustar modelos DEPDF | `matb_integration/` y `openmatb/` | Escenarios contrabalanceados, manifiestos, métricas y JSONL listo para analizar |
-| Dar seguimiento a participantes y visitas, visualizar datos, ejecutar estadísticas y exportar un estudio | `webui/` | Consola local FastAPI/Next.js con procedencia respaldada por SQLite |
-| Ejecutar un estudio sUAS supervisivo determinista y no cinético | `matb_integration/suas/` y `webui/` | Sesiones de navegador, ISA/SAGAT/TLX/Bedford, reproducción verificada y artefactos sellados |
-| Evaluar contratos sin conexión de seguridad operacional, evidencia, telemetría y separación de investigación | `SMS/` | Paquetes TypeScript, consola local, comprobaciones deterministas y herramientas de verificación sin conexión |
-| Explorar las demostraciones originales de terminal | `aircraft_monitor/` | Demostraciones con semilla de UAV, caza, modo combinado y experimento inspirado en MATB |
+La superficie activa de investigación en Python genera escenarios y procedencia, convierte registros
+CSV de OpenMATB, calcula resultados descriptivos, frecuentistas y bayesianos, ajusta un modelo DEPDF
+de Suhir intraparticipante y admite una evaluación neurocognitiva exploratoria. El entorno de tareas
+OpenMATB está versionado en `openmatb/` para desarrollo local y presentación de tareas; el instalador
+de recursos también admite un checkout compatible independiente cuando un estudio lo requiera.
 
-Si es nuevo en el repositorio, lea el inicio rápido del flujo que necesita y
-empiece con datos sintéticos o seudónimos. Las guías especializadas están en
-[Referencias y guías detalladas](#referencias-y-guías-detalladas).
+La Consola de Investigación es una aplicación FastAPI/Next.js enlazada a loopback, con SQLite y
+almacenamiento local de artefactos. Su superficie sUAS es un simulador sintético, no cinético y de
+supervisión. No contiene aeronaves reales, armas, selección de blancos, despacho autónomo, mapas del
+mundo real, telemetría externa ni rutas de mando y control (C2).
 
-## Seguridad, privacidad y límites de investigación
+El espacio de trabajo `SMS/` evalúa evidencia controlada, telemetría de solo lectura, compuertas de
+seguridad operacional, registros organizacionales del SMS y artefactos de revisión institucional. Que un
+componente pase, una compilación finalice correctamente o una matriz de verificación se complete no es
+una autorización para operar. La evidencia dura ausente, vencida, no confiable o no aceptada produce un
+bloqueo seguro; los revisores institucionales responsables conservan la autoridad de decisión.
 
-- Los flujos OpenMATB y MATB son instrumentos de investigación. NASA-TLX, ISA,
-  Bedford, SAGAT, detección de señales, resultados neurocognitivos, estadísticas
-  y resultados DEPDF no son hallazgos clínicos, determinaciones de aptitud,
-  conclusiones de aeronavegabilidad ni autorizaciones operacionales.
-- El simulador sUAS nativo es sintético y no cinético. No contiene aeronaves
-  reales, armas, selección de blancos, mapas del mundo real, telemetría externa,
-  despacho autónomo ni una ruta de mando y control.
-- El espacio de trabajo `SMS/` es un sistema sin conexión para aseguramiento y
-  evidencia de seguridad. Una prueba, compilación, matriz de evidencia o
-  compuerta aprobada no equivale a aprobación operacional institucional. El
-  estado actual permanece no operacional hasta que revisores humanos
-  calificados cierren los alcances de aceptación requeridos.
-- Mantenga las claves de vinculación de participantes, consentimientos,
-  información de salud, evidencia controlada, material de firma, claves TLS,
-  arrendamientos de controladores y decisiones institucionales fuera del
-  repositorio y bajo custodia de la institución propietaria.
-- Use identificadores seudónimos como `P01` o `SYNTH-P01`. Nunca coloque un
-  arrendamiento de controlador en una URL, registro, captura de pantalla o
-  exportación de investigación.
+Use únicamente identidades de investigación seudónimas. Mantenga los datos del estudio, la evidencia
+controlada, el material de firma, el material TLS, los arrendamientos del controlador y las decisiones
+institucionales fuera del repositorio y bajo los controles de custodia de la institución propietaria.
 
-## Arquitectura y flujo de datos
+<a id="choose-a-workflow"></a>
+## 2. Elija un flujo de trabajo
 
-```text
-Sesión de tareas OpenMATB
-        │ CSV + manifiesto del escenario
-        ▼
-matb_integration.log_converter ──► métricas JSONL ──► DEPDF/estadística Suhir
-                                                              │
-                                                              ▼
-                                                   Consola de Investigación/exportación
+| Objetivo | Comience aquí | Entorno de ejecución | Ejemplo | Resultado esperado |
+| --- | --- | --- | --- | --- |
+| Generar escenarios de OpenMATB, convertir registros o probar el análisis DEPDF | `matb_integration/` y `openmatb/` | Python; OpenMATB versionado o compatible para presentar tareas a participantes | [Recorrido de investigación OpenMATB](examples/openmatb-research/README.es.md) | Tres escenarios/manifiestos, métricas JSONL sintéticas y un JSON DEPDF |
+| Ingerir sesiones, dar seguimiento a visitas, visualizar datos, analizar y exportar | `webui/` | Python 3.12+, Node 20+, navegador local | [Recorrido de la Consola de Investigación](examples/research-console/README.es.md) | Registros SQLite locales y `research-bundle.zip` |
+| Ejecutar una sesión de investigación sUAS determinista y segura para observadores | `matb_integration/suas/` y `webui/` | Python 3.12+; Node 20+ para el servicio de navegador | [Recorrido del simulador sUAS](examples/suas-simulator/README.es.md) | Eventos verificables por reproducción, métricas, informe final, manifiesto y sumas de comprobación |
+| Evaluar contratos de paquetes de gestión de la seguridad operacional sin conexión | `SMS/` | Node 22.x; Docker solo para la imagen/paquete sin conexión | [Recorrido de capacidades del SMS](examples/sms-platform/README.es.md) | JSON determinista con un resultado del núcleo de seguridad operacional bloqueado deliberadamente |
+| Demostrar el monitor de terminal anterior | `aircraft_monitor/` | Python y una terminal | [Guía del monitor heredado](examples/legacy-monitor/README.es.md) | Flujo de eventos de UAV, caza, combinado o experimento en modo sin interfaz gráfica |
 
-YAML sintético ──► motor sUAS determinista ──► estado seguro para observadores
-                                                    │
-                                                    ▼
-                                             artefactos de reproducción/debrief
+El [índice de ejemplos](examples/README.es.md) compara los ejemplos rápidos sin conexión con los
+procedimientos de servicio, navegador, Docker y presentación de tareas OpenMATB.
 
-Evidencia local firmada + telemetría de solo lectura ──► API edge/núcleo SMS
-                                                            │
-                                                            ▼
-                                                     consola/auditoría/verificación
-```
+<a id="architecture-and-data-flow"></a>
+## 3. Arquitectura y movimiento de datos
 
 ```text
 MATB/
-├── matb_integration/       Bibliotecas de escenarios, conversión, análisis, screen y sUAS
-├── openmatb/               Entorno OpenMATB y plugins versionados en el repositorio
-├── scenarios/              Escenarios de aviación militar y sUAS sintético
-├── webui/                  Backend FastAPI y Consola de Investigación Next.js
-├── SMS/                    Monorepo de seguridad operacional Node/TypeScript
-├── aircraft_monitor/       Demostraciones Rich de terminal conservadas
-├── scripts/                Ayudas de instalación, lanzamiento y pruebas sin conexión
-├── tests/                  Pruebas Python, integración, sUAS y aplicaciones
-└── docs/                   Detalle científico, de implementación, diseño y verificación
+├── matb_integration/       Python scenario, conversion, analysis, screen, and sUAS libraries
+├── openmatb/               tracked OpenMATB desktop task runtime and plugins
+├── scenarios/              committed OpenMATB and synthetic sUAS scenarios
+├── webui/                  FastAPI backend and Next.js Research Console
+├── SMS/                    Node/TypeScript safety-management monorepo
+├── aircraft_monitor/       retained Rich terminal demonstrations
+├── examples/               deterministic synthetic workflow tours
+├── scripts/                native sUAS install/launch and documentation verification
+├── tests/                  Python, integration, sUAS, and documentation suites
+└── docs/                   scientific, implementation, design, and verification detail
 ```
 
-La base de datos de investigación y el dominio operacional del SMS son
-responsabilidades separadas. El paquete de investigación del SMS tiene
-comprobaciones explícitas de límites de datos, y las superficies sUAS/telemetría
-nativas son deliberadamente de solo lectura respecto de aeronaves reales.
+Los cuatro flujos principales se mantienen separados de forma deliberada:
 
-## Requisitos previos
+```text
+Tracked/compatible OpenMATB -> session CSV + scenario manifest -> metrics -> DEPDF/statistics -> research bundle
+Browser -> FastAPI Research Console -> local SQLite/artifacts -> tracker/analysis/export
+Synthetic YAML -> deterministic sUAS engine -> observer-safe state -> replay/debrief artifacts
+Signed local evidence + read-only telemetry -> edge API/safety kernel -> console/audit -> offline verification
+```
 
-Instale solamente las dependencias del flujo que vaya a utilizar.
+La base de datos de investigación no es una base de datos operacional. `SMS/packages/research/`
+y el dominio operacional del SMS tienen comprobaciones explícitas de separación. La telemetría es
+de solo lectura y ninguna aplicación expone un canal de mando del vehículo.
 
-| Dependencia | La usan | Versión o nota |
-| --- | --- | --- |
-| Git | Todos los flujos | Necesario para clonar el repositorio |
-| Python | MATB, OpenMATB, Consola de Investigación, sUAS y monitor heredado | Python 3.12+ es la base soportada |
-| Node.js y npm | Frontend de la Consola, lanzador sUAS y SMS | Node 20+ para `webui/` y sUAS; Node 22.x para `SMS/` |
-| Xvfb | OpenMATB en Linux sin interfaz gráfica | Solo para ejecutar el entorno de tareas Pyglet sin pantalla |
-| Navegador | Consola de Investigación y sUAS | Navegador local compatible; Chromium/Playwright además es necesario para compuertas de navegador |
-| Docker | Imagen/paquete SMS sin conexión | Se necesitan contenedores Linux e insumos controlados por la institución |
+<a id="prerequisites"></a>
+## 4. Matriz de prerrequisitos
 
-Clone el repositorio:
+| Dependencia | Versión o función | Herramientas OpenMATB | Consola de Investigación | sUAS | `SMS/` | Monitor heredado |
+| --- | --- | --- | --- | --- | --- | --- |
+| Git | Clonación/control de versiones | Obligatorio | Obligatorio | Obligatorio | Obligatorio | Obligatorio |
+| Python | El instalador de sUAS requiere 3.12+; use la misma versión para los flujos Python del repositorio | Obligatorio | Obligatorio | Obligatorio | No | Obligatorio |
+| Node.js | El lanzador comprueba 20+; el frontend usa npm | No | 20+ obligatorio | 20+ para el servicio de navegador | **22.x obligatorio** | No |
+| npm | Herramienta de dependencias/compilación basada en el archivo de bloqueo | No | Obligatorio para el frontend | Obligatorio para el servicio de navegador | Obligatorio | No |
+| Entorno OpenMATB | Versionado en `openmatb/`; un checkout compatible independiente es opcional | Específico del flujo | Solo para recopilar sesiones de tareas | No | No | No |
+| Xvfb | Pantalla X virtual para OpenMATB/Pyglet en Linux sin interfaz gráfica | Específico del flujo | No | No; la interfaz nativa usa navegador/modo sin interfaz gráfica | No | No en modo `--headless` |
+| Chromium | Uso del navegador; Chromium de Playwright solo se necesita para las compuertas E2E/accesibilidad del navegador | Opcional | Navegador obligatorio; recurso de Playwright opcional | Navegador obligatorio para la UI; opcional para CLI | Recurso opcional de prueba de consola | No |
+| Docker | Motor de contenedores Linux e imagen base preparada | No | No | No | Específico del flujo para imagen/paquete sin conexión | No |
+| WSL2 | Límite POSIX en Windows | Para `setup.sh` o el procedimiento Linux/Xvfb | Solo para el lanzador POSIX combinado | Obligatorio en Windows para `install_suas.sh`/`run_suas.sh` | Para scripts POSIX, permisos Linux y verificación Docker | No obligatorio |
+
+Windows nativo admite los ejemplos PowerShell/Python/Node. No convierte los lanzadores de shell
+POSIX, los puntos de entrada de contenedores Linux, el comportamiento de `chmod`/UID ni Xvfb en
+procedimientos nativos de Windows. Use WSL2 para esas rutas. Los recorridos de API en PowerShell
+requieren PowerShell 7+ porque usan `Invoke-RestMethod -Form`.
+
+Compruebe solo las herramientas necesarias para el flujo seleccionado.
 
 ```bash
-git clone https://github.com/strikerdlm/MATB.git
-cd MATB
+git --version
+python3 --version
+node --version
+npm --version
 ```
 
-En Windows, los ejemplos de Python y Node pueden ejecutarse de forma nativa.
-Los lanzadores POSIX, puntos de entrada de contenedores Linux, comprobaciones de
-permisos Unix y procedimientos Xvfb requieren Linux, macOS o WSL2.
+```powershell
+git --version
+python --version
+node --version
+npm --version
+$PSVersionTable.PSVersion
+```
 
-## Inicio rápido: flujo de investigación MATB/OpenMATB
+<a id="quick-start-openmatb"></a>
+## 5. Inicio rápido de investigación OpenMATB
 
-Este es el flujo principal para un estudio de factores humanos. Produce
-escenarios y análisis sintético sin requerir participantes. El directorio
-versionado `openmatb/` está disponible para desarrollo local; `install_to_openmatb.py`
-también puede copiar los escenarios y cuestionarios del repositorio a otro
-checkout compatible de OpenMATB.
+El primer ejemplo es completamente sintético y no abre una ventana de tareas. Use el entorno
+versionado `openmatb/`, o un checkout compatible independiente, para presentar las tareas generadas
+a un participante.
 
-### 1. Cree el entorno Python
+<h3>Prerrequisitos</h3>
+
+Use Git y Python 3.12+. El entorno versionado está en `openmatb/`; un checkout compatible
+independiente es opcional. La presentación en Linux/sin interfaz gráfica también necesita Xvfb y
+una pantalla Pyglet funcional; Windows nativo ejecuta directamente el entorno de escritorio.
+
+<h3>Instalación</h3>
+
+Bash de Linux o WSL2, desde la raíz del clon:
 
 ```bash
-python3 -m venv .venv-matb
-.venv-matb/bin/python -m pip install --upgrade pip
-.venv-matb/bin/python -m pip install -r requirements-dev.txt
-.venv-matb/bin/python -m pip install -r openmatb/requirements.txt
+REPO_ROOT="$(pwd)"
+python3 -m venv "$REPO_ROOT/.venv-openmatb"
+"$REPO_ROOT/.venv-openmatb/bin/python" -m pip install -r "$REPO_ROOT/requirements-dev.txt"
+"$REPO_ROOT/.venv-openmatb/bin/python" -m pip install -r "$REPO_ROOT/openmatb/requirements.txt"
 ```
 
-`requirements-dev.txt` incluye las dependencias Python de análisis y backend.
-Los requisitos de OpenMATB agregan sus paquetes específicos de ejecución.
-
-### 2. Instale escenarios y cuestionarios versionados
+`setup.sh` es solo para POSIX e instala el `requirements.txt` base, más limitado, para la integración
+de recursos heredados/OpenMATB. No sustituye la instalación de dependencias de desarrollo anterior
+cuando se ejecuta el ejemplo de DEPDF/estadísticas.
 
 ```bash
-.venv-matb/bin/python install_to_openmatb.py "$PWD/openmatb"
+REPO_ROOT="$(pwd)"
+MATB_VENV="$REPO_ROOT/.venv-openmatb" bash "$REPO_ROOT/setup.sh"
 ```
 
-Esto copia los escenarios de aviación militar y los cuestionarios del repositorio
-a `openmatb/includes/`. Para usar otro checkout, reemplace `"$PWD/openmatb"`
-por su ruta; debe contener un directorio `includes/`.
+PowerShell 7+ en Windows nativo:
 
-### 3. Genere un nuevo conjunto de carga cuando sea necesario
+```powershell
+$RepoRoot = (Get-Location).Path
+python -m venv (Join-Path $RepoRoot ".venv-openmatb")
+& (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") -m pip install -r (Join-Path $RepoRoot "requirements-dev.txt")
+& (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") -m pip install -r (Join-Path $RepoRoot "openmatb\requirements.txt")
+```
 
-El generador crea bloques LOW, MEDIUM y HIGH junto con manifiestos deterministas.
-Use un directorio de salida dedicado para no sobrescribir los escenarios
-versionados:
+<h3>Configuración</h3>
+
+La generación sintética no necesita configuración. Instale los escenarios y cuestionarios del
+repositorio en el entorno versionado:
 
 ```bash
-mkdir -p exports
-.venv-matb/bin/python -m matb_integration.scenario_builder \
-  --output-dir exports/military-aviation \
-  --block-duration 900 \
-  --seed 42
+REPO_ROOT="$(pwd)"
+OPENMATB_DIR="$REPO_ROOT/openmatb"
+"$REPO_ROOT/.venv-openmatb/bin/python" "$REPO_ROOT/install_to_openmatb.py" "$OPENMATB_DIR"
 ```
 
-Los archivos generados son `low_workload.txt`, `medium_workload.txt` y
-`high_workload.txt`. Los manifiestos guardan la semilla, duración, nivel de
-carga, hash del escenario, sondas esperadas y configuración de cuestionarios.
-
-### 4. Configure y ejecute un bloque OpenMATB
-
-Edite [`openmatb/config.ini`](openmatb/config.ini) y comience con:
-
-```ini
-language=en_EN
-fullscreen=False
-scenario_path=military_aviation/low_workload.txt
-display_session_number=True
+```powershell
+$RepoRoot = (Get-Location).Path
+$OpenMatbDir = (Resolve-Path (Join-Path $RepoRoot "openmatb")).Path
+& (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") (Join-Path $RepoRoot "install_to_openmatb.py") $OpenMatbDir
 ```
 
-Ejecute en un equipo con escritorio:
+El destino debe contener `includes/`, como ocurre en el entorno versionado. Para usar un checkout
+compatible independiente, sustituya `OPENMATB_DIR` o `$OpenMatbDir` por su ruta raíz.
+
+<h3>Ejecución</h3>
+
+Genere la estructura del protocolo confirmado en el repositorio sin iniciar OpenMATB:
 
 ```bash
-cd openmatb
-../.venv-matb/bin/python main.py
+REPO_ROOT="$(pwd)"
+"$REPO_ROOT/.venv-openmatb/bin/python" -m matb_integration.scenario_builder \
+  --output-dir "$REPO_ROOT/examples/output/generated-scenarios" --block-duration 900 --seed 42
 ```
 
-Ejecute en Linux sin interfaz gráfica con Xvfb:
-
-```bash
-Xvfb :100 -screen 0 1920x1080x24 &
-cd openmatb
-DISPLAY=:100 ../.venv-matb/bin/python main.py
+```powershell
+$RepoRoot = (Get-Location).Path
+& (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") -m matb_integration.scenario_builder `
+  --output-dir (Join-Path $RepoRoot "examples\output\generated-scenarios") --block-duration 900 --seed 42
 ```
 
-OpenMATB escribe un CSV con marca de tiempo debajo de `openmatb/sessions/`.
-Cambie `scenario_path` a `military_aviation/medium_workload.txt` o
-`military_aviation/high_workload.txt` para las otras condiciones. Empiece en
-modo ventana; active pantalla completa solamente después de estabilizar el
-equipo de destino.
-
-### 5. Convierta un CSV de sesión en métricas
+Para presentar tareas, edite `openmatb/config.ini` y comience con
+`language=en_EN`, `fullscreen=False` y
+`scenario_path=military_aviation/low_workload.txt`. Después ejecute la ventana
+de tareas versionada desde su directorio:
 
 ```bash
-cd ..
-.venv-matb/bin/python -m matb_integration.log_converter \
-  openmatb/sessions/<session>.csv \
-  --participant P01 \
-  --level LOW \
-  --block low_workload \
-  --output exports/P01_low.jsonl
+REPO_ROOT="$(pwd)"
+cd "$REPO_ROOT/openmatb"
+"$REPO_ROOT/.venv-openmatb/bin/python" main.py
 ```
 
-El conversor registra detección de señales SYSMON y COMM, tiempos de reacción,
-NASA-TLX, Bedford, ISA y SAGAT cuando están presentes. Escribe un registro JSONL
-estructurado y utiliza una corrección log-lineal para d-prime.
-
-### 6. Ajuste el DEPDF de Suhir con tres niveles de una visita
-
-```bash
-.venv-matb/bin/python -m matb_integration.suhir.cli fit \
-  --participant P01 \
-  --low LOW.csv \
-  --medium MEDIUM.csv \
-  --high HIGH.csv \
-  --source raw_tlx \
-  --out exports/P01_suhir.json
+```powershell
+$RepoRoot = (Get-Location).Path
+Push-Location (Join-Path $RepoRoot "openmatb")
+try {
+  & (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") main.py
+} finally {
+  Pop-Location
+}
 ```
 
-El ajuste estima `G0`, `P0` y `tau0` a partir de los tres registros de carga.
-Lea la [guía DEPDF](matb_integration/suhir/README.md) antes de citar el modelo:
-es comparativo e intraparticipante, y tres niveles identifican exactamente los
-parámetros sin grados de libertad para bondad de ajuste.
+Para usar un checkout compatible independiente, ejecute su `main.py` desde ese
+checkout con el entorno seleccionado. Use `DISPLAY` y Xvfb solo en Linux sin
+interfaz gráfica; Windows nativo no usa Xvfb.
 
-### 7. Ejecute la CLI estadística independiente cuando sea necesario
-
-La CLI acepta los arreglos JSON devueltos por los endpoints `/metrics/long` y
-`/fits` de la Consola de Investigación:
+<h3>Prueba del ejemplo sintético</h3>
 
 ```bash
-.venv-matb/bin/python -m matb_integration.analysis.stats.cli run \
-  --metrics-json metrics.json \
-  --fits-json fits.json \
-  --output exports/frequentist.json
-
-.venv-matb/bin/python -m matb_integration.analysis.stats.cli bayes \
-  --metrics-json metrics.json \
-  --fits-json fits.json \
-  --output exports/bayesian.json \
-  --seed 20260604 \
-  --draws 1000 \
-  --tune 1000 \
-  --chains 4
+REPO_ROOT="$(pwd)"
+MATB_PYTHON="$REPO_ROOT/.venv-openmatb/bin/python" \
+  bash "$REPO_ROOT/examples/openmatb-research/run.sh" "$REPO_ROOT/examples/output/openmatb-research"
 ```
 
-El motor frecuentista ofrece efectos de carga MixedLM, trayectorias por visita,
-correlación de medidas repetidas, deriva de parámetros DEPDF, multiplicidad,
-tamaños de efecto, intervalos de confianza y procedencia. El comando bayesiano
-es un artefacto de sensibilidad separado; revise R-hat, tamaño de muestra
-efectivo y divergencias antes de interpretarlo.
+```powershell
+$RepoRoot = (Get-Location).Path
+$env:MATB_PYTHON = Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe"
+& (Join-Path $RepoRoot "examples\openmatb-research\run.ps1") -OutputDir (Join-Path $RepoRoot "examples\output\openmatb-research")
+```
 
-## Inicio rápido: Consola de Investigación MATB
+<h3>Resultado esperado</h3>
 
-La Consola administra participantes seudónimos, seguimiento de seis visitas,
-ingesta CSV/manifiesto, visualización descriptiva, estadística, evaluación
-neurocognitiva y exportaciones reproducibles.
+El recorrido escribe tres archivos `scenarios/*.txt` con manifiestos adyacentes, `metrics.jsonl` y
+`suhir.json`; después imprime `External OpenMATB was not started.` Ese mensaje se refiere solamente
+al recorrido sintético: no inicia el entorno versionado ni uno independiente. El recurso contiene
+únicamente `SYNTH-P01`; no son datos de participantes.
 
-### 1. Instale backend y frontend
+<h3>Verificación</h3>
 
 ```bash
-python3 -m venv .venv-webui
-.venv-webui/bin/python -m pip install --upgrade pip
-.venv-webui/bin/python -m pip install -r requirements-dev.txt
+REPO_ROOT="$(pwd)"
+"$REPO_ROOT/.venv-openmatb/bin/python" -m pytest \
+  "$REPO_ROOT/tests/test_scenario_builder.py" \
+  "$REPO_ROOT/tests/test_scenario_manifest.py" \
+  "$REPO_ROOT/tests/test_log_converter.py" \
+  "$REPO_ROOT/tests/analysis_stats" "$REPO_ROOT/tests/suhir" "$REPO_ROOT/tests/screen" -q
+```
 
-cd webui/frontend
+```powershell
+$RepoRoot = (Get-Location).Path
+& (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") -m pytest `
+  (Join-Path $RepoRoot "tests\test_scenario_builder.py") `
+  (Join-Path $RepoRoot "tests\test_scenario_manifest.py") `
+  (Join-Path $RepoRoot "tests\test_log_converter.py") `
+  (Join-Path $RepoRoot "tests\analysis_stats") (Join-Path $RepoRoot "tests\suhir") (Join-Path $RepoRoot "tests\screen") -q
+```
+
+<h3>Detención y limpieza</h3>
+
+Detenga OpenMATB o Xvfb con Ctrl-C. Elimine solo la salida sintética seleccionada, nunca un entorno
+de tareas ni un almacén de sesiones.
+
+```bash
+REPO_ROOT="$(pwd)"
+rm -rf -- "$REPO_ROOT/examples/output/openmatb-research" "$REPO_ROOT/examples/output/generated-scenarios"
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+Remove-Item -Recurse -Force (Join-Path $RepoRoot "examples\output\openmatb-research"), (Join-Path $RepoRoot "examples\output\generated-scenarios") -ErrorAction SilentlyContinue
+```
+
+<h3>Solución de problemas</h3>
+
+Un error `includes/ not found` indica que el checkout versionado o compatible seleccionado es
+incorrecto. `ModuleNotFoundError` suele indicar que el venv está inactivo o no tiene instalados los
+requisitos de OpenMATB. En Linux, los fallos de pantalla/parpadeo/Pyglet pertenecen al límite
+OpenMATB/X11: valide `DISPLAY`, use Xvfb en hosts sin interfaz gráfica y comience en modo de ventana.
+Consulte el [ejemplo completo de OpenMATB](examples/openmatb-research/README.es.md).
+
+<a id="quick-start-research-console"></a>
+## 6. Inicio rápido de la Consola de Investigación
+
+<h3>Prerrequisitos</h3>
+
+Use Python 3.12+, Node 20+, npm y un navegador. La instalación inicial de dependencias necesita
+acceso a la red o cachés preparados de Python/npm; el servicio instalado es local y puede funcionar
+sin conexión.
+
+<h3>Instalación</h3>
+
+Lanzador combinado de Linux o WSL2:
+
+```bash
+REPO_ROOT="$(pwd)"
+MATB_VENV="$REPO_ROOT/.venv-console" bash "$REPO_ROOT/scripts/install_suas.sh"
+```
+
+Instalación de desarrollo en PowerShell 7+ de Windows nativo:
+
+```powershell
+$RepoRoot = (Get-Location).Path
+python -m venv (Join-Path $RepoRoot ".venv-console")
+& (Join-Path $RepoRoot ".venv-console\Scripts\python.exe") -m pip install -r (Join-Path $RepoRoot "requirements-dev.txt")
+Set-Location (Join-Path $RepoRoot "webui\frontend")
 npm ci
-cd ../..
-mkdir -p exports/research-console
+Set-Location $RepoRoot
 ```
 
-### 2. Inicie el backend
+<h3>Configuración</h3>
 
-En la terminal 1:
+Elija una raíz de datos dedicada. El lanzador POSIX configura `MATB_DB_PATH`,
+`MATB_SIMULATION_OUTPUT_DIR`, `MATB_SIMULATION_SCENARIO_DIR` y
+`MATB_FRONTEND_ORIGINS`. Para desarrollo nativo:
 
 ```bash
-cd webui/backend
-MATB_DB_PATH="$PWD/../../exports/research-console/matb.db" \
-MATB_FRONTEND_ORIGINS="http://127.0.0.1:3100" \
-../../.venv-webui/bin/python -m uvicorn app.main:app \
-  --reload --host 127.0.0.1 --port 8000
+REPO_ROOT="$(pwd)"
+export MATB_DB_PATH="$REPO_ROOT/examples/output/research-console-service/matb.db"
+export MATB_FRONTEND_ORIGINS="http://127.0.0.1:3100"
 ```
 
-Compruebe que funciona:
+```powershell
+$RepoRoot = (Get-Location).Path
+$DataRoot = Join-Path $RepoRoot "examples\output\research-console-service"
+New-Item -ItemType Directory -Force -Path $DataRoot | Out-Null
+$env:MATB_DB_PATH = Join-Path $DataRoot "matb.db"
+$env:MATB_FRONTEND_ORIGINS = "http://127.0.0.1:3100"
+$env:NEXT_PUBLIC_API_URL = "http://127.0.0.1:8000"
+```
+
+<h3>Ejecución</h3>
+
+Linux/WSL2 inicia ambos servicios compilados y aplica permisos POSIX exclusivos del propietario:
+
+```bash
+REPO_ROOT="$(pwd)"
+MATB_VENV="$REPO_ROOT/.venv-console" bash "$REPO_ROOT/scripts/run_suas.sh" \
+  --data-dir "$REPO_ROOT/examples/output/research-console-service"
+```
+
+Windows nativo usa dos terminales de PowerShell. Backend:
+
+```powershell
+$RepoRoot = (Get-Location).Path
+Set-Location (Join-Path $RepoRoot "webui\backend")
+& (Join-Path $RepoRoot ".venv-console\Scripts\python.exe") -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Frontend:
+
+```powershell
+$RepoRoot = (Get-Location).Path
+Set-Location (Join-Path $RepoRoot "webui\frontend")
+npm run dev -- --hostname 127.0.0.1 --port 3100
+```
+
+Abra `http://127.0.0.1:3100/`.
+
+<h3>Prueba del ejemplo sintético</h3>
+
+Con el servicio en ejecución:
+
+```bash
+REPO_ROOT="$(pwd)"
+BASE_URL=http://127.0.0.1:8000 OUTPUT_DIR="$REPO_ROOT/examples/output/research-console-tour" \
+  bash "$REPO_ROOT/examples/research-console/api_walkthrough.sh"
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+& (Join-Path $RepoRoot "examples\research-console\api_walkthrough.ps1") `
+  -BaseUrl http://127.0.0.1:8000 -OutputDir (Join-Path $RepoRoot "examples\output\research-console-tour")
+```
+
+<h3>Resultado esperado</h3>
+
+La comprobación de salud tiene éxito; el participante sintético `SYNTH-P01` tiene un bloque de visita
+LOW; se imprimen los JSON de seguimiento/contexto y se escribe `research-bundle.zip`. El estado de
+manifiesto ausente es deliberado y no debe interpretarse como un estudio completo.
+
+<h3>Verificación</h3>
 
 ```bash
 curl --fail http://127.0.0.1:8000/health
 ```
 
-### 3. Inicie el frontend
-
-En la terminal 2:
-
-```bash
-cd webui/frontend
-NEXT_PUBLIC_API_URL=http://127.0.0.1:8000 npm run dev
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/health
 ```
 
-Abra <http://127.0.0.1:3100/>.
+Los conjuntos de pruebas de backend y frontend se enumeran en la sección de operaciones.
 
-### 4. Siga la primera secuencia de uso
+<h3>Detención y limpieza</h3>
 
-1. Abra `Participants` y cree un participante seudónimo como `P01`.
-2. Abra `Upload` e ingrese los CSV LOW, MEDIUM y HIGH de la misma visita.
-   Adjunte el manifiesto de cada escenario cuando esté disponible.
-3. Abra `Tracker` y confirme que la celda de la visita está completa.
-4. Abra `Visualization` para trayectorias, comparaciones por carga, curvas
-   DEPDF y resúmenes grupales.
-5. Abra `Analysis` para ejecutar el artefacto frecuentista y, cuando corresponda,
-   el análisis bayesiano de sensibilidad asíncrono.
-6. Abra `Screen` para administrar la batería exploratoria de cuatro subpruebas:
-   Simple RT, Choice RT, 2-back y seguimiento de persecución. El texto para
-   participantes está en español colombiano (`es-CO`).
-7. Use Research Bundle para exportar participantes, visitas, métricas tidy,
-   ajustes, artefactos de análisis, procedencia, advertencias, manifiestos y
-   opciones de figuras.
-
-Endpoints backend importantes:
-
-| Endpoint | Propósito |
-| --- | --- |
-| `GET /health` | Salud del servicio |
-| `POST /participants` y `GET /participants` | Preparación de participantes |
-| `POST /ingest` | Ingesta CSV y manifiesto opcional |
-| `GET /tracker`, `GET /block` | Integridad y detalle del bloque |
-| `GET /metrics/long`, `GET /fits` | Entradas de análisis y curvas DEPDF |
-| `POST /analysis/run`, `POST /analysis/bayes/run` | Análisis frecuentista y bayesiano |
-| `POST /screen`, `GET /screen` | Puntuación de pantalla y resumen HCF de cohorte |
-| `GET /exports/research-context`, `POST /exports/research-bundle` | Exportaciones reproducibles |
-
-Consulte la [guía del backend](webui/backend/README.md) y la [guía del frontend](webui/frontend/README.md)
-para los contratos completos de API y de la pantalla.
-
-## Inicio rápido: simulador sUAS sintético nativo
-
-Es un simulador de investigación basado en navegador, orientado a Linux y sin
-interfaz gráfica. Es determinista y no cinético, y está diseñado para estudiar
-carga supervisiva, conciencia situacional, comunicación, recuperación y
-reproducción.
-
-### 1. Instale el lanzador sin conexión
-
-El lanzador soportado requiere Python 3.12+, Node 20+ y npm:
+Presione Ctrl-C en el lanzador combinado o en ambas terminales de desarrollo nativo. Cuando los
+servicios se hayan detenido, elimine solo los directorios dedicados del ejemplo:
 
 ```bash
-MATB_VENV="$PWD/.venv-suas" bash scripts/install_suas.sh
+REPO_ROOT="$(pwd)"
+rm -rf -- "$REPO_ROOT/examples/output/research-console-service" "$REPO_ROOT/examples/output/research-console-tour"
 ```
 
-El instalador construye el frontend y ejecuta las compuertas nativas de sUAS y
-backend. La primera instalación puede necesitar red; el runtime instalado está
-diseñado para funcionar sin Docker, X11, GPU ni Internet.
-
-### 2. Inicie la consola
-
-```bash
-MATB_VENV="$PWD/.venv-suas" bash scripts/run_suas.sh
+```powershell
+$RepoRoot = (Get-Location).Path
+Remove-Item -Recurse -Force (Join-Path $RepoRoot "examples\output\research-console-service"), (Join-Path $RepoRoot "examples\output\research-console-tour") -ErrorAction SilentlyContinue
 ```
 
-Abra <http://127.0.0.1:3100/mission/setup>. El estado del backend está en
-<http://127.0.0.1:8000/health>. El lanzador usa loopback por defecto y escribe
-datos con permisos exclusivos del propietario bajo `var/suas/`. Use
-`--data-dir`, `--backend-port` y `--frontend-port` para una ejecución dedicada.
+<h3>Solución de problemas</h3>
 
-### 3. Use el protocolo del navegador
+Un 409 al repetir la ejecución significa que ya existe el hash del CSV o la celda de visita/carga de
+trabajo; use una base de datos dedicada nueva. Si 8000 o 3100 está ocupado, detenga el otro proceso
+o indique puertos distintos al lanzador y alinee `NEXT_PUBLIC_API_URL`. Los fallos de política de
+ejecución o de comillas de PowerShell pueden evitarse usando PowerShell 7 y el operador de llamada `&`
+con `Join-Path`. Consulte la [guía de la Consola de Investigación](examples/research-console/README.es.md).
 
-1. Seleccione un escenario YAML validado y el idioma de sesión (`en` o `es-CO`).
-2. Introduzca el participante y la visita seudónimos.
-3. Prepare e inicie el bloque de práctica o investigación.
-4. Use los controles supervisivos para gestionar flota sintética, contactos,
-   alertas, enlaces, energía, separación y acciones requeridas.
-5. Complete las sondas ISA/SAGAT y los controles NASA-TLX/Bedford posteriores.
-6. Finalice el bloque, revise el debrief y descargue los artefactos sellados.
-7. Si se desconecta el controlador, reconecte explícitamente; la sesión se
-   pausa y nunca se reanuda por sí sola.
+<a id="quick-start-suas"></a>
+## 7. Inicio rápido del sUAS sintético
 
-### 4. Ejecute una comprobación CLI determinista pequeña
+<h3>Prerrequisitos</h3>
+
+La CLI necesita Python 3.12+. El servicio de navegador añade Node 20+, npm y un navegador.
+`install_suas.sh` y `run_suas.sh` son contratos para Linux/WSL2; PowerShell de Windows nativo
+puede ejecutar la CLI y puede llamar a un servicio alojado en WSL2.
+
+<h3>Instalación</h3>
+
+Instalación del servicio en Linux/WSL2:
 
 ```bash
-.venv-suas/bin/python -m matb_integration.suas.cli validate \
-  scenarios/suas/reference_area_search.yaml
-
-.venv-suas/bin/python -m matb_integration.suas.cli record \
-  scenarios/suas/reference_area_search.yaml \
-  --block PRACTICE \
-  --ticks 10 \
-  --session-id SYNTH-SUAS-01 \
-  --output exports/suas-demo
-
-.venv-suas/bin/python -m matb_integration.suas.cli verify exports/suas-demo
+REPO_ROOT="$(pwd)"
+MATB_VENV="$REPO_ROOT/.venv-suas" bash "$REPO_ROOT/scripts/install_suas.sh"
 ```
 
-El directorio grabado contiene manifiesto, eventos ordenados, checkpoints,
-métricas, debrief, verificación de reproducción y `checksums.sha256`. Una
-reproducción coincidente confirma el determinismo interno; no valida el vuelo
-en el mundo real.
+Instalación exclusiva de la CLI en Windows nativo:
 
-La API nativa expone validación de escenarios, ciclo de vida de sesiones,
-comandos no cinéticos, estado de observador redactado, resincronización WebSocket
-ordenada, arrendamientos de controlador, recuperación explícita, debrief y
-descarga de artefactos. Nunca envíe el arrendamiento a un observador ni lo
-coloque en una URL.
+```powershell
+$RepoRoot = (Get-Location).Path
+python -m venv (Join-Path $RepoRoot ".venv-suas")
+& (Join-Path $RepoRoot ".venv-suas\Scripts\python.exe") -m pip install -r (Join-Path $RepoRoot "requirements-dev.txt")
+```
 
-## Inicio rápido: espacio de trabajo SMS FAC ISR
+<h3>Configuración</h3>
 
-`SMS/` es un espacio Node/TypeScript separado para seguridad operacional y
-aseguramiento de evidencia sin conexión. Su dominio de investigación está
-separado deliberadamente del dominio operacional y el runtime no tiene ruta C2.
-
-### 1. Instale y construya el espacio de trabajo
-
-Use Node 22.x:
+El servicio usa de forma predeterminada los escenarios validados de `scenarios/suas/`, los puertos
+loopback 8000/3100 y una raíz de salida dedicada. Se rechaza un enlace que no sea loopback salvo que
+`MATB_FRONTEND_ORIGINS` se configure explícitamente. No exponga el servicio de desarrollo a una red
+no confiable.
 
 ```bash
-cd SMS
+REPO_ROOT="$(pwd)"
+export MATB_SIMULATION_SCENARIO_DIR="$REPO_ROOT/scenarios/suas"
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+$env:MATB_SIMULATION_SCENARIO_DIR = Join-Path $RepoRoot "scenarios\suas"
+```
+
+<h3>Ejecución</h3>
+
+Servicio de navegador en Linux/WSL2:
+
+```bash
+REPO_ROOT="$(pwd)"
+MATB_VENV="$REPO_ROOT/.venv-suas" bash "$REPO_ROOT/scripts/run_suas.sh" \
+  --data-dir "$REPO_ROOT/examples/output/suas-service"
+```
+
+En Windows nativo, inicie ese comando dentro de WSL2 y después abra la URL loopback desde Windows
+o use el recorrido de PowerShell. El lanzador POSIX es responsable del inicio y la detención del
+servicio, de los grupos de procesos y de los permisos Unix.
+
+<h3>Prueba del ejemplo sintético</h3>
+
+Recorrido rápido exclusivo de CLI en Linux/WSL2:
+
+```bash
+REPO_ROOT="$(pwd)"
+MATB_VENV="$REPO_ROOT/.venv-suas" \
+  bash "$REPO_ROOT/examples/suas-simulator/cli_demo.sh" "$REPO_ROOT/examples/output/suas-simulator"
+```
+
+Equivalente para Windows nativo, con el mismo escenario confirmado en el repositorio:
+
+```powershell
+$RepoRoot = (Get-Location).Path
+$Python = Join-Path $RepoRoot ".venv-suas\Scripts\python.exe"
+$Scenario = Join-Path $RepoRoot "scenarios\suas\reference_area_search.yaml"
+$Output = Join-Path $RepoRoot "examples\output\suas-simulator"
+& $Python -m matb_integration.suas.cli validate $Scenario
+& $Python -m matb_integration.suas.cli record $Scenario --block PRACTICE --ticks 10 --session-id SYNTH-SUAS-01 --output $Output
+& $Python -m matb_integration.suas.cli verify $Output
+```
+
+El recorrido de la API del servicio está disponible en Bash y PowerShell; usa un arrendamiento solo
+en el encabezado `X-Simulation-Controller` y nunca envía un mando de aeronave.
+
+<h3>Resultado esperado</h3>
+
+El directorio de salida de la CLI contiene `events.jsonl`, `manifest.json`, `metrics.json`,
+`debrief.json`, `replay-verification.json` y `checksums.sha256`. El servicio expone estado seguro para
+observadores y metadatos de artefactos terminales sellados. Una desconexión del controlador pausa la
+sesión; nunca la reanuda automáticamente.
+
+<h3>Verificación</h3>
+
+```bash
+REPO_ROOT="$(pwd)"
+"$REPO_ROOT/.venv-suas/bin/python" -m matb_integration.suas.cli verify "$REPO_ROOT/examples/output/suas-simulator"
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+& (Join-Path $RepoRoot ".venv-suas\Scripts\python.exe") -m matb_integration.suas.cli verify (Join-Path $RepoRoot "examples\output\suas-simulator")
+```
+
+<h3>Detención y limpieza</h3>
+
+Presione Ctrl-C en el lanzador. Cuando termine, elimine solo las raíces de demostración elegidas:
+
+```bash
+REPO_ROOT="$(pwd)"
+rm -rf -- "$REPO_ROOT/examples/output/suas-service" "$REPO_ROOT/examples/output/suas-simulator"
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+Remove-Item -Recurse -Force (Join-Path $RepoRoot "examples\output\suas-simulator") -ErrorAction SilentlyContinue
+```
+
+<h3>Solución de problemas</h3>
+
+La grabación rechaza un directorio de salida que no esté vacío; seleccione uno nuevo. Los errores de
+compilación ausente del frontend o de venv indican que `install_suas.sh` no se completó. Los usuarios
+de WSL2 deben mantener el clon y los datos en un sistema de archivos WSL para obtener permisos
+predecibles y comprobar el reenvío loopback de Windows a WSL. Consulte el
+[recorrido de sUAS](examples/suas-simulator/README.es.md).
+
+<a id="quick-start-sms"></a>
+## 8. Inicio rápido del SMS FAC ISR
+
+<h3>Prerrequisitos</h3>
+
+Use Node.js 22.x y npm. Docker con compatibilidad para contenedores Linux solo es necesario para
+`build:offline` y la verificación de contenedores, no para el recorrido de paquetes.
+
+<h3>Instalación</h3>
+
+```bash
+REPO_ROOT="$(pwd)"
+cd "$REPO_ROOT/SMS"
 npm ci
-npm run build
 ```
 
-### 2. Ejecute las compuertas técnicas de verificación
+```powershell
+$RepoRoot = (Get-Location).Path
+Set-Location (Join-Path $RepoRoot "SMS")
+npm ci
+```
+
+`npm ci` puede necesitar la red en una estación de desarrollo; un host aislado debe tener preparada
+de antemano la caché de dependencias bloqueadas.
+
+<h3>Configuración</h3>
+
+El recorrido de paquetes no requiere credenciales, material de firma, telemetría ni configuración de
+servicios. Para el despliegue Docker, las instituciones suministran `SMS_DATA_DIR`,
+`SMS_PACKAGE_DIR` de solo lectura y `SMS_TLS_DIR` mediante custodia aprobada. `SMS_EDGE_PORT`
+solo cambia el puerto loopback del host. No cree claves de demostración ni coloque material controlado
+en el repositorio.
+
+<h3>Ejecución</h3>
 
 ```bash
+REPO_ROOT="$(pwd)"
+bash "$REPO_ROOT/examples/sms-platform/run.sh"
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+& (Join-Path $RepoRoot "examples\sms-platform\run.ps1")
+```
+
+Los ejecutores instalan las dependencias bloqueadas, compilan los nueve paquetes e imprimen el
+recorrido determinista de paquetes.
+
+<h3>Prueba del ejemplo sintético</h3>
+
+Después de la primera compilación, repita directamente el ejecutable que no usa la red:
+
+```bash
+REPO_ROOT="$(pwd)"
+cd "$REPO_ROOT/SMS"
+node ../examples/sms-platform/package-tour.mjs
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+Set-Location (Join-Path $RepoRoot "SMS")
+node ..\examples\sms-platform\package-tour.mjs
+```
+
+<h3>Resultado esperado</h3>
+
+Un documento JSON contiene las nueve claves de paquete. El requisito duro sintético deja
+deliberadamente bloqueado `safetyKernel.status` y `research.nonDispatchable` permanece true.
+No se crea ningún servicio, decisión, liberación ni estado de preparación operacional.
+
+<h3>Verificación</h3>
+
+```bash
+REPO_ROOT="$(pwd)"
+cd "$REPO_ROOT/SMS"
 npm test
 npm run typecheck
-npm run lint
 npm run verify:no-c2
 npm run verify:data-separation
 ```
 
-También existen `build:offline`, `verify:offline`, verificación de evidencia,
-comandos SBOM/manifiesto de release, generación de matriz de verificación y
-herramientas controladas para paquetes de aceptación. No ejecute
-`acceptance:record` con datos inventados: es una acción separada de ingreso de
-decisiones institucionales para custodios humanos autorizados.
-
-### 3. Explore la consola y los paquetes
-
-La consola puede iniciarse para desarrollo local de UI con:
-
-```bash
-npm run dev --workspace @fac-isr/console
+```powershell
+$RepoRoot = (Get-Location).Path
+Set-Location (Join-Path $RepoRoot "SMS")
+npm test
+npm run typecheck
+npm run verify:no-c2
+npm run verify:data-separation
 ```
 
-El espacio de trabajo incluye:
+Ejecute la verificación Docker/sin conexión solo en Linux, WSL2 o un entorno de contenedores Linux
+con todas las entradas fijadas previamente preparadas. Un *entorno de ejecución* sin conexión no
+implica que una compilación sin preparar pueda acceder a dependencias o imágenes ausentes.
 
-- `apps/edge-api/`: API Fastify local para misiones, compuertas, posvuelo,
-  ingesta de paquetes, auditoría, reproducción de telemetría, modo seguro y
-  límites de datos.
-- `apps/console/`: consola React bilingüe para revisión de evidencia, riesgo,
-  telemetría, listas de verificación, investigación y debrief.
-- `packages/evidence/`: JSON canónico, hashes, registros de fuentes,
-  manifiestos y controles contra alteración o downgrade.
-- `packages/safety-kernel/`: aplicabilidad, vigencia, dependencias, riesgo,
-  ciclo de vida, compuertas y decisiones de auditoría deterministas.
-- `packages/energy/`, `packages/fleet/` y `packages/geo/`: energía/reserva,
-  configuración/calificación y lógica de coordenadas/rutas/espacio aéreo/terreno.
-- `packages/human-performance/`: evaluaciones acotadas de servicio, fatiga,
-  carga, alertas y CRM; no es diagnóstico médico ni certificación de aptitud.
-- `packages/research/`: protocolo, ética/consentimiento, adaptadores MATB y
-  sensores, instrumentos, reproducción, agregación y exportación desidentificada.
-- `packages/sms/` y `packages/telemetry/`: registros SMS y canonicalización/
-  reproducción de telemetría de solo lectura.
+<h3>Detención y limpieza</h3>
 
-Para despliegue controlado sin conexión, TLS, custodia de paquetes, vigencia de
-evidencia y aceptación institucional, use la [lista de aceptación SMS](SMS/docs/release/state-aviation-acceptance-checklist.md),
-la [matriz de verificación](SMS/docs/release/verification-matrix.md) y las [limitaciones conocidas](SMS/docs/release/known-limitations.md).
+El recorrido de paquetes no inicia servicios. Si inició un servidor de desarrollo, use Ctrl-C.
+`SMS/node_modules/` y `SMS/packages/*/dist/` generados son productos locales; inspeccione
+`git status` y elimine solo esas rutas generadas conocidas cuando quiera intencionalmente una
+instalación limpia. Nunca elimine datos controlados ni un volumen Docker compartido como parte de
+la limpieza de un ejemplo.
 
-## Inicio rápido: demostraciones heredadas de monitor aeronáutico
+<h3>Solución de problemas</h3>
 
-El paquete `aircraft_monitor/` se conserva como demostración determinista de
-terminal, no como superficie activa de investigación:
+Una advertencia del motor indica que Node no es 22.x. Los errores del daemon de Docker o de imagen
+base ausente pertenecen al límite de compilación preparada. La verificación de evidencia puede fallar
+por discrepancia de hash, alteración, artefactos fuente ausentes o vencimiento; restaure evidencia
+aprobada u obtenga una liberación autorizada vigente; nunca omita comprobaciones de vigencia, firma
+o hash. Que la preparación permanezca false después de que pasen las pruebas es una separación
+esperada entre verificación técnica y aceptación institucional. Consulte la
+[guía del SMS](examples/sms-platform/README.es.md).
+
+<a id="quick-start-legacy-monitor"></a>
+## 9. Inicio rápido del monitor heredado
+
+<h3>Prerrequisitos</h3>
+
+Use Python 3.12+ y una terminal. Los lanzadores publicados fuerzan el modo sin interfaz gráfica,
+la semilla 42 y el retardo mínimo admitido de 0.05 segundos entre eventos.
+
+<h3>Instalación</h3>
 
 ```bash
-python3 -m venv .venv-legacy
-.venv-legacy/bin/python -m pip install -r requirements.txt
-
-.venv-legacy/bin/python -m aircraft_monitor
-.venv-legacy/bin/python -m aircraft_monitor.demo_uav
-.venv-legacy/bin/python -m aircraft_monitor.demo_fighter
-.venv-legacy/bin/python -m aircraft_monitor experiment \
-  --headless --research-modality uas --seed 42
+REPO_ROOT="$(pwd)"
+python3 -m venv "$REPO_ROOT/.venv-legacy"
+"$REPO_ROOT/.venv-legacy/bin/python" -m pip install -r "$REPO_ROOT/requirements.txt"
 ```
 
-La salida de investigación se crea por defecto en `./exports/`; use un
-directorio dedicado e identificadores seudónimos para cualquier experimento.
+```powershell
+$RepoRoot = (Get-Location).Path
+python -m venv (Join-Path $RepoRoot ".venv-legacy")
+& (Join-Path $RepoRoot ".venv-legacy\Scripts\python.exe") -m pip install -r (Join-Path $RepoRoot "requirements.txt")
+```
 
-## Capacidades
+<h3>Configuración</h3>
 
-### Investigación MATB y OpenMATB
+No se requiere red ni servicio externo. Para ejecuciones manuales del experimento, use identificadores
+seudónimos y un directorio de salida dedicado. Los lanzadores del ejemplo ya usan `SYNTH-P01` y
+`SYNTH-S01`.
 
-- Flujo OpenMATB de cuatro tareas: monitoreo de sistemas, seguimiento,
-  comunicaciones y gestión de recursos.
-- Bloques LOW/MEDIUM/HIGH con generación de eventos con semilla y apoyo para
-  contrabalanceo.
-- Manifiestos deterministas con procedencia SHA-256, sondas esperadas,
-  metadatos de cuestionarios y validadores.
-- Cuestionarios en inglés y español para NASA-TLX, ISA, Bedford y SAGAT, con
-  las limitaciones de validación documentadas en las guías de escalas.
-- Métricas estructuradas de desempeño: d-prime, aciertos, omisiones, falsas
-  alarmas, rechazos correctos, tiempo de reacción, TLX, Bedford, ISA y SAGAT.
-- Soporte opcional de plugin OpenMATB compatible con LSL para futuros flujos de
-  fisiología sincronizada; un estudio fisiológico completo todavía necesita un
-  protocolo validado de adquisición y sincronización.
+<h3>Ejecución</h3>
 
-### Modelado y estadística
+Con el venv seleccionado activo, elija un modo:
 
-- Cálculos DEPDF de no fallo humano y resultado de misión de Suhir,
-  degradación Weibull, calibración FOAT, normalización MWL, entradas HCF e
-  informes.
-- Análisis frecuentista Q1–Q4: efectos de carga, trayectorias por visita,
-  correlación de medidas repetidas, deriva DEPDF, controles de multiplicidad,
-  tamaños de efecto, intervalos de confianza y sensibilidad de casos completos.
-- Reajustes bayesianos de sensibilidad con PyMC, intervalos posteriores, R-hat,
-  tamaño de muestra efectivo, divergencias, semillas y procedencia del sampler.
-- Estados explícitos `ok`, `insufficient_data` y `not_estimable` para que los
-  datos faltantes no se conviertan silenciosamente en conclusiones.
+```bash
+REPO_ROOT="$(pwd)"
+PATH="$REPO_ROOT/.venv-legacy/bin:$PATH" bash "$REPO_ROOT/examples/legacy-monitor/run.sh" combined
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+$env:PATH = "$(Join-Path $RepoRoot '.venv-legacy\Scripts');$env:PATH"
+& (Join-Path $RepoRoot "examples\legacy-monitor\run.ps1") -Mode combined
+```
+
+Los modos disponibles son `uav`, `fighter`, `combined` y `experiment`.
+
+<h3>Prueba del ejemplo sintético</h3>
+
+```bash
+REPO_ROOT="$(pwd)"
+PATH="$REPO_ROOT/.venv-legacy/bin:$PATH" bash "$REPO_ROOT/examples/legacy-monitor/run.sh" experiment "$REPO_ROOT/examples/output/legacy-monitor"
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+$env:PATH = "$(Join-Path $RepoRoot '.venv-legacy\Scripts');$env:PATH"
+& (Join-Path $RepoRoot "examples\legacy-monitor\run.ps1") -Mode experiment -OutputDir (Join-Path $RepoRoot "examples\output\legacy-monitor")
+```
+
+<h3>Resultado esperado</h3>
+
+La terminal finaliza con `Simulation complete!`. El modo experimento escribe eventos JSONL y una
+salida de resumen solo en el directorio seleccionado por quien ejecuta el comando. Los demás modos
+no reciben un directorio de salida de investigación.
+
+<h3>Verificación</h3>
+
+```bash
+REPO_ROOT="$(pwd)"
+"$REPO_ROOT/.venv-legacy/bin/python" -m aircraft_monitor --help
+"$REPO_ROOT/.venv-legacy/bin/python" -m pytest \
+  "$REPO_ROOT/tests/test_dashboard_behavior.py" \
+  "$REPO_ROOT/tests/test_research_protocol.py" -q
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+$Python = Join-Path $RepoRoot ".venv-legacy\Scripts\python.exe"
+& $Python -m aircraft_monitor --help
+& $Python -m pytest `
+  (Join-Path $RepoRoot "tests\test_dashboard_behavior.py") `
+  (Join-Path $RepoRoot "tests\test_research_protocol.py") -q
+```
+
+<h3>Detención y limpieza</h3>
+
+Ctrl-C devuelve el control normalmente. Elimine solo el directorio dedicado del experimento:
+
+```bash
+REPO_ROOT="$(pwd)"
+rm -rf -- "$REPO_ROOT/examples/output/legacy-monitor"
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+Remove-Item -Recurse -Force (Join-Path $RepoRoot "examples\output\legacy-monitor") -ErrorAction SilentlyContinue
+```
+
+<h3>Solución de problemas</h3>
+
+Si el lanzador resuelve el Python equivocado, active el venv seleccionado o coloque primero su
+directorio `bin`/`Scripts` en `PATH`. Use `--headless` en terminales no interactivas. Consulte la
+[guía del monitor heredado](examples/legacy-monitor/README.es.md).
+
+<a id="module-catalog"></a>
+## 10. Catálogo de módulos
+
+Cada tabla apunta al ejemplo ejecutable más pequeño. Las explicaciones científicas, de endpoints,
+liberación y evidencia detalladas se mantienen en sus guías especializadas.
+
+### Módulos de investigación Python/OpenMATB
+
+| Módulo | Propósito | Usuario | Entradas → salidas | Entorno de ejecución | Ejemplo | Verificación | Limitación |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `matb_integration/scenario_builder.py` | Generar escenarios LOW/MEDIUM/HIGH contrabalanceados | Diseñador del estudio | Protocolo, duración, semilla → escenarios de texto OpenMATB | Python | [Recorrido OpenMATB](examples/openmatb-research/README.es.md) | `pytest tests/test_scenario_builder.py tests/test_scenario_manifest.py tests/test_log_converter.py tests/suhir tests/analysis_stats tests/screen -q` | Las tareas generadas requieren el entorno OpenMATB versionado o uno compatible para su presentación |
+| `matb_integration/scenario_manifest.py` | Calcular hashes de escenarios y validar la procedencia de la sesión | Custodio de datos | Escenario/etiquetas/sondeos esperados → manifiesto adyacente y problemas de validación | Python | Recorrido OpenMATB | Mismo conjunto | La integridad del hash no establece la validez del protocolo ni el consentimiento |
+| `matb_integration/log_converter.py` | Convertir CSV de OpenMATB en métricas canónicas | Analista de investigación | CSV + seudónimo/carga de trabajo → métricas JSONL | Python | Recorrido OpenMATB | Mismo conjunto | La calidad de la entrada y las tareas ausentes limitan la inferencia |
+| `matb_integration/questionnaires/` | Recursos EN/ES de NASA-TLX, Bedford, ISA y SAGAT | Diseñador del estudio | Texto/YAML controlado → contenido configurado de cuestionario/sondeo | OpenMATB o cargador sUAS | Recorridos OpenMATB y sUAS | Pruebas de cuestionarios/SAGAT | Las escalas deben administrarse bajo un protocolo aprobado |
+| `matb_integration/analysis/` | Resultados descriptivos, motores frecuentistas MixedLM/rmcorr/rmANOVA/FDR y motores bayesianos de sensibilidad PyMC | Estadístico | Arreglos JSON `/metrics/long` y `/fits` → artefactos versionados | Python; el muestreo PyMC es opcional/lento | [Comandos de análisis OpenMATB](examples/openmatb-research/README.es.md) | Pruebas de análisis | Los conjuntos pequeños/incompletos pueden no ser estimables; los diagnósticos bayesianos gobiernan la interpretación |
+| `matb_integration/suhir/` | Ajustar parámetros DEPDF de Suhir y resúmenes de investigación de resultados de misión | Investigador de factores humanos | Tres registros de carga de trabajo → G0/P0/tau0 y curvas | Python/SciPy | Recorrido OpenMATB | Pruebas de Suhir; [guía DEPDF](matb_integration/suhir/README.md) | Modelo comparativo intraparticipante; tres niveles identifican exactamente los parámetros; no está certificado |
+| `matb_integration/screen/` | Puntuar tareas de reacción/2-back/seguimiento y mapear HCF/F/F0 exploratorio | Investigador | Ensayos sin procesar/cohorte → puntuaciones y mapeo exploratorio | Python mediante backend | Consola de Investigación `/screen` | Pruebas de evaluación/backend | No es un instrumento diagnóstico, de selección ni predictivo validado |
 
 ### Consola de Investigación
 
-- Seguimiento seudónimo de participantes y seis visitas con una cuadrícula de
-  completitud derivada.
-- Ingesta CSV con controles de duplicados, celdas ocupadas, ausencia de SYSMON,
-  sobrescritura y validación de manifiestos.
-- Trayectorias descriptivas, gráficos por nivel de carga, curvas DEPDF, vistas
-  grupales, exportación PNG y JSON de opciones ECharts para figuras.
-- Ajuste DEPDF automático cuando están presentes los tres niveles de una visita.
-- Batería de pantalla de Simple RT, Choice RT, 2-back y seguimiento de
-  persecución; puntuación server-side desde trials sin procesar y mapeo HCF
-  exploratorio de cohorte.
-- Exportaciones JSON de contexto y ZIP reproducible con métricas, ajustes,
-  artefactos estadísticos, manifiestos, advertencias y procedencia.
+| Módulo | Propósito | Usuario | Entradas → salidas | Entorno de ejecución | Ejemplo | Verificación | Limitación |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Seguimiento e ingestión de `webui/backend/` | Cuadrícula seudónima de participantes/visitas, comprobaciones CSV/manifiesto y ajustes | Custodio de datos | CSV + manifiesto opcional → filas SQLite de bloque/procedencia | FastAPI, Python 3.12+, puerto 8000 | [Recorrido de la consola](examples/research-console/README.es.md) | `cd webui/backend && python -m pytest -q` | Los controles de duplicados/relleno son controles de calidad de datos, no consentimiento |
+| Análisis y exportación de `webui/backend/` | Almacenar en caché resultados frecuentistas/bayesianos y construir paquetes reproducibles | Analista | Métricas/ajustes/figuras almacenados → registros de análisis y ZIP | FastAPI/PyMC en segundo plano | Recorrido de la consola | Pruebas de análisis/exportación del backend | La exportación sigue siendo datos de investigación bajo custodia del propietario |
+| Seguimiento, ingestión y visualización de `webui/frontend/` | Cuadrícula del navegador, carga y gráficos descriptivos | Personal de investigación | JSON del backend → UI local interactiva/PNG | Next.js, Node 20+, puerto 3100 | Recorrido de la consola | `npm test`, `npm run typecheck`, `npm run build` | Los gráficos descriptivos no son conclusiones inferenciales |
+| Evaluación, análisis y exportación de `webui/frontend/` | Administrar la evaluación inicial, revisar análisis y solicitar el paquete | Personal de investigación | Ensayos sin procesar/artefactos del backend → resúmenes UI/solicitud de exportación | Navegador/Next.js | Recorrido de la consola | La evaluación es exploratoria; el navegador no es un dispositivo clínico |
 
-### Simulador sUAS sintético nativo
+Los contratos de endpoints y evaluación se mantienen en la [guía del backend](webui/backend/README.md)
+y la [guía del frontend](webui/frontend/README.md).
 
-- Flota, rutas, sectores, contactos, alertas, sensores, enlaces, energía,
-  separación, perfiles de carga y comandos supervisivos sintéticos deterministas.
-- Bloques de práctica/LOW/MEDIUM/HIGH con compuertas ISA, SAGAT, NASA-TLX y
-  Bedford.
-- Preparación de participante/visita seudónimos, aislamiento por arrendamiento
-  de controlador, modo observador, sondas privadas redactadas, pausa al perder
-  conexión y recuperación explícita.
-- Grabación de eventos append-only, checkpoints, debrief sellado, rutas de
-  artefacto relativas, sumas SHA-256 y reproducción determinista.
-- Funcionamiento Linux/sin interfaz gráfica sin X11, Docker, GPU, telemetría
-  externa ni integración con aeronaves reales.
+### Simulador sUAS sintético
 
-### Espacio de aseguramiento SMS FAC ISR
+| Módulo | Propósito | Usuario | Entradas → salidas | Entorno de ejecución | Ejemplo | Verificación | Limitación |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `matb_integration/suas/scenarios/` | Validar esquemas YAML, manifiestos y perfiles de carga de trabajo | Autor de escenarios | YAML sintético → definición inmutable del escenario | Python 3.12+ | [Recorrido de la CLI sUAS](examples/suas-simulator/README.es.md) | `python -m matb_integration.suas.cli validate ...` | Solo coordenadas y condiciones sintéticas |
+| `matb_integration/suas/engine/` | Lógica determinista de reloj, ruta, energía, enlace, sensor, separación y reductor | Desarrollador del simulador | Escenario + mandos de supervisión → estado del mundo/eventos | Python, no se requiere servicio | Recorrido de la CLI sUAS | `pytest tests/suas -q` | Sin adaptador para vehículos reales ni despacho autónomo |
+| Sesión/ciclo de vida de `matb_integration/suas/` | Preparar, iniciar, pausar, reanudar, finalizar, interrumpir y recuperar sesiones de forma explícita | Operador de investigación | Seudónimo + visita + escenario → ciclo de vida auditado | Python/FastAPI | Recorrido de la API sUAS | Pruebas de backend y sUAS | La recuperación se marca como desviación; una interrupción nunca reanuda automáticamente |
+| Arrendamiento de controlador en `webui/backend/app/routers/simulation.py` | Imponer un único controlador de mutación | Operador | Encabezado de arrendamiento de un solo uso → mutación autorizada del ciclo de vida | FastAPI loopback | Recorrido de la API sUAS | El arrendamiento es sensible; nunca lo registre ni lo coloque en una URL |
+| Flujo de observador de `webui/backend/app/websocket/simulation.py` | Resincronización ordenada y estado de observador redactado, sin arrendamiento | Observador/investigador | Cursor de secuencia → instantánea/envolventes | WebSocket | Recorrido del navegador | El observador no puede mutar; la verdad oculta y los sondeos permanecen privados |
+| Reproducción de `matb_integration/suas/recording/` | Anexar eventos/puntos de control y reproducirlos de forma determinista | Auditor/investigador | Eventos + manifiesto → verificación de reproducción | CLI Python | Recorrido de la CLI sUAS | La verificación demuestra coherencia interna, no validez en el mundo real |
+| Informe final de `matb_integration/suas/metrics/` | Calcular métricas terminales de investigación e informe final | Investigador | Estado/eventos terminales sellados → JSON de métricas/informe final | Python | Recorrido de la CLI sUAS | El informe final es un artefacto de investigación, no un juicio operacional |
+| `matb_integration/suas/recording/artifacts.py` | Sellar manifiesto, sumas de comprobación, metadatos públicos y artefactos privados | Custodio de datos | Registros de sesión → conjunto de artefactos con hashes de rutas relativas | Python/sistema de archivos local | Recorrido de la CLI sUAS | Mantenga la raíz de artefactos exclusiva del propietario; los hashes no desidentifican el contenido |
 
-- Registros de fuentes/evidencia, JSON canónico, hashes, manifiestos, firmas,
-  vigencia y detección de downgrade o alteración.
-- Núcleo de seguridad determinista con resultados pass/blocked/unknown y
-  comportamiento fail-closed ante evidencia crítica.
-- Planificación/revisión de misiones, compuertas, listas de verificación,
-  registros posvuelo, auditoría, modo seguro e ingesta local de paquetes firmados.
-- Reproducción de telemetría de solo lectura, procedencia de retención,
-  comprobaciones de flota/configuración/mantenimiento/calificación de tripulación,
-  energía/reserva y lógica geoespacial sin conexión.
-- Políticas de desempeño humano, protocolos de investigación, consentimiento,
-  adaptadores MATB/HRV/sensores, instrumentos, reproducción, agregación y
-  exportaciones desidentificadas no despachables.
-- Scripts de verificación de ausencia de C2 y separación investigación/operación.
+### Aplicaciones del SMS FAC ISR
 
-## Potencial de investigación
+| Módulo | Propósito | Usuario | Entradas → salidas | Entorno de ejecución | Ejemplo | Verificación | Limitación |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `SMS/apps/edge-api/` | Ingesta local de paquetes Fastify, compuertas, misiones, posvuelo, auditoría, modo seguro y límites de datos | Revisor de seguridad operacional/custodio de despliegue | Paquetes locales verificados + telemetría de solo lectura → resultados SQLite/auditoría/API | Node 22.x; contenedor Linux reforzado para despliegue sin conexión | [Recorrido del SMS](examples/sms-platform/README.es.md) | Pruebas del espacio de trabajo y `/healthz` | Entorno sin C2 y sin Internet; sin autoridad de despacho |
+| `SMS/apps/console/` | Consola React accesible para evidencia, riesgo, telemetría, listas de verificación y límites de investigación | Revisor humano | Resultados de la API edge → vistas de revisión | Node/Vite; puertos 5173 de desarrollo o 4173 de vista previa controlada | Guía del SMS | Pruebas unitarias, de accesibilidad y E2E de Playwright | Mostrar un resultado aprobado no registra aceptación humana |
 
-### Preguntas que admite la plataforma actual
+### Paquetes del SMS FAC ISR
 
-1. **Dosis-respuesta de carga:** ¿Los eventos y tareas concurrentes cambian la
-   detección, el tiempo de respuesta, NASA-TLX, ISA, Bedford o seguimiento?
-2. **Conciencia situacional:** ¿Cómo cambian percepción, comprensión y
-   proyección en sondas de congelamiento bajo carga, pérdida de enlace,
-   incertidumbre de contactos o conflicto supervisivo?
-3. **Aprendizaje y fatiga:** ¿Cambian desempeño, carga, conciencia situacional o
-   parámetros DEPDF en visitas repetidas o bloques prolongados?
-4. **No fallo humano y resultado de misión:** ¿Cómo modifican la carga y los
-   registros de fallos los parámetros DEPDF y las estimaciones comparativas de
-   resultado de misión?
-5. **Operación sUAS supervisiva:** ¿Cómo afectan el tamaño de flota, alertas,
-   separación, energía, pérdida de enlace y reportes requeridos las decisiones
-   y métricas de debrief?
-6. **Aseguramiento centrado en las personas:** ¿Cómo deben presentarse y
-   revisarse la vigencia de evidencia, las compuertas, la telemetría de solo
-   lectura, los controles de fatiga/carga y la separación de datos?
+| Módulo | Propósito | Usuario | Entradas → salidas | Entorno de ejecución | Ejemplo | Verificación | Limitación |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `SMS/packages/evidence/` | JSON canónico, SHA-256, registros de fuente, afirmaciones, manifiestos y rechazo de retrocesos | Custodio de evidencia | Fuentes locales controladas → afirmaciones/manifiestos verificables | Node 22.x | Recorrido de paquetes del SMS | Pruebas del espacio de trabajo | Confianza, autoridad, alcance y vigencia siguen siendo controles externos |
+| `SMS/packages/energy/` | Evaluación con unidades de energía de misión y reservas | Analista de rendimiento | Datos de aeronave/segmento respaldados por evidencia → resultado determinista de energía | Node 22.x | Recorrido de paquetes del SMS | Pruebas de espacio de trabajo/propiedades | El resultado del componente no es una autorización |
+| `SMS/packages/fleet/` | Datos de configuración, capacidad, liberación de mantenimiento y calificación de tripulación | Revisor de flota | Evidencia aceptada + estado de flota → evaluación de capacidad | Node 22.x | Recorrido de paquetes del SMS | Pruebas del espacio de trabajo | La falta de evidencia de calificación/liberación produce un bloqueo seguro |
+| `SMS/packages/geo/` | Coordenadas, rutas, terreno, visibilidad, meteorología, espacio aéreo, paquetes sin conexión y borradores de plan de vuelo | Revisor geográfico | Paquete geográfico controlado → datos/borrador geográfico determinista | Node 22.x | Recorrido de paquetes del SMS | Pruebas del espacio de trabajo | Sin transmisor ni autoridad geoespacial oficial |
+| `SMS/packages/human-performance/` | Límites de servicio, calificación, fatiga, carga de trabajo, carga de alertas y CRM | Revisor de factores humanos | Política + estado explícitos → evaluación acotada | Node 22.x | Recorrido de paquetes del SMS | Pruebas de privacidad/contratos | No es un diagnóstico médico ni una decisión de aptitud |
+| `SMS/packages/research/` | Protocolo, ética/consentimiento, instrumentos, MATB/sensores, reproducción, agregación y exportación desidentificada | Custodio de investigación | Eventos seudónimos consentidos → exportación de investigación nonDispatchable | Node 22.x | Recorrido de paquetes del SMS | Pruebas de límites/exportación | Separación estricta de la liberación operacional |
+| `SMS/packages/safety-kernel/` | Aplicabilidad, vigencia, dependencias, riesgo, ciclo de vida, compuertas y auditoría deterministas | Revisor responsable | Datos respaldados por evidencia → decisiones pass/blocked/unknown | Node 22.x | Recorrido de paquetes del SMS | Pruebas doradas/de propiedades/integración | La evidencia dura desconocida produce un bloqueo seguro; nunca concede aceptación |
+| `SMS/packages/sms/` | Peligros, SPI, auditorías, CAPA, ERP y gestión del cambio | Organización de seguridad operacional | Registros organizacionales → evaluaciones SMS controladas | Node 22.x | Recorrido de paquetes del SMS | Pruebas del espacio de trabajo | La evidencia responsable incompleta permanece bloqueada |
+| `SMS/packages/telemetry/` | Canonizar y reproducir telemetría retardada/con pérdidas con procedencia de retención | Observador/analista | Eventos de solo lectura → flujo canónico/reproducido | Node 22.x | Recorrido de paquetes del SMS | Pruebas de contrato/reproducción | Deliberadamente no tiene ruta de mando |
 
-### Extensiones futuras
+### Herramientas, liberación y aceptación del SMS FAC ISR
 
-Estas son oportunidades de investigación, no afirmaciones de que cada capacidad
-esté implementada o validada:
+| Módulo/flujo | Propósito | Usuario | Entradas → salidas | Entorno de ejecución | Ejemplo | Verificación | Limitación |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `SMS/tools/map-packager/` | Inspeccionar/construir manifiestos y controlar firma/verificación de paquetes geográficos sin conexión | Custodio geográfico/de liberación | Directorio + metadatos + entrada controlada de firma/verificación → manifiesto del paquete | Node 22.x | Inventario CLI de la guía del SMS | Pruebas de herramienta y `verify` | La firma requiere material y autoridad controlados externamente |
+| `SMS/tools/research/` | Registrar consultas de adquisición, adquirir/copiar/extraer fuentes y verificar hashes/sin conexión/sin C2 | Investigador de evidencia | Artefactos de fuente registrados → registros de procedencia/consulta | Node 22.x | Inventario CLI de la guía del SMS | Pruebas de herramienta; `verify:evidence-offline` | Los resultados de búsqueda no son evidencia hasta que se adquieren y verifican |
+| `build:offline` / `verify:offline` | Compilar/probar la imagen Linux y ensamblar/verificar un paquete de transferencia desconectado | Custodio de despliegue | Dependencias bloqueadas, imagen fijada, evidencia local → archivo OCI/paquete | Contenedores Linux/Docker | [Guía sin conexión del SMS](examples/sms-platform/README.es.md) | `npm run verify:offline` | Las entradas de compilación deben prepararse; sin conexión describe el límite de ejecución/transferencia |
+| `release:manifest` / `release:sign` / `release:verify` | Generar SBOM, informe de escaneo/prueba, manifiesto canónico, firma controlada y resultado de integridad | Custodio de liberación | Artefactos versionados + entrada de firma externa → evidencia de liberación | Node 22.x | Guía del SMS | `npm run release:verify` | Firma/integridad no es aceptación operacional |
+| `verify:no-c2` / `verify:data-separation` | Inspeccionar la ausencia de rutas de mando y la separación investigación/operaciones | Revisor de seguridad de la información/investigación | Código compilado/espacios de trabajo → resultado de verificación | Node 22.x | Guía del SMS | Scripts npm nombrados | El alcance es el software del repositorio, no cada control de despliegue |
+| `verify:matrix` / `verify:acceptance` | Ejecutar la matriz de evidencia y validar el estado de aceptación controlado | Revisor independiente | Registros de liberación/evidencia + UTC exacto → informe/estado de preparación | Node 22.x | Guía del SMS | Scripts npm nombrados | La matriz puede pasar mientras la preparación permanece false |
+| `acceptance:packets` | Generar paquetes deterministas sin firmar para revisores | Coordinador de revisión | Directorio de salida vacío + UTC `--as-of` exacto + alcance aprobado opcional → paquetes | Node 22.x | Guía del SMS | `npm run verify:acceptance` | Los paquetes no son decisiones y permanecen sin firmar |
+| `acceptance:record` | Ingerir una decisión institucional controlada suministrada por un humano | Custodio autorizado de registros | Paquete vigente + decisión autorizada real → registro controlado | Node 22.x; acción separada explícita | Sin ejemplo de decisión sintética | Ejecución de prueba y después proceso institucional | Nunca fabrique revisor, resultado, marca de tiempo, evidencia ni firma |
 
-- Sincronización de marcadores LSL y streams fisiológicos para HRV, ECG, EEG,
-  eye-tracking y otras señales alineadas en el tiempo.
-- Derivados tipo BIDS y paquetes longitudinales portables.
-- Manipulaciones controladas de confiabilidad de automatización, handoffs
-  adaptativos, transparencia y confianza en automatización.
-- Paquetes de estresores para caza, RPA, transporte/ISR, MUM-T, rotorcraft y
-  robótica espacial con validación específica de protocolo.
-- Integración de eye-tracking/pupillometría y modelos multimodales de carga.
-- Clasificadores de carga en línea específicos por participante, con
-  incertidumbre y barreras explícitas contra uso operacional.
-- Generación de informes Markdown/Quarto con procedencia, faltantes, tamaños de
-  efecto y advertencias analíticas.
-
-La [revisión de evidencia y hoja de ruta](docs/research/military-aviation-platform/2026-06-10_current_state_and_capability_roadmap.md)
-describe la base científica y las limitaciones pendientes.
-
-## Verificación y operaciones
-
-Ejecute solamente las suites correspondientes al flujo que cambió. Use un
-entorno y un directorio de salida dedicados para cada estudio o demostración.
+El inventario de compilación y verificación del SMS invocado por el usuario desde `SMS/package.json`
+se muestra a continuación. Los comandos parametrizados de liberación y paquetes aún requieren los
+argumentos y la custodia descritos en la [guía del SMS](examples/sms-platform/README.es.md).
 
 ```bash
-# Contrato de documentación
-pytest tests/test_readme_documentation.py -q
-
-# Puente MATB, DEPDF, estadística, screen e integración
-.venv-matb/bin/python -m pytest tests/test_scenario_builder.py \
-  tests/test_scenario_manifest.py tests/test_log_converter.py \
-  tests/analysis_stats tests/suhir tests/screen -q
-
-# Pruebas del sUAS nativo
-.venv-suas/bin/python -m pytest tests/suas -q
-
-# Backend de la Consola de Investigación
-cd webui/backend
-../../.venv-webui/bin/python -m pytest -q
-
-# Frontend de la Consola de Investigación
-cd ../frontend
-npm test -- --run
-npm run typecheck
+cd SMS
 npm run build
-
-# Espacio de trabajo SMS
-cd ../../SMS
+npm run build:packages
+npm run build:tools
+npm run build:apps
+npm run build:research
 npm test
 npm run typecheck
+npm run lint
+npm run build:offline
+npm run verify:offline
+npm run verify:evidence-offline
 npm run verify:no-c2
 npm run verify:data-separation
+npm run release:manifest
+npm run release:sign
+npm run release:verify
+npm run verify:matrix
+npm run acceptance:packets
+npm run verify:acceptance
+npm run verify:all
 ```
 
-Las pruebas E2E/accesibilidad del navegador necesitan además Chromium o el
-recurso Playwright aprobado. La verificación de la imagen SMS sin conexión
-necesita Docker, insumos de compilación fijados y evidencia/paquetes controlados.
+Los scripts de manifiesto restantes son hooks automáticos del ciclo de vida npm: `pretest` compila antes
+de `test`; `preverify:evidence-offline` compila la herramienta de investigación; `preverify:no-c2`
+compila la API edge; y `preverify:data-separation` compila el paquete de investigación y la API edge.
+El script `acceptance:record` (invocado solo como `npm run acceptance:record` por un custodio autorizado)
+forma parte del inventario, no es una instrucción rutinaria: es una acción independiente y potencialmente
+modificadora que ingiere decisiones y requiere un paquete vigente y entrada humana genuina controlada
+por la institución. No lo invoque solo porque está documentado.
 
-Límites locales predeterminados:
+### Monitor de aeronaves heredado
 
-| Servicio | Predeterminado | Límite |
+| Módulo/modo | Propósito | Usuario | Entradas → salidas | Entorno de ejecución | Ejemplo | Verificación | Limitación |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `aircraft_monitor/` `uav` | Demostración determinista de UAV en terminal | Desarrollador/educador | Modelo con semilla → flujo de eventos en terminal | Python/Rich | [Guía heredada](examples/legacy-monitor/README.es.md) | Pruebas Python | Demostración sintética heredada, no monitoreo en vivo |
+| `aircraft_monitor/` `fighter` | Demostración determinista de caza en terminal | Desarrollador/educador | Modelo con semilla → flujo de eventos en terminal | Python/Rich | Guía heredada | Pruebas Python | Contiene vocabulario de combate simulado, pero no ruta de armas/control |
+| `aircraft_monitor/` `combined` | Demostración conjunta en terminal | Desarrollador/educador | Ambos modelos con semilla → flujo combinado | Python/Rich | Guía heredada | Pruebas Python | No es la superficie activa de recopilación de investigación |
+| `aircraft_monitor/` `experiment` | Protocolo de factores humanos inspirado en MATB | Desarrollador de investigación | Seudónimo, sesión, modalidad, semilla → JSONL/resumen | Python/Rich | Guía heredada | Pruebas de investigación | Use seudónimos sintéticos o aprobados; no es OpenMATB |
+
+### Capacidades y potencial de investigación
+
+El catálogo anterior admite investigación actual sobre dosis-respuesta de
+carga, conciencia situacional, aprendizaje o fatiga entre visitas, deriva de
+parámetros DEPDF, decisiones supervisivas sUAS, vigencia de evidencia,
+restricciones de desempeño humano y separación entre datos de investigación y
+operación. Combina escenarios con semilla, manifiestos de procedencia,
+seguimiento longitudinal seudónimo, análisis frecuentista y bayesiano,
+reproducción determinista, artefactos de debrief y aseguramiento SMS con bloqueo
+seguro, sin crear una ruta de control de aeronaves.
+
+Entre las extensiones prometedoras están la sincronización LSL/fisiología (HRV,
+ECG, EEG, eye tracking), derivados longitudinales tipo BIDS, estudios controlados
+de confiabilidad y confianza en automatización, paquetes de estresores
+aeronáuticos/espaciales específicos por protocolo, modelos multimodales de
+carga, clasificadores por participante con incertidumbre e informes
+Markdown/Quarto orientados a publicación. Son oportunidades de investigación,
+no afirmaciones de que cada extensión esté implementada o validada.
+
+<a id="operations-and-maintenance"></a>
+## 11. Operaciones y mantenimiento
+
+### Conjuntos de verificación
+
+Ejecute solo los conjuntos correspondientes al flujo que modificó y después la compuerta de documentación:
+
+```bash
+python -m pytest tests/test_scenario_builder.py tests/test_scenario_manifest.py \
+  tests/test_log_converter.py tests/analysis_stats tests/suhir tests/screen -q
+python -m pytest tests/suas -q
+cd webui/backend && python -m pytest -q
+cd ../../webui/frontend && npm test && npm run typecheck && npm run build
+cd ../../SMS && npm test && npm run typecheck && npm run lint
+cd .. && python -m pytest tests/documentation/test_documentation.py -q
+python scripts/verify_documentation.py
+```
+
+Los conjuntos E2E/accesibilidad del navegador también requieren recursos instalados de
+Chromium/Playwright. La compilación sin conexión del SMS también requiere Docker, la imagen base
+fijada, las dependencias bloqueadas y las entradas controladas por la institución.
+
+### Puertos y límites de procesos
+
+| Servicio | Valor predeterminado | Límite |
 | --- | --- | --- |
 | FastAPI de investigación/sUAS | `127.0.0.1:8000` | Loopback; salud en `/health` |
-| Next.js de investigación/sUAS | `127.0.0.1:3100` | UI local de navegador |
-| Consola SMS de desarrollo | Puerto predeterminado de Vite | Solo UI de desarrollo/revisión |
-| Despliegue edge SMS | HTTPS controlado | Requiere TLS, paquetes y custodia institucionales |
+| Next.js de investigación/sUAS | `127.0.0.1:3100` | Loopback; seguimiento `/`, sUAS `/mission/setup` |
+| Despliegue edge del SMS | Valor predeterminado del host `127.0.0.1:8443` | HTTPS en un despliegue controlado de contenedor |
+| Consola Vite del SMS | 5173 desarrollo / 4173 vista previa controlada | Solo UI de desarrollo/revisión |
 
-Mantenga los valores loopback. Un enlace no local requiere orígenes de navegador,
-autenticación, privacidad, red y controles de amenazas explícitos más allá de
-estos lanzadores.
+Mantenga los valores loopback predeterminados. Un enlace de investigación/sUAS que no sea loopback
+requiere `MATB_FRONTEND_ORIGINS` explícito; también requiere controles institucionales de red,
+autenticación, privacidad y amenazas que exceden este lanzador de desarrollo.
 
-## Solución de problemas
+### Configuración
 
-| Síntoma | Respuesta segura |
+| Variable | Alcance | Significado |
+| --- | --- | --- |
+| `MATB_PYTHON` | Envoltorios de ejemplos | Ejecutable Python exacto seleccionado para recorridos de CLI OpenMATB o sUAS |
+| `MATB_VENV` | Instalación/lanzador POSIX | Ruta del entorno Python local del repositorio |
+| `MATB_DB_PATH` | Backend de investigación/sUAS | Ruta SQLite dedicada |
+| `MATB_SIMULATION_OUTPUT_DIR` | sUAS | Raíz de artefactos sellados exclusiva del propietario |
+| `MATB_SIMULATION_SCENARIO_DIR` | sUAS | Directorio de escenarios YAML validados |
+| `MATB_FRONTEND_ORIGINS` | Investigación/sUAS | Orígenes de navegador permitidos explícitamente |
+| `NEXT_PUBLIC_API_URL` | Frontend de investigación | URL base de FastAPI visible para el navegador |
+| `PLAYWRIGHT_CHROMIUM_EXECUTABLE` | Pruebas de navegador | Ejecutable Chromium aprobado |
+| `SMS_DATA_DIR`, `SMS_PACKAGE_DIR`, `SMS_TLS_DIR` | Contenedor del SMS | Raíces controladas para datos modificables, paquetes de solo lectura y custodia TLS |
+| `SMS_EDGE_PORT` | Contenedor del SMS | Sustitución del puerto loopback del host |
+| `SMS_EVIDENCE_VERIFY_AS_OF` | Verificación de evidencia del SMS | Instante UTC autorizado exacto de verificación |
+| `SMS_RESEARCH_DATABASE_URL`, `SMS_RESEARCH_DATA_DIR` | Separación del SMS | Ubicaciones separadas del almacén de investigación |
+
+Los identificadores y entradas de firma/TLS/claves son asuntos del custodio de liberación. Nunca
+coloque sus valores en el código fuente, ejemplos, historial de shell, registros ni tiquetes de soporte.
+
+### Datos generados y limpieza restringida
+
+Las rutas generadas esperadas incluyen directorios `examples/output/...` seleccionados, venvs de
+Python, bases de datos SQLite, registros/artefactos sUAS, ZIP de paquetes de investigación,
+`webui/frontend/.next/`, `node_modules/` de Node, árboles `dist/` de TypeScript y salidas sin conexión/
+de liberación del SMS. Antes de eliminar algo, detenga los procesos de escritura, resuelva la ruta
+exacta, confirme que sea una ruta dedicada de ejemplo/compilación y conserve los registros de estudio,
+evidencia controlada, liberación o aceptación conforme a la política.
+
+Capaz de funcionar sin conexión significa que el entorno instalado puede operar sin Internet. No
+significa que la primera instalación de dependencias, una compilación Docker sin una imagen base
+preparada o una verificación sin evidencia registrada puedan tener éxito sin conexión.
+
+<a id="troubleshooting"></a>
+## 12. Solución de problemas por síntoma
+
+| Síntoma | Comprobación y respuesta segura |
 | --- | --- |
-| Falta un módulo Python | Confirme el intérprete con `python -c "import sys; print(sys.executable)"` e instale los requisitos del flujo; no instale globalmente para ocultar el problema. |
-| OpenMATB no encuentra un escenario | Ejecute `install_to_openmatb.py` contra el checkout correcto y verifique `includes/scenarios/military_aviation/`. |
-| OpenMATB parpadea o falla Pyglet | Comience en modo ventana, verifique el entorno virtual de OpenMATB y, en Linux sin pantalla, Xvfb y `DISPLAY`. La UI sUAS nativa no necesita X11. |
-| La Consola no conecta | Confirme `/health`, `NEXT_PUBLIC_API_URL`, `MATB_FRONTEND_ORIGINS` y que los puertos 8000/3100 estén disponibles. |
-| La ingesta devuelve 409 | El hash del archivo o la celda participante/visita/carga ya existe. Use una base dedicada nueva o el flujo de sobrescritura documentado después de revisar la procedencia. |
-| La grabación sUAS rechaza la salida | El directorio debe estar ausente o vacío. Elija uno nuevo; no borre un artefacto de estudio para ejecutar una demostración. |
-| Se desconecta el controlador sUAS | Reconecte explícitamente con el arrendamiento. Una desconexión válida pausa la sesión y nunca la reanuda automáticamente. |
-| SMS informa evidencia faltante, vencida o alterada | Detenga el flujo, conserve el diagnóstico y obtenga evidencia autorizada vigente mediante custodia. Nunca desactive controles de vigencia, autoridad, firma o hash. |
-| Las pruebas pasan pero SMS continúa bloqueado | Es esperado hasta que las revisiones institucionales y decisiones humanas autorizadas estén vigentes. La verificación técnica no es autorización operacional. |
+| El instalador rechaza Python o Node | Use Python 3.12+ para sUAS/Python del repositorio, Node 20+ para el lanzador de la Consola de Investigación y Node 22.x para `SMS/`; vuelva a crear solo el venv/instalación de ese flujo. |
+| Falta un módulo Python | Confirme que se ejecute el Python del venv seleccionado (`python -c "import sys; print(sys.executable)"`) e instale los requisitos correspondientes; no instale globalmente para ocultarlo. |
+| OpenMATB no encuentra un escenario | Ejecute `install_to_openmatb.py` contra `openmatb/` o un checkout compatible que contenga `includes/` y verifique `includes/scenarios/military_aviation/`. |
+| OpenMATB parpadea o Pyglet/la pantalla falla | Este es el límite de escritorio/X11. Comience en modo de ventana, valide Pyglet en el venv seleccionado y, en Linux sin interfaz gráfica, valide Xvfb y `DISPLAY`. sUAS no necesita X11 ni Pyglet. |
+| Se bloquea un script de PowerShell o falla una ruta con espacios | Use PowerShell 7+, invoque scripts con `&`, construya rutas con `Join-Path` y use una política de ejecución aprobada por la institución; no desactive globalmente los controles de seguridad de la información. |
+| WSL2 no alcanza un servicio o cambia los permisos | Ejecute los lanzadores POSIX y las raíces de datos en el sistema de archivos WSL, confirme que el servicio se enlace a loopback/al puerto elegido y verifique el comportamiento loopback de Windows a WSL. No reemplace los controles `chmod`/UID con permisos amplios. |
+| El puerto 8000 o 3100 está ocupado | Detenga el proceso conocido o indique valores únicos de `--backend-port`/`--frontend-port`; actualice de forma coherente `NEXT_PUBLIC_API_URL` y los orígenes permitidos. |
+| La prueba de navegador/E2E no encuentra Chromium | Instale el recurso de navegador Playwright compatible con el repositorio o configure `PLAYWRIGHT_CHROMIUM_EXECUTABLE` con un binario local aprobado. Las pruebas unitarias/API/CLI no lo requieren. |
+| Docker no está disponible | Use el recorrido de paquetes Node y los conjuntos sin contenedor, o proporcione un entorno aprobado de contenedores Linux. No llame paquete sin conexión a un directorio no compilado/no verificado. |
+| La evidencia venció, falta o informa alteración/discrepancia de hash | Detenga el flujo, conserve el diagnóstico y obtenga evidencia autorizada vigente mediante los procedimientos de custodia. Nunca debilite comprobaciones de vigencia, firma, autoridad de fuente o hash. |
+| Las pruebas pasan, pero la preparación permanece bloqueada | Es lo esperado: la automatización verifica contratos técnicos; `operationalReady=false` permanece hasta que toda revisión institucional dentro del alcance esté vigente y se registre una decisión humana autorizada. |
 
-## Mapa del repositorio
+<a id="security-privacy-and-governance"></a>
+## 13. Seguridad de la información, privacidad, investigación y gobernanza
 
-| Ruta | Función |
+- Sin C2 y no cinético son límites arquitectónicos: la telemetría es de solo lectura, las simulaciones
+  son sintéticas y ningún paquete puede convertirse en una ruta de mando de aeronave/arma, selección
+  de blancos, vuelo autónomo o despacho.
+- Use identificadores seudónimos de participante/sesión. Almacene las claves de vinculación, el
+  consentimiento, la información de salud, la identidad sin procesar y las exportaciones solo en
+  ubicaciones controladas por la institución, con reglas de mínimo privilegio, retención y eliminación.
+- NASA-TLX, Bedford, ISA, SAGAT, los mapeos de evaluación, los modelos estadísticos y los resultados
+  DEPDF son instrumentos de investigación. No son hallazgos clínicos, decisiones de aptitud individual,
+  hallazgos de aeronavegabilidad ni autorizaciones operacionales.
+- La evidencia controlada debe conservar autoridad de fuente, alcance exacto, procedencia, datos
+  SHA-256/integridad, versión y vigencia. La verificación dependiente del tiempo usa un instante UTC
+  exacto explícito; nunca sustituya una hora local ambigua.
+- Las firmas de liberación, SBOM, manifiestos, comprobaciones sin C2/de separación de datos, pruebas
+  técnicas y matrices son evidencia necesaria, no aceptación. Una institución humana cualificada debe
+  revisar los alcances aplicables de reglamentación/traducción, riesgo operacional, respuesta a
+  emergencias, ciberseguridad/despliegue, datos geográficos oficiales, factores humanos, separación de
+  investigación, capacitación y promoción de la seguridad operacional.
+- Genere sin firmar los paquetes para revisores. Ejecute la ingesta de decisiones solo con un paquete
+  vigente y una decisión humana auténtica, autorizada y controlada. Nunca fabrique identidades,
+  aprobaciones, marcas de tiempo, evidencia, resultados ni firmas.
+
+Para información avanzada, consulte la [revisión de evidencia de investigación](docs/research/military-aviation-platform/research_evidence_review.md),
+la [validación de escalas](docs/research/scales/sagat_validation.md),
+la [verificación de sUAS](docs/implementation/suas-c2-v1-verification.md),
+la [matriz de verificación del SMS](SMS/docs/release/verification-matrix.md),
+las [limitaciones conocidas](SMS/docs/release/known-limitations.md) y la
+[lista de verificación de aceptación de aviación estatal](SMS/docs/release/state-aviation-acceptance-checklist.md).
+
+<a id="repository-map"></a>
+## 14. Mapa del repositorio
+
+| Ruta | Función mantenida |
 | --- | --- |
-| `matb_integration/` | Generación de escenarios, conversión, cuestionarios, DEPDF, estadística, screen y bibliotecas sUAS deterministas |
-| `openmatb/` | Runtime OpenMATB versionado, plugins, escenarios y reproducción |
+| `matb_integration/` | Puente del protocolo de investigación, métricas, estadísticas, DEPDF, evaluación y bibliotecas sUAS deterministas |
+| `openmatb/` | Entorno de escritorio OpenMATB versionado, plugins, escenarios y soporte de reproducción |
 | `scenarios/military_aviation/` | Escenarios de estudio compatibles con OpenMATB |
 | `scenarios/suas/` | Escenarios YAML sUAS sintéticos |
 | `webui/backend/` | Servicio FastAPI de investigación/sUAS, persistencia, análisis y exportaciones |
-| `webui/frontend/` | Seguimiento/análisis de investigación y consola sUAS de navegador |
-| `SMS/apps/` | API edge SMS y consola de revisión bilingüe |
-| `SMS/packages/` | Dominios de evidencia, safety-kernel, energía, flota, geo, desempeño humano, investigación, SMS y telemetría |
-| `SMS/tools/` | Adquisición de evidencia, empaquetado de mapas, compilación sin conexión, release y aceptación |
-| `aircraft_monitor/` | Demostraciones sintéticas de terminal conservadas |
-| `tests/` | Pruebas Python, integración, sUAS, aplicación y documentación |
-| `docs/` y `SMS/docs/` | Evidencia científica, implementación, verificación, release y gobernanza |
+| `webui/frontend/` | Seguimiento/análisis de investigación y consola sUAS del navegador |
+| `SMS/apps/`, `SMS/packages/`, `SMS/tools/` | Aplicaciones SMS sin conexión, contratos y herramientas de liberación/evidencia |
+| `SMS/docs/` | Procedencia controlada, investigación reglamentaria, evidencia de liberación y orientación de aceptación |
+| `aircraft_monitor/` | Demostración sintética de terminal conservada |
+| `examples/` | Recorridos seguros, deterministas y seudónimos |
+| `tests/` | Comprobaciones de integración Python, simulador, aplicación y documentación |
+| `docs/` | Revisiones científicas y registros de diseño/implementación |
 
-## Referencias y guías detalladas
+<a id="glossary"></a>
+## 15. Glosario
 
-- [Guía del runtime OpenMATB](openmatb/README.md)
-- [Descripción de la Consola](webui/README.md), [API backend](webui/backend/README.md) y [pantallas frontend](webui/frontend/README.md)
-- [Guía DEPDF de Suhir](matb_integration/suhir/README.md)
-- [Validación de escalas en español](docs/research/scales/scale_validation_es.md) y [validación SAGAT](docs/research/scales/sagat_validation.md)
-- [Hoja de ruta de capacidades](docs/research/military-aviation-platform/2026-06-10_current_state_and_capability_roadmap.md)
-- [Informe de verificación sUAS](docs/implementation/suas-c2-v1-verification.md)
-- [Diccionario de datos de investigación SMS](SMS/docs/provenance/research-data-dictionary.md)
-- [Matriz de verificación SMS](SMS/docs/release/verification-matrix.md), [limitaciones conocidas](SMS/docs/release/known-limitations.md) y [lista de aceptación](SMS/docs/release/state-aviation-acceptance-checklist.md)
-- [Changelog](CHANGELOG.md)
-
-## Glosario
-
-| Término | Significado en este repositorio |
+| Término | Significado aquí |
 | --- | --- |
+| C2 | Mando y control; ausente deliberadamente de los límites operacionales de MATB |
+| DEPDF | Función de distribución de probabilidad doble exponencial usada para modelado comparativo de no fallo humano |
+| HCF / F/F0 | Mapeo exploratorio del factor de capacidad humana a partir de la evaluación de investigación |
+| Manifiesto | Metadatos canónicos y hashes que vinculan el contenido con la procedencia |
 | MATB | Paradigma Multi-Attribute Task Battery de factores humanos |
-| OpenMATB | Runtime de escritorio de código abierto para presentar las cuatro tareas MATB |
-| DEPDF | Función de distribución de probabilidad doble exponencial para modelado comparativo de no fallo humano |
-| HCF / F/F0 | Mapeo exploratorio del factor de capacidad humana desde la pantalla de investigación |
-| SAGAT | Situation Awareness Global Assessment Technique, método de sondas de congelamiento |
-| sUAS | Sistema de aeronaves pequeñas no tripuladas; aquí, simulador sintético de supervisión |
+| nonDispatchable | Datos/resultados de investigación que no pueden ingresar en una decisión de liberación operacional |
+| OpenMATB | Entorno de escritorio versionado para presentar tareas; también se admite un checkout compatible independiente |
+| Preparación operacional | Estado controlado por la institución que la automatización por sí sola no puede conceder |
+| Seudónimo | Identificador del estudio que omite la identidad directa; sigue siendo un dato de investigación potencialmente vinculable |
 | SMS | Safety Management System; aquí, el espacio de aseguramiento `SMS/` |
-| No despachable | Dato o resultado de investigación que no puede entrar en una decisión de release operacional |
+| sUAS | Sistema de aeronaves pequeñas no tripuladas; aquí, un simulador sintético de investigación supervisora |
 
-## Licencia
+<a id="references"></a>
+## 16. Referencias y guías detalladas
 
-MATB se distribuye bajo la [Licencia MIT](LICENSE). La licencia no certifica
-aptitud para uso clínico, de vuelo, defensa, seguridad crítica u operación y no
-reemplaza la ley aplicable, la gobernanza institucional, la revisión ética ni la
-aceptación humana.
+- [Ejemplos y selector de flujos](examples/README.es.md)
+- [Descripción general de la Consola de Investigación](webui/README.md), [API del backend](webui/backend/README.md) y [pantallas del frontend](webui/frontend/README.md)
+- [Guía DEPDF de Suhir](matb_integration/suhir/README.md)
+- [Revisión de evidencia de investigación](docs/research/military-aviation-platform/research_evidence_review.md) y [validación de escalas](docs/research/scales/sagat_validation.md)
+- [Diseño de sUAS sintético](docs/superpowers/specs/2026-08-01-suas-c2-research-simulator-design.md) y [verificación](docs/implementation/suas-c2-v1-verification.md)
+- [Registro de evidencia de capacidades del SMS](SMS/docs/provenance/capability-evidence-register.jsonl), [matriz de verificación](SMS/docs/release/verification-matrix.md) y [limitaciones conocidas](SMS/docs/release/known-limitations.md)
+
+<a id="contributing"></a>
+## 17. Contribuciones
+
+Mantenga los cambios limitados a un flujo, preserve los límites de Linux/Windows nativo/WSL2 y añada
+pruebas antes de cambiar el comportamiento. Los ejemplos deben ser deterministas, sintéticos,
+seudónimos, seguros sin conexión después de instalar las dependencias y estar restringidos a directorios
+de salida elegidos por quien ejecuta el comando. Nunca confirme en el repositorio datos de estudio
+generados, credenciales, claves privadas, arrendamientos del controlador, firmas controladas ni
+decisiones de aceptación fabricadas.
+
+Antes de enviar cambios de documentación, ejecute:
+
+```bash
+python -m pytest tests/documentation/test_documentation.py -q
+python scripts/verify_documentation.py
+```
+
+Después ejecute los conjuntos pertinentes de Python, frontend o SMS enumerados anteriormente. Explique
+cualquier entorno de tareas, recurso de navegador, entrada Docker o evidencia controlada que no esté
+disponible intencionalmente; no debilite una comprobación para que pase.
+
+<a id="license"></a>
+## 18. Licencia
+
+MATB se proporciona bajo la [Licencia MIT](LICENSE). La licencia no certifica su aptitud para uso
+clínico, de vuelo, defensa, crítico para la seguridad operacional ni operacional, y no sustituye la
+legislación aplicable, la gobernanza institucional, la revisión ética ni la aceptación humana.

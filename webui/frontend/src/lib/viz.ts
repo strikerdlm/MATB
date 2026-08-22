@@ -1,8 +1,6 @@
 import type { MetricRow } from "@/types";
 import { LEVELS } from "@/lib/tracker";
 
-export const VISITS = [1, 2, 3, 4, 5, 6] as const;
-
 export const METRICS: Record<string, { label: string; decimals: number; unit?: string }> = {
   sysmon_d_prime: { label: "SYSMON d′", decimals: 3 },
   sysmon_hit_rate: { label: "SYSMON hit rate", decimals: 3 },
@@ -18,8 +16,13 @@ export interface Trajectory {
   series: Record<string, (number | null)[]>;   // keyed by workload level
 }
 
-export function trajectorySeries(rows: MetricRow[], participantId: string, metric: string): Trajectory {
-  const visits = [...VISITS];
+export function trajectorySeries(
+  rows: MetricRow[],
+  participantId: string,
+  metric: string,
+  visitOrdinals: number[],
+): Trajectory {
+  const visits = [...visitOrdinals];
   const series: Record<string, (number | null)[]> = {};
   for (const level of LEVELS) {
     series[level] = visits.map((v) => {
@@ -38,8 +41,8 @@ export interface GroupStats {
   stats: Record<string, { mean: (number | null)[]; sd: (number | null)[]; n: number[] }>;
 }
 
-export function groupOverview(rows: MetricRow[], metric: string): GroupStats {
-  const visits = [...VISITS];
+export function groupOverview(rows: MetricRow[], metric: string, visitOrdinals: number[]): GroupStats {
+  const visits = [...visitOrdinals];
   const stats: GroupStats["stats"] = {};
   for (const level of LEVELS) {
     const mean: (number | null)[] = [];

@@ -17,7 +17,7 @@ export default function UploadPage() {
         description="Attach an OpenMATB block to crew, visit, and workload metadata."
         stats={[
           { label: "Crew", value: participants.length },
-          { label: "Visits", value: "01-06" },
+          { label: "Visit plan", value: "Active" },
           { label: "Format", value: "CSV" },
         ]}
       />

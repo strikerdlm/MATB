@@ -42,7 +42,7 @@ class CreateSimulationSession(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     participant_id: str = Field(pattern=r"^P[0-9]{2,6}$")
-    visit_ordinal: int = Field(ge=1, le=6)
+    visit_ordinal: int = Field(ge=1, le=16)
     scenario_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
     locale: Locale
 
@@ -55,7 +55,7 @@ class SessionView(BaseModel):
     id: str
     participant_id: str = Field(pattern=r"^P[0-9]{2,6}$")
     visit_id: int | None = Field(default=None, ge=1)
-    visit_ordinal: int | None = Field(default=None, ge=1, le=6)
+    visit_ordinal: int | None = Field(default=None, ge=1, le=16)
     scenario_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
     scenario_sha256: str | None = None
     locale: Locale

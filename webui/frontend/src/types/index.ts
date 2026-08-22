@@ -23,6 +23,22 @@ export interface TrackerCell {
   present: boolean;
 }
 
+export interface LiftoffTrackerCell {
+  participant_id: string;
+  visit_ordinal: number;
+  visit_code: string;
+  scheduled_day: number;
+  attempt_count: number;
+  session_id?: string | null;
+  status?: string | null;
+  validity?: string | null;
+  metrics_present: boolean;
+  hrv_measurement_id?: string | null;
+  sync_quality: string;
+  present: boolean;
+  state: "absent" | "pending" | "partial" | "invalid" | "valid_no_hrv" | "valid_poor_sync" | "valid_good_sync";
+}
+
 export interface IngestResult {
   id: number;
   workload_level: string;
@@ -58,6 +74,31 @@ export interface ParticipantCreate {
   sex?: string;
   age_band?: string;
   notes?: string;
+}
+
+export interface StudyVisitDefinition {
+  ordinal: number;
+  code: "T0" | "DM8" | "DM15" | string;
+  scheduled_day: number;
+}
+
+export interface StudyProtocol {
+  protocol_id: string;
+  protocol_version: string;
+  schedule_sha256: string;
+  visits: StudyVisitDefinition[];
+}
+
+export interface StudyContextCreate {
+  task_sequence: "MATB_LIFTOFF" | "LIFTOFF_MATB";
+  prior_fpv_hours: number;
+  gaming_hours_per_week: number;
+}
+
+export interface StudyParticipantContext extends StudyContextCreate {
+  participant_id: string;
+  protocol_id: string;
+  created_at: string;
 }
 
 export interface BlockDetail {
