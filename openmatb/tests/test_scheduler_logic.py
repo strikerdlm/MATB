@@ -1,6 +1,33 @@
 """Tests for core.scheduler - Logic only (no event loop)."""
 
-from unittest.mock import MagicMock
+import os
+from unittest.mock import MagicMock, patch
+
+
+class TestParentProcessWatchdog:
+    @patch.dict(os.environ, {"OPENMATB_PARENT_PID": "4321"}, clear=False)
+    @patch("core.scheduler.sys.platform", "win32")
+    @patch("core.scheduler.os.kill")
+    @patch("core.scheduler._windows_process_alive", return_value=True)
+    def test_windows_uses_a_non_terminating_process_probe(
+        self,
+        windows_alive,
+        os_kill,
+    ):
+        from core.scheduler import _parent_process_alive
+
+        assert _parent_process_alive() is True
+        windows_alive.assert_called_once_with(4321)
+        os_kill.assert_not_called()
+
+    @patch.dict(os.environ, {"OPENMATB_PARENT_PID": "4321"}, clear=False)
+    @patch("core.scheduler.sys.platform", "linux")
+    @patch("core.scheduler.os.kill")
+    def test_unix_retains_signal_zero_probe(self, os_kill):
+        from core.scheduler import _parent_process_alive
+
+        assert _parent_process_alive() is True
+        os_kill.assert_called_once_with(4321, 0)
 
 
 class TestGetPluginsByStates:
@@ -142,3 +169,66 @@ class TestActivePluginHelpers:
         result = sched.get_active_non_blocking_plugins()
         assert p2 in result
         assert p1 not in result
+
+
+class TestCheckIfMustExit:
+    def _make_scheduler(self):
+        scheduler_type = __import__("core.scheduler", fromlist=["Scheduler"]).Scheduler
+        scheduler = object.__new__(scheduler_type)
+        scheduler.plugins = {}
+        scheduler.events_queue = []
+        scheduler.exit = MagicMock()
+        return scheduler
+
+    @patch("core.scheduler.Window")
+    def test_future_events_do_not_count_as_natural_completion(self, window):
+        scheduler = self._make_scheduler()
+        scheduler.events = [MagicMock(done=0)]
+        window.MainWindow.alive = True
+
+        scheduler.check_if_must_exit()
+
+        scheduler.exit.assert_not_called()
+
+    @patch("core.scheduler.Window")
+    def test_all_events_done_exits_as_completed(self, window):
+        scheduler = self._make_scheduler()
+        scheduler.events = [MagicMock(done=1)]
+        window.MainWindow.alive = True
+
+        scheduler.check_if_must_exit()
+
+        scheduler.exit.assert_called_once_with(completed=True)
+
+    @patch("core.scheduler.Window")
+    def test_closed_window_exits_without_completion(self, window):
+        scheduler = self._make_scheduler()
+        scheduler.events = [MagicMock(done=0)]
+        window.MainWindow.alive = False
+
+        scheduler.check_if_must_exit()
+
+        scheduler.exit.assert_called_once_with(completed=False)
+
+
+class TestParentWatchdog:
+    @patch("core.scheduler._parent_process_alive", return_value=False)
+    def test_synchronized_child_exits_if_backend_parent_is_gone(self, _alive):
+        scheduler_type = __import__("core.scheduler", fromlist=["Scheduler"]).Scheduler
+        scheduler = object.__new__(scheduler_type)
+        scheduler.exit = MagicMock()
+
+        scheduler.update(0.1)
+
+        scheduler.exit.assert_called_once_with(completed=False)
+
+    @patch("core.scheduler._parent_process_alive", return_value=True)
+    @patch("core.scheduler.monotonic", side_effect=(10.0, 10.25, 11.1))
+    def test_parent_watchdog_is_throttled_to_once_per_second(self, _clock, alive):
+        scheduler_type = __import__("core.scheduler", fromlist=["Scheduler"]).Scheduler
+        scheduler = object.__new__(scheduler_type)
+
+        assert scheduler._parent_alive_throttled() is True
+        assert scheduler._parent_alive_throttled() is True
+        assert scheduler._parent_alive_throttled() is True
+        assert alive.call_count == 2

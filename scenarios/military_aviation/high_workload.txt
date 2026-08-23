@@ -241,6 +241,7 @@
 0:14:15;genericscales;start
 
 # Block end — stop tasks, collect NASA-TLX
+0:15:00;system;task_boundary
 0:15:00;sysmon;stop
 0:15:00;track;stop
 0:15:00;resman;stop

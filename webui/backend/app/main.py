@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 import asyncio
 import json
 import math
+import sys
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
@@ -16,6 +17,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.db import get_engine, init_db
+from app.classic_persistence import SQLModelClassicPersistence
+from app.classic_runtime import ClassicManager
 from app.hrv_task_client import HrvTaskClient
 from app.liftoff_persistence import SQLModelLiftoffPersistence
 from app.liftoff_runtime import LiftoffManager
@@ -25,6 +28,9 @@ from app.study_models import ensure_study_binding
 from app.study_protocol import selected_protocol
 from app.websocket.simulation import HubConflict
 from matb_integration.liftoff.receiver import LiftoffUdpReceiver
+from matb_integration.physiology.acquisition import PolarConnectionManager
+from matb_integration.physiology.backend import BleakPolarBackend, SimulatedPolarBackend
+from matb_integration.physiology.openmatb_process import OpenMATBLauncher
 
 
 _DEFAULT_FRONTEND_ORIGINS = (
@@ -100,6 +106,54 @@ def _liftoff_artifact_root() -> Path:
     return value if value.is_absolute() else _repo_root() / value
 
 
+def _classic_artifact_root() -> Path:
+    configured = os.getenv("MATB_CLASSIC_OUTPUT_DIR")
+    value = Path(configured) if configured else Path("exports") / "classic"
+    return value if value.is_absolute() else _repo_root() / value
+
+
+def _classic_scenario_root() -> Path:
+    configured = os.getenv("MATB_CLASSIC_SCENARIO_DIR")
+    value = Path(configured) if configured else Path("scenarios")
+    return value if value.is_absolute() else _repo_root() / value
+
+
+def _openmatb_root() -> Path:
+    configured = os.getenv("MATB_OPENMATB_DIR")
+    value = Path(configured) if configured else Path("openmatb")
+    return value if value.is_absolute() else _repo_root() / value
+
+
+def _classic_wall_time_scale() -> float:
+    if os.getenv("MATB_CLASSIC_TEST_MODE") != "1":
+        return 1.0
+    raw = os.getenv("MATB_CLASSIC_WALL_TIME_SCALE", "1.0")
+    try:
+        value = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "MATB_CLASSIC_WALL_TIME_SCALE must be a finite decimal in [0.001, 1.0]"
+        ) from exc
+    if not math.isfinite(value) or not 0.001 <= value <= 1.0:
+        raise ValueError(
+            "MATB_CLASSIC_WALL_TIME_SCALE must be a finite decimal in [0.001, 1.0]"
+        )
+    return value
+
+
+def _polar_backend():
+    selected = os.getenv("MATB_POLAR_BACKEND", "bleak").strip().casefold()
+    if selected == "bleak":
+        return BleakPolarBackend()
+    if selected == "simulated":
+        if os.getenv("MATB_CLASSIC_TEST_MODE") != "1":
+            raise ValueError(
+                "MATB_POLAR_BACKEND=simulated requires MATB_CLASSIC_TEST_MODE=1"
+            )
+        return SimulatedPolarBackend()
+    raise ValueError("MATB_POLAR_BACKEND must be 'bleak' or 'simulated'")
+
+
 def _liftoff_port() -> int:
     raw = os.getenv("MATB_LIFTOFF_PORT", "9001")
     try:
@@ -130,6 +184,28 @@ def _simulation_wall_time_scale() -> float:
 async def lifespan(app: FastAPI):
     init_db()
     ensure_study_binding(get_engine(), selected_protocol())
+    classic_persistence = SQLModelClassicPersistence(get_engine())
+    classic_scale = _classic_wall_time_scale()
+    classic_test_mode = os.getenv("MATB_CLASSIC_TEST_MODE") == "1"
+
+    async def classic_sleep(seconds: float) -> None:
+        await asyncio.sleep(seconds * classic_scale)
+
+    classic_manager = ClassicManager(
+        artifact_root=_classic_artifact_root(),
+        persistence=classic_persistence,
+        polar=PolarConnectionManager(_polar_backend()),
+        launcher=OpenMATBLauncher(
+            openmatb_root=_openmatb_root(),
+            scenario_root=_classic_scenario_root(),
+            python_executable=os.getenv("MATB_OPENMATB_PYTHON", sys.executable),
+        ),
+        sleep=classic_sleep,
+        test_mode=classic_test_mode,
+        wall_time_scale=classic_scale,
+    )
+    classic_manager.recover_orphaned_attempts()
+    app.state.classic_manager = classic_manager
     liftoff_persistence = SQLModelLiftoffPersistence(get_engine())
     liftoff_persistence.mark_orphaned_sessions()
     liftoff_receiver = LiftoffUdpReceiver(
@@ -166,6 +242,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        await classic_manager.shutdown()
         await liftoff_manager.shutdown()
         await liftoff_receiver.stop()
         await manager.shutdown()
@@ -203,7 +280,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.routers import analysis, exports, fits, ingest, liftoff, metrics, participants, screen, simulation, study, tracker  # noqa: E402
+from app.routers import analysis, classic, exports, fits, ingest, liftoff, metrics, participants, screen, simulation, study, tracker  # noqa: E402
 
 app.include_router(participants.router)
 app.include_router(ingest.router)
@@ -216,6 +293,7 @@ app.include_router(exports.router)
 app.include_router(simulation.router)
 app.include_router(study.router)
 app.include_router(liftoff.router)
+app.include_router(classic.router)
 
 
 @app.websocket("/simulation/sessions/{session_id}/stream")

@@ -23,9 +23,11 @@ Row types this converter consumes:
 from __future__ import annotations
 
 import csv
+import io
 import json
 import math
 import statistics
+import re
 from pathlib import Path
 from typing import Any
 
@@ -106,12 +108,56 @@ def _d_prime(n_hits: int, n_misses: int, n_fa: int, n_cr: int) -> float | None:
     return round(_norm_ppf(h) - _norm_ppf(f), 4)
 
 
-def _parse_csv(csv_path: Path) -> list[dict[str, str]]:
+def _parse_csv_with_recovery(csv_path: Path) -> tuple[list[dict[str, str]], int]:
+    raw_text = Path(csv_path).read_text(encoding="utf-8")
+    reader = csv.DictReader(io.StringIO(raw_text, newline=""), strict=True)
+    fieldnames = reader.fieldnames
+    if (
+        not fieldnames
+        or any(name is None or not name.strip() for name in fieldnames)
+        or len(set(fieldnames)) != len(fieldnames)
+    ):
+        raise ValueError("malformed_csv_header")
     rows: list[dict[str, str]] = []
-    with open(csv_path, encoding="utf-8", newline="") as fh:
-        reader = csv.DictReader(fh)
-        for row in reader:
-            rows.append({k.strip(): v.strip() for k, v in row.items()})
+    parsed_rows: list[tuple[dict[str | None, str | list[str] | None], int]] = []
+    incomplete_final_rows = 0
+    final_append_unterminated = bool(
+        raw_text and not raw_text.endswith(("\n", "\r"))
+    )
+    physical_line_count = len(raw_text.splitlines())
+    while True:
+        record_start_line = reader.line_num + 1
+        try:
+            row = next(reader)
+        except StopIteration:
+            break
+        except csv.Error as exc:
+            if (
+                final_append_unterminated
+                and record_start_line == physical_line_count
+            ):
+                incomplete_final_rows = 1
+                break
+            raise ValueError("malformed_csv_row") from exc
+        parsed_rows.append((row, record_start_line))
+
+    for index, (row, record_start_line) in enumerate(parsed_rows):
+        malformed = any(key is None or value is None for key, value in row.items())
+        if malformed:
+            if (
+                final_append_unterminated
+                and index == len(parsed_rows) - 1
+                and record_start_line == physical_line_count
+            ):
+                incomplete_final_rows = 1
+                continue
+            raise ValueError("malformed_csv_row")
+        rows.append({str(key).strip(): str(value).strip() for key, value in row.items()})
+    return rows, incomplete_final_rows
+
+
+def _parse_csv(csv_path: Path) -> list[dict[str, str]]:
+    rows, _incomplete_final_rows = _parse_csv_with_recovery(csv_path)
     return rows
 
 
@@ -210,12 +256,18 @@ def _nasatlx_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
             subscales[key] = round(v, 2)
 
     filled = [v for v in subscales.values() if v is not None]
-    raw_tlx = round(sum(filled), 4) if filled else None
+    complete = len(filled) == len(NASA_TLX_SUBSCALES)
+    raw_tlx = round(statistics.mean(filled), 4) if complete else None
+    unweighted_sum = round(sum(filled), 4) if complete else None
 
     return {
         **{k.lower().replace(" ", "_"): v for k, v in subscales.items()},
         "raw_tlx": raw_tlx,
+        "raw_tlx_method": "unweighted_mean_of_six_0_to_10",
+        "unweighted_sum_0_60": unweighted_sum,
         "n_subscales_completed": len(filled),
+        "complete": complete,
+        "reason_code": None if complete else "incomplete_nasa_tlx",
     }
 
 
@@ -413,6 +465,190 @@ def _comm_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
     }
 
 
+def _bool_or_none(value: str) -> bool | None:
+    normalized = str(value).strip().casefold()
+    if normalized in {"true", "1", "1.0"}:
+        return True
+    if normalized in {"false", "0", "0.0"}:
+        return False
+    return None
+
+
+def _percentile(values: list[float], percentile: float) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    if len(ordered) == 1:
+        return ordered[0]
+    rank = (len(ordered) - 1) * percentile
+    lower = math.floor(rank)
+    upper = math.ceil(rank)
+    if lower == upper:
+        return ordered[lower]
+    fraction = rank - lower
+    return ordered[lower] + fraction * (ordered[upper] - ordered[lower])
+
+
+def _tracking_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
+    """Aggregate OpenMATB pursuit-tracking performance samples."""
+
+    performance = [
+        row
+        for row in rows
+        if row.get("type") == "performance" and row.get("module") == "track"
+    ]
+    target_samples = [
+        value
+        for row in performance
+        if row.get("address") == "cursor_in_target"
+        and (value := _bool_or_none(row.get("value", ""))) is not None
+    ]
+    deviations = [
+        abs(value)
+        for row in performance
+        if row.get("address") == "center_deviation"
+        and (value := _float_or_none(row.get("value", ""))) is not None
+    ]
+    recoveries = [
+        value
+        for row in performance
+        if row.get("address") == "response_time"
+        and (value := _float_or_none(row.get("value", ""))) is not None
+    ]
+    in_target = sum(target_samples)
+    return {
+        "n_samples": len(target_samples),
+        "in_target_count": in_target,
+        "in_target_pct": 100.0 * in_target / len(target_samples)
+        if target_samples
+        else None,
+        "n_deviation_samples": len(deviations),
+        "mean_center_deviation": statistics.mean(deviations)
+        if deviations
+        else None,
+        "rms_center_deviation": math.sqrt(
+            statistics.mean(value * value for value in deviations)
+        )
+        if deviations
+        else None,
+        "p95_center_deviation": _percentile(deviations, 0.95)
+        if deviations
+        else None,
+        "n_recoveries": len(recoveries),
+        "mean_recovery_rt_ms": round(statistics.mean(recoveries), 2)
+        if recoveries
+        else None,
+    }
+
+
+_RESMAN_ADDRESS = re.compile(r"^([a-z])_(in_tolerance|deviation|response_time)$")
+
+
+def _resman_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
+    """Aggregate target-tank tolerance, deviation, and recovery measures."""
+
+    by_tank: dict[str, dict[str, list[Any]]] = {}
+    for row in rows:
+        if row.get("type") != "performance" or row.get("module") != "resman":
+            continue
+        match = _RESMAN_ADDRESS.fullmatch(row.get("address", ""))
+        if match is None:
+            continue
+        tank, measure = match.groups()
+        values = by_tank.setdefault(
+            tank,
+            {"in_tolerance": [], "deviation": [], "response_time": []},
+        )
+        if measure == "in_tolerance":
+            parsed: Any = _bool_or_none(row.get("value", ""))
+        else:
+            parsed = _float_or_none(row.get("value", ""))
+        if parsed is not None:
+            values[measure].append(parsed)
+
+    tank_metrics: dict[str, dict[str, Any]] = {}
+    all_tolerance: list[bool] = []
+    all_deviations: list[float] = []
+    all_recoveries: list[float] = []
+    for tank in sorted(by_tank):
+        values = by_tank[tank]
+        tolerance = [bool(value) for value in values["in_tolerance"]]
+        deviations = [abs(float(value)) for value in values["deviation"]]
+        recoveries = [float(value) for value in values["response_time"]]
+        all_tolerance.extend(tolerance)
+        all_deviations.extend(deviations)
+        all_recoveries.extend(recoveries)
+        tank_metrics[tank] = {
+            "n_tolerance_samples": len(tolerance),
+            "in_tolerance_pct": 100.0 * sum(tolerance) / len(tolerance)
+            if tolerance
+            else None,
+            "n_deviation_samples": len(deviations),
+            "mean_abs_deviation": statistics.mean(deviations)
+            if deviations
+            else None,
+            "rms_deviation": math.sqrt(
+                statistics.mean(value * value for value in deviations)
+            )
+            if deviations
+            else None,
+            "max_abs_deviation": max(deviations) if deviations else None,
+            "n_recoveries": len(recoveries),
+            "mean_recovery_rt_ms": round(statistics.mean(recoveries), 2)
+            if recoveries
+            else None,
+        }
+
+    combined = {
+        "n_tolerance_samples": len(all_tolerance),
+        "in_tolerance_pct": 100.0 * sum(all_tolerance) / len(all_tolerance)
+        if all_tolerance
+        else None,
+        "n_deviation_samples": len(all_deviations),
+        "mean_abs_deviation": statistics.mean(all_deviations)
+        if all_deviations
+        else None,
+        "rms_deviation": math.sqrt(
+            statistics.mean(value * value for value in all_deviations)
+        )
+        if all_deviations
+        else None,
+        "max_abs_deviation": max(all_deviations)
+        if all_deviations
+        else None,
+        "n_recoveries": len(all_recoveries),
+        "mean_recovery_rt_ms": round(statistics.mean(all_recoveries), 2)
+        if all_recoveries
+        else None,
+    }
+    return {"tanks": tank_metrics, "combined": combined}
+
+
+def _activity_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
+    """Count preserved task activity without inventing a composite score."""
+
+    def counts(row_type: str) -> dict[str, int]:
+        result: dict[str, int] = {}
+        for row in rows:
+            if row.get("type") != row_type:
+                continue
+            module = row.get("module", "") or "unknown"
+            result[module] = result.get(module, 0) + 1
+        return dict(sorted(result.items()))
+
+    return {
+        "total_rows": len(rows),
+        "event_count": sum(row.get("type") == "event" for row in rows),
+        "input_count": sum(row.get("type") == "input" for row in rows),
+        "performance_row_count": sum(
+            row.get("type") == "performance" for row in rows
+        ),
+        "state_row_count": sum(row.get("type") == "state" for row in rows),
+        "events_by_module": counts("event"),
+        "inputs_by_module": counts("input"),
+    }
+
+
 def convert_session(
     csv_path: Path,
     participant_id: str = "unknown",
@@ -440,7 +676,7 @@ def convert_session(
     Returns:
         Dict suitable for json.dumps() as one JSONL line.
     """
-    rows = parse_csv(csv_path)
+    rows, incomplete_final_rows = _parse_csv_with_recovery(csv_path)
 
     scenario_times: list[float] = [
         v for r in rows
@@ -454,7 +690,13 @@ def convert_session(
         "participant_id": participant_id,
         "block_name": block_name,
         "workload_level": workload_level,
-        "csv_path": str(csv_path),
+        "csv_path": Path(csv_path).name,
+        "source_recovery": {
+            "incomplete_final_csv_rows_ignored": incomplete_final_rows,
+            "warning_codes": (
+                ["incomplete_final_csv_row_ignored"] if incomplete_final_rows else []
+            ),
+        },
         "n_rows": len(rows),
         "scenario_time_min_s": t_min,
         "scenario_time_max_s": t_max,
@@ -463,6 +705,9 @@ def convert_session(
         "nasatlx": _nasatlx_metrics(rows),
         "bedford": _bedford_metric(rows),
         "comm": _comm_metrics(rows),
+        "tracking": _tracking_metrics(rows),
+        "resource_management": _resman_metrics(rows),
+        "activity": _activity_metrics(rows),
     }
 
     # Locate optional SAGAT manifest. Search order:

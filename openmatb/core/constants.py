@@ -38,7 +38,7 @@ BFLIM: int = 15
 DEPRECATED: list[str] = ["pumpstatus", "end", "cutofffrequency", "equalproportions"]
 
 SYSTEM_PSEUDO_PLUGIN: str = "system"
-SYSTEM_COMMANDS: list[str] = ["pause"]
+SYSTEM_COMMANDS: list[str] = ["pause", "task_boundary"]
 
 PATHS: dict[str, Path] = {k.upper(): Path(".", k) for k in ["plugins", "sessions"]}
 PATHS.update(

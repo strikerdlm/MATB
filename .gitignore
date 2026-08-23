@@ -6,3 +6,5 @@ webui/frontend/playwright-report/
 .suas-e2e/
 /.worktrees/
 /exports/
+/.venv-classic/
+/research-data/

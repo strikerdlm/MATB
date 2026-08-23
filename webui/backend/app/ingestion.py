@@ -14,6 +14,7 @@ from pathlib import Path
 
 from sqlmodel import Session, select
 
+from app.classic_models import ClassicSessionSelection
 from app.models import Block, BlockProvenance, Visit
 
 WORKLOAD_LEVELS = ("LOW", "MEDIUM", "HIGH")
@@ -161,6 +162,17 @@ def ingest_csv(
         raise IngestionError(
             f"cell already filled: {participant_id} visit {visit_ordinal} {workload_level}"
         )
+    if existing is not None and overwrite:
+        classic_selection = session.exec(
+            select(ClassicSessionSelection).where(
+                ClassicSessionSelection.visit_id == visit.id,
+                ClassicSessionSelection.workload_level == workload_level,
+            )
+        ).first()
+        if classic_selection is not None:
+            raise IngestionError(
+                "classic-selected cell cannot be overwritten by legacy CSV ingestion"
+            )
 
     record, sysmon_rows, csv_rows = _convert_and_rows(content, workload_level)
     sysmon = record.get("sysmon") or {}

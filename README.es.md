@@ -42,6 +42,7 @@ institucionales fuera del repositorio y bajo los controles de custodia de la ins
 | Objetivo | Comience aquí | Entorno de ejecución | Ejemplo | Resultado esperado |
 | --- | --- | --- | --- | --- |
 | Generar escenarios de OpenMATB, convertir registros o probar el análisis DEPDF | `matb_integration/` y `openmatb/` | Python; OpenMATB versionado o compatible para presentar tareas a participantes | [Recorrido de investigación OpenMATB](examples/openmatb-research/README.es.md) | Tres escenarios/manifiestos, métricas JSONL sintéticas y un JSON DEPDF |
+| Capturar OpenMATB clásico con RR/VFC en vivo desde Polar H10 | [`docs/research/polar-h10-classic-matb.md`](docs/research/polar-h10-classic-matb.md) | Windows 11 nativo o Linux/BlueZ; Python, Node, navegador y adaptador BLE | [Manual Polar H10 + MATB clásico](docs/research/polar-h10-classic-matb.md) | Artefactos inmutables bilingües en Markdown, CSV, JSON/JSONL, RR, PSD de VFC, MATB, manifiesto y sumas de comprobación |
 | Ingerir sesiones, dar seguimiento a visitas, visualizar datos, analizar y exportar | `webui/` | Python 3.12+, Node 20+, navegador local | [Recorrido de la Consola de Investigación](examples/research-console/README.es.md) | Registros SQLite locales y `research-bundle.zip` |
 | Ejecutar una sesión de investigación sUAS determinista y segura para observadores | `matb_integration/suas/` y `webui/` | Python 3.12+; Node 20+ para el servicio de navegador | [Recorrido del simulador sUAS](examples/suas-simulator/README.es.md) | Eventos verificables por reproducción, métricas, informe final, manifiesto y sumas de comprobación |
 | Evaluar contratos de paquetes de gestión de la seguridad operacional sin conexión | `SMS/` | Node 22.x; Docker solo para la imagen/paquete sin conexión | [Recorrido de capacidades del SMS](examples/sms-platform/README.es.md) | JSON determinista con un resultado del núcleo de seguridad operacional bloqueado deliberadamente |
@@ -361,6 +362,12 @@ npm run dev -- --hostname 127.0.0.1 --port 3100
 ```
 
 Abra `http://127.0.0.1:3100/`.
+
+Para adquirir datos de Polar H10 de forma nativa y sincronizada con OpenMATB
+clásico, abra `http://127.0.0.1:3100/classic/setup` y siga el
+[manual de Polar H10 para Windows/Linux](docs/research/polar-h10-classic-matb.md).
+El flujo con hardware requiere un solo proceso de backend sin recarga; el
+backend predeterminado usa Bleak real, no el simulador de pruebas.
 
 <h3>Prueba del ejemplo sintético</h3>
 

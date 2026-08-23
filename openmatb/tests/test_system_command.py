@@ -75,6 +75,16 @@ class TestCheckEventsSystemCommands:
         # No error about system;pause
         assert not any("system" in e.lower() for e in errs)
 
+    def test_system_task_boundary_accepted(self):
+        events = [
+            Event(1, 0, "sysmon", ["start"]),
+            Event(2, 900, "system", ["task_boundary"]),
+            Event(3, 900, "sysmon", ["stop"]),
+        ]
+        scenario = self._make_scenario_with_plugins(events)
+
+        assert not any("system" in error.lower() for error in scenario.check_events())
+
     def test_system_invalid_command_rejected(self):
         """check_events() rejects an invalid system command."""
         events = [
@@ -118,6 +128,22 @@ class TestExecuteSystemCommand:
         mock_window.pause_prompt.assert_called_once()
         assert event.done == 1
         mock_log.record_event.assert_called_once_with(event)
+
+    def test_task_boundary_emits_synchronized_marker(self, mock_window, monkeypatch):
+        import core.scheduler
+        from core.scheduler import Scheduler
+
+        mock_log = MagicMock()
+        monkeypatch.setattr(core.scheduler, "get_logger", lambda: mock_log)
+        scheduler = object.__new__(Scheduler)
+        scheduler.plugins = {}
+        event = Event(1, 900, "system", ["task_boundary"])
+
+        scheduler.execute_one_event(event)
+
+        mock_log.record_boundary.assert_called_once_with("task_window_completed")
+        mock_log.record_event.assert_called_once_with(event)
+        assert event.done == 1
 
     def test_normal_event_still_works(self, mock_window, monkeypatch):
         """Normal plugin events are still dispatched to the plugin."""
