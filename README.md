@@ -44,6 +44,7 @@ out of the repository and under the owning institution's custody controls.
 | Goal | Start here | Runtime | Example | Expected output |
 | --- | --- | --- | --- | --- |
 | Generate OpenMATB scenarios, convert logs, or try DEPDF analysis | `matb_integration/` and `openmatb/` | Python; tracked or compatible OpenMATB for participant task presentation | [OpenMATB research tour](examples/openmatb-research/README.md) | Three scenarios/manifests, synthetic JSONL metrics, and one DEPDF JSON |
+| Collect classic OpenMATB with live Polar H10 RR/HRV | [`docs/research/polar-h10-classic-matb.md`](docs/research/polar-h10-classic-matb.md) | Native Windows 11 or Linux/BlueZ; Python, Node, browser, BLE adapter | [Polar H10 + classic MATB runbook](docs/research/polar-h10-classic-matb.md) | Immutable bilingual Markdown, CSV, JSON/JSONL, RR, HRV PSD, MATB, manifest, and checksum artifacts |
 | Ingest sessions, track visits, visualize data, analyze, and export | `webui/` | Python 3.12+, Node 20+, local browser | [Research Console walkthrough](examples/research-console/README.md) | Local SQLite records and `research-bundle.zip` |
 | Run a deterministic, observer-safe sUAS research session | `matb_integration/suas/` and `webui/` | Python 3.12+; Node 20+ for browser service | [sUAS simulator walkthrough](examples/suas-simulator/README.md) | Replay-verifiable events, metrics, debrief, manifest, and checksums |
 | Evaluate offline safety-management package contracts | `SMS/` | Node 22.x; Docker only for the offline image/bundle | [SMS capability tour](examples/sms-platform/README.md) | Deterministic JSON with a deliberately blocked safety-kernel result |
@@ -366,6 +367,12 @@ npm run dev -- --hostname 127.0.0.1 --port 3100
 ```
 
 Open `http://127.0.0.1:3100/`.
+
+For native Polar H10 acquisition synchronized with classic OpenMATB, open
+`http://127.0.0.1:3100/classic/setup` and follow the
+[Windows/Linux Polar H10 runbook](docs/research/polar-h10-classic-matb.md). The
+hardware workflow requires one backend worker without reload; the default
+backend is real Bleak acquisition, not the test simulator.
 
 <h3>Try the synthetic example</h3>
 

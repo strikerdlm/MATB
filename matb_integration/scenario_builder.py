@@ -330,6 +330,7 @@ def build_block_scenario(
     ] if flag]
     label = ", ".join(scales_at_end) if scales_at_end else "no end-of-block scales"
     lines.append(f"# Block end — stop tasks, collect {label}")
+    lines.append(f"{end_time};system;task_boundary")
     for task in ("sysmon", "track", "resman", "communications"):
         lines.append(f"{end_time};{task};stop")
 

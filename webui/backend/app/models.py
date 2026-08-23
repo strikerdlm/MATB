@@ -48,7 +48,7 @@ class BlockProvenance(SQLModel, table=True):
     manifest_filename: str | None = None
     manifest_sha256: str | None = Field(default=None, index=True)
     manifest_json: str | None = None
-    validation_status: str = "missing_manifest"     # ok|warning|error|missing_manifest|invalid_manifest
+    validation_status: str = "missing_manifest"     # scenario validation or classic_session_verified
     validation_issues_json: str = "[]"              # list[ValidationIssue]
     created_at: datetime = Field(default_factory=_utcnow)
 
