@@ -15,42 +15,45 @@ export class EdgeApiError extends Error {
 export class EdgeApiClient {
   private activeSession?: AuthenticatedSession;
 
+  public constructor(private readonly origin = typeof location === "undefined" ? "https://edge.invalid" : location.origin) {}
+
   public session(): AuthenticatedSession | undefined { return this.activeSession; }
 
-  public async login(userId: string, password: string): Promise<AuthenticatedSession> {
-    const session = await this.request<AuthenticatedSession>("/api/auth/login", "POST", { userId, password }, false);
+  public async login(userId: string, password: string, signal?: AbortSignal): Promise<AuthenticatedSession> {
+    const session = await this.request<AuthenticatedSession>("/api/auth/login", "POST", { userId, password }, false, signal);
     this.activeSession = Object.freeze(session);
     return session;
   }
 
-  public async restoreSession(): Promise<AuthenticatedSession> {
-    const session = await this.request<AuthenticatedSession>("/api/auth/session", "GET");
+  public async restoreSession(signal?: AbortSignal): Promise<AuthenticatedSession> {
+    const session = await this.request<AuthenticatedSession>("/api/auth/session", "GET", undefined, true, signal);
     this.activeSession = Object.freeze(session);
     return session;
   }
 
-  public async reauthenticate(password: string): Promise<AuthenticatedSession> {
-    const session = await this.post<AuthenticatedSession>("/api/auth/reauthenticate", { password });
+  public async reauthenticate(password: string, signal?: AbortSignal): Promise<AuthenticatedSession> {
+    const session = await this.post<AuthenticatedSession>("/api/auth/reauthenticate", { password }, signal);
     this.activeSession = Object.freeze(session);
     return session;
   }
 
-  public async lock(): Promise<void> { await this.post<void>("/api/auth/lock"); this.activeSession = undefined; }
-  public async logout(): Promise<void> { await this.post<void>("/api/auth/logout"); this.activeSession = undefined; }
-  public get<T>(path: string): Promise<T> { return this.request<T>(path, "GET"); }
-  public post<T>(path: string, body?: unknown): Promise<T> { return this.request<T>(path, "POST", body); }
+  public async lock(signal?: AbortSignal): Promise<void> { await this.post<void>("/api/auth/lock", undefined, signal); this.activeSession = undefined; }
+  public async logout(signal?: AbortSignal): Promise<void> { await this.post<void>("/api/auth/logout", undefined, signal); this.activeSession = undefined; }
+  public forgetSession(): void { this.activeSession = undefined; }
+  public get<T>(path: string, signal?: AbortSignal): Promise<T> { return this.request<T>(path, "GET", undefined, true, signal); }
+  public post<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> { return this.request<T>(path, "POST", body, true, signal); }
 
-  public async readiness(): Promise<ReadinessReport> {
-    const response = await fetch("/readyz", { method: "GET", credentials: "same-origin", headers: { accept: "application/json" } });
+  public async readiness(signal?: AbortSignal): Promise<ReadinessReport> {
+    const response = await fetch(sameOriginPath("/readyz", this.origin), { method: "GET", credentials: "same-origin", headers: { accept: "application/json" }, signal });
     return parseJson<ReadinessReport>(response);
   }
 
-  private async request<T>(path: string, method: "GET" | "POST", body?: unknown, authenticated = true): Promise<T> {
-    if (!path.startsWith("/") || path.startsWith("//")) throw new TypeError("Edge API paths must be same-origin");
+  private async request<T>(path: string, method: "GET" | "POST", body?: unknown, authenticated = true, signal?: AbortSignal): Promise<T> {
     const csrfToken = this.activeSession?.csrfToken;
-    const response = await fetch(path, {
+    const response = await fetch(sameOriginPath(path, this.origin), {
       method,
       credentials: "same-origin",
+      signal,
       headers: {
         accept: "application/json",
         ...(body === undefined ? {} : { "content-type": "application/json" }),
@@ -66,6 +69,18 @@ export class EdgeApiClient {
     if (response.status === 204) return undefined as T;
     return parseJson<T>(response);
   }
+}
+
+export function sameOriginPath(path: string, origin: string): string {
+  if (!path.startsWith("/") || path.startsWith("//") || /[\\\u0000-\u001f\u007f]/u.test(path)) {
+    throw new TypeError("Edge API paths must be same-origin and unambiguous");
+  }
+  let resolved: URL;
+  try { resolved = new URL(path, origin); } catch { throw new TypeError("Edge API paths must be same-origin and unambiguous"); }
+  if (resolved.origin !== new URL(origin).origin || resolved.username !== "" || resolved.password !== "" || resolved.hash !== "") {
+    throw new TypeError("Edge API paths must be same-origin and unambiguous");
+  }
+  return `${resolved.pathname}${resolved.search}`;
 }
 
 async function parseJson<T>(response: Response): Promise<T> {

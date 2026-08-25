@@ -39,4 +39,19 @@ describe("EdgeApiClient", () => {
     await expect(client.get("/api/missions")).rejects.toBeInstanceOf(SessionExpiredError);
     expect(client.session()).toBeUndefined();
   });
+
+  it.each([
+    "/\\evil.example/mission",
+    "/api/missions\\..\\..\\evil",
+    "/api/missions\nX-Test: injected",
+    "//evil.example/mission",
+    "https://evil.example/mission",
+  ])("rejects the normalized cross-origin or ambiguous path %s before fetch", async (path) => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new EdgeApiClient("https://console.example");
+
+    await expect(client.get(path)).rejects.toThrow(/same-origin/i);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

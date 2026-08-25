@@ -198,6 +198,11 @@ describe("HTTP authentication boundary", () => {
       ...(loginResponse.json() as { csrfToken: string; sessionId: string }),
     };
     expect(session.sessionId).toBe("session-1");
+    expect(loginResponse.json()).toMatchObject({
+      expiresAtUtc: "2026-08-10T02:00:00.000Z",
+      lastActivityAtUtc: nowUtc,
+      idleTimeoutMs: 15 * 60_000,
+    });
     expect(loginResponse.body).not.toContain("bearer-secret-1");
     const safeRead = await app.inject(authenticated(session, { method: "GET", url: "/api/auth/session" }));
     const publicIdAsCredential = await app.inject({

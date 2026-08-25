@@ -2,88 +2,32 @@ export type Locale = "en" | "es";
 
 const labels = {
   en: {
-    overview: "Mission overview",
-    safetyReview: "Safety review",
-    hazards: "Hazards",
-    controls: "Controls",
-    risk: "Risk assessment",
-    profile: "Flight profile",
-    telemetry: "Telemetry",
-    evidence: "Evidence log",
-    reports: "Reports",
-    documents: "Documents",
-    notes: "Crew notes",
-    configuration: "Configuration",
-    research: "Research",
-    missionStrip: "Mission safety strip",
-    highestBlocker: "Highest blocker",
-    unclassified: "Unclassified · controlled safety metadata · do not export",
-    mapCurrent: "Map package state unavailable",
-    readOnlyTelemetry: "Read-only telemetry",
-    evidenceLatest: "Evidence (latest)",
-    notesSafety: "Notes (safety)",
-    local: "Local",
-    offline: "Offline",
-    mapWorkspace: "Offline map workspace",
-    statusNominal: "Status unavailable",
-    networkDisconnected: "Disconnected",
-    verified: "Integrity state unavailable",
-    gateMaintenance: "Maintenance",
-    gateOperator: "Operator",
-    gateSafety: "Safety",
-    gateCommander: "Commander",
-    blocker: "Blocker",
-    pending: "Pending",
-    pass: "Pass",
+    overview: "Mission overview", safetyReview: "Safety review", hazards: "Hazards", controls: "Controls", risk: "Risk assessment", profile: "Flight profile", telemetry: "Telemetry", evidence: "Evidence log", reports: "Reports", documents: "Documents", notes: "Crew notes", configuration: "Configuration", research: "Research", missionStrip: "Mission safety strip", highestBlocker: "Highest blocker", unclassified: "Unclassified · controlled safety metadata · do not export", mapCurrent: "Map package state unavailable", readOnlyTelemetry: "Read-only telemetry", evidenceLatest: "Evidence (latest)", notesSafety: "Notes (safety)", local: "Local", offline: "Offline", mapWorkspace: "Offline map workspace", statusNominal: "Status unavailable", networkDisconnected: "Disconnected", verified: "Integrity state unavailable", gateMaintenance: "Maintenance", gateOperator: "Operator", gateSafety: "Safety", gateCommander: "Commander", blocker: "Blocker", pending: "Pending", pass: "Pass",
+    signInTitle: "Sign in to operational console", userId: "User ID", password: "Password", signIn: "Sign in", signingIn: "Signing in…", spanish: "Español", english: "English", operationalCore: "Operational core", changeLanguage: "Change language", toggleTheme: "Toggle day and night theme", day: "Day", night: "Night", lock: "Lock", locked: "Locked",
+    loadingAuthoritative: "Loading authoritative operational state", connectedEdge: "Connected to Edge API", edgeDisconnected: "Edge API disconnected", sessionExpired: "Session expired — sign in again", forbiddenRole: "Forbidden for this role", forbidden: "Forbidden", requestFailed: "Request failed", readOnlySafeMode: "Read-only safe mode", readOnlyBlocked: "Read-only safe mode: state-changing actions are disabled",
+    primaryNavigation: "Primary navigation", missionNavigation: "Mission navigation", checklistNav: "Checklist", gatesNav: "Gates", systemNav: "System", deferredModules: "Deferred modules", deferredRelease: "Not included in 0.2.0-rc.1", fleet: "Fleet", planning: "Planning", assurance: "Assurance", reportsModule: "Reports", documentsModule: "Documents", notesModule: "Notes",
+    missions: "Missions", noAssignedMissions: "No assigned missions", revision: "Revision", currentRevision: "Current revision", id: "ID", state: "State", notProvided: "Not provided", selectMission: "Select an assigned mission", createMission: "Create mission", missionJson: "Mission JSON", missionJsonInvalid: "Mission JSON must be valid", missionCreated: "Mission created", createMaterialRevision: "Create material revision", revisionChangeJson: "Revision change JSON", revisionJsonInvalid: "Revision JSON must be valid", submitRevision: "Submit revision", revisionRecorded: "Revision recorded", revisionForbidden: "Commander or safety-officer role required to revise",
+    serverOwnedEvaluation: "Server-owned evaluation", stale: "Stale", unavailable: "Unavailable", safetyUnavailable: "Safety evaluation unavailable — approvals remain blocked", evaluated: "Evaluated", status: "Status", apiTimeUnavailable: "API did not provide time", noSafetyBlockers: "The API reports no safety blockers for this revision.", serverBlocker: "Server blocker",
+    itemizedChecklist: "Itemized checklist", noChecklist: "No checklist responses recorded for this revision", itemId: "Item ID", response: "Response", responsePass: "Pass", responseBlock: "Block", responseNotApplicable: "Not applicable", reason: "Reason", respondItem: "Respond to item", checklistRecorded: "Checklist item recorded",
+    fourGates: "Four role-separated gates", gate: "Gate", requiredRole: "Required role", decision: "Decision", accept: "Accept", block: "Block", escalate: "Escalate", recordGate: "Record gate", onlyAssigned: "Only assigned {role} may decide", reauthenticationRequired: "Re-authentication required", gateRecorded: "{gate} gate recorded",
+    noTelemetry: "No authorized telemetry records received", apiTimeMissing: "API time unavailable", sequence: "sequence", loading: "loading", connected: "connected", disconnected: "disconnected", safeMode: "safe mode", blockedState: "blocked", forbiddenState: "forbidden",
+    systemHeading: "Package, readiness, audit and export", packages: "Packages", noActivePackage: "No active package reported", apiState: "API state", quarantined: "quarantined", readiness: "Readiness", technical: "Technical", operational: "Operational", ready: "ready", notReady: "not ready", auditHealth: "Audit health", events: "events", signedExport: "Signed export", reauthPassword: "Re-authentication password", reauthenticate: "Re-authenticate", reauthenticated: "Re-authenticated", requestSignedExport: "Request signed export", signedExportReceived: "Signed export received", exportRoleRequired: "Commander or reviewer role required", export: "Export", key: "Key", algorithm: "Algorithm", signature: "Signature", draftState: "Draft", plannedState: "Planned", activeState: "active", healthyState: "healthy", okState: "ok", acceptState: "accept", passState: "pass", maintenanceRole: "maintenance", operatorRole: "operator", safetyRole: "safety", commanderRole: "commander", maintainerRole: "maintainer", safetyOfficerRole: "safety officer", reviewerRole: "reviewer", administratorRole: "administrator", observerRole: "observer", databaseCheck: "Database", migrationsCheck: "Migrations", auditCheck: "Audit", tlsCheck: "TLS", exportKeyCheck: "Export key", trustAnchorsCheck: "Trust anchors", activeTerminologyCheck: "Active terminology", activePolicyCheck: "Active policy", bootstrapAdministratorCheck: "Bootstrap administrator",
   },
   es: {
-    overview: "Resumen de misión",
-    safetyReview: "Revisión de seguridad",
-    hazards: "Peligros",
-    controls: "Controles",
-    risk: "Evaluación de riesgo",
-    profile: "Perfil de vuelo",
-    telemetry: "Telemetría",
-    evidence: "Registro de evidencia",
-    reports: "Informes",
-    documents: "Documentos",
-    notes: "Notas de tripulación",
-    configuration: "Configuración",
-    research: "Investigación",
-    missionStrip: "Franja de seguridad de misión",
-    highestBlocker: "Bloqueador principal",
-    unclassified: "No clasificado · metadatos controlados de seguridad · no exportar",
-    mapCurrent: "Estado del paquete cartográfico no disponible",
-    readOnlyTelemetry: "Telemetría de solo lectura",
-    evidenceLatest: "Evidencia (última)",
-    notesSafety: "Notas (seguridad)",
-    local: "Local",
-    offline: "Sin conexión",
-    mapWorkspace: "Espacio cartográfico sin conexión",
-    statusNominal: "Estado no disponible",
-    networkDisconnected: "Desconectada",
-    verified: "Estado de integridad no disponible",
-    gateMaintenance: "Mantenimiento",
-    gateOperator: "Operador",
-    gateSafety: "Seguridad",
-    gateCommander: "Comandante",
-    blocker: "Bloqueador",
-    pending: "Pendiente",
-    pass: "Aprobado",
+    overview: "Resumen de misión", safetyReview: "Revisión de seguridad", hazards: "Peligros", controls: "Controles", risk: "Evaluación de riesgo", profile: "Perfil de vuelo", telemetry: "Telemetría", evidence: "Registro de evidencia", reports: "Informes", documents: "Documentos", notes: "Notas de tripulación", configuration: "Configuración", research: "Investigación", missionStrip: "Franja de seguridad de misión", highestBlocker: "Bloqueador principal", unclassified: "No clasificado · metadatos controlados de seguridad · no exportar", mapCurrent: "Estado del paquete cartográfico no disponible", readOnlyTelemetry: "Telemetría de solo lectura", evidenceLatest: "Evidencia (última)", notesSafety: "Notas (seguridad)", local: "Local", offline: "Sin conexión", mapWorkspace: "Espacio cartográfico sin conexión", statusNominal: "Estado no disponible", networkDisconnected: "Desconectada", verified: "Estado de integridad no disponible", gateMaintenance: "Mantenimiento", gateOperator: "Operador", gateSafety: "Seguridad", gateCommander: "Comandante", blocker: "Bloqueador", pending: "Pendiente", pass: "Aprobado",
+    signInTitle: "Iniciar sesión en la consola operativa", userId: "Identificador de usuario", password: "Contraseña", signIn: "Iniciar sesión", signingIn: "Iniciando sesión…", spanish: "Español", english: "English", operationalCore: "Núcleo operativo", changeLanguage: "Cambiar idioma", toggleTheme: "Alternar tema diurno y nocturno", day: "Día", night: "Noche", lock: "Bloquear", locked: "Bloqueada",
+    loadingAuthoritative: "Cargando el estado operativo autorizado", connectedEdge: "Conectada a la API Edge", edgeDisconnected: "API Edge desconectada", sessionExpired: "La sesión expiró — inicie sesión de nuevo", forbiddenRole: "Prohibido para este rol", forbidden: "Prohibido", requestFailed: "La solicitud falló", readOnlySafeMode: "Modo seguro de solo lectura", readOnlyBlocked: "Modo seguro de solo lectura: las acciones de cambio están deshabilitadas",
+    primaryNavigation: "Navegación principal", missionNavigation: "Navegación de misión", checklistNav: "Lista de verificación", gatesNav: "Aprobaciones", systemNav: "Sistema", deferredModules: "Módulos aplazados", deferredRelease: "Not included in 0.2.0-rc.1", fleet: "Flota", planning: "Planificación", assurance: "Aseguramiento", reportsModule: "Informes", documentsModule: "Documentos", notesModule: "Notas",
+    missions: "Misiones", noAssignedMissions: "No hay misiones asignadas", revision: "Revisión", currentRevision: "Revisión actual", id: "ID", state: "Estado", notProvided: "No suministrada", selectMission: "Seleccione una misión asignada", createMission: "Crear misión", missionJson: "JSON de misión", missionJsonInvalid: "El JSON de misión debe ser válido", missionCreated: "Misión creada", createMaterialRevision: "Crear revisión material", revisionChangeJson: "JSON del cambio de revisión", revisionJsonInvalid: "El JSON de revisión debe ser válido", submitRevision: "Enviar revisión", revisionRecorded: "Revisión registrada", revisionForbidden: "Se requiere el rol de comandante u oficial de seguridad para revisar",
+    serverOwnedEvaluation: "Evaluación controlada por el servidor", stale: "Obsoleta", unavailable: "No disponible", safetyUnavailable: "Evaluación de seguridad no disponible — las aprobaciones siguen bloqueadas", evaluated: "Evaluada", status: "Estado", apiTimeUnavailable: "La API no suministró la hora", noSafetyBlockers: "La API no informa bloqueadores de seguridad para esta revisión.", serverBlocker: "Bloqueador del servidor",
+    itemizedChecklist: "Lista de verificación por ítems", noChecklist: "No hay respuestas registradas para esta revisión", itemId: "ID del ítem", response: "Respuesta", responsePass: "Aprobar", responseBlock: "Bloquear", responseNotApplicable: "No aplica", reason: "Motivo", respondItem: "Responder al ítem", checklistRecorded: "Ítem de verificación registrado",
+    fourGates: "Cuatro aprobaciones separadas por rol", gate: "Aprobación", requiredRole: "Rol requerido", decision: "Decisión", accept: "Aceptar", block: "Bloquear", escalate: "Escalar", recordGate: "Registrar aprobación", onlyAssigned: "Solo el rol {role} asignado puede decidir", reauthenticationRequired: "Se requiere reautenticación", gateRecorded: "Aprobación {gate} registrada",
+    noTelemetry: "No se recibieron registros de telemetría autorizados", apiTimeMissing: "Hora de API no disponible", sequence: "secuencia", loading: "cargando", connected: "conectada", disconnected: "desconectada", safeMode: "modo seguro", blockedState: "bloqueada", forbiddenState: "prohibida",
+    systemHeading: "Paquetes, disponibilidad, auditoría y exportación", packages: "Paquetes", noActivePackage: "La API no informa paquetes activos", apiState: "Estado de API", quarantined: "en cuarentena", readiness: "Disponibilidad", technical: "Técnica", operational: "Operativa", ready: "lista", notReady: "no lista", auditHealth: "Salud de auditoría", events: "eventos", signedExport: "Exportación firmada", reauthPassword: "Contraseña de reautenticación", reauthenticate: "Reautenticar", reauthenticated: "Reautenticada", requestSignedExport: "Solicitar exportación firmada", signedExportReceived: "Exportación firmada recibida", exportRoleRequired: "Se requiere rol de comandante o revisor", export: "Exportación", key: "Clave", algorithm: "Algoritmo", signature: "Firma", draftState: "Borrador", plannedState: "Planificada", activeState: "activa", healthyState: "saludable", okState: "correcto", acceptState: "aceptada", passState: "aprobada", maintenanceRole: "mantenimiento", operatorRole: "operador", safetyRole: "seguridad", commanderRole: "comandante", maintainerRole: "mantenedor", safetyOfficerRole: "oficial de seguridad", reviewerRole: "revisor", administratorRole: "administrador", observerRole: "observador", databaseCheck: "Base de datos", migrationsCheck: "Migraciones", auditCheck: "Auditoría", tlsCheck: "TLS", exportKeyCheck: "Clave de exportación", trustAnchorsCheck: "Anclas de confianza", activeTerminologyCheck: "Terminología activa", activePolicyCheck: "Política activa", bootstrapAdministratorCheck: "Administrador inicial",
   },
 } as const;
 
 export type Labels = (typeof labels)[Locale];
-
-export function getLabels(locale: Locale): Labels {
-  return labels[locale];
-}
-
-export function useLocale(locale: Locale): { locale: Locale; labels: Labels } {
-  return { locale, labels: getLabels(locale) };
-}
-
-export function renderConcepts(locale: Locale): string[] {
-  const current = getLabels(locale);
-  return [current.missionStrip, current.gateMaintenance, current.gateOperator, current.gateSafety, current.gateCommander];
-}
+export function getLabels(locale: Locale): Labels { return labels[locale]; }
+export function useLocale(locale: Locale): { locale: Locale; labels: Labels } { return { locale, labels: getLabels(locale) }; }
+export function renderConcepts(locale: Locale): string[] { const current = getLabels(locale); return [current.missionStrip, current.gateMaintenance, current.gateOperator, current.gateSafety, current.gateCommander]; }

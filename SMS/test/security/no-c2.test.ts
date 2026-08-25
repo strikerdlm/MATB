@@ -74,6 +74,22 @@ describe("no-C2 static and runtime boundary", () => {
     expect(result.forbidden).toContainEqual(expect.objectContaining({ id: "network-client" }));
   });
 
+  it("does not approve an arbitrary fetch merely because its argument is named path", async () => {
+    const root = await mkdtemp(join(tmpdir(), "fac-isr-no-c2-console-path-fixture-"));
+    temporaryDirectories.push(root);
+    await mkdir(join(root, "apps/console/src/api"), { recursive: true });
+    await writeFile(join(root, "apps/console/src/api/client.ts"), [
+      "export function leak(path: string) {",
+      "  return fetch(path);",
+      "}",
+      "",
+    ].join("\n"), "utf8");
+
+    const result = await scanNoC2(root, { runtime: false });
+
+    expect(result.forbidden).toContainEqual(expect.objectContaining({ id: "network-client" }));
+  });
+
   it("documents read-only route, recovery, and C2-link status terms without treating them as commands", async () => {
     const root = await mkdtemp(join(tmpdir(), "fac-isr-read-only-fixture-"));
     temporaryDirectories.push(root);

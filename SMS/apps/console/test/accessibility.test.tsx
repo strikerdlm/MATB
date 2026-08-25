@@ -11,8 +11,8 @@ describe("console accessibility and locale contracts", () => {
 
   it("keeps landmarks and labels available in the mobile continuation", () => {
     const html = renderToStaticMarkup(<AppShell initialPath="/missions/mission-1/monitor" initialLocale="es" />);
-    expect(html).toMatch(/Sign in to operational console/);
-    expect(html).toMatch(/User ID/);
-    expect(html).toMatch(/Password/);
+    expect(html).toMatch(/Iniciar sesión en la consola operativa/);
+    expect(html).toMatch(/Identificador de usuario/);
+    expect(html).toMatch(/Contraseña/);
   });
 });

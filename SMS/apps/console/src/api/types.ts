@@ -7,6 +7,9 @@ export interface AuthenticatedSession {
   readonly sessionId: string;
   readonly csrfToken: string;
   readonly requiresReauthentication: boolean;
+  readonly expiresAtUtc: string;
+  readonly lastActivityAtUtc: string;
+  readonly idleTimeoutMs: number;
 }
 
 export interface SafetyView {

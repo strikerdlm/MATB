@@ -140,8 +140,11 @@ function scanSource(root, path, contents, result) {
   function approvedConsoleFetch(node) {
     if (file !== "apps/console/src/api/client.ts") return false;
     const target = node.arguments[0];
-    return target !== undefined && ((ts.isStringLiteralLike(target) && target.text === "/readyz")
-      || (ts.isIdentifier(target) && target.text === "path"));
+    if (target === undefined || !ts.isCallExpression(target) || !ts.isIdentifier(target.expression) || target.expression.text !== "sameOriginPath") return false;
+    const [path, origin] = target.arguments;
+    const approvedPath = (ts.isStringLiteralLike(path) && path.text === "/readyz") || (ts.isIdentifier(path) && path.text === "path");
+    const approvedOrigin = ts.isPropertyAccessExpression(origin) && origin.expression.kind === ts.SyntaxKind.ThisKeyword && origin.name.text === "origin";
+    return approvedPath && approvedOrigin;
   }
 
   function approvedConsoleSse(node) {

@@ -19,6 +19,9 @@ export interface AuthenticatedPrincipal {
   readonly sessionId: string;
   readonly csrfToken: string;
   readonly requiresReauthentication: boolean;
+  readonly expiresAtUtc: string;
+  readonly lastActivityAtUtc: string;
+  readonly idleTimeoutMs: number;
   readonly clientCertificateFingerprint?: string;
 }
 
@@ -60,6 +63,9 @@ function principalFrom(session: Session): AuthenticatedPrincipal {
     sessionId: session.sessionId,
     csrfToken: session.csrfToken,
     requiresReauthentication: session.requiresReauthentication === true,
+    expiresAtUtc: session.expiresAtUtc,
+    lastActivityAtUtc: session.lastActivityAtUtc,
+    idleTimeoutMs: session.idleTimeoutMs,
   });
 }
 
