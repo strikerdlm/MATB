@@ -100,6 +100,28 @@ describe("edge operational database", () => {
     expect(readFileSync(backupPath)).toEqual(originalBytes);
   });
 
+  it("releases the legacy exclusive lock before returning the migrated connection", () => {
+    const databasePath = temporaryDatabasePath();
+    createSchemaV1(databasePath);
+    const migrated = openDatabase(databasePath, 0, { now: () => "2026-08-25T01:02:03.004Z" });
+    const sqlite = process.getBuiltinModule("node:sqlite") as {
+      DatabaseSync: new (path: string, options?: { timeout?: number }) => {
+        prepare(sql: string): { get(...bindings: readonly unknown[]): unknown };
+        close(): void;
+      };
+    };
+    try {
+      const concurrent = new sqlite.DatabaseSync(databasePath, { timeout: 0 });
+      try {
+        expect(concurrent.prepare("SELECT MAX(version) AS version FROM schema_migrations").get()).toEqual({ version: 2 });
+      } finally {
+        concurrent.close();
+      }
+    } finally {
+      migrated.close();
+    }
+  });
+
   it("refuses migration while a legacy schema-v1 WAL connection is still live", () => {
     const databasePath = temporaryDatabasePath();
     createSchemaV1(databasePath);

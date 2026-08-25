@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { closeSync, constants, existsSync, fstatSync, fsyncSync, linkSync, openSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, fsyncSync, linkSync, lstatSync, openSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { SCHEMA_VERSION } from "../db/schema.js";
 import { assertMaintenanceLockOwnership, MaintenanceLock } from "./maintenance-lock.js";
@@ -114,9 +114,19 @@ export function restoreDatabaseBackup(backupPath: string, databasePath: string, 
   const lock = maintenanceLock ?? ownedMaintenanceLock;
   try {
     assertMaintenanceLockOwnership(lock, databasePath);
+    rejectSymbolicDatabaseTarget(databasePath);
     restoreDatabaseBackupLocked(backupPath, databasePath);
   } finally {
     ownedMaintenanceLock?.release();
+  }
+}
+
+function rejectSymbolicDatabaseTarget(databasePath: string): void {
+  try {
+    if (lstatSync(databasePath).isSymbolicLink()) throw new Error("database restore target must not be a symbolic link");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw error;
   }
 }
 

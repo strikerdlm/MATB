@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, lstatSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateKeyPairSync } from "node:crypto";
@@ -166,6 +166,25 @@ describe("offline runtime lease and recovery", () => {
     symlinkSync(backup, link);
 
     expect(() => restoreDatabaseBackup(link, databasePath)).toThrow(/symbolic|symlink|nofollow|regular|backup/i);
+  });
+
+  it("rejects a symlink database target without replacing the alias or missing the protected database", () => {
+    const { directory, database: databasePath, backup } = paths();
+    const initial = openDatabase(databasePath);
+    initial.sql().prepare("INSERT INTO identities (user_id, display_name) VALUES ('restore-marker', 'Before')").run();
+    initial.close();
+    createDatabaseBackup(databasePath, backup);
+    const changed = openDatabase(databasePath);
+    changed.sql().prepare("UPDATE identities SET display_name = 'After' WHERE user_id = 'restore-marker'").run();
+    changed.close();
+    const alias = join(directory, "database-alias.sqlite");
+    symlinkSync(databasePath, alias);
+
+    expect(() => restoreDatabaseBackup(backup, alias)).toThrow(/symbolic|symlink|target|database/i);
+    expect(lstatSync(alias).isSymbolicLink()).toBe(true);
+    const protectedDatabase = openDatabase(databasePath);
+    expect(protectedDatabase.sql().prepare("SELECT display_name FROM identities WHERE user_id = 'restore-marker'").get()).toEqual({ display_name: "After" });
+    protectedDatabase.close();
   });
 
   it("fsyncs rollback files and their directory before reporting restore failure", () => {

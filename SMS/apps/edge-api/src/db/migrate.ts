@@ -366,7 +366,7 @@ export function openDatabase(databaseUrl: string, lockTimeoutMs = 5_000, options
       assertMaintenanceLockOwnership(maintenanceLock, databaseUrl);
     }
     database = new DatabaseSync(databaseUrl, { enableForeignKeyConstraints: true, timeout: lockTimeoutMs });
-    const edgeDatabase = new EdgeDatabase(database);
+    let edgeDatabase = new EdgeDatabase(database);
     const migratingLegacy = databaseUrl !== ":memory:" && existsSync(databaseUrl) && edgeDatabase.schemaVersion() === 1;
     if (migratingLegacy) {
       acquireLegacyDatabaseExclusion(database);
@@ -374,7 +374,14 @@ export function openDatabase(databaseUrl: string, lockTimeoutMs = 5_000, options
     }
     configureDatabase(database, lockTimeoutMs);
     edgeDatabase.migrate();
-    if (migratingLegacy) database.prepare("PRAGMA locking_mode = NORMAL").get();
+    if (migratingLegacy) {
+      database.prepare("PRAGMA locking_mode = NORMAL").get();
+      database.close();
+      database = undefined;
+      database = new DatabaseSync(databaseUrl, { enableForeignKeyConstraints: true, timeout: lockTimeoutMs });
+      configureDatabase(database, lockTimeoutMs);
+      edgeDatabase = new EdgeDatabase(database);
+    }
     return edgeDatabase;
   } catch (error) {
     database?.close();
