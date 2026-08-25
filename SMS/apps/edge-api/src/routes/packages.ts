@@ -1,10 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { SafeModeError, type SafeModeService } from "../services/safe-mode.js";
+import { requirePrincipal } from "../auth/http.js";
+import { serviceContext } from "./authorization.js";
 
 export function registerPackageRoutes(app: FastifyInstance, service: SafeModeService): void {
   app.post("/api/packages/import", async (request, reply) => {
     try {
-      const record = await service.importPackage(request.body);
+      const record = await service.importPackage(request.body, serviceContext(requirePrincipal(request)));
       return reply.code(record.state === "quarantined" ? 422 : 201).send(record);
     } catch (error) {
       if (error instanceof SafeModeError) return reply.code(error.statusCode).send({ error: error.code, state: error.state, message: error.message });

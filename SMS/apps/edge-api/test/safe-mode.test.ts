@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { buildServer, type EdgeServer } from "../src/server.js";
+import type { EdgeServer } from "../src/server.js";
+import { authenticatedTestServer } from "./http-test-auth.js";
 
 describe("safe failure modes", () => {
   let app: EdgeServer | undefined;
@@ -10,17 +11,19 @@ describe("safe failure modes", () => {
   });
 
   it("disables package writes after a database failure and keeps the service explicit", async () => {
-    app = await buildServer({ databaseUrl: ":memory:", internet: "disabled" });
+    const server = await authenticatedTestServer({ databaseUrl: ":memory:", internet: "disabled" });
+    app = server.app;
     await app.safeModeService.simulateDatabaseFailure();
 
-    const response = await app.inject({ method: "POST", url: "/api/packages/import", payload: {} });
+    const response = await server.request({ method: "POST", url: "/api/packages/import", payload: {} });
     expect(response.statusCode).toBe(503);
     expect(response.json()).toMatchObject({ error: "SAFE_MODE_DATABASE_FAILURE", state: "read-only" });
   });
 
   it("keeps an imported mission in read-only review until an explicit clone", async () => {
-    app = await buildServer({ databaseUrl: ":memory:", internet: "disabled" });
-    const response = await app.inject({ method: "POST", url: "/api/mission-import/review", payload: { missionId: "mission-import-1", revisionId: "mission-import-1:r0", requestedState: "Released" } });
+    const server = await authenticatedTestServer({ databaseUrl: ":memory:", internet: "disabled" });
+    app = server.app;
+    const response = await server.request({ method: "POST", url: "/api/mission-import/review", payload: { missionId: "mission-import-1", revisionId: "mission-import-1:r0", requestedState: "Released" } });
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ state: "read-only-review", cloneRequired: true, missionId: "mission-import-1" });

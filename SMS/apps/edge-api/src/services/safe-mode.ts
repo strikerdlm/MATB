@@ -3,7 +3,7 @@ import { isAbsolute, relative, resolve } from "node:path";
 import { assertSignedPackageManifest, canonicalJson, rejectDowngrade, verifyPackage, type SignedPackageManifest, type VerificationReport } from "@fac-isr/evidence";
 import type { AuditLedger } from "../audit/ledger.js";
 import type { EdgeDatabase } from "../db/migrate.js";
-import type { MissionService } from "./mission-service.js";
+import type { MissionService, ServiceActorContext } from "./mission-service.js";
 
 export type PackageState = "active" | "quarantined";
 
@@ -111,7 +111,7 @@ export class SafeModeService {
     this.load();
   }
 
-  public async importPackage(input: unknown): Promise<PackageRecord> {
+  public async importPackage(input: unknown, context: ServiceActorContext): Promise<PackageRecord> {
     if (this.databaseFailure) throw new SafeModeError(503, "SAFE_MODE_DATABASE_FAILURE", "package writes are disabled while the local database is unavailable");
     const envelope = objectInput(input);
     const identity = manifestIdentity(envelope.manifest);
@@ -130,7 +130,7 @@ export class SafeModeService {
       const record: PackageRecord = Object.freeze({ packageId: manifest.packageId, version: manifest.version, state: "active", reason: "verified and approved", importedAtUtc, manifest, checks: report.checks });
       this.packages.push(record);
       this.persist();
-      await this.audit.append({ type: "package.imported", actorUserId: "edge-service", occurredAtUtc: importedAtUtc, action: "import", reason: record.reason, payload: { packageId: record.packageId, version: record.version } });
+      await this.audit.append({ type: "package.imported", actorUserId: context.actorUserId, clientSessionId: context.clientSessionId, occurredAtUtc: importedAtUtc, action: "import", reason: record.reason, payload: { packageId: record.packageId, version: record.version } });
       return record;
     } catch (error) {
       const reason = error instanceof PackageVerificationError ? error.message : error instanceof Error ? error.message : String(error);
@@ -138,7 +138,7 @@ export class SafeModeService {
       const record: PackageRecord = Object.freeze({ packageId: identity.packageId, version: identity.version, state: "quarantined", reason, importedAtUtc, ...(envelope.manifest !== undefined && typeof envelope.manifest === "object" ? { manifest: envelope.manifest as SignedPackageManifest } : {}), checks });
       this.packages.push(record);
       this.persist();
-      await this.audit.append({ type: "package.quarantined", actorUserId: "edge-service", occurredAtUtc: importedAtUtc, action: "quarantine", reason, payload: { packageId: record.packageId, version: record.version } });
+      await this.audit.append({ type: "package.quarantined", actorUserId: context.actorUserId, clientSessionId: context.clientSessionId, occurredAtUtc: importedAtUtc, action: "quarantine", reason, payload: { packageId: record.packageId, version: record.version } });
       return record;
     }
   }
@@ -147,7 +147,7 @@ export class SafeModeService {
     return this.packages.filter((record) => record.state === "quarantined").map((record) => ({ ...record, checks: [...record.checks] }));
   }
 
-  public async exportRevision(revisionId: string): Promise<MissionExport> {
+  public async exportRevision(revisionId: string, context: ServiceActorContext): Promise<MissionExport> {
     if (this.exportFailure) throw new SafeModeError(500, "EXPORT_FAILED", "export failed before the mission store was changed");
     const missionId = revisionId.split(":", 1)[0] ?? revisionId;
     const mission = this.missions.getMission(missionId) as { missionId: string; revisions: readonly Record<string, unknown>[]; safetyResults: readonly unknown[]; checklistResponses: readonly unknown[]; gateApprovals: readonly unknown[] };
@@ -155,7 +155,10 @@ export class SafeModeService {
     if (revision === undefined) throw new SafeModeError(404, "REVISION_NOT_FOUND", "mission revision was not found");
     const events = await this.audit.queryAudit({ missionRevisionId: revisionId });
     const payload = { revision, safetyResults: mission.safetyResults.filter((result) => (result as { missionRevisionId?: string }).missionRevisionId === revisionId), checklistResponses: mission.checklistResponses.filter((response) => (response as { revisionId?: string }).revisionId === revisionId), gateApprovals: mission.gateApprovals.filter((approval) => (approval as { missionRevisionId?: string }).missionRevisionId === revisionId) };
-    return Object.freeze({ exportSchemaVersion: "1.0", exportId: `export:${revisionId}:${this.now()}`, missionId: mission.missionId, revisionId, exportedAtUtc: this.now(), ...payload, auditManifest: { eventCount: events.length, eventHashes: events.map((event) => event.hash) }, hashes: { payloadSha256: hashPayload(payload) } });
+    const exportedAtUtc = this.now();
+    const result = Object.freeze({ exportSchemaVersion: "1.0" as const, exportId: `export:${revisionId}:${exportedAtUtc}`, missionId: mission.missionId, revisionId, exportedAtUtc, ...payload, auditManifest: { eventCount: events.length, eventHashes: events.map((event) => event.hash) }, hashes: { payloadSha256: hashPayload(payload) } });
+    await this.audit.append({ type: "export.created", actorUserId: context.actorUserId, clientSessionId: context.clientSessionId, missionRevisionId: revisionId, occurredAtUtc: exportedAtUtc, action: "export", reason: "revision export created", payload: { exportId: result.exportId } });
+    return result;
   }
 
   public reviewMissionImport(input: unknown): Record<string, unknown> {

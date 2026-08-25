@@ -55,6 +55,30 @@ async function registerAndAuthenticate(
 }
 
 describe("local identity and role separation", () => {
+  it("locks a default identity after five failures for fifteen minutes", () => {
+    let current = nowUtc;
+    const store = new LocalIdentityStore({ now: () => current });
+    store.register({
+      userId: "operator-defaults",
+      displayName: "Operator Defaults",
+      roles: ["operator"],
+      missionIds: ["mission-1"],
+      password: "correct horse battery staple",
+    });
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      expect(() => store.authenticate({ userId: "operator-defaults", password: "wrong" })).toThrow("invalid local credentials");
+    }
+    expect(store.getLoginState("operator-defaults")).toEqual({
+      failedAttempts: 5,
+      lockedUntilUtc: "2026-08-09T18:15:00.000Z",
+    });
+    expect(() => store.authenticate({ userId: "operator-defaults", password: "correct horse battery staple" })).toThrow("invalid local credentials");
+
+    current = "2026-08-09T18:15:00.000Z";
+    expect(store.authenticate({ userId: "operator-defaults", password: "correct horse battery staple" }).userId).toBe("operator-defaults");
+  });
+
   it("does not let a commander sign the maintenance gate", async () => {
     const store = createStore();
     const sessions = createSessions();

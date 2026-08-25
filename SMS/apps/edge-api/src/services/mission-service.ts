@@ -72,6 +72,16 @@ export interface MissionServiceOptions {
   readonly now?: () => string;
 }
 
+export interface ServiceActorContext {
+  readonly actorUserId: string;
+  readonly clientSessionId: string;
+  readonly occurredAtUtc: string;
+}
+
+export interface GateActorContext extends ServiceActorContext {
+  readonly actorRole: GateActorRole;
+}
+
 export class MissionServiceError extends Error {
   public constructor(
     public readonly statusCode: number,
@@ -96,7 +106,7 @@ export class MissionService {
     this.load();
   }
 
-  public async createMission(input: unknown): Promise<MissionRevision> {
+  public async createMission(input: unknown, context: ServiceActorContext): Promise<MissionRevision> {
     const envelope = objectInput(input);
     const rawRevision = isObject(envelope.revision)
       ? envelope.revision
@@ -125,9 +135,10 @@ export class MissionService {
       type: "mission.created",
       action: "create",
       reason: "mission revision created",
-      actorUserId: textOr(envelope.actorUserId, "edge-service"),
+      actorUserId: context.actorUserId,
       missionRevisionId: revision.id,
-      occurredAtUtc: this.timestamp(envelope.occurredAtUtc),
+      clientSessionId: context.clientSessionId,
+      occurredAtUtc: this.timestamp(context.occurredAtUtc),
       payload: { missionId: revision.missionId, revision: revision.revision },
     });
     this.missions.set(revision.missionId, stored);
@@ -151,7 +162,11 @@ export class MissionService {
     };
   }
 
-  public async createRevision(missionId: string, input: unknown): Promise<MissionRevision> {
+  public missionIdForRevision(revisionId: string): string {
+    return this.requireRevision(revisionId).stored.missionId;
+  }
+
+  public async createRevision(missionId: string, input: unknown, context: ServiceActorContext): Promise<MissionRevision> {
     const stored = this.requireMission(missionId);
     const current = stored.revisions.at(-1)!;
     const envelope = objectInput(input);
@@ -196,9 +211,10 @@ export class MissionService {
         type: "gate.invalidated",
         action: "invalidate",
         reason: "material mission revision invalidated the prior approval",
-        actorUserId: textOr(envelope.actorUserId, "edge-service"),
+        actorUserId: context.actorUserId,
         missionRevisionId: current.id,
-        occurredAtUtc: this.timestamp(envelope.occurredAtUtc),
+        clientSessionId: context.clientSessionId,
+        occurredAtUtc: this.timestamp(context.occurredAtUtc),
         payload: { gate: approval.gate, priorApprovalId: `${approval.gate}:${approval.actorUserId}` },
       });
     }
@@ -206,9 +222,10 @@ export class MissionService {
       type: "mission.revised",
       action: "revise",
       reason: "material mission fact changed",
-      actorUserId: textOr(envelope.actorUserId, "edge-service"),
+      actorUserId: context.actorUserId,
       missionRevisionId: next.id,
-      occurredAtUtc: this.timestamp(envelope.occurredAtUtc),
+      clientSessionId: context.clientSessionId,
+      occurredAtUtc: this.timestamp(context.occurredAtUtc),
       payload: { previousRevisionId: current.id, revision: next.revision },
     });
 
@@ -221,7 +238,7 @@ export class MissionService {
     return next;
   }
 
-  public async recordChecklistResponse(revisionId: string, input: unknown): Promise<ChecklistResponse> {
+  public async recordChecklistResponse(revisionId: string, input: unknown, context: ServiceActorContext): Promise<ChecklistResponse> {
     const envelope = objectInput(input);
     const stored = this.requireRevision(revisionId).stored;
     if (envelope.checkAll === true) {
@@ -230,8 +247,8 @@ export class MissionService {
     const responseId = required(envelope.responseId, "responseId");
     const itemId = required(envelope.itemId, "itemId");
     const response = required(envelope.response, "response");
-    const actorUserId = required(envelope.actorUserId ?? envelope.accountableUserId, "actorUserId");
-    const occurredAtUtc = this.timestamp(envelope.occurredAtUtc);
+    const actorUserId = context.actorUserId;
+    const occurredAtUtc = this.timestamp(context.occurredAtUtc);
     this.assertExpectedRevision(envelope, revisionId);
     if (stored.checklistResponses.some((item) => item.responseId === responseId || (item.revisionId === revisionId && item.itemId === itemId))) {
       throw new MissionServiceError(409, "CHECKLIST_RESPONSE_EXISTS", "checklist item already has a response");
@@ -256,6 +273,7 @@ export class MissionService {
       reason: record.reason ?? "checklist response recorded",
       actorUserId,
       missionRevisionId: revisionId,
+      clientSessionId: context.clientSessionId,
       occurredAtUtc,
       payload: record as unknown as Record<string, unknown>,
     });
@@ -278,7 +296,7 @@ export class MissionService {
     }, revisionId);
   }
 
-  public async recordGateDecision(revisionId: string, gateInput: string, input: unknown): Promise<GateApprovalRecord> {
+  public async recordGateDecision(revisionId: string, gateInput: string, input: unknown, context: GateActorContext): Promise<GateApprovalRecord> {
     if (!GATES.includes(gateInput as GateName)) throw new MissionServiceError(400, "INVALID_GATE", "gate is not supported");
     const gate = gateInput as GateName;
     const envelope = objectInput(input);
@@ -290,8 +308,8 @@ export class MissionService {
     if (!(["accept", "block", "escalate"] as readonly string[]).includes(decision)) {
       throw new MissionServiceError(400, "INVALID_GATE_DECISION", "decision must be accept, block, or escalate");
     }
-    const actorUserId = required(envelope.actorUserId, "actorUserId");
-    const actorRole = normalizeRole(envelope.actorRole);
+    const actorUserId = context.actorUserId;
+    const actorRole = context.actorRole;
     if (actorRole !== ROLE_BY_GATE[gate]) throw new MissionServiceError(403, "GATE_ROLE_FORBIDDEN", "actor role cannot sign this gate");
     const crew = revision.crew.find((member) => member.userId === actorUserId && member.role === actorRole);
     const aircraftId = envelope.aircraftId === undefined ? undefined : required(envelope.aircraftId, "aircraftId");
@@ -313,7 +331,7 @@ export class MissionService {
     const duplicate = stored.approvals.some((approval) => approval.missionRevisionId === revisionId
       && approval.gate === gate && approval.aircraftId === aircraftId);
     if (duplicate) throw new MissionServiceError(409, "GATE_ALREADY_SIGNED", "gate already has a decision for this scope");
-    const occurredAtUtc = this.timestamp(envelope.occurredAtUtc);
+    const occurredAtUtc = this.timestamp(context.occurredAtUtc);
     const evidenceSnapshotId = required(envelope.evidenceSnapshotId, "evidenceSnapshotId");
     const reason = required(envelope.reason, "reason");
     const approval = parseGateApproval({
@@ -351,7 +369,7 @@ export class MissionService {
       actorUserId,
       missionRevisionId: revisionId,
       evidenceSnapshotId,
-      clientSessionId: textOr(envelope.clientSessionId, "local-session"),
+      clientSessionId: context.clientSessionId,
       occurredAtUtc,
       payload: { gate, decision, ...(aircraftId === undefined ? {} : { aircraftId }), checklistResponseIds },
     });
@@ -360,7 +378,7 @@ export class MissionService {
     return record;
   }
 
-  public async recordPostflight(revisionId: string, input: unknown): Promise<PostflightRecord> {
+  public async recordPostflight(revisionId: string, input: unknown, context: ServiceActorContext): Promise<PostflightRecord> {
     const envelope = objectInput(input);
     const stored = this.requireRevision(revisionId).stored;
     if (stored.postflight !== undefined) throw new MissionServiceError(409, "POSTFLIGHT_ALREADY_RECORDED", "post-flight record already exists");
@@ -372,20 +390,20 @@ export class MissionService {
       throw new MissionServiceError(400, "TELEMETRY_PRESERVATION_REQUIRED", "post-flight telemetry must be preserved with a SHA-256 checksum");
     }
     const record: PostflightRecord = Object.freeze({ revisionId, recordedAtUtc: this.timestamp(envelope.recordedAtUtc), recovery, battery, telemetry, debrief });
-    await this.appendAudit({ type: "mission.postflight", action: "record", reason: "post-flight evidence recorded", actorUserId: textOr(envelope.actorUserId, "edge-service"), missionRevisionId: revisionId, occurredAtUtc: record.recordedAtUtc, payload: record as unknown as Record<string, unknown> });
+    await this.appendAudit({ type: "mission.postflight", action: "record", reason: "post-flight evidence recorded", actorUserId: context.actorUserId, clientSessionId: context.clientSessionId, missionRevisionId: revisionId, occurredAtUtc: record.recordedAtUtc, payload: record as unknown as Record<string, unknown> });
     stored.postflight = record;
     this.persist();
     return record;
   }
 
-  public async recordOccurrence(revisionId: string, input: unknown): Promise<OccurrenceRecord> {
+  public async recordOccurrence(revisionId: string, input: unknown, context: ServiceActorContext): Promise<OccurrenceRecord> {
     const envelope = objectInput(input);
     const stored = this.requireRevision(revisionId).stored;
     const occurrenceId = required(envelope.occurrenceId, "occurrenceId");
     if (stored.occurrences.some((item) => item.occurrenceId === occurrenceId)) throw new MissionServiceError(409, "OCCURRENCE_ALREADY_EXISTS", "occurrence already exists");
     if (typeof envelope.reportable !== "boolean") throw new MissionServiceError(400, "OCCURRENCE_REPORTABILITY_REQUIRED", "occurrence reportability is required");
     const record: OccurrenceRecord = Object.freeze({ revisionId, occurrenceId, screenedAtUtc: this.timestamp(envelope.screenedAtUtc), reportable: envelope.reportable, disposition: required(envelope.disposition, "disposition"), ...(envelope.details === undefined ? {} : { details: required(envelope.details, "details") }) });
-    await this.appendAudit({ type: "occurrence.screened", action: "screen", reason: "occurrence screening recorded", actorUserId: textOr(envelope.actorUserId, "edge-service"), missionRevisionId: revisionId, occurredAtUtc: record.screenedAtUtc, payload: record as unknown as Record<string, unknown> });
+    await this.appendAudit({ type: "occurrence.screened", action: "screen", reason: "occurrence screening recorded", actorUserId: context.actorUserId, clientSessionId: context.clientSessionId, missionRevisionId: revisionId, occurredAtUtc: record.screenedAtUtc, payload: record as unknown as Record<string, unknown> });
     stored.occurrences.push(record);
     this.persist();
     return record;
@@ -512,13 +530,6 @@ function textOr(value: unknown, fallback: string): string {
 function arrayOfText(value: unknown, field: string): string[] {
   if (!Array.isArray(value)) throw new MissionServiceError(400, "INVALID_REQUEST", `${field} must be an array`);
   return value.map((item) => required(item, field));
-}
-
-function normalizeRole(value: unknown): GateActorRole {
-  const role = required(value, "actorRole");
-  if (role === "safety-officer") return "safety";
-  if (role === "maintainer" || role === "operator" || role === "safety" || role === "commander") return role;
-  throw new MissionServiceError(403, "GATE_ROLE_FORBIDDEN", "actor role cannot sign this gate");
 }
 
 function errorMessage(error: unknown): string {

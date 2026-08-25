@@ -92,7 +92,7 @@ export class LocalIdentityStore {
   public constructor(options: IdentityStoreOptions = {}) {
     this.now = options.now ?? (() => new Date().toISOString());
     this.maxFailedAttempts = options.maxFailedAttempts ?? 5;
-    this.lockoutDurationMs = options.lockoutDurationMs ?? 300_000;
+    this.lockoutDurationMs = options.lockoutDurationMs ?? 900_000;
     assertOptions({
       maxFailedAttempts: this.maxFailedAttempts,
       lockoutDurationMs: this.lockoutDurationMs,

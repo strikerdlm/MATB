@@ -4,7 +4,8 @@ import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 import { manifestContentDigest, signManifest, type SignedPackageManifest } from "@fac-isr/evidence";
-import { buildServer, type EdgeServer } from "../src/server.js";
+import type { EdgeServer } from "../src/server.js";
+import { authenticatedTestServer } from "./http-test-auth.js";
 
 const asOfUtc = "2026-08-09T18:00:00.000Z";
 
@@ -46,8 +47,9 @@ describe("signed package import and quarantine", () => {
 
   it("quarantines an unsigned package before activation", async () => {
     const root = mkdtempSync(join(tmpdir(), "fac-isr-packages-"));
-    app = await buildServer({ databaseUrl: ":memory:", internet: "disabled", packageDirectory: root });
-    const response = await app.inject({ method: "POST", url: "/api/packages/import", payload: { directory: ".", manifest: { schemaVersion: "1.0", packageId: "map-colombia", kind: "map", version: "1.0.0" }, asOfUtc } });
+    const server = await authenticatedTestServer({ databaseUrl: ":memory:", internet: "disabled", packageDirectory: root });
+    app = server.app;
+    const response = await server.request({ method: "POST", url: "/api/packages/import", payload: { directory: ".", manifest: { schemaVersion: "1.0", packageId: "map-colombia", kind: "map", version: "1.0.0" }, asOfUtc } });
 
     expect(response.statusCode).toBe(422);
     expect(response.json()).toMatchObject({ state: "quarantined", packageId: "map-colombia" });
@@ -55,18 +57,19 @@ describe("signed package import and quarantine", () => {
 
   it("refuses a signed downgrade while preserving the quarantine record", async () => {
     const root = mkdtempSync(join(tmpdir(), "fac-isr-packages-"));
-    app = await buildServer({ databaseUrl: ":memory:", internet: "disabled", packageDirectory: root });
+    const server = await authenticatedTestServer({ databaseUrl: ":memory:", internet: "disabled", packageDirectory: root });
+    app = server.app;
     const current = signedPackage(root, "1.2.0");
-    const first = await app.inject({ method: "POST", url: "/api/packages/import", payload: { ...current, asOfUtc } });
+    const first = await server.request({ method: "POST", url: "/api/packages/import", payload: { ...current, asOfUtc } });
     expect(first.statusCode).toBe(201);
     expect(first.json()).toMatchObject({ state: "active", packageId: "map-colombia", version: "1.2.0" });
 
     const older = signedPackage(root, "1.1.0");
-    const downgrade = await app.inject({ method: "POST", url: "/api/packages/import", payload: { ...older, asOfUtc } });
+    const downgrade = await server.request({ method: "POST", url: "/api/packages/import", payload: { ...older, asOfUtc } });
     expect(downgrade.statusCode).toBe(422);
     expect(downgrade.json()).toMatchObject({ state: "quarantined", reason: expect.stringMatching(/downgrade/i) });
 
-    const quarantine = await app.inject({ method: "GET", url: "/api/packages/quarantine" });
+    const quarantine = await server.request({ method: "GET", url: "/api/packages/quarantine" });
     expect(quarantine.statusCode).toBe(200);
     expect(quarantine.json().packages).toEqual(expect.arrayContaining([expect.objectContaining({ version: "1.1.0", state: "quarantined" })]));
   });

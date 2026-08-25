@@ -15,6 +15,11 @@ import { MissionService } from "./services/mission-service.js";
 import { TelemetryService } from "./services/telemetry-service.js";
 import { SafeModeService } from "./services/safe-mode.js";
 import { registerOperationalDataBoundary } from "./data-boundary.js";
+import {
+  createDefaultHttpAuthDependencies,
+  registerHttpAuthentication,
+  type HttpAuthDependencies,
+} from "./auth/http.js";
 
 interface ReadinessCheck {
   readonly status: "ok" | "pending";
@@ -40,6 +45,8 @@ export interface EdgeServer extends FastifyInstance {
   readonly telemetryService: TelemetryService;
   readonly safeModeService: SafeModeService;
 }
+
+export type EdgeServerDependencies = Partial<HttpAuthDependencies>;
 
 function buildReadinessReport(database: EdgeDatabase): ReadinessReport {
   const migrationsReady = database.schemaVersion() === SCHEMA_VERSION;
@@ -69,7 +76,7 @@ async function loadTlsMaterial(config: EdgeConfig): Promise<{ readonly cert: Buf
   }
 }
 
-export async function buildServer(input: EdgeConfigInput = {}): Promise<EdgeServer> {
+export async function buildServer(input: EdgeConfigInput = {}, dependencies: EdgeServerDependencies = {}): Promise<EdgeServer> {
   const edgeConfig = createConfig(input);
   const https = await loadTlsMaterial(edgeConfig);
   const edgeDatabase = openDatabase(edgeConfig.databaseUrl, edgeConfig.lockTimeoutMs);
@@ -92,6 +99,11 @@ export async function buildServer(input: EdgeConfigInput = {}): Promise<EdgeServ
   });
 
   registerOperationalDataBoundary(app);
+  const defaults = createDefaultHttpAuthDependencies();
+  registerHttpAuthentication(app, {
+    identityStore: dependencies.identityStore ?? defaults.identityStore,
+    sessionManager: dependencies.sessionManager ?? defaults.sessionManager,
+  });
 
   app.get("/healthz", async () => ({
     status: "ok",

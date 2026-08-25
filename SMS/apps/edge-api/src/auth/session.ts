@@ -4,6 +4,7 @@ import type { AuthorizationSubject, UserRole } from "./roles.js";
 
 export interface Session extends AuthorizationSubject {
   readonly sessionId: string;
+  readonly csrfToken: string;
   readonly issuedAtUtc: string;
   readonly expiresAtUtc: string;
   readonly lastActivityAtUtc: string;
@@ -22,6 +23,7 @@ export interface SessionPolicy {
 export interface SessionManagerOptions extends SessionPolicy {
   readonly now?: () => string;
   readonly sessionIdFactory?: () => string;
+  readonly csrfTokenFactory?: () => string;
 }
 
 function parseUtc(value: string): number | undefined {
@@ -72,6 +74,7 @@ export class SessionManager {
   private readonly sessions = new Map<string, Session>();
   private readonly now: () => string;
   private readonly sessionIdFactory: () => string;
+  private readonly csrfTokenFactory: () => string;
   private readonly policy: SessionPolicy;
 
   public constructor(options: SessionManagerOptions) {
@@ -83,6 +86,7 @@ export class SessionManager {
     });
     this.now = options.now ?? (() => new Date().toISOString());
     this.sessionIdFactory = options.sessionIdFactory ?? (() => randomBytes(24).toString("base64url"));
+    this.csrfTokenFactory = options.csrfTokenFactory ?? (() => randomBytes(32).toString("base64url"));
   }
 
   public createSession(identity: IdentityRecord, issuedAtUtc = this.now()): Session {
@@ -92,8 +96,11 @@ export class SessionManager {
     if (sessionId.trim() === "" || this.sessions.has(sessionId)) {
       throw new Error("session ID must be unique and non-empty");
     }
+    const csrfToken = this.csrfTokenFactory();
+    if (csrfToken.trim() === "") throw new Error("CSRF token must be non-empty");
     const session: Session = Object.freeze({
       sessionId,
+      csrfToken,
       userId: identity.userId,
       roles: Object.freeze([...identity.roles]) as readonly UserRole[],
       missionIds: Object.freeze([...identity.missionIds]),
@@ -128,6 +135,10 @@ export class SessionManager {
       lockedAtUtc,
       lockReason: reason,
     }));
+  }
+
+  public deleteSession(sessionId: string): void {
+    this.sessions.delete(sessionId);
   }
 
   public isReauthenticationRequired(sessionId: string, nowUtc = this.now()): boolean {

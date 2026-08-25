@@ -8,7 +8,8 @@ import { AuditLedger } from "../../apps/edge-api/src/audit/ledger.js";
 import { authorize } from "../../apps/edge-api/src/auth/roles.js";
 import { authorizeTransport, validateTlsConfig } from "../../apps/edge-api/src/auth/tls.js";
 import { SessionManager } from "../../apps/edge-api/src/auth/session.js";
-import { buildServer, type EdgeServer } from "../../apps/edge-api/src/server.js";
+import type { EdgeServer } from "../../apps/edge-api/src/server.js";
+import { authenticatedTestServer } from "../../apps/edge-api/test/http-test-auth.js";
 
 const temporaryDirectories: string[] = [];
 let app: EdgeServer | undefined;
@@ -48,9 +49,10 @@ describe("tamper, rollback, transport, and least-privilege controls", () => {
       caveats: ["test fixture"],
     }, keys.privateKey.export({ type: "pkcs8", format: "pem" }).toString());
     await writeFile(path, "tampered policy\n", "utf8");
-    app = await buildServer({ databaseUrl: ":memory:", internet: "disabled", packageDirectory: packageRoot });
+    const server = await authenticatedTestServer({ databaseUrl: ":memory:", internet: "disabled", packageDirectory: packageRoot });
+    app = server.app;
 
-    const response = await app.inject({
+    const response = await server.request({
       method: "POST",
       url: "/api/packages/import",
       payload: {
@@ -118,9 +120,10 @@ describe("tamper, rollback, transport, and least-privilege controls", () => {
       };
     }
 
-    app = await buildServer({ databaseUrl: ":memory:", internet: "disabled", packageDirectory: packageRoot });
-    const current = await app.inject({ method: "POST", url: "/api/packages/import", payload: await signedPackage("2.0.0") });
-    const rollback = await app.inject({ method: "POST", url: "/api/packages/import", payload: await signedPackage("1.9.0") });
+    const server = await authenticatedTestServer({ databaseUrl: ":memory:", internet: "disabled", packageDirectory: packageRoot });
+    app = server.app;
+    const current = await server.request({ method: "POST", url: "/api/packages/import", payload: await signedPackage("2.0.0") });
+    const rollback = await server.request({ method: "POST", url: "/api/packages/import", payload: await signedPackage("1.9.0") });
 
     expect(current.statusCode).toBe(201);
     expect(rollback.statusCode).toBe(422);

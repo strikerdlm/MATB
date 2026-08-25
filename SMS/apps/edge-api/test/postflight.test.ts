@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { buildServer, type EdgeServer } from "../src/server.js";
+import type { EdgeServer } from "../src/server.js";
 import { missionFixture, safetyResult } from "./mission-fixture.js";
+import { authenticatedTestServer } from "./http-test-auth.js";
 
 describe("post-flight and occurrence routes", () => {
   let app: EdgeServer | undefined;
@@ -10,13 +11,14 @@ describe("post-flight and occurrence routes", () => {
   });
 
   it("requires preserved telemetry and structured recovery evidence", async () => {
-    app = await buildServer({ databaseUrl: ":memory:", internet: "disabled" });
-    await app.inject({ method: "POST", url: "/api/missions", payload: { revision: missionFixture(), safetyResult: safetyResult() } });
+    const server = await authenticatedTestServer({ databaseUrl: ":memory:", internet: "disabled" });
+    app = server.app;
+    await server.request({ method: "POST", url: "/api/missions", payload: { revision: missionFixture(), safetyResult: safetyResult() } });
 
-    const missing = await app.inject({ method: "POST", url: "/api/revisions/mission-1:r0/postflight", payload: { recovery: { status: "recovered" } } });
+    const missing = await server.request({ method: "POST", url: "/api/revisions/mission-1:r0/postflight", payload: { recovery: { status: "recovered" } } });
     expect(missing.statusCode).toBe(400);
 
-    const complete = await app.inject({
+    const complete = await server.request({
       method: "POST",
       url: "/api/revisions/mission-1:r0/postflight",
       payload: {
@@ -28,7 +30,7 @@ describe("post-flight and occurrence routes", () => {
     });
     expect(complete.statusCode).toBe(201);
 
-    const occurrence = await app.inject({ method: "POST", url: "/api/revisions/mission-1:r0/occurrences", payload: { occurrenceId: "occurrence-1", screenedAtUtc: "2026-08-09T20:00:00.000Z", reportable: false, disposition: "no-report" } });
+    const occurrence = await server.request({ method: "POST", url: "/api/revisions/mission-1:r0/occurrences", payload: { occurrenceId: "occurrence-1", screenedAtUtc: "2026-08-09T20:00:00.000Z", reportable: false, disposition: "no-report" } });
     expect(occurrence.statusCode).toBe(201);
   });
 });
