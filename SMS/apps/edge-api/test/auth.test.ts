@@ -18,6 +18,7 @@ import {
   recordTlsPeer,
   validateTlsConfig,
 } from "../src/auth/tls.js";
+import { openDatabase } from "../src/db/migrate.js";
 
 const nowUtc = "2026-08-09T18:00:00.000Z";
 
@@ -233,6 +234,61 @@ describe("session lifecycle", () => {
       action: "gate:operator:accept",
       missionId: "mission-1",
     }).allowed).toBe(true);
+  });
+
+  it("persists credential hashes, roles, assignments, and lockout state across restart", () => {
+    const database = openDatabase(":memory:");
+    const first = new LocalIdentityStore({ database, now: () => "2026-08-09T18:00:00.000Z" });
+    first.register({
+      userId: "operator-persistent",
+      displayName: "Persistent Operator",
+      roles: ["operator"],
+      missionIds: ["mission-1"],
+      qualificationRefs: ["qualification-1"],
+      password: "persistent-password",
+    });
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      expect(() => first.authenticate({ userId: "operator-persistent", password: "wrong-password" })).toThrow(AuthenticationError);
+    }
+
+    const reopened = new LocalIdentityStore({ database, now: () => "2026-08-09T18:01:00.000Z" });
+
+    expect(reopened.getIdentity("operator-persistent")).toEqual({
+      userId: "operator-persistent",
+      displayName: "Persistent Operator",
+      roles: ["operator"],
+      missionIds: ["mission-1"],
+      qualificationRefs: ["qualification-1"],
+    });
+    expect(reopened.getLoginState("operator-persistent")).toEqual({ failedAttempts: 5, lockedUntilUtc: "2026-08-09T18:15:00.000Z" });
+    expect(() => reopened.authenticate({ userId: "operator-persistent", password: "persistent-password" })).toThrow(AuthenticationError);
+    expect(database.sql().prepare("SELECT version, length(salt) AS salt_bytes, length(password_hash) AS hash_bytes FROM credential_versions WHERE user_id = ?").get("operator-persistent"))
+      .toEqual({ version: 1, salt_bytes: 16, hash_bytes: 32 });
+    database.close();
+  });
+
+  it("persists only a session credential hash and reloads an active session", () => {
+    const database = openDatabase(":memory:");
+    const identityStore = new LocalIdentityStore({ database });
+    const identity = identityStore.register({ userId: "session-user", displayName: "Session User", roles: ["reviewer"], missionIds: ["*"], password: "session-password" });
+    const policy = { idleTimeoutMs: 60_000, maxLifetimeMs: 3_600_000, reauthenticationIntervalMs: 300_000 };
+    const first = new SessionManager({
+      ...policy,
+      database,
+      now: () => "2026-08-09T18:00:00.000Z",
+      sessionIdFactory: () => "session-persistent",
+      sessionCredentialFactory: () => "raw-session-secret",
+      csrfTokenFactory: () => "csrf-secret",
+    });
+    const issued = first.issueSession(identity);
+
+    const reopened = new SessionManager({ ...policy, database, now: () => "2026-08-09T18:00:30.000Z" });
+
+    expect(reopened.getSessionByCredential(issued.credential)).toMatchObject({ sessionId: "session-persistent", userId: "session-user", state: "active" });
+    const stored = database.sql().prepare("SELECT credential_hash, session_json FROM sessions WHERE session_id = ?").get("session-persistent") as { credential_hash: string; session_json: string };
+    expect(stored.credential_hash).not.toContain("raw-session-secret");
+    expect(stored.session_json).not.toContain("raw-session-secret");
+    database.close();
   });
 });
 

@@ -10,7 +10,8 @@ import {
   type MissionRevisionChange,
 } from "@fac-isr/safety-kernel";
 import type { EdgeDatabase } from "../db/migrate.js";
-import { AuditLedger } from "../audit/ledger.js";
+import { AtomicConflictError, AtomicDomainWriteError, AuditLedger, type AuditEventInput } from "../audit/ledger.js";
+import { loadMissionSnapshots, MissionSnapshotConflictError, writeMissionSnapshot } from "../db/operational-repository.js";
 import {
   asSafetyEvaluationResult,
   UnavailableSafetyEvaluationProvider,
@@ -64,6 +65,7 @@ export interface OccurrenceRecord {
 
 interface StoredMission {
   readonly missionId: string;
+  persistenceVersion: number;
   revisions: MissionRevision[];
   safetyResults: StoredSafetyEvaluation[];
   checklistResponses: ChecklistResponse[];
@@ -94,6 +96,12 @@ export interface GateActorContext extends ServiceActorContext {
   readonly actorRole: GateActorRole;
 }
 
+export interface StagedMissionMutation {
+  readonly auditInputs: readonly AuditEventInput[];
+  writeDomain(): void;
+  publish(): void;
+}
+
 export class MissionServiceError extends Error {
   public constructor(
     public readonly statusCode: number,
@@ -112,6 +120,7 @@ export class MissionService {
   private readonly now: () => string;
   private readonly safetyEvaluationProvider: SafetyEvaluationProvider;
   private safetyIntegrityFailure = false;
+  private mutationTail: Promise<void> = Promise.resolve();
 
   public constructor(options: MissionServiceOptions = {}) {
     this.audit = options.auditLedger ?? new AuditLedger({ database: options.database });
@@ -139,13 +148,14 @@ export class MissionService {
     const safetyResult = await this.evaluateSafety(revision);
     const stored: StoredMission = {
       missionId: revision.missionId,
+      persistenceVersion: 0,
       revisions: [revision],
       safetyResults: [{ envelope: safetyResult, stale: false }],
       checklistResponses: [],
       approvals: [],
       occurrences: [],
     };
-    await this.appendAudit({
+    const audit: AuditEventInput = {
       type: "mission.created",
       action: "create",
       reason: "mission revision created",
@@ -154,9 +164,8 @@ export class MissionService {
       clientSessionId: context.clientSessionId,
       occurredAtUtc: this.timestamp(context.occurredAtUtc),
       payload: { missionId: revision.missionId, revision: revision.revision },
-    });
-    this.missions.set(revision.missionId, stored);
-    this.persist();
+    };
+    await this.commitMission(stored, [audit]);
     return revision;
   }
 
@@ -180,8 +189,12 @@ export class MissionService {
     return this.requireRevision(revisionId).stored.missionId;
   }
 
-  public async createRevision(missionId: string, input: unknown, context: ServiceActorContext): Promise<MissionRevision> {
-    const stored = this.requireMission(missionId);
+  public createRevision(missionId: string, input: unknown, context: ServiceActorContext): Promise<MissionRevision> {
+    return this.enqueueMutation(() => this.createRevisionInternal(missionId, input, context));
+  }
+
+  private async createRevisionInternal(missionId: string, input: unknown, context: ServiceActorContext): Promise<MissionRevision> {
+    const stored = cloneStoredMission(this.requireMission(missionId));
     const current = stored.revisions.at(-1)!;
     const envelope = objectInput(input);
     this.rejectCallerSafetyResult(envelope);
@@ -219,8 +232,9 @@ export class MissionService {
 
     const safetyResult = await this.evaluateSafety(next);
     const invalidated = stored.approvals.filter((approval) => approval.missionRevisionId === current.id);
+    const audits: AuditEventInput[] = [];
     for (const approval of invalidated) {
-      await this.appendAudit({
+      audits.push({
         type: "gate.invalidated",
         action: "invalidate",
         reason: "material mission revision invalidated the prior approval",
@@ -231,7 +245,7 @@ export class MissionService {
         payload: { gate: approval.gate, priorApprovalId: `${approval.gate}:${approval.actorUserId}` },
       });
     }
-    await this.appendAudit({
+    audits.push({
       type: "mission.revised",
       action: "revise",
       reason: "material mission fact changed",
@@ -249,13 +263,14 @@ export class MissionService {
       if (result.envelope.revisionId === current.id) result.stale = true;
     }
     stored.safetyResults.push({ envelope: safetyResult, stale: false });
-    this.persist();
+    await this.commitMission(stored, audits);
     return next;
   }
 
   public async recordChecklistResponse(revisionId: string, input: unknown, context: ServiceActorContext): Promise<ChecklistResponse> {
     const envelope = objectInput(input);
-    const stored = this.requireRevision(revisionId).stored;
+    const live = this.requireRevision(revisionId).stored;
+    const stored = cloneStoredMission(live);
     if (envelope.checkAll === true) {
       throw new MissionServiceError(400, "BULK_CHECKLIST_FORBIDDEN", "checklist responses must be recorded one item at a time");
     }
@@ -282,7 +297,7 @@ export class MissionService {
       ...(envelope.evidenceRef === undefined ? {} : { evidenceRef: required(envelope.evidenceRef, "evidenceRef") }),
       ...(envelope.reason === undefined ? {} : { reason: required(envelope.reason, "reason") }),
     });
-    await this.appendAudit({
+    const audit: AuditEventInput = {
       type: "checklist.response",
       action: "record",
       reason: record.reason ?? "checklist response recorded",
@@ -291,9 +306,9 @@ export class MissionService {
       clientSessionId: context.clientSessionId,
       occurredAtUtc,
       payload: record as unknown as Record<string, unknown>,
-    });
+    };
     stored.checklistResponses.push(record);
-    this.persist();
+    await this.commitMission(stored, [audit]);
     return record;
   }
 
@@ -307,11 +322,14 @@ export class MissionService {
 
   public async recomputeSafetyEvaluation(revisionId: string, context?: ServiceActorContext): Promise<SafetyEvaluationView> {
     const resolved = this.requireRevision(revisionId);
-    const envelope = await this.evaluateSafety(resolved.revision);
-    const invalidated = resolved.stored.approvals.filter((approval) => approval.missionRevisionId === revisionId);
+    const storedMission = cloneStoredMission(resolved.stored);
+    const stagedRevision = storedMission.revisions.find((revision) => revision.id === revisionId)!;
+    const envelope = await this.evaluateSafety(stagedRevision);
+    const invalidated = storedMission.approvals.filter((approval) => approval.missionRevisionId === revisionId);
     const auditContext = context ?? { actorUserId: "safety-evaluation-service", clientSessionId: "server-recompute", occurredAtUtc: this.now() };
+    const audits: AuditEventInput[] = [];
     for (const approval of invalidated) {
-      await this.appendAudit({
+      audits.push({
         type: "gate.invalidated",
         action: "invalidate",
         reason: "safety evaluation recomputation invalidated the prior approval",
@@ -322,16 +340,35 @@ export class MissionService {
         payload: { gate: approval.gate, cause: "safety.recomputed" },
       });
     }
-    resolved.stored.approvals = resolved.stored.approvals.filter((approval) => approval.missionRevisionId !== revisionId);
-    resolved.stored.safetyResults = resolved.stored.safetyResults.filter((item) => item.envelope.revisionId !== revisionId);
+    storedMission.approvals = storedMission.approvals.filter((approval) => approval.missionRevisionId !== revisionId);
+    storedMission.safetyResults = storedMission.safetyResults.filter((item) => item.envelope.revisionId !== revisionId);
     const stored = { envelope, stale: false };
-    resolved.stored.safetyResults.push(stored);
-    this.persist();
+    storedMission.safetyResults.push(stored);
+    await this.commitMission(storedMission, audits);
     return this.evaluationView(stored);
   }
 
   public async markSafetyEvaluationsStale(context: ServiceActorContext, reason: string): Promise<void> {
-    for (const stored of this.missions.values()) {
+    const staged = this.stageSafetyEvaluationsStale(context, reason);
+    if (this.database === undefined) {
+      for (const input of staged.auditInputs) await this.audit.append(input);
+      staged.publish();
+      return;
+    }
+    try {
+      await this.audit.commitAtomic(staged.auditInputs, staged.writeDomain);
+      staged.publish();
+    } catch (error) {
+      if (error instanceof AtomicConflictError) throw new MissionServiceError(409, "CONCURRENT_MISSION_WRITE", error.message);
+      if (error instanceof AtomicDomainWriteError) throw new MissionServiceError(503, "MISSION_STORE_UNAVAILABLE", errorMessage(error.cause ?? error));
+      throw new MissionServiceError(503, "AUDIT_LEDGER_UNAVAILABLE", errorMessage(error));
+    }
+  }
+
+  public stageSafetyEvaluationsStale(context: ServiceActorContext, reason: string): StagedMissionMutation {
+    const stagedMissions = [...this.missions.values()].map(cloneStoredMission);
+    const audits: AuditEventInput[] = [];
+    for (const stored of stagedMissions) {
       const affectedRevisionIds = new Set<string>();
       for (const evaluation of stored.safetyResults) {
         if (evaluation.stale) continue;
@@ -340,7 +377,7 @@ export class MissionService {
       }
       const invalidated = stored.approvals.filter((approval) => affectedRevisionIds.has(approval.missionRevisionId));
       for (const approval of invalidated) {
-        await this.appendAudit({
+        audits.push({
           type: "gate.invalidated",
           action: "invalidate",
           reason,
@@ -353,15 +390,36 @@ export class MissionService {
       }
       stored.approvals = stored.approvals.filter((approval) => !affectedRevisionIds.has(approval.missionRevisionId));
     }
-    this.persist();
+    return {
+      auditInputs: audits,
+      writeDomain: () => {
+        if (this.database === undefined) return;
+        try {
+          for (const stored of stagedMissions) writeMissionSnapshot(this.database.sql(), stored as unknown as Parameters<typeof writeMissionSnapshot>[1]);
+        } catch (error) {
+          if (error instanceof MissionSnapshotConflictError) throw new AtomicConflictError(error.message, { cause: error });
+          throw new AtomicDomainWriteError("normalized mission persistence failed", { cause: error });
+        }
+      },
+      publish: () => {
+        for (const stored of stagedMissions) {
+          if (this.database !== undefined) stored.persistenceVersion += 1;
+          this.missions.set(stored.missionId, stored);
+        }
+      },
+    };
   }
 
-  public async recordGateDecision(revisionId: string, gateInput: string, input: unknown, context: GateActorContext): Promise<GateApprovalRecord> {
+  public recordGateDecision(revisionId: string, gateInput: string, input: unknown, context: GateActorContext): Promise<GateApprovalRecord> {
+    return this.enqueueMutation(() => this.recordGateDecisionInternal(revisionId, gateInput, input, context));
+  }
+
+  private async recordGateDecisionInternal(revisionId: string, gateInput: string, input: unknown, context: GateActorContext): Promise<GateApprovalRecord> {
     if (!GATES.includes(gateInput as GateName)) throw new MissionServiceError(400, "INVALID_GATE", "gate is not supported");
     const gate = gateInput as GateName;
     const envelope = objectInput(input);
     const resolved = this.requireRevision(revisionId);
-    const stored = resolved.stored;
+    const stored = cloneStoredMission(resolved.stored);
     const revision = resolved.revision;
     this.assertExpectedRevision(envelope, revisionId);
     const decision = required(envelope.decision, "decision");
@@ -422,7 +480,7 @@ export class MissionService {
       }
     }
     const record: GateApprovalRecord = Object.freeze({ ...approval, checklistResponseIds: Object.freeze(checklistResponseIds) });
-    await this.appendAudit({
+    const audit: AuditEventInput = {
       type: `gate.${decision}`,
       action: decision,
       reason,
@@ -432,15 +490,15 @@ export class MissionService {
       clientSessionId: context.clientSessionId,
       occurredAtUtc,
       payload: { gate, decision, ...(aircraftId === undefined ? {} : { aircraftId }), checklistResponseIds },
-    });
+    };
     stored.approvals.push(record);
-    this.persist();
+    await this.commitMission(stored, [audit]);
     return record;
   }
 
   public async recordPostflight(revisionId: string, input: unknown, context: ServiceActorContext): Promise<PostflightRecord> {
     const envelope = objectInput(input);
-    const stored = this.requireRevision(revisionId).stored;
+    const stored = cloneStoredMission(this.requireRevision(revisionId).stored);
     if (stored.postflight !== undefined) throw new MissionServiceError(409, "POSTFLIGHT_ALREADY_RECORDED", "post-flight record already exists");
     const recovery = objectRequired(envelope.recovery, "recovery");
     const battery = objectRequired(envelope.battery, "battery");
@@ -450,22 +508,22 @@ export class MissionService {
       throw new MissionServiceError(400, "TELEMETRY_PRESERVATION_REQUIRED", "post-flight telemetry must be preserved with a SHA-256 checksum");
     }
     const record: PostflightRecord = Object.freeze({ revisionId, recordedAtUtc: this.timestamp(envelope.recordedAtUtc), recovery, battery, telemetry, debrief });
-    await this.appendAudit({ type: "mission.postflight", action: "record", reason: "post-flight evidence recorded", actorUserId: context.actorUserId, clientSessionId: context.clientSessionId, missionRevisionId: revisionId, occurredAtUtc: record.recordedAtUtc, payload: record as unknown as Record<string, unknown> });
+    const audit: AuditEventInput = { type: "mission.postflight", action: "record", reason: "post-flight evidence recorded", actorUserId: context.actorUserId, clientSessionId: context.clientSessionId, missionRevisionId: revisionId, occurredAtUtc: record.recordedAtUtc, payload: record as unknown as Record<string, unknown> };
     stored.postflight = record;
-    this.persist();
+    await this.commitMission(stored, [audit]);
     return record;
   }
 
   public async recordOccurrence(revisionId: string, input: unknown, context: ServiceActorContext): Promise<OccurrenceRecord> {
     const envelope = objectInput(input);
-    const stored = this.requireRevision(revisionId).stored;
+    const stored = cloneStoredMission(this.requireRevision(revisionId).stored);
     const occurrenceId = required(envelope.occurrenceId, "occurrenceId");
     if (stored.occurrences.some((item) => item.occurrenceId === occurrenceId)) throw new MissionServiceError(409, "OCCURRENCE_ALREADY_EXISTS", "occurrence already exists");
     if (typeof envelope.reportable !== "boolean") throw new MissionServiceError(400, "OCCURRENCE_REPORTABILITY_REQUIRED", "occurrence reportability is required");
     const record: OccurrenceRecord = Object.freeze({ revisionId, occurrenceId, screenedAtUtc: this.timestamp(envelope.screenedAtUtc), reportable: envelope.reportable, disposition: required(envelope.disposition, "disposition"), ...(envelope.details === undefined ? {} : { details: required(envelope.details, "details") }) });
-    await this.appendAudit({ type: "occurrence.screened", action: "screen", reason: "occurrence screening recorded", actorUserId: context.actorUserId, clientSessionId: context.clientSessionId, missionRevisionId: revisionId, occurredAtUtc: record.screenedAtUtc, payload: record as unknown as Record<string, unknown> });
+    const audit: AuditEventInput = { type: "occurrence.screened", action: "screen", reason: "occurrence screening recorded", actorUserId: context.actorUserId, clientSessionId: context.clientSessionId, missionRevisionId: revisionId, occurredAtUtc: record.screenedAtUtc, payload: record as unknown as Record<string, unknown> };
     stored.occurrences.push(record);
-    this.persist();
+    await this.commitMission(stored, [audit]);
     return record;
   }
 
@@ -519,8 +577,9 @@ export class MissionService {
     if (!current) {
       record.stale = true;
       const invalidated = stored.approvals.filter((approval) => approval.missionRevisionId === revision.id);
+      const audits: AuditEventInput[] = [];
       for (const approval of invalidated) {
-        await this.appendAudit({
+        audits.push({
           type: "gate.invalidated",
           action: "invalidate",
           reason: "trusted safety inputs changed after evaluation",
@@ -532,7 +591,7 @@ export class MissionService {
         });
       }
       stored.approvals = stored.approvals.filter((approval) => approval.missionRevisionId !== revision.id);
-      this.persist();
+      await this.commitMission(stored, audits);
       throw new MissionServiceError(409, "SAFETY_EVALUATION_STALE", "gate decisions are blocked until safety is recomputed");
     }
     return this.evaluationView(record);
@@ -591,10 +650,8 @@ export class MissionService {
 
   private load(): void {
     if (this.database === undefined) return;
-    const row = this.database.sql().prepare("SELECT value FROM service_state WHERE key = ?").get("mission_store") as { value?: unknown } | undefined;
-    if (row?.value === undefined) return;
     try {
-      const parsed = JSON.parse(String(row.value)) as StoredMission[];
+      const parsed = loadMissionSnapshots(this.database.sql()) as unknown as StoredMission[];
       for (const raw of parsed) {
         const revisions = raw.revisions.map((revision) => this.parseMission(revision));
         const safetyResults = raw.safetyResults.flatMap((result) => {
@@ -614,21 +671,63 @@ export class MissionService {
         });
         this.missions.set(raw.missionId, { ...raw, revisions, safetyResults, approvals });
       }
-    } catch (error) {
-      throw new Error(`mission store is corrupt: ${errorMessage(error)}`);
+    } catch {
+      this.missions.clear();
+      this.safetyIntegrityFailure = true;
+      void this.audit.simulateWriteFailure();
     }
   }
 
-  private persist(): void {
-    if (this.database === undefined) return;
-    const value = JSON.stringify([...this.missions.values()]);
+  private async commitMission(stored: StoredMission, auditInputs: readonly AuditEventInput[]): Promise<void> {
+    return this.commitMissions([stored], auditInputs);
+  }
+
+  private async commitMissions(storedMissions: readonly StoredMission[], auditInputs: readonly AuditEventInput[]): Promise<void> {
+    if (this.database === undefined) {
+      for (const input of auditInputs) await this.appendAudit(input);
+      for (const stored of storedMissions) this.missions.set(stored.missionId, stored);
+      return;
+    }
     try {
-      this.database.sql().prepare("INSERT INTO service_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run("mission_store", value);
+      await this.audit.commitAtomic(auditInputs, () => {
+        try {
+          for (const stored of storedMissions) writeMissionSnapshot(this.database!.sql(), stored as unknown as Parameters<typeof writeMissionSnapshot>[1]);
+        } catch (error) {
+          if (error instanceof MissionSnapshotConflictError) throw new AtomicConflictError(error.message, { cause: error });
+          throw new AtomicDomainWriteError("normalized mission persistence failed", { cause: error });
+        }
+      });
     } catch (error) {
-      void this.audit.simulateWriteFailure();
-      throw new MissionServiceError(503, "MISSION_STORE_UNAVAILABLE", errorMessage(error));
+      if (error instanceof AtomicConflictError) throw new MissionServiceError(409, "CONCURRENT_MISSION_WRITE", error.message);
+      if (error instanceof AtomicDomainWriteError) {
+        throw new MissionServiceError(503, "MISSION_STORE_UNAVAILABLE", errorMessage(error.cause ?? error));
+      }
+      throw new MissionServiceError(503, "AUDIT_LEDGER_UNAVAILABLE", errorMessage(error));
+    }
+    for (const stored of storedMissions) {
+      stored.persistenceVersion += 1;
+      this.missions.set(stored.missionId, stored);
     }
   }
+
+  private enqueueMutation<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.mutationTail.then(operation);
+    this.mutationTail = result.then(() => undefined, () => undefined);
+    return result;
+  }
+}
+
+function cloneStoredMission(stored: StoredMission): StoredMission {
+  return {
+    missionId: stored.missionId,
+    persistenceVersion: stored.persistenceVersion,
+    revisions: [...stored.revisions],
+    safetyResults: stored.safetyResults.map((result) => ({ envelope: result.envelope, stale: result.stale })),
+    checklistResponses: [...stored.checklistResponses],
+    approvals: [...stored.approvals],
+    ...(stored.postflight === undefined ? {} : { postflight: stored.postflight }),
+    occurrences: [...stored.occurrences],
+  };
 }
 
 function objectInput(value: unknown): Record<string, unknown> {

@@ -2,9 +2,9 @@ import { createHash, createPublicKey } from "node:crypto";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { assertSignedPackageManifest, canonicalJson, verifyPackage, type SignedPackageManifest, type VerificationReport } from "@fac-isr/evidence";
-import type { AuditLedger } from "../audit/ledger.js";
+import { AtomicDomainWriteError, type AuditEventInput, type AuditLedger } from "../audit/ledger.js";
 import type { EdgeDatabase } from "../db/migrate.js";
-import type { ServiceActorContext } from "./mission-service.js";
+import type { ServiceActorContext, StagedMissionMutation } from "./mission-service.js";
 import type { ActiveSafetyPackage, ActiveSafetyPackageSource } from "./safety-evaluation.js";
 
 export type PackageState = "verified" | "active" | "quarantined";
@@ -35,6 +35,28 @@ export class InMemoryTrustedKeyStore implements TrustedKeyStore {
 
   public get(keyId: string): TrustedKeyRecord | undefined {
     return this.records.get(keyId);
+  }
+}
+
+export class SqliteTrustedKeyStore implements TrustedKeyStore {
+  public constructor(private readonly database: EdgeDatabase) {}
+
+  public add(record: TrustedKeyRecord): TrustedKeyRecord {
+    this.database.sql().prepare(`INSERT INTO trusted_keys
+      (key_id, scope, algorithm, public_key_pem, added_at_utc, added_by_user_id)
+      VALUES (?, ?, ?, ?, ?, ?)`)
+      .run(record.keyId, record.scope, record.algorithm, record.publicKeyPem, record.addedAtUtc, record.addedByUserId);
+    return Object.freeze({ ...record });
+  }
+
+  public get(keyId: string): TrustedKeyRecord | undefined {
+    const row = this.database.sql().prepare("SELECT * FROM trusted_keys WHERE key_id = ?").get(keyId) as Record<string, unknown> | undefined;
+    return row === undefined ? undefined : Object.freeze({ keyId: String(row.key_id), scope: String(row.scope) as TrustedKeyScope, algorithm: String(row.algorithm) as TrustedKeyAlgorithm, publicKeyPem: String(row.public_key_pem), addedAtUtc: String(row.added_at_utc), addedByUserId: String(row.added_by_user_id) });
+  }
+
+  public list(): readonly TrustedKeyRecord[] {
+    const rows = this.database.sql().prepare("SELECT key_id FROM trusted_keys ORDER BY key_id").all() as { key_id: string }[];
+    return Object.freeze(rows.map(({ key_id }) => this.get(key_id)!));
   }
 }
 
@@ -91,6 +113,7 @@ export interface SafeModeServiceOptions {
   readonly auditLedger: AuditLedger;
   readonly missionService: {
     markSafetyEvaluationsStale(context: ServiceActorContext, reason: string): Promise<void>;
+    stageSafetyEvaluationsStale?(context: ServiceActorContext, reason: string): StagedMissionMutation;
     getMission(missionId: string): Record<string, unknown>;
   };
   readonly now?: () => string;
@@ -227,8 +250,9 @@ export class SafeModeService implements ActiveSafetyPackageSource {
       eventType = "package.quarantined";
     }
     const prior = this.packages;
-    const next = [...prior, record];
-    await this.commitSnapshot(prior, next, async () => this.audit.append({ type: eventType, actorUserId: context.actorUserId, clientSessionId: context.clientSessionId, occurredAtUtc: importedAtUtc, action: eventType === "package.imported" ? "import" : "quarantine", reason: record.reason, payload: { packageId: record.packageId, version: record.version } }));
+    const duplicateIdentity = prior.some((existing) => existing.packageId === record.packageId && existing.version === record.version);
+    const next = duplicateIdentity ? prior : [...prior, record];
+    await this.commitSnapshot(next, [{ type: eventType, actorUserId: context.actorUserId, clientSessionId: context.clientSessionId, occurredAtUtc: importedAtUtc, action: eventType === "package.imported" ? "import" : "quarantine", reason: record.reason, payload: { packageId: record.packageId, version: record.version } }]);
     return record;
   }
 
@@ -256,7 +280,7 @@ export class SafeModeService implements ActiveSafetyPackageSource {
       const quarantined: PackageRecord = detached({ ...candidate, state: "quarantined" as const, reason: report.checks.find((check) => check.status === "fail")?.reason ?? "package verification failed at activation", checks: checksFromReport(report) });
       const prior = this.packages;
       const next = prior.map((item) => item === candidate ? quarantined : item);
-      await this.commitSnapshot(prior, next, async () => this.audit.append({ type: "package.quarantined", actorUserId: context.actorUserId, clientSessionId: context.clientSessionId, occurredAtUtc: activatedAtUtc, action: "quarantine", reason: quarantined.reason, payload: { packageId, version } }));
+      await this.commitSnapshot(next, [{ type: "package.quarantined", actorUserId: context.actorUserId, clientSessionId: context.clientSessionId, occurredAtUtc: activatedAtUtc, action: "quarantine", reason: quarantined.reason, payload: { packageId, version } }]);
       throw new SafeModeError(409, "PACKAGE_ACTIVATION_REJECTED", quarantined.reason, "quarantined");
     }
     const active: PackageRecord = detached({ ...candidate, state: "active" as const, reason: "verified package activated", checks: checksFromReport(report) });
@@ -265,11 +289,18 @@ export class SafeModeService implements ActiveSafetyPackageSource {
       if (record.state === "active" && record.manifest?.kind === candidateManifest.kind) return detached({ ...record, state: "verified" as const, reason: "superseded by a newly activated package" });
       return record;
     });
-    const prior = this.packages;
-    await this.commitSnapshot(prior, nextPackages, async () => {
-      await this.audit.append({ type: "package.activated", actorUserId: context.actorUserId, clientSessionId: context.clientSessionId, occurredAtUtc: activatedAtUtc, action: "activate", reason: active.reason, payload: { packageId, version, keyId, kind: candidateManifest.kind } });
-      await this.missions.markSafetyEvaluationsStale(context, `package ${packageId}@${version} activation invalidated prior evaluations`);
-    });
+    const invalidationReason = `package ${packageId}@${version} activation invalidated prior evaluations`;
+    const stagedMission = this.missions.stageSafetyEvaluationsStale?.(context, invalidationReason);
+    await this.commitSnapshot(
+      nextPackages,
+      [
+        { type: "package.activated", actorUserId: context.actorUserId, clientSessionId: context.clientSessionId, occurredAtUtc: activatedAtUtc, action: "activate", reason: active.reason, payload: { packageId, version, keyId, kind: candidateManifest.kind } },
+        ...(stagedMission?.auditInputs ?? []),
+      ],
+      stagedMission?.writeDomain,
+      stagedMission?.publish,
+    );
+    if (stagedMission === undefined) await this.missions.markSafetyEvaluationsStale(context, invalidationReason);
     return active;
   }
 
@@ -332,11 +363,8 @@ export class SafeModeService implements ActiveSafetyPackageSource {
 
   private load(): void {
     try {
-      const row = this.database.sql().prepare("SELECT value FROM service_state WHERE key = ?").get("package_store") as { value?: unknown } | undefined;
-      if (row?.value === undefined) return;
-      const parsed = JSON.parse(String(row.value)) as unknown;
-      if (!Array.isArray(parsed)) throw new Error("package store must be an array");
-      this.packages = parsed.map(parsePackageRecord);
+      const rows = this.database.sql().prepare("SELECT record_json FROM packages ORDER BY package_id, version").all() as { record_json: string }[];
+      this.packages = rows.map(({ record_json }) => parsePackageRecord(JSON.parse(record_json) as unknown));
       assertUniquePackageRecords(this.packages);
     } catch {
       this.packages = [];
@@ -345,31 +373,34 @@ export class SafeModeService implements ActiveSafetyPackageSource {
   }
 
   private writeSnapshot(packages: readonly PackageRecord[]): void {
-    const value = JSON.stringify(packages);
-    this.database.sql().prepare("INSERT INTO service_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run("package_store", value);
+    const sql = this.database.sql();
+    sql.prepare("DELETE FROM active_package_roles").run();
+    sql.prepare("DELETE FROM packages").run();
+    for (const record of packages) {
+      const kind = record.manifest?.kind ?? null;
+      sql.prepare("INSERT INTO packages (package_id, version, kind, state, imported_at_utc, record_json) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(record.packageId, record.version, kind, record.state, record.importedAtUtc, JSON.stringify(record));
+      if (record.state === "active" && kind !== null) sql.prepare("INSERT INTO active_package_roles (role, package_id, version) VALUES (?, ?, ?)").run(kind, record.packageId, record.version);
+    }
   }
 
-  private async commitSnapshot(prior: PackageRecord[], next: PackageRecord[], sideEffects: () => Promise<unknown>): Promise<void> {
+  private async commitSnapshot(next: PackageRecord[], auditInputs: readonly AuditEventInput[], writeRelatedDomain?: () => void, publishRelated?: () => void): Promise<void> {
     if (this.databaseFailure) throw new SafeModeError(503, "SAFE_MODE_DATABASE_FAILURE", "package writes are disabled while the local database is unavailable");
     try {
-      this.writeSnapshot(next);
+      await this.audit.commitAtomic(auditInputs, () => {
+        try {
+          this.writeSnapshot(next);
+          writeRelatedDomain?.();
+        } catch (error) {
+          throw new AtomicDomainWriteError("normalized package persistence failed", { cause: error });
+        }
+      });
     } catch (error) {
       this.databaseFailure = true;
       throw new SafeModeError(503, "SAFE_MODE_DATABASE_FAILURE", errorMessage(error));
     }
-    try {
-      await sideEffects();
-    } catch (error) {
-      try {
-        this.writeSnapshot(prior);
-      } catch {
-        this.databaseFailure = true;
-        void this.audit.simulateWriteFailure();
-        throw new SafeModeError(503, "SAFE_MODE_DATABASE_FAILURE", "package state rollback failed after a partial operation");
-      }
-      throw error;
-    }
     this.packages = next;
+    publishRelated?.();
   }
 
   private async reverifyActivePackages(asOfUtc: string): Promise<void> {
@@ -395,11 +426,7 @@ export class SafeModeService implements ActiveSafetyPackageSource {
     if (replacements.size === 0) return;
     const next = prior.map((record) => replacements.get(record) ?? record);
     const occurredAtUtc = this.now();
-    await this.commitSnapshot(prior, next, async () => {
-      for (const quarantined of replacements.values()) {
-        await this.audit.append({ type: "package.quarantined", actorUserId: "safe-mode-service", clientSessionId: "package-reverification", occurredAtUtc, action: "quarantine", reason: quarantined.reason, payload: { packageId: quarantined.packageId, version: quarantined.version } });
-      }
-    });
+    await this.commitSnapshot(next, [...replacements.values()].map((quarantined) => ({ type: "package.quarantined", actorUserId: "safe-mode-service", clientSessionId: "package-reverification", occurredAtUtc, action: "quarantine", reason: quarantined.reason, payload: { packageId: quarantined.packageId, version: quarantined.version } })));
   }
 
   private requireTrustedKey(keyId: string, kind: SignedPackageManifest["kind"]): TrustedKeyRecord {

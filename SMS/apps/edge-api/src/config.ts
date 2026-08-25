@@ -13,6 +13,7 @@ export interface EdgeConfigInput {
   readonly port?: number;
   readonly databaseUrl?: string;
   readonly packageDirectory?: string;
+  readonly exportKeyPath?: string;
   readonly lockTimeoutMs?: number;
   readonly internet?: InternetMode | string;
   readonly tls?: Partial<TlsPaths>;
@@ -23,6 +24,7 @@ export interface EdgeConfig {
   readonly port: number;
   readonly databaseUrl: string;
   readonly packageDirectory: string;
+  readonly exportKeyPath?: string;
   readonly lockTimeoutMs: number;
   readonly internet: InternetMode;
   readonly tls?: TlsPaths;
@@ -97,6 +99,7 @@ export function createConfig(input: EdgeConfigInput = {}): EdgeConfig {
     port,
     databaseUrl,
     packageDirectory,
+    ...(input.exportKeyPath === undefined ? {} : { exportKeyPath: normalizePath(input.exportKeyPath, "exportKeyPath") }),
     lockTimeoutMs,
     internet: "disabled" as const,
     tls: validateTls(input.tls),

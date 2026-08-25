@@ -24,4 +24,11 @@ describe("edge configuration", () => {
     expect(() => createConfig({ bindAddress: "not-an-ip" })).toThrow(/bindAddress/i);
     expect(() => createConfig({ lockTimeoutMs: 0 })).toThrow(/lockTimeoutMs/i);
   });
+
+  it("normalizes an externally provisioned runtime export key path", () => {
+    const config = createConfig({ exportKeyPath: "secrets/export-key.pem" });
+
+    expect(config.exportKeyPath).toMatch(/secrets[\\/]export-key\.pem$/);
+    expect(() => createConfig({ exportKeyPath: "bad\0key" })).toThrow(/exportKeyPath/i);
+  });
 });

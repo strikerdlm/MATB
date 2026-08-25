@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { IdentityRecord } from "./identity.js";
 import type { AuthorizationSubject, UserRole } from "./roles.js";
+import type { EdgeDatabase } from "../db/migrate.js";
 
 export interface Session extends AuthorizationSubject {
   readonly sessionId: string;
@@ -30,6 +31,7 @@ export interface SessionManagerOptions extends SessionPolicy {
   readonly sessionIdFactory?: () => string;
   readonly sessionCredentialFactory?: () => string;
   readonly csrfTokenFactory?: () => string;
+  readonly database?: EdgeDatabase;
 }
 
 function parseUtc(value: string): number | undefined {
@@ -84,6 +86,7 @@ export class SessionManager {
   private readonly sessionCredentialFactory: () => string;
   private readonly csrfTokenFactory: () => string;
   private readonly policy: SessionPolicy;
+  private readonly database?: EdgeDatabase;
 
   public constructor(options: SessionManagerOptions) {
     assertPolicy(options);
@@ -96,6 +99,8 @@ export class SessionManager {
     this.sessionIdFactory = options.sessionIdFactory ?? (() => randomBytes(18).toString("base64url"));
     this.sessionCredentialFactory = options.sessionCredentialFactory ?? (() => randomBytes(32).toString("base64url"));
     this.csrfTokenFactory = options.csrfTokenFactory ?? (() => randomBytes(32).toString("base64url"));
+    this.database = options.database;
+    this.load();
   }
 
   public createSession(identity: IdentityRecord, issuedAtUtc = this.now()): Session {
@@ -135,6 +140,7 @@ export class SessionManager {
     });
     this.sessionsByCredentialHash.set(credentialHash, session);
     this.credentialHashBySessionId.set(sessionId, credentialHash);
+    this.persist(credentialHash, session);
     return Object.freeze({ session, credential });
   }
 
@@ -161,6 +167,7 @@ export class SessionManager {
       lockedAtUtc,
       lockReason: reason,
     }));
+    this.persist(credentialHash, this.sessionsByCredentialHash.get(credentialHash)!);
   }
 
   public deleteSession(sessionId: string): void {
@@ -168,6 +175,7 @@ export class SessionManager {
     if (credentialHash === undefined) return;
     this.credentialHashBySessionId.delete(sessionId);
     this.sessionsByCredentialHash.delete(credentialHash);
+    this.database?.sql().prepare("DELETE FROM sessions WHERE session_id = ?").run(sessionId);
   }
 
   public isReauthenticationRequired(sessionId: string, nowUtc = this.now()): boolean {
@@ -198,6 +206,7 @@ export class SessionManager {
         lockReason: evaluated.lockReason ?? "idle timeout",
       });
       this.sessionsByCredentialHash.set(credentialHash, locked);
+      this.persist(credentialHash, locked);
       return locked;
     }
     const touched = Object.freeze({
@@ -206,6 +215,7 @@ export class SessionManager {
       requiresReauthentication: isSessionReauthenticationRequired(evaluated, nowUtc),
     });
     this.sessionsByCredentialHash.set(credentialHash, touched);
+    this.persist(credentialHash, touched);
     return touched;
   }
 
@@ -225,6 +235,7 @@ export class SessionManager {
         : formatUtc(at + this.policy.reauthenticationIntervalMs),
     });
     this.sessionsByCredentialHash.set(credentialHash, refreshed);
+    this.persist(credentialHash, refreshed);
     return refreshed;
   }
 
@@ -252,6 +263,23 @@ export class SessionManager {
       state: "active" as const,
       requiresReauthentication: isSessionReauthenticationRequired(session, nowUtc),
     });
+  }
+
+  private persist(credentialHash: string, session: Session): void {
+    this.database?.sql().prepare(`INSERT INTO sessions (session_id, credential_hash, session_json, updated_at_utc)
+      VALUES (?, ?, ?, ?) ON CONFLICT(session_id) DO UPDATE SET credential_hash = excluded.credential_hash,
+      session_json = excluded.session_json, updated_at_utc = excluded.updated_at_utc`)
+      .run(session.sessionId, credentialHash, JSON.stringify(session), this.now());
+  }
+
+  private load(): void {
+    if (this.database === undefined) return;
+    const rows = this.database.sql().prepare("SELECT credential_hash, session_json FROM sessions ORDER BY session_id").all() as { credential_hash: string; session_json: string }[];
+    for (const row of rows) {
+      const session = Object.freeze(JSON.parse(row.session_json) as Session);
+      this.sessionsByCredentialHash.set(row.credential_hash, session);
+      this.credentialHashBySessionId.set(session.sessionId, row.credential_hash);
+    }
   }
 }
 

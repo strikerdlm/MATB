@@ -17,6 +17,7 @@
     "pretest": "npm run build",
     "test": "vitest run",
     "lint": "eslint .",
+    "sms-admin": "node apps/edge-api/dist/admin/cli.js",
     "build:offline": "node scripts/build-offline-bundle.mjs",
     "verify:offline": "node scripts/verify-offline.mjs",
     "release:manifest": "node scripts/generate-sbom.mjs manifest",

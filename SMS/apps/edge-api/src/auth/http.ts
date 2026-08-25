@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { AuthenticationError, LocalAuthenticator, LocalIdentityStore } from "./identity.js";
 import type { UserRole } from "./roles.js";
 import { SessionManager, type Session } from "./session.js";
+import type { EdgeDatabase } from "../db/migrate.js";
 
 export const SESSION_COOKIE_NAME = "__Host-sms_session";
 export const SESSION_COOKIE_ATTRIBUTES = "Secure; HttpOnly; SameSite=Strict; Path=/";
@@ -43,10 +44,10 @@ const ACCOUNTABLE_IDENTITY_FIELDS = new Set([
   "signerRole",
 ]);
 
-export function createDefaultHttpAuthDependencies(): HttpAuthDependencies {
+export function createDefaultHttpAuthDependencies(database?: EdgeDatabase): HttpAuthDependencies {
   return {
-    identityStore: new LocalIdentityStore(),
-    sessionManager: new SessionManager(DEFAULT_SESSION_POLICY),
+    identityStore: new LocalIdentityStore({ database }),
+    sessionManager: new SessionManager({ ...DEFAULT_SESSION_POLICY, database }),
   };
 }
 

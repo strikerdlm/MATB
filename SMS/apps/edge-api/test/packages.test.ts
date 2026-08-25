@@ -8,6 +8,9 @@ import type { PolicyPackage } from "@fac-isr/safety-kernel";
 import type { EdgeServer } from "../src/server.js";
 import { authenticatedTestServer } from "./http-test-auth.js";
 import type { TrustedKeyRecord } from "../src/services/safe-mode.js";
+import { SqliteTrustedKeyStore } from "../src/services/safe-mode.js";
+import { openDatabase } from "../src/db/migrate.js";
+import { missionFixture, testSafetyEvaluationProvider } from "./mission-fixture.js";
 
 const asOfUtc = "2026-08-09T18:00:00.000Z";
 
@@ -96,6 +99,60 @@ describe("signed package import and quarantine", () => {
   afterEach(async () => {
     await app?.close();
     app = undefined;
+  });
+
+  it("persists trusted keys without accepting key material from package requests", () => {
+    const database = openDatabase(":memory:");
+    const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const record = trustedKey(keys);
+    new SqliteTrustedKeyStore(database).add(record);
+
+    const reopened = new SqliteTrustedKeyStore(database);
+
+    expect(reopened.get(record.keyId)).toEqual(record);
+    expect(reopened.list()).toEqual([record]);
+    database.close();
+  });
+
+  it("stores verified and active package roles in normalized tables", async () => {
+    const root = mkdtempSync(join(tmpdir(), "fac-isr-normalized-packages-"));
+    const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const record = trustedKey(keys);
+    const databaseUrl = join(root, "edge.sqlite");
+    const server = await authenticatedTestServer(
+      { databaseUrl, internet: "disabled", packageDirectory: root },
+      undefined,
+      { trustedKeyStore: { get: () => record }, now: () => asOfUtc },
+    );
+    app = server.app;
+    const fixture = signedPackage(root, "1.0.0", keys);
+    const imported = await app.safeModeService.importPackage({ ...fixture, keyId: record.keyId }, context);
+    await app.safeModeService.activatePackage({ packageId: imported.packageId, version: imported.version, keyId: record.keyId }, context);
+
+    expect(app.edgeDatabase.sql().prepare("SELECT package_id, version, state FROM packages").get()).toEqual({ package_id: "map-colombia", version: "1.0.0", state: "active" });
+    expect(app.edgeDatabase.sql().prepare("SELECT role, package_id, version FROM active_package_roles").get()).toEqual({ role: "map", package_id: "map-colombia", version: "1.0.0" });
+    expect(app.edgeDatabase.sql().prepare("SELECT value FROM service_state WHERE key = 'package_store'").get()).toBeUndefined();
+  });
+
+  it("does not activate a package or append its audit event when mission invalidation fails", async () => {
+    const root = mkdtempSync(join(tmpdir(), "fac-isr-atomic-package-mission-"));
+    const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const record = trustedKey(keys);
+    const server = await authenticatedTestServer(
+      { databaseUrl: ":memory:", internet: "disabled", packageDirectory: root },
+      undefined,
+      { trustedKeyStore: { get: () => record }, now: () => asOfUtc, safetyEvaluationProvider: testSafetyEvaluationProvider() },
+    );
+    app = server.app;
+    await app.missionService.createMission({ revision: missionFixture() }, context);
+    const fixture = signedPackage(root, "1.0.0", keys);
+    const imported = await app.safeModeService.importPackage({ ...fixture, keyId: record.keyId }, context);
+    app.edgeDatabase.sql().exec("CREATE TRIGGER fail_invalidation BEFORE INSERT ON evaluation_envelopes BEGIN SELECT RAISE(FAIL, 'invalidation fault'); END");
+
+    await expect(app.safeModeService.activatePackage({ packageId: imported.packageId, version: imported.version, keyId: record.keyId }, context)).rejects.toMatchObject({ code: "SAFE_MODE_DATABASE_FAILURE" });
+
+    expect(app.edgeDatabase.sql().prepare("SELECT state FROM packages WHERE package_id = ? AND version = ?").get(imported.packageId, imported.version)).toEqual({ state: "verified" });
+    expect(await app.auditLedger.queryAudit({ type: "package.activated" })).toEqual([]);
   });
 
   it("quarantines an unsigned package before activation", async () => {
@@ -226,7 +283,7 @@ describe("signed package import and quarantine", () => {
 
     await expect(app.safeModeService.importPackage({ ...fixture, keyId: record.keyId }, context)).rejects.toBeDefined();
     app.auditLedger.clearReadOnlySafeMode();
-    await expect(app.safeModeService.activatePackage({ packageId: "map-colombia", version: "1.0.0", keyId: record.keyId }, context)).rejects.toMatchObject({ code: "PACKAGE_NOT_VERIFIED" });
+    await expect(app.safeModeService.activatePackage({ packageId: "map-colombia", version: "1.0.0", keyId: record.keyId }, context)).rejects.toMatchObject({ code: "SAFE_MODE_DATABASE_FAILURE" });
   });
 
   it("never exposes activation state when package persistence fails", async () => {
@@ -241,7 +298,7 @@ describe("signed package import and quarantine", () => {
     );
     app = server.app;
     const imported = await app.safeModeService.importPackage({ ...fixture, keyId: record.keyId }, context);
-    app.edgeDatabase.sql().exec("CREATE TRIGGER fail_package_update BEFORE UPDATE ON service_state WHEN NEW.key = 'package_store' BEGIN SELECT RAISE(FAIL, 'package persistence failed'); END");
+    app.edgeDatabase.sql().exec("CREATE TRIGGER fail_package_update BEFORE INSERT ON packages BEGIN SELECT RAISE(FAIL, 'package persistence failed'); END");
 
     await expect(app.safeModeService.activatePackage({ packageId: imported.packageId, version: imported.version, keyId: record.keyId }, context)).rejects.toMatchObject({ code: "SAFE_MODE_DATABASE_FAILURE" });
     const state = await app.safeModeService.getPackageState();
@@ -401,10 +458,10 @@ describe("signed package import and quarantine", () => {
     app = server.app;
     const imported = await app.safeModeService.importPackage({ ...one, keyId: record.keyId }, context);
     await app.safeModeService.activatePackage({ packageId: imported.packageId, version: imported.version, keyId: record.keyId }, context);
-    const row = app.edgeDatabase.sql().prepare("SELECT value FROM service_state WHERE key = ?").get("package_store") as { value: string };
-    const oldSnapshot = JSON.parse(row.value) as Array<{ verifiedProvenance?: { effectiveFromUtc?: string } }>;
-    delete oldSnapshot[0]?.verifiedProvenance?.effectiveFromUtc;
-    app.edgeDatabase.sql().prepare("UPDATE service_state SET value = ? WHERE key = ?").run(JSON.stringify(oldSnapshot), "package_store");
+    const row = app.edgeDatabase.sql().prepare("SELECT package_id, version, record_json FROM packages LIMIT 1").get() as { package_id: string; version: string; record_json: string };
+    const oldSnapshot = JSON.parse(row.record_json) as { verifiedProvenance?: { effectiveFromUtc?: string } };
+    delete oldSnapshot.verifiedProvenance?.effectiveFromUtc;
+    app.edgeDatabase.sql().prepare("UPDATE packages SET record_json = ? WHERE package_id = ? AND version = ?").run(JSON.stringify(oldSnapshot), row.package_id, row.version);
     await app.close();
     app = undefined;
 

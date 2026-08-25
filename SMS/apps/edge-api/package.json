@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "sms-admin": "./dist/admin/cli.js"
+  },
   "exports": {
     ".": {
       "types": "./src/index.ts",
