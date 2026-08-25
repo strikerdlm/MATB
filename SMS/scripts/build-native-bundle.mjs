@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { chmod, cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -30,6 +30,28 @@ export function isOfficialNodeSignatureStatus(status) {
     const signingFingerprint = fields[2]?.toUpperCase();
     return OFFICIAL_NODE_RELEASE_SIGNERS.has(primaryFingerprint) || OFFICIAL_NODE_RELEASE_SIGNERS.has(signingFingerprint);
   });
+}
+
+export function validateProductionDependencyName(name) {
+  if (typeof name !== "string" || !(/^(?:[A-Za-z0-9][A-Za-z0-9._-]*|@[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._-]*)$/u).test(name)) {
+    throw new Error(`invalid production dependency name: ${String(name)}`);
+  }
+  return name;
+}
+
+function assertContained(root, candidate, label) {
+  const path = relative(root, candidate);
+  if (path === "" || path === ".." || path.startsWith(`..${sep}`) || isAbsolute(path)) throw new Error(`${label} resolves outside the application root`);
+  return path;
+}
+
+async function assertNoSymbolicPath(root, candidate, label) {
+  const path = assertContained(root, candidate, label);
+  let cursor = root;
+  for (const component of path.split(sep)) {
+    cursor = resolve(cursor, component);
+    if ((await lstat(cursor)).isSymbolicLink()) throw new Error(`${label} contains a symbolic path component`);
+  }
 }
 
 function parse(argv) {
@@ -182,13 +204,18 @@ export async function copyRequiredApp(appRoot, destination) {
     .map((name) => ({ name, requester: resolve(appRoot, runtimePackagePaths[index]) })));
   const copied = new Set();
   async function resolveDependencyInstance(name, requester) {
+    validateProductionDependencyName(name);
     let directory = requester;
     for (;;) {
       const candidate = resolve(directory, "node_modules", ...name.split("/"));
+      assertContained(appRoot, candidate, `production dependency ${name}`);
       try {
         const info = await lstat(candidate);
         if (info.isSymbolicLink() || !info.isDirectory()) throw new Error(`production dependency is not a real directory: ${name}`);
-        return candidate;
+        await assertNoSymbolicPath(appRoot, candidate, `production dependency ${name}`);
+        const canonical = await realpath(candidate);
+        assertContained(appRoot, canonical, `production dependency ${name}`);
+        return canonical;
       } catch (error) {
         if (!(error instanceof Error && error.code === "ENOENT")) throw error;
       }
@@ -203,8 +230,10 @@ export async function copyRequiredApp(appRoot, destination) {
     const request = queue.shift();
     const source = await resolveDependencyInstance(request.name, request.requester);
     const instancePath = relative(appRoot, source).split(sep).join("/");
+    if (!instancePath.startsWith("node_modules/") && !instancePath.includes("/node_modules/")) throw new Error(`unsafe production dependency instance path: ${instancePath}`);
     if (copied.has(instancePath)) continue;
     const target = resolve(destination, instancePath);
+    assertContained(destination, target, `production dependency destination ${request.name}`);
     await mkdir(dirname(target), { recursive: true });
     await cp(source, target, {
       recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true,

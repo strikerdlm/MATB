@@ -322,8 +322,31 @@ backup_restore() {
     done
   ' sh "$staging" {} +; then rm -rf "$staging"; fail "backup contains a non-portable path"; fi
   mkdir "$rollback"
-  [ ! -e "$VAR/data" ] || mv "$VAR/data" "$rollback/data"
-  [ ! -e "$VAR/packages" ] || mv "$VAR/packages" "$rollback/packages"
+  old_data_moved=0
+  old_packages_moved=0
+  if [ -e "$VAR/data" ]; then
+    if mv "$VAR/data" "$rollback/data"; then old_data_moved=1
+    else rm -rf "$rollback" "$staging"; fail "restore failed before original data could be staged"
+    fi
+  fi
+  if [ "$TEST_MODE" -eq 1 ] && [ "${SMS_TEST_FAIL_RESTORE_AFTER_OLD_DATA_MOVE:-0}" = "1" ]; then
+    original_packages_staged=0
+  elif [ ! -e "$VAR/packages" ]; then
+    original_packages_staged=1
+  elif mv "$VAR/packages" "$rollback/packages"; then
+    old_packages_moved=1
+    original_packages_staged=1
+  else
+    original_packages_staged=0
+  fi
+  if [ "$original_packages_staged" -ne 1 ]; then
+    recovery_failed=0
+    if [ "$old_data_moved" -eq 1 ] && ! mv "$rollback/data" "$VAR/data"; then recovery_failed=1; fi
+    rm -rf "$staging"
+    [ "$recovery_failed" -eq 0 ] || fail "restore failed while staging packages and original data recovery also failed; recovery remains at $rollback"
+    rm -rf "$rollback"
+    fail "restore failed while staging original packages; original state was recovered"
+  fi
   replacement_complete=0
   if mv "$staging/data" "$VAR/data"; then
     if [ "$TEST_MODE" -eq 1 ] && [ "${SMS_TEST_FAIL_RESTORE_AFTER_DATA_MOVE:-0}" = "1" ]; then :
@@ -336,9 +359,12 @@ backup_restore() {
     if [ "$TEST_MODE" -eq 0 ]; then chown -R "$SERVICE_UID:$SERVICE_GID" "$VAR/data" "$VAR/packages"; fi
   else
     rm -rf "$VAR/data" "$VAR/packages"
-    [ ! -e "$rollback/data" ] || mv "$rollback/data" "$VAR/data" || fail "restore failed and original data could not be recovered"
-    [ ! -e "$rollback/packages" ] || mv "$rollback/packages" "$VAR/packages" || fail "restore failed and original packages could not be recovered"
-    rm -rf "$rollback" "$staging"
+    recovery_failed=0
+    if [ "$old_data_moved" -eq 1 ] && ! mv "$rollback/data" "$VAR/data"; then recovery_failed=1; fi
+    if [ "$old_packages_moved" -eq 1 ] && ! mv "$rollback/packages" "$VAR/packages"; then recovery_failed=1; fi
+    rm -rf "$staging"
+    [ "$recovery_failed" -eq 0 ] || fail "restore failed and original state recovery is incomplete; recovery remains at $rollback"
+    rm -rf "$rollback"
     fail "restore failed; original data was recovered"
   fi
 }

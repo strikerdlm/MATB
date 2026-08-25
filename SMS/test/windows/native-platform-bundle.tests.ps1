@@ -1,10 +1,14 @@
 [CmdletBinding()]
-param()
+param(
+  [string]$GeneratedBundlePath = $env:SMS_WINDOWS_BUNDLE_PATH
+)
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 if ($env:OS -ne "Windows_NT") { throw "This suite must run on native Windows; WSL is not evidence" }
 if ((node --version).Trim() -ne "v22.23.2") { throw "Native Windows packaging tests require Node 22.23.2" }
+if ([string]::IsNullOrWhiteSpace($GeneratedBundlePath) -or -not (Test-Path -LiteralPath $GeneratedBundlePath -PathType Leaf)) { throw "SMS_WINDOWS_BUNDLE_PATH must reference the generated official Windows release ZIP" }
+if ([IO.Path]::GetFileName($GeneratedBundlePath) -ne "fac-isr-sms-0.2.0-rc.1-win32-x64.zip") { throw "Native Windows evidence requires the exact production artifact name" }
 
 $SmsRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $Installer = Join-Path $SmsRoot "packaging\windows\SmsCtl.ps1"
@@ -31,7 +35,7 @@ function Update-BundleInventory([string]$Bundle) {
 function Write-Bundle([string]$Name, [bool]$FailMigration = $false, [bool]$FailStart = $false, [bool]$Production = $true) {
   $bundle = Join-Path $TestRoot $Name
   $files = @{
-    "release.json" = (@{ release = "fac-isr-sms@0.2.0-rc.1"; target = "win32-x64"; buildId = $Name; operationalReady = $false; production = $Production; runtimeProvenance = $(if ($Production) { "official-node-signed-checksums" } else { "controlled-test-fixture" }) } | ConvertTo-Json -Compress)
+    "release.json" = (@{ release = "fac-isr-sms@0.2.0-rc.1"; target = "win32-x64"; nodeVersion = "22.23.2"; internet = "disabled"; buildId = $Name; operationalReady = $false; production = $Production; runtimeProvenance = $(if ($Production) { "official-node-signed-checksums" } else { "controlled-test-fixture" }) } | ConvertTo-Json -Compress)
     "app\scripts\start-edge.mjs" = $(if ($FailStart) { "process.exit(74);" } else { "process.stdout.write('listening\n');" })
     "app\scripts\edge-healthcheck.mjs" = "process.exit(0);"
     "app\apps\edge-api\dist\admin\cli.js" = "process.stdout.write('admin\n');"
@@ -65,6 +69,14 @@ function Set-ServiceOnlyAcl([string]$Path) {
 
 try {
   New-Item -ItemType Directory -Path $TestRoot | Out-Null
+  $generatedExtract = Join-Path $TestRoot "generated-artifact"
+  Expand-Archive -LiteralPath $GeneratedBundlePath -DestinationPath $generatedExtract
+  $generatedBundle = Join-Path $generatedExtract "fac-isr-sms"
+  $generatedInstallRoot = Join-Path $TestRoot "generated-install"
+  & $Installer -Action Install -BundleRoot $generatedBundle -Root $generatedInstallRoot -TestMode | Out-Null
+  Assert-True (Test-Path -LiteralPath (Join-Path $generatedInstallRoot "Program Files\FAC ISR\SMS\current.txt") -PathType Leaf) "generated official Windows artifact did not install through SmsCtl"
+  & $Installer -Action Uninstall -Root $generatedInstallRoot -TestMode | Out-Null
+
   $parserRelease = Join-Path $TestRoot "parser-release"
   New-Item -ItemType Directory -Path (Join-Path $parserRelease "runtime"), (Join-Path $parserRelease "app\scripts") -Force | Out-Null
   Copy-Item -LiteralPath (Get-Command node.exe).Source -Destination (Join-Path $parserRelease "runtime\node.exe")
@@ -123,6 +135,15 @@ try {
   Assert-True ((Get-Content -LiteralPath $database -Raw) -eq "original database bytes") "backup restore did not recover exact data"
   Assert-True ((Get-Content -LiteralPath $activePackage -Raw) -eq "original package bytes") "backup restore did not recover exact packages"
   Assert-True ((Invoke-Sms "Status" $null $null) -match "running ready") "standalone restore did not restore prior running state"
+  Set-Content -LiteralPath $database -Value "pre-original-move database bytes" -NoNewline
+  Set-Content -LiteralPath $activePackage -Value "pre-original-move package bytes" -NoNewline
+  $env:SMS_TEST_FAIL_RESTORE_AFTER_OLD_DATA_MOVE = "1"
+  try { Invoke-Sms "Restore" $null $backup | Out-Null } catch { }
+  Remove-Item Env:SMS_TEST_FAIL_RESTORE_AFTER_OLD_DATA_MOVE
+  Assert-True ((Get-Content -LiteralPath $database -Raw) -eq "pre-original-move database bytes") "restore failure while staging original state misplaced data"
+  Assert-True ((Get-Content -LiteralPath $activePackage -Raw) -eq "pre-original-move package bytes") "restore failure while staging original state misplaced packages"
+  Assert-True ((Invoke-Sms "Status" $null $null) -match "running ready") "failed original-state staging stranded the prior running service"
+  Invoke-Sms "Restore" $null $backup | Out-Null
   $invalidBackup = Join-Path $TestRoot "invalid-backup.zip"
   Set-Content -LiteralPath $invalidBackup -Value "not a zip"
   try { Invoke-Sms "Restore" $null $invalidBackup | Out-Null } catch { }

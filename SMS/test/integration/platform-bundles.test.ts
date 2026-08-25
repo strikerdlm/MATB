@@ -6,7 +6,7 @@ import { basename, join, resolve } from "node:path";
 import { createServer } from "node:https";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, test } from "vitest";
-import { isOfficialNodeSignatureStatus } from "../../scripts/build-native-bundle.mjs";
+import { copyRequiredApp, isOfficialNodeSignatureStatus, validateProductionDependencyName } from "../../scripts/build-native-bundle.mjs";
 import { buildInstalledRequestOptions } from "../../scripts/edge-healthcheck.mjs";
 import { verifyPlatformInventory } from "../../scripts/verify-platform-inventory.mjs";
 
@@ -234,6 +234,21 @@ describe("native release bundle builder", () => {
       env: { PATH: "/nonexistent", HOME: resolve(root, "empty-home"), SMS_NETWORK: "disabled", SMS_COLD_START_MARKER: marker },
     });
     expect(await readFile(marker, "utf8")).toBe("offline cold start fast-uri@3.0.6 process-warning@5.0.0 real-require@0.2.0\n");
+  });
+
+  test("rejects malformed dependency names and dependency paths that resolve outside the application root", async () => {
+    expect(() => validateProductionDependencyName("../outside")).toThrow(/dependency name/i);
+
+    const root = await temporaryDirectory();
+    const appRoot = resolve(root, "app");
+    await createAppFixture(appRoot);
+    const externalModules = resolve(root, "external-node-modules");
+    await mkdir(resolve(externalModules, "fast-uri"), { recursive: true });
+    await writeFile(resolve(externalModules, "fast-uri/package.json"), JSON.stringify({ name: "fast-uri", version: "3.0.6" }));
+    await rm(resolve(appRoot, "node_modules/ajv/node_modules"), { recursive: true, force: true });
+    await symlink(externalModules, resolve(appRoot, "node_modules/ajv/node_modules"), "dir");
+
+    await expect(copyRequiredApp(appRoot, resolve(root, "bundle-app"))).rejects.toThrow(/unsafe|outside|symbolic/i);
   });
 });
 
@@ -514,6 +529,13 @@ describe("Linux native lifecycle", () => {
     expect(await readFile(database, "utf8")).toBe("pre-failure database bytes\n");
     expect(await readFile(activePackage, "utf8")).toBe("pre-failure package bytes\n");
     await expect(stat(resolve(root, "var/lib/fac-isr-sms/data/data"))).rejects.toMatchObject({ code: "ENOENT" });
+    expect((await runLinux(root, "status")).stdout).toContain("running ready");
+
+    await writeFile(database, "pre-original-move database bytes\n");
+    await writeFile(activePackage, "pre-original-move package bytes\n");
+    await expect(runLinuxWithEnvironment(root, { SMS_TEST_FAIL_RESTORE_AFTER_OLD_DATA_MOVE: "1" }, "restore", "--backup", backup)).rejects.toThrow(/restore/i);
+    expect(await readFile(database, "utf8")).toBe("pre-original-move database bytes\n");
+    expect(await readFile(activePackage, "utf8")).toBe("pre-original-move package bytes\n");
     expect((await runLinux(root, "status")).stdout).toContain("running ready");
   });
 

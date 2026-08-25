@@ -109,7 +109,7 @@ function Test-BundleInventory([string]$Path) {
     if ((Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -ne $record.sha256 -or $file.Length -ne $record.sizeBytes) { throw "Trusted bundle inventory mismatch: $relative" }
   }
   $release = Get-Content -LiteralPath $releasePath -Raw | ConvertFrom-Json
-  if ($release.release -ne "fac-isr-sms@0.2.0-rc.1" -or $release.target -ne "win32-x64" -or $release.operationalReady -ne $false -or $release.production -ne $true -or $release.runtimeProvenance -ne "official-node-signed-checksums") { throw "Bundle release metadata is invalid" }
+  if ($release.release -ne "fac-isr-sms@0.2.0-rc.1" -or $release.target -ne "win32-x64" -or $release.nodeVersion -ne "22.23.2" -or $release.internet -ne "disabled" -or $release.operationalReady -ne $false -or $release.production -ne $true -or $release.runtimeProvenance -ne "official-node-signed-checksums") { throw "Bundle release metadata is invalid" }
   $buildProperty = $release.PSObject.Properties["buildId"]
   return @{ InventoryPath = $inventoryPath; BuildId = $(if ($null -ne $buildProperty) { [string]$buildProperty.Value } else { "release" }) }
 }
@@ -276,20 +276,41 @@ function Restore-SmsBackup([string]$Path) {
     Remove-Item -LiteralPath $staging, $rollback -Recurse -Force
     throw "Backup does not contain both data and packages"
   }
-  if (Test-Path -LiteralPath $DataRoot) { Move-Item -LiteralPath $DataRoot -Destination (Join-Path $rollback "data") }
-  if (Test-Path -LiteralPath $PackageRoot) { Move-Item -LiteralPath $PackageRoot -Destination (Join-Path $rollback "packages") }
+  $oldDataMoved = $false
+  $oldPackagesMoved = $false
   try {
+    if (Test-Path -LiteralPath $DataRoot) {
+      Move-Item -LiteralPath $DataRoot -Destination (Join-Path $rollback "data")
+      $oldDataMoved = $true
+    }
+    if ($TestMode -and $env:SMS_TEST_FAIL_RESTORE_AFTER_OLD_DATA_MOVE -eq "1") { throw "controlled restore failure after staging original data" }
+    if (Test-Path -LiteralPath $PackageRoot) {
+      Move-Item -LiteralPath $PackageRoot -Destination (Join-Path $rollback "packages")
+      $oldPackagesMoved = $true
+    }
     Move-Item -LiteralPath $stagedData -Destination $DataRoot
     Move-Item -LiteralPath $stagedPackages -Destination $PackageRoot
     Remove-Item -LiteralPath $rollback, $staging -Recurse -Force
     Set-RestrictedAcl $DataRoot $true
     Set-RestrictedAcl $PackageRoot $true
   } catch {
-    if (Test-Path -LiteralPath $DataRoot) { Remove-Item -LiteralPath $DataRoot -Recurse -Force }
-    if (Test-Path -LiteralPath $PackageRoot) { Remove-Item -LiteralPath $PackageRoot -Recurse -Force }
-    if (Test-Path -LiteralPath (Join-Path $rollback "data")) { Move-Item -LiteralPath (Join-Path $rollback "data") -Destination $DataRoot }
-    if (Test-Path -LiteralPath (Join-Path $rollback "packages")) { Move-Item -LiteralPath (Join-Path $rollback "packages") -Destination $PackageRoot }
-    throw "Restore failed; original data and packages were recovered: $($_.Exception.Message)"
+    $originalFailure = $_.Exception.Message
+    $recoveryFailures = @()
+    if ($oldDataMoved) {
+      try {
+        if (Test-Path -LiteralPath $DataRoot) { Remove-Item -LiteralPath $DataRoot -Recurse -Force }
+        Move-Item -LiteralPath (Join-Path $rollback "data") -Destination $DataRoot
+      } catch { $recoveryFailures += "data: $($_.Exception.Message)" }
+    }
+    if ($oldPackagesMoved) {
+      try {
+        if (Test-Path -LiteralPath $PackageRoot) { Remove-Item -LiteralPath $PackageRoot -Recurse -Force }
+        Move-Item -LiteralPath (Join-Path $rollback "packages") -Destination $PackageRoot
+      } catch { $recoveryFailures += "packages: $($_.Exception.Message)" }
+    }
+    if ($recoveryFailures.Count -gt 0) { throw "Restore failed and original-state recovery is incomplete; recovery remains at ${rollback}: $($recoveryFailures -join '; ')" }
+    Remove-Item -LiteralPath $staging, $rollback -Recurse -Force -ErrorAction SilentlyContinue
+    throw "Restore failed; original data and packages were recovered: $originalFailure"
   }
 }
 
