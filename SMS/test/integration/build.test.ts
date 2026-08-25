@@ -103,10 +103,13 @@ describe("release verification command", () => {
     expect(workflow).not.toContain("actions/checkout@11d5960");
     expect(workflow.match(/raw\.githubusercontent\.com\/nodejs\/release-keys\/[a-f0-9]{40}\/gpg-only-active-keys\/pubring\.kbx/g)).toHaveLength(2);
     expect(workflow).not.toContain("release-keys/HEAD");
-    expect(workflow).toContain("Get-Command gpgv.exe, zip.exe, unzip.exe, zipinfo.exe");
+    expect(workflow).toContain("Get-Command gpgv.exe, unzip.exe, zipinfo.exe");
+    expect(workflow).not.toMatch(/(?:^|[,\s])zip\.exe(?:$|[,\s])/u);
     expect(workflow).toContain("id: oci_scan");
     expect(workflow).toContain("grype-version: 0.110.0");
     expect(workflow).toContain("${{ steps.oci_scan.outputs.json }}");
+    expect(workflow).toContain("image: oci-archive:SMS/artifacts/fac-isr-sms-${{ env.RELEASE_VERSION }}-linux-amd64.oci.tar");
+    expect(workflow).toContain('--oci-image "fac-isr-sms-edge:${{ github.sha }}"');
     expect(workflow).not.toContain("output-file:");
     expect(workflow).toContain('--artifact "linux-x64=artifacts/fac-isr-sms-${RELEASE_VERSION}-linux-x64.tar.gz"');
     expect(workflow).toContain('--artifact "win32-x64=artifacts/fac-isr-sms-$env:RELEASE_VERSION-win32-x64.zip"');
@@ -128,13 +131,21 @@ describe("release verification command", () => {
     expect(workflow.match(/actions\/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093/g)).toHaveLength(3);
     expect(workflow).toContain("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02");
     expect([...workflow.matchAll(/^\s*uses:\s*(\S+)/gmu)].every((match) => /@[a-f0-9]{40}$/u.test(match[1] ?? ""))).toBe(true);
-    expect(workflow).toContain("npm run verify:technical-release");
+    expect(workflow.match(/npm run verify:technical-release/g)).toHaveLength(2);
     expect(workflow).toContain("git merge-base --is-ancestor");
     expect(workflow).toContain("validate-release-ci-run.mjs");
     expect(workflow).toContain("branches/main");
     expect(workflow).toContain("validate-operational-block.mjs");
     expect(workflow).toContain("--json --require-ready");
-    expect(workflow.indexOf("npm run verify:technical-release")).toBeLessThan(workflow.indexOf("actions/upload-artifact@"));
+    const firstTechnicalGate = workflow.indexOf("npm run verify:technical-release");
+    const operationalGate = workflow.indexOf("validate-operational-block.mjs");
+    const atomicPublication = workflow.lastIndexOf("npm run verify:technical-release");
+    expect(firstTechnicalGate).toBeLessThan(operationalGate);
+    expect(operationalGate).toBeLessThan(atomicPublication);
+    expect(workflow.slice(firstTechnicalGate, operationalGate)).not.toContain("--publish-dir");
+    expect(workflow.slice(atomicPublication)).toContain('--public-key "$RUNNER_TEMP/sms-release-public/release-public-key.pem" --publish-dir release-output');
+    expect(workflow).not.toContain("cp \"$RUNNER_TEMP/sms-release-public/release-public-key.pem\" release-output");
+    expect(atomicPublication).toBeLessThan(workflow.indexOf("actions/upload-artifact@"));
   });
 
   it("labels the OCI candidate with explicit pinned-runtime provenance", () => {

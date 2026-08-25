@@ -7,6 +7,7 @@ import { createServer } from "node:https";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, test } from "vitest";
 import { copyRequiredApp, isOfficialNodeSignatureStatus, validateProductionDependencyName } from "../../scripts/build-native-bundle.mjs";
+import { writeDeterministicZip } from "../../scripts/deterministic-zip.mjs";
 import { buildInstalledRequestOptions } from "../../scripts/edge-healthcheck.mjs";
 import { verifyPlatformInventory } from "../../scripts/verify-platform-inventory.mjs";
 
@@ -94,7 +95,7 @@ async function createRuntimeFixture(root: string, target: "linux-x64" | "win32-x
   if (target === "linux-x64") {
     await exec("tar", ["-cJf", archive, "-C", root, basename(runtimeRoot)]);
   } else {
-    await exec("zip", ["-X", "-q", "-r", archive, basename(runtimeRoot)], { cwd: root });
+    await writeDeterministicZip(archive, [{ archivePath: `${basename(runtimeRoot)}/node.exe`, sourcePath: executable, mode: 0o755 }], 1_700_000_000);
   }
   const checksum = await sha256(archive);
   const checksums = resolve(root, "SHASUMS256.txt");

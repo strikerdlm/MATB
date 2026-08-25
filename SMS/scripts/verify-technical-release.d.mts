@@ -32,6 +32,11 @@ export interface CandidateArtifactInspection {
   readonly artifactSha256: string;
   readonly artifactSizeBytes: number;
   readonly contentInventorySha256: string;
+  readonly ociManifestDigest?: string;
+  readonly ociConfigDigest?: string;
+  readonly ociLayerDigests?: readonly string[];
+  readonly ociDiffIds?: readonly string[];
+  readonly ociReference?: string;
 }
 
 export function inspectCandidateArtifact(
@@ -45,6 +50,7 @@ export function publishCandidateAtomic(
   manifest: unknown,
   manifestPath: string,
   signaturePath: string,
+  publicKeyPath: string,
   destination: string,
 ): Promise<void>;
 

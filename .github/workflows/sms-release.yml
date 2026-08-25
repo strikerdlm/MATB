@@ -102,8 +102,8 @@ jobs:
           printf '%s' "$SMS_MALWARE_SCAN_EVIDENCE_B64" | base64 --decode > release-candidate/evidence/malware-scan.json
           printf '%s' "$SMS_MALWARE_SCAN_OUTPUT_B64" | base64 --decode > release-candidate/scan-output/malware-scan.json
           chmod 0444 release-candidate/release-evidence.json release-candidate/release-evidence.sig release-candidate/evidence/malware-scan.json release-candidate/scan-output/malware-scan.json "$RUNNER_TEMP/sms-release-public/release-public-key.pem"
-      - name: Verify exact signed technical release and publish only after gates
-        run: npm run verify:technical-release -- --candidate release-candidate --source-commit "${{ github.sha }}" --public-key "$RUNNER_TEMP/sms-release-public/release-public-key.pem" --publish-dir release-output
+      - name: Verify exact signed technical release without publishing
+        run: npm run verify:technical-release -- --candidate release-candidate --source-commit "${{ github.sha }}" --public-key "$RUNNER_TEMP/sms-release-public/release-public-key.pem"
       - name: Prove institutional readiness remains blocked
         shell: bash
         run: |
@@ -112,9 +112,8 @@ jobs:
           OPERATIONAL_EXIT=$?
           set -e
           node scripts/validate-operational-block.mjs "$RUNNER_TEMP/operational-readiness.json" "$OPERATIONAL_EXIT"
-      - name: Include external public verification material after the technical gate
-        shell: bash
-        run: cp "$RUNNER_TEMP/sms-release-public/release-public-key.pem" release-output/release-public-key.pem
+      - name: Atomically assemble the complete technical RC after every gate
+        run: npm run verify:technical-release -- --candidate release-candidate --source-commit "${{ github.sha }}" --public-key "$RUNNER_TEMP/sms-release-public/release-public-key.pem" --publish-dir release-output
       - name: Upload signed technical RC only after all gates
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

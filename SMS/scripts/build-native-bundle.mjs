@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { writeDeterministicZip } from "./deterministic-zip.mjs";
 
 const RELEASE = "0.2.0-rc.1";
 const NODE_VERSION = "22.23.2";
@@ -358,8 +359,12 @@ async function build(options) {
     if (options.target === "linux-x64") {
       await run("tar", ["--sort=name", `--mtime=@${epoch}`, "--owner=0", "--group=0", "--numeric-owner", "--format=posix", "--pax-option=delete=atime,delete=ctime", "-czf", artifact, "fac-isr-sms"], { cwd: stage, env: { GZIP: "-n" } });
     } else {
-      const names = (await walk(bundle)).map(({ path }) => `fac-isr-sms/${path}`);
-      await run("zip", ["-X", "-q", artifact, "-@"], { cwd: stage, input: `${names.join("\n")}\n` });
+      const entries = (await walk(bundle)).map(({ path, full }) => ({
+        archivePath: `fac-isr-sms/${path}`,
+        sourcePath: full,
+        mode: new Set(["runtime/node.exe", "bin/sms-admin.cmd"]).has(path) ? 0o555 : path === "config/sms.env.template" ? 0o640 : 0o444,
+      }));
+      await writeDeterministicZip(artifact, entries, epoch);
     }
     process.stdout.write(`${artifact}\n`);
   } finally {

@@ -81,11 +81,11 @@ jobs:
           set -euo pipefail
           docker image inspect "fac-isr-sms-edge:${GITHUB_SHA}" > scan-output/oci-inspect.json
           node -e 'const x=require("./scan-output/oci-inspect.json")[0];if(x.Os!=="linux"||x.Architecture!=="amd64"||x.Config.User!=="10001:10001")process.exit(1)'
-      - name: Scan exact OCI image for vulnerabilities
+      - name: Scan exact OCI archive for vulnerabilities
         id: oci_scan
         uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
         with:
-          image: fac-isr-sms-edge:${{ github.sha }}
+          image: oci-archive:SMS/artifacts/fac-isr-sms-${{ env.RELEASE_VERSION }}-linux-amd64.oci.tar
           fail-build: true
           severity-cutoff: high
           output-format: json
@@ -132,7 +132,7 @@ jobs:
         run: '"C:\Program Files\Git\usr\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append'
       - name: Require native Windows archive and signature tools
         shell: pwsh
-        run: Get-Command gpgv.exe, zip.exe, unzip.exe, zipinfo.exe | Out-Null
+        run: Get-Command gpgv.exe, unzip.exe, zipinfo.exe | Out-Null
       - name: Install locked development dependencies
         run: npm ci
       - name: Install Chromium for real console gates

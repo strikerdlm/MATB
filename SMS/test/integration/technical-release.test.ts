@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import { inspectCandidateArtifact, verifyTechnicalRelease } from "../../scripts/verify-technical-release.mjs";
 import * as releaseVerifier from "../../scripts/verify-technical-release.mjs";
+import { writeDeterministicZip } from "../../scripts/deterministic-zip.mjs";
 
 const execute = promisify(execFile);
 const SOURCE_COMMIT = "a".repeat(40);
@@ -106,16 +107,91 @@ async function nativeArchive(root: string, target: "linux-x64" | "win32-x64"): P
     : "TEST-ONLY-fac-isr-sms-0.2.0-rc.1-win32-x64.zip";
   const path = join(artifacts, name);
   if (target === "linux-x64") await execute("tar", ["-czf", path, "fac-isr-sms"], { cwd: stage });
-  else await execute("zip", ["-X", "-q", "-r", path, "fac-isr-sms"], { cwd: stage });
+  else await writeDeterministicZip(path, (await readdir(bundle)).filter((name) => !name.startsWith(".")).map((name) => ({
+    archivePath: `fac-isr-sms/${name}`,
+    sourcePath: join(bundle, name),
+    mode: 0o444,
+  })), 1_700_000_000);
   return { path, inventorySha256: sha256(inventoryText) };
 }
 
-interface OciOptions { readonly configUser?: string; readonly extraBlob?: boolean; readonly missingLayer?: boolean; readonly symlinkBlob?: boolean }
+interface OciOptions {
+  readonly badLayerChecksum?: boolean;
+  readonly configUser?: string;
+  readonly duplicateLayerPath?: boolean;
+  readonly emptyLayers?: boolean;
+  readonly emptyLayerTar?: boolean;
+  readonly escapingLayerLink?: boolean;
+  readonly extraBlob?: boolean;
+  readonly invalidLayerTar?: boolean;
+  readonly mismatchedDiffId?: boolean;
+  readonly missingLayer?: boolean;
+  readonly specialLayerEntry?: boolean;
+  readonly truncatedLayerTermination?: boolean;
+  readonly safeLayerLink?: boolean;
+  readonly symlinkBlob?: boolean;
+  readonly unsafeLayerPath?: boolean;
+}
 
-async function ociArchive(root: string, options: OciOptions = {}): Promise<{ path: string; inventorySha256: string }> {
+async function ociArchive(root: string, options: OciOptions = {}): Promise<{
+  path: string;
+  inventorySha256: string;
+  manifestDigest: string;
+  configDigest: string;
+  layerDigests: string[];
+  diffIds: string[];
+}> {
   const stage = join(root, "stage-oci");
   await rm(stage, { recursive: true, force: true });
   await mkdir(join(stage, "blobs/sha256"), { recursive: true });
+  const layerDigests: string[] = [];
+  const diffIds: string[] = [];
+  const layers: Array<{ mediaType: string; digest: string; size: number }> = [];
+  if (!options.emptyLayers) {
+    if (options.missingLayer) {
+      const missing = "d".repeat(64);
+      layers.push({ mediaType: "application/vnd.oci.image.layer.v1.tar", digest: `sha256:${missing}`, size: 12 });
+      layerDigests.push(`sha256:${missing}`);
+      diffIds.push(`sha256:${missing}`);
+    } else {
+      const layerRoot = join(root, "layer-input");
+      const layerPath = join(root, "layer.tar");
+      await rm(layerRoot, { recursive: true, force: true });
+      await mkdir(layerRoot);
+      if (options.invalidLayerTar) {
+        await writeFile(layerPath, "not a tar archive\n");
+      } else if (options.emptyLayerTar) {
+        const emptyList = join(root, "empty-layer-files.txt");
+        await writeFile(emptyList, "");
+        await execute("tar", ["-cf", layerPath, "--files-from", emptyList]);
+      } else if (options.specialLayerEntry) {
+        await execute("mkfifo", [join(layerRoot, "TEST-ONLY.fifo")]);
+        await execute("tar", ["-cf", layerPath, "TEST-ONLY.fifo"], { cwd: layerRoot });
+      } else {
+        await writeFile(join(layerRoot, "TEST-ONLY-layer.txt"), "controlled OCI layer\n");
+        if (options.safeLayerLink || options.escapingLayerLink) {
+          await symlink(options.escapingLayerLink ? "../escape.txt" : "TEST-ONLY-layer.txt", join(layerRoot, "TEST-ONLY-link.txt"));
+        }
+        const tarArguments = ["-cf", layerPath];
+        if (options.unsafeLayerPath) tarArguments.push("--transform", "s|TEST-ONLY-layer.txt|../escape.txt|");
+        tarArguments.push("TEST-ONLY-layer.txt");
+        if (options.duplicateLayerPath) tarArguments.push("./TEST-ONLY-layer.txt");
+        if (options.safeLayerLink || options.escapingLayerLink) tarArguments.push("TEST-ONLY-link.txt");
+        await execute("tar", tarArguments, { cwd: layerRoot });
+      }
+      let layer = await readFile(layerPath);
+      if (options.badLayerChecksum) {
+        layer = Buffer.from(layer);
+        layer[0] ^= 1;
+      }
+      if (options.truncatedLayerTermination) layer = layer.subarray(0, 1024);
+      const layerDigest = sha256(layer);
+      await writeFile(join(stage, "blobs/sha256", layerDigest), layer);
+      layers.push({ mediaType: "application/vnd.oci.image.layer.v1.tar", digest: `sha256:${layerDigest}`, size: layer.length });
+      layerDigests.push(`sha256:${layerDigest}`);
+      diffIds.push(`sha256:${options.mismatchedDiffId ? "0".repeat(64) : layerDigest}`);
+    }
+  }
   const config = Buffer.from(`${JSON.stringify({
     architecture: "amd64",
     os: "linux",
@@ -127,7 +203,7 @@ async function ociArchive(root: string, options: OciOptions = {}): Promise<{ pat
         "org.fac-isr.sms.runtime-provenance": "controlled-test-fixture",
       },
     },
-    rootfs: { type: "layers", diff_ids: [] },
+    rootfs: { type: "layers", diff_ids: diffIds },
   })}\n`);
   const configDigest = sha256(config);
   await writeFile(join(stage, "blobs/sha256", configDigest), config);
@@ -135,7 +211,7 @@ async function ociArchive(root: string, options: OciOptions = {}): Promise<{ pat
     schemaVersion: 2,
     mediaType: "application/vnd.oci.image.manifest.v1+json",
     config: { mediaType: "application/vnd.oci.image.config.v1+json", digest: `sha256:${configDigest}`, size: config.length },
-    layers: options.missingLayer ? [{ mediaType: "application/vnd.oci.image.layer.v1.tar", digest: `sha256:${"d".repeat(64)}`, size: 12 }] : [],
+    layers,
   })}\n`);
   const manifestDigest = sha256(manifest);
   await writeFile(join(stage, "blobs/sha256", manifestDigest), manifest);
@@ -158,7 +234,7 @@ async function ociArchive(root: string, options: OciOptions = {}): Promise<{ pat
   await mkdir(artifacts, { recursive: true });
   const path = join(artifacts, "TEST-ONLY-fac-isr-sms-0.2.0-rc.1-linux-amd64.oci.tar");
   await execute("tar", ["-cf", path, "blobs", "index.json", "oci-layout"], { cwd: stage });
-  return { path, inventorySha256: await sha256File(join(stage, "index.json")) };
+  return { path, inventorySha256: await sha256File(join(stage, "index.json")), manifestDigest: `sha256:${manifestDigest}`, configDigest: `sha256:${configDigest}`, layerDigests, diffIds };
 }
 
 async function replaceOciArtifact(fixture: Fixture, options: OciOptions): Promise<void> {
@@ -235,7 +311,7 @@ async function createFixture(): Promise<Fixture> {
   const allArtifactSha256s = Object.fromEntries(artifacts.map((artifact) => [artifact.target, artifact.sha256]));
   const scannerRaw = {
     "dependency-scan": { path: "scan-output/npm-audit.json", body: { auditReportVersion: 2, metadata: { vulnerabilities: { total: 0 } } } },
-    "oci-vulnerability-scan": { path: "scan-output/oci-vulnerabilities.json", body: { matches: [] } },
+    "oci-vulnerability-scan": { path: "scan-output/oci-vulnerabilities.json", body: { matches: [], source: { type: "oci-model", target: { userInput: `oci-archive:${artifacts[2].path}`, manifestDigest: oci.manifestDigest } } } },
     "malware-scan": { path: "scan-output/malware-scan.json", body: { malwareFound: 0, errors: 0, artifactSha256s: allArtifactSha256s } },
   } as const;
   for (const value of Object.values(scannerRaw)) await writeJson(join(root, value.path), value.body);
@@ -316,16 +392,36 @@ async function mutateEvidence(fixture: Fixture, type: string, mutation: (record:
   await resign(fixture);
 }
 
+async function mutateScannerRaw(fixture: Fixture, type: string, mutation: (record: Record<string, unknown>) => void): Promise<void> {
+  const manifest = JSON.parse(await readFile(fixture.manifestPath, "utf8")) as MutableManifest;
+  const item = manifest.evidence.find((candidate) => candidate.type === type) as MutableEvidenceItem & { scannerOutputPath?: string; scannerOutputSha256?: string };
+  if (!item?.scannerOutputPath) throw new Error(`missing scanner output fixture: ${type}`);
+  const rawPath = resolve(fixture.root, item.scannerOutputPath);
+  const raw = JSON.parse(await readFile(rawPath, "utf8")) as Record<string, unknown>;
+  mutation(raw);
+  await writeJson(rawPath, raw);
+  item.scannerOutputSha256 = await sha256File(rawPath);
+  const evidencePath = resolve(fixture.root, item.path);
+  const evidence = JSON.parse(await readFile(evidencePath, "utf8"));
+  evidence.scannerOutputSha256 = item.scannerOutputSha256;
+  await writeJson(evidencePath, evidence);
+  item.sha256 = await sha256File(evidencePath);
+  await writeJson(fixture.manifestPath, manifest);
+  await resign(fixture);
+}
+
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
 
 describe("technical release evidence gate", () => {
   it("accepts a fresh, exact, controlled TEST-ONLY signed fixture", async () => {
-    const report = await verify(await createFixture());
+    const fixture = await createFixture();
+    const report = await verify(fixture);
     expect(report.ok, JSON.stringify(report.checks, null, 2)).toBe(true);
     expect(report.technicalReady).toBe(true);
     expect(report.operationalReady).toBe(false);
+    expect(await readFile(join(fixture.publishPath, "release-public-key.pem"))).toEqual(await readFile(fixture.publicKeyPath));
   });
 
   it("rejects a stale source inventory and publishes no candidate", async () => {
@@ -415,6 +511,16 @@ describe("technical release evidence gate", () => {
     expect((await verify(findings)).ok).toBe(false);
   });
 
+  it("rejects a clean Grype report sourced from any OCI manifest other than the exact candidate", async () => {
+    const fixture = await createFixture();
+    await mutateScannerRaw(fixture, "oci-vulnerability-scan", (raw) => {
+      raw.source = { type: "oci-model", target: { userInput: "oci-archive:artifacts/other.oci.tar", manifestDigest: `sha256:${"f".repeat(64)}` } };
+    });
+    const report = await verify(fixture);
+    expect(report.ok).toBe(false);
+    expect(report.checks).toContainEqual(expect.objectContaining({ id: "fresh-evidence", status: "fail" }));
+  });
+
   it("rejects native special entries before extraction", async () => {
     const root = await mkdtemp(join(tmpdir(), "TEST-ONLY-native-special-"));
     temporaryDirectories.push(root);
@@ -426,8 +532,18 @@ describe("technical release evidence gate", () => {
   });
 
   it.each([
+    ["bad layer TAR checksum", { badLayerChecksum: true }],
+    ["aliased duplicate layer path", { duplicateLayerPath: true }],
     ["root container user", { configUser: "0:0" }],
+    ["empty layer set", { emptyLayers: true }],
+    ["empty layer TAR", { emptyLayerTar: true }],
+    ["escaping layer link", { escapingLayerLink: true }],
+    ["invalid layer TAR", { invalidLayerTar: true }],
+    ["mismatched diff ID", { mismatchedDiffId: true }],
     ["missing layer blob", { missingLayer: true }],
+    ["special layer entry", { specialLayerEntry: true }],
+    ["truncated layer termination", { truncatedLayerTermination: true }],
+    ["unsafe layer path", { unsafeLayerPath: true }],
     ["unexpected blob", { extraBlob: true }],
     ["symbolic blob", { symlinkBlob: true }],
   ] as const)("rejects an OCI layout with %s", async (_label, options) => {
@@ -438,6 +554,16 @@ describe("technical release evidence gate", () => {
     expect(report.checks).toContainEqual(expect.objectContaining({ id: "artifact-inventories", status: "fail" }));
   });
 
+  it("accepts a contained OCI layer symbolic link", async () => {
+    const root = await mkdtemp(join(tmpdir(), "TEST-ONLY-oci-safe-link-"));
+    temporaryDirectories.push(root);
+    const artifact = await ociArchive(root, { safeLayerLink: true });
+    await expect(inspectCandidateArtifact(artifact.path, "linux-amd64-oci", {
+      expectedSourceCommit: SOURCE_COMMIT,
+      testOnlyFixture: true,
+    })).resolves.toMatchObject({ ociManifestDigest: artifact.manifestDigest });
+  });
+
   it("removes private staging and exposes no destination after a publication copy failure", async () => {
     const fixture = await createFixture();
     const destination = join(fixture.root, "atomic-published");
@@ -446,7 +572,7 @@ describe("technical release evidence gate", () => {
     await expect(async () => atomicPublish(fixture.root, {
       artifacts: [{ path: "artifacts/does-not-exist", inventoryPath: "inventories/linux-x64.json" }],
       evidence: [],
-    }, fixture.manifestPath, fixture.signaturePath, destination)).rejects.toThrow();
+    }, fixture.manifestPath, fixture.signaturePath, fixture.publicKeyPath, destination)).rejects.toThrow();
     await expect(stat(destination)).rejects.toMatchObject({ code: "ENOENT" });
     expect((await readdir(fixture.root)).some((name) => name.startsWith(".atomic-published.staging-"))).toBe(false);
   });

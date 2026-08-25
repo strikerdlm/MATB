@@ -4,6 +4,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import { prepareVerifiedOciCandidate, removeVerifiedOciCandidate } from "./oci-candidate-runtime.mjs";
 import { inspectCandidateArtifact } from "./verify-technical-release.mjs";
 
 function parse(argv) {
@@ -21,6 +22,7 @@ function parse(argv) {
   if (!options.local && !/^[a-f0-9]{40}$/u.test(options.sourceCommit ?? "")) throw new Error("production CI requires exact --source-commit");
   if (!options.local && !options.nativeArtifact) throw new Error("production CI requires --native-artifact");
   if (!options.local && options.platform === "linux" && (!options.ociArtifact || !options.ociImage)) throw new Error("Linux production CI requires --oci-artifact and --oci-image");
+  if (!options.local && options.platform === "linux" && options.ociImage !== `fac-isr-sms-edge:${options.sourceCommit}`) throw new Error("Linux production CI requires the source-commit-specific build image");
   return options;
 }
 
@@ -80,7 +82,12 @@ async function main() {
       env: { SMS_LINUX_BUNDLE_PATH: resolve(options.nativeArtifact) },
     });
     ociInspection = await inspectCandidateArtifact(options.ociArtifact, "linux-amd64-oci", { expectedSourceCommit: options.sourceCommit });
-    await run(npm, ["run", "verify:oci-native", "--", options.ociImage], { timeoutMs: 180_000 });
+    const verifiedReference = await prepareVerifiedOciCandidate(options.ociImage, ociInspection);
+    try {
+      await run(npm, ["run", "verify:oci-native", "--", verifiedReference], { timeoutMs: 180_000 });
+    } finally {
+      await removeVerifiedOciCandidate(verifiedReference);
+    }
   } else {
     await run(npm, ["run", "verify:windows-native"], {
       timeoutMs: 10 * 60 * 1000,
