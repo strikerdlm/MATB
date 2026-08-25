@@ -2,7 +2,9 @@
 
 ## Document control
 
-- Release: `fac-isr-sms@0.1.0`
+- Release candidate: `fac-isr-sms@0.2.0-rc.1`
+- Technical readiness: independently established by `npm run verify:technical-release`; it is not acceptance.
+- Operational readiness: `operationalReady=false` pending all institutional decisions and limitation closure.
 - Profile: Colombian state-aviation unarmed ISR/support baseline
 - Acceptance status: **NOT OPERATIONALLY APPROVED — institutional reviews pending**
 - Machine-readable record: `operational-readiness-record.json`

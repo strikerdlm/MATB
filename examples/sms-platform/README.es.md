@@ -137,22 +137,22 @@ npm run verify:offline
 npm run verify:evidence-offline
 npm run verify:no-c2
 npm run verify:data-separation
-npm run release:manifest
-npm run release:sign
-npm run release:verify
+npm run verify:ci -- --platform linux --local
+npm run verify:technical-release -- --candidate <directorio-candidato> --source-commit <commit-40-hex> --public-key <clave-publica-externa.pem>
+npm run verify:operational -- --require-ready
 npm run verify:matrix
 npm run acceptance:packets
 npm run verify:acceptance
 npm run verify:all
 ```
 
-La lista identifica los scripts; los flujos parametrizados aún requieren argumentos. `release:manifest` requiere `-- --version <x.y.z>` igual a `SMS/package.json` y genera SBOM, escaneo de seguridad de la información e informe de pruebas antes del manifiesto canónico. `release:sign` requiere un identificador institucional y una entrada de firma externa; solo el custodio autorizado debe ejecutarlo. `release:verify` comprueba integridad y reporta la preparación operacional por separado. Nunca cree material de demostración ni confirme material controlado.
+La lista identifica los scripts; los flujos parametrizados aún requieren argumentos. La CI local de Linux usa artefactos controlados TEST-ONLY y no produce evidencia de producción. La CI de producción ejecuta los artefactos exactos en Ubuntu 24.04 y Windows Server 2022. `verify:technical-release` exige los tres nombres/inventarios exactos, SBOM y escaneos vigentes, humo nativo/OCI limpio, commit exacto, firma separada y clave pública externa. Puede establecer `technicalReady=true`, pero este RC exige `operationalReady=false`. Nunca cree material de firma institucional de demostración ni confirme material controlado. Consulte la [guía del operador](../../SMS/docs/operator-guide.md).
 
 `verify:matrix` ejecuta la matriz de evidencia y escribe deliberadamente un informe con operationalReady=false aunque pasen todos los requisitos técnicos. `acceptance:packets` requiere `-- --output <empty-directory> --as-of <exact-UTC>` y opcionalmente un `--scope` aprobado; genera paquetes deterministas no firmados fuera de `SMS/docs/release`. Esos paquetes no son decisiones.
 
 `acceptance:record` se omite deliberadamente del bloque masivo porque no es una verificación automatizada rutinaria. Su simulación requiere un paquete vigente y una decisión institucional controlada suministrada por una persona; aplicar el registro es una acción mutante separada. Nunca rellene una plantilla con revisores, aprobaciones, tiempos, evidencia o resultados inventados. Revisores institucionales calificados deben resolver los ámbitos RACAE/traducción, lista operacional, autoridad de riesgo, emergencias, ciberseguridad/despliegue, datos geográficos oficiales, factores humanos, separación de investigación y formación/promoción de seguridad operacional.
 
-`verify:acceptance` valida la evidencia registrada a una fecha UTC explícita; `--require-ready` es una compuerta estricta opcional. `verify:all` combina tipos, lint, matriz y aceptación. Una compilación, pruebas, matriz, integridad de liberación o generación de paquetes satisfactoria puede coexistir con operationalReady=false. Solo el flujo institucional humano controlado puede cambiar ese estado.
+`verify:operational` (nombre vigente del verificador institucional; `verify:acceptance` sigue como alias) valida la evidencia registrada a una fecha UTC explícita. `--require-ready` falla intencionalmente para 0.2.0-rc.1 mientras existan limitaciones/revisiones abiertas. `verify:all` combina tipos, lint, matriz y aceptación. Una compilación, pruebas, matriz o compuerta técnica satisfactoria puede coexistir con `operationalReady=false`. Solo el flujo institucional humano controlado puede cambiar ese estado.
 
 ## Interpretación de seguridad operacional
 

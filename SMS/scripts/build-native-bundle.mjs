@@ -74,12 +74,16 @@ function parse(argv) {
 
 function run(command, args, options = {}) {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, args, { cwd: options.cwd, env: { ...process.env, TZ: "UTC", ...options.env }, stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit" });
+    const stdio = options.capture
+      ? [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"]
+      : options.input === undefined ? "inherit" : ["pipe", "inherit", "inherit"];
+    const child = spawn(command, args, { cwd: options.cwd, env: { ...process.env, TZ: "UTC", ...options.env }, stdio });
     const stdout = [];
     const stderr = [];
     child.stdout?.on("data", (chunk) => stdout.push(chunk));
     child.stderr?.on("data", (chunk) => stderr.push(chunk));
     child.once("error", reject);
+    if (options.input !== undefined) child.stdin.end(options.input);
     child.once("close", (code) => {
       const result = { code, stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8") };
       if (code === 0) resolvePromise(result);
@@ -355,7 +359,7 @@ async function build(options) {
       await run("tar", ["--sort=name", `--mtime=@${epoch}`, "--owner=0", "--group=0", "--numeric-owner", "--format=posix", "--pax-option=delete=atime,delete=ctime", "-czf", artifact, "fac-isr-sms"], { cwd: stage, env: { GZIP: "-n" } });
     } else {
       const names = (await walk(bundle)).map(({ path }) => `fac-isr-sms/${path}`);
-      await run("zip", ["-X", "-q", artifact, ...names], { cwd: stage });
+      await run("zip", ["-X", "-q", artifact, "-@"], { cwd: stage, input: `${names.join("\n")}\n` });
     }
     process.stdout.write(`${artifact}\n`);
   } finally {

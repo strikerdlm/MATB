@@ -10,16 +10,14 @@ export const KNOWN_LIMITATION_CATEGORIES: readonly [
   "cybersecurity-deployment", "performance-validation",
 ];
 export const ACCEPTANCE_EVIDENCE_PATHS: readonly [
-  "docs/release/known-limitations.md", "docs/release/release-manifest.json",
-  "docs/release/release-manifest.sig", "docs/release/release-public-key.pem",
-  "docs/release/sbom.cdx.json", "docs/release/security-scan.json",
-  "docs/release/state-aviation-acceptance-checklist.md", "docs/release/test-report.json",
+  "docs/operator-guide.md", "docs/release/known-limitations.md",
+  "docs/release/state-aviation-acceptance-checklist.md",
   "docs/release/verification-matrix.md",
 ];
 export const ACCEPTANCE_STATE_PATHS: readonly [
   "docs/release/operational-readiness-record.json", "docs/release/verification-signatures.jsonl",
   "docs/release/state-aviation-acceptance-checklist.md", "docs/release/known-limitations.md",
-  "docs/release/verification-matrix.md", "docs/release/release-manifest.json",
+  "docs/release/verification-matrix.md",
 ];
 
 export type AcceptanceDecision = "accept" | "accept-with-conditions" | "reject";
