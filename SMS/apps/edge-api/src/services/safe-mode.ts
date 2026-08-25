@@ -10,6 +10,8 @@ import type { ActiveSafetyPackage, ActiveSafetyPackageSource } from "./safety-ev
 export type PackageState = "verified" | "active" | "quarantined";
 export type TrustedKeyAlgorithm = "ed25519" | "rsa-sha256";
 export type TrustedKeyScope = SignedPackageManifest["kind"];
+const PACKAGE_ID = /^[a-z0-9][a-z0-9._-]{2,127}$/;
+const PACKAGE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 export interface TrustedKeyRecord {
   readonly keyId: string;
@@ -51,6 +53,7 @@ export interface PackageRecord {
   readonly directory?: string;
   readonly manifest?: SignedPackageManifest;
   readonly verifiedProvenance?: VerifiedPackageProvenance;
+  readonly untrustedManifestSha256?: string;
   readonly checks: readonly PackageCheck[];
 }
 
@@ -58,6 +61,7 @@ export interface VerifiedPackageProvenance {
   readonly packageId: string;
   readonly version: string;
   readonly contentSha256: string;
+  readonly effectiveFromUtc: string;
 }
 
 export interface MissionExport {
@@ -120,7 +124,10 @@ function text(value: unknown, fallback: string): string {
 function manifestIdentity(value: unknown): { packageId: string; version: string } {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return { packageId: "unknown", version: "unknown" };
   const manifest = value as Record<string, unknown>;
-  return { packageId: text(manifest.packageId, "unknown"), version: text(manifest.version, "unknown") };
+  return {
+    packageId: typeof manifest.packageId === "string" && PACKAGE_ID.test(manifest.packageId) ? manifest.packageId : "unknown",
+    version: typeof manifest.version === "string" && PACKAGE_VERSION.test(manifest.version) ? manifest.version : "unknown",
+  };
 }
 
 function checksFromReport(report: VerificationReport): readonly PackageCheck[] {
@@ -216,7 +223,7 @@ export class SafeModeService implements ActiveSafetyPackageSource {
     } catch (error) {
       const reason = error instanceof PackageVerificationError ? error.message : error instanceof Error ? error.message : String(error);
       const checks = error instanceof PackageVerificationError ? checksFromReport(error.report) : [{ id: "verification", status: "fail" as const, reason }];
-      record = detached({ packageId: identity.packageId, version: identity.version, state: "quarantined" as const, reason, importedAtUtc, ...(validatedManifest === undefined ? {} : { manifest: validatedManifest }), checks });
+      record = detached({ packageId: identity.packageId, version: identity.version, state: "quarantined" as const, reason, importedAtUtc, ...(validatedManifest === undefined ? (envelope.manifest === undefined ? {} : { untrustedManifestSha256: hashPayload(envelope.manifest) }) : { manifest: validatedManifest }), checks });
       eventType = "package.quarantined";
     }
     const prior = this.packages;
@@ -486,11 +493,14 @@ function parsePackageRecord(value: unknown): PackageRecord {
       packageId: requiredStoredText(raw.packageId, "verifiedProvenance.packageId"),
       version: requiredStoredText(raw.version, "verifiedProvenance.version"),
       contentSha256: requiredStoredSha256(raw.contentSha256, "verifiedProvenance.contentSha256"),
+      effectiveFromUtc: requiredStoredUtc(raw.effectiveFromUtc, "verifiedProvenance.effectiveFromUtc"),
     };
-    if (verifiedProvenance.packageId !== packageId || verifiedProvenance.version !== version || manifest?.contentSha256 !== verifiedProvenance.contentSha256) throw new Error("verified package provenance does not match its immutable record");
+    if (verifiedProvenance.packageId !== packageId || verifiedProvenance.version !== version || manifest?.contentSha256 !== verifiedProvenance.contentSha256 || manifest.effectiveFromUtc !== verifiedProvenance.effectiveFromUtc) throw new Error("verified package provenance does not match its immutable record");
   }
   if (record.state !== "quarantined" && verifiedProvenance === undefined) throw new Error("non-quarantined package record lacks verified provenance");
-  return detached({ packageId, version, state: record.state as PackageState, reason, importedAtUtc: record.importedAtUtc, ...(directory === undefined ? {} : { directory }), ...(manifest === undefined ? {} : { manifest }), ...(verifiedProvenance === undefined ? {} : { verifiedProvenance }), checks });
+  const untrustedManifestSha256 = record.untrustedManifestSha256 === undefined ? undefined : requiredStoredSha256(record.untrustedManifestSha256, "untrustedManifestSha256");
+  if (untrustedManifestSha256 !== undefined && (record.state !== "quarantined" || manifest !== undefined || verifiedProvenance !== undefined)) throw new Error("untrusted manifest digest is invalid for this package record");
+  return detached({ packageId, version, state: record.state as PackageState, reason, importedAtUtc: record.importedAtUtc, ...(directory === undefined ? {} : { directory }), ...(manifest === undefined ? {} : { manifest }), ...(verifiedProvenance === undefined ? {} : { verifiedProvenance }), ...(untrustedManifestSha256 === undefined ? {} : { untrustedManifestSha256 }), checks });
 }
 
 function requiredStoredText(value: unknown, field: string): string {
@@ -500,6 +510,11 @@ function requiredStoredText(value: unknown, field: string): string {
 
 function requiredStoredSha256(value: unknown, field: string): string {
   if (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value)) throw new Error(`package record ${field} is invalid`);
+  return value;
+}
+
+function requiredStoredUtc(value: unknown, field: string): string {
+  if (!isExactUtc(value)) throw new Error(`package record ${field} is invalid`);
   return value;
 }
 
@@ -524,10 +539,11 @@ function assertUniquePackageRecords(records: readonly PackageRecord[]): void {
 }
 
 function provenanceFor(manifest: SignedPackageManifest): VerifiedPackageProvenance {
-  return { packageId: manifest.packageId, version: manifest.version, contentSha256: manifest.contentSha256 };
+  return { packageId: manifest.packageId, version: manifest.version, contentSha256: manifest.contentSha256, effectiveFromUtc: manifest.effectiveFromUtc };
 }
 
 function rejectVerifiedDowngrade(current: VerifiedPackageProvenance, incoming: SignedPackageManifest): void {
+  if (Date.parse(incoming.effectiveFromUtc) < Date.parse(current.effectiveFromUtc)) throw new Error(`package effective-period downgrade rejected: ${current.effectiveFromUtc} -> ${incoming.effectiveFromUtc}`);
   const currentParts = current.version.split(".").map(Number);
   const incomingParts = incoming.version.split(".").map(Number);
   for (let index = 0; index < 3; index += 1) {

@@ -105,6 +105,21 @@ function activePackageResolver(evidenceSnapshot: unknown, requirements: unknown)
   });
 }
 
+function normalizedRequirement(requirementId: string, evidenceId: string) {
+  return {
+    requirementId,
+    sourceRefs: [{ evidenceId, sourceId: "source-1", edition: "1", locator: { section: "1" }, quoteLanguage: "es", extractionSha256: "a".repeat(64), reviewState: "accepted" }],
+    Spanish: `Requisito ${requirementId}`,
+    EnglishControlled: `Requirement ${requirementId}`,
+    applicabilityExpression: "state_aviation",
+    severity: "hard",
+    evidenceRequired: true,
+    effectiveFromUtc: "2026-01-01T00:00:00.000Z",
+    interpretationStatus: "approved",
+    reviewerIds: ["reviewer-1"],
+  };
+}
+
 describe("server-owned safety authority", () => {
   let app: EdgeServer | undefined;
 
@@ -336,6 +351,21 @@ describe("server-owned safety authority", () => {
     const resolver = activePackageResolver({ snapshotId: "evidence-1", requirementIds: ["requirement-1"], acceptedEvidenceIds: [] }, requirements);
 
     await expect(resolver.resolve(missionFixture() as never, nowUtc)).rejects.toThrow(/evidence/i);
+  });
+
+  it("accepts one immutable evidence identity cited by multiple distinct requirements", async () => {
+    const requirements = [normalizedRequirement("requirement-1", "evidence-1"), normalizedRequirement("requirement-2", "evidence-1")];
+    const resolver = activePackageResolver({ snapshotId: "evidence-1", requirementIds: ["requirement-1", "requirement-2"], acceptedEvidenceIds: ["evidence-1"] }, requirements);
+
+    await expect(resolver.resolve(missionFixture() as never, nowUtc)).resolves.toMatchObject({ requirements: [{ requirementId: "requirement-1" }, { requirementId: "requirement-2" }] });
+  });
+
+  it("rejects duplicate evidence reference records within one requirement", async () => {
+    const requirement = normalizedRequirement("requirement-1", "evidence-1");
+    const requirements = [{ ...requirement, sourceRefs: [requirement.sourceRefs[0], requirement.sourceRefs[0]] }];
+    const resolver = activePackageResolver({ snapshotId: "evidence-1", requirementIds: ["requirement-1"], acceptedEvidenceIds: ["evidence-1"] }, requirements);
+
+    await expect(resolver.resolve(missionFixture() as never, nowUtc)).rejects.toThrow(/duplicate.*reference/i);
   });
 
   it("rejects nested safetyResult inside a revision change", async () => {

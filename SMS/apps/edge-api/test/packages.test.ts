@@ -361,6 +361,60 @@ describe("signed package import and quarantine", () => {
     expect(forward.state).toBe("verified");
   });
 
+  it("rejects a newer version whose effective period predates quarantined verified provenance after restart", async () => {
+    const root = mkdtempSync(join(tmpdir(), "fac-isr-package-effective-high-water-"));
+    const databaseUrl = join(root, "edge.sqlite");
+    const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const record = trustedKey(keys);
+    const dependencies = { trustedKeyStore: { get: () => record }, now: () => asOfUtc };
+    const three = signedPackage(root, "3.0.0", keys);
+    const fourBase = signedPackage(root, "4.0.0", keys);
+    const four = {
+      ...fourBase,
+      manifest: signManifest({ ...fourBase.manifest, issuedAtUtc: "2025-12-31T00:00:00.000Z", effectiveFromUtc: "2026-01-01T00:00:00.000Z", signature: "" }, keys.privateKey.export({ type: "pkcs1", format: "pem" }).toString()),
+    };
+    let server = await authenticatedTestServer({ databaseUrl, internet: "disabled", packageDirectory: root }, undefined, dependencies);
+    app = server.app;
+    const imported = await app.safeModeService.importPackage({ ...three, keyId: record.keyId }, context);
+    await app.safeModeService.activatePackage({ packageId: imported.packageId, version: imported.version, keyId: record.keyId }, context);
+    writeFileSync(join(root, three.directory, "map.txt"), "tampered effective high-water package");
+    await app.safeModeService.getPackageState();
+    await app.close();
+    app = undefined;
+
+    server = await authenticatedTestServer({ databaseUrl, internet: "disabled", packageDirectory: root }, undefined, dependencies);
+    app = server.app;
+    const rollback = await app.safeModeService.importPackage({ ...four, keyId: record.keyId }, context);
+
+    expect(rollback).toMatchObject({ state: "quarantined", reason: expect.stringMatching(/effective|period|downgrade/i) });
+  });
+
+  it("fails closed when reloading pre-effective-date verified provenance", async () => {
+    const root = mkdtempSync(join(tmpdir(), "fac-isr-package-old-provenance-"));
+    const databaseUrl = join(root, "edge.sqlite");
+    const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const record = trustedKey(keys);
+    const dependencies = { trustedKeyStore: { get: () => record }, now: () => asOfUtc };
+    const one = signedPackage(root, "1.0.0", keys);
+    const two = signedPackage(root, "2.0.0", keys);
+    let server = await authenticatedTestServer({ databaseUrl, internet: "disabled", packageDirectory: root }, undefined, dependencies);
+    app = server.app;
+    const imported = await app.safeModeService.importPackage({ ...one, keyId: record.keyId }, context);
+    await app.safeModeService.activatePackage({ packageId: imported.packageId, version: imported.version, keyId: record.keyId }, context);
+    const row = app.edgeDatabase.sql().prepare("SELECT value FROM service_state WHERE key = ?").get("package_store") as { value: string };
+    const oldSnapshot = JSON.parse(row.value) as Array<{ verifiedProvenance?: { effectiveFromUtc?: string } }>;
+    delete oldSnapshot[0]?.verifiedProvenance?.effectiveFromUtc;
+    app.edgeDatabase.sql().prepare("UPDATE service_state SET value = ? WHERE key = ?").run(JSON.stringify(oldSnapshot), "package_store");
+    await app.close();
+    app = undefined;
+
+    server = await authenticatedTestServer({ databaseUrl, internet: "disabled", packageDirectory: root }, undefined, dependencies);
+    app = server.app;
+
+    expect((await app.safeModeService.getPackageState()).active).toEqual([]);
+    await expect(app.safeModeService.importPackage({ ...two, keyId: record.keyId }, context)).rejects.toMatchObject({ code: "SAFE_MODE_DATABASE_FAILURE" });
+  });
+
   it("reloads malformed quarantine evidence without disabling valid package writes", async () => {
     const root = mkdtempSync(join(tmpdir(), "fac-isr-malformed-quarantine-reload-"));
     const databaseUrl = join(root, "edge.sqlite");
@@ -383,6 +437,31 @@ describe("signed package import and quarantine", () => {
     const state = await app.safeModeService.getPackageState();
 
     expect(state.quarantined).toEqual(expect.arrayContaining([expect.objectContaining({ packageId: "bad-package", state: "quarantined" })]));
+    await expect(app.safeModeService.importPackage({ ...fixture, keyId: record.keyId }, context)).resolves.toMatchObject({ state: "verified" });
+  });
+
+  it("canonicalizes whitespace-malformed quarantine identity before restart", async () => {
+    const root = mkdtempSync(join(tmpdir(), "fac-isr-whitespace-quarantine-reload-"));
+    const databaseUrl = join(root, "edge.sqlite");
+    let server = await authenticatedTestServer({ databaseUrl, internet: "disabled", packageDirectory: root });
+    app = server.app;
+    const malformed = await app.safeModeService.importPackage({ directory: ".", manifest: { schemaVersion: "1.0", packageId: " bad-package ", kind: "map", version: " 9.0.0 " }, keyId: "missing-key" }, context);
+    expect(malformed).toMatchObject({ state: "quarantined", packageId: "unknown", version: "unknown", untrustedManifestSha256: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    await app.close();
+    app = undefined;
+
+    const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const record = trustedKey(keys);
+    const fixture = signedPackage(root, "1.0.0", keys);
+    server = await authenticatedTestServer(
+      { databaseUrl, internet: "disabled", packageDirectory: root },
+      undefined,
+      { trustedKeyStore: { get: () => record }, now: () => asOfUtc },
+    );
+    app = server.app;
+    const state = await app.safeModeService.getPackageState();
+
+    expect(state.quarantined).toEqual(expect.arrayContaining([expect.objectContaining({ packageId: "unknown", version: "unknown", untrustedManifestSha256: expect.stringMatching(/^[a-f0-9]{64}$/) })]));
     await expect(app.safeModeService.importPackage({ ...fixture, keyId: record.keyId }, context)).resolves.toMatchObject({ state: "verified" });
   });
 

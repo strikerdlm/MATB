@@ -164,7 +164,7 @@ function parseEvidenceSnapshot(value: unknown, requestedSnapshotId: string, requ
   if (snapshot.snapshotId !== requestedSnapshotId) throw new Error(`active evidence snapshot identity does not match mission snapshot ${requestedSnapshotId}`);
   const requirementIds = requirements.map((requirement) => requirement.requirementId);
   if (!sameStringSet(snapshot.requirementIds, requirementIds)) throw new Error("evidence snapshot requirement references do not match the evaluated requirements");
-  const referencedEvidenceIds = requirements.flatMap((requirement) => requirement.sourceRefs.map((reference) => String(reference.evidenceId)));
+  const referencedEvidenceIds = [...new Set(requirements.flatMap((requirement) => requirement.sourceRefs.map((reference) => String(reference.evidenceId))))];
   if (!sameStringSet(snapshot.acceptedEvidenceIds, referencedEvidenceIds)) throw new Error("evidence snapshot accepted evidence references do not match requirement evidence");
   return deepFreeze(snapshot);
 }
@@ -198,6 +198,8 @@ function parseRequirement(value: unknown, index: number, asOfUtc: string): Norma
   if (reviewerIds.length === 0) throw new Error(`${field} requires an accountable reviewer`);
   if (!Array.isArray(requirement.sourceRefs)) throw new Error(`${field} sourceRefs must be an array`);
   const sourceRefs = requirement.sourceRefs.map((reference, referenceIndex) => parseEvidenceReference(reference, `${field} sourceRefs[${referenceIndex}]`));
+  const referenceRecords = sourceRefs.map((reference) => canonicalJson(reference));
+  if (new Set(referenceRecords).size !== referenceRecords.length) throw new Error(`${field} has duplicate evidence reference records`);
   if (requirement.evidenceRequired && sourceRefs.length === 0) throw new Error(`${field} requires evidence references`);
   return {
     requirementId: nonEmptyText(requirement.requirementId, `${field} requirementId`),
