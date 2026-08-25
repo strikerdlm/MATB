@@ -37,8 +37,16 @@ export interface CandidateArtifactInspection {
 export function inspectCandidateArtifact(
   artifactPath: string,
   target: CandidateArtifactInspection["target"],
-  options?: { readonly testOnlyFixture?: boolean },
+  options?: { readonly testOnlyFixture?: boolean; readonly expectedSourceCommit?: string },
 ): Promise<CandidateArtifactInspection>;
+
+export function publishCandidateAtomic(
+  root: string,
+  manifest: unknown,
+  manifestPath: string,
+  signaturePath: string,
+  destination: string,
+): Promise<void>;
 
 export function verifyTechnicalRelease(
   candidateRoot: string,

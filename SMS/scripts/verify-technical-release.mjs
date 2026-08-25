@@ -2,7 +2,7 @@
 
 import { createHash, createPublicKey, verify as verifySignature } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
+import { chmod, cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { spawn } from "node:child_process";
@@ -83,13 +83,31 @@ async function regularFile(path, field) {
   return info;
 }
 
-function safeArchiveListing(output) {
+function safeArchiveListing(output, expectedRoot) {
+  const seen = new Set();
   for (const raw of output.split(/\r?\n/u).filter(Boolean)) {
-    const path = raw.replaceAll("\\", "/");
+    const path = raw.replaceAll("\\", "/").replace(/\/$/u, "");
     if (path.startsWith("/") || /^[A-Za-z]:\//u.test(path) || path.split("/").includes("..")) {
       throw new Error(`unsafe archive path: ${raw}`);
     }
+    if (expectedRoot !== undefined && path !== expectedRoot && !path.startsWith(`${expectedRoot}/`)) throw new Error(`unexpected archive root: ${raw}`);
+    if (seen.has(path)) throw new Error(`duplicate archive path: ${raw}`);
+    seen.add(path);
   }
+  return seen;
+}
+
+function rejectSpecialTarEntries(output) {
+  for (const line of output.split(/\r?\n/u).filter(Boolean)) {
+    const type = line[0];
+    if (type !== "-" && type !== "d") throw new Error(`special archive entry is forbidden: ${line}`);
+  }
+}
+
+function rejectSpecialZipEntries(output, expectedCount) {
+  const entries = output.split(/\r?\n/u).filter((line) => /^[bcdlps-][rwx-]{9}\s/u.test(line));
+  if (entries.length !== expectedCount) throw new Error("ZIP metadata does not cover every archive entry");
+  for (const line of entries) if (line[0] !== "-" && line[0] !== "d") throw new Error(`special archive entry is forbidden: ${line}`);
 }
 
 function expectedIdentity(testOnlyFixture) {
@@ -105,17 +123,13 @@ async function verifyNativeArtifact(path, record, target, testOnlyFixture) {
   try {
     if (target === "linux-x64") {
       const listing = await run("tar", ["-tzf", path]);
-      safeArchiveListing(listing.stdout);
+      safeArchiveListing(listing.stdout, "fac-isr-sms");
+      rejectSpecialTarEntries((await run("tar", ["-tvzf", path])).stdout);
       await run("tar", ["-xzf", path, "-C", stage, "--no-same-owner"]);
-    } else if (process.platform === "win32") {
-      const command = [
-        "$ErrorActionPreference='Stop';",
-        `Expand-Archive -LiteralPath '${path.replaceAll("'", "''")}' -DestinationPath '${stage.replaceAll("'", "''")}'`,
-      ].join(" ");
-      await run("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command]);
     } else {
       const listing = await run("unzip", ["-Z1", path]);
-      safeArchiveListing(listing.stdout);
+      const paths = safeArchiveListing(listing.stdout, "fac-isr-sms");
+      rejectSpecialZipEntries((await run("zipinfo", ["-l", path])).stdout, paths.size);
       await run("unzip", ["-q", path, "-d", stage]);
     }
     const roots = await readdir(stage, { withFileTypes: true });
@@ -142,27 +156,73 @@ async function verifyNativeArtifact(path, record, target, testOnlyFixture) {
   }
 }
 
-async function verifyOciArtifact(path, record, testOnlyFixture) {
+function validDescriptor(descriptor, mediaTypes) {
+  return descriptor !== null && typeof descriptor === "object" && mediaTypes.includes(descriptor.mediaType)
+    && /^sha256:[a-f0-9]{64}$/u.test(descriptor.digest) && Number.isSafeInteger(descriptor.size) && descriptor.size > 0;
+}
+
+async function verifyDescriptorBlob(stage, descriptor, label) {
+  const blobPath = join(stage, "blobs/sha256", descriptor.digest.slice("sha256:".length));
+  const info = await regularFile(blobPath, label);
+  if (info.size !== descriptor.size || await sha256File(blobPath) !== descriptor.digest.slice("sha256:".length)) {
+    throw new Error(`${label} descriptor does not match its blob`);
+  }
+  return blobPath;
+}
+
+async function verifyOciArtifact(path, record, testOnlyFixture, expectedSourceCommit) {
   const stage = await mkdtemp(join(tmpdir(), "sms-release-oci-"));
   try {
     const listing = await run("tar", ["-tf", path]);
     safeArchiveListing(listing.stdout);
+    const originalPaths = new Set(listing.stdout.split(/\r?\n/u).filter(Boolean).map((item) => item.replace(/\/$/u, "")));
+    if (!originalPaths.has("index.json") || !originalPaths.has("oci-layout")) throw new Error("OCI archive is missing index.json or oci-layout");
+    for (const item of originalPaths) {
+      if (item !== "index.json" && item !== "oci-layout" && item !== "blobs" && item !== "blobs/sha256" && !/^blobs\/sha256\/[a-f0-9]{64}$/u.test(item)) {
+        throw new Error(`unexpected OCI archive path: ${item}`);
+      }
+    }
+    rejectSpecialTarEntries((await run("tar", ["-tvf", path])).stdout);
     await run("tar", ["-xf", path, "-C", stage, "--no-same-owner"]);
     const layout = JSON.parse(await readFile(join(stage, "oci-layout"), "utf8"));
     const indexPath = join(stage, "index.json");
     const index = JSON.parse(await readFile(indexPath, "utf8"));
-    if (layout.imageLayoutVersion !== "1.0.0" || index.schemaVersion !== 2 || !Array.isArray(index.manifests) || index.manifests.length !== 1) {
+    if (layout.imageLayoutVersion !== "1.0.0" || index.schemaVersion !== 2 || index.mediaType !== "application/vnd.oci.image.index.v1+json"
+      || !Array.isArray(index.manifests) || index.manifests.length !== 1) {
       throw new Error("OCI layout/index contract is invalid");
     }
     const descriptor = index.manifests[0];
     const expectedReference = `${testOnlyFixture ? "TEST-ONLY-" : ""}fac-isr-sms:${RELEASE}`;
     if (descriptor.platform?.os !== "linux" || descriptor.platform?.architecture !== "amd64"
       || descriptor.annotations?.["org.opencontainers.image.ref.name"] !== expectedReference
-      || !/^sha256:[a-f0-9]{64}$/u.test(descriptor.digest)) throw new Error("OCI platform or release reference is invalid");
-    const manifestPath = join(stage, "blobs/sha256", descriptor.digest.slice("sha256:".length));
-    const info = await regularFile(manifestPath, "OCI manifest blob");
-    if (info.size !== descriptor.size || await sha256File(manifestPath) !== descriptor.digest.slice("sha256:".length)) {
-      throw new Error("OCI manifest descriptor does not match its blob");
+      || !validDescriptor(descriptor, ["application/vnd.oci.image.manifest.v1+json"])) throw new Error("OCI platform or release reference is invalid");
+    const manifestPath = await verifyDescriptorBlob(stage, descriptor, "OCI manifest blob");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    if (manifest.schemaVersion !== 2 || manifest.mediaType !== "application/vnd.oci.image.manifest.v1+json"
+      || !validDescriptor(manifest.config, ["application/vnd.oci.image.config.v1+json"]) || !Array.isArray(manifest.layers)) {
+      throw new Error("OCI manifest contract is invalid");
+    }
+    const descriptors = [manifest.config, ...manifest.layers];
+    const layerTypes = ["application/vnd.oci.image.layer.v1.tar", "application/vnd.oci.image.layer.v1.tar+gzip", "application/vnd.oci.image.layer.v1.tar+zstd"];
+    if (manifest.layers.some((layer) => !validDescriptor(layer, layerTypes))) throw new Error("OCI layer descriptor is invalid");
+    const digests = new Set([descriptor.digest]);
+    for (const [indexNumber, item] of descriptors.entries()) {
+      if (digests.has(item.digest)) throw new Error("OCI descriptors contain a duplicate digest");
+      digests.add(item.digest);
+      await verifyDescriptorBlob(stage, item, indexNumber === 0 ? "OCI config blob" : `OCI layer ${indexNumber}`);
+    }
+    const actualBlobs = (await readdir(join(stage, "blobs/sha256"), { withFileTypes: true })).map((entry) => {
+      if (!entry.isFile() || entry.isSymbolicLink() || !/^[a-f0-9]{64}$/u.test(entry.name)) throw new Error(`unsupported OCI blob entry: ${entry.name}`);
+      return `sha256:${entry.name}`;
+    }).sort();
+    if (JSON.stringify(actualBlobs) !== JSON.stringify([...digests].sort())) throw new Error("OCI layout has missing or unexpected blobs");
+    const config = JSON.parse(await readFile(join(stage, "blobs/sha256", manifest.config.digest.slice(7)), "utf8"));
+    const labels = config.config?.Labels;
+    const expectedProvenance = testOnlyFixture ? "controlled-test-fixture" : "official-node-pinned-image";
+    if (config.os !== "linux" || config.architecture !== "amd64" || config.config?.User !== "10001:10001"
+      || labels?.["org.opencontainers.image.version"] !== RELEASE || labels?.["org.fac-isr.sms.runtime-provenance"] !== expectedProvenance
+      || (expectedSourceCommit !== undefined && labels?.["org.opencontainers.image.revision"] !== expectedSourceCommit)) {
+      throw new Error("OCI config platform, non-root user, release, source, or provenance is invalid");
     }
     const inventorySha256 = await sha256File(indexPath);
     if (record?.contentInventorySha256 !== undefined && record.contentInventorySha256 !== inventorySha256) throw new Error("OCI inventory digest differs from release evidence");
@@ -182,7 +242,7 @@ export async function inspectCandidateArtifact(artifactPathInput, target, option
   if (basename(artifactPath) !== artifactName) throw new Error(`candidate artifact must be named ${artifactName}`);
   const contentInventorySha256 = expected.kind === "native"
     ? await verifyNativeArtifact(artifactPath, undefined, target, options.testOnlyFixture === true)
-    : await verifyOciArtifact(artifactPath, undefined, options.testOnlyFixture === true);
+    : await verifyOciArtifact(artifactPath, undefined, options.testOnlyFixture === true, options.expectedSourceCommit);
   const info = await stat(artifactPath);
   return {
     target,
@@ -221,7 +281,7 @@ async function assertArtifacts(root, manifest, expectedSourceCommit, testOnlyFix
       || inventory.contentInventorySha256 === undefined || !SHA256.test(inventory.contentInventorySha256)) {
       throw new Error(`platform inventory provenance differs: ${expected.target}`);
     }
-    const inspected = await inspectCandidateArtifact(artifactPath, expected.target, { testOnlyFixture });
+    const inspected = await inspectCandidateArtifact(artifactPath, expected.target, { testOnlyFixture, expectedSourceCommit });
     if (inspected.contentInventorySha256 !== inventory.contentInventorySha256) throw new Error(`content inventory differs: ${expected.target}`);
   }
 }
@@ -245,46 +305,93 @@ async function assertFreshEvidence(root, manifest, expectedSourceCommit, now, ma
     }
     byType.set(item.type, record);
   }
+  const artifactHashes = Object.fromEntries(manifest.artifacts.map((artifact) => [artifact.target, artifact.sha256]));
+  const exactArtifactHashes = (record, targets, label) => {
+    const expected = Object.fromEntries(targets.map((target) => [target, artifactHashes[target]]));
+    if (record?.artifactSha256s === null || typeof record?.artifactSha256s !== "object"
+      || JSON.stringify(Object.keys(record.artifactSha256s).sort()) !== JSON.stringify(Object.keys(expected).sort())
+      || Object.entries(expected).some(([target, digest]) => record.artifactSha256s[target] !== digest)) {
+      throw new Error(`${label} does not bind the exact required artifact hashes`);
+    }
+  };
   const sbom = byType.get("sbom");
   if (sbom.bomFormat !== "CycloneDX" || !Array.isArray(sbom.components) || sbom.components.length === 0) throw new Error("fresh CycloneDX SBOM is incomplete");
-  for (const type of ["dependency-scan", "oci-vulnerability-scan", "malware-scan"]) {
-    if (typeof byType.get(type).scanner !== "string" || byType.get(type).scanner.trim() === "") throw new Error(`${type} scanner identity is absent`);
+  exactArtifactHashes(sbom, TARGETS.map(({ target }) => target), "SBOM");
+  const evidenceItems = new Map(manifest.evidence.map((item) => [item.type, item]));
+  for (const [type, targets, threshold] of [
+    ["dependency-scan", TARGETS.map(({ target }) => target), "low"],
+    ["oci-vulnerability-scan", ["linux-amd64-oci"], "high"],
+    ["malware-scan", TARGETS.map(({ target }) => target), "zero-malware"],
+  ]) {
+    const record = byType.get(type);
+    const item = evidenceItems.get(type);
+    if (typeof record.scanner !== "string" || record.scanner.trim() === "" || record.threshold !== threshold
+      || record.findingsAtOrAboveThreshold !== 0 || !SHA256.test(record.scannerOutputSha256 ?? "")
+      || item?.scannerOutputPath !== record.scannerOutputPath || item?.scannerOutputSha256 !== record.scannerOutputSha256) {
+      throw new Error(`${type} scanner result metadata is absent, failing, or not signed`);
+    }
+    exactArtifactHashes(record, targets, type);
+    const rawPath = contained(root, record.scannerOutputPath, `${type} scanner output path`);
+    await regularFile(rawPath, `${type} scanner output`);
+    if (await sha256File(rawPath) !== record.scannerOutputSha256) throw new Error(`${type} scanner output bytes differ`);
+    const raw = JSON.parse(await readFile(rawPath, "utf8"));
+    if (type === "dependency-scan") {
+      if (!Number.isSafeInteger(raw.auditReportVersion) || raw.metadata?.vulnerabilities?.total !== 0) throw new Error("dependency scan raw output reports vulnerabilities or is invalid");
+    } else if (type === "oci-vulnerability-scan") {
+      if (!Array.isArray(raw.matches)) throw new Error("OCI vulnerability scan raw output is invalid");
+      const blocked = raw.matches.filter((match) => ["high", "critical"].includes(String(match?.vulnerability?.severity ?? "").toLowerCase()));
+      if (blocked.length !== 0) throw new Error("OCI vulnerability scan raw output reaches the high threshold");
+    } else {
+      exactArtifactHashes(raw, targets, "malware scan raw output");
+      if (raw.malwareFound !== 0 || raw.errors !== 0) throw new Error("malware scan raw output is invalid or reports findings");
+    }
   }
-  const artifacts = new Map(manifest.artifacts.map((artifact) => [artifact.target, artifact.sha256]));
   for (const [type, target, platform] of [
     ["native-linux-smoke", "linux-x64", "ubuntu-24.04"],
     ["native-windows-smoke", "win32-x64", "windows-2022"],
     ["oci-linux-smoke", "linux-amd64-oci", "ubuntu-24.04"],
   ]) {
     const record = byType.get(type);
-    if (record.clean !== true || record.platform !== platform || record.artifactSha256 !== artifacts.get(target)) throw new Error(`${type} does not attest the exact clean candidate`);
+    if (record.clean !== true || record.platform !== platform || record.artifactSha256 !== artifactHashes[target]) throw new Error(`${type} does not attest the exact clean candidate`);
   }
   if (byType.get("ubuntu-ci").clean !== true || byType.get("ubuntu-ci").platform !== "ubuntu-24.04"
     || byType.get("windows-ci").clean !== true || byType.get("windows-ci").platform !== "windows-2022") {
     throw new Error("clean Ubuntu 24.04 and Windows Server 2022 CI evidence is required");
   }
+  exactArtifactHashes(byType.get("ubuntu-ci"), ["linux-x64", "linux-amd64-oci"], "Ubuntu CI");
+  exactArtifactHashes(byType.get("windows-ci"), ["win32-x64"], "Windows CI");
 }
 
-async function publish(root, manifest, manifestPath, signaturePath, destination) {
+export async function publishCandidateAtomic(root, manifest, manifestPath, signaturePath, destination) {
   try {
     await lstat(destination);
     throw new Error("publish directory must not already exist");
   } catch (error) {
     if (!(error instanceof Error) || error.code !== "ENOENT") throw error;
   }
-  await mkdir(destination, { recursive: false, mode: 0o755 });
+  const parent = dirname(destination);
+  await mkdir(parent, { recursive: true, mode: 0o755 });
+  const staging = await mkdtemp(join(parent, `.${basename(destination)}.staging-`));
+  await chmod(staging, 0o700);
+  let published = false;
   const paths = [
     ...manifest.artifacts.flatMap((record) => [record.path, record.inventoryPath]),
-    ...manifest.evidence.map((record) => record.path),
+    ...manifest.evidence.flatMap((record) => [record.path, ...(record.scannerOutputPath ? [record.scannerOutputPath] : [])]),
   ];
-  for (const path of paths) {
-    const source = contained(root, path, "publish input");
-    const target = resolve(destination, path);
-    await mkdir(dirname(target), { recursive: true });
-    await cp(source, target, { errorOnExist: true, force: false });
+  try {
+    for (const path of [...new Set(paths)]) {
+      const source = contained(root, path, "publish input");
+      const target = resolve(staging, path);
+      await mkdir(dirname(target), { recursive: true });
+      await cp(source, target, { errorOnExist: true, force: false });
+    }
+    await cp(manifestPath, resolve(staging, basename(manifestPath)), { errorOnExist: true, force: false });
+    await cp(signaturePath, resolve(staging, basename(signaturePath)), { errorOnExist: true, force: false });
+    await rename(staging, destination);
+    published = true;
+  } finally {
+    if (!published) await rm(staging, { recursive: true, force: true });
   }
-  await cp(manifestPath, resolve(destination, basename(manifestPath)), { errorOnExist: true, force: false });
-  await cp(signaturePath, resolve(destination, basename(signaturePath)), { errorOnExist: true, force: false });
 }
 
 export async function verifyTechnicalRelease(candidateRoot, options = {}) {
@@ -379,7 +486,7 @@ export async function verifyTechnicalRelease(candidateRoot, options = {}) {
   }
 
   const ok = checks.length > 0 && !checks.some((check) => check.status === "fail");
-  if (ok && options.publishDirectory) await publish(root, manifest, manifestPath, signaturePath, resolve(options.publishDirectory));
+  if (ok && options.publishDirectory) await publishCandidateAtomic(root, manifest, manifestPath, signaturePath, resolve(options.publishDirectory));
   return {
     schemaVersion: "1.0",
     ok,

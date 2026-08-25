@@ -22,10 +22,54 @@ function parse(argv) {
     else if (argument.startsWith("--")) {
       const value = rest[++index];
       if (!value || value.startsWith("--")) throw new Error(`${argument} requires a value`);
-      options[argument.slice(2).replaceAll(/-([a-z])/gu, (_, letter) => letter.toUpperCase())] = value;
+      const key = argument.slice(2).replaceAll(/-([a-z])/gu, (_, letter) => letter.toUpperCase());
+      if (key === "artifact") options.artifact = [...(options.artifact ?? []), value];
+      else options[key] = value;
     } else throw new Error(`unknown argument: ${argument}`);
   }
   return options;
+}
+
+const ARTIFACT_TARGETS = new Set(["linux-x64", "win32-x64", "linux-amd64-oci"]);
+
+function artifactValues(options) {
+  return Array.isArray(options.artifact) ? options.artifact : [];
+}
+
+async function artifactBindings(options) {
+  const bindings = {};
+  for (const specification of artifactValues(options)) {
+    const separator = specification.indexOf("=");
+    if (separator < 1) throw new Error("--artifact must use target=path");
+    const target = specification.slice(0, separator);
+    const path = specification.slice(separator + 1);
+    if (!ARTIFACT_TARGETS.has(target) || !path || Object.hasOwn(bindings, target)) throw new Error(`invalid or duplicate artifact target: ${target}`);
+    await lstat(resolve(path));
+    bindings[target] = await hashFile(resolve(path));
+  }
+  return bindings;
+}
+
+function requireExactTargets(bindings, expected, type) {
+  const actual = Object.keys(bindings).sort();
+  const wanted = [...expected].sort();
+  if (JSON.stringify(actual) !== JSON.stringify(wanted)) throw new Error(`${type} requires exact artifact targets: ${wanted.join(", ")}`);
+}
+
+function scannerFindings(type, document, threshold) {
+  if (type === "dependency-scan") {
+    if (threshold !== "low" || !Number.isSafeInteger(document?.auditReportVersion) || !Number.isInteger(document?.metadata?.vulnerabilities?.total)) throw new Error("dependency scan requires npm-audit JSON and --threshold low");
+    return document.metadata.vulnerabilities.total;
+  }
+  if (type === "oci-vulnerability-scan") {
+    if (threshold !== "high" || !Array.isArray(document?.matches)) throw new Error("OCI scan requires Grype JSON and --threshold high");
+    return document.matches.filter((match) => new Set(["high", "critical"]).has(String(match?.vulnerability?.severity).toLowerCase())).length;
+  }
+  if (type === "malware-scan") {
+    if (threshold !== "zero-malware" || !Number.isInteger(document?.malwareFound) || !Number.isInteger(document?.errors)) throw new Error("malware scan requires normalized JSON and --threshold zero-malware");
+    return document.malwareFound + document.errors;
+  }
+  throw new Error(`${type} does not accept scanner input`);
 }
 
 async function hashFile(path) {
@@ -66,8 +110,9 @@ function run(command, args, cwd) {
 }
 
 async function inventory(options) {
-  if (!options.artifact || !options.target || !options.output) throw new Error("inventory requires --artifact, --target, and --output");
-  const inspected = await inspectCandidateArtifact(options.artifact, options.target, { testOnlyFixture: options.testOnlyFixture });
+  const artifact = artifactValues(options);
+  if (artifact.length !== 1 || artifact[0].includes("=") || !options.target || !options.output) throw new Error("inventory requires one path-only --artifact, --target, and --output");
+  const inspected = await inspectCandidateArtifact(artifact[0], options.target, { testOnlyFixture: options.testOnlyFixture });
   await json(resolve(options.output), {
     schemaVersion: "1.0",
     ...(options.testOnlyFixture ? { fixtureClassification: "TEST-ONLY-NON-PRODUCTION" } : {}),
@@ -79,6 +124,8 @@ async function inventory(options) {
 
 async function sbom(options) {
   if (!options.output) throw new Error("sbom requires --output");
+  const bindings = await artifactBindings(options);
+  requireExactTargets(bindings, ARTIFACT_TARGETS, "sbom");
   const output = await run("npm", ["sbom", "--sbom-format", "cyclonedx"], process.cwd());
   const document = JSON.parse(output.toString("utf8"));
   if (document.bomFormat !== "CycloneDX" || !Array.isArray(document.components) || document.components.length === 0) throw new Error("npm returned an incomplete CycloneDX SBOM");
@@ -88,6 +135,7 @@ async function sbom(options) {
     sourceCommit: source(options),
     generatedAtUtc: timestamp(options),
     status: "pass",
+    artifactSha256s: bindings,
     bomFormat: document.bomFormat,
     specVersion: document.specVersion,
     components: document.components,
@@ -105,14 +153,33 @@ async function attest(options) {
     status: "pass",
   };
   if (options.platform) record.platform = options.platform;
-  if (options.artifact) {
-    await lstat(resolve(options.artifact));
-    record.artifactSha256 = await hashFile(resolve(options.artifact));
+  const bindings = await artifactBindings(options);
+  const targetRequirements = {
+    "dependency-scan": ARTIFACT_TARGETS,
+    "oci-vulnerability-scan": new Set(["linux-amd64-oci"]),
+    "malware-scan": ARTIFACT_TARGETS,
+    "native-linux-smoke": new Set(["linux-x64"]),
+    "native-windows-smoke": new Set(["win32-x64"]),
+    "oci-linux-smoke": new Set(["linux-amd64-oci"]),
+  };
+  if (targetRequirements[options.type]) requireExactTargets(bindings, targetRequirements[options.type], options.type);
+  if (options.type.endsWith("-smoke")) {
+    record.artifactSha256 = Object.values(bindings)[0];
+  } else if (Object.keys(bindings).length > 0) {
+    record.artifactSha256s = bindings;
   }
   if (options.scanner) record.scanner = options.scanner;
   if (options.input) {
-    await lstat(resolve(options.input));
-    record.scannerOutputSha256 = await hashFile(resolve(options.input));
+    if (!options.scanner || !options.scannerOutputPath || !options.threshold) throw new Error("scanner attestations require --scanner, --scanner-output-path, and --threshold");
+    if (options.scannerOutputPath.startsWith("/") || options.scannerOutputPath.split(/[\\/]/u).includes("..")) throw new Error("--scanner-output-path must be a contained relative path");
+    const input = resolve(options.input);
+    const document = JSON.parse(await readFile(input, "utf8"));
+    const findings = scannerFindings(options.type, document, options.threshold);
+    if (findings !== 0) throw new Error(`${options.type} found ${findings} findings at or above ${options.threshold}`);
+    record.scannerOutputPath = options.scannerOutputPath.replaceAll("\\", "/");
+    record.scannerOutputSha256 = await hashFile(input);
+    record.threshold = options.threshold;
+    record.findingsAtOrAboveThreshold = findings;
   }
   if (options.clean === "true") record.clean = true;
   await json(resolve(options.output), record);
@@ -154,7 +221,15 @@ async function assemble(options) {
   const evidence = [];
   for (const item of await files(resolve(root, "evidence"))) {
     const record = JSON.parse(await readFile(item.full, "utf8"));
-    if (typeof record.type === "string") evidence.push({ type: record.type, path: `evidence/${item.path}`, sha256: await hashFile(item.full) });
+    if (typeof record.type === "string") evidence.push({
+      type: record.type,
+      path: `evidence/${item.path}`,
+      sha256: await hashFile(item.full),
+      ...(record.scannerOutputPath ? {
+        scannerOutputPath: record.scannerOutputPath,
+        scannerOutputSha256: record.scannerOutputSha256,
+      } : {}),
+    });
   }
   evidence.sort((left, right) => left.type.localeCompare(right.type));
   await json(resolve(options.output), {

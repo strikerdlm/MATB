@@ -72,13 +72,14 @@ async function main() {
   }
 
   const nativeTarget = options.platform === "linux" ? "linux-x64" : "win32-x64";
-  await inspectCandidateArtifact(options.nativeArtifact, nativeTarget);
+  const nativeInspection = await inspectCandidateArtifact(options.nativeArtifact, nativeTarget, { expectedSourceCommit: options.sourceCommit });
+  let ociInspection;
   if (options.platform === "linux") {
     await run(npm, ["run", "verify:linux-native"], {
       timeoutMs: 5 * 60 * 1000,
       env: { SMS_LINUX_BUNDLE_PATH: resolve(options.nativeArtifact) },
     });
-    await inspectCandidateArtifact(options.ociArtifact, "linux-amd64-oci");
+    ociInspection = await inspectCandidateArtifact(options.ociArtifact, "linux-amd64-oci", { expectedSourceCommit: options.sourceCommit });
     await run(npm, ["run", "verify:oci-native", "--", options.ociImage], { timeoutMs: 180_000 });
   } else {
     await run(npm, ["run", "verify:windows-native"], {
@@ -98,6 +99,9 @@ async function main() {
     status: "pass",
     platform: options.platform === "linux" ? "ubuntu-24.04" : "windows-2022",
     clean: true,
+    artifactSha256s: options.platform === "linux"
+      ? { "linux-x64": nativeInspection.artifactSha256, "linux-amd64-oci": ociInspection.artifactSha256 }
+      : { "win32-x64": nativeInspection.artifactSha256 },
   }, null, 2)}\n`);
   process.stdout.write(`PASS verify:ci ${options.platform} (exact production candidates)\n`);
 }

@@ -6,7 +6,8 @@ LABEL org.opencontainers.image.title="FAC ISR SMS offline edge" \
       org.opencontainers.image.description="Headless, non-C2, offline safety-management edge runtime" \
       org.opencontainers.image.version="0.2.0-rc.1" \
       org.opencontainers.image.revision="${BUILD_COMMIT}" \
-      org.opencontainers.image.source="https://github.com/strikerdlm/MATB"
+      org.opencontainers.image.source="https://github.com/strikerdlm/MATB" \
+      org.fac-isr.sms.runtime-provenance="official-node-pinned-image"
 
 ENV NODE_ENV=production \
     SMS_BIND_ADDRESS=127.0.0.1 \
