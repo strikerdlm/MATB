@@ -28,7 +28,9 @@ export async function authenticatedTestServer(
   identities: readonly HttpTestIdentity[] = [{ userId: "commander-1", roles: ["commander"], missionIds: ["mission-1"] }],
   additionalDependencies: Readonly<Record<string, unknown>> = {},
 ): Promise<AuthenticatedTestServer> {
-  const identityStore = new LocalIdentityStore({ now: () => nowUtc });
+  const injectedNow = additionalDependencies.now;
+  const clock = typeof injectedNow === "function" ? injectedNow as () => string : () => nowUtc;
+  const identityStore = new LocalIdentityStore({ now: clock });
   for (const identity of identities) {
     identityStore.register({
       userId: identity.userId,
@@ -40,7 +42,7 @@ export async function authenticatedTestServer(
   }
   let sequence = 0;
   const sessionManager = new SessionManager({
-    now: () => nowUtc,
+    now: clock,
     idleTimeoutMs: 15 * 60_000,
     maxLifetimeMs: 8 * 60 * 60_000,
     reauthenticationIntervalMs: 5 * 60_000,

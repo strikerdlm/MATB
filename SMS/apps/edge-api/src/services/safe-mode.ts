@@ -6,6 +6,7 @@ import { AtomicConflictError, AtomicDomainWriteError, type AuditEventInput, type
 import type { EdgeDatabase } from "../db/migrate.js";
 import type { ServiceActorContext, StagedMissionMutation } from "./mission-service.js";
 import type { ActiveSafetyPackage, ActiveSafetyPackageSource } from "./safety-evaluation.js";
+import type { MissionExportSigner } from "../runtime/export-signing.js";
 
 export type PackageState = "verified" | "active" | "quarantined";
 export type TrustedKeyAlgorithm = "ed25519" | "rsa-sha256";
@@ -96,7 +97,8 @@ export interface VerifiedPackageProvenance {
 }
 
 export interface MissionExport {
-  readonly exportSchemaVersion: "1.0";
+  readonly exportSchemaVersion: "2.0";
+  readonly releaseId: string;
   readonly exportId: string;
   readonly missionId: string;
   readonly revisionId: string;
@@ -106,7 +108,10 @@ export interface MissionExport {
   readonly checklistResponses: readonly unknown[];
   readonly gateApprovals: readonly unknown[];
   readonly auditManifest: { readonly eventCount: number; readonly eventHashes: readonly string[] };
-  readonly hashes: { readonly payloadSha256: string };
+  readonly hashes: { readonly revisionSha256: string; readonly evaluationSha256: string; readonly packageSha256: string; readonly auditSha256: string; readonly payloadSha256: string };
+  readonly signatureKeyId: string;
+  readonly signatureAlgorithm: "Ed25519";
+  readonly detachedSignature: string;
 }
 
 export class SafeModeError extends Error {
@@ -127,6 +132,8 @@ export interface SafeModeServiceOptions {
   };
   readonly now?: () => string;
   readonly trustedKeyStore?: TrustedKeyStore;
+  readonly exportSigner?: MissionExportSigner;
+  readonly releaseId?: string;
 }
 
 interface ImportInput {
@@ -212,6 +219,8 @@ export class SafeModeService implements ActiveSafetyPackageSource {
   private readonly missions: SafeModeServiceOptions["missionService"];
   private readonly now: () => string;
   private readonly trustedKeys: TrustedKeyStore;
+  private readonly exportSigner?: MissionExportSigner;
+  private readonly releaseId: string;
   private packages: PackageRecord[] = [];
   private packageGeneration = 0;
   private databaseFailure = false;
@@ -224,6 +233,8 @@ export class SafeModeService implements ActiveSafetyPackageSource {
     this.missions = options.missionService;
     this.now = options.now ?? (() => new Date().toISOString());
     this.trustedKeys = options.trustedKeyStore ?? new InMemoryTrustedKeyStore();
+    this.exportSigner = options.exportSigner;
+    this.releaseId = options.releaseId ?? "fac-isr-sms@0.2.0-rc.1";
     this.load();
   }
 
@@ -347,16 +358,46 @@ export class SafeModeService implements ActiveSafetyPackageSource {
     return detached({ packageId: record.packageId, version: record.version, documents });
   }
 
-  public async exportRevision(revisionId: string, context: ServiceActorContext): Promise<MissionExport> {
+  public async exportRevision(revisionId: string, missionId: string, context: ServiceActorContext): Promise<MissionExport> {
+    if (this.exportSigner === undefined) throw new SafeModeError(503, "EXPORT_SIGNING_UNAVAILABLE", "runtime export signing is unavailable");
     if (this.exportFailure) throw new SafeModeError(500, "EXPORT_FAILED", "export failed before the mission store was changed");
-    const missionId = revisionId.split(":", 1)[0] ?? revisionId;
     const mission = this.missions.getMission(missionId) as { missionId: string; revisions: readonly Record<string, unknown>[]; safetyResults: readonly unknown[]; checklistResponses: readonly unknown[]; gateApprovals: readonly unknown[] };
     const revision = mission.revisions.find((candidate) => candidate.id === revisionId);
     if (revision === undefined) throw new SafeModeError(404, "REVISION_NOT_FOUND", "mission revision was not found");
     const events = await this.audit.queryAudit({ missionRevisionId: revisionId });
     const payload = { revision, safetyResults: mission.safetyResults.filter((result) => (result as { revisionId?: string }).revisionId === revisionId), checklistResponses: mission.checklistResponses.filter((response) => (response as { revisionId?: string }).revisionId === revisionId), gateApprovals: mission.gateApprovals.filter((approval) => (approval as { missionRevisionId?: string }).missionRevisionId === revisionId) };
+    const packages = payload.safetyResults.flatMap((value) => {
+      const evaluation = value as Record<string, unknown>;
+      return [evaluation.policyPackage, evaluation.terminologyPackage, evaluation.evidencePackage].filter((item) => item !== undefined);
+    });
     const exportedAtUtc = this.now();
-    const result = Object.freeze({ exportSchemaVersion: "1.0" as const, exportId: `export:${revisionId}:${exportedAtUtc}`, missionId: mission.missionId, revisionId, exportedAtUtc, ...payload, auditManifest: { eventCount: events.length, eventHashes: events.map((event) => event.hash) }, hashes: { payloadSha256: hashPayload(payload) } });
+    const auditManifest = { eventCount: events.length, eventHashes: events.map((event) => event.hash) };
+    const unsigned = detached({
+      exportSchemaVersion: "2.0" as const,
+      releaseId: this.releaseId,
+      exportId: `export:${revisionId}:${exportedAtUtc}`,
+      missionId: mission.missionId,
+      revisionId,
+      exportedAtUtc,
+      ...payload,
+      auditManifest,
+      hashes: {
+        revisionSha256: hashPayload(revision),
+        evaluationSha256: hashPayload(payload.safetyResults),
+        packageSha256: hashPayload(packages),
+        auditSha256: hashPayload(auditManifest),
+        payloadSha256: hashPayload(payload),
+      },
+      signatureKeyId: this.exportSigner.keyId,
+      signatureAlgorithm: this.exportSigner.algorithm,
+    });
+    let detachedSignature: string;
+    try {
+      detachedSignature = this.exportSigner.sign(Buffer.from(canonicalJson(unsigned)));
+    } catch {
+      throw new SafeModeError(500, "EXPORT_FAILED", "export signing failed");
+    }
+    const result = detached({ ...unsigned, detachedSignature });
     await this.audit.append({ type: "export.created", actorUserId: context.actorUserId, clientSessionId: context.clientSessionId, missionRevisionId: revisionId, occurredAtUtc: exportedAtUtc, action: "export", reason: "revision export created", payload: { exportId: result.exportId } });
     return result;
   }

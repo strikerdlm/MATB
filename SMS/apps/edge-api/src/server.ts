@@ -1,7 +1,7 @@
 import { createPublicKey } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import Fastify, { type FastifyInstance } from "fastify";
-import { createConfig, type EdgeConfig, type EdgeConfigInput } from "./config.js";
+import { createConfig, tlsRequestPolicy, type EdgeConfig, type EdgeConfigInput } from "./config.js";
 import { openDatabase, type EdgeDatabase } from "./db/migrate.js";
 import { SCHEMA_VERSION } from "./db/schema.js";
 import { AuditLedger } from "./audit/ledger.js";
@@ -11,7 +11,7 @@ import { registerGateRoutes } from "./routes/gates.js";
 import { registerMissionRoutes } from "./routes/missions.js";
 import { registerPackageRoutes } from "./routes/packages.js";
 import { registerPostflightRoutes } from "./routes/postflight.js";
-import { registerTelemetryRoutes } from "./routes/telemetry.js";
+import { registerTelemetryRoutes, type TelemetryPeerIdentityProvider } from "./routes/telemetry.js";
 import { MissionService } from "./services/mission-service.js";
 import { TelemetryService } from "./services/telemetry-service.js";
 import { SafeModeService, SqliteTrustedKeyStore, type TrustedKeyStore } from "./services/safe-mode.js";
@@ -24,6 +24,9 @@ import {
 } from "./auth/http.js";
 import { RuntimeLease } from "./admin/runtime-lease.js";
 import { MaintenanceLock } from "./admin/maintenance-lock.js";
+import { registerHttpSecurity, safeRequestId } from "./runtime/http-security.js";
+import type { RuntimeLogSink } from "./runtime/lifecycle.js";
+import { loadMissionExportSigner, type MissionExportSigner } from "./runtime/export-signing.js";
 
 interface ReadinessCheck {
   readonly status: "ok" | "pending";
@@ -60,6 +63,9 @@ export interface EdgeServerDependencies extends Partial<HttpAuthDependencies> {
   readonly safetyEvaluationProvider?: SafetyEvaluationProvider;
   readonly trustedKeyStore?: TrustedKeyStore;
   readonly now?: () => string;
+  readonly logSink?: RuntimeLogSink;
+  readonly telemetryPeerIdentity?: TelemetryPeerIdentityProvider;
+  readonly exportSigner?: MissionExportSigner;
   readonly readiness?: {
     readonly tlsConfigured?: boolean;
     readonly exportKeyConfigured?: boolean;
@@ -113,10 +119,28 @@ async function buildReadinessReport(database: EdgeDatabase, audit: AuditLedger, 
   return { status: technicalReady ? "ready" : "not_ready", technicalReady, operationalReady: false, checks };
 }
 
-function buildDegradedServer(config: EdgeConfig, https: { readonly cert: Buffer; readonly key: Buffer } | undefined, error: unknown): EdgeServer {
-  const app = Fastify({ logger: false, ...(https === undefined ? {} : { https }) }) as unknown as EdgeServer;
+type HttpsMaterial = {
+  readonly cert: Buffer;
+  readonly key: Buffer;
+  readonly ca?: Buffer;
+  readonly requestCert: boolean;
+  readonly rejectUnauthorized: boolean;
+};
+
+function fastifyOptions(config: EdgeConfig, https: HttpsMaterial | undefined) {
+  return {
+    logger: false as const,
+    bodyLimit: config.bodyLimitBytes,
+    genReqId: (request: { headers: { readonly [key: string]: string | string[] | undefined } }) => safeRequestId(request.headers["x-request-id"]),
+    ...(https === undefined ? {} : { https }),
+  };
+}
+
+function buildDegradedServer(config: EdgeConfig, https: HttpsMaterial | undefined, error: unknown, log?: RuntimeLogSink): EdgeServer {
+  const app = Fastify(fastifyOptions(config, https)) as unknown as EdgeServer;
   Object.defineProperty(app, "edgeConfig", { value: config, enumerable: false });
-  const detail = error instanceof Error ? error.message : String(error);
+  registerHttpSecurity(app, log);
+  const detail = "operational state is unavailable";
   app.get("/healthz", async () => ({ status: "ok", service: "fac-isr-edge-api", internet: config.internet, degraded: true }));
   app.get("/readyz", async (_request, reply) => reply.code(503).send({
     status: "not_ready", technicalReady: false, operationalReady: false,
@@ -130,32 +154,25 @@ function buildDegradedServer(config: EdgeConfig, https: { readonly cert: Buffer;
   return app;
 }
 
-async function loadTlsMaterial(config: EdgeConfig): Promise<{ readonly cert: Buffer; readonly key: Buffer } | undefined> {
+async function loadTlsMaterial(config: EdgeConfig): Promise<HttpsMaterial | undefined> {
   if (config.tls === undefined) return undefined;
   try {
-    const [cert, key] = await Promise.all([
+    const [cert, key, ca] = await Promise.all([
       readFile(config.tls.certPath),
       readFile(config.tls.keyPath),
+      config.tls.clientCaPath === undefined ? Promise.resolve(undefined) : readFile(config.tls.clientCaPath),
     ]);
-    return { cert, key };
+    return { cert, key, ...(ca === undefined ? {} : { ca }), ...tlsRequestPolicy(config) };
   } catch (error) {
     throw new Error(`TLS material could not be loaded: ${error instanceof Error ? error.message : String(error)}`);
-  }
-}
-
-async function exportKeyIsReadable(config: EdgeConfig): Promise<boolean> {
-  if (config.exportKeyPath === undefined) return false;
-  try {
-    return (await readFile(config.exportKeyPath)).byteLength > 0;
-  } catch {
-    return false;
   }
 }
 
 export async function buildServer(input: EdgeConfigInput = {}, dependencies: EdgeServerDependencies = {}): Promise<EdgeServer> {
   const edgeConfig = createConfig(input);
   const https = await loadTlsMaterial(edgeConfig);
-  const exportKeyConfigured = await exportKeyIsReadable(edgeConfig);
+  const exportSigner = dependencies.exportSigner ?? await loadMissionExportSigner(edgeConfig.exportKeyPath, edgeConfig.exportKeyId);
+  const exportKeyConfigured = exportSigner !== undefined;
   const maintenanceLock = new MaintenanceLock(edgeConfig.databaseUrl, edgeConfig.lockTimeoutMs);
   maintenanceLock.acquire();
   let edgeDatabase: EdgeDatabase;
@@ -163,7 +180,7 @@ export async function buildServer(input: EdgeConfigInput = {}, dependencies: Edg
     edgeDatabase = openDatabase(edgeConfig.databaseUrl, edgeConfig.lockTimeoutMs, { maintenanceLock });
   } catch (error) {
     maintenanceLock.release();
-    return buildDegradedServer(edgeConfig, https, error);
+    return buildDegradedServer(edgeConfig, https, error, dependencies.logSink);
   }
   const auditLedger = new AuditLedger({ database: edgeDatabase });
   const now = dependencies.now ?? (() => new Date().toISOString());
@@ -192,12 +209,12 @@ export async function buildServer(input: EdgeConfigInput = {}, dependencies: Edg
     stageSafetyEvaluationsStale: (...args: Parameters<MissionService["stageSafetyEvaluationsStale"]>) => requireMissionTarget(missionTarget).stageSafetyEvaluationsStale(...args),
     getMission: (...args: Parameters<MissionService["getMission"]>) => requireMissionTarget(missionTarget).getMission(...args),
   };
-  const safeModeService = new SafeModeService({ database: edgeDatabase, packageDirectory: edgeConfig.packageDirectory, auditLedger, missionService: missionBoundary, now, trustedKeyStore: dependencies.trustedKeyStore ?? new SqliteTrustedKeyStore(edgeDatabase) });
+  const safeModeService = new SafeModeService({ database: edgeDatabase, packageDirectory: edgeConfig.packageDirectory, auditLedger, missionService: missionBoundary, now, trustedKeyStore: dependencies.trustedKeyStore ?? new SqliteTrustedKeyStore(edgeDatabase), exportSigner, releaseId: edgeConfig.releaseId });
   const resolver = new ActivePackageSafetyResolver(safeModeService);
   const safetyEvaluationProvider = dependencies.safetyEvaluationProvider ?? new DeterministicSafetyEvaluationProvider({ now, resolve: resolver.resolve.bind(resolver) });
   const missionService = new MissionService({ auditLedger, database: edgeDatabase, now, safetyEvaluationProvider });
   missionTarget.current = missionService;
-  const telemetryService = new TelemetryService();
+  const telemetryService = new TelemetryService(edgeConfig.telemetryAdapters);
   const defaults = createDefaultHttpAuthDependencies(edgeDatabase);
   const authDependencies = {
     identityStore: dependencies.identityStore ?? defaults.identityStore,
@@ -208,9 +225,9 @@ export async function buildServer(input: EdgeConfigInput = {}, dependencies: Edg
     runtimeLease.release();
     edgeDatabase.close();
     maintenanceLock.release();
-    return buildDegradedServer(edgeConfig, https, new Error("persisted operational domain validation failed"));
+    return buildDegradedServer(edgeConfig, https, new Error("persisted operational domain validation failed"), dependencies.logSink);
   }
-  const app = Fastify({ logger: false, ...(https === undefined ? {} : { https }) }) as unknown as EdgeServer;
+  const app = Fastify(fastifyOptions(edgeConfig, https)) as unknown as EdgeServer;
   Object.defineProperties(app, {
     edgeConfig: { value: edgeConfig, enumerable: false },
     edgeDatabase: { value: edgeDatabase, enumerable: false },
@@ -221,12 +238,14 @@ export async function buildServer(input: EdgeConfigInput = {}, dependencies: Edg
   });
 
   app.addHook("onClose", async () => {
+    telemetryService.close();
     clearInterval(leaseTimer);
     runtimeLease.release();
     edgeDatabase.close();
     maintenanceLock.release();
   });
 
+  registerHttpSecurity(app, dependencies.logSink);
   registerOperationalDataBoundary(app);
   registerHttpAuthentication(app, authDependencies);
 
@@ -253,9 +272,9 @@ export async function buildServer(input: EdgeConfigInput = {}, dependencies: Edg
   registerChecklistRoutes(app, missionService);
   registerGateRoutes(app, missionService);
   registerPostflightRoutes(app, missionService);
-  registerTelemetryRoutes(app, telemetryService, missionService);
+  registerTelemetryRoutes(app, telemetryService, missionService, dependencies.telemetryPeerIdentity);
   registerPackageRoutes(app, safeModeService);
-  registerExportRoutes(app, safeModeService);
+  registerExportRoutes(app, safeModeService, missionService);
 
   return app;
 }

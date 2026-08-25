@@ -340,20 +340,39 @@ describe("session lifecycle", () => {
 });
 
 describe("tactical transport policy", () => {
-  it("requires certificate and key paths in tactical mode", () => {
+  it("requires certificate, key, and client CA paths in tactical mode", () => {
     expect(() => validateTlsConfig({
       tacticalMode: true,
       bindAddress: "192.168.10.20",
     })).toThrow(/certificate and key/i);
+
+    expect(() => validateTlsConfig({
+      tacticalMode: true,
+      bindAddress: "192.168.10.20",
+      certPath: "cert.pem",
+      keyPath: "key.pem",
+    })).toThrow(/client CA/i);
 
     expect(validateTlsConfig({
       tacticalMode: true,
       bindAddress: "192.168.10.20",
       certPath: "cert.pem",
       keyPath: "key.pem",
+      clientCaPath: "client-ca.pem",
     })).toMatchObject({
       requireClientCertificate: true,
+      rejectUnauthorizedClients: true,
       certPath: expect.stringMatching(/cert\.pem$/),
+      clientCaPath: expect.stringMatching(/client-ca\.pem$/),
+    });
+  });
+
+  it("keeps standalone HTTPS bound to loopback", () => {
+    expect(() => validateTlsConfig({ tacticalMode: false, bindAddress: "0.0.0.0", certPath: "cert.pem", keyPath: "key.pem" })).toThrow(/loopback/i);
+    expect(validateTlsConfig({ tacticalMode: false, bindAddress: "127.0.0.1", certPath: "cert.pem", keyPath: "key.pem" })).toMatchObject({
+      requireClientCertificate: false,
+      rejectUnauthorizedClients: false,
+      loopbackBootstrapAllowed: true,
     });
   });
 

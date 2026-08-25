@@ -11,4 +11,7 @@ export * from "./services/mission-service.js";
 export * from "./services/telemetry-service.js";
 export * from "./services/safe-mode.js";
 export * from "./services/safety-evaluation.js";
+export * from "./runtime/export-signing.js";
+export * from "./runtime/lifecycle.js";
+export * from "./runtime/paths.js";
 export * from "./server.js";

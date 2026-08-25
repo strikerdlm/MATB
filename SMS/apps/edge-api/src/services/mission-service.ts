@@ -184,6 +184,10 @@ export class MissionService {
     return this.requireRevision(revisionId).stored.missionId;
   }
 
+  public aircraftIdsForRevision(revisionId: string): readonly string[] {
+    return Object.freeze(this.requireRevision(revisionId).revision.aircraft.map(({ aircraftId }) => aircraftId));
+  }
+
   public createRevision(missionId: string, input: unknown, context: ServiceActorContext): Promise<MissionRevision> {
     return this.enqueueMutation(() => this.createRevisionInternal(missionId, input, context));
   }

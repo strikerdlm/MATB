@@ -34,6 +34,7 @@ declare module "fastify" {
 }
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+const ADAPTER_AUTHENTICATED_ROUTES = new Set(["/api/telemetry/ingest"]);
 const ACCOUNTABLE_IDENTITY_FIELDS = new Set([
   "actorUserId",
   "actorRole",
@@ -125,6 +126,7 @@ export function registerHttpAuthentication(app: FastifyInstance, dependencies: H
 
   app.addHook("onRequest", async (request, reply) => {
     if (request.is404 || !request.url.startsWith("/api/") || (request.method === "POST" && request.routeOptions.url === "/api/auth/login")) return;
+    if (request.routeOptions.url !== undefined && ADAPTER_AUTHENTICATED_ROUTES.has(request.routeOptions.url)) return;
     const sessionCredential = cookieValue(request);
     if (sessionCredential === undefined) return unauthorized(reply);
     const session = dependencies.sessionManager.getSessionByCredential(sessionCredential);
