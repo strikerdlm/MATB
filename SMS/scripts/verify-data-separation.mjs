@@ -202,6 +202,7 @@ async function verifyRuntime(root, report) {
       maxLifetimeMs: 8 * 60 * 60_000,
       reauthenticationIntervalMs: 5 * 60_000,
       sessionIdFactory: () => "boundary-session",
+      sessionCredentialFactory: () => "boundary-credential",
       csrfTokenFactory: () => "boundary-csrf",
     });
     app = await serverModule.buildServer({ databaseUrl: ":memory:", internet: "disabled" }, { identityStore, sessionManager });
@@ -211,7 +212,7 @@ async function verifyRuntime(root, report) {
     const response = await app.inject({
       method: "POST",
       url: "/api/missions",
-      headers: { cookie: "__Host-sms_session=boundary-session", "x-csrf-token": "boundary-csrf" },
+      headers: { cookie: "__Host-sms_session=boundary-credential", "x-csrf-token": "boundary-csrf" },
       payload: {
         dataDomain: "research",
         nonDispatchable: true,

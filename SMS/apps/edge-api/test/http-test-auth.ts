@@ -44,6 +44,7 @@ export async function authenticatedTestServer(
     maxLifetimeMs: 8 * 60 * 60_000,
     reauthenticationIntervalMs: 5 * 60_000,
     sessionIdFactory: () => `test-session-${++sequence}`,
+    sessionCredentialFactory: () => `test-credential-${sequence}`,
     csrfTokenFactory: () => `test-csrf-${sequence}`,
   });
   const app = await buildServer(config, { identityStore, sessionManager });
@@ -56,8 +57,11 @@ export async function authenticatedTestServer(
     });
     if (response.statusCode !== 200) throw new Error(`test login failed for ${identity.userId}`);
     const body = response.json() as { csrfToken: string };
+    const setCookie = response.headers["set-cookie"];
+    const cookie = (Array.isArray(setCookie) ? setCookie[0] : setCookie)?.split(";", 1)[0];
+    if (cookie === undefined) throw new Error(`test login omitted session cookie for ${identity.userId}`);
     sessions.set(identity.userId, {
-      cookie: `__Host-sms_session=test-session-${sessions.size + 1}`,
+      cookie,
       csrfToken: body.csrfToken,
     });
   }

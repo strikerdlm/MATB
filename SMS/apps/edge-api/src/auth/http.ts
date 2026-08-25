@@ -123,12 +123,13 @@ export function registerHttpAuthentication(app: FastifyInstance, dependencies: H
   const authenticator = new LocalAuthenticator(dependencies.identityStore, dependencies.sessionManager);
 
   app.addHook("onRequest", async (request, reply) => {
-    if (request.is404 || !request.url.startsWith("/api/") || (request.method === "POST" && request.url === "/api/auth/login")) return;
-    const sessionId = cookieValue(request);
-    if (sessionId === undefined) return unauthorized(reply);
-    const session = dependencies.sessionManager.getSession(sessionId);
+    if (request.is404 || !request.url.startsWith("/api/") || (request.method === "POST" && request.routeOptions.url === "/api/auth/login")) return;
+    const sessionCredential = cookieValue(request);
+    if (sessionCredential === undefined) return unauthorized(reply);
+    const session = dependencies.sessionManager.getSessionByCredential(sessionCredential);
     if (session === undefined || session.state !== "active") return unauthorized(reply);
-    const touched = dependencies.sessionManager.touchSession(sessionId);
+    const touched = dependencies.sessionManager.touchSessionByCredential(sessionCredential);
+    if (touched === undefined) return unauthorized(reply);
     if (touched.state !== "active") return unauthorized(reply);
     request.authenticatedPrincipal = principalFrom(touched);
     if (!SAFE_METHODS.has(request.method) && request.headers["x-csrf-token"] !== touched.csrfToken) {
@@ -151,8 +152,8 @@ export function registerHttpAuthentication(app: FastifyInstance, dependencies: H
     const userId = typeof body?.userId === "string" ? body.userId : "";
     const password = typeof body?.password === "string" ? body.password : "";
     try {
-      const session = await authenticator.authenticateLocal({ userId, password });
-      return reply.header("set-cookie", sessionCookie(session.sessionId)).code(200).send(principalFrom(session));
+      const issued = await authenticator.authenticateLocalWithCredential({ userId, password });
+      return reply.header("set-cookie", sessionCookie(issued.credential)).code(200).send(principalFrom(issued.session));
     } catch (error) {
       if (error instanceof AuthenticationError) return unauthorized(reply);
       throw error;

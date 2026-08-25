@@ -120,7 +120,7 @@ export async function buildServer(input: EdgeConfigInput = {}, dependencies: Edg
   registerChecklistRoutes(app, missionService);
   registerGateRoutes(app, missionService);
   registerPostflightRoutes(app, missionService);
-  registerTelemetryRoutes(app, telemetryService);
+  registerTelemetryRoutes(app, telemetryService, missionService);
   registerPackageRoutes(app, safeModeService);
   registerExportRoutes(app, safeModeService);
 

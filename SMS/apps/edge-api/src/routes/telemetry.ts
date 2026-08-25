@@ -1,9 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { TelemetryServiceError } from "../services/telemetry-service.js";
 import type { TelemetryService } from "../services/telemetry-service.js";
+import type { MissionService } from "../services/mission-service.js";
 import { canReadMission, forbid, requirePrincipal } from "../auth/http.js";
+import { sendRouteError } from "./errors.js";
 
-export function registerTelemetryRoutes(app: FastifyInstance, service: TelemetryService): void {
+export function registerTelemetryRoutes(app: FastifyInstance, service: TelemetryService, missionService: MissionService): void {
   app.post("/api/telemetry/replay", async (request, reply) => {
     try {
       const result = await service.replay(request.body);
@@ -14,12 +16,16 @@ export function registerTelemetryRoutes(app: FastifyInstance, service: Telemetry
   });
 
   app.get<{ Params: { revisionId: string } }>("/api/revisions/:revisionId/telemetry/stream", async (request, reply) => {
-    const principal = requirePrincipal(request);
-    const missionId = request.params.revisionId.split(":", 1)[0] ?? request.params.revisionId;
-    if (!canReadMission(principal, missionId)) return forbid(reply, "mission assignment or reviewer visibility is required");
-    const events = service.stream(request.params.revisionId);
-    const body = events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("");
-    return reply.header("content-type", "text/event-stream; charset=utf-8").code(200).send(body);
+    try {
+      const principal = requirePrincipal(request);
+      const missionId = missionService.missionIdForRevision(request.params.revisionId);
+      if (!canReadMission(principal, missionId)) return forbid(reply, "mission assignment or reviewer visibility is required");
+      const events = service.stream(request.params.revisionId);
+      const body = events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("");
+      return reply.header("content-type", "text/event-stream; charset=utf-8").code(200).send(body);
+    } catch (error) {
+      return sendRouteError(reply, error);
+    }
   });
 }
 

@@ -1,5 +1,5 @@
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
-import type { Session, SessionManager } from "./session.js";
+import type { IssuedSession, Session, SessionManager } from "./session.js";
 import { isUserRole, type UserRole } from "./roles.js";
 
 export interface IdentityRegistration {
@@ -212,6 +212,11 @@ export class LocalAuthenticator {
   public async authenticateLocal(credentials: LocalCredentials): Promise<Session> {
     const identity = this.identityStore.authenticate(credentials);
     return this.sessionManager.createSession(identity);
+  }
+
+  public async authenticateLocalWithCredential(credentials: LocalCredentials): Promise<IssuedSession> {
+    const identity = this.identityStore.authenticate(credentials);
+    return this.sessionManager.issueSession(identity);
   }
 
   public async reauthenticateLocal(sessionId: string, credentials: LocalCredentials): Promise<Session> {

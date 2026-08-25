@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import type { IdentityRecord } from "./identity.js";
 import type { AuthorizationSubject, UserRole } from "./roles.js";
 
@@ -20,9 +20,15 @@ export interface SessionPolicy {
   readonly reauthenticationIntervalMs: number;
 }
 
+export interface IssuedSession {
+  readonly session: Session;
+  readonly credential: string;
+}
+
 export interface SessionManagerOptions extends SessionPolicy {
   readonly now?: () => string;
   readonly sessionIdFactory?: () => string;
+  readonly sessionCredentialFactory?: () => string;
   readonly csrfTokenFactory?: () => string;
 }
 
@@ -71,9 +77,11 @@ export function isSessionReauthenticationRequired(session: Session, nowUtc: stri
 }
 
 export class SessionManager {
-  private readonly sessions = new Map<string, Session>();
+  private readonly sessionsByCredentialHash = new Map<string, Session>();
+  private readonly credentialHashBySessionId = new Map<string, string>();
   private readonly now: () => string;
   private readonly sessionIdFactory: () => string;
+  private readonly sessionCredentialFactory: () => string;
   private readonly csrfTokenFactory: () => string;
   private readonly policy: SessionPolicy;
 
@@ -85,16 +93,26 @@ export class SessionManager {
       reauthenticationIntervalMs: options.reauthenticationIntervalMs,
     });
     this.now = options.now ?? (() => new Date().toISOString());
-    this.sessionIdFactory = options.sessionIdFactory ?? (() => randomBytes(24).toString("base64url"));
+    this.sessionIdFactory = options.sessionIdFactory ?? (() => randomBytes(18).toString("base64url"));
+    this.sessionCredentialFactory = options.sessionCredentialFactory ?? (() => randomBytes(32).toString("base64url"));
     this.csrfTokenFactory = options.csrfTokenFactory ?? (() => randomBytes(32).toString("base64url"));
   }
 
   public createSession(identity: IdentityRecord, issuedAtUtc = this.now()): Session {
+    return this.issueSession(identity, issuedAtUtc).session;
+  }
+
+  public issueSession(identity: IdentityRecord, issuedAtUtc = this.now()): IssuedSession {
     const issuedAt = parseUtc(issuedAtUtc);
     if (issuedAt === undefined) throw new Error("issuedAtUtc must be a valid timestamp");
     const sessionId = this.sessionIdFactory();
-    if (sessionId.trim() === "" || this.sessions.has(sessionId)) {
+    if (sessionId.trim() === "" || this.credentialHashBySessionId.has(sessionId)) {
       throw new Error("session ID must be unique and non-empty");
+    }
+    const credential = this.sessionCredentialFactory();
+    const credentialHash = hashSessionCredential(credential);
+    if (credential.trim() === "" || this.sessionsByCredentialHash.has(credentialHash)) {
+      throw new Error("session credential must be unique and non-empty");
     }
     const csrfToken = this.csrfTokenFactory();
     if (csrfToken.trim() === "") throw new Error("CSRF token must be non-empty");
@@ -115,21 +133,29 @@ export class SessionManager {
       state: "active",
       requiresReauthentication: false,
     });
-    this.sessions.set(sessionId, session);
-    return session;
+    this.sessionsByCredentialHash.set(credentialHash, session);
+    this.credentialHashBySessionId.set(sessionId, credentialHash);
+    return Object.freeze({ session, credential });
   }
 
   public getSession(sessionId: string, nowUtc = this.now()): Session | undefined {
-    const session = this.sessions.get(sessionId);
+    const credentialHash = this.credentialHashBySessionId.get(sessionId);
+    if (credentialHash === undefined) return undefined;
+    const session = this.sessionsByCredentialHash.get(credentialHash);
+    if (session === undefined) return undefined;
+    return this.evaluated(session, nowUtc);
+  }
+
+  public getSessionByCredential(credential: string, nowUtc = this.now()): Session | undefined {
+    const session = this.sessionsByCredentialHash.get(hashSessionCredential(credential));
     if (session === undefined) return undefined;
     return this.evaluated(session, nowUtc);
   }
 
   public lockSession(sessionId: string, reason: string, lockedAtUtc = this.now()): void {
-    const session = this.sessions.get(sessionId);
-    if (session === undefined) throw new Error("session does not exist");
+    const { credentialHash, session } = this.requireSession(sessionId);
     if (reason.trim() === "") throw new Error("session lock reason is required");
-    this.sessions.set(sessionId, Object.freeze({
+    this.sessionsByCredentialHash.set(credentialHash, Object.freeze({
       ...session,
       state: "locked",
       lockedAtUtc,
@@ -138,32 +164,53 @@ export class SessionManager {
   }
 
   public deleteSession(sessionId: string): void {
-    this.sessions.delete(sessionId);
+    const credentialHash = this.credentialHashBySessionId.get(sessionId);
+    if (credentialHash === undefined) return;
+    this.credentialHashBySessionId.delete(sessionId);
+    this.sessionsByCredentialHash.delete(credentialHash);
   }
 
   public isReauthenticationRequired(sessionId: string, nowUtc = this.now()): boolean {
-    const session = this.sessions.get(sessionId);
+    const credentialHash = this.credentialHashBySessionId.get(sessionId);
+    const session = credentialHash === undefined ? undefined : this.sessionsByCredentialHash.get(credentialHash);
     return session === undefined || isSessionReauthenticationRequired(session, nowUtc);
   }
 
   public touchSession(sessionId: string, nowUtc = this.now()): Session {
-    const session = this.requireSession(sessionId);
+    const stored = this.requireSession(sessionId);
+    return this.touchStoredSession(stored.credentialHash, stored.session, nowUtc);
+  }
+
+  public touchSessionByCredential(credential: string, nowUtc = this.now()): Session | undefined {
+    const credentialHash = hashSessionCredential(credential);
+    const session = this.sessionsByCredentialHash.get(credentialHash);
+    if (session === undefined) return undefined;
+    return this.touchStoredSession(credentialHash, session, nowUtc);
+  }
+
+  private touchStoredSession(credentialHash: string, session: Session, nowUtc: string): Session {
     const evaluated = this.evaluated(session, nowUtc);
     if (isSessionLocked(evaluated, nowUtc)) {
-      this.lockSession(sessionId, "idle timeout", nowUtc);
-      return this.sessions.get(sessionId)!;
+      const locked = Object.freeze({
+        ...evaluated,
+        state: "locked" as const,
+        lockedAtUtc: evaluated.lockedAtUtc ?? nowUtc,
+        lockReason: evaluated.lockReason ?? "idle timeout",
+      });
+      this.sessionsByCredentialHash.set(credentialHash, locked);
+      return locked;
     }
     const touched = Object.freeze({
       ...evaluated,
       lastActivityAtUtc: nowUtc,
       requiresReauthentication: isSessionReauthenticationRequired(evaluated, nowUtc),
     });
-    this.sessions.set(sessionId, touched);
+    this.sessionsByCredentialHash.set(credentialHash, touched);
     return touched;
   }
 
   public reauthenticate(sessionId: string, identity: IdentityRecord, atUtc = this.now()): Session {
-    const session = this.requireSession(sessionId);
+    const { credentialHash, session } = this.requireSession(sessionId);
     if (session.userId !== identity.userId) throw new Error("identity does not match session");
     if (isSessionLocked(session, atUtc)) throw new Error("session is locked or expired");
     const at = parseUtc(atUtc);
@@ -177,14 +224,15 @@ export class SessionManager {
         ? undefined
         : formatUtc(at + this.policy.reauthenticationIntervalMs),
     });
-    this.sessions.set(sessionId, refreshed);
+    this.sessionsByCredentialHash.set(credentialHash, refreshed);
     return refreshed;
   }
 
-  private requireSession(sessionId: string): Session {
-    const session = this.sessions.get(sessionId);
-    if (session === undefined) throw new Error("session does not exist");
-    return session;
+  private requireSession(sessionId: string): { credentialHash: string; session: Session } {
+    const credentialHash = this.credentialHashBySessionId.get(sessionId);
+    const session = credentialHash === undefined ? undefined : this.sessionsByCredentialHash.get(credentialHash);
+    if (credentialHash === undefined || session === undefined) throw new Error("session does not exist");
+    return { credentialHash, session };
   }
 
   private evaluated(session: Session, nowUtc: string): Session {
@@ -205,6 +253,10 @@ export class SessionManager {
       requiresReauthentication: isSessionReauthenticationRequired(session, nowUtc),
     });
   }
+}
+
+function hashSessionCredential(credential: string): string {
+  return createHash("sha256").update(credential, "utf8").digest("base64url");
 }
 
 export function lockSession(manager: SessionManager, sessionId: string, reason: string): void {

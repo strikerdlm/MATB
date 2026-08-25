@@ -39,6 +39,7 @@ function testAuth(identities: readonly TestIdentity[], clock: { now: string }) {
     maxLifetimeMs: 8 * 60 * 60_000,
     reauthenticationIntervalMs: 5 * 60_000,
     sessionIdFactory: () => `session-${++sequence}`,
+    sessionCredentialFactory: () => `bearer-secret-${sequence}`,
   });
   return { identityStore, sessionManager };
 }
@@ -156,7 +157,23 @@ describe("HTTP authentication boundary", () => {
     expect(response.statusCode).toBe(401);
   });
 
-  it("sets the hardened host cookie and requires the exact CSRF token", async () => {
+  it("recognizes the login route when the request includes a query string", async () => {
+    const clock = { now: nowUtc };
+    app = await buildServer(
+      { databaseUrl: ":memory:", internet: "disabled" },
+      testAuth([{ userId: "operator-1", roles: ["operator"], missionIds: ["mission-1"] }], clock),
+    );
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/auth/login?locale=es",
+      payload: { userId: "operator-1", password },
+    });
+
+    expect(response.statusCode).toBe(200);
+  });
+
+  it("keeps the hardened cookie credential secret and requires the exact CSRF token", async () => {
     const clock = { now: nowUtc };
     app = await buildServer(
       { databaseUrl: ":memory:", internet: "disabled" },
@@ -170,13 +187,20 @@ describe("HTTP authentication boundary", () => {
 
     expect(loginResponse.statusCode).toBe(200);
     expect(loginResponse.headers["set-cookie"]).toBe(
-      "__Host-sms_session=session-1; Secure; HttpOnly; SameSite=Strict; Path=/",
+      "__Host-sms_session=bearer-secret-1; Secure; HttpOnly; SameSite=Strict; Path=/",
     );
     const session = {
-      cookie: "__Host-sms_session=session-1",
+      cookie: "__Host-sms_session=bearer-secret-1",
       ...(loginResponse.json() as { csrfToken: string; sessionId: string }),
     };
+    expect(session.sessionId).toBe("session-1");
+    expect(loginResponse.body).not.toContain("bearer-secret-1");
     const safeRead = await app.inject(authenticated(session, { method: "GET", url: "/api/auth/session" }));
+    const publicIdAsCredential = await app.inject({
+      method: "GET",
+      url: "/api/auth/session",
+      headers: { cookie: "__Host-sms_session=session-1" },
+    });
     const missing = await app.inject({
       method: "POST",
       url: "/api/auth/lock",
@@ -186,6 +210,8 @@ describe("HTTP authentication boundary", () => {
     const incorrect = await app.inject(authenticated(session, { method: "POST", url: "/api/auth/lock", payload: {} }, `${session.csrfToken}-wrong`));
 
     expect(safeRead.statusCode).toBe(200);
+    expect(safeRead.body).not.toContain("bearer-secret-1");
+    expect(publicIdAsCredential.statusCode).toBe(401);
     expect(missing.statusCode).toBe(403);
     expect(incorrect.statusCode).toBe(403);
   });
@@ -480,5 +506,6 @@ describe("HTTP principal authorization", () => {
       actorUserId: "commander-1",
       clientSessionId: commander.sessionId,
     }]);
+    expect(JSON.stringify([...events, ...packageEvents])).not.toContain("bearer-secret-1");
   });
 });
