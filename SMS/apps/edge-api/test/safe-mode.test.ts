@@ -15,9 +15,11 @@ describe("safe failure modes", () => {
     app = server.app;
     await app.safeModeService.simulateDatabaseFailure();
 
-    const response = await server.request({ method: "POST", url: "/api/packages/import", payload: {} });
-    expect(response.statusCode).toBe(503);
-    expect(response.json()).toMatchObject({ error: "SAFE_MODE_DATABASE_FAILURE", state: "read-only" });
+    await expect(app.safeModeService.importPackage({}, {
+      actorUserId: "administrator-1",
+      clientSessionId: "offline-cli",
+      occurredAtUtc: "2026-08-09T18:00:00.000Z",
+    })).rejects.toMatchObject({ statusCode: 503, code: "SAFE_MODE_DATABASE_FAILURE", state: "read-only" });
   });
 
   it("keeps an imported mission in read-only review until an explicit clone", async () => {

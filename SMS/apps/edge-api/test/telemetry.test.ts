@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { EdgeServer } from "../src/server.js";
 import { signReplayFixture, type CanonicalTelemetry } from "@fac-isr/telemetry";
 import { authenticatedTestServer } from "./http-test-auth.js";
-import { missionFixture, safetyResult } from "./mission-fixture.js";
+import { missionFixture } from "./mission-fixture.js";
 
 const event: CanonicalTelemetry = {
   eventId: "telemetry-route-1",
@@ -45,7 +45,7 @@ describe("edge telemetry routes", () => {
     await server.request({
       method: "POST",
       url: "/api/missions",
-      payload: { revision: missionFixture(), safetyResult: safetyResult() },
+      payload: { revision: missionFixture() },
     });
     const signed = signReplayFixture([event]);
     await server.request({ method: "POST", url: "/api/telemetry/replay", payload: { revisionId: "mission-1:r0", events: [event], aircraftId: "aircraft-1", signature: signed } });
@@ -73,7 +73,6 @@ describe("edge telemetry routes", () => {
         url: "/api/missions",
         payload: {
           revision: missionFixture({ id: revisionId, missionId }),
-          safetyResult: safetyResult(revisionId),
         },
       });
       expect(created.statusCode).toBe(201);

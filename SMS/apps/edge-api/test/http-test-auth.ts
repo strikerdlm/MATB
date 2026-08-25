@@ -3,7 +3,7 @@ import { LocalIdentityStore } from "../src/auth/identity.js";
 import type { UserRole } from "../src/auth/roles.js";
 import { SessionManager } from "../src/auth/session.js";
 import { buildServer, type EdgeServer } from "../src/server.js";
-import { nowUtc } from "./mission-fixture.js";
+import { nowUtc, testSafetyEvaluationProvider } from "./mission-fixture.js";
 
 const password = "correct horse battery staple";
 
@@ -26,6 +26,7 @@ export interface AuthenticatedTestServer {
 export async function authenticatedTestServer(
   config: Parameters<typeof buildServer>[0],
   identities: readonly HttpTestIdentity[] = [{ userId: "commander-1", roles: ["commander"], missionIds: ["mission-1"] }],
+  additionalDependencies: Readonly<Record<string, unknown>> = {},
 ): Promise<AuthenticatedTestServer> {
   const identityStore = new LocalIdentityStore({ now: () => nowUtc });
   for (const identity of identities) {
@@ -47,7 +48,12 @@ export async function authenticatedTestServer(
     sessionCredentialFactory: () => `test-credential-${sequence}`,
     csrfTokenFactory: () => `test-csrf-${sequence}`,
   });
-  const app = await buildServer(config, { identityStore, sessionManager });
+  const app = await buildServer(config, {
+    identityStore,
+    sessionManager,
+    safetyEvaluationProvider: testSafetyEvaluationProvider(),
+    ...additionalDependencies,
+  });
   const sessions = new Map<string, SessionHeaders>();
   for (const identity of identities) {
     const response = await app.inject({

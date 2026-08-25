@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { EdgeServer } from "../src/server.js";
 import { MissionService } from "../src/services/mission-service.js";
-import { missionFixture, safetyResult } from "./mission-fixture.js";
+import { missionFixture, testSafetyEvaluationProvider } from "./mission-fixture.js";
 import { authenticatedTestServer } from "./http-test-auth.js";
 
 describe("mission and revision routes", () => {
@@ -14,7 +14,7 @@ describe("mission and revision routes", () => {
   it("creates and returns an immutable mission revision", async () => {
     const server = await authenticatedTestServer({ databaseUrl: ":memory:", internet: "disabled" });
     app = server.app;
-    const create = await server.request({ method: "POST", url: "/api/missions", payload: { revision: missionFixture(), safetyResult: safetyResult() } });
+    const create = await server.request({ method: "POST", url: "/api/missions", payload: { revision: missionFixture() } });
 
     expect(create.statusCode).toBe(201);
     const response = await server.request({ method: "GET", url: "/api/missions/mission-1" });
@@ -25,7 +25,7 @@ describe("mission and revision routes", () => {
   it("creates a new planned revision for a material route change and rejects stale writes", async () => {
     const server = await authenticatedTestServer({ databaseUrl: ":memory:", internet: "disabled" });
     app = server.app;
-    await server.request({ method: "POST", url: "/api/missions", payload: { revision: missionFixture(), safetyResult: safetyResult() } });
+    await server.request({ method: "POST", url: "/api/missions", payload: { revision: missionFixture() } });
 
     const revision = await server.request({
       method: "POST",
@@ -53,9 +53,9 @@ describe("mission and revision routes", () => {
   it("reloads mission snapshots from the local operational store", async () => {
     const server = await authenticatedTestServer({ databaseUrl: ":memory:", internet: "disabled" });
     app = server.app;
-    await server.request({ method: "POST", url: "/api/missions", payload: { revision: missionFixture(), safetyResult: safetyResult() } });
+    await server.request({ method: "POST", url: "/api/missions", payload: { revision: missionFixture() } });
 
-    const reloaded = new MissionService({ database: app.edgeDatabase, auditLedger: app.auditLedger });
+    const reloaded = new MissionService({ database: app.edgeDatabase, auditLedger: app.auditLedger, safetyEvaluationProvider: testSafetyEvaluationProvider() });
 
     expect(reloaded.getMission("mission-1")).toMatchObject({ currentRevisionId: "mission-1:r0" });
   });

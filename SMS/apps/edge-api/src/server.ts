@@ -13,7 +13,8 @@ import { registerPostflightRoutes } from "./routes/postflight.js";
 import { registerTelemetryRoutes } from "./routes/telemetry.js";
 import { MissionService } from "./services/mission-service.js";
 import { TelemetryService } from "./services/telemetry-service.js";
-import { SafeModeService } from "./services/safe-mode.js";
+import { InMemoryTrustedKeyStore, SafeModeService, type TrustedKeyStore } from "./services/safe-mode.js";
+import type { SafetyEvaluationProvider } from "./services/safety-evaluation.js";
 import { registerOperationalDataBoundary } from "./data-boundary.js";
 import {
   createDefaultHttpAuthDependencies,
@@ -46,7 +47,10 @@ export interface EdgeServer extends FastifyInstance {
   readonly safeModeService: SafeModeService;
 }
 
-export type EdgeServerDependencies = Partial<HttpAuthDependencies>;
+export interface EdgeServerDependencies extends Partial<HttpAuthDependencies> {
+  readonly safetyEvaluationProvider?: SafetyEvaluationProvider;
+  readonly trustedKeyStore?: TrustedKeyStore;
+}
 
 function buildReadinessReport(database: EdgeDatabase): ReadinessReport {
   const migrationsReady = database.schemaVersion() === SCHEMA_VERSION;
@@ -81,9 +85,9 @@ export async function buildServer(input: EdgeConfigInput = {}, dependencies: Edg
   const https = await loadTlsMaterial(edgeConfig);
   const edgeDatabase = openDatabase(edgeConfig.databaseUrl, edgeConfig.lockTimeoutMs);
   const auditLedger = new AuditLedger({ database: edgeDatabase });
-  const missionService = new MissionService({ auditLedger, database: edgeDatabase });
+  const missionService = new MissionService({ auditLedger, database: edgeDatabase, safetyEvaluationProvider: dependencies.safetyEvaluationProvider });
   const telemetryService = new TelemetryService();
-  const safeModeService = new SafeModeService({ database: edgeDatabase, packageDirectory: edgeConfig.packageDirectory, auditLedger, missionService });
+  const safeModeService = new SafeModeService({ database: edgeDatabase, packageDirectory: edgeConfig.packageDirectory, auditLedger, missionService, trustedKeyStore: dependencies.trustedKeyStore ?? new InMemoryTrustedKeyStore() });
   const app = Fastify({ logger: false, ...(https === undefined ? {} : { https }) }) as unknown as EdgeServer;
   Object.defineProperties(app, {
     edgeConfig: { value: edgeConfig, enumerable: false },

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { EdgeServer } from "../src/server.js";
-import { missionFixture, safetyResult } from "./mission-fixture.js";
+import { missionFixture } from "./mission-fixture.js";
 import { authenticatedTestServer, type AuthenticatedTestServer } from "./http-test-auth.js";
 
 describe("checklist and four-gate routes", () => {
@@ -25,7 +25,7 @@ describe("checklist and four-gate routes", () => {
   }
 
   async function createMission(): Promise<void> {
-    await server.request({ method: "POST", url: "/api/missions", payload: { revision: missionFixture(), safetyResult: safetyResult() } }, "commander-1");
+    await server.request({ method: "POST", url: "/api/missions", payload: { revision: missionFixture() } }, "commander-1");
   }
 
   it("requires accountable checklist responses and refuses bulk completion", async () => {

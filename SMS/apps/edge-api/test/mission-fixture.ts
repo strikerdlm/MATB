@@ -1,3 +1,5 @@
+import { DeterministicSafetyEvaluationProvider } from "../src/services/safety-evaluation.js";
+
 export const nowUtc = "2026-08-09T18:00:00.000Z";
 
 export function missionFixture(overrides: Record<string, unknown> = {}) {
@@ -60,4 +62,33 @@ export function safetyResult(revisionId = "mission-1:r0") {
     invalidatedGates: [],
     kernelVersion: "0.1.0",
   };
+}
+
+export function testSafetyEvaluationProvider() {
+  return new DeterministicSafetyEvaluationProvider({
+    now: () => nowUtc,
+    resolve: async () => ({
+      requirements: [],
+      policy: {
+        packageId: "policy-fixture",
+        version: "1.0.0",
+        status: "approved",
+        delegatedAuthorities: [],
+        freshness: {
+          aip: { maxAgeMinutes: 120, critical: true },
+          notam: { maxAgeMinutes: 120, critical: true },
+          weather: { maxAgeMinutes: 120, critical: true },
+          terrain: { maxAgeMinutes: 120, critical: true },
+          airspace: { maxAgeMinutes: 120, critical: true },
+          policy: { maxAgeMinutes: 120, critical: true },
+          regulation: { maxAgeMinutes: 120, critical: true },
+        },
+        signature: "test-fixture-signature",
+      },
+      evidenceSnapshot: { snapshotId: "evidence-1", acceptedEvidenceIds: [] },
+      policyPackage: { packageId: "policy-fixture", version: "1.0.0" },
+      terminologyPackage: { packageId: "terminology-fixture", version: "1.0.0" },
+      evidencePackage: { packageId: "evidence-fixture", version: "1.0.0" },
+    }),
+  });
 }

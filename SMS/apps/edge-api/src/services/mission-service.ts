@@ -3,16 +3,22 @@ import {
   evaluateFourGates,
   parseGateApproval,
   parseMissionRevision,
-  parseSafetyEvaluationResult,
   type GateApproval,
   type GateActorRole,
   type GateName,
   type MissionRevision,
   type MissionRevisionChange,
-  type SafetyEvaluationResult,
 } from "@fac-isr/safety-kernel";
 import type { EdgeDatabase } from "../db/migrate.js";
 import { AuditLedger } from "../audit/ledger.js";
+import {
+  asSafetyEvaluationResult,
+  UnavailableSafetyEvaluationProvider,
+  validateSafetyEvaluationEnvelope,
+  type SafetyEvaluationEnvelope,
+  type SafetyEvaluationProvider,
+  type SafetyEvaluationView,
+} from "./safety-evaluation.js";
 
 const GATES: readonly GateName[] = ["maintenance", "operator", "safety", "commander"];
 const ROLE_BY_GATE: Readonly<Record<GateName, GateActorRole>> = {
@@ -59,17 +65,23 @@ export interface OccurrenceRecord {
 interface StoredMission {
   readonly missionId: string;
   revisions: MissionRevision[];
-  safetyResults: SafetyEvaluationResult[];
+  safetyResults: StoredSafetyEvaluation[];
   checklistResponses: ChecklistResponse[];
   approvals: GateApprovalRecord[];
   postflight?: PostflightRecord;
   occurrences: OccurrenceRecord[];
 }
 
+interface StoredSafetyEvaluation {
+  readonly envelope: SafetyEvaluationEnvelope;
+  stale: boolean;
+}
+
 export interface MissionServiceOptions {
   readonly auditLedger?: AuditLedger;
   readonly database?: EdgeDatabase;
   readonly now?: () => string;
+  readonly safetyEvaluationProvider?: SafetyEvaluationProvider;
 }
 
 export interface ServiceActorContext {
@@ -98,16 +110,19 @@ export class MissionService {
   private readonly audit: AuditLedger;
   private readonly database?: EdgeDatabase;
   private readonly now: () => string;
+  private readonly safetyEvaluationProvider: SafetyEvaluationProvider;
 
   public constructor(options: MissionServiceOptions = {}) {
     this.audit = options.auditLedger ?? new AuditLedger({ database: options.database });
     this.database = options.database;
     this.now = options.now ?? (() => new Date().toISOString());
+    this.safetyEvaluationProvider = options.safetyEvaluationProvider ?? new UnavailableSafetyEvaluationProvider(this.now);
     this.load();
   }
 
   public async createMission(input: unknown, context: ServiceActorContext): Promise<MissionRevision> {
     const envelope = objectInput(input);
+    this.rejectCallerSafetyResult(envelope);
     const rawRevision = isObject(envelope.revision)
       ? envelope.revision
       : isObject(envelope.mission)
@@ -120,13 +135,11 @@ export class MissionService {
     if (this.missions.has(revision.missionId)) {
       throw new MissionServiceError(409, "MISSION_ALREADY_EXISTS", "mission already exists");
     }
-    const safetyResult = envelope.safetyResult === undefined
-      ? undefined
-      : this.parseSafety(envelope.safetyResult, revision.id);
+    const safetyResult = await this.evaluateSafety(revision);
     const stored: StoredMission = {
       missionId: revision.missionId,
       revisions: [revision],
-      safetyResults: safetyResult === undefined ? [] : [safetyResult],
+      safetyResults: [{ envelope: safetyResult, stale: false }],
       checklistResponses: [],
       approvals: [],
       occurrences: [],
@@ -154,7 +167,7 @@ export class MissionService {
       currentRevisionId: currentRevision.id,
       currentRevision,
       revisions: [...stored.revisions],
-      safetyResults: [...stored.safetyResults],
+      safetyResults: stored.safetyResults.map((result) => this.evaluationView(result)),
       checklistResponses: [...stored.checklistResponses],
       gateApprovals: [...stored.approvals],
       postflight: stored.postflight,
@@ -170,6 +183,7 @@ export class MissionService {
     const stored = this.requireMission(missionId);
     const current = stored.revisions.at(-1)!;
     const envelope = objectInput(input);
+    this.rejectCallerSafetyResult(envelope);
     const expectedRevisionId = envelope.expectedRevisionId ?? envelope.revisionId;
     if (expectedRevisionId !== undefined && expectedRevisionId !== current.id) {
       throw new MissionServiceError(409, "STALE_REVISION", "mission revision has changed");
@@ -202,9 +216,7 @@ export class MissionService {
       }
     }
 
-    const safetyResult = envelope.safetyResult === undefined
-      ? undefined
-      : this.parseSafety(envelope.safetyResult, next.id);
+    const safetyResult = await this.evaluateSafety(next);
     const invalidated = stored.approvals.filter((approval) => approval.missionRevisionId === current.id);
     for (const approval of invalidated) {
       await this.appendAudit({
@@ -232,8 +244,10 @@ export class MissionService {
     stored.revisions.push(next);
     stored.approvals = stored.approvals.filter((approval) => approval.missionRevisionId !== current.id);
     stored.checklistResponses = stored.checklistResponses.filter((response) => response.revisionId !== current.id);
-    stored.safetyResults = stored.safetyResults.filter((result) => result.missionRevisionId !== current.id);
-    if (safetyResult !== undefined) stored.safetyResults.push(safetyResult);
+    for (const result of stored.safetyResults) {
+      if (result.envelope.revisionId === current.id) result.stale = true;
+    }
+    stored.safetyResults.push({ envelope: safetyResult, stale: false });
     this.persist();
     return next;
   }
@@ -282,18 +296,47 @@ export class MissionService {
     return record;
   }
 
-  public getSafetyResult(revisionId: string): SafetyEvaluationResult {
+  public getSafetyResult(revisionId: string): SafetyEvaluationView {
     const stored = this.requireRevision(revisionId).stored;
-    const result = stored.safetyResults.find((item) => item.missionRevisionId === revisionId);
-    if (result !== undefined) return result;
-    return this.parseSafety({
-      missionRevisionId: revisionId,
-      status: "blocked",
-      evaluations: [],
-      blockers: [{ code: "SAFETY_RESULT_MISSING", conceptId: "safety.result.missing", severity: "data", explanationKey: "SAFETY_RESULT_MISSING", evidenceRefs: [] }],
-      invalidatedGates: [],
-      kernelVersion: "0.1.0",
-    }, revisionId);
+    const result = stored.safetyResults.find((item) => item.envelope.revisionId === revisionId);
+    if (result === undefined) throw new MissionServiceError(409, "SAFETY_EVALUATION_MISSING", "server safety evaluation is missing");
+    return this.evaluationView(result);
+  }
+
+  public async recomputeSafetyEvaluation(revisionId: string): Promise<SafetyEvaluationView> {
+    const resolved = this.requireRevision(revisionId);
+    const envelope = await this.evaluateSafety(resolved.revision);
+    resolved.stored.safetyResults = resolved.stored.safetyResults.filter((item) => item.envelope.revisionId !== revisionId);
+    const stored = { envelope, stale: false };
+    resolved.stored.safetyResults.push(stored);
+    this.persist();
+    return this.evaluationView(stored);
+  }
+
+  public async markSafetyEvaluationsStale(context: ServiceActorContext, reason: string): Promise<void> {
+    for (const stored of this.missions.values()) {
+      const affectedRevisionIds = new Set<string>();
+      for (const evaluation of stored.safetyResults) {
+        if (evaluation.stale) continue;
+        evaluation.stale = true;
+        affectedRevisionIds.add(evaluation.envelope.revisionId);
+      }
+      const invalidated = stored.approvals.filter((approval) => affectedRevisionIds.has(approval.missionRevisionId));
+      for (const approval of invalidated) {
+        await this.appendAudit({
+          type: "gate.invalidated",
+          action: "invalidate",
+          reason,
+          actorUserId: context.actorUserId,
+          missionRevisionId: approval.missionRevisionId,
+          clientSessionId: context.clientSessionId,
+          occurredAtUtc: this.timestamp(context.occurredAtUtc),
+          payload: { gate: approval.gate, cause: "package.activation" },
+        });
+      }
+      stored.approvals = stored.approvals.filter((approval) => !affectedRevisionIds.has(approval.missionRevisionId));
+    }
+    this.persist();
   }
 
   public async recordGateDecision(revisionId: string, gateInput: string, input: unknown, context: GateActorContext): Promise<GateApprovalRecord> {
@@ -332,6 +375,7 @@ export class MissionService {
       && approval.gate === gate && approval.aircraftId === aircraftId);
     if (duplicate) throw new MissionServiceError(409, "GATE_ALREADY_SIGNED", "gate already has a decision for this scope");
     const occurredAtUtc = this.timestamp(context.occurredAtUtc);
+    const safety = await this.currentSafetyForGate(revision, stored, context);
     const evidenceSnapshotId = required(envelope.evidenceSnapshotId, "evidenceSnapshotId");
     const reason = required(envelope.reason, "reason");
     const approval = parseGateApproval({
@@ -344,11 +388,10 @@ export class MissionService {
       valid: envelope.valid ?? true,
       occurredAtUtc,
       evidenceSnapshotId,
-      policyVersion: textOr(envelope.policyVersion, "edge-api"),
+      policyVersion: safety.policyPackage.version,
       reason,
     });
     if (decision === "accept") {
-      const safety = this.getSafetyResult(revisionId);
       if (safety.status !== "ready") throw new MissionServiceError(409, "SAFETY_RESULT_BLOCKED", "gate cannot be accepted while safety evaluation is not ready");
       const priorOperatorBlock = stored.approvals.some((item) => item.missionRevisionId === revisionId
         && item.gate === "operator" && item.decision !== "accept");
@@ -357,7 +400,7 @@ export class MissionService {
         const priorApprovals = stored.approvals
           .filter((item) => item.missionRevisionId === revisionId)
           .map(({ checklistResponseIds: _checklistResponseIds, ...baseApproval }) => baseApproval);
-        const gateResult = evaluateFourGates({ mission: revision, evaluation: safety, approvals: [...priorApprovals, approval], nowUtc: occurredAtUtc });
+        const gateResult = evaluateFourGates({ mission: revision, evaluation: asSafetyEvaluationResult(safety), approvals: [...priorApprovals, approval], nowUtc: occurredAtUtc });
         if (gateResult.status !== "ready") throw new MissionServiceError(409, "GATE_DEPENDENCY_BLOCKED", "commander acceptance requires all other gates to be accepted");
       }
     }
@@ -421,13 +464,54 @@ export class MissionService {
     }
   }
 
-  private parseSafety(value: unknown, revisionId: string): SafetyEvaluationResult {
+  private async evaluateSafety(revision: MissionRevision): Promise<SafetyEvaluationEnvelope> {
     try {
-      const result = parseSafetyEvaluationResult(value);
-      if (result.missionRevisionId !== revisionId) throw new Error("safety result revision does not match the target");
-      return result;
+      return validateSafetyEvaluationEnvelope(await this.safetyEvaluationProvider.evaluate(revision), revision.id);
     } catch (error) {
-      throw new MissionServiceError(400, "INVALID_SAFETY_RESULT", errorMessage(error));
+      throw new MissionServiceError(503, "SAFETY_EVALUATION_UNAVAILABLE", errorMessage(error));
+    }
+  }
+
+  private async currentSafetyForGate(revision: MissionRevision, stored: StoredMission, context: ServiceActorContext): Promise<SafetyEvaluationView> {
+    const record = stored.safetyResults.find((item) => item.envelope.revisionId === revision.id);
+    if (record === undefined) throw new MissionServiceError(409, "SAFETY_EVALUATION_MISSING", "server safety evaluation is missing");
+    let current = false;
+    if (!record.stale) {
+      try {
+        current = await this.safetyEvaluationProvider.isCurrent(revision, record.envelope);
+      } catch {
+        current = false;
+      }
+    }
+    if (!current) {
+      record.stale = true;
+      const invalidated = stored.approvals.filter((approval) => approval.missionRevisionId === revision.id);
+      for (const approval of invalidated) {
+        await this.appendAudit({
+          type: "gate.invalidated",
+          action: "invalidate",
+          reason: "trusted safety inputs changed after evaluation",
+          actorUserId: context.actorUserId,
+          missionRevisionId: revision.id,
+          clientSessionId: context.clientSessionId,
+          occurredAtUtc: this.timestamp(context.occurredAtUtc),
+          payload: { gate: approval.gate, cause: "safety.input.changed" },
+        });
+      }
+      stored.approvals = stored.approvals.filter((approval) => approval.missionRevisionId !== revision.id);
+      this.persist();
+      throw new MissionServiceError(409, "SAFETY_EVALUATION_STALE", "gate decisions are blocked until safety is recomputed");
+    }
+    return this.evaluationView(record);
+  }
+
+  private evaluationView(result: StoredSafetyEvaluation): SafetyEvaluationView {
+    return Object.freeze({ ...result.envelope, stale: result.stale });
+  }
+
+  private rejectCallerSafetyResult(envelope: Record<string, unknown>): void {
+    if (Object.prototype.hasOwnProperty.call(envelope, "safetyResult")) {
+      throw new MissionServiceError(400, "CALLER_SAFETY_RESULT_FORBIDDEN", "safetyResult is computed by the server and cannot be supplied by clients");
     }
   }
 
@@ -480,7 +564,11 @@ export class MissionService {
       const parsed = JSON.parse(String(row.value)) as StoredMission[];
       for (const raw of parsed) {
         const revisions = raw.revisions.map((revision) => this.parseMission(revision));
-        const safetyResults = raw.safetyResults.map((result) => this.parseSafety(result, result.missionRevisionId));
+        const safetyResults = raw.safetyResults.flatMap((result) => {
+          if (!isObject(result) || !isObject(result.envelope) || typeof result.stale !== "boolean") return [];
+          const envelope = validateSafetyEvaluationEnvelope(result.envelope as unknown as SafetyEvaluationEnvelope, String(result.envelope.revisionId));
+          return [{ envelope, stale: result.stale }];
+        });
         const approvals = raw.approvals.map((approval) => {
           const { checklistResponseIds, ...baseApproval } = approval;
           return Object.freeze({ ...parseGateApproval(baseApproval), checklistResponseIds: Object.freeze([...checklistResponseIds]) });
@@ -521,10 +609,6 @@ function objectRequired(value: unknown, field: string): Record<string, unknown> 
 function required(value: unknown, field: string): string {
   if (typeof value !== "string" || value.trim() === "" || value !== value.trim() || value.includes("\0")) throw new MissionServiceError(400, "INVALID_REQUEST", `${field} is required`);
   return value;
-}
-
-function textOr(value: unknown, fallback: string): string {
-  return value === undefined ? fallback : required(value, "text");
 }
 
 function arrayOfText(value: unknown, field: string): string[] {

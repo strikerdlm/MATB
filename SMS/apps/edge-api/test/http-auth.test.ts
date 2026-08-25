@@ -5,7 +5,7 @@ import { createDefaultHttpAuthDependencies } from "../src/auth/http.js";
 import type { UserRole } from "../src/auth/roles.js";
 import { SessionManager } from "../src/auth/session.js";
 import { buildServer, type EdgeServer } from "../src/server.js";
-import { missionFixture, nowUtc, safetyResult } from "./mission-fixture.js";
+import { missionFixture, nowUtc, safetyResult, testSafetyEvaluationProvider } from "./mission-fixture.js";
 
 const password = "correct horse battery staple";
 
@@ -41,7 +41,7 @@ function testAuth(identities: readonly TestIdentity[], clock: { now: string }) {
     sessionIdFactory: () => `session-${++sequence}`,
     sessionCredentialFactory: () => `bearer-secret-${sequence}`,
   });
-  return { identityStore, sessionManager };
+  return { identityStore, sessionManager, safetyEvaluationProvider: testSafetyEvaluationProvider() };
 }
 
 async function login(app: EdgeServer, userId: string): Promise<LoginSession> {
@@ -89,7 +89,7 @@ describe("HTTP authentication boundary", () => {
     const createMission = await app.inject({
       method: "POST",
       url: "/api/missions",
-      payload: { revision: missionFixture(), safetyResult: safetyResult() },
+      payload: { revision: missionFixture() },
     });
     const checklist = await app.inject({
       method: "POST",
@@ -327,12 +327,12 @@ describe("HTTP principal authorization", () => {
     const operatorCreate = await app.inject(authenticated(operator, {
       method: "POST",
       url: "/api/missions",
-      payload: { revision: missionFixture(), safetyResult: safetyResult() },
+      payload: { revision: missionFixture() },
     }));
     const created = await app.inject(authenticated(commander, {
       method: "POST",
       url: "/api/missions",
-      payload: { revision: missionFixture(), safetyResult: safetyResult() },
+      payload: { revision: missionFixture() },
     }));
     const assignedRead = await app.inject(authenticated(operator, { method: "GET", url: "/api/missions/mission-1" }));
     const unassignedRead = await app.inject(authenticated(unassigned, { method: "GET", url: "/api/missions/mission-1" }));
@@ -374,7 +374,7 @@ describe("HTTP principal authorization", () => {
     await app.inject(authenticated(commander, {
       method: "POST",
       url: "/api/missions",
-      payload: { revision: missionFixture(), safetyResult: safetyResult() },
+      payload: { revision: missionFixture() },
     }));
 
     const assigned = await app.inject(authenticated(operator, {
@@ -409,7 +409,7 @@ describe("HTTP principal authorization", () => {
     await app.inject(authenticated(commander, {
       method: "POST",
       url: "/api/missions",
-      payload: { revision: missionFixture(), safetyResult: safetyResult() },
+      payload: { revision: missionFixture() },
     }));
     await app.inject(authenticated(operator, {
       method: "POST",
@@ -486,7 +486,7 @@ describe("HTTP principal authorization", () => {
     const created = await app.inject(authenticated(commander, {
       method: "POST",
       url: "/api/missions",
-      payload: { revision: missionFixture(), safetyResult: safetyResult() },
+      payload: { revision: missionFixture() },
     }));
     const events = await app.auditLedger.queryAudit({ type: "mission.created" });
     const packageImport = await app.inject(authenticated(commander, {
@@ -501,11 +501,8 @@ describe("HTTP principal authorization", () => {
       actorUserId: "commander-1",
       clientSessionId: commander.sessionId,
     }]);
-    expect(packageImport.statusCode).toBe(422);
-    expect(packageEvents).toMatchObject([{
-      actorUserId: "commander-1",
-      clientSessionId: commander.sessionId,
-    }]);
+    expect(packageImport.statusCode).toBe(404);
+    expect(packageEvents).toEqual([]);
     expect(JSON.stringify([...events, ...packageEvents])).not.toContain("bearer-secret-1");
   });
 });

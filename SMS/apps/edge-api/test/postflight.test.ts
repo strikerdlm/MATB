@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { EdgeServer } from "../src/server.js";
-import { missionFixture, safetyResult } from "./mission-fixture.js";
+import { missionFixture } from "./mission-fixture.js";
 import { authenticatedTestServer } from "./http-test-auth.js";
 
 describe("post-flight and occurrence routes", () => {
@@ -13,7 +13,7 @@ describe("post-flight and occurrence routes", () => {
   it("requires preserved telemetry and structured recovery evidence", async () => {
     const server = await authenticatedTestServer({ databaseUrl: ":memory:", internet: "disabled" });
     app = server.app;
-    await server.request({ method: "POST", url: "/api/missions", payload: { revision: missionFixture(), safetyResult: safetyResult() } });
+    await server.request({ method: "POST", url: "/api/missions", payload: { revision: missionFixture() } });
 
     const missing = await server.request({ method: "POST", url: "/api/revisions/mission-1:r0/postflight", payload: { recovery: { status: "recovered" } } });
     expect(missing.statusCode).toBe(400);

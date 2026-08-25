@@ -6,4 +6,5 @@ export * from "./db/schema.js";
 export * from "./services/mission-service.js";
 export * from "./services/telemetry-service.js";
 export * from "./services/safe-mode.js";
+export * from "./services/safety-evaluation.js";
 export * from "./server.js";
