@@ -20,6 +20,9 @@ services:
       SMS_PACKAGE_DIRECTORY: /opt/sms/packages
       SMS_TLS_CERT_PATH: /run/secrets/tls/server.crt
       SMS_TLS_KEY_PATH: /run/secrets/tls/server.key
+      SMS_HEALTH_HOST: 127.0.0.1
+      SMS_HEALTH_SERVERNAME: ${SMS_HEALTH_SERVERNAME:?set SMS_HEALTH_SERVERNAME}
+      SMS_HEALTH_CA_PATH: /run/secrets/tls/client-ca.crt
       SMS_EXPORT_KEY_PATH: /run/secrets/tls/export.key
       SMS_TLS_CLIENT_CA_PATH: /run/secrets/tls/client-ca.crt
       SMS_HEALTH_CLIENT_CERT_PATH: /run/secrets/tls/health-client.crt
@@ -58,6 +61,9 @@ services:
       SMS_PACKAGE_DIRECTORY: /opt/sms/packages
       SMS_TLS_CERT_PATH: /run/secrets/tls/server.crt
       SMS_TLS_KEY_PATH: /run/secrets/tls/server.key
+      SMS_HEALTH_HOST: 127.0.0.1
+      SMS_HEALTH_SERVERNAME: ${SMS_HEALTH_SERVERNAME:?set SMS_HEALTH_SERVERNAME}
+      SMS_HEALTH_CA_PATH: /run/secrets/tls/client-ca.crt
       SMS_EXPORT_KEY_PATH: /run/secrets/tls/export.key
       SMS_EXPORT_KEY_ID: ${SMS_EXPORT_KEY_ID:?set SMS_EXPORT_KEY_ID}
       SMS_DEPLOYMENT_MODE: tactical

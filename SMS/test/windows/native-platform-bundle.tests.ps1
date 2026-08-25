@@ -14,11 +14,20 @@ function Assert-True([bool]$Condition, [string]$Message) {
   if (-not $Condition) { throw "ASSERTION FAILED: $Message" }
 }
 
-function Write-Bundle([string]$Name, [bool]$FailMigration = $false) {
+function Update-BundleInventory([string]$Bundle) {
+  $inventory = @()
+  foreach ($file in Get-ChildItem -LiteralPath $Bundle -Recurse -File | Where-Object { $_.Name -ne "inventory.json" } | Sort-Object FullName) {
+    $relative = [IO.Path]::GetRelativePath($Bundle, $file.FullName).Replace('\', '/')
+    $inventory += @{ path = $relative; sha256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant(); sizeBytes = $file.Length; mode = 292 }
+  }
+  @{ schemaVersion = "1.0"; inventoryPath = "inventory.json"; files = $inventory } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $Bundle "inventory.json") -Encoding utf8NoBOM
+}
+
+function Write-Bundle([string]$Name, [bool]$FailMigration = $false, [bool]$FailStart = $false, [bool]$Production = $true) {
   $bundle = Join-Path $TestRoot $Name
   $files = @{
-    "release.json" = (@{ release = "fac-isr-sms@0.2.0-rc.1"; target = "win32-x64"; buildId = $Name; operationalReady = $false } | ConvertTo-Json -Compress)
-    "app\scripts\start-edge.mjs" = "process.stdout.write('listening\n');"
+    "release.json" = (@{ release = "fac-isr-sms@0.2.0-rc.1"; target = "win32-x64"; buildId = $Name; operationalReady = $false; production = $Production; runtimeProvenance = $(if ($Production) { "official-node-signed-checksums" } else { "controlled-test-fixture" }) } | ConvertTo-Json -Compress)
+    "app\scripts\start-edge.mjs" = $(if ($FailStart) { "process.exit(74);" } else { "process.stdout.write('listening\n');" })
     "app\scripts\edge-healthcheck.mjs" = "process.exit(0);"
     "app\apps\edge-api\dist\admin\cli.js" = "process.stdout.write('admin\n');"
     "app\apps\console\dist\index.html" = "<!doctype html><title>SMS</title>"
@@ -33,12 +42,7 @@ function Write-Bundle([string]$Name, [bool]$FailMigration = $false) {
   $runtime = Join-Path $bundle "runtime\node.exe"
   New-Item -ItemType Directory -Path (Split-Path $runtime) -Force | Out-Null
   Copy-Item -LiteralPath (Get-Command node.exe).Source -Destination $runtime
-  $inventory = @()
-  foreach ($file in Get-ChildItem -LiteralPath $bundle -Recurse -File | Sort-Object FullName) {
-    $relative = [IO.Path]::GetRelativePath($bundle, $file.FullName).Replace('\', '/')
-    $inventory += @{ path = $relative; sha256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant(); sizeBytes = $file.Length; mode = 292 }
-  }
-  @{ schemaVersion = "1.0"; inventoryPath = "inventory.json"; files = $inventory } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $bundle "inventory.json") -Encoding utf8NoBOM
+  Update-BundleInventory $bundle
   return $bundle
 }
 
@@ -58,6 +62,16 @@ try {
   New-Item -ItemType Directory -Path $TestRoot | Out-Null
   & node (Join-Path $SmsRoot "scripts\edge-healthcheck.mjs") --ready *> $null
   Assert-True ($LASTEXITCODE -ne 0) "readiness passed without an installed HTTPS listener"
+  $controlled = Write-Bundle "renamed-as-production" $false $false $false
+  $controlledRejected = $false
+  try { Invoke-Sms "Install" $controlled $null } catch { $controlledRejected = $_.Exception.Message -match "release metadata" }
+  Assert-True $controlledRejected "a renamed controlled-runtime bundle was accepted"
+  $nonportable = Write-Bundle "nonportable"
+  Set-Content -LiteralPath (Join-Path $nonportable "app\unsupported[segment]") -Value "not portable"
+  Update-BundleInventory $nonportable
+  $nonportableRejected = $false
+  try { Invoke-Sms "Install" $nonportable $null } catch { $nonportableRejected = $_.Exception.Message -match "portable" }
+  Assert-True $nonportableRejected "a non-portable bundle path was accepted"
   $first = Write-Bundle "build-a"
   Invoke-Sms "Install" $first $null | Out-Null
   $installRoot = Join-Path $TestRoot "Program Files\FAC ISR\SMS"
@@ -90,6 +104,11 @@ try {
   Invoke-Sms "Restore" $null $backup | Out-Null
   Assert-True ((Get-Content -LiteralPath $database -Raw) -eq "original database bytes") "backup restore did not recover exact data"
   Assert-True ((Get-Content -LiteralPath $activePackage -Raw) -eq "original package bytes") "backup restore did not recover exact packages"
+  Assert-True ((Invoke-Sms "Status" $null $null) -match "running ready") "standalone restore did not restore prior running state"
+  $invalidBackup = Join-Path $TestRoot "invalid-backup.zip"
+  Set-Content -LiteralPath $invalidBackup -Value "not a zip"
+  try { Invoke-Sms "Restore" $null $invalidBackup | Out-Null } catch { }
+  Assert-True ((Invoke-Sms "Status" $null $null) -match "running ready") "failed restore stranded the prior running service"
 
   $second = Write-Bundle "build-b"
   Invoke-Sms "Upgrade" $second $null | Out-Null
@@ -104,6 +123,13 @@ try {
   Assert-True ((Get-Content -LiteralPath $database -Raw) -eq "original database bytes") "failed upgrade did not restore data"
   Assert-True ((Get-Content -LiteralPath $activePackage -Raw) -eq "original package bytes") "failed upgrade did not restore packages"
   Assert-True ((Invoke-Sms "Status" $null $null) -match "running ready") "failed upgrade did not restart the old release"
+  $startFailing = Write-Bundle "build-d" $false $true
+  $startFailed = $false
+  try { Invoke-Sms "Upgrade" $startFailing $null } catch { $startFailed = $_.Exception.Message -match "rolled back" }
+  Assert-True $startFailed "failed new-release startup was accepted"
+  Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot "current.txt") -Raw) -eq $upgradedPointer) "startup failure changed the immutable pointer"
+  Assert-True ((Get-Content -LiteralPath $database -Raw) -eq "original database bytes") "startup failure did not restore data"
+  Assert-True ((Invoke-Sms "Status" $null $null) -match "running ready") "startup failure did not restart the old release"
 
   $junctionBundle = Write-Bundle "junction-build"
   New-Item -ItemType Directory -Path (Join-Path $TestRoot "junction-target") | Out-Null

@@ -47,12 +47,24 @@ function Get-CurrentReleasePath {
   return $path
 }
 
+function Assert-PortableRelativePath([string]$Relative) {
+  if ([string]::IsNullOrEmpty($Relative) -or $Relative -notmatch '^[A-Za-z0-9_./@+\-]+$') { throw "Bundle path is not portable" }
+  $components = $Relative.Split('/')
+  if ($components -contains "" -or $components -contains "." -or $components -contains "..") { throw "Bundle path contains an ambiguous component" }
+  foreach ($component in $components) {
+    if ($component.EndsWith('.')) { throw "Bundle path has a non-portable trailing dot" }
+    $stem = $component.Split('.')[0].ToUpperInvariant()
+    if ($stem -match '^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$') { throw "Bundle path uses a reserved Windows name" }
+  }
+}
+
 function Test-BundleInventory([string]$Path) {
   if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Container)) { throw "BundleRoot is required and must be a directory" }
   $rootItem = Get-Item -LiteralPath $Path -Force
   if ($rootItem.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Bundle root cannot be a reparse point" }
   foreach ($item in Get-ChildItem -LiteralPath $Path -Recurse -Force) {
     if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Bundle reparse points are forbidden: $($item.FullName)" }
+    Assert-PortableRelativePath ([IO.Path]::GetRelativePath($Path, $item.FullName).Replace('\', '/'))
   }
   $inventoryPath = Join-Path $Path "inventory.json"
   $releasePath = Join-Path $Path "release.json"
@@ -63,7 +75,8 @@ function Test-BundleInventory([string]$Path) {
   $expected = @{}
   foreach ($entry in $inventory.files) {
     $relative = [string]$entry.path
-    if ([IO.Path]::IsPathRooted($relative) -or $relative -split '[/\\]' -contains '..' -or $expected.ContainsKey($relative)) { throw "Unsafe or duplicate inventory path" }
+    Assert-PortableRelativePath $relative
+    if ([IO.Path]::IsPathRooted($relative) -or $expected.ContainsKey($relative)) { throw "Unsafe or duplicate inventory path" }
     $expected[$relative] = $entry
   }
   $actual = @(Get-ChildItem -LiteralPath $Path -Recurse -File -Force | Where-Object { $_.FullName -ne $inventoryPath })
@@ -71,13 +84,14 @@ function Test-BundleInventory([string]$Path) {
   foreach ($file in $actual) {
     if ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Bundle reparse points are forbidden" }
     $relative = [IO.Path]::GetRelativePath($Path, $file.FullName).Replace('\', '/')
+    Assert-PortableRelativePath $relative
     if (-not $expected.ContainsKey($relative)) { throw "Unexpected bundle file: $relative" }
     $entry = $expected[$relative]
     $digest = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($digest -ne [string]$entry.sha256 -or $file.Length -ne [long]$entry.sizeBytes) { throw "Bundle inventory mismatch: $relative" }
   }
   $release = Get-Content -LiteralPath $releasePath -Raw | ConvertFrom-Json
-  if ($release.release -ne "fac-isr-sms@0.2.0-rc.1" -or $release.target -ne "win32-x64" -or $release.operationalReady -ne $false) { throw "Bundle release metadata is invalid" }
+  if ($release.release -ne "fac-isr-sms@0.2.0-rc.1" -or $release.target -ne "win32-x64" -or $release.operationalReady -ne $false -or $release.production -ne $true -or $release.runtimeProvenance -ne "official-node-signed-checksums") { throw "Bundle release metadata is invalid" }
   $buildProperty = $release.PSObject.Properties["buildId"]
   return @{ InventoryPath = $inventoryPath; BuildId = $(if ($null -ne $buildProperty) { [string]$buildProperty.Value } else { "release" }) }
 }
@@ -155,13 +169,12 @@ function Assert-RuntimeSecurity {
 
 function Set-SmsProcessEnvironment {
   foreach ($line in Get-Content -LiteralPath (Join-Path $ConfigRoot "sms.env")) {
-    $trimmed = $line.Trim()
-    if ($trimmed.Length -eq 0 -or $trimmed.StartsWith("#")) { continue }
-    $separator = $trimmed.IndexOf('=')
+    if ([string]::IsNullOrWhiteSpace($line) -or $line.TrimStart().StartsWith("#")) { continue }
+    $separator = $line.IndexOf('=')
     if ($separator -lt 1) { throw "Invalid SMS environment configuration line" }
-    $name = $trimmed.Substring(0, $separator)
+    $name = $line.Substring(0, $separator)
     if ($name -notmatch '^SMS_[A-Z0-9_]+$') { throw "Invalid SMS environment variable name" }
-    [Environment]::SetEnvironmentVariable($name, $trimmed.Substring($separator + 1), "Process")
+    [Environment]::SetEnvironmentVariable($name, $line.Substring($separator + 1), "Process")
   }
 }
 
@@ -175,6 +188,10 @@ function Assert-SmsReadiness {
 function Start-Sms {
   Assert-RuntimeSecurity
   if ($TestMode) {
+    Set-SmsProcessEnvironment
+    $release = Get-CurrentReleasePath
+    & (Join-Path $release "runtime\node.exe") (Join-Path $release "app\scripts\start-edge.mjs") *> $null
+    if ($LASTEXITCODE -ne 0) { throw "FAC ISR SMS controlled start failed" }
     [IO.File]::WriteAllText((Join-Path $StateRoot "service.state"), "running ready`r`n", [Text.UTF8Encoding]::new($false))
   } else {
     Start-ScheduledTask -TaskName $TaskName
@@ -196,6 +213,22 @@ function Stop-Sms {
   }
 }
 
+function Test-SmsRunning {
+  if ($TestMode) {
+    $state = Join-Path $StateRoot "service.state"
+    return (Test-Path -LiteralPath $state -PathType Leaf) -and ((Get-Content -LiteralPath $state -Raw).Trim() -eq "running ready")
+  }
+  return (Get-ScheduledTask -TaskName $TaskName).State -eq "Running"
+}
+
+function Remove-ImmutableRelease([string]$Name) {
+  $path = Join-Path (Join-Path $InstallRoot "releases") $Name
+  if (Test-Path -LiteralPath $path -PathType Container) {
+    Get-ChildItem -LiteralPath $path -Recurse -Force | ForEach-Object { $_.IsReadOnly = $false }
+    Remove-Item -LiteralPath $path -Recurse -Force
+  }
+}
+
 function New-SmsBackup {
   New-Item -ItemType Directory -Path $BackupRoot -Force | Out-Null
   $path = Join-Path $BackupRoot ("fac-isr-sms-{0}-{1}.zip" -f (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ"), $PID)
@@ -211,6 +244,7 @@ function Restore-SmsBackup([string]$Path) {
   Expand-Archive -LiteralPath $Path -DestinationPath $staging
   foreach ($item in Get-ChildItem -LiteralPath $staging -Recurse -Force) {
     if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { Remove-Item -LiteralPath $staging -Recurse -Force; throw "Backup reparse points are forbidden" }
+    Assert-PortableRelativePath ([IO.Path]::GetRelativePath($staging, $item.FullName).Replace('\', '/'))
   }
   New-Item -ItemType Directory -Path $rollback | Out-Null
   $stagedData = Join-Path $staging "data"
@@ -266,17 +300,21 @@ switch ($Action) {
     }
   }
   "Stop" { Stop-Sms }
-  "Backup" { New-SmsBackup }
-  "Restore" { Stop-Sms; Restore-SmsBackup $BackupPath }
+  "Backup" {
+    $wasRunning = Test-SmsRunning
+    if ($wasRunning) { Stop-Sms }
+    try { New-SmsBackup } finally { if ($wasRunning) { Start-Sms } }
+  }
+  "Restore" {
+    $wasRunning = Test-SmsRunning
+    if ($wasRunning) { Stop-Sms }
+    try { Restore-SmsBackup $BackupPath } finally { if ($wasRunning) { Start-Sms } }
+  }
   "Upgrade" {
     $oldPointer = (Get-Content -LiteralPath (Join-Path $InstallRoot "current.txt") -Raw).Trim()
     $release = Add-ImmutableRelease $BundleRoot
-    $wasRunning = if ($TestMode) {
-      (Test-Path -LiteralPath (Join-Path $StateRoot "service.state")) -and ((Get-Content -LiteralPath (Join-Path $StateRoot "service.state") -Raw).Trim() -eq "running ready")
-    } else {
-      (Get-ScheduledTask -TaskName $TaskName).State -eq "Running"
-    }
-    Stop-Sms
+    $wasRunning = Test-SmsRunning
+    if ($wasRunning) { Stop-Sms }
     $rollbackBackup = $null
     try {
       $rollbackBackup = New-SmsBackup
@@ -291,8 +329,9 @@ switch ($Action) {
       if ($null -ne $rollbackBackup) { Restore-SmsBackup $rollbackBackup }
       Set-CurrentRelease $oldPointer
       Register-SmsTask
+      if ($release.Name -ne $oldPointer) { Remove-ImmutableRelease $release.Name }
       if ($wasRunning) { Start-Sms }
-      throw "Upgrade migration failed; data and immutable pointer were rolled back: $($_.Exception.Message)"
+      throw "Upgrade failed; data, immutable pointer, and prior service state were rolled back: $($_.Exception.Message)"
     }
   }
   "Uninstall" {

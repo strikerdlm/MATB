@@ -20,24 +20,38 @@ async function selfTest() {
   process.stdout.write("PASS edge self-test (offline; readiness fail-closed)\n");
 }
 
-async function installedCheck(mode) {
-  const port = Number(process.env.SMS_PORT ?? "8443");
-  const clientCertificate = process.env.SMS_HEALTH_CLIENT_CERT_PATH;
-  const clientKey = process.env.SMS_HEALTH_CLIENT_KEY_PATH;
+export async function buildInstalledRequestOptions(mode, environment = process.env) {
+  const hostname = environment.SMS_HEALTH_HOST;
+  const port = Number(environment.SMS_HEALTH_PORT ?? environment.SMS_PORT);
+  const servername = environment.SMS_HEALTH_SERVERNAME;
+  const caPath = environment.SMS_HEALTH_CA_PATH;
+  if (!hostname) throw new Error("SMS_HEALTH_HOST is required");
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error("SMS_HEALTH_PORT or SMS_PORT must be a valid TCP port");
+  if (!servername) throw new Error("SMS_HEALTH_SERVERNAME is required");
+  if (!caPath) throw new Error("SMS_HEALTH_CA_PATH is required");
+  const clientCertificate = environment.SMS_HEALTH_CLIENT_CERT_PATH;
+  const clientKey = environment.SMS_HEALTH_CLIENT_KEY_PATH;
   if ((clientCertificate === undefined) !== (clientKey === undefined)) throw new Error("health client certificate and key must be configured together");
   const clientTls = clientCertificate === undefined ? {} : {
     cert: await readFile(clientCertificate),
     key: await readFile(clientKey),
   };
+  return {
+    hostname,
+    port,
+    servername,
+    path: mode === "ready" ? "/readyz" : "/healthz",
+    rejectUnauthorized: true,
+    ca: await readFile(caPath),
+    timeout: 4_000,
+    ...clientTls,
+  };
+}
+
+async function installedCheck(mode) {
+  const options = await buildInstalledRequestOptions(mode);
   const response = await new Promise((resolve, reject) => {
-    const request = https.get({
-      hostname: "127.0.0.1",
-      port,
-      path: mode === "ready" ? "/readyz" : "/healthz",
-      rejectUnauthorized: false,
-      timeout: 4_000,
-      ...clientTls,
-    }, resolve);
+    const request = https.get(options, resolve);
     request.once("timeout", () => request.destroy(new Error("health check timed out")));
     request.once("error", reject);
   });

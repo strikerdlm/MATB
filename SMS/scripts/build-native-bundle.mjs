@@ -212,6 +212,7 @@ async function writeMetadata(bundle, target, appRoot, testRuntime) {
     "SMS_DEPLOYMENT_MODE=standalone", "SMS_BIND_ADDRESS=127.0.0.1", "SMS_PORT=8443", `SMS_CONFIG_DIRECTORY=${platformPaths.config}`,
     `SMS_DATABASE_URL=${platformPaths.database}`, `SMS_PACKAGE_DIRECTORY=${platformPaths.packages}`, `SMS_CONSOLE_DIRECTORY=${platformPaths.console}`,
     `SMS_TLS_CERT_PATH=${platformPaths.tls}${target === "linux-x64" ? "/" : "\\"}server.crt`, `SMS_TLS_KEY_PATH=${platformPaths.tls}${target === "linux-x64" ? "/" : "\\"}server.key`,
+    "SMS_HEALTH_HOST=127.0.0.1", "SMS_HEALTH_SERVERNAME=localhost", `SMS_HEALTH_CA_PATH=${platformPaths.tls}${target === "linux-x64" ? "/" : "\\"}server.crt`,
     `SMS_EXPORT_KEY_PATH=${platformPaths.tls}${target === "linux-x64" ? "/" : "\\"}export.key`, "SMS_EXPORT_KEY_ID=replace-with-institutional-key-id", "SMS_NETWORK=disabled", "",
   ].join(target === "linux-x64" ? "\n" : "\r\n"), { mode: 0o640 });
   await mkdir(resolve(bundle, "notices"), { recursive: true });
