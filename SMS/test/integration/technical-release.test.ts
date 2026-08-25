@@ -311,7 +311,7 @@ async function createFixture(): Promise<Fixture> {
   const allArtifactSha256s = Object.fromEntries(artifacts.map((artifact) => [artifact.target, artifact.sha256]));
   const scannerRaw = {
     "dependency-scan": { path: "scan-output/npm-audit.json", body: { auditReportVersion: 2, metadata: { vulnerabilities: { total: 0 } } } },
-    "oci-vulnerability-scan": { path: "scan-output/oci-vulnerabilities.json", body: { matches: [], source: { type: "oci-model", target: { userInput: `oci-archive:${artifacts[2].path}`, manifestDigest: oci.manifestDigest } } } },
+    "oci-vulnerability-scan": { path: "scan-output/oci-vulnerabilities.json", body: { matches: [], source: { type: "image", target: { userInput: `oci-archive:${artifacts[2].path}`, manifestDigest: oci.manifestDigest } } } },
     "malware-scan": { path: "scan-output/malware-scan.json", body: { malwareFound: 0, errors: 0, artifactSha256s: allArtifactSha256s } },
   } as const;
   for (const value of Object.values(scannerRaw)) await writeJson(join(root, value.path), value.body);
@@ -514,11 +514,33 @@ describe("technical release evidence gate", () => {
   it("rejects a clean Grype report sourced from any OCI manifest other than the exact candidate", async () => {
     const fixture = await createFixture();
     await mutateScannerRaw(fixture, "oci-vulnerability-scan", (raw) => {
-      raw.source = { type: "oci-model", target: { userInput: "oci-archive:artifacts/other.oci.tar", manifestDigest: `sha256:${"f".repeat(64)}` } };
+      raw.source = { type: "image", target: { userInput: "oci-archive:artifacts/other.oci.tar", manifestDigest: `sha256:${"f".repeat(64)}` } };
     });
     const report = await verify(fixture);
     expect(report.ok).toBe(false);
     expect(report.checks).toContainEqual(expect.objectContaining({ id: "fresh-evidence", status: "fail" }));
+  });
+
+  it("accepts the real Grype 0.110 image source shape for the exact OCI archive manifest", async () => {
+    const fixture = await createFixture();
+    await mutateScannerRaw(fixture, "oci-vulnerability-scan", (raw) => {
+      const current = raw.source as { target: { userInput: string; manifestDigest: string } };
+      raw.source = {
+        type: "image",
+        target: {
+          userInput: current.target.userInput,
+          imageID: `sha256:${"9".repeat(64)}`,
+          manifestDigest: current.target.manifestDigest,
+          mediaType: "application/vnd.oci.image.manifest.v1+json",
+          tags: [],
+          repoDigests: [],
+          architecture: "amd64",
+          os: "linux",
+          layers: [],
+        },
+      };
+    });
+    await expect(verify(fixture)).resolves.toMatchObject({ ok: true, technicalReady: true });
   });
 
   it("rejects native special entries before extraction", async () => {

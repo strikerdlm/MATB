@@ -44,19 +44,28 @@ export function validateLoadedOciIdentity(loaded, expected) {
   return { layerCount: layers.length };
 }
 
-export async function prepareVerifiedOciCandidate(sourceReference, expected) {
+export async function prepareVerifiedOciCandidate(sourceReference, expected, runDocker = docker) {
   if (typeof sourceReference !== "string" || sourceReference.length === 0) throw new Error("verified OCI archive has no source reference");
-  const inspected = await docker(["image", "inspect", sourceReference]);
+  const inspected = await runDocker(["image", "inspect", sourceReference]);
   const parsed = JSON.parse(inspected.stdout);
   if (!Array.isArray(parsed) || parsed.length !== 1) throw new Error("loaded OCI inspection did not identify exactly one image");
   validateLoadedOciIdentity(parsed[0], expected);
   const reference = verifiedOciReference(expected.artifactSha256);
-  await docker(["image", "tag", sourceReference, reference], 30_000);
-  const tagged = await docker(["image", "inspect", reference], 30_000);
-  const taggedParsed = JSON.parse(tagged.stdout);
-  if (!Array.isArray(taggedParsed) || taggedParsed.length !== 1) throw new Error("tagged OCI inspection did not identify exactly one image");
-  validateLoadedOciIdentity(taggedParsed[0], expected);
-  return reference;
+  await runDocker(["image", "tag", sourceReference, reference], 30_000);
+  try {
+    const tagged = await runDocker(["image", "inspect", reference], 30_000);
+    const taggedParsed = JSON.parse(tagged.stdout);
+    if (!Array.isArray(taggedParsed) || taggedParsed.length !== 1) throw new Error("tagged OCI inspection did not identify exactly one image");
+    validateLoadedOciIdentity(taggedParsed[0], expected);
+    return reference;
+  } catch (error) {
+    try {
+      await runDocker(["image", "rm", "--force", reference], 30_000);
+    } catch {
+      // The post-tag identity failure is the security-relevant primary error.
+    }
+    throw error;
+  }
 }
 
 export async function removeVerifiedOciCandidate(reference) {

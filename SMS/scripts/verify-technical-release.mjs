@@ -488,7 +488,7 @@ async function assertFreshEvidence(root, manifest, expectedSourceCommit, now, ma
     } else if (type === "oci-vulnerability-scan") {
       if (!Array.isArray(raw.matches)) throw new Error("OCI vulnerability scan raw output is invalid");
       const allowedInputs = new Set([`oci-archive:${ociArtifact.path}`, `oci-archive:SMS/${ociArtifact.path}`]);
-      if (raw.source?.type !== "oci-model" || !allowedInputs.has(raw.source?.target?.userInput)
+      if (raw.source?.type !== "image" || !allowedInputs.has(raw.source?.target?.userInput)
         || raw.source?.target?.manifestDigest !== ociInspection.ociManifestDigest) {
         throw new Error("OCI vulnerability scan raw output is not sourced from the exact candidate archive and manifest");
       }
