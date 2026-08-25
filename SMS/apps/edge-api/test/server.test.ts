@@ -212,5 +212,9 @@ describe("offline edge server", () => {
         keyPath: "/missing/server.key",
       },
     })).rejects.toThrow(/TLS material/i);
+    await expect(buildServer({
+      databaseUrl: ":memory:",
+      tls: { certPath: "/private/tenant-secret/server.crt", keyPath: "/private/tenant-secret/server.key" },
+    })).rejects.not.toThrow(/tenant-secret|ENOENT|\/private/);
   });
 });

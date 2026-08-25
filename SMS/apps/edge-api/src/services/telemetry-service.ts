@@ -1,6 +1,7 @@
 import { canonicalJson } from "@fac-isr/evidence";
 import { canonicalizeTelemetry, TelemetryValidationError, type CanonicalTelemetry } from "@fac-isr/telemetry";
 import type { TelemetryAdapterCertificate } from "../config.js";
+import type { TelemetrySequenceRepository } from "../db/telemetry-sequence-repository.js";
 
 const MAX_EVENT_BYTES = 16 * 1024;
 const MAX_RETAINED_EVENTS = 1_000;
@@ -34,17 +35,16 @@ interface TelemetryEnvelope {
 }
 
 interface Subscriber {
-  readonly push: (record: TelemetryIngestionResult) => void;
+  readonly push: (record: TelemetryIngestionResult) => boolean;
   readonly close: () => void;
 }
 
 export class TelemetryService {
   private readonly adapters: ReadonlyMap<string, TelemetryAdapterCertificate>;
   private readonly streams = new Map<string, TelemetryIngestionResult[]>();
-  private readonly sequences = new Map<string, number>();
   private readonly subscribers = new Map<string, Set<Subscriber>>();
 
-  public constructor(adapters: readonly TelemetryAdapterCertificate[] = []) {
+  public constructor(adapters: readonly TelemetryAdapterCertificate[], private readonly sequenceRepository: TelemetrySequenceRepository) {
     this.adapters = new Map(adapters.map((record) => [record.fingerprintSha256, record]));
   }
 
@@ -57,21 +57,26 @@ export class TelemetryService {
   }
 
   public ingest(input: unknown, peer: TelemetryPeerIdentity, missionAircraftIds?: readonly string[]): TelemetryIngestionResult {
-    const fingerprint = peer.fingerprintSha256?.replaceAll(":", "").toLowerCase() ?? "";
     const adapter = this.authorizePeer(peer);
     const envelope = parseEnvelope(input);
     if (!adapter.aircraftIds.includes(envelope.event.aircraftId)) throw new TelemetryServiceError(403, "TELEMETRY_AIRCRAFT_FORBIDDEN", "the certificate is not assigned to this aircraft");
     if (missionAircraftIds !== undefined && !missionAircraftIds.includes(envelope.event.aircraftId)) throw new TelemetryServiceError(403, "TELEMETRY_MISSION_AIRCRAFT_FORBIDDEN", "the aircraft is not assigned to this mission revision");
-    const key = `${fingerprint}:${envelope.event.aircraftId}`;
-    const lastSequence = this.sequences.get(key);
-    if (lastSequence !== undefined && envelope.sequence <= lastSequence) throw new TelemetryServiceError(409, "TELEMETRY_SEQUENCE_OUT_OF_ORDER", "telemetry sequence must increase monotonically");
+    if (!this.sequenceRepository.claim(adapter.adapterId, envelope.event.aircraftId, envelope.sequence)) {
+      throw new TelemetryServiceError(409, "TELEMETRY_SEQUENCE_OUT_OF_ORDER", "telemetry sequence must increase monotonically");
+    }
     const result = Object.freeze({ adapterId: adapter.adapterId, revisionId: envelope.revisionId, sequence: envelope.sequence, status: "accepted" as const, event: envelope.event });
     const stream = this.streams.get(envelope.revisionId) ?? [];
     stream.push(result);
     if (stream.length > MAX_RETAINED_EVENTS) stream.splice(0, stream.length - MAX_RETAINED_EVENTS);
     this.streams.set(envelope.revisionId, stream);
-    this.sequences.set(key, envelope.sequence);
-    for (const subscriber of this.subscribers.get(envelope.revisionId) ?? []) subscriber.push(result);
+    const subscribers = this.subscribers.get(envelope.revisionId);
+    for (const subscriber of subscribers ?? []) {
+      if (!subscriber.push(result)) {
+        subscribers!.delete(subscriber);
+        subscriber.close();
+      }
+    }
+    if (subscribers?.size === 0) this.subscribers.delete(envelope.revisionId);
     return result;
   }
 

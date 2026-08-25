@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   ReplayGateway,
   replayFixture,
-  type CanonicalTelemetry,
-} from "../src/index.js";
+} from "../test-support/index.js";
+import type { CanonicalTelemetry } from "../src/index.js";
 
 const base: CanonicalTelemetry = {
   eventId: "valid",

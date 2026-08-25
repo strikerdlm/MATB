@@ -134,7 +134,7 @@ describe("offline runtime lease and recovery", () => {
 
     const created = createDatabaseBackup(databasePath, backup);
     expect(created.sha256).toMatch(/^[a-f0-9]{64}$/);
-    expect(verifyDatabaseBackup(backup)).toMatchObject({ ok: true, schemaVersion: 2, sha256: created.sha256 });
+    expect(verifyDatabaseBackup(backup)).toMatchObject({ ok: true, schemaVersion: 3, sha256: created.sha256 });
     const changed = openDatabase(databasePath);
     changed.sql().prepare("DELETE FROM identities").run();
     changed.close();

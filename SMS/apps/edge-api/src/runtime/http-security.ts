@@ -9,9 +9,13 @@ export function requestIdFrom(request: FastifyRequest): string {
   return request.id;
 }
 
-export function safeRequestId(header: string | string[] | undefined): string {
-  const candidate = Array.isArray(header) ? undefined : header;
-  return typeof candidate === "string" && REQUEST_ID.test(candidate) ? candidate : randomUUID();
+export function safeRequestId(): string {
+  return randomUUID();
+}
+
+function clientCorrelationId(request: FastifyRequest): string | undefined {
+  const header = request.headers["x-request-id"];
+  return typeof header === "string" && REQUEST_ID.test(header) ? header : undefined;
 }
 
 export function registerHttpSecurity(app: FastifyInstance, log: RuntimeLogSink = () => undefined): void {
@@ -27,12 +31,14 @@ export function registerHttpSecurity(app: FastifyInstance, log: RuntimeLogSink =
   });
 
   app.addHook("onResponse", async (request, reply) => {
+    const correlation = clientCorrelationId(request);
     log(Object.freeze({
       event: "http.response",
       requestId: request.id,
       method: request.method,
       route: request.routeOptions.url ?? "unmatched",
       statusCode: reply.statusCode,
+      ...(correlation === undefined ? {} : { clientCorrelationId: correlation }),
     }));
   });
 
@@ -47,7 +53,11 @@ export function registerHttpSecurity(app: FastifyInstance, log: RuntimeLogSink =
     if (detail.statusCode === 413 || detail.code === "FST_ERR_CTP_BODY_TOO_LARGE") {
       return reply.code(413).send({ error: "PAYLOAD_TOO_LARGE", message: "request body exceeds the configured limit", requestId: request.id });
     }
-    log(Object.freeze({ event: "http.error", requestId: request.id, method: request.method, route: request.routeOptions.url ?? "unmatched", code: "INTERNAL_ERROR" }));
+    if (detail.statusCode === 400 && (detail.code === "STRICT_JSON_INVALID" || detail.code === "FST_ERR_CTP_INVALID_JSON_BODY")) {
+      return reply.code(400).send({ error: "INVALID_JSON", message: "request body must be strict bounded JSON", requestId: request.id });
+    }
+    const correlation = clientCorrelationId(request);
+    log(Object.freeze({ event: "http.error", requestId: request.id, method: request.method, route: request.routeOptions.url ?? "unmatched", code: "INTERNAL_ERROR", ...(correlation === undefined ? {} : { clientCorrelationId: correlation }) }));
     return reply.code(500).send({ error: "INTERNAL_ERROR", message: "an unexpected error occurred", requestId: request.id });
   });
 }

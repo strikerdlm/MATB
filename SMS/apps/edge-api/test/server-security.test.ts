@@ -25,12 +25,15 @@ describe("edge HTTP security boundary", () => {
   });
 
   it("returns stable sanitized errors without internal secrets", async () => {
-    app = await buildServer({ databaseUrl: ":memory:" });
+    const entries: unknown[] = [];
+    app = await buildServer({ databaseUrl: ":memory:" }, { logSink: (entry) => entries.push(entry) });
     app.get("/fixture-failure", async () => { throw new Error("private-key=never-disclose"); });
     const response = await app.inject({ method: "GET", url: "/fixture-failure", headers: { "x-request-id": "external-request-id-1234" } });
     expect(response.statusCode).toBe(500);
-    expect(response.json()).toEqual({ error: "INTERNAL_ERROR", message: "an unexpected error occurred", requestId: "external-request-id-1234" });
+    expect(response.headers["x-request-id"]).not.toBe("external-request-id-1234");
+    expect(response.json()).toEqual({ error: "INTERNAL_ERROR", message: "an unexpected error occurred", requestId: response.headers["x-request-id"] });
     expect(response.body).not.toContain("never-disclose");
+    expect(entries).toEqual(expect.arrayContaining([expect.objectContaining({ requestId: response.headers["x-request-id"], clientCorrelationId: "external-request-id-1234" })]));
   });
 
   it("enforces a strict JSON body limit with a stable error", async () => {

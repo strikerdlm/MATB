@@ -1,9 +1,14 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { request as httpRequest, type ClientRequest, type IncomingMessage } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import type { FastifyRequest } from "fastify";
 import type { EdgeServer } from "../src/server.js";
 import type { CanonicalTelemetry } from "@fac-isr/telemetry";
 import { authenticatedTestServer } from "./http-test-auth.js";
 import { missionFixture } from "./mission-fixture.js";
+import { BoundedSseStream } from "../src/runtime/bounded-sse-stream.js";
 
 const allowedFingerprint = "a".repeat(64);
 const event: CanonicalTelemetry = {
@@ -30,10 +35,12 @@ function peerFromHeader(request: FastifyRequest) {
 
 describe("edge telemetry routes", () => {
   let app: EdgeServer | undefined;
+  const temporaryDirectories: string[] = [];
 
   afterEach(async () => {
     await app?.close();
     app = undefined;
+    for (const directory of temporaryDirectories.splice(0)) rmSync(directory, { recursive: true, force: true });
   });
 
   it("does not register production telemetry replay", async () => {
@@ -75,6 +82,52 @@ describe("edge telemetry routes", () => {
     });
     expect(response.statusCode).toBe(403);
     expect(response.json()).toMatchObject({ error: "TELEMETRY_MISSION_AIRCRAFT_FORBIDDEN" });
+  });
+
+  it("persists the stable adapter and aircraft sequence across restart and certificate rotation", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "sms-telemetry-watermark-"));
+    temporaryDirectories.push(directory);
+    const databaseUrl = join(directory, "edge.sqlite");
+    const config = (fingerprintSha256: string) => ({
+      databaseUrl,
+      packageDirectory: directory,
+      internet: "disabled" as const,
+      telemetryAdapters: [{ fingerprintSha256, adapterId: "adapter-1", aircraftIds: ["aircraft-1"] }],
+    });
+    const first = await authenticatedTestServer(config(allowedFingerprint), undefined, { telemetryPeerIdentity: peerFromHeader });
+    app = first.app;
+    await first.request({ method: "POST", url: "/api/missions", payload: { revision: missionFixture() } });
+    expect((await app.inject({ method: "POST", url: "/api/telemetry/ingest", headers: { "x-test-peer-fingerprint": allowedFingerprint }, payload: { revisionId: "mission-1:r0", sequence: 10, event } })).statusCode).toBe(202);
+    await app.close();
+    app = undefined;
+
+    const rotatedFingerprint = "b".repeat(64);
+    const restarted = await authenticatedTestServer(config(rotatedFingerprint), undefined, { telemetryPeerIdentity: peerFromHeader });
+    app = restarted.app;
+    const replayedLowSequence = await app.inject({ method: "POST", url: "/api/telemetry/ingest", headers: { "x-test-peer-fingerprint": rotatedFingerprint }, payload: { revisionId: "mission-1:r0", sequence: 1, event: { ...event, eventId: "after-rotation-low" } } });
+    const continued = await app.inject({ method: "POST", url: "/api/telemetry/ingest", headers: { "x-test-peer-fingerprint": rotatedFingerprint }, payload: { revisionId: "mission-1:r0", sequence: 11, event: { ...event, eventId: "after-rotation-next" } } });
+    expect(replayedLowSequence.statusCode).toBe(409);
+    expect(continued.statusCode).toBe(202);
+  });
+
+  it("rejects duplicate keys recursively, excessive JSON depth, and unsupported ingestion content types", async () => {
+    const server = await authenticatedTestServer(telemetryConfig(), undefined, { telemetryPeerIdentity: peerFromHeader });
+    app = server.app;
+    await server.request({ method: "POST", url: "/api/missions", payload: { revision: missionFixture() } });
+    const headers = { "content-type": "application/json", "x-test-peer-fingerprint": allowedFingerprint };
+    const duplicateTopLevel = await app.inject({ method: "POST", url: "/api/telemetry/ingest", headers, payload: `{"revisionId":"mission-1:r0","sequence":1,"sequence":1,"event":${JSON.stringify(event)}}` });
+    const duplicateNested = await app.inject({ method: "POST", url: "/api/telemetry/ingest", headers, payload: `{"revisionId":"mission-1:r0","sequence":1,"event":{"eventId":"duplicate-nested","aircraftId":"aircraft-1","position":{"lat":4.7,"lat":4.8,"lon":-74.1},"observedAtUtc":"2026-08-09T18:00:00.000Z","sourcePackageIds":["telemetry-package-1"]}}` });
+    const tooDeep = await app.inject({ method: "POST", url: "/api/telemetry/ingest", headers, payload: `{"revisionId":"mission-1:r0","sequence":1,"event":{"eventId":"deep","aircraftId":"aircraft-1","observedAtUtc":"2026-08-09T18:00:00.000Z","sourcePackageIds":["telemetry-package-1"],"extra":${"[".repeat(40)}null${"]".repeat(40)}}}` });
+    const unsupported = await app.inject({ method: "POST", url: "/api/telemetry/ingest", headers: { "content-type": "text/plain", "x-test-peer-fingerprint": allowedFingerprint }, payload: JSON.stringify({ revisionId: "mission-1:r0", sequence: 1, event }) });
+    expect(duplicateTopLevel.statusCode).toBe(400);
+    expect(duplicateTopLevel.json()).toMatchObject({ error: "INVALID_JSON" });
+    expect(duplicateNested.statusCode).toBe(400);
+    expect(duplicateNested.json()).toMatchObject({ error: "INVALID_JSON" });
+    expect(tooDeep.statusCode).toBe(400);
+    expect(tooDeep.json()).toMatchObject({ error: "INVALID_JSON" });
+    expect(unsupported.statusCode).toBe(415);
+    const supported = await app.inject({ method: "POST", url: "/api/telemetry/ingest", headers: { "content-type": "application/json; charset=utf-8", "x-test-peer-fingerprint": allowedFingerprint }, payload: JSON.stringify({ revisionId: "mission-1:r0", sequence: 1, event: { ...event, eventId: "supported-content-type" } }) });
+    expect(supported.statusCode).toBe(202);
   });
 
   it("rejects malformed, out-of-order, oversized, wrong-aircraft, and operation-shaped telemetry", async () => {
@@ -121,4 +174,61 @@ describe("edge telemetry routes", () => {
     expect((await server.request({ method: "GET", url: "/api/revisions/mission-1:r0/telemetry/stream?follow=false" }, "operator-2")).statusCode).toBe(403);
     expect(app.telemetryService.activeSubscriberCount()).toBe(0);
   });
+
+  it("caps a stalled SSE subscriber queue and disconnects it when the cap is exceeded", async () => {
+    const output = new BoundedSseStream({ maxQueuedRecords: 2, highWaterMark: 1 });
+    expect(output.enqueue("data: one\n\n")).toBe(true);
+    expect(output.enqueue("data: two\n\n")).toBe(true);
+    expect(output.enqueue("data: three\n\n")).toBe(true);
+    expect(output.queuedRecordCount()).toBe(2);
+    expect(output.enqueue("data: four\n\n")).toBe(false);
+    expect(output.queuedRecordCount()).toBe(0);
+    expect(output.destroyed).toBe(true);
+  });
+
+  it("unsubscribes an actual followed stream on client disconnect and server close", async () => {
+    const server = await authenticatedTestServer(telemetryConfig(), undefined, { telemetryPeerIdentity: peerFromHeader });
+    app = server.app;
+    await server.request({ method: "POST", url: "/api/missions", payload: { revision: missionFixture() } });
+    await app.inject({ method: "POST", url: "/api/telemetry/ingest", headers: { "x-test-peer-fingerprint": allowedFingerprint }, payload: { revisionId: "mission-1:r0", sequence: 1, event } });
+    await app.listen({ host: "127.0.0.1", port: 0 });
+
+    const first = await openFollowedStream(app, server.headers());
+    expect(app.telemetryService.activeSubscriberCount()).toBe(1);
+    first.response.destroy();
+    first.request.destroy();
+    await waitFor(() => app!.telemetryService.activeSubscriberCount() === 0);
+
+    const second = await openFollowedStream(app, server.headers());
+    expect(app.telemetryService.activeSubscriberCount()).toBe(1);
+    const closing = app.close();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const subscribersDuringClose = app.telemetryService.activeSubscriberCount();
+    second.response.destroy();
+    second.request.destroy();
+    await closing;
+    app = undefined;
+    expect(subscribersDuringClose).toBe(0);
+  });
 });
+
+async function openFollowedStream(app: EdgeServer, headers: Readonly<Record<string, string>>): Promise<{ request: ClientRequest; response: IncomingMessage }> {
+  const address = app.server.address();
+  if (address === null || typeof address === "string") throw new Error("test server did not bind TCP");
+  return await new Promise((resolve, reject) => {
+    const request = httpRequest({ host: "127.0.0.1", port: address.port, method: "GET", path: "/api/revisions/mission-1:r0/telemetry/stream?window=1", headers }, (response) => {
+      response.once("data", () => resolve({ request, response }));
+      response.once("error", reject);
+    });
+    request.once("error", reject);
+    request.end();
+  });
+}
+
+async function waitFor(predicate: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error("condition was not reached");
+}

@@ -1,9 +1,9 @@
-import { Readable } from "node:stream";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { TelemetryServiceError, type TelemetryPeerIdentity, type TelemetryService, type TelemetryIngestionResult } from "../services/telemetry-service.js";
 import type { MissionService } from "../services/mission-service.js";
 import { canReadMission, forbid, requirePrincipal } from "../auth/http.js";
 import { sendRouteError } from "./errors.js";
+import { BoundedSseStream } from "../runtime/bounded-sse-stream.js";
 
 const TELEMETRY_ROLES = new Set(["commander", "safety-officer", "maintainer", "operator", "observer", "reviewer"]);
 
@@ -31,6 +31,9 @@ export function registerTelemetryRoutes(
 ): void {
   app.post("/api/telemetry/ingest", async (request, reply) => {
     try {
+      if (request.headers["content-type"]?.split(";", 1)[0]?.trim().toLowerCase() !== "application/json") {
+        return reply.code(415).send({ error: "UNSUPPORTED_MEDIA_TYPE", message: "telemetry ingestion requires application/json" });
+      }
       const peer = peerIdentity(request);
       service.authorizePeer(peer);
       const revisionId = (request.body as { revisionId?: unknown } | null)?.revisionId;
@@ -52,20 +55,15 @@ export function registerTelemetryRoutes(
       const snapshot = service.snapshot(request.params.revisionId, window);
       const follow = request.query.follow !== "false";
       let unsubscribe: () => void = () => undefined;
-      const output = new Readable({
-        read() { /* records are pushed by the telemetry service */ },
-        destroy(error, callback) {
-          unsubscribe();
-          callback(error);
-        },
-      });
-      const push = (record: TelemetryIngestionResult) => output.push(`data: ${JSON.stringify(record)}\n\n`);
+      const output = new BoundedSseStream();
+      output.once("close", () => unsubscribe());
+      const push = (record: TelemetryIngestionResult) => output.enqueue(`data: ${JSON.stringify(record)}\n\n`);
       for (const record of snapshot) push(record);
       if (follow) {
-        unsubscribe = service.subscribe(request.params.revisionId, push, () => output.push(null));
+        unsubscribe = service.subscribe(request.params.revisionId, push, () => output.destroy());
         reply.raw.once("close", () => output.destroy());
       } else {
-        output.push(null);
+        output.endStream();
       }
       return reply.header("content-type", "text/event-stream; charset=utf-8").header("cache-control", "no-store").header("x-accel-buffering", "no").code(200).send(output);
     } catch (error) {

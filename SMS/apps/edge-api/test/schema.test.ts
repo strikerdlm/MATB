@@ -48,7 +48,7 @@ describe("edge operational database", () => {
     const database = openDatabase(":memory:");
 
     expect(database.pragma("foreign_keys")).toBe(1);
-    expect(database.schemaVersion()).toBe(2);
+    expect(database.schemaVersion()).toBe(3);
     expect(database.tableNames()).toEqual([
       "active_package_roles",
       "audit_events",
@@ -70,6 +70,7 @@ describe("edge operational database", () => {
       "schema_migrations",
       "service_state",
       "sessions",
+      "telemetry_sequence_watermarks",
       "trusted_keys",
     ]);
 
@@ -83,8 +84,23 @@ describe("edge operational database", () => {
     database.migrate();
 
     expect(database.schemaVersion()).toBe(firstVersion);
-    expect(database.tableNames()).toHaveLength(21);
+    expect(database.tableNames()).toHaveLength(22);
     database.close();
+  });
+
+  it("upgrades an existing schema-v2 database with the telemetry watermark table", () => {
+    const databasePath = temporaryDatabasePath();
+    const current = openDatabase(databasePath);
+    current.close();
+    const sqlite = process.getBuiltinModule("node:sqlite") as { DatabaseSync: new (path: string) => { exec(sql: string): void; close(): void } };
+    const versionTwo = new sqlite.DatabaseSync(databasePath);
+    versionTwo.exec("DROP TABLE telemetry_sequence_watermarks; DELETE FROM schema_migrations WHERE version = 3");
+    versionTwo.close();
+
+    const migrated = openDatabase(databasePath);
+    expect(migrated.schemaVersion()).toBe(3);
+    expect(migrated.tableNames()).toContain("telemetry_sequence_watermarks");
+    migrated.close();
   });
 
   it("backs up schema v1 bytes before a successful normalized migration", () => {
@@ -94,7 +110,7 @@ describe("edge operational database", () => {
 
     const database = openDatabase(databasePath, 5_000, { now: () => "2026-08-25T01:02:03.004Z" });
 
-    expect(database.schemaVersion()).toBe(2);
+    expect(database.schemaVersion()).toBe(3);
     database.close();
     const backupPath = `${databasePath}.pre-v2-20260825T010203004Z.sqlite`;
     expect(readFileSync(backupPath)).toEqual(originalBytes);
@@ -113,7 +129,7 @@ describe("edge operational database", () => {
     try {
       const concurrent = new sqlite.DatabaseSync(databasePath, { timeout: 0 });
       try {
-        expect(concurrent.prepare("SELECT MAX(version) AS version FROM schema_migrations").get()).toEqual({ version: 2 });
+        expect(concurrent.prepare("SELECT MAX(version) AS version FROM schema_migrations").get()).toEqual({ version: 3 });
       } finally {
         concurrent.close();
       }

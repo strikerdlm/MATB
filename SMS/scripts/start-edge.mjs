@@ -1,9 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildServer } from "../apps/edge-api/dist/server.js";
-import { installGracefulShutdown } from "../apps/edge-api/dist/runtime/lifecycle.js";
-import { resolveContainedRuntimePath } from "../apps/edge-api/dist/runtime/paths.js";
 
 const moduleDirectory = dirname(fileURLToPath(import.meta.url));
 const contentTypes = new Map([
@@ -28,13 +25,20 @@ async function configuredTelemetryAdapters(configDirectory) {
   return parsed;
 }
 
+let app;
+try {
+const [{ buildServer }, { installGracefulShutdown }, { resolveContainedRuntimePath }] = await Promise.all([
+  import("../apps/edge-api/dist/server.js"),
+  import("../apps/edge-api/dist/runtime/lifecycle.js"),
+  import("../apps/edge-api/dist/runtime/paths.js"),
+]);
 const deploymentMode = requiredEnvironment("SMS_DEPLOYMENT_MODE");
 if (deploymentMode !== "standalone" && deploymentMode !== "tactical") throw new Error("SMS_DEPLOYMENT_MODE must be standalone or tactical");
 const configDirectory = resolve(moduleDirectory, process.env.SMS_CONFIG_DIRECTORY ?? ".");
 const port = Number(process.env.SMS_PORT ?? "8443");
 if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error("SMS_PORT must be an integer between 1 and 65535");
 
-const app = await buildServer({
+app = await buildServer({
   deploymentMode,
   configDirectory,
   consoleDirectory: process.env.SMS_CONSOLE_DIRECTORY ?? resolve(moduleDirectory, "../apps/console/dist"),
@@ -80,3 +84,8 @@ app.get("/assets/*", async (request, reply) => staticAsset(`assets/${typeof requ
 installGracefulShutdown(app, process, (entry) => process.stderr.write(`${JSON.stringify(entry)}\n`));
 await app.listen({ host: app.edgeConfig.bindAddress, port: app.edgeConfig.port });
 process.stdout.write(`${JSON.stringify({ event: "listening", address: app.edgeConfig.bindAddress, port: app.edgeConfig.port, internet: app.edgeConfig.internet, tls: true, deploymentMode: app.edgeConfig.deploymentMode })}\n`);
+} catch {
+  try { await app?.close(); } catch { /* startup failure remains sanitized below */ }
+  process.stderr.write(`${JSON.stringify({ event: "startup.failed", code: "STARTUP_FAILED" })}\n`);
+  process.exitCode = 1;
+}

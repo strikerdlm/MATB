@@ -10,7 +10,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "node clean-build.mjs && tsc -p tsconfig.build.json",
     "test": "vitest run",
     "typecheck": "tsc -p ../../tsconfig.base.json"
   },

@@ -21,6 +21,7 @@ interface SessionHeaders {
 export interface AuthenticatedTestServer {
   readonly app: EdgeServer;
   request(input: InjectOptions, userId?: string): Promise<LightMyRequestResponse>;
+  headers(userId?: string): Readonly<Record<string, string>>;
 }
 
 export async function authenticatedTestServer(
@@ -76,6 +77,11 @@ export async function authenticatedTestServer(
 
   return {
     app,
+    headers(userId = identities[0]?.userId ?? "") {
+      const session = sessions.get(userId);
+      if (session === undefined) throw new Error(`no authenticated test session for ${userId}`);
+      return Object.freeze({ cookie: session.cookie });
+    },
     async request(input, userId = identities[0]?.userId ?? "") {
       const session = sessions.get(userId);
       if (session === undefined) throw new Error(`no authenticated test session for ${userId}`);

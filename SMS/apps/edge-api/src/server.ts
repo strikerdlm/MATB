@@ -25,8 +25,10 @@ import {
 import { RuntimeLease } from "./admin/runtime-lease.js";
 import { MaintenanceLock } from "./admin/maintenance-lock.js";
 import { registerHttpSecurity, safeRequestId } from "./runtime/http-security.js";
-import type { RuntimeLogSink } from "./runtime/lifecycle.js";
+import { closeRuntimeResources, type RuntimeLogSink } from "./runtime/lifecycle.js";
 import { loadMissionExportSigner, type MissionExportSigner } from "./runtime/export-signing.js";
+import { TelemetrySequenceRepository } from "./db/telemetry-sequence-repository.js";
+import { registerStrictJsonParser } from "./runtime/strict-json.js";
 
 interface ReadinessCheck {
   readonly status: "ok" | "pending";
@@ -131,13 +133,14 @@ function fastifyOptions(config: EdgeConfig, https: HttpsMaterial | undefined) {
   return {
     logger: false as const,
     bodyLimit: config.bodyLimitBytes,
-    genReqId: (request: { headers: { readonly [key: string]: string | string[] | undefined } }) => safeRequestId(request.headers["x-request-id"]),
+    genReqId: () => safeRequestId(),
     ...(https === undefined ? {} : { https }),
   };
 }
 
 function buildDegradedServer(config: EdgeConfig, https: HttpsMaterial | undefined, error: unknown, log?: RuntimeLogSink): EdgeServer {
   const app = Fastify(fastifyOptions(config, https)) as unknown as EdgeServer;
+  registerStrictJsonParser(app);
   Object.defineProperty(app, "edgeConfig", { value: config, enumerable: false });
   registerHttpSecurity(app, log);
   const detail = "operational state is unavailable";
@@ -163,8 +166,8 @@ async function loadTlsMaterial(config: EdgeConfig): Promise<HttpsMaterial | unde
       config.tls.clientCaPath === undefined ? Promise.resolve(undefined) : readFile(config.tls.clientCaPath),
     ]);
     return { cert, key, ...(ca === undefined ? {} : { ca }), ...tlsRequestPolicy(config) };
-  } catch (error) {
-    throw new Error(`TLS material could not be loaded: ${error instanceof Error ? error.message : String(error)}`);
+  } catch {
+    throw new Error("TLS material could not be loaded");
   }
 }
 
@@ -214,7 +217,7 @@ export async function buildServer(input: EdgeConfigInput = {}, dependencies: Edg
   const safetyEvaluationProvider = dependencies.safetyEvaluationProvider ?? new DeterministicSafetyEvaluationProvider({ now, resolve: resolver.resolve.bind(resolver) });
   const missionService = new MissionService({ auditLedger, database: edgeDatabase, now, safetyEvaluationProvider });
   missionTarget.current = missionService;
-  const telemetryService = new TelemetryService(edgeConfig.telemetryAdapters);
+  const telemetryService = new TelemetryService(edgeConfig.telemetryAdapters, new TelemetrySequenceRepository(edgeDatabase));
   const defaults = createDefaultHttpAuthDependencies(edgeDatabase);
   const authDependencies = {
     identityStore: dependencies.identityStore ?? defaults.identityStore,
@@ -228,6 +231,7 @@ export async function buildServer(input: EdgeConfigInput = {}, dependencies: Edg
     return buildDegradedServer(edgeConfig, https, new Error("persisted operational domain validation failed"), dependencies.logSink);
   }
   const app = Fastify(fastifyOptions(edgeConfig, https)) as unknown as EdgeServer;
+  registerStrictJsonParser(app);
   Object.defineProperties(app, {
     edgeConfig: { value: edgeConfig, enumerable: false },
     edgeDatabase: { value: edgeDatabase, enumerable: false },
@@ -238,11 +242,16 @@ export async function buildServer(input: EdgeConfigInput = {}, dependencies: Edg
   });
 
   app.addHook("onClose", async () => {
-    telemetryService.close();
-    clearInterval(leaseTimer);
-    runtimeLease.release();
-    edgeDatabase.close();
-    maintenanceLock.release();
+    await closeRuntimeResources([
+      { name: "telemetry", close: () => telemetryService.close() },
+      { name: "lease-timer", close: () => clearInterval(leaseTimer) },
+      { name: "runtime-lease", close: () => runtimeLease.release() },
+      { name: "database", close: () => edgeDatabase.close() },
+      { name: "maintenance-lock", close: () => maintenanceLock.release() },
+    ]);
+  });
+  app.addHook("preClose", async () => {
+    try { telemetryService.close(); } catch { /* onClose retries and settles every resource */ }
   });
 
   registerHttpSecurity(app, dependencies.logSink);

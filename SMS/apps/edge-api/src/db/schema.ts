@@ -10,7 +10,7 @@ export interface SqlDatabase {
   close(): void;
 }
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export interface Migration {
   readonly version: number;
@@ -167,6 +167,17 @@ export const MIGRATIONS: readonly Migration[] = [
         fencing_token INTEGER NOT NULL CHECK (fencing_token > 0),
         acquired_at_utc TEXT NOT NULL,
         expires_at_utc TEXT NOT NULL
+      ) STRICT`,
+    ],
+  },
+  {
+    version: 3,
+    statements: [
+      `CREATE TABLE telemetry_sequence_watermarks (
+        adapter_id TEXT NOT NULL,
+        aircraft_id TEXT NOT NULL,
+        last_sequence INTEGER NOT NULL CHECK (last_sequence >= 0),
+        PRIMARY KEY (adapter_id, aircraft_id)
       ) STRICT`,
     ],
   },

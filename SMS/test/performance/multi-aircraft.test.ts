@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { describe, expect, it } from "vitest";
 import { AuditLedger } from "../../apps/edge-api/src/audit/ledger.js";
-import { ReplayGateway } from "../../packages/telemetry/src/index.js";
+import { ReplayGateway } from "../../packages/telemetry/test-support/index.js";
 
 const AIRCRAFT_COUNT = 12;
 const EVENTS_PER_AIRCRAFT = 240;
