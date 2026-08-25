@@ -32,7 +32,7 @@ export function registerTelemetryRoutes(
   app.post("/api/telemetry/ingest", async (request, reply) => {
     try {
       if (request.headers["content-type"]?.split(";", 1)[0]?.trim().toLowerCase() !== "application/json") {
-        return reply.code(415).send({ error: "UNSUPPORTED_MEDIA_TYPE", message: "telemetry ingestion requires application/json" });
+        return reply.code(415).send({ error: "UNSUPPORTED_MEDIA_TYPE", message: "request content type is not supported", requestId: request.id });
       }
       const peer = peerIdentity(request);
       service.authorizePeer(peer);

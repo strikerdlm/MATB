@@ -117,6 +117,7 @@ class StrictJsonParser {
   private number(): void {
     const match = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(this.source.slice(this.offset));
     if (match === null) this.fail();
+    if (!Number.isFinite(Number(match[0]))) this.fail();
     this.offset += match[0].length;
   }
 

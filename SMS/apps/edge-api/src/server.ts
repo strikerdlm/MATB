@@ -22,10 +22,10 @@ import {
   registerHttpAuthentication,
   type HttpAuthDependencies,
 } from "./auth/http.js";
-import { RuntimeLease } from "./admin/runtime-lease.js";
+import { RuntimeLease, RuntimeLeaseError } from "./admin/runtime-lease.js";
 import { MaintenanceLock } from "./admin/maintenance-lock.js";
 import { registerHttpSecurity, safeRequestId } from "./runtime/http-security.js";
-import { closeRuntimeResources, type RuntimeLogSink } from "./runtime/lifecycle.js";
+import { closeRuntimeResources, type RuntimeLogSink, type RuntimeResource } from "./runtime/lifecycle.js";
 import { loadMissionExportSigner, type MissionExportSigner } from "./runtime/export-signing.js";
 import { TelemetrySequenceRepository } from "./db/telemetry-sequence-repository.js";
 import { registerStrictJsonParser } from "./runtime/strict-json.js";
@@ -178,26 +178,37 @@ export async function buildServer(input: EdgeConfigInput = {}, dependencies: Edg
   const exportKeyConfigured = exportSigner !== undefined;
   const maintenanceLock = new MaintenanceLock(edgeConfig.databaseUrl, edgeConfig.lockTimeoutMs);
   maintenanceLock.acquire();
+  const ownedResources: RuntimeResource[] = [
+    { name: "maintenance-lock", close: () => maintenanceLock.release() },
+  ];
   let edgeDatabase: EdgeDatabase;
   try {
     edgeDatabase = openDatabase(edgeConfig.databaseUrl, edgeConfig.lockTimeoutMs, { maintenanceLock });
   } catch (error) {
-    maintenanceLock.release();
+    await releaseRuntimeOwnership(ownedResources);
     return buildDegradedServer(edgeConfig, https, error, dependencies.logSink);
   }
-  const auditLedger = new AuditLedger({ database: edgeDatabase });
+  ownedResources.push({ name: "database", close: () => edgeDatabase.close() });
+  let auditLedger: AuditLedger;
   const now = dependencies.now ?? (() => new Date().toISOString());
-  if (!edgeDatabase.integrityCheck().ok || !(await auditLedger.verifyAuditChain()).ok) await auditLedger.simulateWriteFailure();
+  try {
+    auditLedger = new AuditLedger({ database: edgeDatabase });
+    if (!edgeDatabase.integrityCheck().ok || !(await auditLedger.verifyAuditChain()).ok) await auditLedger.simulateWriteFailure();
+  } catch (error) {
+    await releaseRuntimeOwnership(ownedResources);
+    return buildDegradedServer(edgeConfig, https, error, dependencies.logSink);
+  }
   // Runtime ownership uses the process wall clock, independent of injectable
   // domain clocks used to evaluate packages and mission records.
   const runtimeLease = new RuntimeLease(edgeDatabase, { holderId: `edge-service:${process.pid}`, durationMs: 120_000 });
   try {
     runtimeLease.acquire();
   } catch (error) {
-    edgeDatabase.close();
-    maintenanceLock.release();
-    throw error;
+    await releaseRuntimeOwnership(ownedResources);
+    if (error instanceof RuntimeLeaseError) throw error;
+    return buildDegradedServer(edgeConfig, https, error, dependencies.logSink);
   }
+  ownedResources.push({ name: "runtime-lease", close: () => runtimeLease.release() });
   const leaseTimer = setInterval(() => {
     try {
       runtimeLease.renew();
@@ -206,6 +217,8 @@ export async function buildServer(input: EdgeConfigInput = {}, dependencies: Edg
     }
   }, 40_000);
   leaseTimer.unref();
+  ownedResources.push({ name: "lease-timer", close: () => clearInterval(leaseTimer) });
+  try {
   const missionTarget: { current?: MissionService } = {};
   const missionBoundary = {
     markSafetyEvaluationsStale: async (...args: Parameters<MissionService["markSafetyEvaluationsStale"]>) => requireMissionTarget(missionTarget).markSafetyEvaluationsStale(...args),
@@ -218,16 +231,14 @@ export async function buildServer(input: EdgeConfigInput = {}, dependencies: Edg
   const missionService = new MissionService({ auditLedger, database: edgeDatabase, now, safetyEvaluationProvider });
   missionTarget.current = missionService;
   const telemetryService = new TelemetryService(edgeConfig.telemetryAdapters, new TelemetrySequenceRepository(edgeDatabase));
+  ownedResources.push({ name: "telemetry", close: () => telemetryService.close() });
   const defaults = createDefaultHttpAuthDependencies(edgeDatabase);
   const authDependencies = {
     identityStore: dependencies.identityStore ?? defaults.identityStore,
     sessionManager: dependencies.sessionManager ?? defaults.sessionManager,
   };
   if (auditLedger.isReadOnlySafeMode() || missionService.isReadOnlySafeMode() || safeModeService.isReadOnlySafeMode() || authDependencies.identityStore.isReadOnlySafeMode() || authDependencies.sessionManager.isReadOnlySafeMode()) {
-    clearInterval(leaseTimer);
-    runtimeLease.release();
-    edgeDatabase.close();
-    maintenanceLock.release();
+    await releaseRuntimeOwnership(ownedResources);
     return buildDegradedServer(edgeConfig, https, new Error("persisted operational domain validation failed"), dependencies.logSink);
   }
   const app = Fastify(fastifyOptions(edgeConfig, https)) as unknown as EdgeServer;
@@ -242,13 +253,7 @@ export async function buildServer(input: EdgeConfigInput = {}, dependencies: Edg
   });
 
   app.addHook("onClose", async () => {
-    await closeRuntimeResources([
-      { name: "telemetry", close: () => telemetryService.close() },
-      { name: "lease-timer", close: () => clearInterval(leaseTimer) },
-      { name: "runtime-lease", close: () => runtimeLease.release() },
-      { name: "database", close: () => edgeDatabase.close() },
-      { name: "maintenance-lock", close: () => maintenanceLock.release() },
-    ]);
+    await releaseRuntimeOwnership(ownedResources);
   });
   app.addHook("preClose", async () => {
     try { telemetryService.close(); } catch { /* onClose retries and settles every resource */ }
@@ -286,6 +291,14 @@ export async function buildServer(input: EdgeConfigInput = {}, dependencies: Edg
   registerExportRoutes(app, safeModeService, missionService);
 
   return app;
+  } catch (error) {
+    await releaseRuntimeOwnership(ownedResources);
+    return buildDegradedServer(edgeConfig, https, error, dependencies.logSink);
+  }
+}
+
+async function releaseRuntimeOwnership(resources: RuntimeResource[]): Promise<void> {
+  await closeRuntimeResources(resources.splice(0).reverse());
 }
 
 function requireMissionTarget(target: { current?: MissionService }): MissionService {

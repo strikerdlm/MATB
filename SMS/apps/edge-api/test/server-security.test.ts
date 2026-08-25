@@ -44,6 +44,26 @@ describe("edge HTTP security boundary", () => {
     expect(response.json().requestId).toBe(response.headers["x-request-id"]);
   });
 
+  it("returns a stable secured 415 when no parser supports the request media type", async () => {
+    app = await buildServer({ databaseUrl: ":memory:" });
+    for (const contentType of ["application/vnd.fac+json", "application/octet-stream", "text/plain"]) {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/telemetry/ingest",
+        headers: { "content-type": contentType },
+        payload: '{"revisionId":"mission-1:r0"}',
+      });
+      expect(response.statusCode).toBe(415);
+      expect(response.json()).toEqual({
+        error: "UNSUPPORTED_MEDIA_TYPE",
+        message: "request content type is not supported",
+        requestId: response.headers["x-request-id"],
+      });
+      expect(response.headers["content-security-policy"]).toContain("default-src 'self'");
+      expect(response.headers["x-content-type-options"]).toBe("nosniff");
+    }
+  });
+
   it("writes sensitive-safe JSON metadata without headers or payloads", async () => {
     const entries: unknown[] = [];
     app = await buildServer({ databaseUrl: ":memory:" }, { logSink: (entry) => entries.push(entry) });

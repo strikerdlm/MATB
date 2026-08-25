@@ -204,6 +204,63 @@ describe("offline edge server", () => {
     expect((await app.inject({ method: "POST", url: "/api/auth/login", payload: { userId: "fixture", password: "irrelevant-password" } })).statusCode).toBe(503);
   });
 
+  it("releases startup ownership and serves degraded liveness when a retained schema table is missing", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "sms-schema-logical-corrupt-"));
+    temporaryDirectories.push(directory);
+    const databaseUrl = join(directory, "edge.sqlite");
+    const initialized = openDatabase(databaseUrl);
+    initialized.close();
+    const sqlite = process.getBuiltinModule("node:sqlite") as {
+      DatabaseSync: new (path: string) => { exec(sql: string): void; close(): void };
+    };
+    const corrupted = new sqlite.DatabaseSync(databaseUrl);
+    corrupted.exec("DROP TABLE telemetry_sequence_watermarks");
+    corrupted.close();
+
+    app = await buildServer({ databaseUrl, packageDirectory: directory, internet: "disabled" });
+    const health = await app.inject({ method: "GET", url: "/healthz" });
+    expect(health.statusCode).toBe(200);
+    expect(health.json()).toMatchObject({ status: "ok", degraded: true });
+    await app.close();
+    app = undefined;
+
+    const repaired = new sqlite.DatabaseSync(databaseUrl);
+    repaired.exec(`CREATE TABLE telemetry_sequence_watermarks (
+      adapter_id TEXT NOT NULL,
+      aircraft_id TEXT NOT NULL,
+      last_sequence INTEGER NOT NULL CHECK (last_sequence >= 0),
+      PRIMARY KEY (adapter_id, aircraft_id)
+    ) STRICT`);
+    repaired.close();
+    app = await buildServer({ databaseUrl, packageDirectory: directory, internet: "disabled" });
+    const restarted = await app.inject({ method: "GET", url: "/healthz" });
+    expect(restarted.statusCode).toBe(200);
+    expect(restarted.json()).not.toHaveProperty("degraded");
+  });
+
+  it("serves degraded liveness and remains restartable when the runtime lease table is missing", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "sms-runtime-lease-schema-corrupt-"));
+    temporaryDirectories.push(directory);
+    const databaseUrl = join(directory, "edge.sqlite");
+    const initialized = openDatabase(databaseUrl);
+    initialized.close();
+    const sqlite = process.getBuiltinModule("node:sqlite") as {
+      DatabaseSync: new (path: string) => { exec(sql: string): void; close(): void };
+    };
+    const corrupted = new sqlite.DatabaseSync(databaseUrl);
+    corrupted.exec("DROP TABLE runtime_lease");
+    corrupted.close();
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      app = await buildServer({ databaseUrl, packageDirectory: directory, internet: "disabled" });
+      const health = await app.inject({ method: "GET", url: "/healthz" });
+      expect(health.statusCode).toBe(200);
+      expect(health.json()).toMatchObject({ status: "ok", degraded: true });
+      await app.close();
+      app = undefined;
+    }
+  });
+
   it("fails closed when configured TLS material cannot be loaded", async () => {
     await expect(buildServer({
       databaseUrl: ":memory:",

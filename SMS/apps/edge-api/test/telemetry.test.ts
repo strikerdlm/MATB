@@ -118,6 +118,8 @@ describe("edge telemetry routes", () => {
     const duplicateTopLevel = await app.inject({ method: "POST", url: "/api/telemetry/ingest", headers, payload: `{"revisionId":"mission-1:r0","sequence":1,"sequence":1,"event":${JSON.stringify(event)}}` });
     const duplicateNested = await app.inject({ method: "POST", url: "/api/telemetry/ingest", headers, payload: `{"revisionId":"mission-1:r0","sequence":1,"event":{"eventId":"duplicate-nested","aircraftId":"aircraft-1","position":{"lat":4.7,"lat":4.8,"lon":-74.1},"observedAtUtc":"2026-08-09T18:00:00.000Z","sourcePackageIds":["telemetry-package-1"]}}` });
     const tooDeep = await app.inject({ method: "POST", url: "/api/telemetry/ingest", headers, payload: `{"revisionId":"mission-1:r0","sequence":1,"event":{"eventId":"deep","aircraftId":"aircraft-1","observedAtUtc":"2026-08-09T18:00:00.000Z","sourcePackageIds":["telemetry-package-1"],"extra":${"[".repeat(40)}null${"]".repeat(40)}}}` });
+    const positiveOverflow = await app.inject({ method: "POST", url: "/api/telemetry/ingest", headers, payload: `{"revisionId":"mission-1:r0","sequence":1,"event":{"eventId":"positive-overflow","aircraftId":"aircraft-1","position":{"lat":1e9999,"lon":0},"observedAtUtc":"2026-08-09T18:00:00.000Z","sourcePackageIds":["telemetry-package-1"]}}` });
+    const negativeOverflow = await app.inject({ method: "POST", url: "/api/telemetry/ingest", headers, payload: `{"revisionId":"mission-1:r0","sequence":1,"event":{"eventId":"negative-overflow","aircraftId":"aircraft-1","motion":{"verticalRateFpm":-1e9999},"observedAtUtc":"2026-08-09T18:00:00.000Z","sourcePackageIds":["telemetry-package-1"]}}` });
     const unsupported = await app.inject({ method: "POST", url: "/api/telemetry/ingest", headers: { "content-type": "text/plain", "x-test-peer-fingerprint": allowedFingerprint }, payload: JSON.stringify({ revisionId: "mission-1:r0", sequence: 1, event }) });
     expect(duplicateTopLevel.statusCode).toBe(400);
     expect(duplicateTopLevel.json()).toMatchObject({ error: "INVALID_JSON" });
@@ -125,6 +127,10 @@ describe("edge telemetry routes", () => {
     expect(duplicateNested.json()).toMatchObject({ error: "INVALID_JSON" });
     expect(tooDeep.statusCode).toBe(400);
     expect(tooDeep.json()).toMatchObject({ error: "INVALID_JSON" });
+    expect(positiveOverflow.statusCode).toBe(400);
+    expect(positiveOverflow.json()).toMatchObject({ error: "INVALID_JSON" });
+    expect(negativeOverflow.statusCode).toBe(400);
+    expect(negativeOverflow.json()).toMatchObject({ error: "INVALID_JSON" });
     expect(unsupported.statusCode).toBe(415);
     const supported = await app.inject({ method: "POST", url: "/api/telemetry/ingest", headers: { "content-type": "application/json; charset=utf-8", "x-test-peer-fingerprint": allowedFingerprint }, payload: JSON.stringify({ revisionId: "mission-1:r0", sequence: 1, event: { ...event, eventId: "supported-content-type" } }) });
     expect(supported.statusCode).toBe(202);

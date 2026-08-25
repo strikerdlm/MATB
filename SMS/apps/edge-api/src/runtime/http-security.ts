@@ -53,6 +53,9 @@ export function registerHttpSecurity(app: FastifyInstance, log: RuntimeLogSink =
     if (detail.statusCode === 413 || detail.code === "FST_ERR_CTP_BODY_TOO_LARGE") {
       return reply.code(413).send({ error: "PAYLOAD_TOO_LARGE", message: "request body exceeds the configured limit", requestId: request.id });
     }
+    if (detail.statusCode === 415 || detail.code === "FST_ERR_CTP_INVALID_MEDIA_TYPE") {
+      return reply.code(415).send({ error: "UNSUPPORTED_MEDIA_TYPE", message: "request content type is not supported", requestId: request.id });
+    }
     if (detail.statusCode === 400 && (detail.code === "STRICT_JSON_INVALID" || detail.code === "FST_ERR_CTP_INVALID_JSON_BODY")) {
       return reply.code(400).send({ error: "INVALID_JSON", message: "request body must be strict bounded JSON", requestId: request.id });
     }
