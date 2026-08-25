@@ -1,0 +1,276 @@
+#!/bin/sh
+set -eu
+
+PROGRAM=fac-isr-sms
+SERVICE_USER=fac-isr-sms
+SERVICE_UID=10001
+SERVICE_GID=10001
+
+fail() {
+  printf '%s\n' "$*" >&2
+  exit 1
+}
+
+[ "$#" -ge 1 ] || fail "usage: smsctl install|start|restart|status|stop|upgrade|backup|restore|uninstall"
+COMMAND=$1
+shift
+ROOT=/
+TEST_MODE=0
+BUNDLE=
+BACKUP=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --root) [ "$#" -ge 2 ] || fail "--root requires a value"; ROOT=$2; shift 2 ;;
+    --bundle) [ "$#" -ge 2 ] || fail "--bundle requires a value"; BUNDLE=$2; shift 2 ;;
+    --backup) [ "$#" -ge 2 ] || fail "--backup requires a value"; BACKUP=$2; shift 2 ;;
+    --test-mode) TEST_MODE=1; shift ;;
+    *) fail "unknown argument: $1" ;;
+  esac
+done
+
+case "$ROOT" in
+  /*) ;;
+  *) fail "--root must be absolute" ;;
+esac
+[ "$ROOT" != "" ] || fail "unsafe empty root"
+if [ "$TEST_MODE" -eq 0 ] && [ "$ROOT" != "/" ]; then fail "--root is test-only"; fi
+if [ "$TEST_MODE" -eq 0 ] && [ "$(id -u)" -ne 0 ]; then fail "root privileges are required"; fi
+
+root_path() {
+  if [ "$ROOT" = "/" ]; then printf '/%s\n' "${1#/}"; else printf '%s/%s\n' "${ROOT%/}" "${1#/}"; fi
+}
+
+OPT=$(root_path /opt/fac-isr-sms)
+ETC=$(root_path /etc/fac-isr-sms)
+VAR=$(root_path /var/lib/fac-isr-sms)
+RUN=$(root_path /run/fac-isr-sms)
+UNIT=$(root_path /etc/systemd/system/fac-isr-sms.service)
+
+verify_bundle() {
+  bundle=$1
+  [ -d "$bundle" ] || fail "bundle directory does not exist"
+  [ ! -L "$bundle" ] || fail "bundle root cannot be a symbolic link"
+  [ -f "$bundle/inventory.json" ] || fail "bundle inventory is missing"
+  [ -x "$bundle/runtime/bin/node" ] || fail "Node runtime is missing or not executable"
+  "$bundle/runtime/bin/node" -e '
+const fs=require("node:fs"),p=require("node:path"),c=require("node:crypto");const r=p.resolve(process.argv[1]);const i=JSON.parse(fs.readFileSync(p.join(r,"inventory.json"),"utf8"));if(i.schemaVersion!=="1.0"||!Array.isArray(i.files))throw Error("invalid inventory");const expected=new Map(i.files.map(x=>[x.path,x]));const actual=[];function walk(d){for(const e of fs.readdirSync(d,{withFileTypes:true})){const f=p.join(d,e.name),q=p.relative(r,f).split(p.sep).join("/");if(e.isSymbolicLink())throw Error("symbolic link: "+q);if(e.isDirectory())walk(f);else if(e.isFile()&&q!=="inventory.json")actual.push(q);else if(!e.isFile())throw Error("unsupported entry: "+q)}}walk(r);actual.sort();if(actual.length!==expected.size||actual.some(x=>!expected.has(x)))throw Error("inventory path set mismatch");for(const q of actual){const x=expected.get(q),f=p.join(r,q),s=fs.statSync(f),h=c.createHash("sha256").update(fs.readFileSync(f)).digest("hex");if(x.sha256!==h||x.sizeBytes!==s.size||x.mode!==(s.mode&511))throw Error("inventory mismatch: "+q)}' "$bundle" || fail "bundle inventory verification failed"
+  release=$($bundle/runtime/bin/node -e 'const x=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));if(x.release!=="fac-isr-sms@0.2.0-rc.1"||x.target!=="linux-x64"||x.operationalReady!==false)process.exit(2);process.stdout.write(x.buildId||"release")' "$bundle/release.json") || fail "bundle release metadata is invalid"
+  printf '%s\n' "$release"
+}
+
+ensure_identity_and_layout() {
+  if [ "$TEST_MODE" -eq 1 ]; then
+    mkdir -p "$ETC" "$VAR/data" "$VAR/packages" "$VAR/backups" "$RUN"
+    printf '%s:%s:%s\n' "$SERVICE_USER" "$SERVICE_UID" "$SERVICE_GID" > "$ETC/service-account"
+  else
+    if ! getent group "$SERVICE_USER" >/dev/null 2>&1; then groupadd --system --gid "$SERVICE_GID" "$SERVICE_USER"; fi
+    if ! getent passwd "$SERVICE_USER" >/dev/null 2>&1; then useradd --system --uid "$SERVICE_UID" --gid "$SERVICE_GID" --home-dir "$VAR" --shell /usr/sbin/nologin "$SERVICE_USER"; fi
+    mkdir -p "$ETC" "$VAR/data" "$VAR/packages" "$VAR/backups" "$RUN"
+    chown -R "$SERVICE_UID:$SERVICE_GID" "$VAR" "$RUN"
+  fi
+  chmod 0750 "$ETC"
+  chmod 0700 "$VAR" "$VAR/data" "$VAR/packages" "$VAR/backups" "$RUN"
+}
+
+write_unit() {
+  mkdir -p "$(dirname "$UNIT")"
+  cat > "$UNIT" <<'EOF'
+[Unit]
+Description=FAC ISR SMS operational-core edge service
+After=local-fs.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=fac-isr-sms
+Group=fac-isr-sms
+EnvironmentFile=/etc/fac-isr-sms/sms.env
+WorkingDirectory=/opt/fac-isr-sms/current
+ExecStart=/opt/fac-isr-sms/current/runtime/bin/node /opt/fac-isr-sms/current/app/scripts/start-edge.mjs
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+KillSignal=SIGTERM
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/fac-isr-sms /run/fac-isr-sms
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  chmod 0644 "$UNIT"
+}
+
+stage_release() {
+  bundle=$1
+  build_id=$(verify_bundle "$bundle")
+  inventory_hash=$(sha256sum "$bundle/inventory.json" | awk '{print substr($1,1,16)}')
+  release_id="0.2.0-rc.1-$inventory_hash"
+  destination="$OPT/releases/$release_id"
+  mkdir -p "$OPT/releases"
+  if [ ! -d "$destination" ]; then
+    staging="$OPT/releases/.staging-$release_id-$$"
+    [ ! -e "$staging" ] || fail "upgrade staging path already exists"
+    mkdir "$staging"
+    cp -a "$bundle/." "$staging/"
+    find "$staging" -type d -exec chmod a-w {} +
+    find "$staging" -type f -exec chmod a-w {} +
+    mv "$staging" "$destination"
+  fi
+  STAGED_RELEASE=$release_id
+  STAGED_PATH=$destination
+  STAGED_BUILD=$build_id
+}
+
+switch_release() {
+  release_id=$1
+  new_link="$OPT/.current-$$"
+  ln -s "releases/$release_id" "$new_link"
+  mv -Tf "$new_link" "$OPT/current"
+}
+
+validate_tls_and_data() {
+  cert="$ETC/tls/server.crt"
+  key="$ETC/tls/server.key"
+  export_key="$ETC/tls/export.key"
+  [ -f "$cert" ] && [ ! -L "$cert" ] || fail "TLS certificate is missing or unsafe"
+  [ -f "$key" ] && [ ! -L "$key" ] || fail "TLS private key is missing or unsafe"
+  [ -f "$export_key" ] && [ ! -L "$export_key" ] || fail "export private key is missing or unsafe"
+  key_mode=$(stat -c '%a' "$key")
+  [ "$key_mode" = "600" ] || [ "$key_mode" = "400" ] || fail "TLS private key permissions must be 0400 or 0600; found $key_mode"
+  export_mode=$(stat -c '%a' "$export_key")
+  [ "$export_mode" = "600" ] || [ "$export_mode" = "400" ] || fail "export private key permissions must be 0400 or 0600; found $export_mode"
+  data_mode=$(stat -c '%a' "$VAR")
+  [ "$data_mode" = "700" ] || fail "data directory permissions must be 0700; found $data_mode"
+  if [ "$TEST_MODE" -eq 0 ]; then
+    [ "$(stat -c '%u:%g' "$key")" = "$SERVICE_UID:$SERVICE_GID" ] || fail "TLS private key ownership must be $SERVICE_UID:$SERVICE_GID"
+    [ "$(stat -c '%u:%g' "$VAR")" = "$SERVICE_UID:$SERVICE_GID" ] || fail "data ownership must be $SERVICE_UID:$SERVICE_GID"
+  fi
+}
+
+service_start() {
+  validate_tls_and_data
+  if [ "$TEST_MODE" -eq 1 ]; then
+    "$OPT/current/runtime/bin/node" --version >/dev/null
+    "$OPT/current/runtime/bin/node" "$OPT/current/app/scripts/start-edge.mjs" >/dev/null
+    printf 'running ready\n' > "$RUN/service.state"
+  else
+    systemctl daemon-reload
+    systemctl enable --now fac-isr-sms.service
+    attempt=0
+    while ! "$OPT/current/runtime/bin/node" "$OPT/current/app/scripts/edge-healthcheck.mjs" --ready >/dev/null 2>&1; do
+      attempt=$((attempt + 1)); [ "$attempt" -lt 30 ] || fail "service did not become ready"; sleep 1
+    done
+  fi
+}
+
+service_stop() {
+  if [ "$TEST_MODE" -eq 1 ]; then printf 'stopped\n' > "$RUN/service.state"; else systemctl stop fac-isr-sms.service; fi
+}
+
+remove_immutable() {
+  target=$1
+  if [ -e "$target" ]; then
+    find "$target" -type d -exec chmod u+w {} +
+    find "$target" -type f -exec chmod u+w {} +
+    rm -rf "$target"
+  fi
+}
+
+backup_create() {
+  mkdir -p "$VAR/backups"
+  output="$VAR/backups/fac-isr-sms-$(date -u +%Y%m%dT%H%M%SZ)-$$.tar.gz"
+  temporary="$output.tmp"
+  tar --sort=name --numeric-owner -czf "$temporary" -C "$VAR" data packages
+  chmod 0600 "$temporary"
+  mv "$temporary" "$output"
+  printf '%s\n' "$output"
+}
+
+backup_restore() {
+  source=$1
+  [ -f "$source" ] && [ ! -L "$source" ] || fail "backup is missing or unsafe"
+  staging="$VAR/.restore-$$"
+  rollback="$VAR/.rollback-$$"
+  mkdir "$staging"
+  tar -tzf "$source" | while IFS= read -r path; do case "$path" in /*|*../*|../*) fail "unsafe backup path";; esac; done
+  tar -xzf "$source" -C "$staging" --no-same-owner --no-same-permissions
+  mkdir "$rollback"
+  [ ! -e "$VAR/data" ] || mv "$VAR/data" "$rollback/data"
+  [ ! -e "$VAR/packages" ] || mv "$VAR/packages" "$rollback/packages"
+  if mv "$staging/data" "$VAR/data" && mv "$staging/packages" "$VAR/packages"; then
+    rm -rf "$rollback" "$staging"
+    chmod 0700 "$VAR/data" "$VAR/packages"
+    if [ "$TEST_MODE" -eq 0 ]; then chown -R "$SERVICE_UID:$SERVICE_GID" "$VAR/data" "$VAR/packages"; fi
+  else
+    [ ! -e "$rollback/data" ] || mv "$rollback/data" "$VAR/data"
+    [ ! -e "$rollback/packages" ] || mv "$rollback/packages" "$VAR/packages"
+    fail "restore failed; original data was recovered"
+  fi
+}
+
+case "$COMMAND" in
+  install)
+    [ -n "$BUNDLE" ] || fail "install requires --bundle"
+    ensure_identity_and_layout
+    stage_release "$BUNDLE"
+    switch_release "$STAGED_RELEASE"
+    if [ ! -f "$ETC/sms.env" ]; then cp "$BUNDLE/config/sms.env.template" "$ETC/sms.env"; chmod 0640 "$ETC/sms.env"; fi
+    mkdir -p "$ETC/tls"; chmod 0700 "$ETC/tls"
+    write_unit
+    if [ "$TEST_MODE" -eq 0 ]; then systemctl daemon-reload; fi
+    printf 'installed %s\n' "$STAGED_RELEASE"
+    ;;
+  start) service_start ;;
+  restart)
+    if [ "$TEST_MODE" -eq 1 ]; then service_stop; service_start; else systemctl restart fac-isr-sms.service; fi
+    ;;
+  status)
+    if [ "$TEST_MODE" -eq 1 ]; then [ -f "$RUN/service.state" ] || fail "stopped"; cat "$RUN/service.state"; grep -q '^running ready$' "$RUN/service.state" || exit 3
+    else systemctl status --no-pager fac-isr-sms.service; "$OPT/current/runtime/bin/node" "$OPT/current/app/scripts/edge-healthcheck.mjs" --ready; fi
+    ;;
+  stop) service_stop ;;
+  backup) backup_create ;;
+  restore)
+    [ -n "$BACKUP" ] || fail "restore requires --backup"
+    service_stop
+    backup_restore "$BACKUP"
+    ;;
+  upgrade)
+    [ -n "$BUNDLE" ] || fail "upgrade requires --bundle"
+    old_link=$(readlink "$OPT/current") || fail "no current installation"
+    rollback_backup=$(backup_create)
+    stage_release "$BUNDLE"
+    service_stop
+    if ! SMS_DATA_DIRECTORY="$VAR" SMS_RELEASE_BUILD_ID="$STAGED_BUILD" "$STAGED_PATH/install/linux/migrate"; then
+      backup_restore "$rollback_backup"
+      remove_immutable "$STAGED_PATH"
+      fail "upgrade migration failed; data and immutable release were rolled back"
+    fi
+    switch_release "$STAGED_RELEASE"
+    printf 'upgraded from %s to %s\n' "$old_link" "$STAGED_RELEASE"
+    ;;
+  uninstall)
+    service_stop
+    if [ "$TEST_MODE" -eq 0 ]; then systemctl disable fac-isr-sms.service >/dev/null 2>&1 || true; fi
+    remove_immutable "$OPT"
+    rm -rf "$ETC"
+    rm -f "$UNIT"
+    if [ "$TEST_MODE" -eq 0 ]; then systemctl daemon-reload; fi
+    printf 'uninstalled; data preserved at %s\n' "$VAR"
+    ;;
+  *) fail "unknown command: $COMMAND" ;;
+esac

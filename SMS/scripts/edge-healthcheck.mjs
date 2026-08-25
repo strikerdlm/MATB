@@ -1,4 +1,5 @@
 import https from "node:https";
+import { readFile } from "node:fs/promises";
 import { buildServer } from "../apps/edge-api/dist/server.js";
 
 async function selfTest() {
@@ -21,6 +22,13 @@ async function selfTest() {
 
 async function liveCheck() {
   const port = Number(process.env.SMS_PORT ?? "8443");
+  const clientCertificate = process.env.SMS_HEALTH_CLIENT_CERT_PATH;
+  const clientKey = process.env.SMS_HEALTH_CLIENT_KEY_PATH;
+  if ((clientCertificate === undefined) !== (clientKey === undefined)) throw new Error("health client certificate and key must be configured together");
+  const clientTls = clientCertificate === undefined ? {} : {
+    cert: await readFile(clientCertificate),
+    key: await readFile(clientKey),
+  };
   const response = await new Promise((resolve, reject) => {
     const request = https.get({
       hostname: "127.0.0.1",
@@ -28,6 +36,7 @@ async function liveCheck() {
       path: "/healthz",
       rejectUnauthorized: false,
       timeout: 4_000,
+      ...clientTls,
     }, resolve);
     request.once("timeout", () => request.destroy(new Error("health check timed out")));
     request.once("error", reject);

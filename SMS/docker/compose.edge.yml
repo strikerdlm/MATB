@@ -1,6 +1,42 @@
 name: fac-isr-sms-edge
 
 services:
+  init:
+    image: ${SMS_EDGE_IMAGE:-fac-isr-sms-edge:offline}
+    profiles: ["init"]
+    user: "0:0"
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      SMS_DATABASE_URL: /var/lib/fac-isr/data/edge.sqlite
+      SMS_DATA_DIRECTORY: /var/lib/fac-isr/data
+      SMS_PACKAGE_DIRECTORY: /opt/sms/packages
+      SMS_TLS_CERT_PATH: /run/secrets/tls/server.crt
+      SMS_TLS_KEY_PATH: /run/secrets/tls/server.key
+      SMS_EXPORT_KEY_PATH: /run/secrets/tls/export.key
+      SMS_TLS_CLIENT_CA_PATH: /run/secrets/tls/client-ca.crt
+      SMS_HEALTH_CLIENT_CERT_PATH: /run/secrets/tls/health-client.crt
+      SMS_HEALTH_CLIENT_KEY_PATH: /run/secrets/tls/health-client.key
+    volumes:
+      - ${SMS_DATA_DIR:?set SMS_DATA_DIR}:/var/lib/fac-isr/data:rw
+      - ${SMS_PACKAGE_DIR:?set SMS_PACKAGE_DIR}:/opt/sms/packages:ro
+      - ${SMS_TLS_DIR:?set SMS_TLS_DIR}/server.crt:/run/secrets/tls/server.crt:ro
+      - ${SMS_TLS_DIR:?set SMS_TLS_DIR}/server.key:/run/secrets/tls/server.key:ro
+      - ${SMS_TLS_DIR:?set SMS_TLS_DIR}/export.key:/run/secrets/tls/export.key:ro
+      - ${SMS_TLS_DIR:?set SMS_TLS_DIR}/client-ca.crt:/run/secrets/tls/client-ca.crt:ro
+      - ${SMS_TLS_DIR:?set SMS_TLS_DIR}/health-client.crt:/run/secrets/tls/health-client.crt:ro
+      - ${SMS_TLS_DIR:?set SMS_TLS_DIR}/health-client.key:/run/secrets/tls/health-client.key:ro
+    networks:
+      - edge_internal
+    entrypoint: ["/opt/sms/bin/preflight", "init"]
+
   edge:
     image: ${SMS_EDGE_IMAGE:-fac-isr-sms-edge:offline}
     user: "10001:10001"
@@ -18,15 +54,28 @@ services:
       SMS_BIND_ADDRESS: 0.0.0.0
       SMS_PORT: 8443
       SMS_DATABASE_URL: /var/lib/fac-isr/data/edge.sqlite
+      SMS_DATA_DIRECTORY: /var/lib/fac-isr/data
       SMS_PACKAGE_DIRECTORY: /opt/sms/packages
       SMS_TLS_CERT_PATH: /run/secrets/tls/server.crt
       SMS_TLS_KEY_PATH: /run/secrets/tls/server.key
+      SMS_EXPORT_KEY_PATH: /run/secrets/tls/export.key
+      SMS_EXPORT_KEY_ID: ${SMS_EXPORT_KEY_ID:?set SMS_EXPORT_KEY_ID}
+      SMS_DEPLOYMENT_MODE: tactical
+      SMS_TLS_CLIENT_CA_PATH: /run/secrets/tls/client-ca.crt
+      SMS_HEALTH_CLIENT_CERT_PATH: /run/secrets/tls/health-client.crt
+      SMS_HEALTH_CLIENT_KEY_PATH: /run/secrets/tls/health-client.key
+      SMS_CONSOLE_DIRECTORY: /opt/sms/app/apps/console/dist
+      SMS_CONFIG_DIRECTORY: /etc/fac-isr-sms
     volumes:
       # SMS_DATA_DIR must reside on an institutionally approved encrypted volume.
       - ${SMS_DATA_DIR:?set SMS_DATA_DIR}:/var/lib/fac-isr/data:rw
       - ${SMS_PACKAGE_DIR:?set SMS_PACKAGE_DIR}:/opt/sms/packages:ro
       - ${SMS_TLS_DIR:?set SMS_TLS_DIR}/server.crt:/run/secrets/tls/server.crt:ro
       - ${SMS_TLS_DIR:?set SMS_TLS_DIR}/server.key:/run/secrets/tls/server.key:ro
+      - ${SMS_TLS_DIR:?set SMS_TLS_DIR}/export.key:/run/secrets/tls/export.key:ro
+      - ${SMS_TLS_DIR:?set SMS_TLS_DIR}/client-ca.crt:/run/secrets/tls/client-ca.crt:ro
+      - ${SMS_TLS_DIR:?set SMS_TLS_DIR}/health-client.crt:/run/secrets/tls/health-client.crt:ro
+      - ${SMS_TLS_DIR:?set SMS_TLS_DIR}/health-client.key:/run/secrets/tls/health-client.key:ro
     ports:
       - "127.0.0.1:${SMS_EDGE_PORT:-8443}:8443"
     networks:
