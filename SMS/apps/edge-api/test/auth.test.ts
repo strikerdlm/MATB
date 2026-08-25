@@ -285,9 +285,40 @@ describe("session lifecycle", () => {
     const reopened = new SessionManager({ ...policy, database, now: () => "2026-08-09T18:00:30.000Z" });
 
     expect(reopened.getSessionByCredential(issued.credential)).toMatchObject({ sessionId: "session-persistent", userId: "session-user", state: "active" });
-    const stored = database.sql().prepare("SELECT credential_hash, session_json FROM sessions WHERE session_id = ?").get("session-persistent") as { credential_hash: string; session_json: string };
+    const stored = database.sql().prepare("SELECT credential_hash, csrf_hash, session_json FROM sessions WHERE session_id = ?").get("session-persistent") as { credential_hash: string; csrf_hash: string; session_json: string };
     expect(stored.credential_hash).not.toContain("raw-session-secret");
     expect(stored.session_json).not.toContain("raw-session-secret");
+    expect(stored.csrf_hash).not.toContain("csrf-secret");
+    expect(stored.session_json).not.toContain("csrf-secret");
+    database.close();
+  });
+
+  it("does not publish a session in memory when its durable insert fails", () => {
+    const database = openDatabase(":memory:");
+    const identities = new LocalIdentityStore({ database });
+    const identity = identities.register({ userId: "session-fault", displayName: "Session Fault", roles: ["reviewer"], missionIds: ["*"], password: "session-fault-password" });
+    database.sql().exec("CREATE TRIGGER fail_session_insert BEFORE INSERT ON sessions BEGIN SELECT RAISE(FAIL, 'session persistence fault'); END");
+    let sequence = 0;
+    const manager = new SessionManager({ idleTimeoutMs: 60_000, maxLifetimeMs: 3_600_000, reauthenticationIntervalMs: 300_000, database, sessionIdFactory: () => `fault-session-${++sequence}`, sessionCredentialFactory: () => `fault-credential-${sequence}`, csrfTokenFactory: () => `fault-csrf-${sequence}` });
+
+    expect(() => manager.issueSession(identity)).toThrow(/persist|session|fault/i);
+    expect(manager.getSession("fault-session-1")).toBeUndefined();
+    database.sql().exec("DROP TRIGGER fail_session_insert");
+    expect(() => manager.issueSession(identity)).toThrow(/safe|read.only|persist/i);
+    expect(database.sql().prepare("SELECT COUNT(*) AS count FROM sessions").get()).toEqual({ count: 0 });
+    database.close();
+  });
+
+  it("does not publish lockout state in memory when its durable update fails", () => {
+    const database = openDatabase(":memory:");
+    const identities = new LocalIdentityStore({ database, now: () => "2026-08-09T18:00:00.000Z" });
+    identities.register({ userId: "lockout-fault", displayName: "Lockout Fault", roles: ["operator"], password: "lockout-fault-password" });
+    database.sql().exec("CREATE TRIGGER fail_lockout_update BEFORE UPDATE ON login_lockout_state BEGIN SELECT RAISE(FAIL, 'lockout persistence fault'); END");
+
+    expect(() => identities.authenticate({ userId: "lockout-fault", password: "wrong-password" })).toThrow(/persist|lockout|fault|read.only/i);
+    expect(identities.getLoginState("lockout-fault")).toEqual({ failedAttempts: 0 });
+    expect(identities.isReadOnlySafeMode()).toBe(true);
+    expect(database.sql().prepare("SELECT failed_attempts FROM login_lockout_state WHERE user_id = 'lockout-fault'").get()).toEqual({ failed_attempts: 0 });
     database.close();
   });
 });

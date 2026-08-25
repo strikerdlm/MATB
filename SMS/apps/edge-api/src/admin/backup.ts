@@ -1,6 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
-import { copyFileSync, existsSync, readFileSync, renameSync, rmSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { closeSync, copyFileSync, existsSync, fsyncSync, linkSync, openSync, readFileSync, renameSync, rmSync, unlinkSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
+import { SCHEMA_VERSION } from "../db/schema.js";
+import { MaintenanceLock } from "./maintenance-lock.js";
 
 export interface BackupVerification {
   readonly ok: boolean;
@@ -28,28 +30,56 @@ function sha256(path: string): string {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
+function sqlitePathLiteral(path: string): string {
+  return `'${path.replaceAll("'", "''")}'`;
+}
+
+function syncFile(path: string): void {
+  const descriptor = openSync(path, "r");
+  try {
+    fsyncSync(descriptor);
+  } finally {
+    closeSync(descriptor);
+  }
+}
+
+function syncDirectory(path: string): void {
+  const descriptor = openSync(dirname(path), "r");
+  try {
+    fsyncSync(descriptor);
+  } finally {
+    closeSync(descriptor);
+  }
+}
+
 export function createDatabaseBackup(databasePath: string, backupPath: string): BackupVerification {
   if (!existsSync(databasePath)) throw new Error("database does not exist");
+  if (existsSync(backupPath)) throw new Error("backup output already exists and will not be overwritten");
   const Sqlite = DatabaseSync();
   const source = new Sqlite(databasePath);
+  const temporary = join(dirname(backupPath), `.${basename(backupPath)}.${randomBytes(8).toString("hex")}.tmp`);
   try {
-    source.exec("PRAGMA wal_checkpoint(TRUNCATE)");
     const result = source.prepare("PRAGMA integrity_check").get() as Record<string, unknown>;
     if (String(Object.values(result)[0]) !== "ok") throw new Error("database integrity check failed before backup");
+    source.exec(`VACUUM INTO ${sqlitePathLiteral(temporary)}`);
   } finally {
     source.close();
   }
-  copyFileSync(databasePath, backupPath);
   try {
-    const backup = new Sqlite(backupPath);
+    const backup = new Sqlite(temporary);
     try {
       backup.prepare("DELETE FROM runtime_lease").run();
     } finally {
       backup.close();
     }
+    verifyDatabaseBackup(temporary);
+    syncFile(temporary);
+    linkSync(temporary, backupPath);
+    unlinkSync(temporary);
+    syncDirectory(backupPath);
     return verifyDatabaseBackup(backupPath);
   } catch (error) {
-    rmSync(backupPath, { force: true });
+    rmSync(temporary, { force: true });
     throw error;
   }
 }
@@ -68,24 +98,50 @@ export function verifyDatabaseBackup(backupPath: string): BackupVerification {
     if (String(Object.values(integrity)[0]) !== "ok") throw new Error("backup integrity check failed");
     const row = database.prepare("SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations").get() as { version?: unknown };
     const schemaVersion = Number(row.version);
-    if (!Number.isInteger(schemaVersion) || schemaVersion <= 0) throw new Error("backup schema version is invalid");
+    if (!Number.isInteger(schemaVersion) || schemaVersion !== SCHEMA_VERSION) throw new Error(`backup schema version ${schemaVersion} is unsupported`);
     return { ok: true, schemaVersion, sha256: sha256(backupPath) };
   } catch (error) {
-    throw new Error("backup integrity verification failed", { cause: error });
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`backup integrity verification failed: ${detail}`, { cause: error });
   } finally {
     database.close();
   }
 }
 
-export function restoreDatabaseBackup(backupPath: string, databasePath: string): void {
+export function restoreDatabaseBackup(backupPath: string, databasePath: string, maintenanceLock?: MaintenanceLock): void {
+  const ownedMaintenanceLock = maintenanceLock === undefined ? new MaintenanceLock(databasePath) : undefined;
+  ownedMaintenanceLock?.acquire();
+  try {
+    restoreDatabaseBackupLocked(backupPath, databasePath);
+  } finally {
+    ownedMaintenanceLock?.release();
+  }
+}
+
+function restoreDatabaseBackupLocked(backupPath: string, databasePath: string): void {
   verifyDatabaseBackup(backupPath);
   const temporary = join(dirname(databasePath), `.sms-restore-${randomBytes(8).toString("hex")}.sqlite`);
+  const rollbackStem = `${databasePath}.pre-restore-${new Date().toISOString().replace(/[-:.]/g, "")}-${randomBytes(4).toString("hex")}`;
+  const moved: Array<{ from: string; to: string }> = [];
   try {
     copyFileSync(backupPath, temporary);
     verifyDatabaseBackup(temporary);
+    syncFile(temporary);
+    for (const suffix of ["", "-wal", "-shm"] as const) {
+      const source = `${databasePath}${suffix}`;
+      if (!existsSync(source)) continue;
+      const retained = `${rollbackStem}${suffix}`;
+      renameSync(source, retained);
+      moved.push({ from: retained, to: source });
+    }
     renameSync(temporary, databasePath);
-    rmSync(`${databasePath}-wal`, { force: true });
-    rmSync(`${databasePath}-shm`, { force: true });
+    verifyDatabaseBackup(databasePath);
+    syncFile(databasePath);
+    syncDirectory(databasePath);
+  } catch (error) {
+    if (existsSync(databasePath)) renameSync(databasePath, `${rollbackStem}.failed`);
+    for (const entry of moved.reverse()) renameSync(entry.from, entry.to);
+    throw error;
   } finally {
     rmSync(temporary, { force: true });
   }

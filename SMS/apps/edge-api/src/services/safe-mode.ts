@@ -2,7 +2,7 @@ import { createHash, createPublicKey } from "node:crypto";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { assertSignedPackageManifest, canonicalJson, verifyPackage, type SignedPackageManifest, type VerificationReport } from "@fac-isr/evidence";
-import { AtomicDomainWriteError, type AuditEventInput, type AuditLedger } from "../audit/ledger.js";
+import { AtomicConflictError, AtomicDomainWriteError, type AuditEventInput, type AuditLedger } from "../audit/ledger.js";
 import type { EdgeDatabase } from "../db/migrate.js";
 import type { ServiceActorContext, StagedMissionMutation } from "./mission-service.js";
 import type { ActiveSafetyPackage, ActiveSafetyPackageSource } from "./safety-evaluation.js";
@@ -42,6 +42,7 @@ export class SqliteTrustedKeyStore implements TrustedKeyStore {
   public constructor(private readonly database: EdgeDatabase) {}
 
   public add(record: TrustedKeyRecord): TrustedKeyRecord {
+    this.database.assertFencingToken();
     this.database.sql().prepare(`INSERT INTO trusted_keys
       (key_id, scope, algorithm, public_key_pem, added_at_utc, added_by_user_id)
       VALUES (?, ?, ?, ?, ?, ?)`)
@@ -204,6 +205,7 @@ export class SafeModeService implements ActiveSafetyPackageSource {
   private readonly now: () => string;
   private readonly trustedKeys: TrustedKeyStore;
   private packages: PackageRecord[] = [];
+  private packageGeneration = 0;
   private databaseFailure = false;
   private exportFailure = false;
 
@@ -361,8 +363,13 @@ export class SafeModeService implements ActiveSafetyPackageSource {
   /** Fixture-only failure injection used to prove exports are non-mutating. */
   public async simulateExportFailure(): Promise<void> { this.exportFailure = true; }
 
+  public isReadOnlySafeMode(): boolean { return this.databaseFailure; }
+
   private load(): void {
     try {
+      const generation = this.database.sql().prepare("SELECT generation FROM package_state_generation WHERE singleton = 1").get() as { generation: number } | undefined;
+      if (generation === undefined || !Number.isInteger(generation.generation) || generation.generation < 0) throw new Error("package generation state is corrupt");
+      this.packageGeneration = generation.generation;
       const rows = this.database.sql().prepare("SELECT record_json FROM packages ORDER BY package_id, version").all() as { record_json: string }[];
       this.packages = rows.map(({ record_json }) => parsePackageRecord(JSON.parse(record_json) as unknown));
       assertUniquePackageRecords(this.packages);
@@ -374,6 +381,9 @@ export class SafeModeService implements ActiveSafetyPackageSource {
 
   private writeSnapshot(packages: readonly PackageRecord[]): void {
     const sql = this.database.sql();
+    const claimed = sql.prepare("UPDATE package_state_generation SET generation = generation + 1 WHERE singleton = 1 AND generation = ?")
+      .run(this.packageGeneration) as { changes?: number | bigint };
+    if (Number(claimed.changes ?? 0) !== 1) throw new AtomicConflictError("package state changed in another repository instance");
     sql.prepare("DELETE FROM active_package_roles").run();
     sql.prepare("DELETE FROM packages").run();
     for (const record of packages) {
@@ -392,14 +402,19 @@ export class SafeModeService implements ActiveSafetyPackageSource {
           this.writeSnapshot(next);
           writeRelatedDomain?.();
         } catch (error) {
+          if (error instanceof AtomicConflictError) throw error;
           throw new AtomicDomainWriteError("normalized package persistence failed", { cause: error });
         }
       });
     } catch (error) {
+      if (error instanceof AtomicConflictError) {
+        throw new SafeModeError(409, "PACKAGE_STATE_CONFLICT", error.message);
+      }
       this.databaseFailure = true;
       throw new SafeModeError(503, "SAFE_MODE_DATABASE_FAILURE", errorMessage(error));
     }
     this.packages = next;
+    this.packageGeneration += 1;
     publishRelated?.();
   }
 
@@ -489,7 +504,7 @@ function isExactUtc(value: unknown): value is string {
     && date.getUTCMilliseconds() === Number(fraction);
 }
 
-function parsePackageRecord(value: unknown): PackageRecord {
+export function parsePackageRecord(value: unknown): PackageRecord {
   if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("package record must be an object");
   const record = value as Record<string, unknown>;
   const packageId = requiredStoredText(record.packageId, "packageId");

@@ -279,6 +279,18 @@ describe("HTTP authentication boundary", () => {
     expect(afterLogout.statusCode).toBe(401);
   });
 
+  it("revokes an authenticated bearer session when its identity is disabled", async () => {
+    const clock = { now: nowUtc };
+    const auth = testAuth([{ userId: "operator-1", roles: ["operator"], missionIds: ["mission-1"] }], clock);
+    app = await buildServer({ databaseUrl: ":memory:", internet: "disabled" }, auth);
+    const session = await login(app, "operator-1");
+
+    auth.identityStore.disable("operator-1");
+
+    const response = await app.inject(authenticated(session, { method: "GET", url: "/api/auth/session" }));
+    expect(response.statusCode).toBe(401);
+  });
+
   it("enforces the five-attempt, fifteen-minute lockout through login requests", async () => {
     const clock = { now: nowUtc };
     app = await buildServer(

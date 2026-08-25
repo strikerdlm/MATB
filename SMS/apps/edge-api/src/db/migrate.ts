@@ -1,5 +1,10 @@
-import { copyFileSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import { constants, copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { MaintenanceLock } from "../admin/maintenance-lock.js";
+import { parseGateApproval, parseMissionRevision, type MissionRevision } from "@fac-isr/safety-kernel";
+import { GENESIS_HASH, hashAuditEvent } from "../audit/ledger.js";
+import { validateSafetyEvaluationEnvelope, type SafetyEvaluationEnvelope } from "../services/safety-evaluation.js";
+import { parsePackageRecord } from "../services/safe-mode.js";
 import { configureDatabase, MIGRATIONS, SCHEMA_VERSION } from "./schema.js";
 import type { SqlDatabase } from "./schema.js";
 
@@ -7,9 +12,11 @@ type SqlRow = Record<string, unknown>;
 
 export interface DatabaseOpenOptions {
   readonly now?: () => string;
+  readonly maintenanceLock?: MaintenanceLock;
 }
 
 export class EdgeDatabase {
+  private fence?: { readonly holderId: string; readonly token: number; readonly now: () => string };
   public constructor(private readonly database: SqlDatabase) {}
 
   /** Exposes the configured local connection to services that own their tables. */
@@ -77,6 +84,23 @@ export class EdgeDatabase {
     }
   }
 
+  public setFencingToken(holderId: string, token: number, now: () => string): void {
+    this.fence = { holderId, token, now };
+  }
+
+  public clearFencingToken(holderId: string): void {
+    if (this.fence?.holderId === holderId) this.fence = undefined;
+  }
+
+  public assertFencingToken(): void {
+    if (this.fence === undefined) return;
+    const row = this.database.prepare("SELECT holder_id, fencing_token, expires_at_utc FROM runtime_lease WHERE singleton = 1").get() as { holder_id: string; fencing_token: number; expires_at_utc: string } | undefined;
+    const now = Date.parse(this.fence.now());
+    if (row === undefined || row.holder_id !== this.fence.holderId || row.fencing_token !== this.fence.token || !Number.isFinite(now) || Date.parse(row.expires_at_utc) <= now) {
+      throw new Error("runtime lease fencing token is stale or expired");
+    }
+  }
+
   public close(): void {
     this.database.close();
   }
@@ -93,8 +117,20 @@ function requireArray(value: unknown, field: string): unknown[] {
 }
 
 function requiredText(value: unknown, field: string): string {
-  if (typeof value !== "string" || value.trim() === "") throw new Error(`${field} must be non-empty text`);
+  if (typeof value !== "string" || value.trim() === "" || value !== value.trim()) throw new Error(`${field} must be canonical non-empty text`);
   return value;
+}
+
+function requiredUtc(value: unknown, field: string): string {
+  const text = requiredText(value, field);
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(text) || !Number.isFinite(Date.parse(text))) {
+    throw new Error(`${field} must be a valid UTC timestamp`);
+  }
+  return text;
+}
+
+function optionalText(value: unknown, field: string): string | undefined {
+  return value === undefined ? undefined : requiredText(value, field);
 }
 
 function parseLegacyJson(database: SqlDatabase, key: string, fallback: unknown): unknown {
@@ -117,47 +153,94 @@ function migrateLegacyState(database: SqlDatabase): void {
     const currentRevision = revisions.reduce((highest, revision) => Math.max(highest, Number(revision.revision)), -1);
     if (!Number.isInteger(currentRevision) || currentRevision < 0) throw new Error(`mission_store mission ${missionId} has an invalid revision`);
     database.prepare("INSERT INTO missions (mission_id, current_revision) VALUES (?, ?)").run(missionId, currentRevision);
+    const revisionsById = new Map<string, MissionRevision>();
     for (const revision of revisions) {
       const revisionId = requiredText(revision.id, "mission revision id");
       const revisionNumber = Number(revision.revision);
       if (!Number.isInteger(revisionNumber) || revisionNumber < 0) throw new Error(`mission revision ${revisionId} is invalid`);
+      const validatedRevision = parseMissionRevision(revision);
+      if (validatedRevision.missionId !== missionId || validatedRevision.id !== revisionId || validatedRevision.revision !== revisionNumber) {
+        throw new Error(`mission revision ${revisionId} does not belong to its legacy mission envelope`);
+      }
+      if (revisionsById.has(revisionId)) throw new Error(`duplicate mission revision ${revisionId}`);
+      revisionsById.set(revisionId, validatedRevision);
       database.prepare("INSERT INTO mission_revisions (revision_id, mission_id, revision, revision_json) VALUES (?, ?, ?, ?)")
-        .run(revisionId, missionId, revisionNumber, JSON.stringify(revision));
+        .run(revisionId, missionId, revisionNumber, JSON.stringify(validatedRevision));
     }
     for (const value of requireArray(mission.safetyResults ?? [], "mission safetyResults")) {
       const result = requireObject(value, "mission safety result");
       const envelope = requireObject(result.envelope, "mission safety envelope");
+      const revisionId = requiredText(envelope.revisionId, "evaluation revisionId");
+      if (!revisionsById.has(revisionId)) throw new Error(`evaluation ${revisionId} does not belong to mission ${missionId}`);
+      const validatedEnvelope = validateSafetyEvaluationEnvelope(envelope as unknown as SafetyEvaluationEnvelope, revisionId);
       database.prepare("INSERT INTO evaluation_envelopes (revision_id, envelope_json, stale) VALUES (?, ?, ?)")
-        .run(requiredText(envelope.revisionId, "evaluation revisionId"), JSON.stringify(envelope), result.stale === true ? 1 : 0);
+        .run(revisionId, JSON.stringify(validatedEnvelope), result.stale === true ? 1 : 0);
     }
+    const checklistById = new Map<string, string>();
     for (const value of requireArray(mission.checklistResponses ?? [], "mission checklistResponses")) {
       const response = requireObject(value, "checklist response");
+      const responseId = requiredText(response.responseId, "checklist responseId");
+      const revisionId = requiredText(response.revisionId, "checklist revisionId");
+      const revision = revisionsById.get(revisionId);
+      if (revision === undefined) throw new Error(`checklist response ${responseId} does not belong to mission ${missionId}`);
+      const actorUserId = requiredText(response.actorUserId, "checklist actorUserId");
+      if (!revision.crew.some(({ userId }) => userId === actorUserId)) throw new Error(`checklist actor ${actorUserId} is not assigned to revision ${revisionId}`);
+      const normalized = {
+        responseId,
+        revisionId,
+        itemId: requiredText(response.itemId, "checklist itemId"),
+        response: requiredText(response.response, "checklist response"),
+        actorUserId,
+        occurredAtUtc: requiredUtc(response.occurredAtUtc, "checklist occurredAtUtc"),
+        ...(optionalText(response.evidenceRef, "checklist evidenceRef") === undefined ? {} : { evidenceRef: optionalText(response.evidenceRef, "checklist evidenceRef") }),
+        ...(optionalText(response.reason, "checklist reason") === undefined ? {} : { reason: optionalText(response.reason, "checklist reason") }),
+      };
       database.prepare("INSERT INTO checklist_responses (response_id, revision_id, item_id, response_json) VALUES (?, ?, ?, ?)")
-        .run(requiredText(response.responseId, "checklist responseId"), requiredText(response.revisionId, "checklist revisionId"), requiredText(response.itemId, "checklist itemId"), JSON.stringify(response));
+        .run(responseId, revisionId, normalized.itemId, JSON.stringify(normalized));
+      checklistById.set(responseId, revisionId);
     }
     for (const value of requireArray(mission.approvals ?? [], "mission approvals")) {
       const decision = requireObject(value, "gate decision");
       const revisionId = requiredText(decision.missionRevisionId, "gate revisionId");
-      const gate = requiredText(decision.gate, "gate");
-      const aircraftScope = typeof decision.aircraftId === "string" ? decision.aircraftId : "";
+      const revision = revisionsById.get(revisionId);
+      if (revision === undefined) throw new Error(`gate decision does not belong to mission ${missionId}`);
+      const { checklistResponseIds: rawChecklistIds, ...approvalValue } = decision;
+      const approval = parseGateApproval(approvalValue);
+      const checklistResponseIds = requireArray(rawChecklistIds, "gate checklistResponseIds").map((id) => requiredText(id, "gate checklistResponseId"));
+      if (checklistResponseIds.length === 0 || checklistResponseIds.some((id) => checklistById.get(id) !== revisionId)) throw new Error(`gate decision for ${revisionId} references invalid checklist responses`);
+      const crew = revision.crew.find(({ userId, role }) => userId === approval.actorUserId && role === approval.actorRole);
+      if (crew === undefined || !crew.qualified || !crew.recencyCurrent || crew.dutyStatus !== "available") throw new Error(`gate actor ${approval.actorUserId} is not qualified for revision ${revisionId}`);
+      const gate = approval.gate;
+      const aircraftScope = approval.aircraftId ?? "";
+      const normalized = { ...approval, checklistResponseIds };
       database.prepare("INSERT INTO gate_decisions (decision_id, revision_id, gate, aircraft_scope, decision_json) VALUES (?, ?, ?, ?, ?)")
-        .run(`${revisionId}:${gate}:${aircraftScope}`, revisionId, gate, aircraftScope, JSON.stringify(decision));
+        .run(`${revisionId}:${gate}:${aircraftScope}`, revisionId, gate, aircraftScope, JSON.stringify(normalized));
     }
     if (mission.postflight !== undefined) {
       const record = requireObject(mission.postflight, "postflight record");
+      const revisionId = requiredText(record.revisionId, "postflight revisionId");
+      if (!revisionsById.has(revisionId)) throw new Error(`postflight record does not belong to mission ${missionId}`);
+      const telemetry = requireObject(record.telemetry, "postflight telemetry");
+      if (telemetry.preserved !== true || !/^[a-f0-9]{64}$/.test(requiredText(telemetry.checksum, "postflight telemetry checksum"))) throw new Error("postflight telemetry preservation is invalid");
+      const normalized = { revisionId, recordedAtUtc: requiredUtc(record.recordedAtUtc, "postflight recordedAtUtc"), recovery: requireObject(record.recovery, "postflight recovery"), battery: requireObject(record.battery, "postflight battery"), telemetry, debrief: requireObject(record.debrief, "postflight debrief") };
       database.prepare("INSERT INTO postflight_records (revision_id, record_json) VALUES (?, ?)")
-        .run(requiredText(record.revisionId, "postflight revisionId"), JSON.stringify(record));
+        .run(revisionId, JSON.stringify(normalized));
     }
     for (const value of requireArray(mission.occurrences ?? [], "mission occurrences")) {
       const record = requireObject(value, "occurrence record");
+      const occurrenceId = requiredText(record.occurrenceId, "occurrenceId");
+      const revisionId = requiredText(record.revisionId, "occurrence revisionId");
+      if (!revisionsById.has(revisionId)) throw new Error(`occurrence ${occurrenceId} does not belong to mission ${missionId}`);
+      if (typeof record.reportable !== "boolean") throw new Error(`occurrence ${occurrenceId} reportability is invalid`);
+      const normalized = { occurrenceId, revisionId, screenedAtUtc: requiredUtc(record.screenedAtUtc, "occurrence screenedAtUtc"), reportable: record.reportable, disposition: requiredText(record.disposition, "occurrence disposition"), ...(optionalText(record.details, "occurrence details") === undefined ? {} : { details: optionalText(record.details, "occurrence details") }) };
       database.prepare("INSERT INTO occurrences (occurrence_id, revision_id, record_json) VALUES (?, ?, ?)")
-        .run(requiredText(record.occurrenceId, "occurrenceId"), requiredText(record.revisionId, "occurrence revisionId"), JSON.stringify(record));
+        .run(occurrenceId, revisionId, JSON.stringify(normalized));
     }
   }
 
   const packages = requireArray(parseLegacyJson(database, "package_store", []), "package_store");
   for (const value of packages) {
-    const record = requireObject(value, "package record");
+    const record = parsePackageRecord(value) as unknown as Record<string, unknown>;
     const packageId = requiredText(record.packageId, "packageId");
     const version = requiredText(record.version, "package version");
     const manifest = record.manifest === undefined ? undefined : requireObject(record.manifest, "package manifest");
@@ -181,7 +264,46 @@ function migrateLegacyState(database: SqlDatabase): void {
       FROM operational_audit_events ORDER BY sequence`);
     database.exec("DROP TABLE operational_audit_events");
   }
+  validateMigratedAuditChain(database);
   database.prepare("DELETE FROM service_state WHERE key IN ('mission_store', 'package_store')").run();
+}
+
+function validateMigratedAuditChain(database: SqlDatabase): void {
+  const rows = database.prepare("SELECT * FROM audit_events ORDER BY sequence").all() as SqlRow[];
+  let previousHash = GENESIS_HASH;
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index]!;
+    let payload: unknown;
+    try {
+      payload = JSON.parse(String(row.payload_json));
+    } catch (error) {
+      throw new Error(`audit payload ${index} is invalid JSON`, { cause: error });
+    }
+    if (payload === null || typeof payload !== "object" || Array.isArray(payload)) throw new Error(`audit payload ${index} must be an object`);
+    const event = {
+      sequence: Number(row.sequence),
+      eventId: requiredText(row.event_id, "audit eventId"),
+      type: requiredText(row.type, "audit type"),
+      actorUserId: requiredText(row.actor_user_id, "audit actor"),
+      ...(row.mission_revision_id === null ? {} : { missionRevisionId: requiredText(row.mission_revision_id, "audit mission revision") }),
+      occurredAtUtc: requiredUtc(row.occurred_at_utc, "audit occurredAtUtc"),
+      action: requiredText(row.action, "audit action"),
+      reason: requiredText(row.reason, "audit reason"),
+      ...(row.evidence_snapshot_id === null ? {} : { evidenceSnapshotId: requiredText(row.evidence_snapshot_id, "audit evidence snapshot") }),
+      ...(row.client_session_id === null ? {} : { clientSessionId: requiredText(row.client_session_id, "audit client session") }),
+      schemaVersion: Number(row.schema_version),
+      payload: payload as Record<string, unknown>,
+      previousHash: String(row.previous_hash),
+    };
+    const valid = event.sequence === index
+      && Number.isInteger(event.schemaVersion) && event.schemaVersion > 0
+      && /^[a-f0-9]{64}$/.test(event.previousHash)
+      && event.previousHash === previousHash
+      && /^[a-f0-9]{64}$/.test(String(row.hash))
+      && hashAuditEvent(event) === row.hash;
+    if (!valid) throw new Error(`migrated audit chain is invalid at sequence ${index}`);
+    previousHash = String(row.hash);
+  }
 }
 
 function sqliteConstructor(): new (path: string, options?: { enableForeignKeyConstraints?: boolean; timeout?: number; readOnly?: boolean }) => SqlDatabase {
@@ -192,69 +314,57 @@ function sqliteConstructor(): new (path: string, options?: { enableForeignKeyCon
   return sqlite.DatabaseSync;
 }
 
-function integrityCheck(databasePath: string): void {
-  const DatabaseSync = sqliteConstructor();
-  const database = new DatabaseSync(databasePath, { readOnly: true });
-  try {
-    const rows = database.prepare("PRAGMA integrity_check").all() as SqlRow[];
-    if (rows.length !== 1 || String(Object.values(rows[0] ?? {})[0]) !== "ok") {
-      throw new Error("database integrity check failed");
-    }
-  } finally {
-    database.close();
-  }
-}
-
-function schemaVersionAtPath(databasePath: string): number {
-  const DatabaseSync = sqliteConstructor();
-  const database = new DatabaseSync(databasePath, { readOnly: true });
-  try {
-    const table = database.prepare("SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'").get() as SqlRow | undefined;
-    if (table === undefined) return 0;
-    const row = database.prepare("SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations").get() as SqlRow;
-    return Number(row.version);
-  } finally {
-    database.close();
-  }
-}
-
 function backupTimestamp(value: string): string {
   const parsed = new Date(value);
   if (!Number.isFinite(parsed.getTime())) throw new Error("migration clock returned an invalid UTC timestamp");
   return parsed.toISOString().replace(/[-:.]/g, "");
 }
 
+function coherentBackup(database: SqlDatabase, databasePath: string, timestamp: string): string {
+  const integrity = database.prepare("PRAGMA integrity_check").all() as SqlRow[];
+  if (integrity.length !== 1 || String(Object.values(integrity[0] ?? {})[0]) !== "ok") {
+    throw new Error("database integrity check failed before schema v2 migration");
+  }
+  const checkpoint = database.prepare("PRAGMA wal_checkpoint(FULL)").get() as SqlRow;
+  if (Number(checkpoint.busy ?? 0) !== 0) throw new Error("database WAL could not be checkpointed for schema v2 migration");
+  const stem = `${databasePath}.pre-v2-${timestamp}`;
+  for (let collision = 0; collision < 10_000; collision += 1) {
+    const candidate = `${stem}${collision === 0 ? "" : `-${collision}`}.sqlite`;
+    try {
+      copyFileSync(databasePath, candidate, constants.COPYFILE_EXCL);
+      return candidate;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+  }
+  throw new Error("could not allocate a collision-safe schema v2 backup path");
+}
+
 export function openDatabase(databaseUrl: string, lockTimeoutMs = 5_000, options: DatabaseOpenOptions = {}): EdgeDatabase {
   if (databaseUrl !== ":memory:") {
     mkdirSync(dirname(databaseUrl), { recursive: true });
   }
-  let backupPath: string | undefined;
-  if (databaseUrl !== ":memory:" && existsSync(databaseUrl) && schemaVersionAtPath(databaseUrl) === 1) {
-    backupPath = `${databaseUrl}.pre-v2-${backupTimestamp((options.now ?? (() => new Date().toISOString()))())}.sqlite`;
-    copyFileSync(databaseUrl, backupPath);
-    try {
-      integrityCheck(databaseUrl);
-    } catch (error) {
-      throw new Error("database integrity check failed before schema v2 migration", { cause: error });
-    }
-  }
+  const ownedMaintenanceLock = databaseUrl === ":memory:" || options.maintenanceLock !== undefined ? undefined : new MaintenanceLock(databaseUrl, lockTimeoutMs);
+  ownedMaintenanceLock?.acquire();
   const DatabaseSync = sqliteConstructor();
-  const database = new DatabaseSync(databaseUrl, {
-    enableForeignKeyConstraints: true,
-    timeout: lockTimeoutMs,
-  });
+  let database: SqlDatabase | undefined;
+  let backupPath: string | undefined;
   try {
-    configureDatabase(database, lockTimeoutMs);
+    database = new DatabaseSync(databaseUrl, { enableForeignKeyConstraints: true, timeout: lockTimeoutMs });
     const edgeDatabase = new EdgeDatabase(database);
+    if (databaseUrl !== ":memory:" && existsSync(databaseUrl) && edgeDatabase.schemaVersion() === 1) {
+      backupPath = coherentBackup(database, databaseUrl, backupTimestamp((options.now ?? (() => new Date().toISOString()))()));
+    }
+    configureDatabase(database, lockTimeoutMs);
     edgeDatabase.migrate();
     return edgeDatabase;
   } catch (error) {
-    database.close();
+    database?.close();
     if (backupPath !== undefined) {
-      rmSync(`${databaseUrl}-wal`, { force: true });
-      rmSync(`${databaseUrl}-shm`, { force: true });
       copyFileSync(backupPath, databaseUrl);
     }
     throw error;
+  } finally {
+    ownedMaintenanceLock?.release();
   }
 }

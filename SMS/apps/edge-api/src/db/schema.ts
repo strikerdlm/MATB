@@ -67,9 +67,13 @@ export const MIGRATIONS: readonly Migration[] = [
       ) STRICT`,
       `CREATE TABLE sessions (
         session_id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        credential_version INTEGER NOT NULL CHECK (credential_version > 0),
         credential_hash TEXT NOT NULL UNIQUE,
+        csrf_hash TEXT NOT NULL,
         session_json TEXT NOT NULL,
-        updated_at_utc TEXT NOT NULL
+        updated_at_utc TEXT NOT NULL,
+        FOREIGN KEY (user_id, credential_version) REFERENCES credential_versions(user_id, version) ON DELETE CASCADE
       ) STRICT`,
       `CREATE TABLE trusted_keys (
         key_id TEXT PRIMARY KEY,
@@ -88,6 +92,11 @@ export const MIGRATIONS: readonly Migration[] = [
         record_json TEXT NOT NULL,
         PRIMARY KEY (package_id, version)
       ) STRICT`,
+      `CREATE TABLE package_state_generation (
+        singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+        generation INTEGER NOT NULL CHECK (generation >= 0)
+      ) STRICT`,
+      `INSERT INTO package_state_generation (singleton, generation) VALUES (1, 0)`,
       `CREATE TABLE active_package_roles (
         role TEXT PRIMARY KEY,
         package_id TEXT NOT NULL,
@@ -155,6 +164,7 @@ export const MIGRATIONS: readonly Migration[] = [
       `CREATE TABLE runtime_lease (
         singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
         holder_id TEXT NOT NULL,
+        fencing_token INTEGER NOT NULL CHECK (fencing_token > 0),
         acquired_at_utc TEXT NOT NULL,
         expires_at_utc TEXT NOT NULL
       ) STRICT`,

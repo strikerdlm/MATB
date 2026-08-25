@@ -4,6 +4,7 @@ export * from "./audit/index.js";
 export * from "./admin/backup.js";
 export * from "./admin/cli.js";
 export * from "./admin/runtime-lease.js";
+export * from "./admin/maintenance-lock.js";
 export * from "./db/migrate.js";
 export * from "./db/schema.js";
 export * from "./services/mission-service.js";

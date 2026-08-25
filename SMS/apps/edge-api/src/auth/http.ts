@@ -129,11 +129,16 @@ export function registerHttpAuthentication(app: FastifyInstance, dependencies: H
     if (sessionCredential === undefined) return unauthorized(reply);
     const session = dependencies.sessionManager.getSessionByCredential(sessionCredential);
     if (session === undefined || session.state !== "active") return unauthorized(reply);
+    if (!dependencies.identityStore.isSessionIdentityValid(session.userId, session.credentialVersion)) {
+      dependencies.sessionManager.deleteSession(session.sessionId);
+      return unauthorized(reply);
+    }
     const touched = dependencies.sessionManager.touchSessionByCredential(sessionCredential);
     if (touched === undefined) return unauthorized(reply);
     if (touched.state !== "active") return unauthorized(reply);
     request.authenticatedPrincipal = principalFrom(touched);
-    if (!SAFE_METHODS.has(request.method) && request.headers["x-csrf-token"] !== touched.csrfToken) {
+    const csrf = request.headers["x-csrf-token"];
+    if (!SAFE_METHODS.has(request.method) && (typeof csrf !== "string" || !dependencies.sessionManager.verifyCsrfToken(touched.sessionId, csrf))) {
       return reply.code(403).send({ error: "CSRF_TOKEN_INVALID", message: "the exact session CSRF token is required" });
     }
   });

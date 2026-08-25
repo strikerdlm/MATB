@@ -75,7 +75,7 @@ export class AtomicConflictError extends Error {
   }
 }
 
-export type AuditDatabase = SqlDatabase | Pick<EdgeDatabase, "sql">;
+export type AuditDatabase = SqlDatabase | Pick<EdgeDatabase, "sql" | "assertFencingToken">;
 
 export interface AuditLedgerOptions {
   readonly persistence?: AuditPersistence;
@@ -297,9 +297,11 @@ interface StoredAuditRow {
 /** SQLite persistence used by the edge node; the table is created without a schema-version bump. */
 export class SqliteAuditPersistence implements AuditPersistence {
   private readonly database: SqlDatabase;
+  private readonly edgeDatabase?: Pick<EdgeDatabase, "assertFencingToken">;
 
   public constructor(database: AuditDatabase) {
     this.database = resolveDatabase(database);
+    this.edgeDatabase = "assertFencingToken" in database ? database : undefined;
     this.database.exec(`
       CREATE TABLE IF NOT EXISTS audit_events (
         sequence INTEGER PRIMARY KEY,
@@ -325,6 +327,7 @@ export class SqliteAuditPersistence implements AuditPersistence {
   }
 
   private appendSync(event: AuditEvent): void {
+    this.edgeDatabase?.assertFencingToken();
     this.database.prepare(`
       INSERT INTO audit_events
         (sequence, event_id, type, actor_user_id, mission_revision_id, occurred_at_utc,
@@ -381,6 +384,7 @@ export class SqliteAuditPersistence implements AuditPersistence {
     schemaVersion: number,
     writeDomain: () => void,
   ): AuditEvent[] {
+    this.edgeDatabase?.assertFencingToken();
     this.database.exec("BEGIN IMMEDIATE");
     try {
       const integrity = this.database.prepare("PRAGMA quick_check").get() as Record<string, unknown>;

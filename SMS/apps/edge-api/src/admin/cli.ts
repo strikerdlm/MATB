@@ -1,17 +1,20 @@
 #!/usr/bin/env node
-import { statSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { open, readFile } from "node:fs/promises";
 import { createPublicKey } from "node:crypto";
 import { AuditLedger } from "../audit/ledger.js";
 import { LocalIdentityStore } from "../auth/identity.js";
 import { openDatabase, type EdgeDatabase } from "../db/migrate.js";
 import { createDatabaseBackup, restoreDatabaseBackup, verifyDatabaseBackup } from "./backup.js";
-import { RuntimeLease } from "./runtime-lease.js";
+import { RuntimeLease, RuntimeLeaseError } from "./runtime-lease.js";
+import { MaintenanceLock } from "./maintenance-lock.js";
 import { MissionService } from "../services/mission-service.js";
 import { SafeModeService, SqliteTrustedKeyStore, type TrustedKeyAlgorithm, type TrustedKeyRecord, type TrustedKeyScope } from "../services/safe-mode.js";
 
 export interface AdminIo {
   readonly stdin: () => Promise<string>;
+  readonly stdinIsTty?: () => boolean;
+  readonly promptSecret?: () => Promise<string>;
   readonly stdout: (message: string) => void;
   readonly stderr: (message: string) => void;
 }
@@ -68,10 +71,27 @@ async function password(parsed: ParsedArguments, io: AdminIo): Promise<string> {
   if (passwordFile !== undefined && fromStdin) throw new Error("choose one password source");
   let value: string;
   if (passwordFile !== undefined) {
-    if ((statSync(passwordFile).mode & 0o077) !== 0) throw new Error("password file must be protected with mode 0600 or stricter");
-    value = await readFile(passwordFile, "utf8");
-  } else {
+    let handle;
+    try {
+      handle = await open(passwordFile, constants.O_RDONLY | constants.O_NOFOLLOW);
+    } catch (error) {
+      throw new Error("password file must be a protected regular file and symbolic links are forbidden", { cause: error });
+    }
+    try {
+      const metadata = await handle.stat();
+      if (!metadata.isFile()) throw new Error("password file must be a regular file");
+      if ((metadata.mode & 0o077) !== 0) throw new Error("password file must be protected with mode 0600 or stricter");
+      if (typeof process.getuid === "function" && metadata.uid !== process.getuid()) throw new Error("password file must be owned by the current service account");
+      value = await handle.readFile("utf8");
+    } finally {
+      await handle.close();
+    }
+  } else if (fromStdin) {
+    if (io.stdinIsTty?.() === true) throw new Error("--password-stdin requires a pipe; use the masked TTY prompt instead");
     value = await io.stdin();
+  } else {
+    if (io.stdinIsTty?.() !== true || io.promptSecret === undefined) throw new Error("choose --password-stdin, --password-file, or an interactive masked prompt");
+    value = await io.promptSecret();
   }
   value = value.replace(/[\r\n]+$/, "");
   if (value.length < 12) throw new Error("password must contain at least 12 characters");
@@ -79,16 +99,34 @@ async function password(parsed: ParsedArguments, io: AdminIo): Promise<string> {
 }
 
 async function withOfflineLease<T>(databasePath: string, operation: (database: EdgeDatabase) => Promise<T> | T): Promise<T> {
-  const database = openDatabase(databasePath);
+  const maintenance = new MaintenanceLock(databasePath);
+  maintenance.acquire();
+  let database: EdgeDatabase | undefined;
+  try {
+    database = openDatabase(databasePath, 5_000, { maintenanceLock: maintenance });
+  } catch (error) {
+    maintenance.release();
+    throw error;
+  }
   const lease = new RuntimeLease(database, { holderId: `sms-admin:${process.pid}`, durationMs: 120_000 });
   let acquired = false;
+  let renewalFailure: unknown;
+  let renewalTimer: ReturnType<typeof setInterval> | undefined;
   try {
     lease.acquire();
     acquired = true;
-    return await operation(database);
+    renewalTimer = setInterval(() => {
+      try { lease.renew(); } catch (error) { renewalFailure = error; }
+    }, 40_000);
+    renewalTimer.unref();
+    const result = await operation(database);
+    if (renewalFailure !== undefined) throw new RuntimeLeaseError("offline operation lost its runtime lease", { cause: renewalFailure });
+    return result;
   } finally {
+    if (renewalTimer !== undefined) clearInterval(renewalTimer);
     if (acquired) lease.release();
     database.close();
+    maintenance.release();
   }
 }
 
@@ -189,8 +227,13 @@ export async function runAdminCli(argv: readonly string[], io: AdminIo): Promise
   }
   if (command === "backup" && subcommand === "restore") {
     const databasePath = option(parsed, "database")!;
-    await withOfflineLease(databasePath, () => undefined);
-    restoreDatabaseBackup(option(parsed, "input")!, databasePath);
+    const maintenance = new MaintenanceLock(databasePath);
+    maintenance.acquire();
+    try {
+      restoreDatabaseBackup(option(parsed, "input")!, databasePath, maintenance);
+    } finally {
+      maintenance.release();
+    }
     emit(io, { ok: true, command: "backup restore" });
     return 0;
   }
@@ -214,6 +257,8 @@ async function main(): Promise<void> {
       for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
       return Buffer.concat(chunks).toString("utf8");
     },
+    stdinIsTty: () => process.stdin.isTTY === true,
+    promptSecret: maskedPasswordPrompt,
     stdout: (message) => process.stdout.write(`${message}\n`),
     stderr: (message) => process.stderr.write(`${message}\n`),
   };
@@ -223,6 +268,41 @@ async function main(): Promise<void> {
     io.stderr(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
   }
+}
+
+async function maskedPasswordPrompt(): Promise<string> {
+  if (process.stdin.isTTY !== true || typeof process.stdin.setRawMode !== "function") throw new Error("a TTY is required for the masked password prompt");
+  return new Promise<string>((resolve, reject) => {
+    let secret = "";
+    const wasRaw = process.stdin.isRaw;
+    const cleanup = (): void => {
+      process.stdin.off("data", onData);
+      process.stdin.setRawMode(wasRaw);
+      process.stdin.pause();
+    };
+    const onData = (chunk: Buffer | string): void => {
+      for (const character of String(chunk)) {
+        if (character === "\r" || character === "\n") {
+          cleanup();
+          process.stdout.write("\n");
+          resolve(secret);
+          return;
+        }
+        if (character === "\u0003") {
+          cleanup();
+          process.stdout.write("\n");
+          reject(new Error("password prompt cancelled"));
+          return;
+        }
+        if (character === "\u007f" || character === "\b") secret = secret.slice(0, -1);
+        else if (character >= " ") secret += character;
+      }
+    };
+    process.stdout.write("Password: ");
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.on("data", onData);
+  });
 }
 
 if (process.argv[1]?.endsWith("cli.js")) void main();

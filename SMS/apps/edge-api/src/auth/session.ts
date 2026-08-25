@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { IdentityRecord } from "./identity.js";
 import type { AuthorizationSubject, UserRole } from "./roles.js";
 import type { EdgeDatabase } from "../db/migrate.js";
@@ -6,6 +6,7 @@ import type { EdgeDatabase } from "../db/migrate.js";
 export interface Session extends AuthorizationSubject {
   readonly sessionId: string;
   readonly csrfToken: string;
+  readonly credentialVersion: number;
   readonly issuedAtUtc: string;
   readonly expiresAtUtc: string;
   readonly lastActivityAtUtc: string;
@@ -81,12 +82,14 @@ export function isSessionReauthenticationRequired(session: Session, nowUtc: stri
 export class SessionManager {
   private readonly sessionsByCredentialHash = new Map<string, Session>();
   private readonly credentialHashBySessionId = new Map<string, string>();
+  private readonly csrfHashBySessionId = new Map<string, string>();
   private readonly now: () => string;
   private readonly sessionIdFactory: () => string;
   private readonly sessionCredentialFactory: () => string;
   private readonly csrfTokenFactory: () => string;
   private readonly policy: SessionPolicy;
   private readonly database?: EdgeDatabase;
+  private persistenceFailed = false;
 
   public constructor(options: SessionManagerOptions) {
     assertPolicy(options);
@@ -121,9 +124,11 @@ export class SessionManager {
     }
     const csrfToken = this.csrfTokenFactory();
     if (csrfToken.trim() === "") throw new Error("CSRF token must be non-empty");
+    const credentialVersion = this.activeCredentialVersion(identity.userId);
     const session: Session = Object.freeze({
       sessionId,
       csrfToken,
+      credentialVersion,
       userId: identity.userId,
       roles: Object.freeze([...identity.roles]) as readonly UserRole[],
       missionIds: Object.freeze([...identity.missionIds]),
@@ -138,9 +143,11 @@ export class SessionManager {
       state: "active",
       requiresReauthentication: false,
     });
+    const csrfHash = hashCsrfToken(csrfToken);
+    this.persist(credentialHash, csrfHash, session);
     this.sessionsByCredentialHash.set(credentialHash, session);
     this.credentialHashBySessionId.set(sessionId, credentialHash);
-    this.persist(credentialHash, session);
+    this.csrfHashBySessionId.set(sessionId, csrfHash);
     return Object.freeze({ session, credential });
   }
 
@@ -161,21 +168,41 @@ export class SessionManager {
   public lockSession(sessionId: string, reason: string, lockedAtUtc = this.now()): void {
     const { credentialHash, session } = this.requireSession(sessionId);
     if (reason.trim() === "") throw new Error("session lock reason is required");
-    this.sessionsByCredentialHash.set(credentialHash, Object.freeze({
+    const locked = Object.freeze({
       ...session,
       state: "locked",
       lockedAtUtc,
       lockReason: reason,
-    }));
-    this.persist(credentialHash, this.sessionsByCredentialHash.get(credentialHash)!);
+    });
+    this.persist(credentialHash, this.requireCsrfHash(sessionId), locked);
+    this.sessionsByCredentialHash.set(credentialHash, locked);
   }
 
   public deleteSession(sessionId: string): void {
     const credentialHash = this.credentialHashBySessionId.get(sessionId);
     if (credentialHash === undefined) return;
+    this.assertWritable();
+    try {
+      this.database?.assertFencingToken();
+      this.database?.sql().prepare("DELETE FROM sessions WHERE session_id = ?").run(sessionId);
+    } catch (error) {
+      this.persistenceFailed = true;
+      throw new Error("session persistence failed; session store is read-only", { cause: error });
+    }
     this.credentialHashBySessionId.delete(sessionId);
+    this.csrfHashBySessionId.delete(sessionId);
     this.sessionsByCredentialHash.delete(credentialHash);
-    this.database?.sql().prepare("DELETE FROM sessions WHERE session_id = ?").run(sessionId);
+  }
+
+  public verifyCsrfToken(sessionId: string, candidate: string): boolean {
+    const expected = this.csrfHashBySessionId.get(sessionId);
+    if (expected === undefined || typeof candidate !== "string") return false;
+    const actual = hashCsrfToken(candidate);
+    return actual.length === expected.length && timingSafeEqual(Buffer.from(actual), Buffer.from(expected));
+  }
+
+  public isReadOnlySafeMode(): boolean {
+    return this.persistenceFailed;
   }
 
   public isReauthenticationRequired(sessionId: string, nowUtc = this.now()): boolean {
@@ -205,8 +232,8 @@ export class SessionManager {
         lockedAtUtc: evaluated.lockedAtUtc ?? nowUtc,
         lockReason: evaluated.lockReason ?? "idle timeout",
       });
+      this.persist(credentialHash, this.requireCsrfHash(locked.sessionId), locked);
       this.sessionsByCredentialHash.set(credentialHash, locked);
-      this.persist(credentialHash, locked);
       return locked;
     }
     const touched = Object.freeze({
@@ -214,8 +241,8 @@ export class SessionManager {
       lastActivityAtUtc: nowUtc,
       requiresReauthentication: isSessionReauthenticationRequired(evaluated, nowUtc),
     });
+    this.persist(credentialHash, this.requireCsrfHash(touched.sessionId), touched);
     this.sessionsByCredentialHash.set(credentialHash, touched);
-    this.persist(credentialHash, touched);
     return touched;
   }
 
@@ -234,8 +261,8 @@ export class SessionManager {
         ? undefined
         : formatUtc(at + this.policy.reauthenticationIntervalMs),
     });
+    this.persist(credentialHash, this.requireCsrfHash(refreshed.sessionId), refreshed);
     this.sessionsByCredentialHash.set(credentialHash, refreshed);
-    this.persist(credentialHash, refreshed);
     return refreshed;
   }
 
@@ -265,26 +292,68 @@ export class SessionManager {
     });
   }
 
-  private persist(credentialHash: string, session: Session): void {
-    this.database?.sql().prepare(`INSERT INTO sessions (session_id, credential_hash, session_json, updated_at_utc)
-      VALUES (?, ?, ?, ?) ON CONFLICT(session_id) DO UPDATE SET credential_hash = excluded.credential_hash,
-      session_json = excluded.session_json, updated_at_utc = excluded.updated_at_utc`)
-      .run(session.sessionId, credentialHash, JSON.stringify(session), this.now());
+  private persist(credentialHash: string, csrfHash: string, session: Session): void {
+    this.assertWritable();
+    if (this.database === undefined) return;
+    const { csrfToken: _csrfToken, ...durableSession } = session;
+    try {
+      this.database.assertFencingToken();
+      this.database.sql().prepare(`INSERT INTO sessions
+        (session_id, user_id, credential_version, credential_hash, csrf_hash, session_json, updated_at_utc)
+        VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(session_id) DO UPDATE SET user_id = excluded.user_id,
+        credential_version = excluded.credential_version, credential_hash = excluded.credential_hash,
+        csrf_hash = excluded.csrf_hash, session_json = excluded.session_json, updated_at_utc = excluded.updated_at_utc`)
+        .run(session.sessionId, session.userId, session.credentialVersion, credentialHash, csrfHash, JSON.stringify(durableSession), this.now());
+    } catch (error) {
+      this.persistenceFailed = true;
+      throw new Error("session persistence failed; session store is read-only", { cause: error });
+    }
   }
 
   private load(): void {
     if (this.database === undefined) return;
-    const rows = this.database.sql().prepare("SELECT credential_hash, session_json FROM sessions ORDER BY session_id").all() as { credential_hash: string; session_json: string }[];
-    for (const row of rows) {
-      const session = Object.freeze(JSON.parse(row.session_json) as Session);
-      this.sessionsByCredentialHash.set(row.credential_hash, session);
-      this.credentialHashBySessionId.set(session.sessionId, row.credential_hash);
+    try {
+      const rows = this.database.sql().prepare("SELECT user_id, credential_version, credential_hash, csrf_hash, session_json FROM sessions ORDER BY session_id").all() as { user_id: string; credential_version: number; credential_hash: string; csrf_hash: string; session_json: string }[];
+      for (const row of rows) {
+        const parsed = JSON.parse(row.session_json) as Record<string, unknown>;
+        if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed) || typeof parsed.sessionId !== "string" || parsed.userId !== row.user_id || parsed.credentialVersion !== row.credential_version || typeof row.csrf_hash !== "string" || row.csrf_hash.length < 32) throw new Error("persisted session is corrupt");
+        const session = Object.freeze({ ...parsed, csrfToken: "" }) as unknown as Session;
+        this.sessionsByCredentialHash.set(row.credential_hash, session);
+        this.credentialHashBySessionId.set(session.sessionId, row.credential_hash);
+        this.csrfHashBySessionId.set(session.sessionId, row.csrf_hash);
+      }
+    } catch {
+      this.sessionsByCredentialHash.clear();
+      this.credentialHashBySessionId.clear();
+      this.csrfHashBySessionId.clear();
+      this.persistenceFailed = true;
     }
+  }
+
+  private activeCredentialVersion(userId: string): number {
+    if (this.database === undefined) return 1;
+    const row = this.database.sql().prepare("SELECT MAX(version) AS version FROM credential_versions WHERE user_id = ? AND retired_at_utc IS NULL").get(userId) as { version: number | null };
+    if (!Number.isInteger(row.version) || Number(row.version) <= 0) throw new Error("identity has no active credential version");
+    return Number(row.version);
+  }
+
+  private requireCsrfHash(sessionId: string): string {
+    const hash = this.csrfHashBySessionId.get(sessionId);
+    if (hash === undefined) throw new Error("session CSRF hash is unavailable");
+    return hash;
+  }
+
+  private assertWritable(): void {
+    if (this.persistenceFailed) throw new Error("session persistence is in read-only safe mode");
   }
 }
 
 function hashSessionCredential(credential: string): string {
   return createHash("sha256").update(credential, "utf8").digest("base64url");
+}
+
+function hashCsrfToken(token: string): string {
+  return createHash("sha256").update(token, "utf8").digest("base64url");
 }
 
 export function lockSession(manager: SessionManager, sessionId: string, reason: string): void {

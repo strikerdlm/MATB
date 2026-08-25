@@ -5,24 +5,25 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 import { manifestContentDigest, signManifest, type SignedPackageManifest } from "@fac-isr/evidence";
 import type { PolicyPackage } from "@fac-isr/safety-kernel";
-import type { EdgeServer } from "../src/server.js";
+import { buildServer, type EdgeServer } from "../src/server.js";
 import { authenticatedTestServer } from "./http-test-auth.js";
 import type { TrustedKeyRecord } from "../src/services/safe-mode.js";
-import { SqliteTrustedKeyStore } from "../src/services/safe-mode.js";
+import { SafeModeService, SqliteTrustedKeyStore } from "../src/services/safe-mode.js";
 import { openDatabase } from "../src/db/migrate.js";
+import { AuditLedger } from "../src/audit/ledger.js";
 import { missionFixture, testSafetyEvaluationProvider } from "./mission-fixture.js";
 
 const asOfUtc = "2026-08-09T18:00:00.000Z";
 
-function signedPackage(root: string, version: string, keys: ReturnType<typeof generateKeyPairSync>): { directory: string; manifest: SignedPackageManifest } {
-  const directoryPath = join(root, `map-${version.replaceAll(".", "-")}`);
+function signedPackage(root: string, version: string, keys: ReturnType<typeof generateKeyPairSync>, packageId = "map-colombia"): { directory: string; manifest: SignedPackageManifest } {
+  const directoryPath = join(root, `${packageId}-${version.replaceAll(".", "-")}`);
   mkdirSync(directoryPath);
   const content = Buffer.from(`map package ${version}`, "utf8");
   writeFileSync(join(directoryPath, "map.txt"), content);
   const files = [{ path: "map.txt", sha256: createHash("sha256").update(content).digest("hex"), sizeBytes: content.byteLength }];
   const manifest = signManifest({
     schemaVersion: "1.0",
-    packageId: "map-colombia",
+    packageId,
     kind: "map",
     issuer: "fac-isr",
     version,
@@ -132,6 +133,27 @@ describe("signed package import and quarantine", () => {
     expect(app.edgeDatabase.sql().prepare("SELECT package_id, version, state FROM packages").get()).toEqual({ package_id: "map-colombia", version: "1.0.0", state: "active" });
     expect(app.edgeDatabase.sql().prepare("SELECT role, package_id, version FROM active_package_roles").get()).toEqual({ role: "map", package_id: "map-colombia", version: "1.0.0" });
     expect(app.edgeDatabase.sql().prepare("SELECT value FROM service_state WHERE key = 'package_store'").get()).toBeUndefined();
+  });
+
+  it("rejects a stale package snapshot without losing committed package or audit state", async () => {
+    const root = mkdtempSync(join(tmpdir(), "fac-isr-package-cas-"));
+    const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const record = trustedKey(keys);
+    const database = openDatabase(":memory:");
+    const missionService = { markSafetyEvaluationsStale: async () => undefined, getMission: () => ({}) };
+    const firstAudit = new AuditLedger({ database, now: () => asOfUtc });
+    const secondAudit = new AuditLedger({ database, now: () => asOfUtc });
+    const first = new SafeModeService({ database, packageDirectory: root, auditLedger: firstAudit, missionService, trustedKeyStore: { get: () => record }, now: () => asOfUtc });
+    const stale = new SafeModeService({ database, packageDirectory: root, auditLedger: secondAudit, missionService, trustedKeyStore: { get: () => record }, now: () => asOfUtc });
+
+    await first.importPackage({ ...signedPackage(root, "1.0.0", keys, "pkg-one"), keyId: record.keyId }, context);
+    await expect(stale.importPackage({ ...signedPackage(root, "1.0.0", keys, "pkg-two"), keyId: record.keyId }, context))
+      .rejects.toMatchObject({ statusCode: 409, code: "PACKAGE_STATE_CONFLICT" });
+
+    expect(database.sql().prepare("SELECT package_id FROM packages ORDER BY package_id").all()).toEqual([{ package_id: "pkg-one" }]);
+    expect(await firstAudit.queryAudit({ type: "package.imported" })).toHaveLength(1);
+    expect(firstAudit.isReadOnlySafeMode()).toBe(false);
+    database.close();
   });
 
   it("does not activate a package or append its audit event when mission invalidation fails", async () => {
@@ -454,7 +476,7 @@ describe("signed package import and quarantine", () => {
     const dependencies = { trustedKeyStore: { get: () => record }, now: () => asOfUtc };
     const one = signedPackage(root, "1.0.0", keys);
     const two = signedPackage(root, "2.0.0", keys);
-    let server = await authenticatedTestServer({ databaseUrl, internet: "disabled", packageDirectory: root }, undefined, dependencies);
+    const server = await authenticatedTestServer({ databaseUrl, internet: "disabled", packageDirectory: root }, undefined, dependencies);
     app = server.app;
     const imported = await app.safeModeService.importPackage({ ...one, keyId: record.keyId }, context);
     await app.safeModeService.activatePackage({ packageId: imported.packageId, version: imported.version, keyId: record.keyId }, context);
@@ -465,11 +487,11 @@ describe("signed package import and quarantine", () => {
     await app.close();
     app = undefined;
 
-    server = await authenticatedTestServer({ databaseUrl, internet: "disabled", packageDirectory: root }, undefined, dependencies);
-    app = server.app;
+    app = await buildServer({ databaseUrl, internet: "disabled", packageDirectory: root }, dependencies);
 
-    expect((await app.safeModeService.getPackageState()).active).toEqual([]);
-    await expect(app.safeModeService.importPackage({ ...two, keyId: record.keyId }, context)).rejects.toMatchObject({ code: "SAFE_MODE_DATABASE_FAILURE" });
+    expect((await app.inject({ method: "GET", url: "/healthz" })).json()).toMatchObject({ status: "ok", degraded: true });
+    expect((await app.inject({ method: "GET", url: "/readyz" })).statusCode).toBe(503);
+    expect((await app.inject({ method: "POST", url: "/api/packages/import", payload: { ...two, keyId: record.keyId } })).statusCode).toBe(503);
   });
 
   it("reloads malformed quarantine evidence without disabling valid package writes", async () => {

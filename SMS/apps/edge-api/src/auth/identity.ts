@@ -91,6 +91,7 @@ export class LocalIdentityStore {
   private readonly maxFailedAttempts: number;
   private readonly lockoutDurationMs: number;
   private readonly database?: EdgeDatabase;
+  private persistenceFailed = false;
 
   public constructor(options: IdentityStoreOptions = {}) {
     this.now = options.now ?? (() => new Date().toISOString());
@@ -105,6 +106,7 @@ export class LocalIdentityStore {
   }
 
   public register(input: IdentityRegistration): IdentityRecord {
+    this.assertWritable();
     const userId = canonicalText(input.userId, "userId");
     const displayName = canonicalText(input.displayName, "displayName");
     if (this.identities.has(userId)) throw new Error("identity already exists");
@@ -157,6 +159,7 @@ export class LocalIdentityStore {
   }
 
   public authenticate(credentials: LocalCredentials): IdentityRecord {
+    this.assertWritable();
     const userId = typeof credentials?.userId === "string" ? credentials.userId : "unknown";
     const stored = this.identities.get(userId);
     const occurredAtUtc = this.currentTime();
@@ -174,29 +177,32 @@ export class LocalIdentityStore {
       this.recordEvent({ type: "authentication.failed", userId, occurredAtUtc, reason: "identity_locked" });
       throw new AuthenticationError();
     }
-    if (stored.lockedUntilEpochMs !== undefined && now >= stored.lockedUntilEpochMs) {
-      stored.lockedUntilEpochMs = undefined;
-      stored.failedAttempts = 0;
-    }
+    const next: StoredIdentity = {
+      ...stored,
+      failedAttempts: stored.lockedUntilEpochMs !== undefined && now >= stored.lockedUntilEpochMs ? 0 : stored.failedAttempts,
+      ...(stored.lockedUntilEpochMs !== undefined && now < stored.lockedUntilEpochMs ? { lockedUntilEpochMs: stored.lockedUntilEpochMs } : {}),
+    };
 
     const password = typeof credentials?.password === "string" ? credentials.password : "";
     const candidate = scryptSync(password, stored.salt, 32);
     const valid = candidate.length === stored.passwordHash.length
       && timingSafeEqual(candidate, stored.passwordHash);
     if (!valid) {
-      stored.failedAttempts += 1;
-      this.recordEvent({ type: "authentication.failed", userId, occurredAtUtc, reason: "invalid_credentials" });
-      if (stored.failedAttempts >= this.maxFailedAttempts) {
-        stored.lockedUntilEpochMs = now + this.lockoutDurationMs;
-        this.recordEvent({ type: "identity.locked", userId, occurredAtUtc, reason: "too_many_failures" });
+      next.failedAttempts += 1;
+      if (next.failedAttempts >= this.maxFailedAttempts) {
+        next.lockedUntilEpochMs = now + this.lockoutDurationMs;
       }
-      this.persistLoginState(stored);
+      this.persistLoginState(next);
+      this.identities.set(userId, next);
+      this.recordEvent({ type: "authentication.failed", userId, occurredAtUtc, reason: "invalid_credentials" });
+      if (next.lockedUntilEpochMs !== undefined) this.recordEvent({ type: "identity.locked", userId, occurredAtUtc, reason: "too_many_failures" });
       throw new AuthenticationError();
     }
 
-    stored.failedAttempts = 0;
-    stored.lockedUntilEpochMs = undefined;
-    this.persistLoginState(stored);
+    next.failedAttempts = 0;
+    next.lockedUntilEpochMs = undefined;
+    this.persistLoginState(next);
+    this.identities.set(userId, next);
     this.recordEvent({ type: "authentication.succeeded", userId, occurredAtUtc, reason: "accepted" });
     return stored.record;
   }
@@ -212,15 +218,37 @@ export class LocalIdentityStore {
   }
 
   public disable(userId: string, disabledAtUtc = this.currentTime()): IdentityRecord {
+    this.assertWritable();
     const stored = this.identities.get(userId);
     if (stored === undefined) throw new Error("identity does not exist");
     const record = Object.freeze({ ...stored.record, disabledAtUtc });
-    this.database?.sql().prepare("UPDATE identities SET disabled_at_utc = ? WHERE user_id = ?").run(disabledAtUtc, userId);
+    if (this.database !== undefined) {
+      this.database.assertFencingToken();
+      const sql = this.database.sql();
+      sql.exec("BEGIN IMMEDIATE");
+      try {
+        sql.prepare("UPDATE identities SET disabled_at_utc = ? WHERE user_id = ?").run(disabledAtUtc, userId);
+        sql.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId);
+        sql.exec("COMMIT");
+      } catch (error) {
+        sql.exec("ROLLBACK");
+        throw error;
+      }
+    }
     this.identities.set(userId, { ...stored, record });
     return record;
   }
 
+  public isSessionIdentityValid(userId: string, credentialVersion: number): boolean {
+    const identity = this.identities.get(userId);
+    if (identity === undefined || identity.record.disabledAtUtc !== undefined) return false;
+    if (this.database === undefined) return credentialVersion === 1;
+    return this.database.sql().prepare(`SELECT 1 AS present FROM credential_versions
+      WHERE user_id = ? AND version = ? AND retired_at_utc IS NULL`).get(userId, credentialVersion) !== undefined;
+  }
+
   public assign(userId: string, input: Pick<IdentityRegistration, "roles" | "missionIds" | "qualificationRefs">): IdentityRecord {
+    this.assertWritable();
     const stored = this.identities.get(userId);
     if (stored === undefined) throw new Error("identity does not exist");
     const roles = [...input.roles];
@@ -229,6 +257,7 @@ export class LocalIdentityStore {
     const qualificationRefs = [...(input.qualificationRefs ?? [])].map((reference) => canonicalText(reference, "qualificationRef"));
     const record = Object.freeze({ ...stored.record, roles: Object.freeze(roles), missionIds: Object.freeze(missionIds), qualificationRefs: Object.freeze(qualificationRefs) });
     if (this.database !== undefined) {
+      this.database.assertFencingToken();
       const sql = this.database.sql();
       sql.exec("BEGIN IMMEDIATE");
       try {
@@ -251,8 +280,13 @@ export class LocalIdentityStore {
     return Object.freeze([...this.identities.values()].map(({ record }) => record));
   }
 
+  public isReadOnlySafeMode(): boolean {
+    return this.persistenceFailed;
+  }
+
   private persistRegistration(stored: StoredIdentity): void {
     if (this.database === undefined) return;
+    this.database.assertFencingToken();
     const sql = this.database.sql();
     sql.exec("BEGIN IMMEDIATE");
     try {
@@ -271,28 +305,45 @@ export class LocalIdentityStore {
   }
 
   private persistLoginState(stored: StoredIdentity): void {
-    this.database?.sql().prepare("UPDATE login_lockout_state SET failed_attempts = ?, locked_until_utc = ? WHERE user_id = ?")
-      .run(stored.failedAttempts, stored.lockedUntilEpochMs === undefined ? null : new Date(stored.lockedUntilEpochMs).toISOString(), stored.record.userId);
+    try {
+      this.database?.assertFencingToken();
+      this.database?.sql().prepare("UPDATE login_lockout_state SET failed_attempts = ?, locked_until_utc = ? WHERE user_id = ?")
+        .run(stored.failedAttempts, stored.lockedUntilEpochMs === undefined ? null : new Date(stored.lockedUntilEpochMs).toISOString(), stored.record.userId);
+    } catch (error) {
+      this.persistenceFailed = true;
+      throw new Error("identity lockout persistence failed; identity store is read-only", { cause: error });
+    }
   }
 
   private load(): void {
     if (this.database === undefined) return;
     const sql = this.database.sql();
-    const rows = sql.prepare(`SELECT i.user_id, i.display_name, i.qualification_refs_json, i.disabled_at_utc,
+    try {
+      const rows = sql.prepare(`SELECT i.user_id, i.display_name, i.qualification_refs_json, i.disabled_at_utc,
       c.salt, c.password_hash, l.failed_attempts, l.locked_until_utc
       FROM identities i
       JOIN credential_versions c ON c.user_id = i.user_id AND c.retired_at_utc IS NULL
       LEFT JOIN login_lockout_state l ON l.user_id = i.user_id
       ORDER BY i.user_id, c.version DESC`).all() as Array<Record<string, unknown>>;
-    for (const row of rows) {
-      const userId = String(row.user_id);
-      if (this.identities.has(userId)) continue;
-      const roles = (sql.prepare("SELECT role FROM identity_roles WHERE user_id = ? ORDER BY role").all(userId) as { role: string }[]).map(({ role }) => role as UserRole);
-      const missionIds = (sql.prepare("SELECT mission_id FROM mission_assignments WHERE user_id = ? ORDER BY mission_id").all(userId) as { mission_id: string }[]).map(({ mission_id }) => mission_id);
-      const qualificationRefs = JSON.parse(String(row.qualification_refs_json)) as string[];
-      const record: IdentityRecord = Object.freeze({ userId, displayName: String(row.display_name), roles: Object.freeze(roles), missionIds: Object.freeze(missionIds), qualificationRefs: Object.freeze(qualificationRefs), ...(row.disabled_at_utc === null ? {} : { disabledAtUtc: String(row.disabled_at_utc) }) });
-      this.identities.set(userId, { record, salt: Buffer.from(row.salt as Uint8Array), passwordHash: Buffer.from(row.password_hash as Uint8Array), failedAttempts: Number(row.failed_attempts ?? 0), ...(row.locked_until_utc === null || row.locked_until_utc === undefined ? {} : { lockedUntilEpochMs: Date.parse(String(row.locked_until_utc)) }) });
+      for (const row of rows) {
+        const userId = String(row.user_id);
+        if (this.identities.has(userId)) continue;
+        const roles = (sql.prepare("SELECT role FROM identity_roles WHERE user_id = ? ORDER BY role").all(userId) as { role: string }[]).map(({ role }) => role as UserRole);
+        const missionIds = (sql.prepare("SELECT mission_id FROM mission_assignments WHERE user_id = ? ORDER BY mission_id").all(userId) as { mission_id: string }[]).map(({ mission_id }) => mission_id);
+        const qualificationRefs = JSON.parse(String(row.qualification_refs_json)) as unknown;
+        if (!Array.isArray(qualificationRefs) || qualificationRefs.some((item) => typeof item !== "string")) throw new Error("identity qualification references are corrupt");
+        if (roles.length === 0 || roles.some((role) => !isUserRole(role))) throw new Error("identity roles are corrupt");
+        const record: IdentityRecord = Object.freeze({ userId, displayName: String(row.display_name), roles: Object.freeze(roles), missionIds: Object.freeze(missionIds), qualificationRefs: Object.freeze(qualificationRefs), ...(row.disabled_at_utc === null ? {} : { disabledAtUtc: String(row.disabled_at_utc) }) });
+        this.identities.set(userId, { record, salt: Buffer.from(row.salt as Uint8Array), passwordHash: Buffer.from(row.password_hash as Uint8Array), failedAttempts: Number(row.failed_attempts ?? 0), ...(row.locked_until_utc === null || row.locked_until_utc === undefined ? {} : { lockedUntilEpochMs: Date.parse(String(row.locked_until_utc)) }) });
+      }
+    } catch {
+      this.identities.clear();
+      this.persistenceFailed = true;
     }
+  }
+
+  private assertWritable(): void {
+    if (this.persistenceFailed) throw new Error("identity persistence is in read-only safe mode");
   }
 }
 
