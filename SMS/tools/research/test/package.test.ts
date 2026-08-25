@@ -11,9 +11,10 @@ const paths: string[] = [];
 const pair = generateKeyPairSync("ed25519");
 const privateKey = pair.privateKey.export({ type: "pkcs8", format: "pem" }).toString();
 const publicKey = pair.publicKey.export({ type: "spki", format: "pem" }).toString();
+const isWindows = process.platform === "win32";
 afterEach(async () => { await Promise.all(paths.splice(0).map((path) => rm(path, { recursive: true, force: true }))); });
 
-describe("deterministic evidence package assembly", () => {
+describe.skipIf(isWindows)("deterministic evidence package assembly", () => {
   it("builds a closed signed package from explicit staging key material", async () => {
     const root = await mkdtemp(join(tmpdir(), "fac-evidence-source-")); const outputParent = await mkdtemp(join(tmpdir(), "fac-evidence-output-")); const output = join(outputParent, "package"); paths.push(root, outputParent);
     await writeFile(join(root, "rule.json"), "{\"rule\":true}\n");
@@ -79,6 +80,9 @@ describe("deterministic evidence package assembly", () => {
     await expect(assembleEvidencePackage({ sourceRoot: root, outputDirectory: output, files: [{ sourcePath: "rule.json" }], privateKey, manifest: { schemaVersion: "1.0", packageId: "fac-package-test", kind: "regulatory", issuer: "test issuer", version: "1.0.0", issuedAtUtc: "2026-08-08T00:00:00Z", effectiveFromUtc: "2026-08-08T00:00:00Z", geographicScope: "Colombia", keyId: "test", dependencies: [], qualification: "qualified-review", caveats: ["test only"] } })).rejects.toThrow("non-symlink");
     await expect(readFile(join(root, "secret.txt"), "utf8")).resolves.toBe("not-for-package");
   });
+});
+
+describe("evidence package contracts", () => {
   it("validates untrusted manifest JSON before returning it", async () => {
     const root = await mkdtemp(join(tmpdir(), "fac-evidence-manifest-")); paths.push(root); const path = join(root, "manifest.json");
     await writeFile(path, JSON.stringify({ schemaVersion: "1.0", packageId: "fac-package-test", kind: "bad", geographicScope: "", files: [] }));

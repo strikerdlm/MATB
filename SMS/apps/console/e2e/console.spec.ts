@@ -1,12 +1,14 @@
 import { readFileSync } from "node:fs";
 import { request as httpsRequest } from "node:https";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { expect, request as apiRequest, test, type Page } from "@playwright/test";
 import { e2eNowUtc as nowUtc, missionFixture } from "./mission-fixture.js";
 
 const password = "correct horse battery staple";
-const clientCertificatePath = "/tmp/sms-console-e2e-client.crt";
-const clientKeyPath = "/tmp/sms-console-e2e-client.key";
-const certificateAuthorityPath = "/tmp/sms-console-e2e-ca.crt";
+const clientCertificatePath = join(tmpdir(), "sms-console-e2e-client.crt");
+const clientKeyPath = join(tmpdir(), "sms-console-e2e-client.key");
+const certificateAuthorityPath = join(tmpdir(), "sms-console-e2e-ca.crt");
 const mission = missionFixture("mission-1");
 
 async function login(page: Page, userId: string): Promise<void> {
@@ -60,20 +62,20 @@ test("uses authenticated HTTPS and mTLS Edge state through create, revision, iso
   const revisionBefore = await page.getByText(/Revision 1 · Planned/).innerText(); const gatesBefore = await page.locator(".gate-live > .live-status").allTextContents(); const auditFacts = page.getByTestId("audit-facts"); const auditBefore = await auditFacts.textContent(); const auditHashBefore = await auditFacts.locator("code").textContent(); expect(gatesBefore).toEqual(["accept", "accept", "accept", "accept"]); expect(await auditFacts.locator(".live-status").textContent()).toBe("healthy"); expect(await auditFacts.locator("p").textContent()).toMatch(/^[1-9]\d* events$/); expect(auditHashBefore).toMatch(/^[a-f0-9]{64}$/); await lock(page);
   const restart = await page.request.post("/__test/restart"); expect(restart.status()).toBe(202); await page.waitForTimeout(350); await expect.poll(async () => { try { return (await page.request.get("/healthz")).status(); } catch { return 0; } }, { timeout: 15_000 }).toBe(200); await login(page, "commander-1");
   expect(await page.getByText(/Revision 1 · Planned/).innerText()).toBe(revisionBefore); expect(await page.locator(".gate-live > .live-status").allTextContents()).toEqual(gatesBefore); expect(await page.getByTestId("audit-facts").textContent()).toBe(auditBefore); expect(await page.getByTestId("audit-facts").locator("code").textContent()).toBe(auditHashBefore); expect(await ingestTelemetry("mission-1:r1", 3)).toBe(202); await expect(page.getByText(/sequence 3/)).toBeVisible();
-  expect(await page.locator("vite-error-overlay, nextjs-portal").count()).toBe(0); expect((await page.locator("body").innerText()).length).toBeGreaterThan(500); await page.screenshot({ path: "/tmp/sms-console-review2-desktop-en.png", fullPage: false });
+  expect(await page.locator("vite-error-overlay, nextjs-portal").count()).toBe(0); expect((await page.locator("body").innerText()).length).toBeGreaterThan(500); await page.screenshot({ path: join(tmpdir(), "sms-console-review2-desktop-en.png"), fullPage: false });
   expect(failedResponses).toEqual([{ path: "/api/revisions/mission-1:r1/gates/commander", status: 409 }]); expect(consoleErrors).toEqual([]); expect(pageErrors).toEqual([]);
 });
 
 test("localizes the complete operational surface and retains reduced-motion, keyboard and tablet behavior", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" }); await page.setViewportSize({ width: 820, height: 1180 }); await page.goto("/"); await login(page, "commander-1"); await createMission(page, "mission-es"); await page.getByRole("button").filter({ hasText: "mission-es" }).click(); await page.route("**/api/missions", async (route) => { const response = await route.fetch(); const body = await response.json(); await route.fulfill({ response, json: { ...body, missions: body.missions.map((item: { missionId: string; currentRevision: Record<string, unknown> }) => item.missionId === "mission-es" ? { ...item, currentRevision: { ...item.currentRevision, state: "UnderReview" } } : item) } }); }, { times: 1 }); await reauthenticate(page); await page.getByRole("button", { name: "Change language" }).click();
   for (const name of ["Misiones", "Revisión actual", "Franja de seguridad de misión", "Lista de verificación por ítems", "Cuatro aprobaciones separadas por rol", "Telemetría de solo lectura", "Paquetes, disponibilidad, auditoría y exportación"]) await expect(page.getByRole("heading", { name })).toBeVisible();
-  await expect(page.getByText("En revisión", { exact: true }).first()).toBeVisible(); expect(await page.locator("body").innerText()).not.toMatch(/Missions|Current revision|Itemized checklist|Four role-separated gates|Read-only telemetry|Package, readiness, audit and export|UnderReview/); for (const raw of ["ready", "pass", "accept", "active", "healthy", "operator", "maintenance", "safety", "commander"]) await expect(page.getByText(raw, { exact: true })).toHaveCount(0); await page.getByRole("button", { name: "Alternar tema diurno y nocturno" }).click(); await expect(page.locator(".console-shell")).toHaveClass(/theme-day/); await page.keyboard.press("Tab"); await expect(page.locator(":focus-visible")).toBeVisible(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true); expect(await page.locator("vite-error-overlay, nextjs-portal").count()).toBe(0); await page.screenshot({ path: "/tmp/sms-console-review2-tablet-es.png", fullPage: false });
+  await expect(page.getByText("En revisión", { exact: true }).first()).toBeVisible(); expect(await page.locator("body").innerText()).not.toMatch(/Missions|Current revision|Itemized checklist|Four role-separated gates|Read-only telemetry|Package, readiness, audit and export|UnderReview/); for (const raw of ["ready", "pass", "accept", "active", "healthy", "operator", "maintenance", "safety", "commander"]) await expect(page.getByText(raw, { exact: true })).toHaveCount(0); await page.getByRole("button", { name: "Alternar tema diurno y nocturno" }).click(); await expect(page.locator(".console-shell")).toHaveClass(/theme-day/); await page.keyboard.press("Tab"); await expect(page.locator(":focus-visible")).toBeVisible(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true); expect(await page.locator("vite-error-overlay, nextjs-portal").count()).toBe(0); await page.screenshot({ path: join(tmpdir(), "sms-console-review2-tablet-es.png"), fullPage: false });
 });
 
 test("makes safe mode read-only and explains every blocked unsafe action", async ({ page }) => {
   await page.goto("/"); await login(page, "commander-1"); await createMission(page, "mission-safe-view"); await lock(page); await page.route("**/readyz", (route) => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ status: "not_ready", technicalReady: false, operationalReady: false, checks: { database: { status: "pending", detail: "read-only safe mode" } } }) })); await login(page, "commander-1"); await page.getByRole("button").filter({ hasText: "mission-safe-view" }).click(); await expect(page.getByText("Read-only safe mode", { exact: true })).toBeVisible(); await page.getByText("Create material revision").click();
   for (const name of ["Submit revision", "Respond to item", "Record gate", "Re-authenticate", "Request signed export"]) await expect(page.getByRole("button", { name, exact: true }).first()).toBeDisabled();
-  await expect(page.locator(".state-block:visible").filter({ hasText: "Read-only safe mode: state-changing actions are disabled" }).first()).toBeVisible(); await page.screenshot({ path: "/tmp/sms-console-review2-safe-mode.png", fullPage: false });
+  await expect(page.locator(".state-block:visible").filter({ hasText: "Read-only safe mode: state-changing actions are disabled" }).first()).toBeVisible(); await page.screenshot({ path: join(tmpdir(), "sms-console-review2-safe-mode.png"), fullPage: false });
 });
 
 test("enters read-only safe mode immediately after a stable runtime persistence failure", async ({ page }) => {
@@ -117,7 +119,7 @@ test("a delayed old-tab lock cannot clear a newer shared-cookie session", async 
   try { expect((await oldSessionRequest.get("/api/auth/status")).status()).toBe(401); } finally { await oldSessionRequest.dispose(); }
 
   await page.getByLabel("User ID").fill("operator-1"); await page.getByLabel("Password").fill(password); await page.getByRole("button", { name: "Sign in", exact: true }).click(); await expect(page.getByText("operator-1", { exact: true })).toBeVisible(); expect((await context.request.get("/api/auth/status")).status()).toBe(200);
-  await page.screenshot({ path: "/tmp/sms-console-review3-two-tab-lock.png", fullPage: false });
+  await page.screenshot({ path: join(tmpdir(), "sms-console-review3-two-tab-lock.png"), fullPage: false });
 });
 
 test("expires an open console at the real server idle deadline without probe keepalive", async ({ page }) => {

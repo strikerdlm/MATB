@@ -2,7 +2,7 @@ name: fac-isr-sms-edge
 
 services:
   init:
-    image: ${SMS_EDGE_IMAGE:-fac-isr-sms-edge:offline}
+    image: ${SMS_EDGE_IMAGE:-fac-isr-sms:0.2.0-rc.1}
     profiles: ["init"]
     user: "0:0"
     read_only: true
@@ -42,7 +42,7 @@ services:
     entrypoint: ["/opt/sms/bin/preflight", "init"]
 
   edge:
-    image: ${SMS_EDGE_IMAGE:-fac-isr-sms-edge:offline}
+    image: ${SMS_EDGE_IMAGE:-fac-isr-sms:0.2.0-rc.1}
     user: "10001:10001"
     read_only: true
     init: true

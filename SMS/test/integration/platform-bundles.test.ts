@@ -18,6 +18,7 @@ const linuxInstaller = resolve(smsRoot, "packaging/linux/smsctl");
 const ociPreflight = resolve(smsRoot, "docker/preflight.sh");
 const healthcheck = resolve(smsRoot, "scripts/edge-healthcheck.mjs");
 const temporaryDirectories: string[] = [];
+const isWindows = process.platform === "win32";
 
 async function temporaryDirectory(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "sms-platform-bundle-"));
@@ -149,10 +150,11 @@ afterEach(async () => {
 describe("native release bundle builder", () => {
   test("requires signed official Node checksum metadata outside controlled fixture mode", async () => {
     const root = await temporaryDirectory();
-    const runtime = await createRuntimeFixture(root, "linux-x64");
+    const target = isWindows ? "win32-x64" : "linux-x64";
+    const runtime = await createRuntimeFixture(root, target);
     await expect(exec(process.execPath, [
       builder,
-      "--target", "linux-x64",
+      "--target", target,
       "--runtime-archive", runtime.archive,
       "--runtime-checksums", runtime.checksums,
       "--output-dir", resolve(root, "out"),
@@ -169,12 +171,13 @@ describe("native release bundle builder", () => {
     const root = await temporaryDirectory();
     const appRoot = resolve(root, "app");
     await createAppFixture(appRoot);
-    const runtime = await createRuntimeFixture(root, "linux-x64");
+    const target = isWindows ? "win32-x64" : "linux-x64";
+    const runtime = await createRuntimeFixture(root, target);
     await writeFile(runtime.checksums, `${"0".repeat(64)}  ${basename(runtime.archive)}\n`);
 
     await expect(exec(process.execPath, [
       builder,
-      "--target", "linux-x64",
+      "--target", target,
       "--runtime-archive", runtime.archive,
       "--runtime-checksums", runtime.checksums,
       "--output-dir", resolve(root, "out"),
@@ -184,8 +187,8 @@ describe("native release bundle builder", () => {
   });
 
   test.each([
-    ["linux-x64", "TEST-ONLY-fac-isr-sms-0.2.0-rc.1-linux-x64.tar.gz"],
     ["win32-x64", "TEST-ONLY-fac-isr-sms-0.2.0-rc.1-win32-x64.zip"],
+    ...(!isWindows ? [["linux-x64", "TEST-ONLY-fac-isr-sms-0.2.0-rc.1-linux-x64.tar.gz"] as const] : []),
   ] as const)("builds and verifies the exact deterministic %s artifact", async (target, artifactName) => {
     const firstRoot = await temporaryDirectory();
     const secondRoot = await temporaryDirectory();
@@ -222,7 +225,7 @@ describe("native release bundle builder", () => {
     await expect(stat(resolve(bundleRoot, target === "linux-x64" ? "install/linux/smsctl" : "install/windows/SmsCtl.ps1"))).resolves.toBeDefined();
   });
 
-  test("cold-starts the Linux bundle with the network removed from the child environment", async () => {
+  test.skipIf(isWindows)("cold-starts the Linux bundle with the network removed from the child environment", async () => {
     const root = await temporaryDirectory();
     const output = resolve(root, "out");
     await runBuilder("linux-x64", root, output);
@@ -237,9 +240,11 @@ describe("native release bundle builder", () => {
     expect(await readFile(marker, "utf8")).toBe("offline cold start fast-uri@3.0.6 process-warning@5.0.0 real-require@0.2.0\n");
   });
 
-  test("rejects malformed dependency names and dependency paths that resolve outside the application root", async () => {
+  test("rejects malformed dependency names", () => {
     expect(() => validateProductionDependencyName("../outside")).toThrow(/dependency name/i);
+  });
 
+  test.skipIf(isWindows)("rejects dependency paths that resolve outside the application root", async () => {
     const root = await temporaryDirectory();
     const appRoot = resolve(root, "app");
     await createAppFixture(appRoot);
@@ -374,7 +379,7 @@ async function provisionTls(root: string, mode = 0o600): Promise<void> {
   await chmod(resolve(directory, "export.key"), 0o600);
 }
 
-describe("Linux native lifecycle", () => {
+describe.skipIf(isWindows)("Linux native lifecycle", () => {
   test("rejects controlled runtime provenance even when the extracted directory is renamed", async () => {
     const fixtureRoot = await temporaryDirectory();
     const output = resolve(fixtureRoot, "out");
@@ -596,7 +601,7 @@ describe("Linux native lifecycle", () => {
   });
 });
 
-describe("OCI privileged init and permanent runtime boundary", () => {
+describe.skipIf(isWindows)("OCI privileged init and permanent runtime boundary", () => {
   test("normalizes existing mounted data recursively and rejects symbolic entries", async () => {
     if (process.getuid?.() !== 0) return;
     const root = await temporaryDirectory();

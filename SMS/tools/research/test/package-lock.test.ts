@@ -41,6 +41,7 @@ import { assembleEvidencePackage } from "../src/package.js";
 const paths: string[] = [];
 const pair = generateKeyPairSync("ed25519");
 const privateKey = pair.privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+const isWindows = process.platform === "win32";
 
 afterEach(async () => {
   closeInjection.parentPath = undefined;
@@ -71,7 +72,7 @@ function input(sourceRoot: string, outputDirectory: string) {
   };
 }
 
-describe("publish-lock cleanup", () => {
+describe.skipIf(isWindows)("publish-lock cleanup", () => {
   it("releases the lock when final parent-handle cleanup fails", async () => {
     const root = await mkdtemp(join(tmpdir(), "fac-evidence-lock-source-"));
     const outputParent = await mkdtemp(join(tmpdir(), "fac-evidence-lock-output-"));

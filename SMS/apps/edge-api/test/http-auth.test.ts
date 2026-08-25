@@ -391,6 +391,43 @@ describe("HTTP authentication boundary", () => {
     }
   });
 
+  it("issues a fresh CSRF token when immediately reauthenticating after restart", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "sms-csrf-reauth-restart-"));
+    const databaseUrl = join(directory, "edge.sqlite");
+    try {
+      const database = openDatabase(databaseUrl);
+      new LocalIdentityStore({ database }).register({ userId: "restart-user", displayName: "Restart User", roles: ["operator"], missionIds: ["mission-1"], password });
+      database.close();
+      app = await buildServer({ databaseUrl, internet: "disabled" });
+      const original = await login(app, "restart-user");
+      await app.close();
+      app = await buildServer({ databaseUrl, internet: "disabled" });
+
+      const reauthenticated = await app.inject({
+        method: "POST",
+        url: "/api/auth/reauthenticate",
+        headers: { cookie: original.cookie, "x-csrf-token": original.csrfToken },
+        payload: { password },
+      });
+      expect(reauthenticated.statusCode).toBe(200);
+      const refreshed = reauthenticated.json() as { csrfToken: string; sessionId: string };
+      expect(refreshed.csrfToken).not.toBe("");
+      expect(refreshed.csrfToken).not.toBe(original.csrfToken);
+
+      const locked = await app.inject({
+        method: "POST",
+        url: "/api/auth/lock",
+        headers: { cookie: original.cookie, "x-csrf-token": refreshed.csrfToken },
+        payload: { expectedSessionId: refreshed.sessionId },
+      });
+      expect(locked.statusCode).toBe(204);
+    } finally {
+      await app?.close();
+      app = undefined;
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("enforces the five-attempt, fifteen-minute lockout through login requests", async () => {
     const clock = { now: nowUtc };
     app = await buildServer(

@@ -15,6 +15,7 @@ import { MaintenanceLock } from "../src/admin/maintenance-lock.js";
 
 const temporaryDirectories: string[] = [];
 const runningServers: EdgeServer[] = [];
+const isWindows = process.platform === "win32";
 
 function paths(): { directory: string; database: string; backup: string } {
   const directory = mkdtempSync(join(tmpdir(), "sms-admin-"));
@@ -187,7 +188,7 @@ describe("offline runtime lease and recovery", () => {
     protectedDatabase.close();
   });
 
-  it("fsyncs rollback files and their directory before reporting restore failure", () => {
+  it.skipIf(isWindows)("fsyncs POSIX rollback files and their directory before reporting restore failure", () => {
     const { database: databasePath, backup } = paths();
     const database = openDatabase(databasePath);
     database.sql().prepare("INSERT INTO identities (user_id, display_name) VALUES ('before-backup', 'Before Backup')").run();
@@ -261,7 +262,7 @@ describe("sms-admin secret boundary", () => {
     reopened.close();
   });
 
-  it("requires a protected password file and never echoes its contents", async () => {
+  it.skipIf(isWindows)("enforces POSIX password-file modes and never echoes its contents", async () => {
     const { directory, database } = paths();
     const passwordFile = join(directory, "password.txt");
     writeFileSync(passwordFile, "protected-password\n");

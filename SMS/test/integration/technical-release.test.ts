@@ -13,6 +13,7 @@ const execute = promisify(execFile);
 const SOURCE_COMMIT = "a".repeat(40);
 const NOW = new Date("2026-08-25T12:00:00.000Z");
 const temporaryDirectories: string[] = [];
+const isWindows = process.platform === "win32";
 
 interface Fixture {
   readonly root: string;
@@ -543,7 +544,7 @@ describe("technical release evidence gate", () => {
     await expect(verify(fixture)).resolves.toMatchObject({ ok: true, technicalReady: true });
   });
 
-  it("rejects native special entries before extraction", async () => {
+  it.skipIf(isWindows)("rejects native special entries before extraction", async () => {
     const root = await mkdtemp(join(tmpdir(), "TEST-ONLY-native-special-"));
     temporaryDirectories.push(root);
     await nativeArchive(root, "linux-x64");
@@ -559,15 +560,12 @@ describe("technical release evidence gate", () => {
     ["root container user", { configUser: "0:0" }],
     ["empty layer set", { emptyLayers: true }],
     ["empty layer TAR", { emptyLayerTar: true }],
-    ["escaping layer link", { escapingLayerLink: true }],
     ["invalid layer TAR", { invalidLayerTar: true }],
     ["mismatched diff ID", { mismatchedDiffId: true }],
     ["missing layer blob", { missingLayer: true }],
-    ["special layer entry", { specialLayerEntry: true }],
     ["truncated layer termination", { truncatedLayerTermination: true }],
     ["unsafe layer path", { unsafeLayerPath: true }],
     ["unexpected blob", { extraBlob: true }],
-    ["symbolic blob", { symlinkBlob: true }],
   ] as const)("rejects an OCI layout with %s", async (_label, options) => {
     const fixture = await createFixture();
     await replaceOciArtifact(fixture, options);
@@ -576,7 +574,19 @@ describe("technical release evidence gate", () => {
     expect(report.checks).toContainEqual(expect.objectContaining({ id: "artifact-inventories", status: "fail" }));
   });
 
-  it("accepts a contained OCI layer symbolic link", async () => {
+  it.skipIf(isWindows).each([
+    ["escaping layer link", { escapingLayerLink: true }],
+    ["special layer entry", { specialLayerEntry: true }],
+    ["symbolic blob", { symlinkBlob: true }],
+  ] as const)("rejects an OCI layout with POSIX-only %s", async (_label, options) => {
+    const fixture = await createFixture();
+    await replaceOciArtifact(fixture, options);
+    const report = await verify(fixture);
+    expect(report.ok).toBe(false);
+    expect(report.checks).toContainEqual(expect.objectContaining({ id: "artifact-inventories", status: "fail" }));
+  });
+
+  it.skipIf(isWindows)("accepts a contained OCI layer symbolic link", async () => {
     const root = await mkdtemp(join(tmpdir(), "TEST-ONLY-oci-safe-link-"));
     temporaryDirectories.push(root);
     const artifact = await ociArchive(root, { safeLayerLink: true });

@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { validateCiRunSelection } from "../../scripts/validate-release-ci-run.mjs";
 import { validateExpectedOperationalBlock } from "../../scripts/validate-operational-block.mjs";
@@ -6,6 +8,7 @@ const commit = "a".repeat(40);
 const repository = "strikerdlm/MATB";
 const workflow = { id: 731, path: ".github/workflows/sms-ci.yml", state: "active" };
 const protectedMain = { name: "main", protected: true };
+const smsRoot = process.cwd();
 const trustedRun = {
   id: 90210,
   workflow_id: 731,
@@ -63,5 +66,21 @@ describe("release workflow trust policy", () => {
     expect(() => validateExpectedOperationalBlock({ ...report, ok: false }, 1)).toThrow(/valid/u);
     expect(() => validateExpectedOperationalBlock({ ...report, pendingReviewScopes: scopes.slice(1) }, 1)).toThrow(/pending/u);
     expect(() => validateExpectedOperationalBlock({ ...report, operationalReady: true }, 1)).toThrow(/operationalReady/u);
+  });
+
+  it("keeps disconnected OCI commands aligned with Compose services and the released image reference", async () => {
+    const packageJson = JSON.parse(await readFile(join(smsRoot, "package.json"), "utf8")) as { version: string };
+    const compose = await readFile(join(smsRoot, "docker/compose.edge.yml"), "utf8");
+    const guide = await readFile(join(smsRoot, "docs/operator-guide.md"), "utf8");
+    const releasedImage = `fac-isr-sms:${packageJson.version}`;
+    const servicesBlock = /^services:\n([\s\S]*?)^networks:/mu.exec(compose)?.[1] ?? "";
+    const serviceNames = [...servicesBlock.matchAll(/^  ([a-z][a-z0-9_-]*):$/gmu)].map((match) => match[1]);
+    const composeImages = [...compose.matchAll(/^\s+image: \$\{SMS_EDGE_IMAGE:-([^}]+)\}$/gmu)].map((match) => match[1]);
+
+    expect(serviceNames).toEqual(["init", "edge"]);
+    expect(composeImages).toEqual([releasedImage, releasedImage]);
+    expect(guide).toContain(`export SMS_EDGE_IMAGE=${releasedImage}`);
+    expect(guide).toContain("docker compose -f docker/compose.edge.yml up init");
+    expect(guide).toContain("docker compose -f docker/compose.edge.yml up -d edge");
   });
 });

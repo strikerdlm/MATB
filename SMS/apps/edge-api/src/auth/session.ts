@@ -274,8 +274,12 @@ export class SessionManager {
     if (isSessionLocked(session, atUtc)) throw new Error("session is locked or expired");
     const at = parseUtc(atUtc);
     if (at === undefined) throw new Error("reauthentication timestamp is invalid");
+    const restored = session.csrfToken === "";
+    const csrfToken = restored ? this.csrfTokenFactory() : session.csrfToken;
+    if (csrfToken.trim() === "") throw new Error("CSRF token must be non-empty");
     const refreshed = Object.freeze({
       ...session,
+      csrfToken,
       state: "active" as const,
       lastActivityAtUtc: new Date(at).toISOString(),
       requiresReauthentication: false,
@@ -283,8 +287,10 @@ export class SessionManager {
         ? undefined
         : formatUtc(at + this.policy.reauthenticationIntervalMs),
     });
-    this.persist(credentialHash, this.requireCsrfHash(refreshed.sessionId), refreshed);
+    const csrfHash = restored ? hashCsrfToken(csrfToken) : this.requireCsrfHash(refreshed.sessionId);
+    this.persist(credentialHash, csrfHash, refreshed);
     this.sessionsByCredentialHash.set(credentialHash, refreshed);
+    this.csrfHashBySessionId.set(sessionId, csrfHash);
     return refreshed;
   }
 

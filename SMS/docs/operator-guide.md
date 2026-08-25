@@ -99,14 +99,15 @@ The one-time init/preflight runs with only the capabilities needed to establish 
 
 ```bash
 docker image load --input fac-isr-sms-0.2.0-rc.1-linux-amd64.oci.tar
+export SMS_EDGE_IMAGE=fac-isr-sms:0.2.0-rc.1
 docker compose -f docker/compose.edge.yml config
-docker compose -f docker/compose.edge.yml up sms-init
-docker compose -f docker/compose.edge.yml up -d sms-edge
+docker compose -f docker/compose.edge.yml up init
+docker compose -f docker/compose.edge.yml up -d edge
 docker compose -f docker/compose.edge.yml ps
 docker compose -f docker/compose.edge.yml down
 ```
 
-Use the image reference produced by the controlled import process. Do not permit registry pulls at runtime.
+Use the exact released image reference shown above, which the controlled archive import provides and Compose also uses by default. Do not permit registry pulls at runtime.
 
 ## TLS, release keys, export keys, and trust anchors
 

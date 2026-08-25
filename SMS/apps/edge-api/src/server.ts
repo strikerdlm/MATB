@@ -49,6 +49,7 @@ interface ReadinessReport {
     readonly trustAnchors: ReadinessCheck;
     readonly activeTerminology: ReadinessCheck;
     readonly activePolicy: ReadinessCheck;
+    readonly activeRegulatoryEvidence: ReadinessCheck;
     readonly bootstrapAdministrator: ReadinessCheck;
   };
 }
@@ -116,6 +117,7 @@ async function buildReadinessReport(database: EdgeDatabase, audit: AuditLedger, 
     trustAnchors: trustAnchors ? { status: "ok" as const } : { status: "pending" as const, detail: "usable trusted package keys are not configured" },
     activeTerminology: activeRole("terminology") ? { status: "ok" as const } : { status: "pending" as const, detail: "active terminology package is not configured" },
     activePolicy: activeRole("policy") ? { status: "ok" as const } : { status: "pending" as const, detail: "active policy package is not configured" },
+    activeRegulatoryEvidence: activeRole("regulatory") ? { status: "ok" as const } : { status: "pending" as const, detail: "active regulatory evidence package is not configured" },
     bootstrapAdministrator: bootstrapAdministrator ? { status: "ok" as const } : { status: "pending" as const, detail: "bootstrap administrator is not configured" },
   };
   const technicalReady = Object.values(checks).every(({ status }) => status === "ok");
@@ -151,7 +153,7 @@ function buildDegradedServer(config: EdgeConfig, https: HttpsMaterial | undefine
     checks: {
       database: { status: "pending", detail }, migrations: { status: "pending" }, audit: { status: "pending" },
       tls: { status: https === undefined ? "pending" : "ok" }, exportKey: { status: "pending" }, trustAnchors: { status: "pending" },
-      activeTerminology: { status: "pending" }, activePolicy: { status: "pending" }, bootstrapAdministrator: { status: "pending" },
+      activeTerminology: { status: "pending" }, activePolicy: { status: "pending" }, activeRegulatoryEvidence: { status: "pending" }, bootstrapAdministrator: { status: "pending" },
     },
   }));
   app.all("/api/*", async (_request, reply) => reply.code(503).send({ error: "READ_ONLY_DEGRADED_STARTUP", message: "operational state is unavailable" }));

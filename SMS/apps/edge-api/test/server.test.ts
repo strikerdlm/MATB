@@ -15,14 +15,18 @@ import { manifestContentDigest, signManifest } from "@fac-isr/evidence";
 
 const readinessNow = "2026-08-25T00:00:00.000Z";
 
-function authorityFixture(root: string, kind: "policy" | "terminology", keyId: string, packageId: string, keys: ReturnType<typeof generateKeyPairSync>) {
+function authorityFixture(root: string, kind: "policy" | "terminology" | "regulatory", keyId: string, packageId: string, keys: ReturnType<typeof generateKeyPairSync>) {
   const directory = `${kind}-fixture`;
   const full = join(root, directory);
   mkdirSync(full);
-  const content = Buffer.from(JSON.stringify({ kind, entries: [] }));
-  const path = `${kind}.json`;
-  writeFileSync(join(full, path), content);
-  const files = [{ path, sha256: createHash("sha256").update(content).digest("hex"), sizeBytes: content.byteLength }];
+  const documents = kind === "regulatory"
+    ? [["evidence-snapshot.json", JSON.stringify({ snapshotId: "readiness-evidence", requirementIds: [], acceptedEvidenceIds: [] })], ["requirements.json", "[]"]] as const
+    : [[`${kind}.json`, JSON.stringify({ kind, entries: [] })]] as const;
+  const files = documents.map(([path, value]) => {
+    const content = Buffer.from(value);
+    writeFileSync(join(full, path), content);
+    return { path, sha256: createHash("sha256").update(content).digest("hex"), sizeBytes: content.byteLength };
+  });
   const manifest = signManifest({
     schemaVersion: "1.0", packageId, kind, issuer: "fac-isr", version: "1.0.0",
     issuedAtUtc: "2026-08-24T00:00:00.000Z", effectiveFromUtc: "2026-08-24T00:00:00.000Z",
@@ -74,6 +78,7 @@ describe("offline edge server", () => {
         trustAnchors: { status: "pending" },
         activeTerminology: { status: "pending" },
         activePolicy: { status: "pending" },
+        activeRegulatoryEvidence: { status: "pending" },
         bootstrapAdministrator: { status: "pending" },
       },
     });
@@ -99,12 +104,12 @@ describe("offline edge server", () => {
     expect(response.statusCode).toBe(503);
     expect(response.json()).toMatchObject({ status: "not_ready", technicalReady: false, operationalReady: false, checks: {
       bootstrapAdministrator: { status: "pending" }, trustAnchors: { status: "pending" },
-      activePolicy: { status: "pending" }, activeTerminology: { status: "pending" },
+      activePolicy: { status: "pending" }, activeTerminology: { status: "pending" }, activeRegulatoryEvidence: { status: "pending" },
     } });
   });
 
-  it("returns HTTP 200 only for reverified packages, usable trust, and an enabled credentialed administrator", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "sms-ready-valid-"));
+  it("does not report technical readiness without active regulatory evidence for the server-owned evaluator", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "sms-ready-no-regulatory-"));
     temporaryDirectories.push(directory);
     app = await buildServer(
       { databaseUrl: join(directory, "edge.sqlite"), internet: "disabled", packageDirectory: directory },
@@ -123,8 +128,48 @@ describe("offline edge server", () => {
     }
 
     const response = await app.inject({ method: "GET", url: "/readyz" });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({
+      status: "not_ready",
+      technicalReady: false,
+      operationalReady: false,
+      checks: {
+        activeRegulatoryEvidence: {
+          status: "pending",
+          detail: "active regulatory evidence package is not configured",
+        },
+      },
+    });
+  });
+
+  it("returns HTTP 200 only for reverified packages, usable trust, and an enabled credentialed administrator", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "sms-ready-valid-"));
+    temporaryDirectories.push(directory);
+    app = await buildServer(
+      { databaseUrl: join(directory, "edge.sqlite"), internet: "disabled", packageDirectory: directory },
+      { readiness: { tlsConfigured: true, exportKeyConfigured: true }, now: () => readinessNow },
+    );
+    const server = app as Awaited<ReturnType<typeof buildServer>>;
+    new LocalIdentityStore({ database: server.edgeDatabase, now: () => readinessNow }).register({ userId: "admin-1", displayName: "Administrator", roles: ["administrator"], missionIds: ["*"], password: "readiness-admin-password" });
+    const trust = new SqliteTrustedKeyStore(server.edgeDatabase);
+    for (const kind of ["policy", "terminology", "regulatory"] as const) {
+      const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });
+      const keyId = `${kind}-key`;
+      trust.add({ keyId, scope: kind, algorithm: "rsa-sha256", publicKeyPem: keys.publicKey.export({ type: "spki", format: "pem" }).toString(), addedAtUtc: readinessNow, addedByUserId: "admin-1" });
+      const fixture = authorityFixture(directory, kind, keyId, `${kind}-package`, keys);
+      const imported = await server.safeModeService.importPackage({ ...fixture, keyId }, { actorUserId: "admin-1", clientSessionId: "bootstrap", occurredAtUtc: readinessNow });
+      await server.safeModeService.activatePackage({ packageId: imported.packageId, version: imported.version, keyId }, { actorUserId: "admin-1", clientSessionId: "bootstrap", occurredAtUtc: readinessNow });
+    }
+
+    const response = await app.inject({ method: "GET", url: "/readyz" });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({ status: "ready", technicalReady: true, operationalReady: false });
+    expect(response.json()).toMatchObject({
+      status: "ready",
+      technicalReady: true,
+      operationalReady: false,
+      checks: { activeRegulatoryEvidence: { status: "ok" } },
+    });
   });
 
   it("serves liveness in degraded mode when the database file is physically corrupt", async () => {

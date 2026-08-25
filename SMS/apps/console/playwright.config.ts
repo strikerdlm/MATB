@@ -1,5 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
+const configuredExecutable = process.env.SMS_PLAYWRIGHT_EXECUTABLE_PATH?.trim();
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
@@ -9,9 +11,9 @@ export default defineConfig({
   use: {
     baseURL: "https://127.0.0.1:4173",
     ignoreHTTPSErrors: true,
-    launchOptions: {
-      executablePath: "/root/.cache/ms-playwright/chromium_headless_shell-1223/chrome-headless-shell-linux64/chrome-headless-shell",
-    },
+    ...(configuredExecutable === undefined || configuredExecutable === ""
+      ? {}
+      : { launchOptions: { executablePath: configuredExecutable } }),
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
