@@ -1,7 +1,7 @@
 import { createHash, createPublicKey } from "node:crypto";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
-import { assertSignedPackageManifest, canonicalJson, rejectDowngrade, verifyPackage, type SignedPackageManifest, type VerificationReport } from "@fac-isr/evidence";
+import { assertSignedPackageManifest, canonicalJson, verifyPackage, type SignedPackageManifest, type VerificationReport } from "@fac-isr/evidence";
 import type { AuditLedger } from "../audit/ledger.js";
 import type { EdgeDatabase } from "../db/migrate.js";
 import type { ServiceActorContext } from "./mission-service.js";
@@ -50,7 +50,14 @@ export interface PackageRecord {
   readonly importedAtUtc: string;
   readonly directory?: string;
   readonly manifest?: SignedPackageManifest;
+  readonly verifiedProvenance?: VerifiedPackageProvenance;
   readonly checks: readonly PackageCheck[];
+}
+
+export interface VerifiedPackageProvenance {
+  readonly packageId: string;
+  readonly version: string;
+  readonly contentSha256: string;
 }
 
 export interface MissionExport {
@@ -187,10 +194,12 @@ export class SafeModeService implements ActiveSafetyPackageSource {
     const importedAtUtc = this.now();
     let record: PackageRecord;
     let eventType: "package.imported" | "package.quarantined";
+    let validatedManifest: SignedPackageManifest | undefined;
     try {
       if (envelope.manifest === undefined) throw new Error("manifest is required");
       const manifest = detached(envelope.manifest);
       assertSignedPackageManifest(manifest, true);
+      validatedManifest = manifest;
       const keyId = requiredText(envelope.keyId, "keyId");
       if (keyId !== manifest.keyId) throw new Error("package keyId does not match the manifest keyId");
       const trustedKey = this.requireTrustedKey(keyId, manifest.kind);
@@ -198,16 +207,16 @@ export class SafeModeService implements ActiveSafetyPackageSource {
       const directory = await packagePath(this.packageDirectory, envelope.directory);
       const report = await verifyPackage(directory, manifest, trustedKey.publicKeyPem, importedAtUtc);
       if (!report.ok) throw new PackageVerificationError(report);
-      const installed = this.packages.filter((candidate) => candidate.packageId === manifest.packageId && candidate.state !== "quarantined" && candidate.manifest !== undefined);
+      const installed = this.packages.flatMap((candidate) => candidate.verifiedProvenance?.packageId === manifest.packageId ? [candidate.verifiedProvenance] : []);
       if (installed.some((candidate) => candidate.version === manifest.version)) throw new Error(`duplicate package identity already imported: ${manifest.packageId}@${manifest.version}`);
-      for (const current of installed) rejectDowngrade(current.manifest!, manifest);
+      for (const current of installed) rejectVerifiedDowngrade(current, manifest);
       if (manifest.qualification !== "approved") throw new Error("package qualification is not approved for activation");
-      record = detached({ packageId: manifest.packageId, version: manifest.version, state: "verified" as const, reason: "verified against configured trusted key", importedAtUtc, directory, manifest, checks: checksFromReport(report) });
+      record = detached({ packageId: manifest.packageId, version: manifest.version, state: "verified" as const, reason: "verified against configured trusted key", importedAtUtc, directory, manifest, verifiedProvenance: provenanceFor(manifest), checks: checksFromReport(report) });
       eventType = "package.imported";
     } catch (error) {
       const reason = error instanceof PackageVerificationError ? error.message : error instanceof Error ? error.message : String(error);
       const checks = error instanceof PackageVerificationError ? checksFromReport(error.report) : [{ id: "verification", status: "fail" as const, reason }];
-      record = detached({ packageId: identity.packageId, version: identity.version, state: "quarantined" as const, reason, importedAtUtc, ...(envelope.manifest !== undefined && typeof envelope.manifest === "object" ? { manifest: envelope.manifest as SignedPackageManifest } : {}), checks });
+      record = detached({ packageId: identity.packageId, version: identity.version, state: "quarantined" as const, reason, importedAtUtc, ...(validatedManifest === undefined ? {} : { manifest: validatedManifest }), checks });
       eventType = "package.quarantined";
     }
     const prior = this.packages;
@@ -469,11 +478,28 @@ function parsePackageRecord(value: unknown): PackageRecord {
     if (manifest.packageId !== packageId || manifest.version !== version) throw new Error("package record identity does not match its manifest");
   }
   const directory = record.directory === undefined ? undefined : requiredStoredText(record.directory, "directory");
-  return detached({ packageId, version, state: record.state as PackageState, reason, importedAtUtc: record.importedAtUtc, ...(directory === undefined ? {} : { directory }), ...(manifest === undefined ? {} : { manifest }), checks });
+  let verifiedProvenance: VerifiedPackageProvenance | undefined;
+  if (record.verifiedProvenance !== undefined) {
+    if (record.verifiedProvenance === null || typeof record.verifiedProvenance !== "object" || Array.isArray(record.verifiedProvenance)) throw new Error("verified package provenance is invalid");
+    const raw = record.verifiedProvenance as Record<string, unknown>;
+    verifiedProvenance = {
+      packageId: requiredStoredText(raw.packageId, "verifiedProvenance.packageId"),
+      version: requiredStoredText(raw.version, "verifiedProvenance.version"),
+      contentSha256: requiredStoredSha256(raw.contentSha256, "verifiedProvenance.contentSha256"),
+    };
+    if (verifiedProvenance.packageId !== packageId || verifiedProvenance.version !== version || manifest?.contentSha256 !== verifiedProvenance.contentSha256) throw new Error("verified package provenance does not match its immutable record");
+  }
+  if (record.state !== "quarantined" && verifiedProvenance === undefined) throw new Error("non-quarantined package record lacks verified provenance");
+  return detached({ packageId, version, state: record.state as PackageState, reason, importedAtUtc: record.importedAtUtc, ...(directory === undefined ? {} : { directory }), ...(manifest === undefined ? {} : { manifest }), ...(verifiedProvenance === undefined ? {} : { verifiedProvenance }), checks });
 }
 
 function requiredStoredText(value: unknown, field: string): string {
   if (typeof value !== "string" || value.trim() === "" || value !== value.trim()) throw new Error(`package record ${field} is invalid`);
+  return value;
+}
+
+function requiredStoredSha256(value: unknown, field: string): string {
+  if (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value)) throw new Error(`package record ${field} is invalid`);
   return value;
 }
 
@@ -484,13 +510,29 @@ function errorMessage(error: unknown): string {
 function assertUniquePackageRecords(records: readonly PackageRecord[]): void {
   const identities = new Set<string>();
   const activeKinds = new Set<string>();
-  for (const record of records.filter((candidate) => candidate.state !== "quarantined")) {
-    const identity = `${record.packageId}@${record.version}`;
-    if (identities.has(identity)) throw new Error(`duplicate persisted package identity: ${identity}`);
-    identities.add(identity);
+  for (const record of records) {
+    if (record.verifiedProvenance !== undefined) {
+      const identity = `${record.verifiedProvenance.packageId}@${record.verifiedProvenance.version}`;
+      if (identities.has(identity)) throw new Error(`duplicate persisted verified package identity: ${identity}`);
+      identities.add(identity);
+    }
     if (record.state === "active" && record.manifest !== undefined) {
       if (activeKinds.has(record.manifest.kind)) throw new Error(`multiple active persisted packages for kind: ${record.manifest.kind}`);
       activeKinds.add(record.manifest.kind);
     }
+  }
+}
+
+function provenanceFor(manifest: SignedPackageManifest): VerifiedPackageProvenance {
+  return { packageId: manifest.packageId, version: manifest.version, contentSha256: manifest.contentSha256 };
+}
+
+function rejectVerifiedDowngrade(current: VerifiedPackageProvenance, incoming: SignedPackageManifest): void {
+  const currentParts = current.version.split(".").map(Number);
+  const incomingParts = incoming.version.split(".").map(Number);
+  for (let index = 0; index < 3; index += 1) {
+    const difference = (incomingParts[index] ?? 0) - (currentParts[index] ?? 0);
+    if (difference > 0) return;
+    if (difference < 0) throw new Error(`package downgrade rejected: ${current.version} -> ${incoming.version}`);
   }
 }

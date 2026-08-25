@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 import { manifestContentDigest, signManifest, type SignedPackageManifest } from "@fac-isr/evidence";
 import type { EdgeServer } from "../src/server.js";
-import { DeterministicSafetyEvaluationProvider, UnavailableSafetyEvaluationProvider, validateSafetyEvaluationEnvelope } from "../src/services/safety-evaluation.js";
+import { ActivePackageSafetyResolver, DeterministicSafetyEvaluationProvider, UnavailableSafetyEvaluationProvider, validateSafetyEvaluationEnvelope } from "../src/services/safety-evaluation.js";
 import { missionFixture, nowUtc, safetyResult, testSafetyEvaluationProvider } from "./mission-fixture.js";
 import { authenticatedTestServer, type AuthenticatedTestServer } from "./http-test-auth.js";
 
@@ -73,6 +73,36 @@ function trustedKeyStore(records: readonly ReturnType<typeof trustedKey>[]) {
 
 function fixtureEvaluationProvider() {
   return testSafetyEvaluationProvider();
+}
+
+function activePackageResolver(evidenceSnapshot: unknown, requirements: unknown): ActivePackageSafetyResolver {
+  return new ActivePackageSafetyResolver({
+    async getReverifiedActivePackage(kind) {
+      if (kind === "policy") return {
+        packageId: "policy-authority",
+        version: "1.0.0",
+        documents: {
+          "policy.json": JSON.stringify({
+            packageId: "policy-authority",
+            version: "1.0.0",
+            status: "approved",
+            delegatedAuthorities: [],
+            freshness: {},
+            signature: "trusted",
+          }),
+        } as Record<string, string>,
+      };
+      if (kind === "terminology") return { packageId: "terminology-authority", version: "1.0.0", documents: { "terminology.json": "{}" } as Record<string, string> };
+      return {
+        packageId: "regulatory-authority",
+        version: "1.0.0",
+        documents: {
+          "evidence-snapshot.json": JSON.stringify(evidenceSnapshot),
+          "requirements.json": JSON.stringify(requirements),
+        } as Record<string, string>,
+      };
+    },
+  });
 }
 
 describe("server-owned safety authority", () => {
@@ -282,6 +312,30 @@ describe("server-owned safety authority", () => {
     const envelope = await provider.evaluate(revision as never);
 
     await expect(provider.isCurrent(revision as never, envelope, "2026-08-09T19:00:00.001Z")).resolves.toBe(false);
+  });
+
+  it("rejects an active evidence snapshot that does not match the mission revision", async () => {
+    const resolver = activePackageResolver({ snapshotId: "different-snapshot", requirementIds: [], acceptedEvidenceIds: [] }, []);
+
+    await expect(resolver.resolve(missionFixture({ evidenceSnapshotId: "mission-snapshot" }) as never, nowUtc)).rejects.toThrow(/snapshot.*mission|mission.*snapshot|identity/i);
+  });
+
+  it("rejects an evidence snapshot whose requirement evidence references are not bound", async () => {
+    const requirements = [{
+      requirementId: "requirement-1",
+      sourceRefs: [{ evidenceId: "evidence-1", sourceId: "source-1", edition: "1", locator: { section: "1" }, quoteLanguage: "es", extractionSha256: "a".repeat(64), reviewState: "accepted" }],
+      Spanish: "Requisito",
+      EnglishControlled: "Requirement",
+      applicabilityExpression: "state_aviation",
+      severity: "hard",
+      evidenceRequired: true,
+      effectiveFromUtc: "2026-01-01T00:00:00.000Z",
+      interpretationStatus: "approved",
+      reviewerIds: ["reviewer-1"],
+    }];
+    const resolver = activePackageResolver({ snapshotId: "evidence-1", requirementIds: ["requirement-1"], acceptedEvidenceIds: [] }, requirements);
+
+    await expect(resolver.resolve(missionFixture() as never, nowUtc)).rejects.toThrow(/evidence/i);
   });
 
   it("rejects nested safetyResult inside a revision change", async () => {

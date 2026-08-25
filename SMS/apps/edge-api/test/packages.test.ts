@@ -331,6 +331,61 @@ describe("signed package import and quarantine", () => {
     expect(duplicate).toMatchObject({ state: "quarantined", reason: expect.stringMatching(/already imported|duplicate/i) });
   });
 
+  it("preserves the verified version high-water mark after quarantine and restart", async () => {
+    const root = mkdtempSync(join(tmpdir(), "fac-isr-package-high-water-"));
+    const databaseUrl = join(root, "edge.sqlite");
+    const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const record = trustedKey(keys);
+    const dependencies = { trustedKeyStore: { get: () => record }, now: () => asOfUtc };
+    const three = signedPackage(root, "3.0.0", keys);
+    const two = signedPackage(root, "2.0.0", keys);
+    const four = signedPackage(root, "4.0.0", keys);
+    const nine = signedPackage(root, "9.0.0", keys);
+    let server = await authenticatedTestServer({ databaseUrl, internet: "disabled", packageDirectory: root }, undefined, dependencies);
+    app = server.app;
+    const imported = await app.safeModeService.importPackage({ ...three, keyId: record.keyId }, context);
+    await app.safeModeService.activatePackage({ packageId: imported.packageId, version: imported.version, keyId: record.keyId }, context);
+    writeFileSync(join(root, three.directory, "map.txt"), "tampered newest package");
+    expect((await app.safeModeService.getPackageState()).quarantined).toEqual(expect.arrayContaining([expect.objectContaining({ version: "3.0.0" })]));
+    await app.close();
+    app = undefined;
+
+    server = await authenticatedTestServer({ databaseUrl, internet: "disabled", packageDirectory: root }, undefined, dependencies);
+    app = server.app;
+    const invalidNine = await app.safeModeService.importPackage({ ...nine, manifest: { ...nine.manifest, signature: three.manifest.signature }, keyId: record.keyId }, context);
+    const rollback = await app.safeModeService.importPackage({ ...two, keyId: record.keyId }, context);
+    const forward = await app.safeModeService.importPackage({ ...four, keyId: record.keyId }, context);
+
+    expect(invalidNine.state).toBe("quarantined");
+    expect(rollback).toMatchObject({ state: "quarantined", reason: expect.stringMatching(/downgrade/i) });
+    expect(forward.state).toBe("verified");
+  });
+
+  it("reloads malformed quarantine evidence without disabling valid package writes", async () => {
+    const root = mkdtempSync(join(tmpdir(), "fac-isr-malformed-quarantine-reload-"));
+    const databaseUrl = join(root, "edge.sqlite");
+    let server = await authenticatedTestServer({ databaseUrl, internet: "disabled", packageDirectory: root });
+    app = server.app;
+    const malformed = await app.safeModeService.importPackage({ directory: ".", manifest: { schemaVersion: "1.0", packageId: "bad-package", kind: "map", version: "1.0.0" }, keyId: "missing-key" }, context);
+    expect(malformed.state).toBe("quarantined");
+    await app.close();
+    app = undefined;
+
+    const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const record = trustedKey(keys);
+    const fixture = signedPackage(root, "1.0.0", keys);
+    server = await authenticatedTestServer(
+      { databaseUrl, internet: "disabled", packageDirectory: root },
+      undefined,
+      { trustedKeyStore: { get: () => record }, now: () => asOfUtc },
+    );
+    app = server.app;
+    const state = await app.safeModeService.getPackageState();
+
+    expect(state.quarantined).toEqual(expect.arrayContaining([expect.objectContaining({ packageId: "bad-package", state: "quarantined" })]));
+    await expect(app.safeModeService.importPackage({ ...fixture, keyId: record.keyId }, context)).resolves.toMatchObject({ state: "verified" });
+  });
+
   it("uses only reverified active packages as the default production safety authority", async () => {
     const root = mkdtempSync(join(tmpdir(), "fac-isr-active-authority-"));
     const kinds = ["policy", "terminology", "regulatory"] as const;
@@ -355,7 +410,7 @@ describe("signed package import and quarantine", () => {
       authorityPackage(root, "policy", "policy-authority", "policy-key", keys.policy, { "policy.json": policy }),
       authorityPackage(root, "terminology", "terminology-authority", "terminology-key", keys.terminology, { "terminology.json": { concepts: [] } }),
       authorityPackage(root, "regulatory", "regulatory-authority", "regulatory-key", keys.regulatory, {
-        "evidence-snapshot.json": { snapshotId: "evidence-1", acceptedEvidenceIds: [] },
+        "evidence-snapshot.json": { snapshotId: "evidence-1", requirementIds: [], acceptedEvidenceIds: [] },
         "requirements.json": [],
       }),
     ];

@@ -122,7 +122,7 @@ function resultProjection(envelope: SafetyEvaluationEnvelope): SafetyEvaluationR
 export class ActivePackageSafetyResolver {
   public constructor(private readonly source: ActiveSafetyPackageSource) {}
 
-  public async resolve(_revision: MissionRevision, asOfUtc: string): Promise<SafetyEvaluationResolution> {
+  public async resolve(revision: MissionRevision, asOfUtc: string): Promise<SafetyEvaluationResolution> {
     if (!validUtc(asOfUtc)) throw new Error("package resolution time must be a valid UTC instant");
     const [policyPackage, terminologyPackage, evidencePackage] = await Promise.all([
       this.source.getReverifiedActivePackage("policy", asOfUtc),
@@ -133,12 +133,11 @@ export class ActivePackageSafetyResolver {
     if (policy === null || typeof policy !== "object" || Array.isArray(policy)) throw new Error("active policy package policy.json must be an object");
     const candidatePolicy = policy as PolicyPackage;
     if (candidatePolicy.packageId !== policyPackage.packageId || candidatePolicy.version !== policyPackage.version) throw new Error("active policy document identity does not match its signed manifest");
-    const requirements = parseDocument(evidencePackage, "requirements.json");
-    if (!Array.isArray(requirements)) throw new Error("active regulatory package requirements.json must be an array");
-    const evidenceSnapshot = parseDocument(evidencePackage, "evidence-snapshot.json");
+    const requirements = parseRequirements(parseDocument(evidencePackage, "requirements.json"), asOfUtc);
+    const evidenceSnapshot = parseEvidenceSnapshot(parseDocument(evidencePackage, "evidence-snapshot.json"), revision.evidenceSnapshotId, requirements);
     if (Object.keys(terminologyPackage.documents).length === 0) throw new Error("active terminology package has no immutable contents");
     return {
-      requirements: requirements as readonly NormalizedRequirement[],
+      requirements,
       policy: candidatePolicy,
       evidenceSnapshot,
       policyPackage,
@@ -152,6 +151,115 @@ function parseDocument(pkg: ActiveSafetyPackage, name: string): unknown {
   const content = pkg.documents[name];
   if (content === undefined) throw new Error(`active package ${pkg.packageId}@${pkg.version} is missing ${name}`);
   return JSON.parse(content) as unknown;
+}
+
+interface BoundEvidenceSnapshot {
+  readonly snapshotId: string;
+  readonly requirementIds: readonly string[];
+  readonly acceptedEvidenceIds: readonly string[];
+}
+
+function parseEvidenceSnapshot(value: unknown, requestedSnapshotId: string, requirements: readonly NormalizedRequirement[]): BoundEvidenceSnapshot {
+  const snapshot = parseBoundEvidenceSnapshot(value);
+  if (snapshot.snapshotId !== requestedSnapshotId) throw new Error(`active evidence snapshot identity does not match mission snapshot ${requestedSnapshotId}`);
+  const requirementIds = requirements.map((requirement) => requirement.requirementId);
+  if (!sameStringSet(snapshot.requirementIds, requirementIds)) throw new Error("evidence snapshot requirement references do not match the evaluated requirements");
+  const referencedEvidenceIds = requirements.flatMap((requirement) => requirement.sourceRefs.map((reference) => String(reference.evidenceId)));
+  if (!sameStringSet(snapshot.acceptedEvidenceIds, referencedEvidenceIds)) throw new Error("evidence snapshot accepted evidence references do not match requirement evidence");
+  return deepFreeze(snapshot);
+}
+
+function parseBoundEvidenceSnapshot(value: unknown): BoundEvidenceSnapshot {
+  const snapshot = strictObject(value, ["acceptedEvidenceIds", "requirementIds", "snapshotId"], "evidence snapshot");
+  return {
+    snapshotId: nonEmptyText(snapshot.snapshotId, "evidence snapshot snapshotId"),
+    requirementIds: uniqueTextArray(snapshot.requirementIds, "evidence snapshot requirementIds"),
+    acceptedEvidenceIds: uniqueTextArray(snapshot.acceptedEvidenceIds, "evidence snapshot acceptedEvidenceIds"),
+  };
+}
+
+function parseRequirements(value: unknown, asOfUtc: string): readonly NormalizedRequirement[] {
+  if (!Array.isArray(value)) throw new Error("active regulatory package requirements.json must be an array");
+  const parsed = value.map((candidate, index) => parseRequirement(candidate, index, asOfUtc));
+  const identifiers = parsed.map((requirement) => requirement.requirementId);
+  if (new Set(identifiers).size !== identifiers.length) throw new Error("active regulatory package has duplicate requirement IDs");
+  return deepFreeze(parsed);
+}
+
+function parseRequirement(value: unknown, index: number, asOfUtc: string): NormalizedRequirement {
+  const field = `requirement ${index}`;
+  const requirement = strictObject(value, ["EnglishControlled", "Spanish", "applicabilityExpression", "effectiveFromUtc", "evidenceRequired", "interpretationStatus", "requirementId", "reviewerIds", "severity", "sourceRefs"], field);
+  const effectiveFromUtc = nonEmptyText(requirement.effectiveFromUtc, `${field} effectiveFromUtc`);
+  if (!validUtc(effectiveFromUtc) || Date.parse(effectiveFromUtc) > Date.parse(asOfUtc)) throw new Error(`${field} effectiveFromUtc is invalid or not yet effective`);
+  if (requirement.interpretationStatus !== "approved") throw new Error(`${field} must have approved interpretation status`);
+  if (!["hard", "soft", "advisory"].includes(String(requirement.severity))) throw new Error(`${field} severity is invalid`);
+  if (typeof requirement.evidenceRequired !== "boolean") throw new Error(`${field} evidenceRequired must be boolean`);
+  const reviewerIds = uniqueTextArray(requirement.reviewerIds, `${field} reviewerIds`);
+  if (reviewerIds.length === 0) throw new Error(`${field} requires an accountable reviewer`);
+  if (!Array.isArray(requirement.sourceRefs)) throw new Error(`${field} sourceRefs must be an array`);
+  const sourceRefs = requirement.sourceRefs.map((reference, referenceIndex) => parseEvidenceReference(reference, `${field} sourceRefs[${referenceIndex}]`));
+  if (requirement.evidenceRequired && sourceRefs.length === 0) throw new Error(`${field} requires evidence references`);
+  return {
+    requirementId: nonEmptyText(requirement.requirementId, `${field} requirementId`),
+    sourceRefs: sourceRefs as unknown as NormalizedRequirement["sourceRefs"],
+    Spanish: nonEmptyText(requirement.Spanish, `${field} Spanish`),
+    EnglishControlled: nonEmptyText(requirement.EnglishControlled, `${field} EnglishControlled`),
+    applicabilityExpression: nonEmptyText(requirement.applicabilityExpression, `${field} applicabilityExpression`),
+    severity: requirement.severity as NormalizedRequirement["severity"],
+    evidenceRequired: requirement.evidenceRequired,
+    effectiveFromUtc,
+    interpretationStatus: "approved",
+    reviewerIds,
+  };
+}
+
+function parseEvidenceReference(value: unknown, field: string): Record<string, unknown> {
+  const reference = strictObject(value, ["edition", "evidenceId", "extractionSha256", "locator", "quoteLanguage", "reviewState", "reviewerId", "sourceId"], field, ["reviewerId"]);
+  if (reference.reviewState !== "accepted") throw new Error(`${field} must be accepted`);
+  if (reference.quoteLanguage !== "es" && reference.quoteLanguage !== "en") throw new Error(`${field} quoteLanguage is invalid`);
+  if (typeof reference.extractionSha256 !== "string" || !SHA256.test(reference.extractionSha256)) throw new Error(`${field} extractionSha256 is invalid`);
+  const locator = strictObject(reference.locator, ["page", "paragraph", "section"], `${field} locator`, ["page", "paragraph", "section"]);
+  if (locator.page !== undefined && (!Number.isSafeInteger(locator.page) || Number(locator.page) <= 0)) throw new Error(`${field} locator page is invalid`);
+  if (locator.section !== undefined) nonEmptyText(locator.section, `${field} locator section`);
+  if (locator.paragraph !== undefined) nonEmptyText(locator.paragraph, `${field} locator paragraph`);
+  if (Object.keys(locator).length === 0) throw new Error(`${field} locator is empty`);
+  return {
+    evidenceId: nonEmptyText(reference.evidenceId, `${field} evidenceId`),
+    sourceId: nonEmptyText(reference.sourceId, `${field} sourceId`),
+    edition: nonEmptyText(reference.edition, `${field} edition`),
+    locator,
+    quoteLanguage: reference.quoteLanguage,
+    extractionSha256: reference.extractionSha256,
+    ...(reference.reviewerId === undefined ? {} : { reviewerId: nonEmptyText(reference.reviewerId, `${field} reviewerId`) }),
+    reviewState: "accepted",
+  };
+}
+
+function strictObject(value: unknown, allowedKeys: readonly string[], field: string, optionalKeys: readonly string[] = []): Record<string, unknown> {
+  if (!isPlainObject(value)) throw new Error(`${field} must be an object`);
+  const keys = Object.keys(value);
+  if (keys.some((key) => !allowedKeys.includes(key)) || allowedKeys.some((key) => !optionalKeys.includes(key) && !keys.includes(key))) throw new Error(`${field} shape is invalid`);
+  return value;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function nonEmptyText(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.trim() === "" || value !== value.trim()) throw new Error(`${field} must be non-empty text`);
+  return value;
+}
+
+function uniqueTextArray(value: unknown, field: string): string[] {
+  if (!Array.isArray(value)) throw new Error(`${field} must be an array`);
+  const output = value.map((item) => nonEmptyText(item, field));
+  if (new Set(output).size !== output.length) throw new Error(`${field} must be unique`);
+  return output;
+}
+
+function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value) => right.includes(value));
 }
 
 /** Resolves trusted local inputs, invokes the pure kernel, and hashes the canonical decision record. */
