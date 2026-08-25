@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
-import { request } from "node:https";
-import { expect, test, type Page } from "@playwright/test";
+import { request as httpsRequest } from "node:https";
+import { expect, request as apiRequest, test, type Page } from "@playwright/test";
 import { e2eNowUtc as nowUtc, missionFixture } from "./mission-fixture.js";
 
 const password = "correct horse battery staple";
@@ -30,7 +30,7 @@ async function checklistAndGate(page: Page, userId: string, gate: string): Promi
 async function ingestTelemetry(revisionId: string, sequence: number, aircraftId = "aircraft-1"): Promise<number> {
   const payload = JSON.stringify({ revisionId, sequence, event: { eventId: `telemetry-e2e-${aircraftId}-${sequence}`, aircraftId, observedAtUtc: nowUtc, position: { lat: 4.7, lon: -74.1, altitudeMslM: 1300 + sequence }, energy: { stateOfChargePercent: Math.max(0, 73 - sequence) }, platform: { propulsion: "normal", gnss: "normal", c2Link: "normal" }, sourcePackageIds: ["policy-console-e2e"] } });
   return new Promise((resolve, reject) => {
-    const operation = request({ hostname: "127.0.0.1", port: 4173, path: "/api/telemetry/ingest", method: "POST", cert: readFileSync(clientCertificatePath), key: readFileSync(clientKeyPath), ca: readFileSync(certificateAuthorityPath), rejectUnauthorized: true, headers: { "content-type": "application/json", "content-length": Buffer.byteLength(payload) } }, (response) => { response.resume(); response.once("end", () => resolve(response.statusCode ?? 0)); });
+    const operation = httpsRequest({ hostname: "127.0.0.1", port: 4173, path: "/api/telemetry/ingest", method: "POST", cert: readFileSync(clientCertificatePath), key: readFileSync(clientKeyPath), ca: readFileSync(certificateAuthorityPath), rejectUnauthorized: true, headers: { "content-type": "application/json", "content-length": Buffer.byteLength(payload) } }, (response) => { response.resume(); response.once("end", () => resolve(response.statusCode ?? 0)); });
     operation.once("error", reject); operation.end(payload);
   });
 }
@@ -87,10 +87,37 @@ test("recovers the login form after authenticated bootstrap disconnects", async 
   await page.route("**/api/missions", (route) => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "EDGE_UNAVAILABLE", message: "Edge unavailable" }) }), { times: 1 }); await page.goto("/"); await page.getByLabel("User ID").fill("operator-1"); await page.getByLabel("Password").fill(password); await page.getByRole("button", { name: "Sign in", exact: true }).click(); await expect(page.getByRole("heading", { name: "Sign in to operational console" })).toBeVisible(); await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeEnabled(); await expect(page.getByText("Edge API disconnected", { exact: true })).toBeVisible();
 });
 
-test("keeps sign-in disabled until an old-session lock is confirmed", async ({ page }) => {
+test("keeps sign-in disabled until an old-session lock is confirmed", async ({ context, page }) => {
   await page.goto("/"); await login(page, "operator-1"); await page.route("**/api/auth/lock", (route) => route.abort("failed"), { times: 1 }); await page.getByRole("button", { name: "Lock", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Sign in to operational console" })).toBeVisible(); await expect(page.getByText("operator-1", { exact: true })).toHaveCount(0); await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeDisabled(); await expect(page.getByText("Lock could not be confirmed — sign-in remains disabled", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Retry lock" }).click(); await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeEnabled(); await expect(page.getByText("Locked", { exact: true })).toBeVisible();
+  const staleCookie = (await context.cookies()).find(({ name }) => name === "__Host-sms_session"); expect(staleCookie?.value.length).toBeGreaterThan(32); expect((await context.request.get("/api/auth/status")).status()).toBe(401);
+  await login(page, "operator-1"); const replacementCookie = (await context.cookies()).find(({ name }) => name === "__Host-sms_session"); expect(replacementCookie?.value).not.toBe(staleCookie?.value); expect((await context.request.get("/api/auth/status")).status()).toBe(200);
+});
+
+test("a delayed old-tab lock cannot clear a newer shared-cookie session", async ({ context, page }) => {
+  test.setTimeout(60_000);
+  await page.goto("/"); await login(page, "operator-1");
+  const oldStatus = await context.request.get("/api/auth/status"); expect(oldStatus.status()).toBe(200); const oldSessionId = (await oldStatus.json() as { sessionId: string }).sessionId;
+  const oldCookie = (await context.cookies()).find(({ name }) => name === "__Host-sms_session"); expect(oldCookie?.value.length).toBeGreaterThan(32);
+
+  let releaseOldResponse!: () => void; let oldLockCaptured!: () => void;
+  const releaseOldResponsePromise = new Promise<void>((resolve) => { releaseOldResponse = resolve; });
+  const oldLockCapturedPromise = new Promise<void>((resolve) => { oldLockCaptured = resolve; });
+  await page.route("**/api/auth/lock", async (route) => { const response = await route.fetch(); oldLockCaptured(); await releaseOldResponsePromise; await route.fulfill({ response }); }, { times: 1 });
+  await page.getByRole("button", { name: "Lock", exact: true }).click(); await oldLockCapturedPromise;
+  await expect(page.getByRole("heading", { name: "Sign in to operational console" })).toBeVisible(); await expect(page.getByText("operator-1", { exact: true })).toHaveCount(0);
+
+  const newerTab = await context.newPage(); await newerTab.goto("/"); await login(newerTab, "commander-1");
+  const newStatusBefore = await context.request.get("/api/auth/status"); expect(newStatusBefore.status()).toBe(200); const newSessionId = (await newStatusBefore.json() as { sessionId: string }).sessionId; expect(newSessionId).not.toBe(oldSessionId);
+  releaseOldResponse(); await expect(page.getByText("Locked", { exact: true })).toBeVisible();
+
+  const newStatusAfter = await context.request.get("/api/auth/status"); expect(newStatusAfter.status()).toBe(200); expect((await newStatusAfter.json() as { sessionId: string }).sessionId).toBe(newSessionId); await expect(newerTab.getByText("commander-1", { exact: true })).toBeVisible();
+  const oldSessionRequest = await apiRequest.newContext({ baseURL: "https://127.0.0.1:4173", ignoreHTTPSErrors: true, extraHTTPHeaders: { cookie: `${oldCookie!.name}=${oldCookie!.value}` } });
+  try { expect((await oldSessionRequest.get("/api/auth/status")).status()).toBe(401); } finally { await oldSessionRequest.dispose(); }
+
+  await page.getByLabel("User ID").fill("operator-1"); await page.getByLabel("Password").fill(password); await page.getByRole("button", { name: "Sign in", exact: true }).click(); await expect(page.getByText("operator-1", { exact: true })).toBeVisible(); expect((await context.request.get("/api/auth/status")).status()).toBe(200);
+  await page.screenshot({ path: "/tmp/sms-console-review3-two-tab-lock.png", fullPage: false });
 });
 
 test("expires an open console at the real server idle deadline without probe keepalive", async ({ page }) => {

@@ -213,7 +213,7 @@ export function registerHttpAuthentication(app: FastifyInstance, dependencies: H
       return reply.code(409).send({ error: "SESSION_CHANGED", message: "the active session changed before lock completed" });
     }
     dependencies.sessionManager.lockSession(principal.sessionId, "user requested lock");
-    return reply.header("set-cookie", clearedSessionCookie()).code(204).send();
+    return reply.code(204).send();
   });
 
   app.post("/api/auth/logout", async (request, reply) => {

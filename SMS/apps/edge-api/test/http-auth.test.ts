@@ -346,6 +346,7 @@ describe("HTTP authentication boundary", () => {
     expect(mismatched.headers["set-cookie"]).toBeUndefined();
     expect(stillActive.statusCode).toBe(200);
     expect(locked.statusCode).toBe(204);
+    expect(locked.headers["set-cookie"]).toBeUndefined();
     expect(afterLock.statusCode).toBe(401);
     expect(logout.statusCode).toBe(204);
     expect(logout.headers["set-cookie"]).toContain("Max-Age=0");
