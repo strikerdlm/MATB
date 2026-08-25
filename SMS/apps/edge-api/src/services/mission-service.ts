@@ -111,6 +111,7 @@ export class MissionService {
   private readonly database?: EdgeDatabase;
   private readonly now: () => string;
   private readonly safetyEvaluationProvider: SafetyEvaluationProvider;
+  private safetyIntegrityFailure = false;
 
   public constructor(options: MissionServiceOptions = {}) {
     this.audit = options.auditLedger ?? new AuditLedger({ database: options.database });
@@ -297,15 +298,31 @@ export class MissionService {
   }
 
   public getSafetyResult(revisionId: string): SafetyEvaluationView {
+    if (this.safetyIntegrityFailure) throw new MissionServiceError(503, "SAFETY_EVALUATION_INTEGRITY_FAILURE", "safety evaluation authority is in fail-closed safe mode");
     const stored = this.requireRevision(revisionId).stored;
     const result = stored.safetyResults.find((item) => item.envelope.revisionId === revisionId);
     if (result === undefined) throw new MissionServiceError(409, "SAFETY_EVALUATION_MISSING", "server safety evaluation is missing");
     return this.evaluationView(result);
   }
 
-  public async recomputeSafetyEvaluation(revisionId: string): Promise<SafetyEvaluationView> {
+  public async recomputeSafetyEvaluation(revisionId: string, context?: ServiceActorContext): Promise<SafetyEvaluationView> {
     const resolved = this.requireRevision(revisionId);
     const envelope = await this.evaluateSafety(resolved.revision);
+    const invalidated = resolved.stored.approvals.filter((approval) => approval.missionRevisionId === revisionId);
+    const auditContext = context ?? { actorUserId: "safety-evaluation-service", clientSessionId: "server-recompute", occurredAtUtc: this.now() };
+    for (const approval of invalidated) {
+      await this.appendAudit({
+        type: "gate.invalidated",
+        action: "invalidate",
+        reason: "safety evaluation recomputation invalidated the prior approval",
+        actorUserId: auditContext.actorUserId,
+        missionRevisionId: revisionId,
+        clientSessionId: auditContext.clientSessionId,
+        occurredAtUtc: this.timestamp(auditContext.occurredAtUtc),
+        payload: { gate: approval.gate, cause: "safety.recomputed" },
+      });
+    }
+    resolved.stored.approvals = resolved.stored.approvals.filter((approval) => approval.missionRevisionId !== revisionId);
     resolved.stored.safetyResults = resolved.stored.safetyResults.filter((item) => item.envelope.revisionId !== revisionId);
     const stored = { envelope, stale: false };
     resolved.stored.safetyResults.push(stored);
@@ -465,20 +482,36 @@ export class MissionService {
   }
 
   private async evaluateSafety(revision: MissionRevision): Promise<SafetyEvaluationEnvelope> {
+    let candidate: SafetyEvaluationEnvelope;
     try {
-      return validateSafetyEvaluationEnvelope(await this.safetyEvaluationProvider.evaluate(revision), revision.id);
+      candidate = await this.safetyEvaluationProvider.evaluate(revision);
     } catch (error) {
       throw new MissionServiceError(503, "SAFETY_EVALUATION_UNAVAILABLE", errorMessage(error));
+    }
+    try {
+      return validateSafetyEvaluationEnvelope(candidate, revision.id);
+    } catch (error) {
+      this.safetyIntegrityFailure = true;
+      await this.audit.simulateWriteFailure();
+      throw new MissionServiceError(503, "SAFETY_EVALUATION_INTEGRITY_FAILURE", errorMessage(error));
     }
   }
 
   private async currentSafetyForGate(revision: MissionRevision, stored: StoredMission, context: ServiceActorContext): Promise<SafetyEvaluationView> {
     const record = stored.safetyResults.find((item) => item.envelope.revisionId === revision.id);
     if (record === undefined) throw new MissionServiceError(409, "SAFETY_EVALUATION_MISSING", "server safety evaluation is missing");
+    if (this.safetyIntegrityFailure) throw new MissionServiceError(503, "SAFETY_EVALUATION_INTEGRITY_FAILURE", "safety evaluation authority is in fail-closed safe mode");
+    try {
+      validateSafetyEvaluationEnvelope(record.envelope, revision.id);
+    } catch (error) {
+      this.safetyIntegrityFailure = true;
+      await this.audit.simulateWriteFailure();
+      throw new MissionServiceError(503, "SAFETY_EVALUATION_INTEGRITY_FAILURE", errorMessage(error));
+    }
     let current = false;
     if (!record.stale) {
       try {
-        current = await this.safetyEvaluationProvider.isCurrent(revision, record.envelope);
+        current = await this.safetyEvaluationProvider.isCurrent(revision, record.envelope, this.now());
       } catch {
         current = false;
       }
@@ -510,7 +543,7 @@ export class MissionService {
   }
 
   private rejectCallerSafetyResult(envelope: Record<string, unknown>): void {
-    if (Object.prototype.hasOwnProperty.call(envelope, "safetyResult")) {
+    if (containsForbiddenSafetyResult(envelope)) {
       throw new MissionServiceError(400, "CALLER_SAFETY_RESULT_FORBIDDEN", "safetyResult is computed by the server and cannot be supplied by clients");
     }
   }
@@ -566,8 +599,14 @@ export class MissionService {
         const revisions = raw.revisions.map((revision) => this.parseMission(revision));
         const safetyResults = raw.safetyResults.flatMap((result) => {
           if (!isObject(result) || !isObject(result.envelope) || typeof result.stale !== "boolean") return [];
-          const envelope = validateSafetyEvaluationEnvelope(result.envelope as unknown as SafetyEvaluationEnvelope, String(result.envelope.revisionId));
-          return [{ envelope, stale: result.stale }];
+          try {
+            const envelope = validateSafetyEvaluationEnvelope(result.envelope as unknown as SafetyEvaluationEnvelope, String(result.envelope.revisionId));
+            return [{ envelope, stale: result.stale }];
+          } catch {
+            this.safetyIntegrityFailure = true;
+            void this.audit.simulateWriteFailure();
+            return [];
+          }
         });
         const approvals = raw.approvals.map((approval) => {
           const { checklistResponseIds, ...baseApproval } = approval;
@@ -599,6 +638,13 @@ function objectInput(value: unknown): Record<string, unknown> {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function containsForbiddenSafetyResult(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsForbiddenSafetyResult);
+  if (!isObject(value)) return false;
+  if (Object.prototype.hasOwnProperty.call(value, "safetyResult")) return true;
+  return Object.values(value).some(containsForbiddenSafetyResult);
 }
 
 function objectRequired(value: unknown, field: string): Record<string, unknown> {

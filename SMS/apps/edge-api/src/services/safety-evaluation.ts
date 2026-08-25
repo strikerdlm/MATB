@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { canonicalJson, type NormalizedRequirement } from "@fac-isr/evidence";
 import {
   evaluateMission,
+  parseSafetyEvaluationResult,
   type GateName,
   type MissionRevision,
   type PolicyPackage,
@@ -11,7 +12,6 @@ import {
 } from "@fac-isr/safety-kernel";
 
 const SHA256 = /^[a-f0-9]{64}$/;
-const UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
 
 export interface PackageIdentity {
   readonly packageId: string;
@@ -49,12 +49,22 @@ export interface SafetyEvaluationResolution {
 
 export interface SafetyEvaluationProvider {
   evaluate(revision: MissionRevision): Promise<SafetyEvaluationEnvelope>;
-  isCurrent(revision: MissionRevision, envelope: SafetyEvaluationEnvelope): Promise<boolean>;
+  isCurrent(revision: MissionRevision, envelope: SafetyEvaluationEnvelope, asOfUtc: string): Promise<boolean>;
 }
 
 export interface DeterministicSafetyEvaluationProviderOptions {
-  readonly resolve: (revision: MissionRevision) => Promise<SafetyEvaluationResolution>;
+  readonly resolve: (revision: MissionRevision, asOfUtc: string) => Promise<SafetyEvaluationResolution>;
   readonly now?: () => string;
+}
+
+export interface ActiveSafetyPackage {
+  readonly packageId: string;
+  readonly version: string;
+  readonly documents: Readonly<Record<string, string>>;
+}
+
+export interface ActiveSafetyPackageSource {
+  getReverifiedActivePackage(kind: "policy" | "terminology" | "regulatory", asOfUtc: string): Promise<ActiveSafetyPackage>;
 }
 
 function normalizedJson(value: unknown): unknown {
@@ -83,7 +93,65 @@ function packageIdentity(value: PackageIdentity, field: string): PackageIdentity
 }
 
 function validUtc(value: string): boolean {
-  return UTC.test(value) && Number.isFinite(Date.parse(value));
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z$/.exec(value);
+  if (!match) return false;
+  const [, year, month, day, hour, minute, second, fraction = ""] = match;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime())
+    && date.getUTCFullYear() === Number(year)
+    && date.getUTCMonth() + 1 === Number(month)
+    && date.getUTCDate() === Number(day)
+    && date.getUTCHours() === Number(hour)
+    && date.getUTCMinutes() === Number(minute)
+    && date.getUTCSeconds() === Number(second)
+    && date.getUTCMilliseconds() === Number(fraction.padEnd(3, "0") || 0);
+}
+
+function resultProjection(envelope: SafetyEvaluationEnvelope): SafetyEvaluationResult {
+  return parseSafetyEvaluationResult({
+    missionRevisionId: envelope.revisionId,
+    status: envelope.status,
+    evaluations: normalizedJson(envelope.evaluations),
+    blockers: normalizedJson(envelope.blockers),
+    invalidatedGates: normalizedJson(envelope.invalidatedGates),
+    kernelVersion: envelope.kernelVersion,
+  });
+}
+
+/** Resolves evaluation inputs exclusively from package records reverified by SafeModeService. */
+export class ActivePackageSafetyResolver {
+  public constructor(private readonly source: ActiveSafetyPackageSource) {}
+
+  public async resolve(_revision: MissionRevision, asOfUtc: string): Promise<SafetyEvaluationResolution> {
+    if (!validUtc(asOfUtc)) throw new Error("package resolution time must be a valid UTC instant");
+    const [policyPackage, terminologyPackage, evidencePackage] = await Promise.all([
+      this.source.getReverifiedActivePackage("policy", asOfUtc),
+      this.source.getReverifiedActivePackage("terminology", asOfUtc),
+      this.source.getReverifiedActivePackage("regulatory", asOfUtc),
+    ]);
+    const policy = parseDocument(policyPackage, "policy.json");
+    if (policy === null || typeof policy !== "object" || Array.isArray(policy)) throw new Error("active policy package policy.json must be an object");
+    const candidatePolicy = policy as PolicyPackage;
+    if (candidatePolicy.packageId !== policyPackage.packageId || candidatePolicy.version !== policyPackage.version) throw new Error("active policy document identity does not match its signed manifest");
+    const requirements = parseDocument(evidencePackage, "requirements.json");
+    if (!Array.isArray(requirements)) throw new Error("active regulatory package requirements.json must be an array");
+    const evidenceSnapshot = parseDocument(evidencePackage, "evidence-snapshot.json");
+    if (Object.keys(terminologyPackage.documents).length === 0) throw new Error("active terminology package has no immutable contents");
+    return {
+      requirements: requirements as readonly NormalizedRequirement[],
+      policy: candidatePolicy,
+      evidenceSnapshot,
+      policyPackage,
+      terminologyPackage,
+      evidencePackage,
+    };
+  }
+}
+
+function parseDocument(pkg: ActiveSafetyPackage, name: string): unknown {
+  const content = pkg.documents[name];
+  if (content === undefined) throw new Error(`active package ${pkg.packageId}@${pkg.version} is missing ${name}`);
+  return JSON.parse(content) as unknown;
 }
 
 /** Resolves trusted local inputs, invokes the pure kernel, and hashes the canonical decision record. */
@@ -99,7 +167,7 @@ export class DeterministicSafetyEvaluationProvider implements SafetyEvaluationPr
   public async evaluate(revision: MissionRevision): Promise<SafetyEvaluationEnvelope> {
     const evaluatedAtUtc = this.now();
     if (!validUtc(evaluatedAtUtc)) throw new Error("evaluation time must be a valid UTC instant");
-    const resolved = await this.resolve(revision);
+    const resolved = await this.resolve(revision, evaluatedAtUtc);
     const input = {
       mission: revision,
       requirements: resolved.requirements,
@@ -125,17 +193,20 @@ export class DeterministicSafetyEvaluationProvider implements SafetyEvaluationPr
     return deepFreeze(envelope);
   }
 
-  public async isCurrent(revision: MissionRevision, envelope: SafetyEvaluationEnvelope): Promise<boolean> {
-    const resolved = await this.resolve(revision);
+  public async isCurrent(revision: MissionRevision, envelope: SafetyEvaluationEnvelope, asOfUtc: string): Promise<boolean> {
+    if (!validUtc(asOfUtc)) return false;
+    validateSafetyEvaluationEnvelope(envelope, revision.id);
+    const resolved = await this.resolve(revision, asOfUtc);
     const sameIdentity = (left: PackageIdentity, right: PackageIdentity): boolean => left.packageId === right.packageId && left.version === right.version;
     if (!sameIdentity(envelope.policyPackage, resolved.policyPackage)
       || !sameIdentity(envelope.terminologyPackage, resolved.terminologyPackage)
       || !sameIdentity(envelope.evidencePackage, resolved.evidencePackage)) return false;
-    const input = { mission: revision, requirements: resolved.requirements, policy: resolved.policy, nowUtc: envelope.evaluatedAtUtc };
-    const result = evaluateMission(input);
-    return sha256(input) === envelope.canonicalInputSha256
+    const originalInput = { mission: revision, requirements: resolved.requirements, policy: resolved.policy, nowUtc: envelope.evaluatedAtUtc };
+    const currentInput = { mission: revision, requirements: resolved.requirements, policy: resolved.policy, nowUtc: asOfUtc };
+    const currentResult = evaluateMission(currentInput);
+    return sha256(originalInput) === envelope.canonicalInputSha256
       && sha256(resolved.evidenceSnapshot) === envelope.evidenceSnapshotSha256
-      && sha256(result) === envelope.resultSha256;
+      && sha256(currentResult) === envelope.resultSha256;
   }
 }
 
@@ -154,9 +225,10 @@ export function validateSafetyEvaluationEnvelope(value: SafetyEvaluationEnvelope
     if (!SHA256.test(hash)) throw new Error(`${field} must be a SHA-256 digest`);
   }
   if (!validUtc(value.evaluatedAtUtc)) throw new Error("evaluatedAtUtc must be a valid UTC instant");
-  if (!Array.isArray(value.evaluations) || !Array.isArray(value.blockers) || !Array.isArray(value.invalidatedGates)) throw new Error("safety evaluation collections are invalid");
-  if (!["ready", "conditional", "blocked", "degraded"].includes(value.status)) throw new Error("safety evaluation status is invalid");
-  return deepFreeze(value);
+  const result = resultProjection(value);
+  if (sha256(result) !== value.resultSha256) throw new Error("resultSha256 does not match the safety evaluation result projection");
+  const detached = normalizedJson(value) as SafetyEvaluationEnvelope;
+  return deepFreeze(detached);
 }
 
 /** Production fail-closed default used until trusted active packages are configured. */
@@ -200,16 +272,12 @@ export class UnavailableSafetyEvaluationProvider implements SafetyEvaluationProv
     });
   }
 
-  public async isCurrent(): Promise<boolean> { return true; }
+  public async isCurrent(_revision: MissionRevision, envelope: SafetyEvaluationEnvelope): Promise<boolean> {
+    validateSafetyEvaluationEnvelope(envelope, envelope.revisionId);
+    return true;
+  }
 }
 
 export function asSafetyEvaluationResult(envelope: SafetyEvaluationEnvelope): SafetyEvaluationResult {
-  return Object.freeze({
-    missionRevisionId: envelope.revisionId,
-    status: envelope.status,
-    evaluations: envelope.evaluations,
-    blockers: envelope.blockers,
-    invalidatedGates: envelope.invalidatedGates,
-    kernelVersion: envelope.kernelVersion,
-  });
+  return resultProjection(envelope);
 }

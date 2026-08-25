@@ -19,6 +19,12 @@ describe("revision exports", () => {
     const response = await server.request({ method: "POST", url: "/api/revisions/mission-1:r0/export", payload: {} });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ revisionId: "mission-1:r0", missionId: "mission-1", auditManifest: { eventCount: 1 } });
+    expect(response.json().safetyResults).toEqual([expect.objectContaining({
+      revisionId: "mission-1:r0",
+      canonicalInputSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      evidenceSnapshotSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      resultSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+    })]);
     expect(response.json().hashes.payloadSha256).toMatch(/^[a-f0-9]{64}$/);
     await expect(app.auditLedger.queryAudit({ type: "export.created" })).resolves.toMatchObject([{
       actorUserId: "commander-1",

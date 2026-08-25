@@ -14,7 +14,7 @@ import { registerTelemetryRoutes } from "./routes/telemetry.js";
 import { MissionService } from "./services/mission-service.js";
 import { TelemetryService } from "./services/telemetry-service.js";
 import { InMemoryTrustedKeyStore, SafeModeService, type TrustedKeyStore } from "./services/safe-mode.js";
-import type { SafetyEvaluationProvider } from "./services/safety-evaluation.js";
+import { ActivePackageSafetyResolver, DeterministicSafetyEvaluationProvider, type SafetyEvaluationProvider } from "./services/safety-evaluation.js";
 import { registerOperationalDataBoundary } from "./data-boundary.js";
 import {
   createDefaultHttpAuthDependencies,
@@ -50,6 +50,7 @@ export interface EdgeServer extends FastifyInstance {
 export interface EdgeServerDependencies extends Partial<HttpAuthDependencies> {
   readonly safetyEvaluationProvider?: SafetyEvaluationProvider;
   readonly trustedKeyStore?: TrustedKeyStore;
+  readonly now?: () => string;
 }
 
 function buildReadinessReport(database: EdgeDatabase): ReadinessReport {
@@ -85,9 +86,18 @@ export async function buildServer(input: EdgeConfigInput = {}, dependencies: Edg
   const https = await loadTlsMaterial(edgeConfig);
   const edgeDatabase = openDatabase(edgeConfig.databaseUrl, edgeConfig.lockTimeoutMs);
   const auditLedger = new AuditLedger({ database: edgeDatabase });
-  const missionService = new MissionService({ auditLedger, database: edgeDatabase, safetyEvaluationProvider: dependencies.safetyEvaluationProvider });
+  const now = dependencies.now ?? (() => new Date().toISOString());
+  const missionTarget: { current?: MissionService } = {};
+  const missionBoundary = {
+    markSafetyEvaluationsStale: async (...args: Parameters<MissionService["markSafetyEvaluationsStale"]>) => requireMissionTarget(missionTarget).markSafetyEvaluationsStale(...args),
+    getMission: (...args: Parameters<MissionService["getMission"]>) => requireMissionTarget(missionTarget).getMission(...args),
+  };
+  const safeModeService = new SafeModeService({ database: edgeDatabase, packageDirectory: edgeConfig.packageDirectory, auditLedger, missionService: missionBoundary, now, trustedKeyStore: dependencies.trustedKeyStore ?? new InMemoryTrustedKeyStore() });
+  const resolver = new ActivePackageSafetyResolver(safeModeService);
+  const safetyEvaluationProvider = dependencies.safetyEvaluationProvider ?? new DeterministicSafetyEvaluationProvider({ now, resolve: resolver.resolve.bind(resolver) });
+  const missionService = new MissionService({ auditLedger, database: edgeDatabase, now, safetyEvaluationProvider });
+  missionTarget.current = missionService;
   const telemetryService = new TelemetryService();
-  const safeModeService = new SafeModeService({ database: edgeDatabase, packageDirectory: edgeConfig.packageDirectory, auditLedger, missionService, trustedKeyStore: dependencies.trustedKeyStore ?? new InMemoryTrustedKeyStore() });
   const app = Fastify({ logger: false, ...(https === undefined ? {} : { https }) }) as unknown as EdgeServer;
   Object.defineProperties(app, {
     edgeConfig: { value: edgeConfig, enumerable: false },
@@ -129,4 +139,9 @@ export async function buildServer(input: EdgeConfigInput = {}, dependencies: Edg
   registerExportRoutes(app, safeModeService);
 
   return app;
+}
+
+function requireMissionTarget(target: { current?: MissionService }): MissionService {
+  if (target.current === undefined) throw new Error("mission service is not initialized");
+  return target.current;
 }

@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 import { manifestContentDigest, signManifest, type SignedPackageManifest } from "@fac-isr/evidence";
 import type { EdgeServer } from "../src/server.js";
-import { missionFixture, nowUtc, safetyResult } from "./mission-fixture.js";
+import { DeterministicSafetyEvaluationProvider, UnavailableSafetyEvaluationProvider, validateSafetyEvaluationEnvelope } from "../src/services/safety-evaluation.js";
+import { missionFixture, nowUtc, safetyResult, testSafetyEvaluationProvider } from "./mission-fixture.js";
 import { authenticatedTestServer, type AuthenticatedTestServer } from "./http-test-auth.js";
 
 const actorContext = Object.freeze({
@@ -71,26 +72,7 @@ function trustedKeyStore(records: readonly ReturnType<typeof trustedKey>[]) {
 }
 
 function fixtureEvaluationProvider() {
-  return {
-    async evaluate(revision: ReturnType<typeof missionFixture>) {
-      return Object.freeze({
-        revisionId: revision.id,
-        kernelVersion: "0.1.0",
-        policyPackage: Object.freeze({ packageId: "policy-fixture", version: "1.0.0" }),
-        terminologyPackage: Object.freeze({ packageId: "terminology-fixture", version: "1.0.0" }),
-        evidencePackage: Object.freeze({ packageId: "evidence-fixture", version: "1.0.0" }),
-        canonicalInputSha256: "1".repeat(64),
-        evidenceSnapshotSha256: "2".repeat(64),
-        resultSha256: "3".repeat(64),
-        evaluatedAtUtc: nowUtc,
-        evaluations: Object.freeze([]),
-        blockers: Object.freeze([]),
-        invalidatedGates: Object.freeze([]),
-        status: "ready" as const,
-      });
-    },
-    async isCurrent() { return true; },
-  };
+  return testSafetyEvaluationProvider();
 }
 
 describe("server-owned safety authority", () => {
@@ -137,9 +119,9 @@ describe("server-owned safety authority", () => {
       status: "ready",
       stale: false,
       policyPackage: { packageId: "policy-fixture", version: "1.0.0" },
-      canonicalInputSha256: "1".repeat(64),
-      evidenceSnapshotSha256: "2".repeat(64),
-      resultSha256: "3".repeat(64),
+      canonicalInputSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      evidenceSnapshotSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      resultSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
     });
   });
 
@@ -226,6 +208,117 @@ describe("server-owned safety authority", () => {
     expect(Object.isFrozen(first)).toBe(true);
     expect(Object.isFrozen(first.evaluations)).toBe(true);
     expect(Object.isFrozen(first.blockers)).toBe(true);
+  });
+
+  it("rejects a readiness mutation that retains a blocked result hash", async () => {
+    const blocked = await new UnavailableSafetyEvaluationProvider(() => nowUtc).evaluate(missionFixture() as never);
+    const forged = JSON.parse(JSON.stringify({ ...blocked, status: "ready", blockers: [] })) as typeof blocked;
+
+    expect(() => validateSafetyEvaluationEnvelope(forged, "mission-1:r0")).toThrow(/resultSha256/i);
+  });
+
+  it("enters fail-closed safe mode when a provider supplies a forged result envelope", async () => {
+    const unavailable = new UnavailableSafetyEvaluationProvider(() => nowUtc);
+    const server = await authenticatedTestServer(
+      { databaseUrl: ":memory:", internet: "disabled", packageDirectory: mkdtempSync(join(tmpdir(), "fac-isr-forged-envelope-")) },
+      undefined,
+      {
+        safetyEvaluationProvider: {
+          async evaluate(revision: Parameters<typeof unavailable.evaluate>[0]) {
+            const blocked = await unavailable.evaluate(revision);
+            return JSON.parse(JSON.stringify({ ...blocked, status: "ready", blockers: [], invalidatedGates: [] }));
+          },
+          async isCurrent() { return true; },
+        },
+      },
+    );
+    app = server.app;
+
+    const response = await server.request({ method: "POST", url: "/api/missions", payload: { revision: missionFixture() } });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({ error: "SAFETY_EVALUATION_INTEGRITY_FAILURE" });
+    expect(app.auditLedger.isReadOnlySafeMode()).toBe(true);
+  });
+
+  it("rejects normalized impossible UTC dates in evaluation envelopes", async () => {
+    const valid = await testSafetyEvaluationProvider().evaluate(missionFixture() as never);
+    const impossible = JSON.parse(JSON.stringify({ ...valid, evaluatedAtUtc: "2026-02-31T18:00:00.000Z" })) as typeof valid;
+
+    expect(() => validateSafetyEvaluationEnvelope(impossible, "mission-1:r0")).toThrow(/evaluatedAtUtc/i);
+  });
+
+  it("reevaluates time-dependent freshness at the trusted gate time", async () => {
+    const provider = new DeterministicSafetyEvaluationProvider({
+      now: () => nowUtc,
+      resolve: async () => ({
+        requirements: [{
+          requirementId: "weather-current",
+          sourceRefs: [{ evidenceId: "evidence-1", sourceId: "source-1", edition: "1", locator: { section: "1" }, quoteLanguage: "es", extractionSha256: "a".repeat(64), reviewState: "accepted" }],
+          Spanish: "Tiempo vigente",
+          EnglishControlled: "Current weather",
+          applicabilityExpression: "state_aviation",
+          severity: "hard",
+          evidenceRequired: true,
+          effectiveFromUtc: "2026-01-01T00:00:00.000Z",
+          interpretationStatus: "approved",
+          reviewerIds: ["reviewer-1"],
+        }] as never,
+        policy: {
+          packageId: "policy-time",
+          version: "1.0.0",
+          status: "approved",
+          delegatedAuthorities: [],
+          freshness: { aip: { maxAgeMinutes: 60, critical: true }, notam: { maxAgeMinutes: 60, critical: true }, weather: { maxAgeMinutes: 60, critical: true }, terrain: { maxAgeMinutes: 60, critical: true }, airspace: { maxAgeMinutes: 60, critical: true }, policy: { maxAgeMinutes: 60, critical: true }, regulation: { maxAgeMinutes: 60, critical: true } },
+          signature: "trusted",
+        },
+        evidenceSnapshot: { id: "evidence-1" },
+        policyPackage: { packageId: "policy-time", version: "1.0.0" },
+        terminologyPackage: { packageId: "terms-time", version: "1.0.0" },
+        evidencePackage: { packageId: "evidence-time", version: "1.0.0" },
+      }),
+    });
+    const revision = missionFixture({ dataSnapshots: [{ snapshotId: "weather-1", kind: "weather", packageId: "weather-pack", status: "current", capturedAtUtc: nowUtc }] });
+    const envelope = await provider.evaluate(revision as never);
+
+    await expect(provider.isCurrent(revision as never, envelope, "2026-08-09T19:00:00.001Z")).resolves.toBe(false);
+  });
+
+  it("rejects nested safetyResult inside a revision change", async () => {
+    const server = await authenticatedTestServer({ databaseUrl: ":memory:", internet: "disabled" });
+    app = server.app;
+    await server.request({ method: "POST", url: "/api/missions", payload: { revision: missionFixture() } });
+
+    const response = await server.request({
+      method: "POST",
+      url: "/api/missions/mission-1/revisions",
+      payload: {
+        expectedRevisionId: "mission-1:r0",
+        change: { field: "route", previous: missionFixture().route, next: { ...missionFixture().route, routeHash: "nested-forgery" }, safetyResult: safetyResult("mission-1:r1") },
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ error: "CALLER_SAFETY_RESULT_FORBIDDEN" });
+  });
+
+  it("invalidates approvals before publishing a recomputed envelope", async () => {
+    const server = await authenticatedTestServer(
+      { databaseUrl: ":memory:", internet: "disabled" },
+      [
+        { userId: "commander-1", roles: ["commander"], missionIds: ["mission-1"] },
+        { userId: "operator-1", roles: ["operator"], missionIds: ["mission-1"] },
+      ],
+    );
+    app = server.app;
+    await server.request({ method: "POST", url: "/api/missions", payload: { revision: missionFixture() } }, "commander-1");
+    await server.request({ method: "POST", url: "/api/revisions/mission-1:r0/checklist-responses", payload: { responseId: "check-op", itemId: "operator", response: "pass" } }, "operator-1");
+    await server.request({ method: "POST", url: "/api/revisions/mission-1:r0/gates/operator", payload: { decision: "accept", aircraftId: "aircraft-1", reason: "accepted", evidenceSnapshotId: "evidence-1", checklistResponseIds: ["check-op"] } }, "operator-1");
+
+    await app.missionService.recomputeSafetyEvaluation("mission-1:r0", actorContext);
+
+    expect((app.missionService.getMission("mission-1") as { gateApprovals: unknown[] }).gateApprovals).toEqual([]);
+    await expect(app.auditLedger.queryAudit({ type: "gate.invalidated" })).resolves.toHaveLength(1);
   });
 });
 
