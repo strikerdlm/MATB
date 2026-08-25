@@ -10,10 +10,11 @@ async function source(path: string): Promise<string> {
 }
 
 describe("Windows CI portability policy", () => {
-  it("lets Playwright resolve its installed Chromium executable", () => {
+  it("uses an explicit Playwright executable override only when configured", () => {
     const use = playwrightConfig.use as { launchOptions?: { executablePath?: string } } | undefined;
+    const configured = process.env.SMS_PLAYWRIGHT_EXECUTABLE_PATH?.trim();
 
-    expect(use?.launchOptions?.executablePath).toBeUndefined();
+    expect(use?.launchOptions?.executablePath).toBe(configured === undefined || configured === "" ? undefined : configured);
   });
 
   it("uses host-native temporary and file URL paths in the console gates", async () => {
