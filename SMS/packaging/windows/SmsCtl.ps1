@@ -293,7 +293,6 @@ function Restore-SmsBackup([string]$Path) {
     Set-RestrictedAcl $DataRoot $true
     if ($TestMode -and $env:SMS_TEST_FAIL_RESTORE_AFTER_DATA_ACL -eq "1") { throw "controlled restore failure after data ACL" }
     Set-RestrictedAcl $PackageRoot $true
-    Remove-Item -LiteralPath $rollback, $staging -Recurse -Force
   } catch {
     $originalFailure = $_.Exception.Message
     $recoveryFailures = @()
@@ -313,6 +312,12 @@ function Restore-SmsBackup([string]$Path) {
     Remove-Item -LiteralPath $staging, $rollback -Recurse -Force -ErrorAction SilentlyContinue
     throw "Restore failed; original data and packages were recovered: $originalFailure"
   }
+  $cleanupFailures = @()
+  foreach ($path in @($staging, $rollback)) {
+    try { Remove-Item -LiteralPath $path -Recurse -Force }
+    catch { $cleanupFailures += "${path}: $($_.Exception.Message)" }
+  }
+  if ($cleanupFailures.Count -gt 0) { throw "Restore committed, but staging cleanup is incomplete: $($cleanupFailures -join '; ')" }
 }
 
 Assert-Administrator
