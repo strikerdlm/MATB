@@ -10,11 +10,27 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const RELEASE = "0.2.0-rc.1";
 const NODE_VERSION = "22.23.2";
+const OFFICIAL_NODE_RELEASE_SIGNERS = new Set([
+  "5BE8A3F6C8A5C01D106C0AD820B1A390B168D356", "DD792F5973C6DE52C432CBDAC77ABFA00DDBF2B7",
+  "CC68F5A3106FF448322E48ED27F5E38D5B0A215F", "8FCCA13FEF1D0C2E91008E09770F7A9A5AE15600",
+  "890C08DB8579162FEE0DF9DB8BEAB4DFCF555EF4", "C82FA3AE1CBEDC6BE46B9360C43CEC45C17AB93C",
+  "108F52B48DB57BB0CC439B2997B01419BD92F80A", "655F3B5C1FB3FA8D1A0CA6BDE4A7D232B936D2FD",
+  "A363A499291CBBC940DD62E41F10027AF002F8B0",
+]);
 const smsRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const targetMetadata = Object.freeze({
   "linux-x64": { archive: `node-v${NODE_VERSION}-linux-x64.tar.xz`, executable: "bin/node", artifact: `fac-isr-sms-${RELEASE}-linux-x64.tar.gz` },
   "win32-x64": { archive: `node-v${NODE_VERSION}-win-x64.zip`, executable: "node.exe", artifact: `fac-isr-sms-${RELEASE}-win32-x64.zip` },
 });
+
+export function isOfficialNodeSignatureStatus(status) {
+  return status.split(/\r?\n/u).filter((line) => line.startsWith("[GNUPG:] VALIDSIG ")).some((line) => {
+    const fields = line.trim().split(/\s+/u);
+    const primaryFingerprint = fields.at(-1)?.toUpperCase();
+    const signingFingerprint = fields[2]?.toUpperCase();
+    return OFFICIAL_NODE_RELEASE_SIGNERS.has(primaryFingerprint) || OFFICIAL_NODE_RELEASE_SIGNERS.has(signingFingerprint);
+  });
+}
 
 function parse(argv) {
   const options = { testRuntime: false };
@@ -99,7 +115,25 @@ async function verifyRuntime(options, metadata) {
   if (!matching) throw new Error("Node checksum metadata does not cover the runtime archive");
   if (await sha256(runtimeArchive) !== matching[1]) throw new Error("Node runtime checksum mismatch");
   if (!options.testRuntime) {
-    await run("gpgv", ["--keyring", resolve(options.nodeReleaseKeyring), resolve(options.runtimeChecksumsSignature), resolve(options.runtimeChecksums)], { capture: true });
+    const signatureStage = await mkdtemp(join(tmpdir(), "sms-node-signature-"));
+    try {
+      const verifiedChecksums = resolve(signatureStage, "SHASUMS256.txt");
+      let verified;
+      try {
+        verified = await run("gpgv", ["--status-fd", "1", "--keyring", resolve(options.nodeReleaseKeyring), "--output", verifiedChecksums, resolve(options.runtimeChecksumsSignature)], { capture: true });
+        if (await readFile(verifiedChecksums, "utf8") !== checksumText) throw new Error("signed Node checksum content does not match supplied checksum metadata");
+      } catch (clearSignedError) {
+        await rm(verifiedChecksums, { force: true });
+        try {
+          verified = await run("gpgv", ["--status-fd", "1", "--keyring", resolve(options.nodeReleaseKeyring), resolve(options.runtimeChecksumsSignature), resolve(options.runtimeChecksums)], { capture: true });
+        } catch {
+          throw clearSignedError;
+        }
+      }
+      if (!isOfficialNodeSignatureStatus(verified.stdout)) throw new Error("Node checksum signature is not from a pinned official Node release signer");
+    } finally {
+      await rm(signatureStage, { recursive: true, force: true });
+    }
   }
   return runtimeArchive;
 }
@@ -165,7 +199,7 @@ export async function copyRequiredApp(appRoot, destination) {
   }
 }
 
-async function writeMetadata(bundle, target, appRoot) {
+async function writeMetadata(bundle, target, appRoot, testRuntime) {
   await mkdir(resolve(bundle, "config"), { recursive: true });
   const platformPaths = target === "linux-x64" ? {
     config: "/etc/fac-isr-sms", database: "/var/lib/fac-isr-sms/data/edge.sqlite", packages: "/var/lib/fac-isr-sms/packages",
@@ -186,8 +220,14 @@ async function writeMetadata(bundle, target, appRoot) {
   for (const metadata of Object.values(lock.packages ?? {})) if (typeof metadata?.license === "string") licenses.set(metadata.license, (licenses.get(metadata.license) ?? 0) + 1);
   await writeFile(resolve(bundle, "notices/THIRD_PARTY_NOTICES.md"), `# Third-party notices\n\nBundled production dependencies are enumerated in the SBOM fragment. No external fonts are bundled.\n\n${[...licenses].sort().map(([name, count]) => `- ${name}: ${count}`).join("\n")}\n`);
   await mkdir(resolve(bundle, "sbom"), { recursive: true });
-  await writeFile(resolve(bundle, "sbom/runtime-fragment.cdx.json"), `${JSON.stringify({ bomFormat: "CycloneDX", specVersion: "1.6", version: 1, metadata: { component: { type: "application", name: "fac-isr-sms", version: RELEASE } }, components: [{ type: "framework", name: "node", version: NODE_VERSION, properties: [{ name: "fac-isr:target", value: target }] }] }, null, 2)}\n`);
-  await writeFile(resolve(bundle, "release.json"), `${JSON.stringify({ release: `fac-isr-sms@${RELEASE}`, target, nodeVersion: NODE_VERSION, internet: "disabled", operationalReady: false }, null, 2)}\n`);
+  const components = [{ type: "framework", name: "node", version: NODE_VERSION, properties: [{ name: "fac-isr:target", value: target }] }];
+  for (const packageJson of (await walk(resolve(bundle, "app/node_modules"))).filter(({ path }) => path.endsWith("package.json"))) {
+    const metadata = JSON.parse(await readFile(packageJson.full, "utf8"));
+    if (typeof metadata.name === "string" && typeof metadata.version === "string") components.push({ type: "library", name: metadata.name, version: metadata.version, ...(typeof metadata.license === "string" ? { licenses: [{ license: { id: metadata.license } }] } : {}) });
+  }
+  components.sort((left, right) => left.name.localeCompare(right.name));
+  await writeFile(resolve(bundle, "sbom/runtime-fragment.cdx.json"), `${JSON.stringify({ bomFormat: "CycloneDX", specVersion: "1.6", version: 1, metadata: { component: { type: "application", name: "fac-isr-sms", version: RELEASE } }, components }, null, 2)}\n`);
+  await writeFile(resolve(bundle, "release.json"), `${JSON.stringify({ release: `fac-isr-sms@${RELEASE}`, target, nodeVersion: NODE_VERSION, internet: "disabled", operationalReady: false, production: !testRuntime, runtimeProvenance: testRuntime ? "controlled-test-fixture" : "official-node-signed-checksums" }, null, 2)}\n`);
   await mkdir(resolve(bundle, "bin"), { recursive: true });
   await writeFile(resolve(bundle, target === "linux-x64" ? "bin/sms-admin" : "bin/sms-admin.cmd"), target === "linux-x64"
     ? "#!/bin/sh\nset -eu\nHERE=$(CDPATH= cd -- \"$(dirname -- \"$0\")/..\" && pwd)\nexec \"$HERE/runtime/bin/node\" \"$HERE/app/apps/edge-api/dist/admin/cli.js\" \"$@\"\n"
@@ -223,6 +263,10 @@ async function normalizeAndInventory(bundle, epoch, target) {
   await chmod(bundle, 0o755);
   await writeFile(resolve(bundle, "inventory.json"), `${JSON.stringify({ schemaVersion: "1.0", release: `fac-isr-sms@${RELEASE}`, target, inventoryPath: "inventory.json", files }, null, 2)}\n`, { mode: 0o444 });
   await utimes(resolve(bundle, "inventory.json"), date, date);
+  const inventoryInfo = await stat(resolve(bundle, "inventory.json"));
+  const trustedFiles = [...files, { path: "inventory.json", sha256: await sha256(resolve(bundle, "inventory.json")), sizeBytes: inventoryInfo.size, mode: inventoryInfo.mode & 0o777 }];
+  await writeFile(resolve(bundle, "inventory.tsv"), `${trustedFiles.map((file) => `${file.path}\t${file.sha256}\t${file.sizeBytes}\t${file.mode.toString(8).padStart(3, "0")}`).join("\n")}\n`, { mode: 0o444 });
+  await utimes(resolve(bundle, "inventory.tsv"), date, date);
   await chmod(bundle, 0o755);
   await utimes(bundle, date, date);
 }
@@ -243,10 +287,11 @@ async function build(options) {
     await extractRuntime(archive, options.target, runtimeStage, resolve(bundle, "runtime"));
     await mkdir(resolve(bundle, "app"));
     await copyRequiredApp(appRoot, resolve(bundle, "app"));
-    await writeMetadata(bundle, options.target, appRoot);
+    await writeMetadata(bundle, options.target, appRoot, options.testRuntime);
     await normalizeAndInventory(bundle, epoch, options.target);
     await mkdir(output, { recursive: true });
-    const artifact = resolve(output, metadata.artifact);
+    const artifactName = options.testRuntime ? `TEST-ONLY-${metadata.artifact}` : metadata.artifact;
+    const artifact = resolve(output, artifactName);
     await rm(artifact, { force: true });
     if (options.target === "linux-x64") {
       await run("tar", ["--sort=name", `--mtime=@${epoch}`, "--owner=0", "--group=0", "--numeric-owner", "--format=posix", "--pax-option=delete=atime,delete=ctime", "-czf", artifact, "fac-isr-sms"], { cwd: stage, env: { GZIP: "-n" } });

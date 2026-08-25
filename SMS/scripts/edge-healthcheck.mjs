@@ -20,7 +20,7 @@ async function selfTest() {
   process.stdout.write("PASS edge self-test (offline; readiness fail-closed)\n");
 }
 
-async function liveCheck() {
+async function installedCheck(mode) {
   const port = Number(process.env.SMS_PORT ?? "8443");
   const clientCertificate = process.env.SMS_HEALTH_CLIENT_CERT_PATH;
   const clientKey = process.env.SMS_HEALTH_CLIENT_KEY_PATH;
@@ -33,7 +33,7 @@ async function liveCheck() {
     const request = https.get({
       hostname: "127.0.0.1",
       port,
-      path: "/healthz",
+      path: mode === "ready" ? "/readyz" : "/healthz",
       rejectUnauthorized: false,
       timeout: 4_000,
       ...clientTls,
@@ -44,14 +44,17 @@ async function liveCheck() {
   const chunks = [];
   for await (const chunk of response) chunks.push(chunk);
   const payload = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-  if (response.statusCode !== 200 || payload.status !== "ok" || payload.internet !== "disabled") {
-    throw new Error("live edge health check failed");
+  if (mode === "ready") {
+    if (response.statusCode !== 200 || payload.technicalReady !== true) throw new Error("installed edge readiness check failed");
+  } else if (response.statusCode !== 200 || payload.status !== "ok" || payload.internet !== "disabled") {
+    throw new Error("installed edge liveness check failed");
   }
-  process.stdout.write("PASS live edge health check\n");
+  process.stdout.write(`PASS installed edge ${mode} check\n`);
 }
 
 try {
-  if (process.argv[2] === "--live") await liveCheck();
+  if (process.argv[2] === "--live") await installedCheck("live");
+  else if (process.argv[2] === "--ready") await installedCheck("ready");
   else await selfTest();
 } catch (error) {
   process.stderr.write(`FAIL edge health check: ${error instanceof Error ? error.message : String(error)}\n`);

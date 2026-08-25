@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, readdir, readlink, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, chown, link, mkdir, mkdtemp, readFile, readdir, readlink, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, test } from "vitest";
+import { isOfficialNodeSignatureStatus } from "../../scripts/build-native-bundle.mjs";
 import { verifyPlatformInventory } from "../../scripts/verify-platform-inventory.mjs";
 
 const exec = promisify(execFile);
@@ -12,6 +13,7 @@ const smsRoot = process.cwd();
 const builder = resolve(smsRoot, "scripts/build-native-bundle.mjs");
 const linuxInstaller = resolve(smsRoot, "packaging/linux/smsctl");
 const ociPreflight = resolve(smsRoot, "docker/preflight.sh");
+const healthcheck = resolve(smsRoot, "scripts/edge-healthcheck.mjs");
 const temporaryDirectories: string[] = [];
 
 async function temporaryDirectory(): Promise<string> {
@@ -28,7 +30,7 @@ async function createAppFixture(root: string): Promise<void> {
   const files = new Map<string, string>([
     ["package.json", JSON.stringify({ name: "fac-isr-sms", version: "0.2.0-rc.1" })],
     ["package-lock.json", JSON.stringify({ lockfileVersion: 3, packages: {} })],
-    ["apps/edge-api/package.json", JSON.stringify({ name: "@fac-isr/edge-api", version: "0.2.0-rc.1" })],
+    ["apps/edge-api/package.json", JSON.stringify({ name: "@fac-isr/edge-api", version: "0.2.0-rc.1", dependencies: { fastify: "5.6.1" } })],
     ["apps/edge-api/dist/server.js", "export const builtEdge = true;\n"],
     ["apps/edge-api/dist/admin/cli.js", "process.stdout.write('sms-admin fixture\\n');\n"],
     ["apps/console/dist/index.html", "<!doctype html><title>SMS</title>\n"],
@@ -39,8 +41,10 @@ async function createAppFixture(root: string): Promise<void> {
     ["packages/safety-kernel/dist/index.js", "export {};\n"],
     ["packages/telemetry/package.json", JSON.stringify({ name: "@fac-isr/telemetry", version: "0.2.0-rc.1" })],
     ["packages/telemetry/dist/index.js", "export {};\n"],
-    ["node_modules/fastify/package.json", JSON.stringify({ name: "fastify", version: "5.6.1", license: "MIT" })],
+    ["node_modules/fastify/package.json", JSON.stringify({ name: "fastify", version: "5.6.1", license: "MIT", dependencies: { "fast-content-type-parse": "2.0.0" } })],
     ["node_modules/fastify/index.js", "export {};\n"],
+    ["node_modules/fast-content-type-parse/package.json", JSON.stringify({ name: "fast-content-type-parse", version: "2.0.0", license: "MIT" })],
+    ["node_modules/fast-content-type-parse/index.js", "export {};\n"],
     ["scripts/start-edge.mjs", "import { writeFileSync } from 'node:fs';\nif (process.env.SMS_COLD_START_MARKER) writeFileSync(process.env.SMS_COLD_START_MARKER, 'offline cold start\\n');\nprocess.stdout.write('offline cold start\\n');\n"],
     ["scripts/edge-healthcheck.mjs", "process.stdout.write('ok\\n');\n"],
   ]);
@@ -130,6 +134,11 @@ describe("native release bundle builder", () => {
     ], { cwd: smsRoot })).rejects.toBeDefined();
   });
 
+  test("rejects arbitrary valid signatures and accepts only pinned official Node signer status", () => {
+    expect(isOfficialNodeSignatureStatus("[GNUPG:] VALIDSIG AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA 2026-01-01 0 4 0 22 8 00 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n")).toBe(false);
+    expect(isOfficialNodeSignatureStatus("[GNUPG:] VALIDSIG BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB 2026-01-01 0 4 0 22 8 00 5BE8A3F6C8A5C01D106C0AD820B1A390B168D356\n")).toBe(true);
+  });
+
   test("rejects runtime bytes not covered by the supplied Node checksum metadata", async () => {
     const root = await temporaryDirectory();
     const appRoot = resolve(root, "app");
@@ -149,8 +158,8 @@ describe("native release bundle builder", () => {
   });
 
   test.each([
-    ["linux-x64", "fac-isr-sms-0.2.0-rc.1-linux-x64.tar.gz"],
-    ["win32-x64", "fac-isr-sms-0.2.0-rc.1-win32-x64.zip"],
+    ["linux-x64", "TEST-ONLY-fac-isr-sms-0.2.0-rc.1-linux-x64.tar.gz"],
+    ["win32-x64", "TEST-ONLY-fac-isr-sms-0.2.0-rc.1-win32-x64.zip"],
   ] as const)("builds and verifies the exact deterministic %s artifact", async (target, artifactName) => {
     const firstRoot = await temporaryDirectory();
     const secondRoot = await temporaryDirectory();
@@ -174,6 +183,9 @@ describe("native release bundle builder", () => {
     await expect(stat(resolve(bundleRoot, "app/apps/edge-api/dist/admin/cli.js"))).resolves.toBeDefined();
     await expect(stat(resolve(bundleRoot, "notices/THIRD_PARTY_NOTICES.md"))).resolves.toBeDefined();
     await expect(stat(resolve(bundleRoot, "sbom/runtime-fragment.cdx.json"))).resolves.toBeDefined();
+    const sbom = JSON.parse(await readFile(resolve(bundleRoot, "sbom/runtime-fragment.cdx.json"), "utf8"));
+    expect(sbom.components.map((component: { name: string }) => component.name)).toEqual(expect.arrayContaining(["node", "fastify", "fast-content-type-parse"]));
+    expect(JSON.parse(await readFile(resolve(bundleRoot, "release.json"), "utf8"))).toMatchObject({ production: false, runtimeProvenance: "controlled-test-fixture" });
     await expect(stat(resolve(bundleRoot, "config/sms.env.template"))).resolves.toBeDefined();
     await expect(stat(resolve(bundleRoot, target === "linux-x64" ? "install/linux/smsctl" : "install/windows/SmsCtl.ps1"))).resolves.toBeDefined();
   });
@@ -183,7 +195,7 @@ describe("native release bundle builder", () => {
     const output = resolve(root, "out");
     await runBuilder("linux-x64", root, output);
     const extracted = resolve(root, "extracted");
-    await extractArtifact(resolve(output, "fac-isr-sms-0.2.0-rc.1-linux-x64.tar.gz"), extracted);
+    await extractArtifact(resolve(output, "TEST-ONLY-fac-isr-sms-0.2.0-rc.1-linux-x64.tar.gz"), extracted);
     const bundleRoot = resolve(extracted, "fac-isr-sms");
     const marker = resolve(root, "cold-start.marker");
     await exec(resolve(bundleRoot, "runtime/bin/node"), [resolve(bundleRoot, "app/scripts/start-edge.mjs")], {
@@ -194,14 +206,36 @@ describe("native release bundle builder", () => {
   });
 });
 
+describe("installed-process readiness", () => {
+  test("fails when no installed HTTPS listener is reachable", async () => {
+    await expect(exec(process.execPath, [healthcheck, "--ready"], {
+      cwd: smsRoot,
+      env: { ...process.env, SMS_PORT: "1" },
+    })).rejects.toBeDefined();
+  });
+
+});
+
 async function lifecycleFiles(root: string, current = root): Promise<string[]> {
   const paths: string[] = [];
   for (const entry of await readdir(current, { withFileTypes: true })) {
     const full = resolve(current, entry.name);
     if (entry.isDirectory()) paths.push(...await lifecycleFiles(root, full));
-    else if (entry.isFile() && entry.name !== "inventory.json") paths.push(full.slice(root.length + 1).replaceAll("\\", "/"));
+    else if (entry.isFile() && entry.name !== "inventory.json" && entry.name !== "inventory.tsv") paths.push(full.slice(root.length + 1).replaceAll("\\", "/"));
   }
   return paths.sort();
+}
+
+async function refreshLifecycleInventory(bundle: string): Promise<void> {
+  const inventory = [];
+  for (const path of await lifecycleFiles(bundle)) {
+    const info = await stat(resolve(bundle, path));
+    inventory.push({ path, sha256: await sha256(resolve(bundle, path)), sizeBytes: info.size, mode: info.mode & 0o777 });
+  }
+  await writeFile(resolve(bundle, "inventory.json"), `${JSON.stringify({ schemaVersion: "1.0", inventoryPath: "inventory.json", files: inventory }, null, 2)}\n`);
+  const jsonInfo = await stat(resolve(bundle, "inventory.json"));
+  inventory.push({ path: "inventory.json", sha256: await sha256(resolve(bundle, "inventory.json")), sizeBytes: jsonInfo.size, mode: jsonInfo.mode & 0o777 });
+  await writeFile(resolve(bundle, "inventory.tsv"), `${inventory.map((file) => `${file.path}\t${file.sha256}\t${file.sizeBytes}\t${file.mode.toString(8).padStart(3, "0")}`).join("\n")}\n`);
 }
 
 async function createLifecycleBundle(root: string, buildId: string, migration = "success"): Promise<string> {
@@ -223,17 +257,16 @@ async function createLifecycleBundle(root: string, buildId: string, migration = 
     await writeFile(path, body);
   }
   for (const path of await lifecycleFiles(bundle)) await chmod(resolve(bundle, path), path === "runtime/bin/node" || path === "install/linux/migrate" ? 0o555 : path === "config/sms.env.template" ? 0o640 : 0o444);
-  const inventory = [];
-  for (const path of await lifecycleFiles(bundle)) {
-    const info = await stat(resolve(bundle, path));
-    inventory.push({ path, sha256: await sha256(resolve(bundle, path)), sizeBytes: info.size, mode: info.mode & 0o777 });
-  }
-  await writeFile(resolve(bundle, "inventory.json"), `${JSON.stringify({ schemaVersion: "1.0", inventoryPath: "inventory.json", files: inventory }, null, 2)}\n`);
+  await refreshLifecycleInventory(bundle);
   return bundle;
 }
 
 async function runLinux(root: string, ...arguments_: string[]) {
   return exec(linuxInstaller, [...arguments_, "--root", root, "--test-mode"], { cwd: smsRoot, env: { ...process.env, TZ: "UTC" } });
+}
+
+async function runLinuxWithEnvironment(root: string, environment: NodeJS.ProcessEnv, ...arguments_: string[]) {
+  return exec(linuxInstaller, [...arguments_, "--root", root, "--test-mode"], { cwd: smsRoot, env: { ...process.env, ...environment, TZ: "UTC" } });
 }
 
 async function provisionTls(root: string, mode = 0o600): Promise<void> {
@@ -248,6 +281,36 @@ async function provisionTls(root: string, mode = 0o600): Promise<void> {
 }
 
 describe("Linux native lifecycle", () => {
+  test("verifies source and staged bytes with trusted host tools without executing bundle contents", async () => {
+    const root = await temporaryDirectory();
+    const bundle = await createLifecycleBundle(root, "build-a");
+    const executionMarker = resolve(root, "untrusted-runtime-executed");
+    await chmod(resolve(bundle, "runtime/bin/node"), 0o755);
+    await writeFile(resolve(bundle, "runtime/bin/node"), `#!/bin/sh\nprintf executed > ${executionMarker}\nexit 90\n`);
+    await chmod(resolve(bundle, "runtime/bin/node"), 0o555);
+    await refreshLifecycleInventory(bundle);
+    await runLinux(root, "install", "--bundle", bundle);
+    await expect(stat(executionMarker)).rejects.toMatchObject({ code: "ENOENT" });
+
+    const secondRoot = await temporaryDirectory();
+    await expect(runLinuxWithEnvironment(secondRoot, { SMS_TEST_TAMPER_STAGE: "1" }, "install", "--bundle", await createLifecycleBundle(secondRoot, "build-b"))).rejects.toBeDefined();
+    await expect(stat(resolve(secondRoot, "opt/fac-isr-sms/current"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  test("rejects config-directory traversal and provisions service-owned private paths", async () => {
+    const root = await temporaryDirectory();
+    const external = resolve(root, "external-config");
+    await mkdir(resolve(root, "etc"), { recursive: true });
+    await mkdir(external, { mode: 0o755 });
+    await symlink(external, resolve(root, "etc/fac-isr-sms"));
+    await expect(runLinux(root, "install", "--bundle", await createLifecycleBundle(root, "build-a"))).rejects.toThrow(/symbolic|unsafe/i);
+    expect((await stat(external)).mode & 0o777).toBe(0o755);
+
+    const cleanRoot = await temporaryDirectory();
+    await runLinux(cleanRoot, "install", "--bundle", await createLifecycleBundle(cleanRoot, "build-b"));
+    expect((await stat(resolve(cleanRoot, "etc/fac-isr-sms"))).mode & 0o777).toBe(0o750);
+  });
+
   test("installs immutable application files, private mutable paths, and a dedicated service identity", async () => {
     const root = await temporaryDirectory();
     const bundle = await createLifecycleBundle(root, "build-a");
@@ -292,14 +355,42 @@ describe("Linux native lifecycle", () => {
     expect(await readFile(database, "utf8")).toBe("original database bytes\n");
 
     const second = await createLifecycleBundle(root, "build-b");
+    await runLinux(root, "start");
     await runLinux(root, "upgrade", "--bundle", second);
-    expect(await readFile(resolve(root, "var/lib/fac-isr-sms/migration.marker"), "utf8")).toBe("build-b\n");
+    expect(await readFile(resolve(root, "var/lib/fac-isr-sms/migration.marker"), "utf8")).toMatch(/^[a-f0-9]{16}\n$/u);
+    expect((await runLinux(root, "status")).stdout).toContain("running ready");
     const upgradedLink = await readlink(resolve(root, "opt/fac-isr-sms/current"));
 
     const failing = await createLifecycleBundle(root, "build-c", "fail");
     await expect(runLinux(root, "upgrade", "--bundle", failing)).rejects.toThrow(/migration/i);
     expect(await readlink(resolve(root, "opt/fac-isr-sms/current"))).toBe(upgradedLink);
     expect(await readFile(database, "utf8")).toBe("original database bytes\n");
+    expect((await runLinux(root, "status")).stdout).toContain("running ready");
+  });
+
+  test("rejects link entries in restore archives without changing installed data", async () => {
+    const root = await temporaryDirectory();
+    await runLinux(root, "install", "--bundle", await createLifecycleBundle(root, "build-a"));
+    const database = resolve(root, "var/lib/fac-isr-sms/data/edge.sqlite");
+    await writeFile(database, "preserved bytes\n");
+    const maliciousRoot = resolve(root, "malicious-backup");
+    await mkdir(resolve(maliciousRoot, "data"), { recursive: true });
+    await mkdir(resolve(maliciousRoot, "packages"), { recursive: true });
+    await symlink("/etc/passwd", resolve(maliciousRoot, "data/edge.sqlite"));
+    const archive = resolve(root, "malicious.tar.gz");
+    await exec("tar", ["-czf", archive, "-C", maliciousRoot, "data", "packages"]);
+    await expect(runLinux(root, "restore", "--backup", archive)).rejects.toThrow(/link|unsafe/i);
+    expect(await readFile(database, "utf8")).toBe("preserved bytes\n");
+
+    await rm(maliciousRoot, { recursive: true, force: true });
+    await mkdir(resolve(maliciousRoot, "data"), { recursive: true });
+    await mkdir(resolve(maliciousRoot, "packages"), { recursive: true });
+    await writeFile(resolve(maliciousRoot, "data/shared"), "hard-linked bytes\n");
+    await link(resolve(maliciousRoot, "data/shared"), resolve(maliciousRoot, "data/edge.sqlite"));
+    const hardlinkArchive = resolve(root, "malicious-hardlink.tar.gz");
+    await exec("tar", ["-czf", hardlinkArchive, "-C", maliciousRoot, "data", "packages"]);
+    await expect(runLinux(root, "restore", "--backup", hardlinkArchive)).rejects.toThrow(/link|unsafe/i);
+    expect(await readFile(database, "utf8")).toBe("preserved bytes\n");
   });
 
   test("stops and uninstalls immutable/config state while preserving operational data by default", async () => {
@@ -318,6 +409,30 @@ describe("Linux native lifecycle", () => {
 });
 
 describe("OCI privileged init and permanent runtime boundary", () => {
+  test("normalizes existing mounted data recursively and rejects symbolic entries", async () => {
+    if (process.getuid?.() !== 0) return;
+    const root = await temporaryDirectory();
+    const data = resolve(root, "data");
+    const tls = resolve(root, "tls");
+    const packages = resolve(root, "packages");
+    await mkdir(resolve(data, "nested"), { recursive: true, mode: 0o777 });
+    await writeFile(resolve(data, "nested/state.sqlite"), "state\n", { mode: 0o666 });
+    await mkdir(tls); await mkdir(packages, { mode: 0o555 });
+    for (const [name, mode] of [["server.crt", 0o444], ["server.key", 0o400], ["export.key", 0o400]] as const) {
+      await writeFile(resolve(tls, name), name); await chmod(resolve(tls, name), mode);
+      try { await chown(resolve(tls, name), 10001, 10001); } catch (error) {
+        if (error instanceof Error && "code" in error && error.code === "EINVAL") return;
+        throw error;
+      }
+    }
+    const environment = { ...process.env, SMS_DATA_DIRECTORY: data, SMS_PACKAGE_DIRECTORY: packages, SMS_TLS_CERT_PATH: resolve(tls, "server.crt"), SMS_TLS_KEY_PATH: resolve(tls, "server.key"), SMS_EXPORT_KEY_PATH: resolve(tls, "export.key") };
+    await exec(ociPreflight, ["init"], { env: environment });
+    expect(await stat(resolve(data, "nested"))).toMatchObject({ uid: 10001, gid: 10001 });
+    expect((await stat(resolve(data, "nested"))).mode & 0o777).toBe(0o700);
+    expect((await stat(resolve(data, "nested/state.sqlite"))).mode & 0o777).toBe(0o600);
+    await symlink("/etc/passwd", resolve(data, "unsafe-link"));
+    await expect(exec(ociPreflight, ["init"], { env: environment })).rejects.toBeDefined();
+  });
   test("rejects unsafe TLS mode and ownership before changing mounted state", async () => {
     const root = await temporaryDirectory();
     const data = resolve(root, "data");

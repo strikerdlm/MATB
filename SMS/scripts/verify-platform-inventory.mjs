@@ -49,7 +49,7 @@ export async function verifyPlatformInventory(rootInput) {
     }
     expected.set(item.path, item);
   }
-  const actual = (await files(root)).filter((path) => path !== "inventory.json");
+  const actual = (await files(root)).filter((path) => path !== "inventory.json" && path !== "inventory.tsv");
   const actualSet = new Set(actual);
   const missing = [...expected.keys()].filter((path) => !actualSet.has(path)).sort();
   const unexpected = actual.filter((path) => !expected.has(path)).sort();

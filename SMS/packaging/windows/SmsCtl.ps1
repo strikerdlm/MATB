@@ -51,6 +51,9 @@ function Test-BundleInventory([string]$Path) {
   if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Container)) { throw "BundleRoot is required and must be a directory" }
   $rootItem = Get-Item -LiteralPath $Path -Force
   if ($rootItem.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Bundle root cannot be a reparse point" }
+  foreach ($item in Get-ChildItem -LiteralPath $Path -Recurse -Force) {
+    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Bundle reparse points are forbidden: $($item.FullName)" }
+  }
   $inventoryPath = Join-Path $Path "inventory.json"
   $releasePath = Join-Path $Path "release.json"
   $runtimePath = Join-Path $Path "runtime\node.exe"
@@ -116,6 +119,7 @@ function Add-ImmutableRelease([string]$Path) {
   if (-not (Test-Path -LiteralPath $destination)) {
     $staging = Join-Path $releases ".staging-$releaseName-$PID"
     Copy-Item -LiteralPath $Path -Destination $staging -Recurse
+    Test-BundleInventory $staging | Out-Null
     Move-Item -LiteralPath $staging -Destination $destination
     Get-ChildItem -LiteralPath $destination -Recurse -Force | ForEach-Object { $_.IsReadOnly = $true }
     Set-RestrictedAcl $destination $true $false
@@ -149,19 +153,34 @@ function Assert-RuntimeSecurity {
   if (-not (Test-Path -LiteralPath (Join-Path $ConfigRoot "tls\server.crt") -PathType Leaf)) { throw "TLS certificate is missing" }
 }
 
+function Set-SmsProcessEnvironment {
+  foreach ($line in Get-Content -LiteralPath (Join-Path $ConfigRoot "sms.env")) {
+    $trimmed = $line.Trim()
+    if ($trimmed.Length -eq 0 -or $trimmed.StartsWith("#")) { continue }
+    $separator = $trimmed.IndexOf('=')
+    if ($separator -lt 1) { throw "Invalid SMS environment configuration line" }
+    $name = $trimmed.Substring(0, $separator)
+    if ($name -notmatch '^SMS_[A-Z0-9_]+$') { throw "Invalid SMS environment variable name" }
+    [Environment]::SetEnvironmentVariable($name, $trimmed.Substring($separator + 1), "Process")
+  }
+}
+
+function Assert-SmsReadiness {
+  Set-SmsProcessEnvironment
+  $release = Get-CurrentReleasePath
+  & (Join-Path $release "runtime\node.exe") (Join-Path $release "app\scripts\edge-healthcheck.mjs") --ready *> $null
+  if ($LASTEXITCODE -ne 0) { throw "FAC ISR SMS installed process is not technically ready" }
+}
+
 function Start-Sms {
   Assert-RuntimeSecurity
   if ($TestMode) {
     [IO.File]::WriteAllText((Join-Path $StateRoot "service.state"), "running ready`r`n", [Text.UTF8Encoding]::new($false))
   } else {
     Start-ScheduledTask -TaskName $TaskName
-    $release = Get-CurrentReleasePath
-    $node = Join-Path $release "runtime\node.exe"
-    $health = Join-Path $release "app\scripts\edge-healthcheck.mjs"
     $ready = $false
     for ($attempt = 0; $attempt -lt 30; $attempt++) {
-      & $node $health --ready *> $null
-      if ($LASTEXITCODE -eq 0) { $ready = $true; break }
+      try { Assert-SmsReadiness; $ready = $true; break } catch { }
       Start-Sleep -Seconds 1
     }
     if (-not $ready) { throw "FAC ISR SMS did not become ready" }
@@ -190,6 +209,9 @@ function Restore-SmsBackup([string]$Path) {
   $staging = Join-Path $MutableRoot ".restore-$PID"
   $rollback = Join-Path $MutableRoot ".rollback-$PID"
   Expand-Archive -LiteralPath $Path -DestinationPath $staging
+  foreach ($item in Get-ChildItem -LiteralPath $staging -Recurse -Force) {
+    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { Remove-Item -LiteralPath $staging -Recurse -Force; throw "Backup reparse points are forbidden" }
+  }
   New-Item -ItemType Directory -Path $rollback | Out-Null
   $stagedData = Join-Path $staging "data"
   $stagedPackages = Join-Path $staging "packages"
@@ -240,6 +262,7 @@ switch ($Action) {
       $task = Get-ScheduledTask -TaskName $TaskName
       Write-Output $task.State
       if ($task.State -ne "Running") { exit 3 }
+      Assert-SmsReadiness
     }
   }
   "Stop" { Stop-Sms }
@@ -247,19 +270,28 @@ switch ($Action) {
   "Restore" { Stop-Sms; Restore-SmsBackup $BackupPath }
   "Upgrade" {
     $oldPointer = (Get-Content -LiteralPath (Join-Path $InstallRoot "current.txt") -Raw).Trim()
-    $rollbackBackup = New-SmsBackup
     $release = Add-ImmutableRelease $BundleRoot
+    $wasRunning = if ($TestMode) {
+      (Test-Path -LiteralPath (Join-Path $StateRoot "service.state")) -and ((Get-Content -LiteralPath (Join-Path $StateRoot "service.state") -Raw).Trim() -eq "running ready")
+    } else {
+      (Get-ScheduledTask -TaskName $TaskName).State -eq "Running"
+    }
     Stop-Sms
+    $rollbackBackup = $null
     try {
+      $rollbackBackup = New-SmsBackup
       $migration = Join-Path $release.Path "install\windows\Migrate.ps1"
       if (Test-Path -LiteralPath $migration) { & $migration -DataRoot $MutableRoot -BuildId $release.BuildId }
       if (-not $?) { throw "migration returned failure" }
       Set-CurrentRelease $release.Name
       Register-SmsTask
+      if ($wasRunning) { Start-Sms }
       Write-Output "upgraded from $oldPointer to $($release.Name)"
     } catch {
-      Restore-SmsBackup $rollbackBackup
+      if ($null -ne $rollbackBackup) { Restore-SmsBackup $rollbackBackup }
       Set-CurrentRelease $oldPointer
+      Register-SmsTask
+      if ($wasRunning) { Start-Sms }
       throw "Upgrade migration failed; data and immutable pointer were rolled back: $($_.Exception.Message)"
     }
   }

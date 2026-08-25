@@ -1,6 +1,6 @@
 {
   "name": "@fac-isr/map-packager",
-  "version": "0.1.0",
+  "version": "0.2.0-rc.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,7 @@
     "typecheck": "tsc -p ../../tsconfig.base.json"
   },
   "dependencies": {
-    "@fac-isr/evidence": "0.1.0",
-    "@fac-isr/geo": "0.1.0"
+    "@fac-isr/evidence": "0.2.0-rc.1",
+    "@fac-isr/geo": "0.2.0-rc.1"
   }
 }

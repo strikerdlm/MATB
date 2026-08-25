@@ -56,6 +56,8 @@ function Set-ServiceOnlyAcl([string]$Path) {
 
 try {
   New-Item -ItemType Directory -Path $TestRoot | Out-Null
+  & node (Join-Path $SmsRoot "scripts\edge-healthcheck.mjs") --ready *> $null
+  Assert-True ($LASTEXITCODE -ne 0) "readiness passed without an installed HTTPS listener"
   $first = Write-Bundle "build-a"
   Invoke-Sms "Install" $first $null | Out-Null
   $installRoot = Join-Path $TestRoot "Program Files\FAC ISR\SMS"
@@ -91,6 +93,7 @@ try {
 
   $second = Write-Bundle "build-b"
   Invoke-Sms "Upgrade" $second $null | Out-Null
+  Assert-True ((Invoke-Sms "Status" $null $null) -match "running ready") "successful upgrade did not restart the prior running service"
   Assert-True ((Get-Content -LiteralPath (Join-Path $mutableRoot "migration.marker") -Raw) -eq "build-b") "upgrade migration did not run"
   $upgradedPointer = Get-Content -LiteralPath (Join-Path $installRoot "current.txt") -Raw
   $failing = Write-Bundle "build-c" $true
@@ -100,6 +103,14 @@ try {
   Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot "current.txt") -Raw) -eq $upgradedPointer) "failed upgrade changed the immutable pointer"
   Assert-True ((Get-Content -LiteralPath $database -Raw) -eq "original database bytes") "failed upgrade did not restore data"
   Assert-True ((Get-Content -LiteralPath $activePackage -Raw) -eq "original package bytes") "failed upgrade did not restore packages"
+  Assert-True ((Invoke-Sms "Status" $null $null) -match "running ready") "failed upgrade did not restart the old release"
+
+  $junctionBundle = Write-Bundle "junction-build"
+  New-Item -ItemType Directory -Path (Join-Path $TestRoot "junction-target") | Out-Null
+  New-Item -ItemType Junction -Path (Join-Path $junctionBundle "app\unsafe-junction") -Target (Join-Path $TestRoot "junction-target") | Out-Null
+  $junctionRejected = $false
+  try { Invoke-Sms "Install" $junctionBundle $null } catch { $junctionRejected = $_.Exception.Message -match "reparse" }
+  Assert-True $junctionRejected "bundle directory junction was accepted"
 
   Invoke-Sms "Stop" $null $null | Out-Null
   Invoke-Sms "Uninstall" $null $null | Out-Null

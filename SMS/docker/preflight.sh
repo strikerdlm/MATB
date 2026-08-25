@@ -65,8 +65,9 @@ case "$COMMAND" in
     validate_packages
     [ ! -L "$SMS_DATA_DIRECTORY" ] || fail "data directory cannot be a symbolic link"
     mkdir -p "$SMS_DATA_DIRECTORY"
-    chown -R "$SERVICE_UID:$SERVICE_GID" "$SMS_DATA_DIRECTORY"
-    chmod 0700 "$SMS_DATA_DIRECTORY"
+    if find "$SMS_DATA_DIRECTORY" -xdev ! -type d ! -type f -print -quit | grep -q .; then fail "data tree contains a link or special entry"; fi
+    find "$SMS_DATA_DIRECTORY" -xdev -type d -exec chown "$SERVICE_UID:$SERVICE_GID" {} + -exec chmod 0700 {} +
+    find "$SMS_DATA_DIRECTORY" -xdev -type f -exec chown "$SERVICE_UID:$SERVICE_GID" {} + -exec chmod 0600 {} +
     printf 'initialized uid=%s gid=%s data=%s\n' "$SERVICE_UID" "$SERVICE_GID" "$SMS_DATA_DIRECTORY"
     ;;
   runtime)

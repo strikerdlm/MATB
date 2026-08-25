@@ -45,7 +45,7 @@ describe("release verification command", () => {
   });
 
   it("has a semantic release identity for SBOM package URLs", () => {
-    expect(readPackageJson().version).toMatch(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/);
+    expect(readPackageJson().version).toMatch(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/);
   });
 
   it("discovers package, app, tool, and root integration tests", () => {
