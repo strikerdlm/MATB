@@ -29,10 +29,21 @@ async function sha256(path: string): Promise<string> {
 }
 
 async function createAppFixture(root: string): Promise<void> {
+  const lockPackages = {
+    "": { name: "fac-isr-sms", version: "0.2.0-rc.1" },
+    "node_modules/fastify": { name: "fastify", version: "5.6.1", license: "MIT", dependencies: { "fast-content-type-parse": "2.0.0" } },
+    "node_modules/fast-content-type-parse": { name: "fast-content-type-parse", version: "2.0.0", license: "MIT" },
+    "node_modules/ajv": { name: "ajv", version: "8.17.1", license: "MIT", dependencies: { "fast-uri": "3.0.6" } },
+    "node_modules/ajv/node_modules/fast-uri": { name: "fast-uri", version: "3.0.6", license: "BSD-3-Clause" },
+    "node_modules/light-my-request": { name: "light-my-request", version: "6.6.0", license: "BSD-3-Clause", dependencies: { "process-warning": "5.0.0" } },
+    "node_modules/light-my-request/node_modules/process-warning": { name: "process-warning", version: "5.0.0", license: "MIT" },
+    "node_modules/thread-stream": { name: "thread-stream", version: "3.1.0", license: "MIT", dependencies: { "real-require": "0.2.0" } },
+    "node_modules/thread-stream/node_modules/real-require": { name: "real-require", version: "0.2.0", license: "MIT" },
+  };
   const files = new Map<string, string>([
     ["package.json", JSON.stringify({ name: "fac-isr-sms", version: "0.2.0-rc.1" })],
-    ["package-lock.json", JSON.stringify({ lockfileVersion: 3, packages: {} })],
-    ["apps/edge-api/package.json", JSON.stringify({ name: "@fac-isr/edge-api", version: "0.2.0-rc.1", dependencies: { fastify: "5.6.1" } })],
+    ["package-lock.json", JSON.stringify({ lockfileVersion: 3, packages: lockPackages })],
+    ["apps/edge-api/package.json", JSON.stringify({ name: "@fac-isr/edge-api", version: "0.2.0-rc.1", dependencies: { fastify: "5.6.1", ajv: "8.17.1", "light-my-request": "6.6.0", "thread-stream": "3.1.0" } })],
     ["apps/edge-api/dist/server.js", "export const builtEdge = true;\n"],
     ["apps/edge-api/dist/admin/cli.js", "process.stdout.write('sms-admin fixture\\n');\n"],
     ["apps/console/dist/index.html", "<!doctype html><title>SMS</title>\n"],
@@ -47,7 +58,19 @@ async function createAppFixture(root: string): Promise<void> {
     ["node_modules/fastify/index.js", "export {};\n"],
     ["node_modules/fast-content-type-parse/package.json", JSON.stringify({ name: "fast-content-type-parse", version: "2.0.0", license: "MIT" })],
     ["node_modules/fast-content-type-parse/index.js", "export {};\n"],
-    ["scripts/start-edge.mjs", "import { writeFileSync } from 'node:fs';\nif (process.env.SMS_COLD_START_MARKER) writeFileSync(process.env.SMS_COLD_START_MARKER, 'offline cold start\\n');\nprocess.stdout.write('offline cold start\\n');\n"],
+    ["node_modules/ajv/package.json", JSON.stringify({ name: "ajv", version: "8.17.1", type: "module", main: "index.js", license: "MIT", dependencies: { "fast-uri": "3.0.6" } })],
+    ["node_modules/ajv/index.js", "import nested from 'fast-uri'; export default nested;\n"],
+    ["node_modules/ajv/node_modules/fast-uri/package.json", JSON.stringify({ name: "fast-uri", version: "3.0.6", type: "module", main: "index.js", license: "BSD-3-Clause" })],
+    ["node_modules/ajv/node_modules/fast-uri/index.js", "export default 'fast-uri@3.0.6';\n"],
+    ["node_modules/light-my-request/package.json", JSON.stringify({ name: "light-my-request", version: "6.6.0", type: "module", main: "index.js", dependencies: { "process-warning": "5.0.0" } })],
+    ["node_modules/light-my-request/index.js", "import nested from 'process-warning'; export default nested;\n"],
+    ["node_modules/light-my-request/node_modules/process-warning/package.json", JSON.stringify({ name: "process-warning", version: "5.0.0", type: "module", main: "index.js", license: "MIT" })],
+    ["node_modules/light-my-request/node_modules/process-warning/index.js", "export default 'process-warning@5.0.0';\n"],
+    ["node_modules/thread-stream/package.json", JSON.stringify({ name: "thread-stream", version: "3.1.0", type: "module", main: "index.js", dependencies: { "real-require": "0.2.0" } })],
+    ["node_modules/thread-stream/index.js", "import nested from 'real-require'; export default nested;\n"],
+    ["node_modules/thread-stream/node_modules/real-require/package.json", JSON.stringify({ name: "real-require", version: "0.2.0", type: "module", main: "index.js", license: "MIT" })],
+    ["node_modules/thread-stream/node_modules/real-require/index.js", "export default 'real-require@0.2.0';\n"],
+    ["scripts/start-edge.mjs", "import { writeFileSync } from 'node:fs'; import ajvNested from 'ajv'; import requestNested from 'light-my-request'; import threadNested from 'thread-stream';\nif (process.env.SMS_COLD_START_MARKER) writeFileSync(process.env.SMS_COLD_START_MARKER, `offline cold start ${ajvNested} ${requestNested} ${threadNested}\\n`);\nprocess.stdout.write('offline cold start\\n');\n"],
     ["scripts/edge-healthcheck.mjs", "process.stdout.write('ok\\n');\n"],
   ]);
   for (const [relativePath, body] of files) {
@@ -179,14 +202,20 @@ describe("native release bundle builder", () => {
     await extractArtifact(firstArtifact, extracted);
     const bundleRoot = resolve(extracted, "fac-isr-sms");
     const verification = await verifyPlatformInventory(bundleRoot);
-    expect(verification).toMatchObject({ valid: true, unexpected: [], missing: [], mismatched: [] });
+    expect(verification).toMatchObject({ valid: true, trustedManifestValid: true, unexpected: [], missing: [], mismatched: [] });
     await expect(stat(resolve(bundleRoot, target === "linux-x64" ? "runtime/bin/node" : "runtime/node.exe"))).resolves.toBeDefined();
     await expect(stat(resolve(bundleRoot, "app/apps/console/dist/index.html"))).resolves.toBeDefined();
     await expect(stat(resolve(bundleRoot, "app/apps/edge-api/dist/admin/cli.js"))).resolves.toBeDefined();
     await expect(stat(resolve(bundleRoot, "notices/THIRD_PARTY_NOTICES.md"))).resolves.toBeDefined();
     await expect(stat(resolve(bundleRoot, "sbom/runtime-fragment.cdx.json"))).resolves.toBeDefined();
     const sbom = JSON.parse(await readFile(resolve(bundleRoot, "sbom/runtime-fragment.cdx.json"), "utf8"));
-    expect(sbom.components.map((component: { name: string }) => component.name)).toEqual(expect.arrayContaining(["node", "fastify", "fast-content-type-parse"]));
+    expect(sbom.components.map((component: { name: string; version: string }) => `${component.name}@${component.version}`)).toEqual(expect.arrayContaining([
+      "node@22.23.2", "fastify@5.6.1", "fast-content-type-parse@2.0.0", "ajv@8.17.1", "fast-uri@3.0.6",
+      "light-my-request@6.6.0", "process-warning@5.0.0", "thread-stream@3.1.0", "real-require@0.2.0",
+    ]));
+    await expect(stat(resolve(bundleRoot, "app/node_modules/ajv/node_modules/fast-uri/index.js"))).resolves.toBeDefined();
+    await expect(stat(resolve(bundleRoot, "app/node_modules/light-my-request/node_modules/process-warning/index.js"))).resolves.toBeDefined();
+    await expect(stat(resolve(bundleRoot, "app/node_modules/thread-stream/node_modules/real-require/index.js"))).resolves.toBeDefined();
     expect(JSON.parse(await readFile(resolve(bundleRoot, "release.json"), "utf8"))).toMatchObject({ production: false, runtimeProvenance: "controlled-test-fixture" });
     await expect(stat(resolve(bundleRoot, "config/sms.env.template"))).resolves.toBeDefined();
     await expect(stat(resolve(bundleRoot, target === "linux-x64" ? "install/linux/smsctl" : "install/windows/SmsCtl.ps1"))).resolves.toBeDefined();
@@ -204,7 +233,7 @@ describe("native release bundle builder", () => {
       cwd: bundleRoot,
       env: { PATH: "/nonexistent", HOME: resolve(root, "empty-home"), SMS_NETWORK: "disabled", SMS_COLD_START_MARKER: marker },
     });
-    expect(await readFile(marker, "utf8")).toBe("offline cold start\n");
+    expect(await readFile(marker, "utf8")).toBe("offline cold start fast-uri@3.0.6 process-warning@5.0.0 real-require@0.2.0\n");
   });
 });
 
@@ -371,6 +400,15 @@ describe("Linux native lifecycle", () => {
     await expect(stat(resolve(secondRoot, "opt/fac-isr-sms/current"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
+  test("installs configuration only from the verified immutable staged release", async () => {
+    const root = await temporaryDirectory();
+    const bundle = await createLifecycleBundle(root, "build-a");
+    const expected = await readFile(resolve(bundle, "config/sms.env.template"), "utf8");
+    await runLinuxWithEnvironment(root, { SMS_TEST_MUTATE_SOURCE_AFTER_STAGE: "1" }, "install", "--bundle", bundle);
+    expect(await readFile(resolve(bundle, "config/sms.env.template"), "utf8")).toContain("SMS_SOURCE_MUTATED=1");
+    expect(await readFile(resolve(root, "etc/fac-isr-sms/sms.env"), "utf8")).toBe(expected);
+  });
+
   test("rejects config-directory traversal and provisions service-owned private paths", async () => {
     const root = await temporaryDirectory();
     const external = resolve(root, "external-config");
@@ -457,6 +495,38 @@ describe("Linux native lifecycle", () => {
     await expect(runLinux(root, "upgrade", "--bundle", failing)).rejects.toThrow(/migration/i);
     expect(await readlink(resolve(root, "opt/fac-isr-sms/current"))).toBe(upgradedLink);
     expect(await readFile(database, "utf8")).toBe("original database bytes\n");
+    expect((await runLinux(root, "status")).stdout).toContain("running ready");
+  });
+
+  test("restores exact pre-restore paths and running state after a partial replacement failure", async () => {
+    const root = await temporaryDirectory();
+    await runLinux(root, "install", "--bundle", await createLifecycleBundle(root, "build-a"));
+    await provisionTls(root);
+    const database = resolve(root, "var/lib/fac-isr-sms/data/edge.sqlite");
+    const activePackage = resolve(root, "var/lib/fac-isr-sms/packages/active-policy.json");
+    await writeFile(database, "backup database bytes\n");
+    await writeFile(activePackage, "backup package bytes\n");
+    await runLinux(root, "start");
+    const backup = (await runLinux(root, "backup")).stdout.trim();
+    await writeFile(database, "pre-failure database bytes\n");
+    await writeFile(activePackage, "pre-failure package bytes\n");
+    await expect(runLinuxWithEnvironment(root, { SMS_TEST_FAIL_RESTORE_AFTER_DATA_MOVE: "1" }, "restore", "--backup", backup)).rejects.toThrow(/restore/i);
+    expect(await readFile(database, "utf8")).toBe("pre-failure database bytes\n");
+    expect(await readFile(activePackage, "utf8")).toBe("pre-failure package bytes\n");
+    await expect(stat(resolve(root, "var/lib/fac-isr-sms/data/data"))).rejects.toMatchObject({ code: "ENOENT" });
+    expect((await runLinux(root, "status")).stdout).toContain("running ready");
+  });
+
+  test("keeps the active immutable release on a failed same-artifact upgrade", async () => {
+    const root = await temporaryDirectory();
+    const bundle = await createLifecycleBundle(root, "build-a");
+    await runLinux(root, "install", "--bundle", bundle);
+    await provisionTls(root);
+    await runLinux(root, "start");
+    const pointer = await readlink(resolve(root, "opt/fac-isr-sms/current"));
+    await expect(runLinuxWithEnvironment(root, { SMS_TEST_FAIL_MIGRATION_AFTER_STAGE: "1" }, "upgrade", "--bundle", bundle)).rejects.toThrow(/migration/i);
+    expect(await readlink(resolve(root, "opt/fac-isr-sms/current"))).toBe(pointer);
+    await expect(stat(resolve(root, "opt/fac-isr-sms", pointer, "release.json"))).resolves.toBeDefined();
     expect((await runLinux(root, "status")).stdout).toContain("running ready");
   });
 

@@ -180,6 +180,7 @@ stage_release() {
   release_id="0.2.0-rc.1-$inventory_hash"
   destination="$OPT/releases/$release_id"
   mkdir -p "$OPT/releases"
+  STAGED_CREATED=0
   if [ ! -d "$destination" ]; then
     staging="$OPT/releases/.staging-$release_id-$$"
     [ ! -e "$staging" ] || fail "upgrade staging path already exists"
@@ -190,10 +191,18 @@ stage_release() {
     find "$staging" -type d -exec chmod a-w {} +
     find "$staging" -type f -exec chmod a-w {} +
     mv "$staging" "$destination"
+    STAGED_CREATED=1
   fi
   STAGED_RELEASE=$release_id
   STAGED_PATH=$destination
   STAGED_BUILD=$build_id
+}
+
+discard_staged_release() {
+  [ "${STAGED_CREATED:-0}" -eq 1 ] || return 0
+  active=$(readlink "$OPT/current" 2>/dev/null || true)
+  [ "$active" != "releases/$STAGED_RELEASE" ] || return 0
+  remove_immutable "$STAGED_PATH"
 }
 
 switch_release() {
@@ -315,13 +324,21 @@ backup_restore() {
   mkdir "$rollback"
   [ ! -e "$VAR/data" ] || mv "$VAR/data" "$rollback/data"
   [ ! -e "$VAR/packages" ] || mv "$VAR/packages" "$rollback/packages"
-  if mv "$staging/data" "$VAR/data" && mv "$staging/packages" "$VAR/packages"; then
+  replacement_complete=0
+  if mv "$staging/data" "$VAR/data"; then
+    if [ "$TEST_MODE" -eq 1 ] && [ "${SMS_TEST_FAIL_RESTORE_AFTER_DATA_MOVE:-0}" = "1" ]; then :
+    elif mv "$staging/packages" "$VAR/packages"; then replacement_complete=1
+    fi
+  fi
+  if [ "$replacement_complete" -eq 1 ]; then
     rm -rf "$rollback" "$staging"
     chmod 0700 "$VAR/data" "$VAR/packages"
     if [ "$TEST_MODE" -eq 0 ]; then chown -R "$SERVICE_UID:$SERVICE_GID" "$VAR/data" "$VAR/packages"; fi
   else
-    [ ! -e "$rollback/data" ] || mv "$rollback/data" "$VAR/data"
-    [ ! -e "$rollback/packages" ] || mv "$rollback/packages" "$VAR/packages"
+    rm -rf "$VAR/data" "$VAR/packages"
+    [ ! -e "$rollback/data" ] || mv "$rollback/data" "$VAR/data" || fail "restore failed and original data could not be recovered"
+    [ ! -e "$rollback/packages" ] || mv "$rollback/packages" "$VAR/packages" || fail "restore failed and original packages could not be recovered"
+    rm -rf "$rollback" "$staging"
     fail "restore failed; original data was recovered"
   fi
 }
@@ -332,8 +349,12 @@ case "$COMMAND" in
     ensure_identity_and_layout
     stage_release "$BUNDLE"
     switch_release "$STAGED_RELEASE"
+    if [ "$TEST_MODE" -eq 1 ] && [ "${SMS_TEST_MUTATE_SOURCE_AFTER_STAGE:-0}" = "1" ]; then
+      chmod u+w "$BUNDLE/config/sms.env.template"
+      printf 'SMS_SOURCE_MUTATED=1\n' > "$BUNDLE/config/sms.env.template"
+    fi
     [ ! -L "$ETC/sms.env" ] || fail "unsafe symbolic configuration file"
-    if [ ! -f "$ETC/sms.env" ]; then cp "$BUNDLE/config/sms.env.template" "$ETC/sms.env"; chmod 0640 "$ETC/sms.env"; fi
+    if [ ! -f "$ETC/sms.env" ]; then cp "$STAGED_PATH/config/sms.env.template" "$ETC/sms.env"; chmod 0640 "$ETC/sms.env"; fi
     [ ! -L "$ETC/tls" ] || fail "unsafe symbolic TLS directory"
     mkdir -p "$ETC/tls"; chmod 0750 "$ETC/tls"
     if [ "$TEST_MODE" -eq 0 ]; then chown root:"$SERVICE_GID" "$ETC/tls" "$ETC/sms.env"; fi
@@ -382,14 +403,18 @@ case "$COMMAND" in
     service_is_running && was_running=1 || true
     [ "$was_running" -eq 0 ] || service_stop
     if ! rollback_backup=$(backup_create); then
-      remove_immutable "$STAGED_PATH"
+      discard_staged_release
       [ "$was_running" -eq 0 ] || service_start
       fail "upgrade backup failed; old release was restarted"
     fi
-    if ! SMS_DATA_DIRECTORY="$VAR" SMS_RELEASE_BUILD_ID="$STAGED_BUILD" "$STAGED_PATH/install/linux/migrate"; then
+    migration_failed=0
+    if [ "$TEST_MODE" -eq 1 ] && [ "${SMS_TEST_FAIL_MIGRATION_AFTER_STAGE:-0}" = "1" ]; then migration_failed=1
+    elif ! SMS_DATA_DIRECTORY="$VAR" SMS_RELEASE_BUILD_ID="$STAGED_BUILD" "$STAGED_PATH/install/linux/migrate"; then migration_failed=1
+    fi
+    if [ "$migration_failed" -eq 1 ]; then
       backup_restore "$rollback_backup"
-      remove_immutable "$STAGED_PATH"
       switch_release "${old_link#releases/}"
+      discard_staged_release
       [ "$was_running" -eq 0 ] || service_start
       fail "upgrade migration failed; data and immutable release were rolled back"
     fi
@@ -398,7 +423,7 @@ case "$COMMAND" in
       service_stop || true
       (backup_restore "$rollback_backup") || fail "new release failed readiness and rollback data restore failed"
       switch_release "${old_link#releases/}"
-      remove_immutable "$STAGED_PATH"
+      discard_staged_release
       service_start || fail "new release failed readiness and old release could not be restarted"
       fail "new release failed readiness; old release and data were restored"
     fi

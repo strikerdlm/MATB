@@ -62,7 +62,26 @@ export async function verifyPlatformInventory(rootInput) {
     const actualMode = info.mode & 0o777;
     if (item.sha256 !== actualHash || item.sizeBytes !== info.size || item.mode !== actualMode) mismatched.push(path);
   }
-  return { valid: missing.length === 0 && unexpected.length === 0 && mismatched.length === 0, missing, unexpected, mismatched };
+  const trustedExpected = new Map(expected);
+  const inventoryInfo = await lstat(inventoryPath);
+  trustedExpected.set("inventory.json", { path: "inventory.json", sha256: await hash(inventoryPath), sizeBytes: inventoryInfo.size, mode: inventoryInfo.mode & 0o777 });
+  const trustedActual = new Map();
+  let trustedManifestValid = true;
+  for (const line of (await readFile(resolve(root, "inventory.tsv"), "utf8")).split("\n")) {
+    if (line === "") continue;
+    const fields = line.split("\t");
+    if (fields.length !== 4 || trustedActual.has(fields[0]) || !trustedExpected.has(fields[0])) {
+      trustedManifestValid = false;
+      continue;
+    }
+    trustedActual.set(fields[0], { sha256: fields[1], sizeBytes: Number(fields[2]), mode: Number.parseInt(fields[3], 8) });
+  }
+  if (trustedActual.size !== trustedExpected.size) trustedManifestValid = false;
+  for (const [path, expectedItem] of trustedExpected) {
+    const item = trustedActual.get(path);
+    if (!item || item.sha256 !== expectedItem.sha256 || item.sizeBytes !== expectedItem.sizeBytes || item.mode !== expectedItem.mode) trustedManifestValid = false;
+  }
+  return { valid: missing.length === 0 && unexpected.length === 0 && mismatched.length === 0 && trustedManifestValid, trustedManifestValid, missing, unexpected, mismatched };
 }
 
 if (import.meta.url === new URL(`file://${process.argv[1]}`).href) {

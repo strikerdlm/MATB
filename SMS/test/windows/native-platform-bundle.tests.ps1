@@ -8,6 +8,7 @@ if ((node --version).Trim() -ne "v22.23.2") { throw "Native Windows packaging te
 
 $SmsRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $Installer = Join-Path $SmsRoot "packaging\windows\SmsCtl.ps1"
+$StartScript = Join-Path $SmsRoot "packaging\windows\Start-Sms.ps1"
 $TestRoot = Join-Path ([IO.Path]::GetTempPath()) ("fac-isr-sms-native-{0}" -f [guid]::NewGuid().ToString("N"))
 
 function Assert-True([bool]$Condition, [string]$Message) {
@@ -16,11 +17,15 @@ function Assert-True([bool]$Condition, [string]$Message) {
 
 function Update-BundleInventory([string]$Bundle) {
   $inventory = @()
-  foreach ($file in Get-ChildItem -LiteralPath $Bundle -Recurse -File | Where-Object { $_.Name -ne "inventory.json" } | Sort-Object FullName) {
+  foreach ($file in Get-ChildItem -LiteralPath $Bundle -Recurse -File | Where-Object { $_.Name -notin @("inventory.json", "inventory.tsv") } | Sort-Object FullName) {
     $relative = [IO.Path]::GetRelativePath($Bundle, $file.FullName).Replace('\', '/')
     $inventory += @{ path = $relative; sha256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant(); sizeBytes = $file.Length; mode = 292 }
   }
   @{ schemaVersion = "1.0"; inventoryPath = "inventory.json"; files = $inventory } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $Bundle "inventory.json") -Encoding utf8NoBOM
+  $inventoryJson = Get-Item -LiteralPath (Join-Path $Bundle "inventory.json")
+  $trusted = @($inventory) + @(@{ path = "inventory.json"; sha256 = (Get-FileHash -LiteralPath $inventoryJson.FullName -Algorithm SHA256).Hash.ToLowerInvariant(); sizeBytes = $inventoryJson.Length; mode = 292 })
+  $lines = $trusted | ForEach-Object { "{0}`t{1}`t{2}`t{3}" -f $_.path, $_.sha256, $_.sizeBytes, "444" }
+  [IO.File]::WriteAllText((Join-Path $Bundle "inventory.tsv"), (($lines -join "`n") + "`n"), [Text.UTF8Encoding]::new($false))
 }
 
 function Write-Bundle([string]$Name, [bool]$FailMigration = $false, [bool]$FailStart = $false, [bool]$Production = $true) {
@@ -60,6 +65,15 @@ function Set-ServiceOnlyAcl([string]$Path) {
 
 try {
   New-Item -ItemType Directory -Path $TestRoot | Out-Null
+  $parserRelease = Join-Path $TestRoot "parser-release"
+  New-Item -ItemType Directory -Path (Join-Path $parserRelease "runtime"), (Join-Path $parserRelease "app\scripts") -Force | Out-Null
+  Copy-Item -LiteralPath (Get-Command node.exe).Source -Destination (Join-Path $parserRelease "runtime\node.exe")
+  $parserMarker = Join-Path $TestRoot "parser-value.txt"
+  [IO.File]::WriteAllText((Join-Path $parserRelease "app\scripts\start-edge.mjs"), "import { writeFileSync } from 'node:fs'; writeFileSync(process.env.SMS_TEST_VALUE_MARKER, process.env.SMS_EXPORT_KEY_ID);", [Text.UTF8Encoding]::new($false))
+  $parserConfig = Join-Path $TestRoot "parser.env"
+  [IO.File]::WriteAllText($parserConfig, "SMS_TEST_VALUE_MARKER=$parserMarker`r`nSMS_EXPORT_KEY_ID=  padded value  `r`n", [Text.UTF8Encoding]::new($false))
+  & $StartScript -ReleaseRoot $parserRelease -ConfigurationPath $parserConfig
+  Assert-True ((Get-Content -LiteralPath $parserMarker -Raw) -eq "  padded value  ") "Start-Sms altered configuration value whitespace"
   & node (Join-Path $SmsRoot "scripts\edge-healthcheck.mjs") --ready *> $null
   Assert-True ($LASTEXITCODE -ne 0) "readiness passed without an installed HTTPS listener"
   $controlled = Write-Bundle "renamed-as-production" $false $false $false
@@ -73,9 +87,13 @@ try {
   try { Invoke-Sms "Install" $nonportable $null } catch { $nonportableRejected = $_.Exception.Message -match "portable" }
   Assert-True $nonportableRejected "a non-portable bundle path was accepted"
   $first = Write-Bundle "build-a"
+  $originalTemplate = Get-Content -LiteralPath (Join-Path $first "config\sms.env.template") -Raw
+  $env:SMS_TEST_MUTATE_SOURCE_AFTER_STAGE = "1"
   Invoke-Sms "Install" $first $null | Out-Null
+  Remove-Item Env:SMS_TEST_MUTATE_SOURCE_AFTER_STAGE
   $installRoot = Join-Path $TestRoot "Program Files\FAC ISR\SMS"
   $mutableRoot = Join-Path $TestRoot "ProgramData\FAC ISR\SMS"
+  Assert-True ((Get-Content -LiteralPath (Join-Path $mutableRoot "config\sms.env") -Raw) -eq $originalTemplate) "install copied configuration from mutable source input"
   Assert-True (Test-Path -LiteralPath (Join-Path $installRoot "current.txt")) "immutable current pointer was not installed"
   $taskContract = Get-Content -LiteralPath (Join-Path $mutableRoot "run\task.json") -Raw | ConvertFrom-Json
   Assert-True ($taskContract.trigger -eq "AtStartup" -and $taskContract.account -eq "LocalService" -and $taskContract.restartCount -ge 3) "at-startup Local Service restart policy is missing"
@@ -123,13 +141,23 @@ try {
   Assert-True ((Get-Content -LiteralPath $database -Raw) -eq "original database bytes") "failed upgrade did not restore data"
   Assert-True ((Get-Content -LiteralPath $activePackage -Raw) -eq "original package bytes") "failed upgrade did not restore packages"
   Assert-True ((Invoke-Sms "Status" $null $null) -match "running ready") "failed upgrade did not restart the old release"
+  $samePointer = Get-Content -LiteralPath (Join-Path $installRoot "current.txt") -Raw
+  $env:SMS_TEST_FAIL_MIGRATION_AFTER_STAGE = "1"
+  try { Invoke-Sms "Upgrade" $second $null | Out-Null } catch { }
+  Remove-Item Env:SMS_TEST_FAIL_MIGRATION_AFTER_STAGE
+  Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot "current.txt") -Raw) -eq $samePointer) "same-artifact failure changed the immutable pointer"
+  Assert-True (Test-Path -LiteralPath (Join-Path (Join-Path $installRoot "releases") $samePointer.Trim())) "same-artifact failure removed the active immutable release"
   $startFailing = Write-Bundle "build-d" $false $true
+  $lifecycleLog = Join-Path $mutableRoot "run\lifecycle.log"
+  Remove-Item -LiteralPath $lifecycleLog -ErrorAction SilentlyContinue
   $startFailed = $false
   try { Invoke-Sms "Upgrade" $startFailing $null } catch { $startFailed = $_.Exception.Message -match "rolled back" }
   Assert-True $startFailed "failed new-release startup was accepted"
   Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot "current.txt") -Raw) -eq $upgradedPointer) "startup failure changed the immutable pointer"
   Assert-True ((Get-Content -LiteralPath $database -Raw) -eq "original database bytes") "startup failure did not restore data"
   Assert-True ((Invoke-Sms "Status" $null $null) -match "running ready") "startup failure did not restart the old release"
+  $rollbackOrder = @(Get-Content -LiteralPath $lifecycleLog)
+  Assert-True (($rollbackOrder -join ',') -eq "stop,start-attempt,stop,restore,start-attempt") "failed new task was not stopped before restore and old-task restart"
 
   $junctionBundle = Write-Bundle "junction-build"
   New-Item -ItemType Directory -Path (Join-Path $TestRoot "junction-target") | Out-Null

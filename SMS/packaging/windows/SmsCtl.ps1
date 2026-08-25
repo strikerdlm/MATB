@@ -67,9 +67,10 @@ function Test-BundleInventory([string]$Path) {
     Assert-PortableRelativePath ([IO.Path]::GetRelativePath($Path, $item.FullName).Replace('\', '/'))
   }
   $inventoryPath = Join-Path $Path "inventory.json"
+  $trustedInventoryPath = Join-Path $Path "inventory.tsv"
   $releasePath = Join-Path $Path "release.json"
   $runtimePath = Join-Path $Path "runtime\node.exe"
-  if (-not (Test-Path -LiteralPath $inventoryPath -PathType Leaf) -or -not (Test-Path -LiteralPath $runtimePath -PathType Leaf)) { throw "Bundle inventory or Node runtime is missing" }
+  if (-not (Test-Path -LiteralPath $inventoryPath -PathType Leaf) -or -not (Test-Path -LiteralPath $trustedInventoryPath -PathType Leaf) -or -not (Test-Path -LiteralPath $runtimePath -PathType Leaf)) { throw "Bundle inventory or Node runtime is missing" }
   $inventory = Get-Content -LiteralPath $inventoryPath -Raw | ConvertFrom-Json
   if ($inventory.schemaVersion -ne "1.0" -or $null -eq $inventory.files) { throw "Unsupported bundle inventory" }
   $expected = @{}
@@ -79,7 +80,7 @@ function Test-BundleInventory([string]$Path) {
     if ([IO.Path]::IsPathRooted($relative) -or $expected.ContainsKey($relative)) { throw "Unsafe or duplicate inventory path" }
     $expected[$relative] = $entry
   }
-  $actual = @(Get-ChildItem -LiteralPath $Path -Recurse -File -Force | Where-Object { $_.FullName -ne $inventoryPath })
+  $actual = @(Get-ChildItem -LiteralPath $Path -Recurse -File -Force | Where-Object { $_.FullName -ne $inventoryPath -and $_.FullName -ne $trustedInventoryPath })
   if ($actual.Count -ne $expected.Count) { throw "Bundle inventory path set mismatch" }
   foreach ($file in $actual) {
     if ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Bundle reparse points are forbidden" }
@@ -89,6 +90,23 @@ function Test-BundleInventory([string]$Path) {
     $entry = $expected[$relative]
     $digest = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($digest -ne [string]$entry.sha256 -or $file.Length -ne [long]$entry.sizeBytes) { throw "Bundle inventory mismatch: $relative" }
+  }
+  $trusted = @{}
+  foreach ($line in Get-Content -LiteralPath $trustedInventoryPath) {
+    $fields = $line.Split("`t")
+    if ($fields.Count -ne 4) { throw "Trusted bundle inventory record is invalid" }
+    $relative = [string]$fields[0]
+    Assert-PortableRelativePath $relative
+    if ($trusted.ContainsKey($relative) -or [string]$fields[1] -notmatch '^[a-f0-9]{64}$' -or [string]$fields[2] -notmatch '^[0-9]+$' -or [string]$fields[3] -notmatch '^[0-7]{3}$') { throw "Trusted bundle inventory record is unsafe or duplicate" }
+    $trusted[$relative] = @{ sha256 = [string]$fields[1]; sizeBytes = [long]$fields[2] }
+  }
+  $trustedFiles = @($actual) + @(Get-Item -LiteralPath $inventoryPath)
+  if ($trusted.Count -ne $trustedFiles.Count) { throw "Trusted bundle inventory path set mismatch" }
+  foreach ($file in $trustedFiles) {
+    $relative = [IO.Path]::GetRelativePath($Path, $file.FullName).Replace('\', '/')
+    if (-not $trusted.ContainsKey($relative)) { throw "Trusted bundle inventory is missing: $relative" }
+    $record = $trusted[$relative]
+    if ((Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -ne $record.sha256 -or $file.Length -ne $record.sizeBytes) { throw "Trusted bundle inventory mismatch: $relative" }
   }
   $release = Get-Content -LiteralPath $releasePath -Raw | ConvertFrom-Json
   if ($release.release -ne "fac-isr-sms@0.2.0-rc.1" -or $release.target -ne "win32-x64" -or $release.operationalReady -ne $false -or $release.production -ne $true -or $release.runtimeProvenance -ne "official-node-signed-checksums") { throw "Bundle release metadata is invalid" }
@@ -130,6 +148,7 @@ function Add-ImmutableRelease([string]$Path) {
   $releases = Join-Path $InstallRoot "releases"
   $destination = Join-Path $releases $releaseName
   New-Item -ItemType Directory -Path $releases -Force | Out-Null
+  $created = $false
   if (-not (Test-Path -LiteralPath $destination)) {
     $staging = Join-Path $releases ".staging-$releaseName-$PID"
     Copy-Item -LiteralPath $Path -Destination $staging -Recurse
@@ -137,8 +156,9 @@ function Add-ImmutableRelease([string]$Path) {
     Move-Item -LiteralPath $staging -Destination $destination
     Get-ChildItem -LiteralPath $destination -Recurse -Force | ForEach-Object { $_.IsReadOnly = $true }
     Set-RestrictedAcl $destination $true $false
+    $created = $true
   }
-  return @{ Name = $releaseName; Path = $destination; BuildId = $verified.BuildId }
+  return @{ Name = $releaseName; Path = $destination; BuildId = $verified.BuildId; Created = $created }
 }
 
 function Set-CurrentRelease([string]$Name) {
@@ -188,6 +208,7 @@ function Assert-SmsReadiness {
 function Start-Sms {
   Assert-RuntimeSecurity
   if ($TestMode) {
+    Add-Content -LiteralPath (Join-Path $StateRoot "lifecycle.log") -Value "start-attempt"
     Set-SmsProcessEnvironment
     $release = Get-CurrentReleasePath
     & (Join-Path $release "runtime\node.exe") (Join-Path $release "app\scripts\start-edge.mjs") *> $null
@@ -207,6 +228,7 @@ function Start-Sms {
 function Stop-Sms {
   if ($TestMode) {
     New-Item -ItemType Directory -Path $StateRoot -Force | Out-Null
+    Add-Content -LiteralPath (Join-Path $StateRoot "lifecycle.log") -Value "stop"
     [IO.File]::WriteAllText((Join-Path $StateRoot "service.state"), "stopped`r`n", [Text.UTF8Encoding]::new($false))
   } else {
     Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
@@ -241,6 +263,7 @@ function Restore-SmsBackup([string]$Path) {
   if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "BackupPath is required and must be a file" }
   $staging = Join-Path $MutableRoot ".restore-$PID"
   $rollback = Join-Path $MutableRoot ".rollback-$PID"
+  if ($TestMode) { Add-Content -LiteralPath (Join-Path $StateRoot "lifecycle.log") -Value "restore" }
   Expand-Archive -LiteralPath $Path -DestinationPath $staging
   foreach ($item in Get-ChildItem -LiteralPath $staging -Recurse -Force) {
     if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { Remove-Item -LiteralPath $staging -Recurse -Force; throw "Backup reparse points are forbidden" }
@@ -276,9 +299,14 @@ switch ($Action) {
     Initialize-MutableLayout
     $release = Add-ImmutableRelease $BundleRoot
     Set-CurrentRelease $release.Name
+    if ($TestMode -and $env:SMS_TEST_MUTATE_SOURCE_AFTER_STAGE -eq "1") {
+      $sourceTemplate = Get-Item -LiteralPath (Join-Path $BundleRoot "config\sms.env.template")
+      $sourceTemplate.IsReadOnly = $false
+      [IO.File]::WriteAllText($sourceTemplate.FullName, "SMS_SOURCE_MUTATED=1`r`n", [Text.UTF8Encoding]::new($false))
+    }
     $configuration = Join-Path $ConfigRoot "sms.env"
     if (-not (Test-Path -LiteralPath $configuration)) {
-      $template = (Get-Content -LiteralPath (Join-Path $BundleRoot "config\sms.env.template") -Raw).Replace("@PROGRAMDATA_SMS@", $MutableRoot).Replace("@PROGRAMFILES_SMS@", $InstallRoot)
+      $template = (Get-Content -LiteralPath (Join-Path $release.Path "config\sms.env.template") -Raw).Replace("@PROGRAMDATA_SMS@", $MutableRoot).Replace("@PROGRAMFILES_SMS@", $InstallRoot)
       [IO.File]::WriteAllText($configuration, $template, [Text.UTF8Encoding]::new($false))
     }
     Set-RestrictedAcl $configuration $false
@@ -318,6 +346,7 @@ switch ($Action) {
     $rollbackBackup = $null
     try {
       $rollbackBackup = New-SmsBackup
+      if ($TestMode -and $env:SMS_TEST_FAIL_MIGRATION_AFTER_STAGE -eq "1") { throw "controlled migration failure after staging" }
       $migration = Join-Path $release.Path "install\windows\Migrate.ps1"
       if (Test-Path -LiteralPath $migration) { & $migration -DataRoot $MutableRoot -BuildId $release.BuildId }
       if (-not $?) { throw "migration returned failure" }
@@ -326,10 +355,11 @@ switch ($Action) {
       if ($wasRunning) { Start-Sms }
       Write-Output "upgraded from $oldPointer to $($release.Name)"
     } catch {
+      if ($wasRunning) { Stop-Sms }
       if ($null -ne $rollbackBackup) { Restore-SmsBackup $rollbackBackup }
       Set-CurrentRelease $oldPointer
       Register-SmsTask
-      if ($release.Name -ne $oldPointer) { Remove-ImmutableRelease $release.Name }
+      if ($release.Created -and $release.Name -ne $oldPointer) { Remove-ImmutableRelease $release.Name }
       if ($wasRunning) { Start-Sms }
       throw "Upgrade failed; data, immutable pointer, and prior service state were rolled back: $($_.Exception.Message)"
     }

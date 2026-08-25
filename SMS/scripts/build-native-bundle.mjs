@@ -176,20 +176,48 @@ export async function copyRequiredApp(appRoot, destination) {
     "packages/safety-kernel/package.json",
     "packages/telemetry/package.json",
   ].map(async (path) => JSON.parse(await readFile(resolve(appRoot, path), "utf8"))));
-  const lock = JSON.parse(await readFile(resolve(appRoot, "package-lock.json"), "utf8"));
-  const queue = runtimePackages.flatMap((metadata) => Object.keys(metadata.dependencies ?? {})).filter((name) => !name.startsWith("@fac-isr/"));
+  const runtimePackagePaths = ["apps/edge-api", "packages/evidence", "packages/safety-kernel", "packages/telemetry"];
+  const queue = runtimePackages.flatMap((metadata, index) => Object.keys({ ...metadata.dependencies, ...metadata.optionalDependencies })
+    .filter((name) => !name.startsWith("@fac-isr/"))
+    .map((name) => ({ name, requester: resolve(appRoot, runtimePackagePaths[index]) })));
   const copied = new Set();
+  async function resolveDependencyInstance(name, requester) {
+    let directory = requester;
+    for (;;) {
+      const candidate = resolve(directory, "node_modules", ...name.split("/"));
+      try {
+        const info = await lstat(candidate);
+        if (info.isSymbolicLink() || !info.isDirectory()) throw new Error(`production dependency is not a real directory: ${name}`);
+        return candidate;
+      } catch (error) {
+        if (!(error instanceof Error && error.code === "ENOENT")) throw error;
+      }
+      if (directory === appRoot) break;
+      const parent = dirname(directory);
+      if (relative(appRoot, parent).startsWith("..")) break;
+      directory = parent;
+    }
+    throw new Error(`production dependency cannot be resolved from ${relative(appRoot, requester)}: ${name}`);
+  }
   while (queue.length > 0) {
-    const name = queue.shift();
-    if (copied.has(name)) continue;
-    const source = resolve(appRoot, "node_modules", name);
-    const info = await lstat(source);
-    if (info.isSymbolicLink() || !info.isDirectory()) throw new Error(`production dependency is not a real directory: ${name}`);
-    await mkdir(dirname(resolve(destination, "node_modules", name)), { recursive: true });
-    await cp(source, resolve(destination, "node_modules", name), { recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true, filter: (path) => basename(path) !== ".bin" });
-    copied.add(name);
-    const metadata = lock.packages?.[`node_modules/${name}`] ?? JSON.parse(await readFile(resolve(source, "package.json"), "utf8"));
-    queue.push(...Object.keys(metadata.dependencies ?? {}).filter((dependency) => !dependency.startsWith("@fac-isr/") && !copied.has(dependency)));
+    const request = queue.shift();
+    const source = await resolveDependencyInstance(request.name, request.requester);
+    const instancePath = relative(appRoot, source).split(sep).join("/");
+    if (copied.has(instancePath)) continue;
+    const target = resolve(destination, instancePath);
+    await mkdir(dirname(target), { recursive: true });
+    await cp(source, target, {
+      recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true,
+      filter: (path) => {
+        const nestedPath = relative(source, path);
+        return nestedPath === "" || (!nestedPath.split(sep).includes("node_modules") && basename(path) !== ".bin");
+      },
+    });
+    copied.add(instancePath);
+    const metadata = JSON.parse(await readFile(resolve(source, "package.json"), "utf8"));
+    queue.push(...Object.keys({ ...metadata.dependencies, ...metadata.optionalDependencies })
+      .filter((dependency) => !dependency.startsWith("@fac-isr/"))
+      .map((name) => ({ name, requester: source })));
   }
   for (const name of ["evidence", "safety-kernel", "telemetry"]) {
     const packageRoot = resolve(destination, "node_modules/@fac-isr", name);
