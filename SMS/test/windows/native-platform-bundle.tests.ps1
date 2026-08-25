@@ -143,6 +143,12 @@ try {
   Assert-True ((Get-Content -LiteralPath $database -Raw) -eq "pre-original-move database bytes") "restore failure while staging original state misplaced data"
   Assert-True ((Get-Content -LiteralPath $activePackage -Raw) -eq "pre-original-move package bytes") "restore failure while staging original state misplaced packages"
   Assert-True ((Invoke-Sms "Status" $null $null) -match "running ready") "failed original-state staging stranded the prior running service"
+  $env:SMS_TEST_FAIL_RESTORE_AFTER_DATA_ACL = "1"
+  try { Invoke-Sms "Restore" $null $backup | Out-Null } catch { }
+  Remove-Item Env:SMS_TEST_FAIL_RESTORE_AFTER_DATA_ACL
+  Assert-True ((Get-Content -LiteralPath $database -Raw) -eq "pre-original-move database bytes") "post-move ACL failure lost original data"
+  Assert-True ((Get-Content -LiteralPath $activePackage -Raw) -eq "pre-original-move package bytes") "post-move ACL failure lost original packages"
+  Assert-True ((Invoke-Sms "Status" $null $null) -match "running ready") "post-move ACL failure stranded the prior running service"
   Invoke-Sms "Restore" $null $backup | Out-Null
   $invalidBackup = Join-Path $TestRoot "invalid-backup.zip"
   Set-Content -LiteralPath $invalidBackup -Value "not a zip"

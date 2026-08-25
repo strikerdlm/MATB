@@ -290,9 +290,10 @@ function Restore-SmsBackup([string]$Path) {
     }
     Move-Item -LiteralPath $stagedData -Destination $DataRoot
     Move-Item -LiteralPath $stagedPackages -Destination $PackageRoot
-    Remove-Item -LiteralPath $rollback, $staging -Recurse -Force
     Set-RestrictedAcl $DataRoot $true
+    if ($TestMode -and $env:SMS_TEST_FAIL_RESTORE_AFTER_DATA_ACL -eq "1") { throw "controlled restore failure after data ACL" }
     Set-RestrictedAcl $PackageRoot $true
+    Remove-Item -LiteralPath $rollback, $staging -Recurse -Force
   } catch {
     $originalFailure = $_.Exception.Message
     $recoveryFailures = @()
