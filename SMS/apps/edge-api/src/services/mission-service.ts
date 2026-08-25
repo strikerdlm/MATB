@@ -180,6 +180,13 @@ export class MissionService {
     };
   }
 
+  public listMissions(visibleMissionIds?: ReadonlySet<string>): readonly Record<string, unknown>[] {
+    return Object.freeze([...this.missions.keys()]
+      .filter((missionId) => visibleMissionIds === undefined || visibleMissionIds.has(missionId))
+      .sort((left, right) => left.localeCompare(right))
+      .map((missionId) => this.getMission(missionId)));
+  }
+
   public missionIdForRevision(revisionId: string): string {
     return this.requireRevision(revisionId).stored.missionId;
   }

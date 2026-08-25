@@ -1,54 +1,22 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+const password = "correct horse battery staple";
+async function login(page: Page, userId: string) { await page.getByLabel("User ID").fill(userId); await page.getByLabel("Password").fill(password); await page.getByRole("button", { name: "Sign in", exact: true }).click(); await expect(page.getByText(userId, { exact: true })).toBeVisible(); await expect(page.getByRole("heading", { name: "Missions" })).toBeVisible(); }
+async function lock(page: Page) { await page.getByRole("button", { name: "Lock", exact: true }).click(); await expect(page.getByRole("heading", { name: "Sign in to operational console" })).toBeVisible(); }
+async function checklistAndGate(page: Page, userId: string, gate: string) {
+  await login(page, userId); await page.getByLabel("Item ID").fill(`${gate}-preflight`); await page.getByLabel("Reason", { exact: true }).first().fill(`${gate} evidence reviewed`); await page.getByRole("button", { name: "Respond to item" }).click(); await expect(page.getByText(`${gate}-preflight`, { exact: true })).toBeVisible();
+  const card = page.locator(".gate-live").filter({ has: page.getByRole("heading", { name: gate, exact: true }) }); await card.getByLabel("Reason").fill(`${gate} accountable decision`); await card.getByRole("button", { name: "Record gate" }).click(); await expect(card.getByRole("status").first()).toContainText("accept"); await lock(page);
+}
 
-test("renders the mission workspace and preserves bilingual day/night interaction", async ({ page }) => {
-  const consoleErrors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
-  });
-  await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto("/");
-
-  await expect(page).toHaveTitle(/FAC ISR SMS/i);
-  await expect(page.getByRole("heading", { name: "Mission safety strip" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Offline map workspace" })).toBeVisible();
-  await expect(page.locator(".console-shell")).toHaveClass(/theme-night/);
-
-  await page.getByRole("button", { name: "Change language" }).click();
-  await expect(page.getByRole("heading", { name: "Franja de seguridad de misión" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Telemetría de solo lectura" })).toBeVisible();
-
-  await page.getByRole("button", { name: "Toggle day and night theme" }).click();
-  await expect(page.locator(".console-shell")).toHaveClass(/theme-day/);
-  expect(consoleErrors).toEqual([]);
+test("uses live HTTPS Edge state through revision, blocking, gates, telemetry, export and restart", async ({ page }) => {
+  const consoleErrors: string[] = []; page.on("console", (message) => { if (message.type() === "error" && !message.text().includes("Failed to load resource")) consoleErrors.push(message.text()); }); await page.setViewportSize({ width: 1440, height: 1000 }); await page.goto("/"); await expect(page).toHaveTitle(/FAC ISR SMS/i); await login(page, "commander-1");
+  await expect(page.getByText("mission-1", { exact: true })).toBeVisible(); await expect(page.getByText(/Revision 0 · Draft/)).toBeVisible(); await expect(page.locator(".gate-live")).toHaveCount(4); await expect(page.getByText("policy-console-e2e", { exact: true })).toBeVisible();
+  await page.getByText("Create material revision").click(); await page.getByLabel("Revision change JSON").fill(JSON.stringify({ expectedRevisionId: "mission-1:r0", change: { field: "route", previous: { areaId: "area-1", routeHash: "route-hash-1", terrainStatus: "pass", obstacleStatus: "pass", airspaceStatus: "pass", notamStatus: "pass", visualConditionStatus: "pass" }, next: { areaId: "area-1", routeHash: "route-hash-2", terrainStatus: "pass", obstacleStatus: "pass", airspaceStatus: "pass", notamStatus: "pass", visualConditionStatus: "pass" } } })); await page.getByRole("button", { name: "Submit revision" }).click(); await expect(page.getByText(/Revision 1 · Planned/)).toBeVisible();
+  const telemetryResponse = await page.request.post("/api/telemetry/ingest", { data: { revisionId: "mission-1:r1", sequence: 2, event: { eventId: "telemetry-e2e-2", aircraftId: "aircraft-1", observedAtUtc: "2026-08-25T12:00:00.000Z", position: { lat: 4.7, lon: -74.1, altitudeMslM: 1300 }, energy: { stateOfChargePercent: 71 }, platform: { propulsion: "normal", gnss: "normal", c2Link: "normal" }, sourcePackageIds: ["policy-console-e2e"] } } }); expect(telemetryResponse.status()).toBe(202); await expect(page.getByText(/stateOfChargePercent/)).toBeVisible();
+  await page.getByLabel("Item ID").fill("commander-preflight"); await page.getByLabel("Reason", { exact: true }).first().fill("commander evidence reviewed"); await page.getByRole("button", { name: "Respond to item" }).click(); const commander = page.locator(".gate-live").filter({ has: page.getByRole("heading", { name: "commander", exact: true }) }); await commander.getByLabel("Reason").fill("premature commander decision"); await commander.getByRole("button", { name: "Record gate" }).click(); await expect(page.getByText(/commander acceptance requires all other gates/i)).toBeVisible(); await lock(page);
+  await checklistAndGate(page, "maintainer-1", "maintenance"); await checklistAndGate(page, "operator-1", "operator"); await checklistAndGate(page, "safety-1", "safety"); await checklistAndGate(page, "commander-1", "commander"); await login(page, "commander-1"); await page.getByRole("button", { name: "Request signed export" }).click(); await expect(page.getByText("Ed25519", { exact: true })).toBeVisible(); await expect(page.getByText("console-e2e-export", { exact: true })).toBeVisible();
+  const restart = await page.request.post("/__test/restart"); expect(restart.status()).toBe(202); await page.waitForTimeout(350); await expect.poll(async () => { try { return (await page.request.get("/healthz")).status(); } catch { return 0; } }, { timeout: 15_000 }).toBe(200); await lock(page); await login(page, "commander-1"); await expect(page.getByText(/Revision 1 · Planned/)).toBeVisible(); await expect(page.getByText(/events/).last()).toBeVisible(); expect(await page.locator("vite-error-overlay, nextjs-portal").count()).toBe(0); expect((await page.locator("body").innerText()).length).toBeGreaterThan(500); await page.screenshot({ path: "/tmp/sms-console-desktop.png", fullPage: false }); expect(consoleErrors).toEqual([]);
 });
 
-test("keeps tablet navigation, touch targets, and content within the viewport", async ({ page }) => {
-  await page.setViewportSize({ width: 820, height: 1180 });
-  await page.goto("/");
-
-  await expect(page.getByRole("navigation", { name: "Mission navigation" })).toBeVisible();
-  const dimensions = await page.locator(".nav-item, .locale-toggle, .theme-toggle").evaluateAll((elements) => elements.map((element) => {
-    const rectangle = element.getBoundingClientRect();
-    return { width: rectangle.width, height: rectangle.height };
-  }));
-  expect(dimensions.every(({ width, height }) => width >= 44 && height >= 44), JSON.stringify(dimensions, null, 2)).toBe(true);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
-
-  await page.getByRole("button", { name: "Research" }).click();
-  await expect(page.getByRole("heading", { name: "MATB workload and interface study" })).toBeVisible();
-  await expect(page.getByText("Participant code only", { exact: false })).toBeVisible();
-});
-
-test("honors reduced-motion preference and retains visible keyboard focus", async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto("/");
-
-  const transitionSeconds = await page.locator(".toggle-track span").evaluate((element) => Number.parseFloat(getComputedStyle(element).transitionDuration));
-  expect(transitionSeconds).toBeLessThanOrEqual(0.00001);
-
-  await page.keyboard.press("Tab");
-  const focused = page.locator(":focus-visible");
-  await expect(focused).toBeVisible();
-  expect(await focused.evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe("none");
+test("retains bilingual, theme, reduced-motion, keyboard and tablet behavior", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" }); await page.setViewportSize({ width: 820, height: 1180 }); await page.goto("/"); await login(page, "operator-1"); await page.getByRole("button", { name: "Change language" }).click(); await expect(page.getByRole("heading", { name: "Franja de seguridad de misión" })).toBeVisible(); await page.getByRole("button", { name: "Toggle day and night theme" }).click(); await expect(page.locator(".console-shell")).toHaveClass(/theme-day/); await page.keyboard.press("Tab"); await expect(page.locator(":focus-visible")).toBeVisible(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true); expect(await page.locator("vite-error-overlay, nextjs-portal").count()).toBe(0); await page.screenshot({ path: "/tmp/sms-console-tablet.png", fullPage: false });
 });

@@ -63,6 +63,17 @@ describe("no-C2 static and runtime boundary", () => {
     expect(result.forbidden).toContainEqual(expect.objectContaining({ id: "network-client" }));
   });
 
+  it("does not allow an external fetch merely because it is placed in the console client", async () => {
+    const root = await mkdtemp(join(tmpdir(), "fac-isr-no-c2-console-network-fixture-"));
+    temporaryDirectories.push(root);
+    await mkdir(join(root, "apps/console/src/api"), { recursive: true });
+    await writeFile(join(root, "apps/console/src/api/client.ts"), "export const leak = fetch('https://example.invalid/mission');\n", "utf8");
+
+    const result = await scanNoC2(root, { runtime: false });
+
+    expect(result.forbidden).toContainEqual(expect.objectContaining({ id: "network-client" }));
+  });
+
   it("documents read-only route, recovery, and C2-link status terms without treating them as commands", async () => {
     const root = await mkdtemp(join(tmpdir(), "fac-isr-read-only-fixture-"));
     temporaryDirectories.push(root);

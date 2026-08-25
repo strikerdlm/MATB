@@ -4,12 +4,12 @@ import { AppShell } from "../src/app/AppShell.js";
 import { routeMode } from "../src/app/routes.js";
 
 describe("console shell", () => {
-  it("renders the controlled-data warning and keyboard-visible navigation", () => {
-    const html = renderToStaticMarkup(<AppShell initialPath="/missions" />);
-    expect(html).toMatch(/unclassified.*controlled safety metadata/i);
-    expect(html).toMatch(/aria-label="Mission navigation"/);
-    expect(html).toMatch(/Mission safety strip/i);
-    expect(html).toMatch(/Read-only telemetry/i);
+  it("renders a genuine login state without production operational fixtures", () => {
+    const html = renderToStaticMarkup(<AppShell />);
+    expect(html).toMatch(/Sign in to operational console/i);
+    expect(html).toMatch(/User ID/i);
+    expect(html).not.toMatch(/M24-0518-ISR|FAC-1287|MAP-COLOMBIA-2024Q2|PROTOCOL-MATB-01/);
+    expect(html).toMatch(/Sign in to operational console/i);
   });
 
   it("maps planning, review, and monitoring routes to safe view modes", () => {

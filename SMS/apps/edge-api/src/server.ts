@@ -12,6 +12,7 @@ import { registerMissionRoutes } from "./routes/missions.js";
 import { registerPackageRoutes } from "./routes/packages.js";
 import { registerPostflightRoutes } from "./routes/postflight.js";
 import { registerTelemetryRoutes, type TelemetryPeerIdentityProvider } from "./routes/telemetry.js";
+import { registerConsoleReadRoutes } from "./routes/console.js";
 import { MissionService } from "./services/mission-service.js";
 import { TelemetryService } from "./services/telemetry-service.js";
 import { SafeModeService, SqliteTrustedKeyStore, type TrustedKeyStore } from "./services/safe-mode.js";
@@ -283,6 +284,7 @@ export async function buildServer(input: EdgeConfigInput = {}, dependencies: Edg
   });
 
   registerMissionRoutes(app, missionService);
+  registerConsoleReadRoutes(app, missionService, auditLedger);
   registerChecklistRoutes(app, missionService);
   registerGateRoutes(app, missionService);
   registerPostflightRoutes(app, missionService);

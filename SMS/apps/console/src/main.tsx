@@ -14,17 +14,3 @@ createRoot(root).render(
 );
 
 export { AppShell } from "./app/AppShell.js";
-export { MissionSafetyStrip } from "./components/MissionSafetyStrip.js";
-export { GateStatus } from "./components/GateStatus.js";
-export { ChecklistPanel } from "./components/ChecklistPanel.js";
-export { AlertTimeline } from "./components/AlertTimeline.js";
-export { MapWorkspace } from "./components/MapWorkspace.js";
-export { TelemetryPanel } from "./components/TelemetryPanel.js";
-export { RiskPanel } from "./components/RiskPanel.js";
-export { HumanPerformancePanel } from "./components/HumanPerformancePanel.js";
-export { SmsDashboard } from "./components/SmsDashboard.js";
-export { PrivacyBanner } from "./components/PrivacyBanner.js";
-export { ResearchProtocolPanel } from "./components/ResearchProtocolPanel.js";
-export { ResearchSessionPanel } from "./components/ResearchSessionPanel.js";
-export { useMissionSafety } from "./hooks/useMissionSafety.js";
-export { useTelemetry } from "./hooks/useTelemetry.js";
