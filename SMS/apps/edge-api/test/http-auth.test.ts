@@ -242,6 +242,65 @@ describe("HTTP authentication boundary", () => {
     expect(maxExpired.statusCode).toBe(401);
   });
 
+  it("passively reports timing without touching idle activity or rotating CSRF", async () => {
+    const clock = { now: nowUtc };
+    const dependencies = testAuth([{ userId: "operator-1", roles: ["operator"], missionIds: ["mission-1"] }], clock);
+    app = await buildServer({ databaseUrl: ":memory:", internet: "disabled" }, dependencies);
+    const session = await login(app, "operator-1");
+
+    clock.now = "2026-08-09T18:05:00.000Z";
+    const first = await app.inject(authenticated(session, { method: "GET", url: "/api/auth/status" }));
+    clock.now = "2026-08-09T18:14:59.999Z";
+    const second = await app.inject(authenticated(session, { method: "GET", url: "/api/auth/status" }));
+
+    expect(first.statusCode).toBe(200);
+    expect(first.json()).toEqual({
+      sessionId: session.sessionId,
+      expiresAtUtc: "2026-08-10T02:00:00.000Z",
+      lastActivityAtUtc: nowUtc,
+      idleTimeoutMs: 15 * 60_000,
+      requiresReauthentication: true,
+    });
+    expect(second.json()).toEqual(first.json());
+    expect(dependencies.sessionManager.getSessionByCredential("bearer-secret-1", clock.now)?.lastActivityAtUtc).toBe(nowUtc);
+    expect(dependencies.sessionManager.verifyCsrfToken(session.sessionId, session.csrfToken)).toBe(true);
+
+    clock.now = "2026-08-09T18:15:00.000Z";
+    const expired = await app.inject(authenticated(session, { method: "GET", url: "/api/auth/status" }));
+    expect(expired.statusCode).toBe(401);
+  });
+
+  it("does not alter the durable session row during a passive status probe", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "sms-passive-status-"));
+    const databaseUrl = join(directory, "edge.sqlite");
+    const database = openDatabase(databaseUrl);
+    new LocalIdentityStore({ database }).register({
+      userId: "operator-1",
+      displayName: "operator-1",
+      roles: ["operator"],
+      missionIds: ["mission-1"],
+      password,
+    });
+    database.close();
+    try {
+      app = await buildServer({ databaseUrl, internet: "disabled" });
+      const session = await login(app, "operator-1");
+      const durableRow = () => app!.edgeDatabase.sql().prepare(
+        "SELECT credential_hash, csrf_hash, session_json, updated_at_utc FROM sessions WHERE session_id = ?",
+      ).get(session.sessionId);
+      const before = durableRow();
+
+      const status = await app.inject(authenticated(session, { method: "GET", url: "/api/auth/status" }));
+
+      expect(status.statusCode).toBe(200);
+      expect(durableRow()).toEqual(before);
+    } finally {
+      await app?.close();
+      app = undefined;
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("uses the production idle, lifetime, and signing reauthentication defaults", () => {
     const identity = {
       userId: "operator-default-policy",
@@ -275,12 +334,17 @@ describe("HTTP authentication boundary", () => {
     );
     const lockedSession = await login(app, "operator-1");
 
-    const locked = await app.inject(authenticated(lockedSession, { method: "POST", url: "/api/auth/lock", payload: {} }));
+    const mismatched = await app.inject(authenticated(lockedSession, { method: "POST", url: "/api/auth/lock", payload: { expectedSessionId: "different-session" } }));
+    const stillActive = await app.inject(authenticated(lockedSession, { method: "GET", url: "/api/auth/status" }));
+    const locked = await app.inject(authenticated(lockedSession, { method: "POST", url: "/api/auth/lock", payload: { expectedSessionId: lockedSession.sessionId } }));
     const afterLock = await app.inject(authenticated(lockedSession, { method: "GET", url: "/api/auth/session" }));
     const logoutSession = await login(app, "operator-1");
     const logout = await app.inject(authenticated(logoutSession, { method: "POST", url: "/api/auth/logout", payload: {} }));
     const afterLogout = await app.inject(authenticated(logoutSession, { method: "GET", url: "/api/auth/session" }));
 
+    expect(mismatched.statusCode).toBe(409);
+    expect(mismatched.headers["set-cookie"]).toBeUndefined();
+    expect(stillActive.statusCode).toBe(200);
     expect(locked.statusCode).toBe(204);
     expect(afterLock.statusCode).toBe(401);
     expect(logout.statusCode).toBe(204);

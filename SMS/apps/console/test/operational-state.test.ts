@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RequestEpoch, emptyMissionScopedState, missionRevisionChanged } from "../src/app/operational-state.js";
+import { RequestEpoch, emptyMissionScopedState, isOperationalSafeModeFailure, missionRevisionChanged } from "../src/app/operational-state.js";
 
 describe("operational session state", () => {
   it("centralizes a complete principal and mission reset", () => {
@@ -31,5 +31,25 @@ describe("operational session state", () => {
     const operationalData = (revisionId: string) => ({ missions: { missions: [{ missionId: "mission-1", currentRevisionId: revisionId }] } });
     expect(missionRevisionChanged(operationalData("mission-1:r0"), operationalData("mission-1:r1"), "mission-1")).toBe(true);
     expect(missionRevisionChanged(operationalData("mission-1:r1"), operationalData("mission-1:r1"), "mission-1")).toBe(false);
+  });
+
+  it("makes each authoritative refresh supersede every older same-principal load", () => {
+    const epoch = new RequestEpoch();
+    const older = epoch.beginLatest();
+    const newer = epoch.beginLatest();
+
+    expect(older.signal.aborted).toBe(true);
+    expect(older.isCurrent()).toBe(false);
+    expect(newer.isCurrent()).toBe(true);
+  });
+
+  it("recognizes only stable server safe-mode failures", () => {
+    expect(isOperationalSafeModeFailure(503, "SAFE_MODE_DATABASE_FAILURE")).toBe(true);
+    expect(isOperationalSafeModeFailure(503, "READ_ONLY_DEGRADED_STARTUP")).toBe(true);
+    expect(isOperationalSafeModeFailure(503, "MISSION_STORE_UNAVAILABLE")).toBe(true);
+    expect(isOperationalSafeModeFailure(503, "AUDIT_LEDGER_UNAVAILABLE")).toBe(true);
+    expect(isOperationalSafeModeFailure(503, "SAFETY_EVALUATION_INTEGRITY_FAILURE")).toBe(true);
+    expect(isOperationalSafeModeFailure(500, "INTERNAL_ERROR")).toBe(false);
+    expect(isOperationalSafeModeFailure(409, "SAFE_MODE_DATABASE_FAILURE")).toBe(false);
   });
 });

@@ -47,6 +47,8 @@ export class RequestEpoch {
     });
   }
 
+  public beginLatest(): RequestTicket { this.invalidate(); return this.begin(); }
+
   public snapshot(): number { return this.generation; }
   public isCurrent(snapshot: number): boolean { return snapshot === this.generation; }
 
@@ -55,4 +57,8 @@ export class RequestEpoch {
     for (const controller of this.controllers) controller.abort();
     this.controllers.clear();
   }
+}
+const SAFE_MODE_CODES = new Set(["SAFE_MODE_DATABASE_FAILURE", "READ_ONLY_DEGRADED_STARTUP", "MISSION_STORE_UNAVAILABLE", "AUDIT_LEDGER_UNAVAILABLE", "SAFETY_EVALUATION_INTEGRITY_FAILURE"]);
+export function isOperationalSafeModeFailure(status: number, code: string): boolean {
+  return status >= 500 && SAFE_MODE_CODES.has(code);
 }

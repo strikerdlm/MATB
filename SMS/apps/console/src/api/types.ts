@@ -12,9 +12,17 @@ export interface AuthenticatedSession {
   readonly idleTimeoutMs: number;
 }
 
+export type AuthenticatedSessionStatus = Pick<AuthenticatedSession, "sessionId" | "expiresAtUtc" | "lastActivityAtUtc" | "idleTimeoutMs" | "requiresReauthentication">;
+export type MissionState = "Draft" | "Planned" | "UnderReview" | "ReadyForRelease" | "Released" | "Active" | "Completed" | "Suspended" | "Aborted" | "PostFlightReview" | "Closed";
+export type SafetyStatus = "ready" | "conditional" | "blocked" | "degraded";
+export type ChecklistResponse = "pass" | "block" | "not-applicable";
+export type GateName = "maintenance" | "operator" | "safety" | "commander";
+export type GateDecision = "accept" | "block" | "escalate";
+export type PackageState = "verified" | "active" | "quarantined";
+
 export interface SafetyView {
   readonly revisionId: string;
-  readonly status: string;
+  readonly status: SafetyStatus;
   readonly stale: boolean;
   readonly evaluatedAtUtc?: string;
   readonly blockers: readonly { readonly code: string; readonly explanation?: string; readonly severity?: string }[];
@@ -28,7 +36,7 @@ export interface MissionView {
   readonly currentRevision: Record<string, unknown> & {
     readonly id: string;
     readonly revision: number;
-    readonly state: string;
+    readonly state: MissionState;
     readonly crew?: readonly { readonly userId: string; readonly role: string }[];
     readonly aircraft?: readonly { readonly aircraftId: string; readonly aircraftClass?: string }[];
     readonly flightRule?: string;
@@ -38,18 +46,18 @@ export interface MissionView {
   readonly revisions: readonly Record<string, unknown>[];
   readonly safetyResults: readonly SafetyView[];
   readonly checklistResponses: readonly {
-    readonly responseId: string; readonly revisionId: string; readonly itemId: string; readonly response: string;
+    readonly responseId: string; readonly revisionId: string; readonly itemId: string; readonly response: ChecklistResponse;
     readonly actorUserId: string; readonly occurredAtUtc: string; readonly evidenceRef?: string; readonly reason?: string;
   }[];
   readonly gateApprovals: readonly {
-    readonly missionRevisionId: string; readonly gate: string; readonly decision: string;
+    readonly missionRevisionId: string; readonly gate: GateName; readonly decision: GateDecision;
     readonly actorUserId: string; readonly occurredAtUtc: string; readonly reason?: string;
   }[];
 }
 
 export interface MissionList { readonly missions: readonly MissionView[] }
 export interface PackageList { readonly active: readonly PackageView[]; readonly quarantined: readonly PackageView[] }
-export interface PackageView { readonly packageId: string; readonly version: string; readonly state: string; readonly reason: string; readonly manifest?: { readonly kind?: string } }
+export interface PackageView { readonly packageId: string; readonly version: string; readonly state: PackageState; readonly reason: string; readonly manifest?: { readonly kind?: string } }
 export interface AuditHealth { readonly state: "healthy" | "safe-mode"; readonly eventCount: number; readonly lastEventHash?: string }
 export interface ReadinessReport {
   readonly status: "ready" | "not_ready";

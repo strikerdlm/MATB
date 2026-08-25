@@ -1,4 +1,4 @@
-import type { AuthenticatedSession, ReadinessReport } from "./types.js";
+import type { AuthenticatedSession, AuthenticatedSessionStatus, ReadinessReport } from "./types.js";
 
 const SAFE_METHODS = new Set(["GET", "HEAD"]);
 
@@ -14,6 +14,7 @@ export class EdgeApiError extends Error {
 
 export class EdgeApiClient {
   private activeSession?: AuthenticatedSession;
+  private csrfMutationTail: Promise<void> = Promise.resolve();
 
   public constructor(private readonly origin = typeof location === "undefined" ? "https://edge.invalid" : location.origin) {}
 
@@ -26,9 +27,17 @@ export class EdgeApiClient {
   }
 
   public async restoreSession(signal?: AbortSignal): Promise<AuthenticatedSession> {
-    const session = await this.request<AuthenticatedSession>("/api/auth/session", "GET", undefined, true, signal);
-    this.activeSession = Object.freeze(session);
-    return session;
+    return this.serializeCsrfMutation(async () => {
+      const session = await this.request<AuthenticatedSession>("/api/auth/session", "GET", undefined, true, signal);
+      this.activeSession = Object.freeze(session);
+      return session;
+    });
+  }
+
+  public async sessionStatus(signal?: AbortSignal): Promise<AuthenticatedSessionStatus> {
+    const status = await this.request<AuthenticatedSessionStatus>("/api/auth/status", "GET", undefined, true, signal);
+    if (this.activeSession?.sessionId === status.sessionId) this.activeSession = Object.freeze({ ...this.activeSession, ...status });
+    return status;
   }
 
   public async reauthenticate(password: string, signal?: AbortSignal): Promise<AuthenticatedSession> {
@@ -37,11 +46,14 @@ export class EdgeApiClient {
     return session;
   }
 
-  public async lock(signal?: AbortSignal): Promise<void> { await this.post<void>("/api/auth/lock", undefined, signal); this.activeSession = undefined; }
+  public async lock(expectedSessionId = this.activeSession?.sessionId, signal?: AbortSignal): Promise<void> {
+    await this.post<void>("/api/auth/lock", { expectedSessionId }, signal);
+    if (this.activeSession?.sessionId === expectedSessionId) this.activeSession = undefined;
+  }
   public async logout(signal?: AbortSignal): Promise<void> { await this.post<void>("/api/auth/logout", undefined, signal); this.activeSession = undefined; }
   public forgetSession(): void { this.activeSession = undefined; }
   public get<T>(path: string, signal?: AbortSignal): Promise<T> { return this.request<T>(path, "GET", undefined, true, signal); }
-  public post<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> { return this.request<T>(path, "POST", body, true, signal); }
+  public post<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> { return this.serializeCsrfMutation(() => this.request<T>(path, "POST", body, true, signal)); }
 
   public async readiness(signal?: AbortSignal): Promise<ReadinessReport> {
     const response = await fetch(sameOriginPath("/readyz", this.origin), { method: "GET", credentials: "same-origin", headers: { accept: "application/json" }, signal });
@@ -61,13 +73,21 @@ export class EdgeApiClient {
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
-    if (response.status === 401) { this.activeSession = undefined; throw new SessionExpiredError(); }
+    if (response.status === 401 && authenticated) { this.activeSession = undefined; throw new SessionExpiredError(); }
     if (!response.ok) {
       const failure: { error?: string; message?: string } = await parseJson<{ error?: string; message?: string }>(response).catch(() => ({}));
       throw new EdgeApiError(response.status, failure.error ?? "REQUEST_FAILED", failure.message ?? "request failed");
     }
     if (response.status === 204) return undefined as T;
     return parseJson<T>(response);
+  }
+
+  private async serializeCsrfMutation<T>(operation: () => Promise<T>): Promise<T> {
+    const previous = this.csrfMutationTail;
+    let release!: () => void;
+    this.csrfMutationTail = new Promise<void>((resolve) => { release = resolve; });
+    await previous;
+    try { return await operation(); } finally { release(); }
   }
 }
 

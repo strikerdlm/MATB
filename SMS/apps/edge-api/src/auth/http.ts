@@ -38,6 +38,7 @@ declare module "fastify" {
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const ADAPTER_AUTHENTICATED_ROUTES = new Set(["/api/telemetry/ingest"]);
+const PASSIVE_AUTHENTICATED_ROUTES = new Set(["/api/auth/status"]);
 const ACCOUNTABLE_IDENTITY_FIELDS = new Set([
   "actorUserId",
   "actorRole",
@@ -141,12 +142,13 @@ export function registerHttpAuthentication(app: FastifyInstance, dependencies: H
       dependencies.sessionManager.deleteSession(session.sessionId);
       return unauthorized(reply);
     }
-    const touched = dependencies.sessionManager.touchSessionByCredential(sessionCredential);
-    if (touched === undefined) return unauthorized(reply);
-    if (touched.state !== "active") return unauthorized(reply);
-    request.authenticatedPrincipal = principalFrom(touched);
+    const current = request.routeOptions.url !== undefined && PASSIVE_AUTHENTICATED_ROUTES.has(request.routeOptions.url)
+      ? session
+      : dependencies.sessionManager.touchSessionByCredential(sessionCredential);
+    if (current === undefined || current.state !== "active") return unauthorized(reply);
+    request.authenticatedPrincipal = principalFrom(current);
     const csrf = request.headers["x-csrf-token"];
-    if (!SAFE_METHODS.has(request.method) && (typeof csrf !== "string" || !dependencies.sessionManager.verifyCsrfToken(touched.sessionId, csrf))) {
+    if (!SAFE_METHODS.has(request.method) && (typeof csrf !== "string" || !dependencies.sessionManager.verifyCsrfToken(current.sessionId, csrf))) {
       return reply.code(403).send({ error: "CSRF_TOKEN_INVALID", message: "the exact session CSRF token is required" });
     }
   });
@@ -180,6 +182,17 @@ export function registerHttpAuthentication(app: FastifyInstance, dependencies: H
     return reply.code(200).send(principalFrom(rotated));
   });
 
+  app.get("/api/auth/status", async (request, reply) => {
+    const principal = requirePrincipal(request);
+    return reply.code(200).send({
+      sessionId: principal.sessionId,
+      expiresAtUtc: principal.expiresAtUtc,
+      lastActivityAtUtc: principal.lastActivityAtUtc,
+      idleTimeoutMs: principal.idleTimeoutMs,
+      requiresReauthentication: principal.requiresReauthentication,
+    });
+  });
+
   app.post("/api/auth/reauthenticate", async (request, reply) => {
     const principal = requirePrincipal(request);
     const body = request.body as { password?: unknown } | null;
@@ -195,6 +208,10 @@ export function registerHttpAuthentication(app: FastifyInstance, dependencies: H
 
   app.post("/api/auth/lock", async (request, reply) => {
     const principal = requirePrincipal(request);
+    const body = request.body as { expectedSessionId?: unknown } | null;
+    if (body?.expectedSessionId !== principal.sessionId) {
+      return reply.code(409).send({ error: "SESSION_CHANGED", message: "the active session changed before lock completed" });
+    }
     dependencies.sessionManager.lockSession(principal.sessionId, "user requested lock");
     return reply.header("set-cookie", clearedSessionCookie()).code(204).send();
   });
