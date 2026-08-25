@@ -42,11 +42,19 @@ export class SqliteTrustedKeyStore implements TrustedKeyStore {
   public constructor(private readonly database: EdgeDatabase) {}
 
   public add(record: TrustedKeyRecord): TrustedKeyRecord {
-    this.database.assertFencingToken();
-    this.database.sql().prepare(`INSERT INTO trusted_keys
-      (key_id, scope, algorithm, public_key_pem, added_at_utc, added_by_user_id)
-      VALUES (?, ?, ?, ?, ?, ?)`)
-      .run(record.keyId, record.scope, record.algorithm, record.publicKeyPem, record.addedAtUtc, record.addedByUserId);
+    const sql = this.database.sql();
+    sql.exec("BEGIN IMMEDIATE");
+    try {
+      this.database.assertFencingToken();
+      sql.prepare(`INSERT INTO trusted_keys
+        (key_id, scope, algorithm, public_key_pem, added_at_utc, added_by_user_id)
+        VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(record.keyId, record.scope, record.algorithm, record.publicKeyPem, record.addedAtUtc, record.addedByUserId);
+      sql.exec("COMMIT");
+    } catch (error) {
+      sql.exec("ROLLBACK");
+      throw error;
+    }
     return Object.freeze({ ...record });
   }
 

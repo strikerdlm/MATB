@@ -2,6 +2,7 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateKeyPairSync } from "node:crypto";
+import { createRequire, syncBuiltinESMExports } from "node:module";
 import { afterEach, describe, expect, it } from "vitest";
 import { createDatabaseBackup, restoreDatabaseBackup, verifyDatabaseBackup } from "../src/admin/backup.js";
 import { runAdminCli } from "../src/admin/cli.js";
@@ -10,6 +11,7 @@ import { openDatabase } from "../src/db/migrate.js";
 import { buildServer, type EdgeServer } from "../src/server.js";
 import { AuditLedger } from "../src/audit/ledger.js";
 import { LocalIdentityStore } from "../src/auth/identity.js";
+import { MaintenanceLock } from "../src/admin/maintenance-lock.js";
 
 const temporaryDirectories: string[] = [];
 const runningServers: EdgeServer[] = [];
@@ -101,6 +103,29 @@ describe("offline runtime lease and recovery", () => {
     staleDatabase.close();
   });
 
+  it("holds the write transaction before validating the fencing token", () => {
+    const { database: databasePath } = paths();
+    const initialized = openDatabase(databasePath);
+    initialized.close();
+    const staleDatabase = openDatabase(databasePath, 0);
+    const takeoverDatabase = openDatabase(databasePath, 0);
+    const staleLease = new RuntimeLease(staleDatabase, { holderId: "service", now: () => "2026-08-25T10:00:00.000Z", durationMs: 60_000 });
+    staleLease.acquire();
+    const identities = new LocalIdentityStore({ database: staleDatabase, now: () => "2026-08-25T10:00:00.000Z" });
+    identities.register({ userId: "race-user", displayName: "Race User", roles: ["operator"], missionIds: ["mission-1"], password: "race-user-password" });
+    const takeover = new RuntimeLease(takeoverDatabase, { holderId: "admin", now: () => "2026-08-25T10:01:00.000Z", durationMs: 60_000 });
+    const originalFenceCheck = staleDatabase.assertFencingToken.bind(staleDatabase);
+    staleDatabase.assertFencingToken = () => {
+      originalFenceCheck();
+      takeover.acquire();
+    };
+
+    expect(() => identities.assign("race-user", { roles: ["reviewer"], missionIds: ["mission-2"], qualificationRefs: [] })).toThrow(/lock|lease|fenc|transaction/i);
+    expect(takeoverDatabase.sql().prepare("SELECT role FROM identity_roles WHERE user_id = 'race-user'").all()).toEqual([{ role: "operator" }]);
+    takeoverDatabase.close();
+    staleDatabase.close();
+  });
+
   it("creates a verified backup and restores its exact operational state", () => {
     const { database: databasePath, backup } = paths();
     const database = openDatabase(databasePath);
@@ -130,6 +155,46 @@ describe("offline runtime lease and recovery", () => {
 
     expect(() => restoreDatabaseBackup(backup, databasePath)).toThrow(/backup|integrity/i);
     expect(readFileSync(databasePath)).toEqual(original);
+  });
+
+  it("rejects a symlink backup source instead of reopening a replaceable path", () => {
+    const { directory, database: databasePath, backup } = paths();
+    const database = openDatabase(databasePath);
+    database.close();
+    createDatabaseBackup(databasePath, backup);
+    const link = join(directory, "replaceable-backup.sqlite");
+    symlinkSync(backup, link);
+
+    expect(() => restoreDatabaseBackup(link, databasePath)).toThrow(/symbolic|symlink|nofollow|regular|backup/i);
+  });
+
+  it("fsyncs rollback files and their directory before reporting restore failure", () => {
+    const { database: databasePath, backup } = paths();
+    const database = openDatabase(databasePath);
+    database.sql().prepare("INSERT INTO identities (user_id, display_name) VALUES ('before-backup', 'Before Backup')").run();
+    database.close();
+    createDatabaseBackup(databasePath, backup);
+    const changed = openDatabase(databasePath);
+    changed.sql().prepare("INSERT INTO identities (user_id, display_name) VALUES ('must-survive', 'Must Survive')").run();
+    changed.close();
+    const original = readFileSync(databasePath);
+    const mutableFs = createRequire(import.meta.url)("node:fs") as { fsyncSync(fd: number): void };
+    const originalFsync = mutableFs.fsyncSync;
+    let calls = 0;
+    mutableFs.fsyncSync = (descriptor: number) => {
+      calls += 1;
+      if (calls === 2) throw new Error("injected post-replacement fsync failure");
+      originalFsync(descriptor);
+    };
+    syncBuiltinESMExports();
+    try {
+      expect(() => restoreDatabaseBackup(backup, databasePath)).toThrow(/injected.*fsync|restore/i);
+      expect(readFileSync(databasePath)).toEqual(original);
+      expect(calls).toBeGreaterThanOrEqual(4);
+    } finally {
+      mutableFs.fsyncSync = originalFsync;
+      syncBuiltinESMExports();
+    }
   });
 
   it("never overwrites an existing backup output", () => {
@@ -282,6 +347,27 @@ describe("sms-admin secret boundary", () => {
     runningServers.push(server);
 
     expect(() => restoreDatabaseBackup(backup, database)).toThrow(/service|maintenance|lock|stopped/i);
+  });
+
+  it("rejects an unacquired or wrong-target maintenance-lock object", () => {
+    const first = paths();
+    const second = paths();
+    const initialized = openDatabase(first.database);
+    initialized.close();
+    createDatabaseBackup(first.database, first.backup);
+    const realOwner = new MaintenanceLock(first.database);
+    realOwner.acquire();
+    try {
+      const unacquired = new MaintenanceLock(first.database);
+      expect(() => restoreDatabaseBackup(first.backup, first.database, unacquired)).toThrow(/acquir|owner|maintenance|lock/i);
+      expect(() => openDatabase(first.database, 5_000, { maintenanceLock: unacquired })).toThrow(/acquir|owner|maintenance|lock/i);
+      Object.assign(unacquired, { assertAcquiredFor: () => undefined });
+      expect(() => restoreDatabaseBackup(first.backup, first.database, unacquired)).toThrow(/acquir|owner|maintenance|lock/i);
+      expect(() => openDatabase(first.database, 5_000, { maintenanceLock: unacquired })).toThrow(/acquir|owner|maintenance|lock/i);
+      expect(() => restoreDatabaseBackup(first.backup, second.database, realOwner)).toThrow(/target|maintenance|lock/i);
+    } finally {
+      realOwner.release();
+    }
   });
 
   it("adds and lists trust anchors and lists offline package state", async () => {

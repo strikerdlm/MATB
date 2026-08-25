@@ -323,7 +323,14 @@ export class SqliteAuditPersistence implements AuditPersistence {
   }
 
   public async append(event: AuditEvent): Promise<void> {
-    this.appendSync(event);
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      this.appendSync(event);
+      this.database.exec("COMMIT");
+    } catch (error) {
+      this.database.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   private appendSync(event: AuditEvent): void {
@@ -384,9 +391,9 @@ export class SqliteAuditPersistence implements AuditPersistence {
     schemaVersion: number,
     writeDomain: () => void,
   ): AuditEvent[] {
-    this.edgeDatabase?.assertFencingToken();
     this.database.exec("BEGIN IMMEDIATE");
     try {
+      this.edgeDatabase?.assertFencingToken();
       const integrity = this.database.prepare("PRAGMA quick_check").get() as Record<string, unknown>;
       if (String(Object.values(integrity)[0] ?? "") !== "ok") throw new AuditWriteError("database integrity check failed; approval writes are disabled");
       const existing = this.listSync();

@@ -223,10 +223,10 @@ export class LocalIdentityStore {
     if (stored === undefined) throw new Error("identity does not exist");
     const record = Object.freeze({ ...stored.record, disabledAtUtc });
     if (this.database !== undefined) {
-      this.database.assertFencingToken();
       const sql = this.database.sql();
       sql.exec("BEGIN IMMEDIATE");
       try {
+        this.database.assertFencingToken();
         sql.prepare("UPDATE identities SET disabled_at_utc = ? WHERE user_id = ?").run(disabledAtUtc, userId);
         sql.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId);
         sql.exec("COMMIT");
@@ -239,9 +239,11 @@ export class LocalIdentityStore {
     return record;
   }
 
-  public isSessionIdentityValid(userId: string, credentialVersion: number): boolean {
+  public isSessionIdentityValid(userId: string, credentialVersion: number, roles?: readonly UserRole[], missionIds?: readonly string[]): boolean {
     const identity = this.identities.get(userId);
     if (identity === undefined || identity.record.disabledAtUtc !== undefined) return false;
+    if (roles !== undefined && !sameValues(identity.record.roles, roles)) return false;
+    if (missionIds !== undefined && !sameValues(identity.record.missionIds, missionIds)) return false;
     if (this.database === undefined) return credentialVersion === 1;
     return this.database.sql().prepare(`SELECT 1 AS present FROM credential_versions
       WHERE user_id = ? AND version = ? AND retired_at_utc IS NULL`).get(userId, credentialVersion) !== undefined;
@@ -257,13 +259,14 @@ export class LocalIdentityStore {
     const qualificationRefs = [...(input.qualificationRefs ?? [])].map((reference) => canonicalText(reference, "qualificationRef"));
     const record = Object.freeze({ ...stored.record, roles: Object.freeze(roles), missionIds: Object.freeze(missionIds), qualificationRefs: Object.freeze(qualificationRefs) });
     if (this.database !== undefined) {
-      this.database.assertFencingToken();
       const sql = this.database.sql();
       sql.exec("BEGIN IMMEDIATE");
       try {
+        this.database.assertFencingToken();
         sql.prepare("UPDATE identities SET qualification_refs_json = ? WHERE user_id = ?").run(JSON.stringify(qualificationRefs), userId);
         sql.prepare("DELETE FROM identity_roles WHERE user_id = ?").run(userId);
         sql.prepare("DELETE FROM mission_assignments WHERE user_id = ?").run(userId);
+        sql.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId);
         for (const role of roles) sql.prepare("INSERT INTO identity_roles (user_id, role) VALUES (?, ?)").run(userId, role);
         for (const missionId of missionIds) sql.prepare("INSERT INTO mission_assignments (user_id, mission_id, qualification_refs_json) VALUES (?, ?, ?)").run(userId, missionId, JSON.stringify(qualificationRefs));
         sql.exec("COMMIT");
@@ -286,10 +289,10 @@ export class LocalIdentityStore {
 
   private persistRegistration(stored: StoredIdentity): void {
     if (this.database === undefined) return;
-    this.database.assertFencingToken();
     const sql = this.database.sql();
     sql.exec("BEGIN IMMEDIATE");
     try {
+      this.database.assertFencingToken();
       sql.prepare("INSERT INTO identities (user_id, display_name, qualification_refs_json, disabled_at_utc) VALUES (?, ?, ?, ?)")
         .run(stored.record.userId, stored.record.displayName, JSON.stringify(stored.record.qualificationRefs), stored.record.disabledAtUtc ?? null);
       sql.prepare("INSERT INTO credential_versions (user_id, version, salt, password_hash, created_at_utc) VALUES (?, 1, ?, ?, ?)")
@@ -305,11 +308,16 @@ export class LocalIdentityStore {
   }
 
   private persistLoginState(stored: StoredIdentity): void {
+    if (this.database === undefined) return;
+    const sql = this.database.sql();
     try {
-      this.database?.assertFencingToken();
-      this.database?.sql().prepare("UPDATE login_lockout_state SET failed_attempts = ?, locked_until_utc = ? WHERE user_id = ?")
+      sql.exec("BEGIN IMMEDIATE");
+      this.database.assertFencingToken();
+      sql.prepare("UPDATE login_lockout_state SET failed_attempts = ?, locked_until_utc = ? WHERE user_id = ?")
         .run(stored.failedAttempts, stored.lockedUntilEpochMs === undefined ? null : new Date(stored.lockedUntilEpochMs).toISOString(), stored.record.userId);
+      sql.exec("COMMIT");
     } catch (error) {
+      try { sql.exec("ROLLBACK"); } catch { /* Transaction did not begin. */ }
       this.persistenceFailed = true;
       throw new Error("identity lockout persistence failed; identity store is read-only", { cause: error });
     }
@@ -345,6 +353,10 @@ export class LocalIdentityStore {
   private assertWritable(): void {
     if (this.persistenceFailed) throw new Error("identity persistence is in read-only safe mode");
   }
+}
+
+function sameValues(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value) => right.includes(value));
 }
 
 export class LocalAuthenticator {

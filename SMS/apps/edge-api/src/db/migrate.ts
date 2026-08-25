@@ -1,10 +1,11 @@
 import { constants, copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { MaintenanceLock } from "../admin/maintenance-lock.js";
+import { assertMaintenanceLockOwnership, MaintenanceLock } from "../admin/maintenance-lock.js";
 import { parseGateApproval, parseMissionRevision, type MissionRevision } from "@fac-isr/safety-kernel";
 import { GENESIS_HASH, hashAuditEvent } from "../audit/ledger.js";
 import { validateSafetyEvaluationEnvelope, type SafetyEvaluationEnvelope } from "../services/safety-evaluation.js";
 import { parsePackageRecord } from "../services/safe-mode.js";
+import { validateGateAuthorityScope } from "../services/gate-authority.js";
 import { configureDatabase, MIGRATIONS, SCHEMA_VERSION } from "./schema.js";
 import type { SqlDatabase } from "./schema.js";
 
@@ -208,8 +209,7 @@ function migrateLegacyState(database: SqlDatabase): void {
       const approval = parseGateApproval(approvalValue);
       const checklistResponseIds = requireArray(rawChecklistIds, "gate checklistResponseIds").map((id) => requiredText(id, "gate checklistResponseId"));
       if (checklistResponseIds.length === 0 || checklistResponseIds.some((id) => checklistById.get(id) !== revisionId)) throw new Error(`gate decision for ${revisionId} references invalid checklist responses`);
-      const crew = revision.crew.find(({ userId, role }) => userId === approval.actorUserId && role === approval.actorRole);
-      if (crew === undefined || !crew.qualified || !crew.recencyCurrent || crew.dutyStatus !== "available") throw new Error(`gate actor ${approval.actorUserId} is not qualified for revision ${revisionId}`);
+      validateGateAuthorityScope(revision, approval);
       const gate = approval.gate;
       const aircraftScope = approval.aircraftId ?? "";
       const normalized = { ...approval, checklistResponseIds };
@@ -340,23 +340,41 @@ function coherentBackup(database: SqlDatabase, databasePath: string, timestamp: 
   throw new Error("could not allocate a collision-safe schema v2 backup path");
 }
 
+function acquireLegacyDatabaseExclusion(database: SqlDatabase): void {
+  database.prepare("PRAGMA locking_mode = EXCLUSIVE").get();
+  try {
+    database.exec("BEGIN EXCLUSIVE");
+    database.exec("COMMIT");
+  } catch (error) {
+    try { database.exec("ROLLBACK"); } catch { /* The exclusive transaction did not begin. */ }
+    throw new Error("schema-v1 migration requires the legacy service and every legacy database connection to be stopped", { cause: error });
+  }
+}
+
 export function openDatabase(databaseUrl: string, lockTimeoutMs = 5_000, options: DatabaseOpenOptions = {}): EdgeDatabase {
   if (databaseUrl !== ":memory:") {
     mkdirSync(dirname(databaseUrl), { recursive: true });
   }
   const ownedMaintenanceLock = databaseUrl === ":memory:" || options.maintenanceLock !== undefined ? undefined : new MaintenanceLock(databaseUrl, lockTimeoutMs);
   ownedMaintenanceLock?.acquire();
+  const maintenanceLock = options.maintenanceLock ?? ownedMaintenanceLock;
   const DatabaseSync = sqliteConstructor();
   let database: SqlDatabase | undefined;
   let backupPath: string | undefined;
   try {
+    if (databaseUrl !== ":memory:") {
+      assertMaintenanceLockOwnership(maintenanceLock, databaseUrl);
+    }
     database = new DatabaseSync(databaseUrl, { enableForeignKeyConstraints: true, timeout: lockTimeoutMs });
     const edgeDatabase = new EdgeDatabase(database);
-    if (databaseUrl !== ":memory:" && existsSync(databaseUrl) && edgeDatabase.schemaVersion() === 1) {
+    const migratingLegacy = databaseUrl !== ":memory:" && existsSync(databaseUrl) && edgeDatabase.schemaVersion() === 1;
+    if (migratingLegacy) {
+      acquireLegacyDatabaseExclusion(database);
       backupPath = coherentBackup(database, databaseUrl, backupTimestamp((options.now ?? (() => new Date().toISOString()))()));
     }
     configureDatabase(database, lockTimeoutMs);
     edgeDatabase.migrate();
+    if (migratingLegacy) database.prepare("PRAGMA locking_mode = NORMAL").get();
     return edgeDatabase;
   } catch (error) {
     database?.close();

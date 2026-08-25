@@ -100,7 +100,7 @@ describe("edge operational database", () => {
     expect(readFileSync(backupPath)).toEqual(originalBytes);
   });
 
-  it("captures committed schema-v1 WAL state in the retained migration backup", () => {
+  it("refuses migration while a legacy schema-v1 WAL connection is still live", () => {
     const databasePath = temporaryDatabasePath();
     createSchemaV1(databasePath);
     const sqlite = process.getBuiltinModule("node:sqlite") as {
@@ -116,13 +116,21 @@ describe("edge operational database", () => {
     const latest = JSON.stringify([{ missionId: mission.missionId, revisions: [mission], safetyResults: [], checklistResponses: [], approvals: [], occurrences: [] }]);
     live.prepare("UPDATE service_state SET value = ? WHERE key = 'mission_store'").run(latest);
 
+    const originalMain = readFileSync(databasePath);
+    const originalWal = readFileSync(`${databasePath}-wal`);
+
+    expect(() => openDatabase(databasePath, 0, { now: () => "2026-08-25T01:02:03.004Z" })).toThrow(/legacy|service|connection|lock|stopped|busy/i);
+    expect(readFileSync(databasePath)).toEqual(originalMain);
+    expect(readFileSync(`${databasePath}-wal`)).toEqual(originalWal);
+    expect(live.prepare("SELECT value FROM service_state WHERE key = 'mission_store'").get()).toEqual({ value: latest });
+    live.close();
+
     const migrated = openDatabase(databasePath, 5_000, { now: () => "2026-08-25T01:02:03.004Z" });
     migrated.close();
     const backupPath = `${databasePath}.pre-v2-20260825T010203004Z.sqlite`;
     const backup = new sqlite.DatabaseSync(backupPath);
     expect(backup.prepare("SELECT value FROM service_state WHERE key = 'mission_store'").get()).toEqual({ value: latest });
     backup.close();
-    live.close();
   });
 
   it("publishes a collision-safe migration backup without overwriting an existing path", () => {
@@ -201,6 +209,19 @@ describe("edge operational database", () => {
     const original = readFileSync(databasePath);
 
     expect(() => openDatabase(databasePath, 5_000, { now: () => "2026-08-25T02:00:00.000Z" })).toThrow(/checklist|actor|crew|mission/i);
+    expect(readFileSync(databasePath)).toEqual(original);
+  });
+
+  it("restores v1 when a legacy gate actor role is unauthorized for the gate", () => {
+    const databasePath = temporaryDatabasePath();
+    const mission = missionFixture();
+    const operator = mission.crew.find(({ role }) => role === "operator")!;
+    const checklistResponses = [{ responseId: "check-1", revisionId: mission.id, itemId: "weather-reviewed", response: "yes", actorUserId: operator.userId, occurredAtUtc: "2026-08-25T02:00:00.000Z" }];
+    const approvals = [{ missionRevisionId: mission.id, gate: "commander", actorUserId: operator.userId, actorRole: "operator", decision: "accept", valid: true, occurredAtUtc: "2026-08-25T02:00:00.000Z", evidenceSnapshotId: mission.evidenceSnapshotId, policyVersion: "1.0.0", reason: "invalid authority", checklistResponseIds: ["check-1"] }];
+    createSchemaV1(databasePath, JSON.stringify([{ missionId: mission.missionId, revisions: [mission], safetyResults: [], checklistResponses, approvals, occurrences: [] }]));
+    const original = readFileSync(databasePath);
+
+    expect(() => openDatabase(databasePath, 5_000, { now: () => "2026-08-25T02:00:00.000Z" })).toThrow(/gate|role|authority|commander/i);
     expect(readFileSync(databasePath)).toEqual(original);
   });
 

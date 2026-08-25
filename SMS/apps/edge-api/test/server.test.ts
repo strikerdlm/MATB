@@ -179,13 +179,13 @@ describe("offline edge server", () => {
     database.close();
 
     app = await buildServer({ databaseUrl, internet: "disabled" });
-    const server = app as Awaited<ReturnType<typeof buildServer>>;
-
-    expect(server.auditLedger.isReadOnlySafeMode()).toBe(true);
-    expect((await app.inject({ method: "GET", url: "/healthz" })).statusCode).toBe(200);
+    const health = await app.inject({ method: "GET", url: "/healthz" });
+    expect(health.statusCode).toBe(200);
+    expect(health.json()).toMatchObject({ status: "ok", degraded: true });
     const readiness = await app.inject({ method: "GET", url: "/readyz" });
     expect(readiness.statusCode).toBe(503);
     expect(readiness.json()).toMatchObject({ technicalReady: false, checks: { audit: { status: "pending" } } });
+    expect((await app.inject({ method: "POST", url: "/api/auth/login", payload: { userId: "fixture", password: "irrelevant-password" } })).statusCode).toBe(503);
   });
 
   it("boots read-only when normalized mission state is corrupt", async () => {
@@ -198,9 +198,10 @@ describe("offline edge server", () => {
     database.close();
 
     app = await buildServer({ databaseUrl, internet: "disabled" });
-    const server = app as Awaited<ReturnType<typeof buildServer>>;
-    expect(server.auditLedger.isReadOnlySafeMode()).toBe(true);
-    expect((await app.inject({ method: "GET", url: "/healthz" })).statusCode).toBe(200);
+    const health = await app.inject({ method: "GET", url: "/healthz" });
+    expect(health.statusCode).toBe(200);
+    expect(health.json()).toMatchObject({ status: "ok", degraded: true });
+    expect((await app.inject({ method: "POST", url: "/api/auth/login", payload: { userId: "fixture", password: "irrelevant-password" } })).statusCode).toBe(503);
   });
 
   it("fails closed when configured TLS material cannot be loaded", async () => {

@@ -6,6 +6,10 @@ import type { UserRole } from "../src/auth/roles.js";
 import { SessionManager } from "../src/auth/session.js";
 import { buildServer, type EdgeServer } from "../src/server.js";
 import { missionFixture, nowUtc, safetyResult, testSafetyEvaluationProvider } from "./mission-fixture.js";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { openDatabase } from "../src/db/migrate.js";
 
 const password = "correct horse battery staple";
 
@@ -289,6 +293,32 @@ describe("HTTP authentication boundary", () => {
 
     const response = await app.inject(authenticated(session, { method: "GET", url: "/api/auth/session" }));
     expect(response.statusCode).toBe(401);
+  });
+
+  it("rotates and persists CSRF during cookie-only session bootstrap after restart", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "sms-csrf-restart-"));
+    const databaseUrl = join(directory, "edge.sqlite");
+    try {
+      const database = openDatabase(databaseUrl);
+      new LocalIdentityStore({ database }).register({ userId: "restart-user", displayName: "Restart User", roles: ["operator"], missionIds: ["mission-1"], password });
+      database.close();
+      app = await buildServer({ databaseUrl, internet: "disabled" });
+      const original = await login(app, "restart-user");
+      await app.close();
+      app = await buildServer({ databaseUrl, internet: "disabled" });
+
+      const bootstrap = await app.inject({ method: "GET", url: "/api/auth/session", headers: { cookie: original.cookie } });
+      expect(bootstrap.statusCode).toBe(200);
+      const rotated = (bootstrap.json() as { csrfToken: string }).csrfToken;
+      expect(rotated).not.toBe("");
+      expect(rotated).not.toBe(original.csrfToken);
+      expect((await app.inject({ method: "POST", url: "/api/auth/reauthenticate", headers: { cookie: original.cookie, "x-csrf-token": original.csrfToken }, payload: { password } })).statusCode).toBe(403);
+      expect((await app.inject({ method: "POST", url: "/api/auth/reauthenticate", headers: { cookie: original.cookie, "x-csrf-token": rotated }, payload: { password } })).statusCode).toBe(200);
+    } finally {
+      await app?.close();
+      app = undefined;
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it("enforces the five-attempt, fifteen-minute lockout through login requests", async () => {

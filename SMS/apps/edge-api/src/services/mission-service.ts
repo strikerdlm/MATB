@@ -20,14 +20,9 @@ import {
   type SafetyEvaluationProvider,
   type SafetyEvaluationView,
 } from "./safety-evaluation.js";
+import { validateGateAuthorityScope } from "./gate-authority.js";
 
 const GATES: readonly GateName[] = ["maintenance", "operator", "safety", "commander"];
-const ROLE_BY_GATE: Readonly<Record<GateName, GateActorRole>> = {
-  maintenance: "maintainer",
-  operator: "operator",
-  safety: "safety",
-  commander: "commander",
-};
 const UTC_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
 
 export interface ChecklistResponse {
@@ -428,17 +423,11 @@ export class MissionService {
     }
     const actorUserId = context.actorUserId;
     const actorRole = context.actorRole;
-    if (actorRole !== ROLE_BY_GATE[gate]) throw new MissionServiceError(403, "GATE_ROLE_FORBIDDEN", "actor role cannot sign this gate");
-    const crew = revision.crew.find((member) => member.userId === actorUserId && member.role === actorRole);
     const aircraftId = envelope.aircraftId === undefined ? undefined : required(envelope.aircraftId, "aircraftId");
-    if (crew === undefined || !crew.qualified || !crew.recencyCurrent || crew.dutyStatus !== "available") {
-      throw new MissionServiceError(403, "GATE_ACTOR_NOT_QUALIFIED", "actor is not qualified and available for this gate");
-    }
-    if (gate === "operator" && (aircraftId === undefined || crew.aircraftId !== aircraftId)) {
-      throw new MissionServiceError(403, "GATE_AIRCRAFT_FORBIDDEN", "operator approval must name the assigned aircraft");
-    }
-    if (gate !== "operator" && aircraftId !== undefined) {
-      throw new MissionServiceError(400, "GATE_AIRCRAFT_SCOPE_INVALID", "only operator approvals may name an aircraft");
+    try {
+      validateGateAuthorityScope(revision, { gate, actorUserId, actorRole, ...(aircraftId === undefined ? {} : { aircraftId }) });
+    } catch (error) {
+      throw new MissionServiceError(403, "GATE_AUTHORITY_FORBIDDEN", error instanceof Error ? error.message : String(error));
     }
     const checklistResponseIds = arrayOfText(envelope.checklistResponseIds, "checklistResponseIds");
     if (checklistResponseIds.length === 0) throw new MissionServiceError(400, "CHECKLIST_REQUIRED", "gate signing requires checklist response IDs");
@@ -529,6 +518,10 @@ export class MissionService {
 
   public getAuditLedger(): AuditLedger {
     return this.audit;
+  }
+
+  public isReadOnlySafeMode(): boolean {
+    return this.safetyIntegrityFailure;
   }
 
   private parseMission(value: unknown): MissionRevision {

@@ -129,7 +129,7 @@ export function registerHttpAuthentication(app: FastifyInstance, dependencies: H
     if (sessionCredential === undefined) return unauthorized(reply);
     const session = dependencies.sessionManager.getSessionByCredential(sessionCredential);
     if (session === undefined || session.state !== "active") return unauthorized(reply);
-    if (!dependencies.identityStore.isSessionIdentityValid(session.userId, session.credentialVersion)) {
+    if (!dependencies.identityStore.isSessionIdentityValid(session.userId, session.credentialVersion, session.roles, session.missionIds)) {
       dependencies.sessionManager.deleteSession(session.sessionId);
       return unauthorized(reply);
     }
@@ -166,7 +166,11 @@ export function registerHttpAuthentication(app: FastifyInstance, dependencies: H
     }
   });
 
-  app.get("/api/auth/session", async (request, reply) => reply.code(200).send(requirePrincipal(request)));
+  app.get("/api/auth/session", async (request, reply) => {
+    const principal = requirePrincipal(request);
+    const rotated = dependencies.sessionManager.rotateCsrfToken(principal.sessionId);
+    return reply.code(200).send(principalFrom(rotated));
+  });
 
   app.post("/api/auth/reauthenticate", async (request, reply) => {
     const principal = requirePrincipal(request);

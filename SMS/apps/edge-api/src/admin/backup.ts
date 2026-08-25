@@ -1,8 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
-import { closeSync, copyFileSync, existsSync, fsyncSync, linkSync, openSync, readFileSync, renameSync, rmSync, unlinkSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, fsyncSync, linkSync, openSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { SCHEMA_VERSION } from "../db/schema.js";
-import { MaintenanceLock } from "./maintenance-lock.js";
+import { assertMaintenanceLockOwnership, MaintenanceLock } from "./maintenance-lock.js";
 
 export interface BackupVerification {
   readonly ok: boolean;
@@ -111,7 +111,9 @@ export function verifyDatabaseBackup(backupPath: string): BackupVerification {
 export function restoreDatabaseBackup(backupPath: string, databasePath: string, maintenanceLock?: MaintenanceLock): void {
   const ownedMaintenanceLock = maintenanceLock === undefined ? new MaintenanceLock(databasePath) : undefined;
   ownedMaintenanceLock?.acquire();
+  const lock = maintenanceLock ?? ownedMaintenanceLock;
   try {
+    assertMaintenanceLockOwnership(lock, databasePath);
     restoreDatabaseBackupLocked(backupPath, databasePath);
   } finally {
     ownedMaintenanceLock?.release();
@@ -119,13 +121,12 @@ export function restoreDatabaseBackup(backupPath: string, databasePath: string, 
 }
 
 function restoreDatabaseBackupLocked(backupPath: string, databasePath: string): void {
-  verifyDatabaseBackup(backupPath);
   const temporary = join(dirname(databasePath), `.sms-restore-${randomBytes(8).toString("hex")}.sqlite`);
   const rollbackStem = `${databasePath}.pre-restore-${new Date().toISOString().replace(/[-:.]/g, "")}-${randomBytes(4).toString("hex")}`;
   const moved: Array<{ from: string; to: string }> = [];
+  let candidateInstalled = false;
   try {
-    copyFileSync(backupPath, temporary);
-    verifyDatabaseBackup(temporary);
+    stageBackupSource(backupPath, temporary);
     syncFile(temporary);
     for (const suffix of ["", "-wal", "-shm"] as const) {
       const source = `${databasePath}${suffix}`;
@@ -135,14 +136,44 @@ function restoreDatabaseBackupLocked(backupPath: string, databasePath: string): 
       moved.push({ from: retained, to: source });
     }
     renameSync(temporary, databasePath);
+    candidateInstalled = true;
     verifyDatabaseBackup(databasePath);
     syncFile(databasePath);
     syncDirectory(databasePath);
   } catch (error) {
-    if (existsSync(databasePath)) renameSync(databasePath, `${rollbackStem}.failed`);
-    for (const entry of moved.reverse()) renameSync(entry.from, entry.to);
+    try {
+      if (candidateInstalled && existsSync(databasePath)) renameSync(databasePath, `${rollbackStem}.failed`);
+      for (const entry of moved.reverse()) renameSync(entry.from, entry.to);
+      for (const entry of moved) {
+        if (existsSync(entry.to) && statSync(entry.to).isFile()) syncFile(entry.to);
+      }
+      syncDirectory(databasePath);
+    } catch (rollbackError) {
+      throw new Error("database restore failed and its rollback could not be made crash durable", { cause: new AggregateError([error, rollbackError]) });
+    }
     throw error;
   } finally {
     rmSync(temporary, { force: true });
   }
+}
+
+function stageBackupSource(backupPath: string, temporary: string): BackupVerification {
+  let descriptor: number;
+  try {
+    descriptor = openSync(backupPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+  } catch (error) {
+    throw new Error("backup source must be a non-symbolic regular file", { cause: error });
+  }
+  let bytes: Buffer;
+  try {
+    if (!fstatSync(descriptor).isFile()) throw new Error("backup source must be a regular file");
+    bytes = readFileSync(descriptor);
+  } finally {
+    closeSync(descriptor);
+  }
+  writeFileSync(temporary, bytes, { flag: "wx", mode: 0o600 });
+  const verification = verifyDatabaseBackup(temporary);
+  const copiedHash = createHash("sha256").update(bytes).digest("hex");
+  if (verification.sha256 !== copiedHash) throw new Error("staged backup bytes changed during verification");
+  return verification;
 }

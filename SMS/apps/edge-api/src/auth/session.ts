@@ -183,8 +183,18 @@ export class SessionManager {
     if (credentialHash === undefined) return;
     this.assertWritable();
     try {
-      this.database?.assertFencingToken();
-      this.database?.sql().prepare("DELETE FROM sessions WHERE session_id = ?").run(sessionId);
+      if (this.database !== undefined) {
+        const sql = this.database.sql();
+        sql.exec("BEGIN IMMEDIATE");
+        try {
+          this.database.assertFencingToken();
+          sql.prepare("DELETE FROM sessions WHERE session_id = ?").run(sessionId);
+          sql.exec("COMMIT");
+        } catch (error) {
+          sql.exec("ROLLBACK");
+          throw error;
+        }
+      }
     } catch (error) {
       this.persistenceFailed = true;
       throw new Error("session persistence failed; session store is read-only", { cause: error });
@@ -199,6 +209,18 @@ export class SessionManager {
     if (expected === undefined || typeof candidate !== "string") return false;
     const actual = hashCsrfToken(candidate);
     return actual.length === expected.length && timingSafeEqual(Buffer.from(actual), Buffer.from(expected));
+  }
+
+  public rotateCsrfToken(sessionId: string): Session {
+    const { credentialHash, session } = this.requireSession(sessionId);
+    const csrfToken = this.csrfTokenFactory();
+    if (csrfToken.trim() === "") throw new Error("CSRF token must be non-empty");
+    const rotated = Object.freeze({ ...session, csrfToken });
+    const csrfHash = hashCsrfToken(csrfToken);
+    this.persist(credentialHash, csrfHash, rotated);
+    this.sessionsByCredentialHash.set(credentialHash, rotated);
+    this.csrfHashBySessionId.set(sessionId, csrfHash);
+    return rotated;
   }
 
   public isReadOnlySafeMode(): boolean {
@@ -297,13 +319,21 @@ export class SessionManager {
     if (this.database === undefined) return;
     const { csrfToken: _csrfToken, ...durableSession } = session;
     try {
-      this.database.assertFencingToken();
-      this.database.sql().prepare(`INSERT INTO sessions
+      const sql = this.database.sql();
+      sql.exec("BEGIN IMMEDIATE");
+      try {
+        this.database.assertFencingToken();
+        sql.prepare(`INSERT INTO sessions
         (session_id, user_id, credential_version, credential_hash, csrf_hash, session_json, updated_at_utc)
         VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(session_id) DO UPDATE SET user_id = excluded.user_id,
         credential_version = excluded.credential_version, credential_hash = excluded.credential_hash,
         csrf_hash = excluded.csrf_hash, session_json = excluded.session_json, updated_at_utc = excluded.updated_at_utc`)
-        .run(session.sessionId, session.userId, session.credentialVersion, credentialHash, csrfHash, JSON.stringify(durableSession), this.now());
+          .run(session.sessionId, session.userId, session.credentialVersion, credentialHash, csrfHash, JSON.stringify(durableSession), this.now());
+        sql.exec("COMMIT");
+      } catch (error) {
+        sql.exec("ROLLBACK");
+        throw error;
+      }
     } catch (error) {
       this.persistenceFailed = true;
       throw new Error("session persistence failed; session store is read-only", { cause: error });

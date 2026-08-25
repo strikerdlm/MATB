@@ -203,7 +203,7 @@ export async function buildServer(input: EdgeConfigInput = {}, dependencies: Edg
     identityStore: dependencies.identityStore ?? defaults.identityStore,
     sessionManager: dependencies.sessionManager ?? defaults.sessionManager,
   };
-  if (safeModeService.isReadOnlySafeMode() || authDependencies.identityStore.isReadOnlySafeMode() || authDependencies.sessionManager.isReadOnlySafeMode()) {
+  if (auditLedger.isReadOnlySafeMode() || missionService.isReadOnlySafeMode() || safeModeService.isReadOnlySafeMode() || authDependencies.identityStore.isReadOnlySafeMode() || authDependencies.sessionManager.isReadOnlySafeMode()) {
     clearInterval(leaseTimer);
     runtimeLease.release();
     edgeDatabase.close();

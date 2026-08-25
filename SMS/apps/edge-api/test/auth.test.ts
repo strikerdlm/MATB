@@ -321,6 +321,22 @@ describe("session lifecycle", () => {
     expect(database.sql().prepare("SELECT failed_attempts FROM login_lockout_state WHERE user_id = 'lockout-fault'").get()).toEqual({ failed_attempts: 0 });
     database.close();
   });
+
+  it("atomically revokes durable sessions when authorization assignments change", () => {
+    const database = openDatabase(":memory:");
+    const identities = new LocalIdentityStore({ database, now: () => "2026-08-09T18:00:00.000Z" });
+    const identity = identities.register({ userId: "assignment-user", displayName: "Assignment User", roles: ["operator"], missionIds: ["mission-1"], password: "assignment-user-password" });
+    const sessions = new SessionManager({ idleTimeoutMs: 60_000, maxLifetimeMs: 3_600_000, reauthenticationIntervalMs: 300_000, database, now: () => "2026-08-09T18:00:00.000Z" });
+    const issued = sessions.issueSession(identity);
+
+    identities.assign(identity.userId, { roles: ["reviewer"], missionIds: ["mission-2"], qualificationRefs: [] });
+
+    expect(database.sql().prepare("SELECT COUNT(*) AS count FROM sessions WHERE user_id = ?").get(identity.userId)).toEqual({ count: 0 });
+    expect(identities.isSessionIdentityValid(identity.userId, issued.session.credentialVersion, issued.session.roles, issued.session.missionIds)).toBe(false);
+    const restarted = new SessionManager({ idleTimeoutMs: 60_000, maxLifetimeMs: 3_600_000, reauthenticationIntervalMs: 300_000, database, now: () => "2026-08-09T18:00:01.000Z" });
+    expect(restarted.getSessionByCredential(issued.credential)).toBeUndefined();
+    database.close();
+  });
 });
 
 describe("tactical transport policy", () => {
