@@ -53,6 +53,22 @@ class Track(AbstractPlugin):
     def get_response_timers(self) -> list[int]:
         return [self.response_time]
 
+    def get_research_state(self) -> dict[str, Any]:
+        state = super().get_research_state()
+        reticle = getattr(self, "reticle", None)
+        if reticle is None:
+            return state
+        half_width = reticle.container.w / 2
+        half_height = reticle.container.h / 2
+        cursor_x, cursor_y = reticle.cursor_relative
+        state.update(
+            tracking_cursor_x=(cursor_x / half_width) if half_width else None,
+            tracking_cursor_y=(cursor_y / half_height) if half_height else None,
+            tracking_deviation=float(reticle.return_deviation()),
+            tracking_in_target=bool(reticle.is_cursor_in_target()),
+        )
+        return state
+
     def create_widgets(self) -> None:
         super().create_widgets()
 

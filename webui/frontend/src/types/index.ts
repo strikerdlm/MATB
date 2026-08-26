@@ -46,6 +46,15 @@ export interface IngestResult {
   validation?: ValidationSummary;
 }
 
+export interface BundleIngestResult {
+  id: number;
+  block_id: number;
+  bundle_sha256: string;
+  schema_version: string;
+  run_status: "complete" | "partial";
+  quality_status: "ok" | "warning" | "error" | string;
+}
+
 export interface ValidationIssue {
   severity: "warning" | "error" | string;
   code: string;

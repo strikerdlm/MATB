@@ -174,6 +174,75 @@ class TestRadioHelpers:
         assert waiting[0]["name"] == "COM_1"
 
 
+class TestStructuredCommunicationTrials:
+    def test_correct_response_records_two_element_trial(self):
+        c = _make_comms_with_radios()
+        c.scenario_time = 9.5
+        c.logger = MagicMock(event_sequence=24)
+        c.parameters.update(
+            automaticsolver=False,
+            maxresponsedelay=20_000,
+            feedbackduration=1_500,
+            feedbacks={"positive": {"active": False}, "negative": {"active": False}},
+        )
+        target = c.parameters["radios"][2]
+        target["is_active"] = True
+        c.parameters["radios"][0]["is_active"] = False
+        target["currentfreq"] = 130.0
+        target["_research_trial_id"] = "communications-000003"
+        target["_research_onset_s"] = 9.0
+        target["_research_event_sequence_start"] = 20
+
+        c.confirm_response()
+
+        trial = c.logger.record_research_trial.call_args.args[0]
+        assert trial == {
+            "trial_id": "communications-000003",
+            "task": "communications",
+            "trial_type": "radio_prompt",
+            "stimulus_id": "COM_1",
+            "onset_s": 9.0,
+            "deadline_s": 29.0,
+            "response_s": 9.5,
+            "rt_ms": 500.0,
+            "outcome": "HIT",
+            "correct": True,
+            "timeout": False,
+            "actor": "manual",
+            "automation_active": False,
+            "target_json": {"radio": "COM_1", "frequency_mhz": 130.0},
+            "response_json": {"radio": "COM_1", "frequency_mhz": 130.0},
+            "elements_available": 2,
+            "elements_correct": 2,
+            "event_sequence_start": 20,
+            "event_sequence_end": 24,
+        }
+
+    def test_missing_response_records_timeout_before_target_is_cleared(self):
+        c = _make_comms_with_radios()
+        c.scenario_time = 29.0
+        c.logger = MagicMock(event_sequence=30)
+        c.parameters.update(
+            automaticsolver=False,
+            maxresponsedelay=20_000,
+            feedbackduration=1_500,
+            feedbacks={"positive": {"active": False}, "negative": {"active": False}},
+        )
+        target = c.parameters["radios"][2]
+        target["_research_trial_id"] = "communications-000003"
+        target["_research_onset_s"] = 9.0
+        target["_research_event_sequence_start"] = 20
+
+        c.record_target_missing(target)
+
+        trial = c.logger.record_research_trial.call_args.args[0]
+        assert trial["target_json"] == {"radio": "COM_1", "frequency_mhz": 130.0}
+        assert trial["outcome"] == "MISS"
+        assert trial["response_s"] is None
+        assert trial["rt_ms"] is None
+        assert trial["timeout"] is True
+
+
 def _make_comms_for_voice():
     """Create a minimal Communications object for testing voice/sound methods."""
     c = object.__new__(Communications)

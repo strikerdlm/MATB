@@ -182,6 +182,14 @@ The target must contain `includes/`, which the tracked runtime does. To use a
 separate compatible checkout, replace `OPENMATB_DIR` or `$OpenMatbDir` with its
 root path.
 
+The tracked runtime enables the additive 20 Hz scientific sidecar in
+`openmatb/config.ini` under `[Research]`. Each run keeps the legacy CSV and also
+seals a checksum-verified `.matb.zip` with raw samples, structured trials,
+Parquet, summaries, a generated data dictionary, and timing quality. See the
+[scientific data layer v1 guide](docs/research/openmatb-scientific-data-layer-v1.md)
+for the USAARL comparison, score directions, and military-research acceptance
+limits.
+
 <h3>Run</h3>
 
 Generate the committed protocol shape without starting OpenMATB:
@@ -776,6 +784,7 @@ endpoint, release, and evidence explanations stay in their specialist guides.
 | `matb_integration/scenario_builder.py` | Generate LOW/MEDIUM/HIGH counterbalanced scenarios | Study designer | Protocol, duration, seed → OpenMATB text scenarios | Python | [OpenMATB tour](examples/openmatb-research/README.md) | `pytest tests/test_scenario_builder.py tests/test_scenario_manifest.py tests/test_log_converter.py tests/suhir tests/analysis_stats tests/screen -q` | Generated tasks require the tracked or a compatible OpenMATB runtime for presentation |
 | `matb_integration/scenario_manifest.py` | Hash scenarios and validate session provenance | Data steward | Scenario/tags/expected probes → adjacent manifest and validation issues | Python | OpenMATB tour | Same suite | Hash integrity does not establish protocol validity or consent |
 | `matb_integration/log_converter.py` | Convert OpenMATB CSV into canonical metrics | Research analyst | CSV + pseudonym/workload → JSONL metrics | Python | OpenMATB tour | Same suite | Input quality and missing tasks constrain inference |
+| `matb_integration/scientific_data/` | Record and validate 20 Hz state, structured trials, transparent scores, and immutable bundles | Human-factors researcher | OpenMATB runtime state + legacy CSV → `.matb.zip` | Python/PyArrow | [Scientific data guide](docs/research/openmatb-scientific-data-layer-v1.md) | Scientific-data and OpenMATB runtime suites | Research output only; hardware timing and psychometric validation remain study responsibilities |
 | `matb_integration/questionnaires/` | EN/ES NASA-TLX, Bedford, ISA, and SAGAT assets | Study designer | Controlled text/YAML → configured questionnaire/probe content | OpenMATB or sUAS loader | OpenMATB and sUAS tours | Questionnaire/SAGAT tests | Scales must be administered under an approved protocol |
 | `matb_integration/analysis/` | Descriptive outputs plus frequentist MixedLM/rmcorr/rmANOVA/FDR and Bayesian PyMC sensitivity engines | Statistician | `/metrics/long` and `/fits` JSON arrays → versioned artifacts | Python; PyMC sampling is optional/slow | [OpenMATB analysis commands](examples/openmatb-research/README.md) | Analysis tests | Small/incomplete datasets may be not estimable; Bayesian diagnostics govern interpretation |
 | `matb_integration/suhir/` | Fit Suhir DEPDF parameters and mission-outcome research summaries | Human-factors researcher | Three workload records → G0/P0/tau0 and curves | Python/SciPy | OpenMATB tour | Suhir tests; [DEPDF guide](matb_integration/suhir/README.md) | Within-participant comparative model; three levels exactly identify parameters; not certified |
@@ -785,7 +794,7 @@ endpoint, release, and evidence explanations stay in their specialist guides.
 
 | Module | Purpose | User | Inputs → outputs | Runtime | Example | Verification | Limitation |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `webui/backend/` tracker and ingestion | Pseudonymous participant/visit grid, CSV/manifest checks, fits | Data steward | CSV + optional manifest → SQLite block/provenance rows | FastAPI, Python 3.12+, port 8000 | [Console walkthrough](examples/research-console/README.md) | `cd webui/backend && python -m pytest -q` | Duplicate/fill guards are data-quality controls, not consent |
+| `webui/backend/` tracker and ingestion | Pseudonymous participant/visit grid, CSV/manifest or validated scientific-bundle intake, fits | Data steward | `.matb.zip` or CSV + optional manifest → immutable artifacts and SQLite metadata | FastAPI, Python 3.12+, port 8000 | [Console walkthrough](examples/research-console/README.md) | `cd webui/backend && python -m pytest -q` | Duplicate/fill guards are data-quality controls, not consent |
 | `webui/backend/` analysis and export | Cache frequentist/Bayesian results and build reproducible bundles | Analyst | Stored metrics/fits/figures → analysis records and ZIP | FastAPI/background PyMC | Console walkthrough | Backend analysis/export tests | Export remains research data under owner custody |
 | `webui/frontend/` tracker, ingestion, and visualization | Browser grid, upload, descriptive charts | Research staff | Backend JSON → interactive local UI/PNG | Next.js, Node 20+, port 3100 | Console walkthrough | `npm test`, `npm run typecheck`, `npm run build` | Descriptive plots are not inferential conclusions |
 | `webui/frontend/` screen, analysis, and export | Administer baseline screen, review analyses, request bundle | Research staff | Raw trials/backend artifacts → UI summaries/export request | Browser/Next.js | Console walkthrough | Screen is exploratory; browser is not a clinical device |

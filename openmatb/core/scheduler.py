@@ -6,12 +6,13 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from time import perf_counter_ns, time_ns
 from typing import Any
 
 from pyglet.app import EventLoop
 
 from core.clock import Clock
-from core.constants import REPLAY_MODE, SYSTEM_PSEUDO_PLUGIN
+from core.constants import CONFIG, REPLAY_MODE, SYSTEM_PSEUDO_PLUGIN
 from core.error import get_errors
 from core.event import Event
 from core.joystick import joystick
@@ -39,6 +40,26 @@ class Scheduler:
 
         self.joystick: Any = joystick
         self.set_scenario()
+
+        self.research_recorder: Any | None = None
+        if not REPLAY_MODE:
+            from core.research import create_research_recorder
+
+            enabled = CONFIG.getboolean("Research", "enabled", fallback=True)
+            sample_hz = CONFIG.getfloat("Research", "sample_hz", fallback=20.0)
+            flush_interval_sec = CONFIG.getfloat("Research", "flush_interval_sec", fallback=1.0)
+            fsync_interval_sec = CONFIG.getfloat("Research", "fsync_interval_sec", fallback=5.0)
+            self.research_recorder = create_research_recorder(
+                logger=get_logger(),
+                scenario_path=self.scenario_path,
+                enabled=enabled,
+                sample_hz=sample_hz,
+                start_monotonic_ns=perf_counter_ns(),
+                start_utc_ns=time_ns(),
+                flush_interval_sec=flush_interval_sec,
+                fsync_interval_sec=fsync_interval_sec,
+            )
+            get_logger().research_recorder = self.research_recorder
 
         Window.MainWindow.display_session_id()
         self.event_loop.run()
@@ -73,24 +94,64 @@ class Scheduler:
         self._dialog_paused: bool = False
 
     def update(self, dt: float) -> None:
-        if Window.MainWindow.modal_dialog is not None:
-            if not self._dialog_paused:
-                self.execute_plugins_methods(self.get_active_plugins(), ["pause"])
-                self._dialog_paused = True
+        try:
+            if Window.MainWindow.modal_dialog is not None:
+                if not self._dialog_paused:
+                    self.execute_plugins_methods(self.get_active_plugins(), ["pause"])
+                    self._dialog_paused = True
+                return
+
+            if self._dialog_paused:
+                self.execute_plugins_methods(self.get_active_plugins(), ["resume"])
+                self._dialog_paused = False
+
+            if not get_errors().is_empty():
+                get_errors().show_errors()
+
+            self.update_timers(dt)
+            self.update_joystick()
+            self.update_active_plugins()
+            self.execute_events()
+            self.check_if_must_exit()
+        finally:
+            self._record_research_sample()
+
+    def _record_research_sample(self) -> None:
+        recorder: Any | None = getattr(self, "research_recorder", None)
+        if recorder is None:
             return
-
-        if self._dialog_paused:
-            self.execute_plugins_methods(self.get_active_plugins(), ["resume"])
-            self._dialog_paused = False
-
-        if not get_errors().is_empty():
-            get_errors().show_errors()
-
-        self.update_timers(dt)
-        self.update_joystick()
-        self.update_active_plugins()
-        self.execute_events()
-        self.check_if_must_exit()
+        try:
+            state: dict[str, Any] = {}
+            for plugin in self.plugins.values():
+                state.update(plugin.get_research_state())
+            state.setdefault("load_sysmon", False)
+            state.setdefault("load_communications", False)
+            state.setdefault("load_workload", False)
+            state["discrete_load_count"] = sum(
+                bool(state[field]) for field in ("load_sysmon", "load_communications", "load_workload")
+            )
+            recorder.maybe_sample(
+                monotonic_ns=perf_counter_ns(),
+                scenario_time_s=self.scenario_time,
+                scenario_paused=self.pause_scenario_time,
+                event_sequence=getattr(get_logger(), "event_sequence", 0),
+                state=state,
+            )
+        except Exception as exc:  # noqa: BLE001 — optional recorder must not abort task presentation
+            get_logger().log_manual_entry(
+                f"Scientific recording disabled after {type(exc).__name__}: {exc}"
+            )
+            try:
+                self._seal_research(
+                    status="partial",
+                    reason=f"recording_error:{type(exc).__name__}",
+                )
+            except Exception as seal_exc:  # noqa: BLE001 — detach after unrecoverable storage failure
+                get_logger().log_manual_entry(
+                    f"Scientific partial seal failed: {type(seal_exc).__name__}: {seal_exc}"
+                )
+                get_logger().research_recorder = None
+                self.research_recorder = None
 
     def update_timers(self, dt: float) -> None:
         # Update timers with dt
@@ -139,6 +200,7 @@ class Scheduler:
                 if plugin.alive:
                     stop_event: Event = Event(0, int(self.scenario_time), p_name, "stop")
                     self.execute_one_event(stop_event)
+            self._seal_research(status="partial", reason="window_closed")
             self.exit()
 
     def execute_events(self) -> None:
@@ -267,6 +329,22 @@ class Scheduler:
 
     def exit(self) -> None:
         get_logger().log_manual_entry("end")
+        self._seal_research(status="complete")
         self.event_loop.exit()
         Window.MainWindow.close()  # needed for windows clean exit
         sys.exit(0)
+
+    def _seal_research(self, *, status: str, reason: str | None = None) -> None:
+        recorder: Any | None = getattr(self, "research_recorder", None)
+        if recorder is None:
+            return
+        logger = get_logger()
+        if getattr(logger, "file", None) is not None and not logger.file.closed:
+            logger.file.flush()
+        recorder.seal(
+            events_csv=Path(logger.path),
+            status=status,
+            reason=reason,
+        )
+        logger.research_recorder = None
+        self.research_recorder = None

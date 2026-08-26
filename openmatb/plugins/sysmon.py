@@ -60,6 +60,7 @@ class Sysmon(AbstractPlugin):
 
         self.keys: set[str] = {"F1", "F2", "F3", "F4", "F5", "F6"}
         self.moving_seed: int = 1  # Useful for pseudorandom generation of
+        self._research_trial_counter: int = 0
         # multiple values at once (arrows move)
 
         new_par: dict[str, Any] = dict(
@@ -102,6 +103,16 @@ class Sysmon(AbstractPlugin):
 
     def get_response_timers(self) -> list[int]:
         return [g["_milliresponsetime"] for g in self.get_all_gauges()]
+
+    def get_research_state(self) -> dict[str, Any]:
+        state = super().get_research_state()
+        pending_ids = [
+            gauge["_research_trial_id"]
+            for gauge in self.get_gauges_on_failure()
+            if gauge.get("_research_trial_id")
+        ]
+        state.update(load_sysmon=bool(pending_ids), sysmon_pending_ids_json=pending_ids)
+        return state
 
     def create_widgets(self) -> None:
         super().create_widgets()
@@ -228,6 +239,10 @@ class Sysmon(AbstractPlugin):
         if gauge["_onfailure"]:
             pass  # TODO : warn in case of multiple failure on the same gauge
         else:
+            self._research_trial_counter = getattr(self, "_research_trial_counter", 0) + 1
+            gauge["_research_trial_id"] = f"sysmon-{self._research_trial_counter:06d}"
+            gauge["_research_onset_s"] = float(self.scenario_time)
+            gauge["_research_event_sequence_start"] = int(getattr(self.logger, "event_sequence", 0))
             gauge["_onfailure"] = True
             if "default" in gauge:  # Light case
                 gauge["on"] = gauge["default"] != "on"
@@ -279,12 +294,50 @@ class Sysmon(AbstractPlugin):
         self.log_performance("signal_detection", sdt_string)
         self.log_performance("response_time", rt)
 
+        automation_active = bool(self.parameters["automaticsolver"])
+        correct = ft == "positive"
+        response_recorded = correct
+        onset_s = float(gauge.get("_research_onset_s", self.scenario_time))
+        response_ms = float(gauge["_milliresponsetime"]) if response_recorded else None
+        self.logger.record_research_trial(
+            {
+                "trial_id": gauge.get("_research_trial_id", ""),
+                "task": "sysmon",
+                "trial_type": "alert",
+                "stimulus_id": gauge["name"],
+                "onset_s": onset_s,
+                "deadline_s": onset_s
+                + float(
+                    self.parameters["automaticsolverdelay"]
+                    if automation_active
+                    else self.parameters["alerttimeout"]
+                )
+                / 1000.0,
+                "response_s": float(self.scenario_time) if response_recorded else None,
+                "rt_ms": response_ms,
+                "outcome": sdt_string,
+                "correct": correct,
+                "timeout": not correct,
+                "actor": "automation" if automation_active else "manual",
+                "automation_active": automation_active,
+                "target_json": {"gauge": gauge["name"]},
+                "response_json": {"key": None if automation_active or not correct else gauge["key"]},
+                "elements_available": 1,
+                "elements_correct": int(correct),
+                "event_sequence_start": gauge.get("_research_event_sequence_start"),
+                "event_sequence_end": int(getattr(self.logger, "event_sequence", 0)),
+            }
+        )
+
         # Reset gauge to its nominal (default) state
         if "default" in gauge:  # Light case
             gauge["on"] = gauge["default"] == "on"
         else:  # Scale case
             gauge["_zone"] = 0
         gauge["_milliresponsetime"] = 0
+        gauge.pop("_research_trial_id", None)
+        gauge.pop("_research_onset_s", None)
+        gauge.pop("_research_event_sequence_start", None)
 
     def get_gauges_key_value(self, key: str, value: Any) -> list[dict[str, Any]]:
         gauge_list: list[dict[str, Any]] = list()
@@ -333,6 +386,30 @@ class Sysmon(AbstractPlugin):
                 self.log_performance("name", gauge["name"])
                 self.log_performance("signal_detection", "FA")
                 self.log_performance("response_time", float("nan"))
+                self._research_trial_counter = getattr(self, "_research_trial_counter", 0) + 1
+                self.logger.record_research_trial(
+                    {
+                        "trial_id": f"sysmon-{self._research_trial_counter:06d}",
+                        "task": "sysmon",
+                        "trial_type": "false_alarm",
+                        "stimulus_id": None,
+                        "onset_s": float(self.scenario_time),
+                        "deadline_s": None,
+                        "response_s": float(self.scenario_time),
+                        "rt_ms": None,
+                        "outcome": "FA",
+                        "correct": False,
+                        "timeout": False,
+                        "actor": "automation" if emulate else "manual",
+                        "automation_active": bool(self.parameters["automaticsolver"]),
+                        "target_json": {"gauge": None},
+                        "response_json": {"key": key},
+                        "elements_available": 1,
+                        "elements_correct": 0,
+                        "event_sequence_start": int(getattr(self.logger, "event_sequence", 0)),
+                        "event_sequence_end": int(getattr(self.logger, "event_sequence", 0)),
+                    }
+                )
 
                 # Set a negative feedback if relevant
                 if self.parameters["feedbacks"]["negative"]["active"]:

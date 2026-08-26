@@ -1,1 +1,1 @@
-Workload;Indicate your current workload level.;Very Low/Very High;1/5/3
+Workload;Indicate your current workload level.;Very Low/Very High;1/10/5

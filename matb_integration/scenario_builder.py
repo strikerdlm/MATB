@@ -305,12 +305,11 @@ def build_block_scenario(
     # ── ISA probes ────────────────────────────────────────────────────────────
     lines.append(
         f"# ISA probes — every {isa_interval}s ({len(isa_times)} probes) "
-        f"[tasks auto-pause via BlockingPlugin]"
+        f"[concurrent ISA-10 prompts]"
     )
     for t in isa_times:
         ts = _fmt_time(t)
-        lines.append(f"{ts};genericscales;filename;{isa_questionnaire}")
-        lines.append(f"{ts};genericscales;start")
+        lines.append(f"{ts};instantaneousworkload;start")
 
     lines.append("")
 
@@ -332,6 +331,8 @@ def build_block_scenario(
     lines.append(f"# Block end — stop tasks, collect {label}")
     for task in ("sysmon", "track", "resman", "communications"):
         lines.append(f"{end_time};{task};stop")
+    if isa_times:
+        lines.append(f"{end_time};instantaneousworkload;stop")
 
     for questionnaire in scales_at_end:
         lines.append(f"{end_time};genericscales;filename;{questionnaire}")
@@ -381,6 +382,9 @@ def _manifest_payload(
             "track_target_proportion": TRACK_TARGET_PROPORTION[level],
             "resman_loss_per_min": RESMAN_LOSS_PER_MIN[level],
             "isa_probe_interval_sec": isa_interval,
+            "isa_scale": "ISA_1_to_10",
+            "isa_concurrent": True,
+            "isa_response_timeout_ms": 10_000,
             "openmatb_alerttimeout_ms": OPENMATB_ALERTTIMEOUT_MS,
             "openmatb_sysmon_lights": list(OPENMATB_SYSMON_LIGHTS),
             "openmatb_sysmon_scales": list(OPENMATB_SYSMON_SCALES),

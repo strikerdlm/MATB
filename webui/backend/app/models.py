@@ -53,6 +53,39 @@ class BlockProvenance(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
 
 
+class BlockBundle(SQLModel, table=True):
+    """Metadata for one validated OpenMATB scientific bundle.
+
+    High-rate samples remain in the immutable ZIP and are deliberately not
+    expanded into relational rows.
+    """
+
+    __table_args__ = (UniqueConstraint("block_id"),)
+    id: int | None = Field(default=None, primary_key=True)
+    block_id: int = Field(foreign_key="block.id", index=True)
+    bundle_sha256: str = Field(index=True, unique=True)
+    original_filename: str
+    stored_filename: str
+    schema_version: str
+    run_status: str
+    quality_status: str
+    session_id: str
+    summary_json: str
+    manifest_json: str
+    quality_json: str
+    ingested_at: datetime = Field(default_factory=_utcnow)
+
+
+class BlockArtifact(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("bundle_id", "name"),)
+    id: int | None = Field(default=None, primary_key=True)
+    bundle_id: int = Field(foreign_key="blockbundle.id", index=True)
+    name: str
+    sha256: str
+    size_bytes: int
+    media_type: str
+
+
 class DepdfFit(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     participant_id: str = Field(foreign_key="participant.id", index=True)

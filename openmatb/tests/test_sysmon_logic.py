@@ -217,6 +217,18 @@ class TestStartFailure:
         s.start_failure(light)
         assert light["_failuretimer"] == 10000  # alerttimeout
 
+    def test_failure_gets_stable_trial_identity_and_onset(self):
+        s = _make_sysmon()
+        s.scenario_time = 12.5
+        s.logger.event_sequence = 41
+        light = s.parameters["lights"]["1"]
+
+        s.start_failure(light)
+
+        assert light["_research_trial_id"] == "sysmon-000001"
+        assert light["_research_onset_s"] == 12.5
+        assert light["_research_event_sequence_start"] == 41
+
     def test_failure_timer_uses_autosolver_delay(self):
         """With autosolver, timer uses shorter delay."""
         s = _make_sysmon()
@@ -325,6 +337,57 @@ class TestStopFailure:
         s.start_failure(light)
         s.stop_failure(light, success=True)
         assert "HIT" in s.performance["signal_detection"]
+
+    def test_success_records_structured_trial(self):
+        s = _make_sysmon()
+        s.scenario_time = 4.0
+        s.logger.event_sequence = 8
+        light = s.parameters["lights"]["1"]
+        s.start_failure(light)
+        light["_milliresponsetime"] = 600
+        s.scenario_time = 4.6
+        s.logger.event_sequence = 12
+
+        s.stop_failure(light, success=True)
+
+        trial = s.logger.record_research_trial.call_args.args[0]
+        assert trial == {
+            "trial_id": "sysmon-000001",
+            "task": "sysmon",
+            "trial_type": "alert",
+            "stimulus_id": "F5",
+            "onset_s": 4.0,
+            "deadline_s": 14.0,
+            "response_s": 4.6,
+            "rt_ms": 600.0,
+            "outcome": "HIT",
+            "correct": True,
+            "timeout": False,
+            "actor": "manual",
+            "automation_active": False,
+            "target_json": {"gauge": "F5"},
+            "response_json": {"key": "F5"},
+            "elements_available": 1,
+            "elements_correct": 1,
+            "event_sequence_start": 8,
+            "event_sequence_end": 12,
+        }
+
+    def test_timeout_records_miss_without_response_time(self):
+        s = _make_sysmon()
+        s.scenario_time = 2.0
+        s.logger.event_sequence = 1
+        light = s.parameters["lights"]["1"]
+        s.start_failure(light)
+        s.scenario_time = 12.0
+
+        s.stop_failure(light, success=False)
+
+        trial = s.logger.record_research_trial.call_args.args[0]
+        assert trial["outcome"] == "MISS"
+        assert trial["response_s"] is None
+        assert trial["rt_ms"] is None
+        assert trial["timeout"] is True
 
     def test_timeout_logs_miss(self):
         """Timeout logs MISS."""
@@ -521,3 +584,21 @@ class TestFailureTimer:
         timers = s.get_response_timers()
         assert len(timers) == 6
         assert all(t == 0 for t in timers)
+
+
+def test_incorrect_button_press_records_false_alarm_trial():
+    s = _make_sysmon()
+    s.scenario_time = 7.25
+    s.logger.event_sequence = 14
+    s.filter_key = lambda key: key
+
+    s.do_on_key("F5", "press", False)
+
+    trial = s.logger.record_research_trial.call_args.args[0]
+    assert trial["trial_id"] == "sysmon-000001"
+    assert trial["trial_type"] == "false_alarm"
+    assert trial["onset_s"] == 7.25
+    assert trial["response_s"] == 7.25
+    assert trial["outcome"] == "FA"
+    assert trial["correct"] is False
+    assert trial["timeout"] is False

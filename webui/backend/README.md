@@ -46,10 +46,18 @@ manifest JSON, validation status, and validation issues. Completeness (the
 12x6x3 grid) is derived, not stored. A DepdfFit row is created per visit once
 all 3 levels are ingested.
 
+A Block may also have one BlockBundle and an artifact inventory. High-rate
+samples stay in the checksum-verified ZIP under `MATB_OPENMATB_BUNDLE_DIR`
+(default `exports/openmatb`); only metadata and scientific summaries are stored
+in SQLite.
+
 ## Endpoints
 - GET  /health
 - POST /participants  ·  GET /participants  ·  GET /participants/{id}/visits
 - POST /ingest  (multipart: file, optional manifest, participant_id, visit_ordinal, workload_level, overwrite)
+- POST /ingest-bundle  (multipart `.matb.zip`: file, participant_id, visit_ordinal, workload_level, overwrite)
+- GET /blocks/{block_id}/artifacts  ·  GET /blocks/{block_id}/artifacts/{name}
+- GET /blocks/{block_id}/bundle
 - GET  /tracker  — the completeness grid
 - GET  /block  — one block's metrics, provenance/validation, and the visit's DEPDF fit
 - GET  /metrics/long  — tidy long-format metric rows (optional `participant_id`)

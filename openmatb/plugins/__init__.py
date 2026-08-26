@@ -7,6 +7,7 @@ from .communications import Communications  # noqa: F401
 from .genericscales import Genericscales  # noqa: F401
 from .generictrigger import Generictrigger  # noqa: F401
 from .instructions import Instructions  # noqa: F401
+from .instantaneousworkload import Instantaneousworkload  # noqa: F401
 from .labstreaminglayer import Labstreaminglayer  # noqa: F401
 from .parallelport import Parallelport  # noqa: F401
 from .performance import Performance  # noqa: F401

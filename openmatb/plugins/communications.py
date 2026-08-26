@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from math import copysign
+from math import copysign, isfinite
 from pathlib import Path
 from string import ascii_lowercase, ascii_uppercase, digits
 from typing import Any, Callable
@@ -59,6 +59,7 @@ class Communications(AbstractPlugin):
 
         self.keys: set[str] = {"UP", "DOWN", "RIGHT", "LEFT", "ENTER"}
         self.callsign_seed: int = 1  # Useful to pseudorandomly generate different callsign when
+        self._research_trial_counter: int = 0
         # trying to generate multiple callsigns at once
 
         self.letters: str = ascii_uppercase
@@ -188,6 +189,19 @@ class Communications(AbstractPlugin):
         if hasattr(self, "player"):
             self.player.pause()
 
+    def get_research_state(self) -> dict[str, Any]:
+        state = super().get_research_state()
+        pending_ids = [
+            radio["_research_trial_id"]
+            for radio in self.get_waiting_response_radios()
+            if radio.get("_research_trial_id")
+        ]
+        state.update(
+            load_communications=bool(pending_ids),
+            communications_pending_ids_json=pending_ids,
+        )
+        return state
+
     def resume(self) -> None:
         super().resume()
         if hasattr(self, "player") and self.player.source is not None:
@@ -263,6 +277,10 @@ class Communications(AbstractPlugin):
         if destination == "own":
             radio["targetfreq"] = random_frequency
             radio["is_prompting"] = True
+            self._research_trial_counter += 1
+            radio["_research_trial_id"] = f"communications-{self._research_trial_counter:06d}"
+            radio["_research_stimulus_onset_s"] = float(self.scenario_time)
+            radio["_research_event_sequence_start"] = int(getattr(self.logger, "event_sequence", 0))
 
         sound_group: Any = self.group_audio_files(callsign, radio_name, random_frequency)
 
@@ -370,6 +388,7 @@ class Communications(AbstractPlugin):
                     del self.player
                     prompting_radio: dict[str, Any] = prompting_radio_list[0]
                     prompting_radio["is_prompting"] = False
+                    prompting_radio["_research_onset_s"] = float(self.scenario_time)
                     self.logger.log_manual_entry(f"Target {prompting_radio['name']}:{prompting_radio['targetfreq']}")
 
                 self.prompt_for_a_new_target(self.parameters["radioprompt"].lower(), radio_name_to_prompt)
@@ -396,6 +415,7 @@ class Communications(AbstractPlugin):
 
             elif self.player.source is None:  # If the radio prompt has just ended
                 radio["is_prompting"] = False
+                radio["_research_onset_s"] = float(self.scenario_time)
                 self.logger.log_manual_entry(f"Target {radio['name']}:{radio['targetfreq']}")
 
         # If multiple radios must be modified
@@ -460,6 +480,69 @@ class Communications(AbstractPlugin):
     def disable_radio_target(self, radio: dict[str, Any]) -> None:
         radio["response_time"] = 0
         radio["targetfreq"] = None
+        for key in (
+            "_research_trial_id",
+            "_research_stimulus_onset_s",
+            "_research_onset_s",
+            "_research_event_sequence_start",
+        ):
+            radio.pop(key, None)
+
+    def _record_research_response(
+        self,
+        *,
+        target_radio: dict[str, Any] | None,
+        responded_radio: dict[str, Any] | None,
+        outcome: str,
+        correct_radio: bool,
+        frequency_correct: bool,
+        response_time_ms: float | None,
+        timeout: bool,
+    ) -> None:
+        automation_active = bool(self.parameters.get("automaticsolver", False))
+        if target_radio is None:
+            self._research_trial_counter = getattr(self, "_research_trial_counter", 0) + 1
+            trial_id = f"communications-{self._research_trial_counter:06d}"
+            onset_s = float(self.scenario_time)
+            event_start = int(getattr(self.logger, "event_sequence", 0))
+            target = {"radio": None, "frequency_mhz": None}
+        else:
+            trial_id = target_radio.get("_research_trial_id", "")
+            onset_s = float(target_radio.get("_research_onset_s", self.scenario_time))
+            event_start = target_radio.get("_research_event_sequence_start")
+            target = {"radio": target_radio["name"], "frequency_mhz": target_radio["targetfreq"]}
+        response = {
+            "radio": None if responded_radio is None else responded_radio["name"],
+            "frequency_mhz": None if responded_radio is None else responded_radio["currentfreq"],
+        }
+        response_present = responded_radio is not None and not timeout
+        self.logger.record_research_trial(
+            {
+                "trial_id": trial_id,
+                "task": "communications",
+                "trial_type": "radio_prompt" if target_radio is not None else "false_alarm",
+                "stimulus_id": None if target_radio is None else target_radio["name"],
+                "onset_s": onset_s,
+                "deadline_s": (
+                    None
+                    if target_radio is None
+                    else onset_s + float(self.parameters["maxresponsedelay"]) / 1000.0
+                ),
+                "response_s": float(self.scenario_time) if response_present else None,
+                "rt_ms": response_time_ms if response_present else None,
+                "outcome": outcome,
+                "correct": bool(correct_radio and frequency_correct) if target_radio is not None else False,
+                "timeout": timeout,
+                "actor": "automation" if automation_active else "manual",
+                "automation_active": automation_active,
+                "target_json": target,
+                "response_json": response,
+                "elements_available": 2 if target_radio is not None else 0,
+                "elements_correct": int(correct_radio) + int(frequency_correct) if target_radio is not None else 0,
+                "event_sequence_start": event_start,
+                "event_sequence_end": int(getattr(self.logger, "event_sequence", 0)),
+            }
+        )
 
     def record_target_missing(self, target_radio: dict[str, Any]) -> None:
         self.log_performance("target_radio", target_radio["name"])
@@ -471,6 +554,16 @@ class Communications(AbstractPlugin):
         self.log_performance("response_deviation", float("nan"))
         self.log_performance("response_time", float("nan"))
         self.log_performance("sdt_value", "MISS")
+
+        self._record_research_response(
+            target_radio=target_radio,
+            responded_radio=None,
+            outcome="MISS",
+            correct_radio=False,
+            frequency_correct=False,
+            response_time_ms=None,
+            timeout=True,
+        )
 
         self.disable_radio_target(target_radio)
 
@@ -541,6 +634,17 @@ class Communications(AbstractPlugin):
         self.log_performance("response_deviation", deviation)
         self.log_performance("response_time", rt)
         self.log_performance("sdt_value", sdt)
+
+        numeric_rt = float(rt) if isinstance(rt, (int, float)) and isfinite(float(rt)) else None
+        self._record_research_response(
+            target_radio=measure_radio,
+            responded_radio=responded_radio,
+            outcome=str(sdt),
+            correct_radio=bool(good_radio) if isinstance(good_radio, bool) else False,
+            frequency_correct=bool(deviation == 0) if isinstance(deviation, (int, float)) and isfinite(deviation) else False,
+            response_time_ms=numeric_rt,
+            timeout=False,
+        )
 
         # Response is good if both radio and frequency are correct
         if not response_needed:

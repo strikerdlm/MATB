@@ -49,6 +49,10 @@ NASA_TLX_SUBSCALES_ES: tuple[str, ...] = (
 )
 
 _ALL_NASA_TLX_SUBSCALES: frozenset[str] = frozenset(NASA_TLX_SUBSCALES + NASA_TLX_SUBSCALES_ES)
+_NASA_TLX_TITLE_ALIASES: dict[str, str] = {
+    "Temporal demand": "Time pressure",
+    "Demanda temporal": "Time pressure",
+}
 
 ISA_TITLE: str = "Workload"
 ISA_TITLE_ES: str = "Carga de trabajo"
@@ -171,8 +175,16 @@ def _isa_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
     isa_rows = [
         r for r in rows
         if r.get("type") == "performance"
-        and r.get("module") == "genericscales"
-        and r.get("address") in (ISA_TITLE, ISA_TITLE_ES)
+        and (
+            (
+                r.get("module") == "genericscales"
+                and r.get("address") in (ISA_TITLE, ISA_TITLE_ES)
+            )
+            or (
+                r.get("module") == "instantaneousworkload"
+                and r.get("address") == "workload"
+            )
+        )
     ]
 
     probes: list[dict[str, Any]] = []
@@ -184,6 +196,11 @@ def _isa_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
 
     values = [p["value"] for p in probes]
     return {
+        "scale": (
+            "ISA_1_to_10"
+            if any(row.get("module") == "instantaneousworkload" for row in isa_rows)
+            else "legacy_1_to_5"
+        ),
         "n_probes_completed": len(values),
         "probes": probes,
         "mean": round(statistics.mean(values), 4) if values else None,
@@ -196,7 +213,10 @@ def _nasatlx_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
         r for r in rows
         if r.get("type") == "performance"
         and r.get("module") == "genericscales"
-        and r.get("address") in _ALL_NASA_TLX_SUBSCALES
+        and (
+            r.get("address") in _ALL_NASA_TLX_SUBSCALES
+            or r.get("address") in _NASA_TLX_TITLE_ALIASES
+        )
     ]
 
     # Accept both English and Spanish titles; normalise to English keys
@@ -204,19 +224,97 @@ def _nasatlx_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
     subscales: dict[str, float | None] = {s: None for s in NASA_TLX_SUBSCALES}
     for r in tlx_rows:
         addr = r["address"]
-        key = _ES_TO_EN.get(addr, addr)   # pass English through unchanged
+        key = _NASA_TLX_TITLE_ALIASES.get(addr, _ES_TO_EN.get(addr, addr))
         v = _float_or_none(r.get("value", ""))
         if v is not None and key in subscales:
             subscales[key] = round(v, 2)
 
     filled = [v for v in subscales.values() if v is not None]
     raw_tlx = round(sum(filled), 4) if filled else None
+    raw_tlx_mean = round(statistics.mean(filled), 4) if filled else None
 
     return {
         **{k.lower().replace(" ", "_"): v for k, v in subscales.items()},
         "raw_tlx": raw_tlx,
+        "raw_tlx_legacy_sum_0_60": raw_tlx,
+        "raw_tlx_mean_0_10": raw_tlx_mean,
+        "raw_tlx_0_100": round(raw_tlx_mean * 10.0, 4) if raw_tlx_mean is not None else None,
         "n_subscales_completed": len(filled),
     }
+
+
+def _bool_or_none(value: str) -> bool | None:
+    normalized = value.strip().lower()
+    if normalized in {"true", "1"}:
+        return True
+    if normalized in {"false", "0"}:
+        return False
+    return None
+
+
+def _tracking_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
+    perf = [
+        row for row in rows
+        if row.get("type") == "performance" and row.get("module") == "track"
+    ]
+    deviations = [
+        value
+        for row in perf
+        if row.get("address") == "center_deviation"
+        and (value := _float_or_none(row.get("value", ""))) is not None
+    ]
+    targets = [
+        value
+        for row in perf
+        if row.get("address") == "cursor_in_target"
+        and (value := _bool_or_none(row.get("value", ""))) is not None
+    ]
+    return {
+        "n_samples": len(deviations),
+        "mean_deviation": round(statistics.mean(deviations), 4) if deviations else None,
+        "rmse_deviation": (
+            round(math.sqrt(statistics.mean(value * value for value in deviations)), 4)
+            if deviations
+            else None
+        ),
+        "in_target_pct": round(100.0 * sum(targets) / len(targets), 4) if targets else None,
+    }
+
+
+def _resman_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
+    perf = [
+        row for row in rows
+        if row.get("type") == "performance" and row.get("module") == "resman"
+    ]
+    result: dict[str, Any] = {}
+    for letter in ("a", "b"):
+        deviations = [
+            value
+            for row in perf
+            if row.get("address") == f"{letter}_deviation"
+            and (value := _float_or_none(row.get("value", ""))) is not None
+        ]
+        tolerance = [
+            value
+            for row in perf
+            if row.get("address") == f"{letter}_in_tolerance"
+            and (value := _bool_or_none(row.get("value", ""))) is not None
+        ]
+        result[f"tank_{letter}"] = {
+            "n_samples": len(deviations),
+            "mean_signed_deviation": round(statistics.mean(deviations), 4) if deviations else None,
+            "mean_absolute_deviation": (
+                round(statistics.mean(abs(value) for value in deviations), 4)
+                if deviations
+                else None
+            ),
+            "in_tolerance_pct": (
+                round(100.0 * sum(tolerance) / len(tolerance), 4)
+                if tolerance
+                else None
+            ),
+        }
+    return result
 
 
 def _bedford_metric(rows: list[dict[str, str]]) -> dict[str, Any]:
@@ -463,6 +561,8 @@ def convert_session(
         "nasatlx": _nasatlx_metrics(rows),
         "bedford": _bedford_metric(rows),
         "comm": _comm_metrics(rows),
+        "tracking": _tracking_metrics(rows),
+        "resman": _resman_metrics(rows),
     }
 
     # Locate optional SAGAT manifest. Search order:

@@ -2,6 +2,7 @@ import type {
   AnalysisArtifact,
   BayesJob,
   BlockDetail,
+  BundleIngestResult,
   FigureOptionExport,
   FitRow,
   IngestResult,
@@ -126,6 +127,18 @@ export async function ingestCsv(file: File, tags: IngestTags): Promise<IngestRes
   form.append("overwrite", String(tags.overwrite ?? false));
   if (tags.manifest) form.append("manifest", tags.manifest);
   const res = await request("/ingest", { method: "POST", body: form });
+  if (!res.ok) throw new IngestError(res.status, await detail(res));
+  return res.json();
+}
+
+export async function ingestBundle(file: File, tags: IngestTags): Promise<BundleIngestResult> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("participant_id", tags.participant_id);
+  form.append("visit_ordinal", String(tags.visit_ordinal));
+  form.append("workload_level", tags.workload_level);
+  form.append("overwrite", String(tags.overwrite ?? false));
+  const res = await request("/ingest-bundle", { method: "POST", body: form });
   if (!res.ok) throw new IngestError(res.status, await detail(res));
   return res.json();
 }

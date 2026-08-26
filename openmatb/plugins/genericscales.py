@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from re import match as regex_match
+from time import perf_counter_ns
 from typing import Any
 
 from pyglet.text import Label as PygletLabel
@@ -42,6 +43,19 @@ class Genericscales(BlockingPlugin):
         self.question_height_ratio: float = 0.1  # question + response slider
         self.question_interspace: float = 0.05  # Space to leave between two questions
         self.top_to_top: float = self.question_interspace + self.question_height_ratio
+        self._research_questionnaire_counter: int = 0
+        self._research_questionnaire_id: str | None = None
+        self._research_onset_s: float | None = None
+        self._research_started_monotonic_ns: int | None = None
+        self._research_event_sequence_start: int | None = None
+
+    def start(self) -> None:
+        self._research_questionnaire_counter += 1
+        self._research_questionnaire_id = f"questionnaire-{self._research_questionnaire_counter:06d}"
+        self._research_onset_s = float(self.scenario_time)
+        self._research_started_monotonic_ns = perf_counter_ns()
+        self._research_event_sequence_start = int(getattr(self.logger, "event_sequence", 0))
+        super().start()
 
     def _measure_text_height(self, text: str, font_size: int, wrap_width_px: float, bold: bool = False) -> int:
         font_name: str = get_conf_value("Openmatb", "font_name")
@@ -210,4 +224,56 @@ class Genericscales(BlockingPlugin):
     def stop(self) -> None:
         for _slider_name, slider_widget in self.sliders.items():
             self.log_performance(slider_widget.get_title(), slider_widget.get_value())
+        self._record_research_scales()
         super().stop()
+
+    def _record_research_scales(self) -> None:
+        questionnaire_id = getattr(self, "_research_questionnaire_id", None)
+        onset_s = getattr(self, "_research_onset_s", None)
+        started_ns = getattr(self, "_research_started_monotonic_ns", None)
+        if questionnaire_id is None or onset_s is None or started_ns is None:
+            return
+        rt_ms = round((perf_counter_ns() - started_ns) / 1_000_000.0, 6)
+        nasa_titles = {
+            "Mental demand", "Physical demand", "Temporal demand", "Time pressure",
+            "Performance", "Effort", "Frustration", "Demanda mental",
+            "Demanda física", "Demanda temporal", "Rendimiento", "Esfuerzo",
+            "Frustración",
+        }
+        for index, slider_widget in enumerate(self.sliders.values(), start=1):
+            title = str(slider_widget.get_title())
+            value = float(slider_widget.get_value())
+            if title in nasa_titles:
+                trial_type, raw_unit = "NASA-TLX", "questionnaire_0_to_10"
+            elif title == "Bedford":
+                trial_type, raw_unit = "Bedford", "Bedford_1_to_10"
+            elif title in {"Workload", "Carga de trabajo"}:
+                trial_type, raw_unit = "legacy_ISA", "legacy_ISA_1_to_5"
+            else:
+                trial_type, raw_unit = "generic_scale", "instrument_unit"
+            maximum_duration = float(self.parameters.get("maxdurationsec", 0))
+            self.logger.record_research_trial(
+                {
+                    "trial_id": f"{questionnaire_id}-{index:02d}",
+                    "task": "subjective_workload",
+                    "trial_type": trial_type,
+                    "stimulus_id": title,
+                    "onset_s": onset_s,
+                    "deadline_s": onset_s + maximum_duration if maximum_duration > 0 else None,
+                    "response_s": float(self.scenario_time),
+                    "rt_ms": rt_ms,
+                    "outcome": "response",
+                    "correct": None,
+                    "timeout": False,
+                    "actor": "manual",
+                    "automation_active": False,
+                    "target_json": {"title": title},
+                    "response_json": {"value": value},
+                    "elements_available": 1,
+                    "elements_correct": None,
+                    "raw_value": value,
+                    "raw_unit": raw_unit,
+                    "event_sequence_start": self._research_event_sequence_start,
+                    "event_sequence_end": int(getattr(self.logger, "event_sequence", 0)),
+                }
+            )
