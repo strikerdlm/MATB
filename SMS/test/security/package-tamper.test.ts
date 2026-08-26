@@ -8,10 +8,17 @@ import { AuditLedger } from "../../apps/edge-api/src/audit/ledger.js";
 import { authorize } from "../../apps/edge-api/src/auth/roles.js";
 import { authorizeTransport, validateTlsConfig } from "../../apps/edge-api/src/auth/tls.js";
 import { SessionManager } from "../../apps/edge-api/src/auth/session.js";
-import { buildServer, type EdgeServer } from "../../apps/edge-api/src/server.js";
+import type { EdgeServer } from "../../apps/edge-api/src/server.js";
+import { authenticatedTestServer } from "../../apps/edge-api/test/http-test-auth.js";
+import type { TrustedKeyRecord } from "../../apps/edge-api/src/services/safe-mode.js";
 
 const temporaryDirectories: string[] = [];
 let app: EdgeServer | undefined;
+const packageContext = { actorUserId: "administrator-1", clientSessionId: "offline-cli", occurredAtUtc: "2026-08-10T12:00:00.000Z" };
+
+function trustedKey(keyId: string, publicKeyPem: string): TrustedKeyRecord {
+  return { keyId, scope: "policy", algorithm: "ed25519", publicKeyPem, addedAtUtc: "2026-08-10T00:00:00.000Z", addedByUserId: "administrator-1" };
+}
 
 afterEach(async () => {
   await app?.close();
@@ -48,21 +55,22 @@ describe("tamper, rollback, transport, and least-privilege controls", () => {
       caveats: ["test fixture"],
     }, keys.privateKey.export({ type: "pkcs8", format: "pem" }).toString());
     await writeFile(path, "tampered policy\n", "utf8");
-    app = await buildServer({ databaseUrl: ":memory:", internet: "disabled", packageDirectory: packageRoot });
+    const record = trustedKey("fixture-ed25519", keys.publicKey.export({ type: "spki", format: "pem" }).toString());
+    const server = await authenticatedTestServer(
+      { databaseUrl: ":memory:", internet: "disabled", packageDirectory: packageRoot },
+      undefined,
+      { trustedKeyStore: { get: (keyId: string) => keyId === record.keyId ? record : undefined } },
+    );
+    app = server.app;
 
-    const response = await app.inject({
-      method: "POST",
-      url: "/api/packages/import",
-      payload: {
-        directory: basename(directory),
-        manifest,
-        publicKeyPem: keys.publicKey.export({ type: "spki", format: "pem" }).toString(),
-        asOfUtc: "2026-08-10T12:00:00.000Z",
-      },
-    });
+    const response = await app.safeModeService.importPackage({
+      directory: basename(directory),
+      manifest,
+      keyId: record.keyId,
+      asOfUtc: "2026-08-10T12:00:00.000Z",
+    }, packageContext);
 
-    expect(response.statusCode).toBe(422);
-    expect(response.json()).toMatchObject({ state: "quarantined", packageId: "fac-policy-security-test" });
+    expect(response).toMatchObject({ state: "quarantined", packageId: "fac-policy-security-test" });
   });
 
   it("enters read-only safe mode after an audit-chain alteration", async () => {
@@ -113,18 +121,24 @@ describe("tamper, rollback, transport, and least-privilege controls", () => {
           qualification: "approved",
           caveats: ["test fixture"],
         }, keys.privateKey.export({ type: "pkcs8", format: "pem" }).toString()),
-        publicKeyPem: keys.publicKey.export({ type: "spki", format: "pem" }).toString(),
+        keyId: "fixture-ed25519",
         asOfUtc: "2026-08-10T12:00:00.000Z",
       };
     }
 
-    app = await buildServer({ databaseUrl: ":memory:", internet: "disabled", packageDirectory: packageRoot });
-    const current = await app.inject({ method: "POST", url: "/api/packages/import", payload: await signedPackage("2.0.0") });
-    const rollback = await app.inject({ method: "POST", url: "/api/packages/import", payload: await signedPackage("1.9.0") });
+    const record = trustedKey("fixture-ed25519", keys.publicKey.export({ type: "spki", format: "pem" }).toString());
+    const server = await authenticatedTestServer(
+      { databaseUrl: ":memory:", internet: "disabled", packageDirectory: packageRoot },
+      undefined,
+      { trustedKeyStore: { get: (keyId: string) => keyId === record.keyId ? record : undefined } },
+    );
+    app = server.app;
+    const current = await app.safeModeService.importPackage(await signedPackage("2.0.0"), packageContext);
+    await app.safeModeService.activatePackage({ packageId: current.packageId, version: current.version, keyId: record.keyId, asOfUtc: "2026-08-10T12:00:00.000Z" }, packageContext);
+    const rollback = await app.safeModeService.importPackage(await signedPackage("1.9.0"), packageContext);
 
-    expect(current.statusCode).toBe(201);
-    expect(rollback.statusCode).toBe(422);
-    expect(rollback.json()).toMatchObject({ state: "quarantined", reason: expect.stringMatching(/downgrade/i) });
+    expect(current).toMatchObject({ state: "verified" });
+    expect(rollback).toMatchObject({ state: "quarantined", reason: expect.stringMatching(/downgrade/i) });
   });
 
   it("locks an idle session and denies subsequent gate authorization", () => {

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0",
-  "recordId": "fac-isr-sms@0.1.0-state-aviation-readiness",
-  "releaseId": "fac-isr-sms@0.1.0",
+  "recordId": "fac-isr-sms@0.2.0-rc.1-state-aviation-readiness",
+  "releaseId": "fac-isr-sms@0.2.0-rc.1",
   "recordStatus": "awaiting-institutional-acceptance",
   "qualification": "blocked",
   "operationalReady": false,

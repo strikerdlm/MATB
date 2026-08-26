@@ -1,32 +1,79 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { TelemetryServiceError } from "../services/telemetry-service.js";
-import type { TelemetryService } from "../services/telemetry-service.js";
+import { TelemetryServiceError, type TelemetryPeerIdentity, type TelemetryService, type TelemetryIngestionResult } from "../services/telemetry-service.js";
+import type { MissionService } from "../services/mission-service.js";
+import { canReadMission, forbid, requirePrincipal } from "../auth/http.js";
+import { sendRouteError } from "./errors.js";
+import { BoundedSseStream } from "../runtime/bounded-sse-stream.js";
 
-export function registerTelemetryRoutes(app: FastifyInstance, service: TelemetryService): void {
-  app.post("/api/telemetry/replay", async (request, reply) => {
-    if (!hasLocalSession(request)) return reply.code(401).send({ error: "LOCAL_SESSION_REQUIRED" });
+const TELEMETRY_ROLES = new Set(["commander", "safety-officer", "maintainer", "operator", "observer", "reviewer"]);
+
+export type TelemetryPeerIdentityProvider = (request: FastifyRequest) => TelemetryPeerIdentity;
+
+export function tlsTelemetryPeerIdentity(request: FastifyRequest): TelemetryPeerIdentity {
+  const socket = request.raw.socket as typeof request.raw.socket & {
+    readonly authorized?: boolean;
+    getPeerCertificate?(): { readonly fingerprint256?: string; readonly subject?: { readonly CN?: string } };
+  };
+  const certificate = socket.getPeerCertificate?.();
+  const fingerprint = certificate?.fingerprint256?.replaceAll(":", "").toLowerCase();
+  return Object.freeze({
+    authorized: socket.authorized === true,
+    ...(fingerprint === undefined ? {} : { fingerprintSha256: fingerprint }),
+    ...(certificate?.subject?.CN === undefined ? {} : { subject: `CN=${certificate.subject.CN}` }),
+  });
+}
+
+export function registerTelemetryRoutes(
+  app: FastifyInstance,
+  service: TelemetryService,
+  missionService: MissionService,
+  peerIdentity: TelemetryPeerIdentityProvider = tlsTelemetryPeerIdentity,
+): void {
+  app.post("/api/telemetry/ingest", async (request, reply) => {
     try {
-      const result = await service.replay(request.body);
-      return reply.code(201).send(result);
+      if (request.headers["content-type"]?.split(";", 1)[0]?.trim().toLowerCase() !== "application/json") {
+        return reply.code(415).send({ error: "UNSUPPORTED_MEDIA_TYPE", message: "request content type is not supported", requestId: request.id });
+      }
+      const peer = peerIdentity(request);
+      service.authorizePeer(peer);
+      const revisionId = (request.body as { revisionId?: unknown } | null)?.revisionId;
+      const missionAircraftIds = typeof revisionId === "string" ? missionService.aircraftIdsForRevision(revisionId) : undefined;
+      return reply.code(202).send(service.ingest(request.body, peer, missionAircraftIds));
     } catch (error) {
-      return sendError(reply, error);
+      return sendTelemetryError(reply, error);
     }
   });
 
-  app.get<{ Params: { revisionId: string } }>("/api/revisions/:revisionId/telemetry/stream", async (request, reply) => {
-    if (!hasLocalSession(request)) return reply.code(401).send({ error: "LOCAL_SESSION_REQUIRED" });
-    const events = service.stream(request.params.revisionId);
-    const body = events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("");
-    return reply.header("content-type", "text/event-stream; charset=utf-8").code(200).send(body);
+  app.get<{ Params: { revisionId: string }; Querystring: { window?: string; follow?: string } }>("/api/revisions/:revisionId/telemetry/stream", async (request, reply) => {
+    try {
+      const principal = requirePrincipal(request);
+      const missionId = missionService.missionIdForRevision(request.params.revisionId);
+      if (!principal.roles.some((role) => TELEMETRY_ROLES.has(role)) || !canReadMission(principal, missionId)) {
+        return forbid(reply, "an assigned operational, observer, or reviewer role is required");
+      }
+      const window = request.query.window === undefined ? 50 : Number(request.query.window);
+      const snapshot = service.snapshot(request.params.revisionId, window);
+      const follow = request.query.follow !== "false";
+      let unsubscribe: () => void = () => undefined;
+      const output = new BoundedSseStream();
+      output.once("close", () => unsubscribe());
+      const push = (record: TelemetryIngestionResult) => output.enqueue(`data: ${JSON.stringify(record)}\n\n`);
+      for (const record of snapshot) push(record);
+      if (follow) {
+        unsubscribe = service.subscribe(request.params.revisionId, push, () => output.destroy());
+        reply.raw.once("close", () => output.destroy());
+      } else {
+        output.endStream();
+      }
+      return reply.header("content-type", "text/event-stream; charset=utf-8").header("cache-control", "no-store").header("x-accel-buffering", "no").code(200).send(output);
+    } catch (error) {
+      if (error instanceof TelemetryServiceError) return sendTelemetryError(reply, error);
+      return sendRouteError(reply, error);
+    }
   });
 }
 
-function hasLocalSession(request: FastifyRequest): boolean {
-  const session = request.headers["x-local-session"];
-  return typeof session === "string" && session.trim() !== "";
-}
-
-function sendError(reply: { code(statusCode: number): { send(payload: unknown): unknown } }, error: unknown): unknown {
+function sendTelemetryError(reply: { code(statusCode: number): { send(payload: unknown): unknown } }, error: unknown): unknown {
   if (error instanceof TelemetryServiceError) return reply.code(error.statusCode).send({ error: error.code, message: error.message });
-  return reply.code(500).send({ error: "INTERNAL_ERROR", message: error instanceof Error ? error.message : "unexpected telemetry error" });
+  return reply.code(500).send({ error: "INTERNAL_ERROR", message: "an unexpected error occurred" });
 }

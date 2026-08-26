@@ -1,6 +1,6 @@
 # Known limitations and operating boundaries
 
-Release `fac-isr-sms@0.1.0` is **not operationally ready**. Every limitation below is open and release-blocking. The machine-readable source of status and required action is `operational-readiness-record.json`; this document explains the operational meaning.
+Release candidate `fac-isr-sms@0.2.0-rc.1` may become technically ready only after the cross-platform release gate passes. It is **not operationally ready**: `operationalReady=false`. Every limitation below is open and operational-release-blocking. Technical readiness does not close or weaken any institutional limitation. The machine-readable source of operational status and required action is `operational-readiness-record.json`; this document explains the operational meaning.
 
 | ID | Boundary | Required disposition |
 | --- | --- | --- |

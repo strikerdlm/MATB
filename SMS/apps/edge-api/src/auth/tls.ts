@@ -6,6 +6,7 @@ export interface TlsConfigInput {
   readonly bindAddress: string;
   readonly certPath?: string;
   readonly keyPath?: string;
+  readonly clientCaPath?: string;
 }
 
 export interface TlsConfig {
@@ -13,7 +14,9 @@ export interface TlsConfig {
   readonly bindAddress: string;
   readonly certPath?: string;
   readonly keyPath?: string;
+  readonly clientCaPath?: string;
   readonly requireClientCertificate: boolean;
+  readonly rejectUnauthorizedClients: boolean;
   readonly loopbackBootstrapAllowed: boolean;
 }
 
@@ -65,12 +68,16 @@ export function validateTlsConfig(input: TlsConfigInput): TlsConfig {
   if (input.tacticalMode && (!hasCert || !hasKey)) {
     throw new Error("tactical mode requires certificate and key paths");
   }
+  if (input.tacticalMode && input.clientCaPath === undefined) throw new Error("tactical mode requires a client CA path");
+  if (!input.tacticalMode && !isLoopback(input.bindAddress)) throw new Error("standalone mode must bind to loopback");
   return Object.freeze({
     tacticalMode: input.tacticalMode,
     bindAddress: input.bindAddress,
     certPath: hasCert ? canonicalPath(input.certPath, "certPath") : undefined,
     keyPath: hasKey ? canonicalPath(input.keyPath, "keyPath") : undefined,
+    clientCaPath: input.clientCaPath === undefined ? undefined : canonicalPath(input.clientCaPath, "clientCaPath"),
     requireClientCertificate: input.tacticalMode,
+    rejectUnauthorizedClients: input.tacticalMode,
     loopbackBootstrapAllowed: isLoopback(input.bindAddress),
   });
 }

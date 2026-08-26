@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { parseResearchEvent } from "../../packages/research/src/index.js";
-import { buildServer, type EdgeServer } from "../../apps/edge-api/src/server.js";
+import type { EdgeServer } from "../../apps/edge-api/src/server.js";
+import { authenticatedTestServer } from "../../apps/edge-api/test/http-test-auth.js";
 import { verifyDataSeparation } from "../../scripts/verify-data-separation.mjs";
 
 const smsRoot = process.cwd();
@@ -18,9 +19,10 @@ afterEach(async () => {
 
 describe("operational and research data separation", () => {
   it("rejects a research-domain payload before operational storage", async () => {
-    app = await buildServer({ databaseUrl: ":memory:", internet: "disabled" });
+    const server = await authenticatedTestServer({ databaseUrl: ":memory:", internet: "disabled" });
+    app = server.app;
 
-    const response = await app.inject({
+    const response = await server.request({
       method: "POST",
       url: "/api/missions",
       payload: {

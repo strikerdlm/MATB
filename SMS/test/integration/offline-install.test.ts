@@ -10,14 +10,9 @@ import { verifyBundle } from "../../scripts/verify-offline.mjs";
 const smsRoot = process.cwd();
 const temporaryDirectories: string[] = [];
 const acceptanceEvidenceSourcePaths = [
+  "docs/operator-guide.md",
   "docs/release/known-limitations.md",
-  "docs/release/release-manifest.json",
-  "docs/release/release-manifest.sig",
-  "docs/release/release-public-key.pem",
-  "docs/release/sbom.cdx.json",
-  "docs/release/security-scan.json",
   "docs/release/state-aviation-acceptance-checklist.md",
-  "docs/release/test-report.json",
   "docs/release/verification-matrix.md",
 ] as const;
 const acceptanceStateSourcePaths = [
@@ -26,7 +21,6 @@ const acceptanceStateSourcePaths = [
   "docs/release/state-aviation-acceptance-checklist.md",
   "docs/release/known-limitations.md",
   "docs/release/verification-matrix.md",
-  "docs/release/release-manifest.json",
 ] as const;
 
 function canonicalJson(value: unknown): string {

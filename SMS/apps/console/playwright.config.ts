@@ -1,5 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
+const configuredExecutable = process.env.SMS_PLAYWRIGHT_EXECUTABLE_PATH?.trim();
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
@@ -7,13 +9,18 @@ export default defineConfig({
   retries: 0,
   reporter: "line",
   use: {
-    baseURL: "http://127.0.0.1:4173",
+    baseURL: "https://127.0.0.1:4173",
+    ignoreHTTPSErrors: true,
+    ...(configuredExecutable === undefined || configuredExecutable === ""
+      ? {}
+      : { launchOptions: { executablePath: configuredExecutable } }),
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
   webServer: {
-    command: "npm run preview:test",
-    url: "http://127.0.0.1:4173",
+    command: "npm run harness:e2e",
+    url: "https://127.0.0.1:4173/healthz",
+    ignoreHTTPSErrors: true,
     reuseExistingServer: false,
     timeout: 120_000,
   },

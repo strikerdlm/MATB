@@ -1,6 +1,6 @@
 {
   "name": "@fac-isr/telemetry",
-  "version": "0.1.0",
+  "version": "0.2.0-rc.1",
   "private": true,
   "type": "module",
   "exports": {
@@ -10,11 +10,11 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "node clean-build.mjs && tsc -p tsconfig.build.json",
     "test": "vitest run",
     "typecheck": "tsc -p ../../tsconfig.base.json"
   },
   "dependencies": {
-    "@fac-isr/evidence": "0.1.0"
+    "@fac-isr/evidence": "0.2.0-rc.1"
   }
 }

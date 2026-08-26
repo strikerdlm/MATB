@@ -1,6 +1,6 @@
 {
   "name": "@fac-isr/console",
-  "version": "0.1.0",
+  "version": "0.2.0-rc.1",
   "private": true,
   "type": "module",
   "exports": {
@@ -14,6 +14,7 @@
     "build": "tsc -p tsconfig.build.json && vite build",
     "prepreview:test": "npm run build",
     "preview:test": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
+    "harness:e2e": "npm --prefix ../.. run build --workspace @fac-isr/edge-api && npm run build && node e2e/live-edge-harness.mjs",
     "test": "vitest run",
     "test:e2e": "playwright test e2e/console.spec.ts --config playwright.config.ts",
     "test:a11y": "playwright test e2e/accessibility.spec.ts --config playwright.config.ts",

@@ -1,159 +1,223 @@
-import { useMemo, useState } from "react";
-import type { JSX, ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { FormEvent, JSX, ReactNode } from "react";
+import { EdgeApiClient, EdgeApiError, SessionExpiredError } from "../api/client.js";
+import type { AuthenticatedSession, GateName, MissionView, SignedMissionExport, TelemetryRecord, UserRole } from "../api/types.js";
 import { getLabels, type Locale } from "../i18n/registry.js";
-import { MissionSafetyStrip } from "../components/MissionSafetyStrip.js";
-import type { GateDescriptor } from "../components/GateStatus.js";
-import { MapWorkspace, type MapFinding, type MapRoute } from "../components/MapWorkspace.js";
-import { TelemetryPanel } from "../components/TelemetryPanel.js";
-import { RiskPanel } from "../components/RiskPanel.js";
-import { SmsDashboard } from "../components/SmsDashboard.js";
-import { ResearchProtocolPanel } from "../components/ResearchProtocolPanel.js";
-import { ResearchSessionPanel } from "../components/ResearchSessionPanel.js";
-import { routeMode } from "./routes.js";
+import { emptyMissionScopedState, isOperationalSafeModeFailure, missionRevisionChanged, RequestEpoch, type MissionScopedState, type OperationalData } from "./operational-state.js";
+import { errorLabel, operatorLabel } from "./operator-labels.js";
 
-export interface AppShellProps {
-  readonly initialPath?: string;
-  readonly initialLocale?: Locale;
+export interface AppShellProps { readonly initialPath?: string; readonly initialLocale?: Locale; readonly apiClient?: EdgeApiClient }
+type ConnectionState = "loading" | "connected" | "disconnected" | "forbidden" | "safe-mode";
+type LockState = "idle" | "pending" | "unconfirmed";
+type Labels = ReturnType<typeof getLabels>;
+type Message = { readonly key: keyof Labels } | { readonly text: string };
+type RunOperation = (operation: (signal: AbortSignal) => Promise<unknown>, success: Message) => Promise<void>;
+const GATES: readonly GateName[] = ["maintenance", "operator", "safety", "commander"];
+const ROLE_FOR_GATE: Readonly<Record<GateName, UserRole | "safety">> = { maintenance: "maintainer", operator: "operator", safety: "safety", commander: "commander" };
+const DEFERRED = [["fleet", "fleet"], ["planning", "planning"], ["assurance", "assurance"], ["research", "research"], ["reportsModule", "reports"], ["documentsModule", "documents"], ["notesModule", "notes"]] as const;
+const GATE_ROLES: readonly UserRole[] = ["maintainer", "operator", "safety-officer", "commander", "reviewer"];
+
+function isAbort(error: unknown): boolean { return error instanceof DOMException && error.name === "AbortError"; }
+function messageText(message: Message, labels: Labels): string { return "key" in message ? String(labels[message.key]) : message.text; }
+function probeDelay(session: AuthenticatedSession): number {
+  const idleDeadline = Date.parse(session.lastActivityAtUtc) + session.idleTimeoutMs;
+  const hardDeadline = Date.parse(session.expiresAtUtc);
+  const remaining = Math.min(idleDeadline, hardDeadline) - Date.now();
+  return Math.max(1_000, Math.min(30_000, Math.floor(session.idleTimeoutMs / 3), Number.isFinite(remaining) ? remaining : 1_000));
 }
+function displayCheck(labels: Labels, value: string): string {
+  const checks: Readonly<Record<string, keyof Labels>> = { database: "databaseCheck", migrations: "migrationsCheck", audit: "auditCheck", tls: "tlsCheck", exportKey: "exportKeyCheck", trustAnchors: "trustAnchorsCheck", activeTerminology: "activeTerminologyCheck", activePolicy: "activePolicyCheck", bootstrapAdministrator: "bootstrapAdministratorCheck" };
+  const key = checks[value]; return key === undefined ? value : String(labels[key]);
+}
+function readinessDetail(labels: Labels, detail?: string): string { return detail === undefined ? "" : ` — ${labels.notReady}`; }
 
-type IconName = "home" | "shield" | "warning" | "sliders" | "risk" | "route" | "pulse" | "file" | "folder" | "edit" | "settings" | "download" | "wifi" | "check" | "stop" | "clock" | "layers" | "crosshair";
-
-const navItems: readonly { icon: IconName; labelKey: keyof ReturnType<typeof getLabels>; path: string }[] = [
-  { icon: "home", labelKey: "overview", path: "/missions" },
-  { icon: "shield", labelKey: "safetyReview", path: "/missions/mission-1/review" },
-  { icon: "warning", labelKey: "hazards", path: "/missions/mission-1/review#hazards" },
-  { icon: "sliders", labelKey: "controls", path: "/missions/mission-1/review#controls" },
-  { icon: "risk", labelKey: "risk", path: "/missions/mission-1/review#risk" },
-  { icon: "route", labelKey: "profile", path: "/missions/mission-1/plan" },
-  { icon: "pulse", labelKey: "telemetry", path: "/missions/mission-1/monitor" },
-  { icon: "file", labelKey: "evidence", path: "/missions/mission-1/review#evidence" },
-  { icon: "file", labelKey: "reports", path: "/reports" },
-  { icon: "folder", labelKey: "documents", path: "/documents" },
-  { icon: "edit", labelKey: "notes", path: "/notes" },
-  { icon: "settings", labelKey: "configuration", path: "/sms" },
-  { icon: "pulse", labelKey: "research", path: "/research" },
-];
-
-const missionSafetyFixture = {
-  missionId: "M24-0518-ISR",
-  phase: "UnderReview",
-  aircraftClass: "IA",
-  flightRule: "VFR",
-  visualCondition: "VLOS",
-  configuration: "unarmed-isr",
-  lastUpdatedLocal: "18 May 2024 09:28",
-  freshness: { telemetry: "09:25", evidence: "09:25" },
-  operatorState: "Assigned · current",
-} as const;
-
-const missionGateFixture: readonly GateDescriptor[] = [
-  { gate: "maintenance", decision: "accept", requiredRole: "maintainer", details: ["Aircraft status · serviceable", "Deferred items · 0 active", "Maint. release · 18 May 08:10"], evidenceRef: "EV-MNT-00091" },
-  { gate: "operator", decision: "accept", requiredRole: "operator", details: ["Crew currency · current", "Training · current", "Ops authorization · valid"], evidenceRef: "EV-OPR-00142" },
-  { gate: "safety", decision: "block", requiredRole: "safety", details: ["Open hazards · 2 high", "Residual risk · not acceptable", "Mitigations · incomplete"], evidenceRef: "EV-SAF-00077" },
-  { gate: "commander", decision: "pending", requiredRole: "commander", details: ["Mission approval · pending", "Risk acceptance · pending", "Comments · —"], evidenceRef: "—" },
-];
-
-const mapPackageFixture = { packageId: "MAP-COLOMBIA-2024Q2", version: "1.2.0", manifestHash: "sha256:deadbeef2024", freshness: "Current · 18 May 2024 09:25" } as const;
-const mapRouteFixture: MapRoute = { routeId: "ISR_SWEEP_120", distanceNm: 214, waypoints: [{ id: "WP01", label: "Puerto Santander", x: 20, y: 65 }, { id: "WP02", label: "Tibú", x: 280, y: 118 }, { id: "WP03", label: "Sardinata", x: 398, y: 158 }, { id: "WP04", label: "La Gabarra", x: 555, y: 198 }, { id: "WP05", label: "Convención", x: 680, y: 318 }] };
-const mapFindingsFixture: readonly MapFinding[] = [{ id: "F-01", label: "Wildlife strike risk", severity: "high", x: 398, y: 158 }, { id: "F-02", label: "Terrain clearance review", severity: "medium", x: 555, y: 198 }];
-const telemetryFixture = { aircraft: { aircraftId: "FAC-1287", platform: "ISR-1", approvedMinimumReservePercent: 30 }, telemetry: { capturedAtLocal: "18 May 2024 09:25:31", latitude: "08° 23.456′ N", longitude: "072° 45.789′ W", altitude: "FL098", groundspeed: "210 KT", heading: "123°", verticalRate: "+500 FPM", energyPercent: 62, batteryHealth: "NOMINAL", linkLatencyMs: 70, linkLossPercent: 0, gnss: "3D FIX", activeLeg: "WP03 → WP04", deviation: "Within tolerance", reservePercent: 38 }, degraded: false } as const;
-const researchProtocolFixture = { id: "PROTOCOL-MATB-01", version: "1.0.0", title: "MATB workload and interface study", ethicsApprovalId: "ETHICS-2026-041", status: "current", permittedSensors: ["matb", "hrv"], permittedInstruments: ["NASA-TLX", "SAGAT"] } as const;
-const researchSessionFixture = { participantCode: "P-017", conditionAssignment: "baseline", startedAtUtc: "2026-08-10T15:00:00.000Z", instrumentProgress: "NASA-TLX · 1/1 · SAGAT · 2/3" } as const;
-
-export function AppShell({ initialPath = "/missions", initialLocale = "en" }: AppShellProps): JSX.Element {
-  const [path, setPath] = useState(initialPath);
+export function AppShell({ initialLocale = "en", apiClient }: AppShellProps): JSX.Element {
+  const client = useMemo(() => apiClient ?? new EdgeApiClient(), [apiClient]);
+  const requests = useMemo(() => new RequestEpoch(), []);
+  const loadRequests = useMemo(() => new RequestEpoch(), []);
+  const writes = useMemo(() => new RequestEpoch(), []);
+  const safeModeRef = useRef(false);
   const [locale, setLocale] = useState<Locale>(initialLocale);
   const [night, setNight] = useState(true);
-  const labels = useMemo(() => getLabels(locale), [locale]);
-  const activePath = path.split("#")[0];
+  const [scope, setScope] = useState<MissionScopedState>(() => emptyMissionScopedState());
+  const [connection, setConnection] = useState<ConnectionState>("disconnected");
+  const [message, setMessage] = useState<Message>({ key: "signInTitle" });
+  const [lockState, setLockState] = useState<LockState>("idle");
+  const labels = getLabels(locale);
+  const { session, data, selectedMissionId, signedExport } = scope;
+  const mission = data?.missions.missions.find(({ missionId }) => missionId === selectedMissionId) ?? data?.missions.missions[0];
+  const readOnly = connection === "safe-mode";
 
-  return (
-    <div className={`console-shell ${night ? "theme-night" : "theme-day"}`}>
-      <aside className="side-rail" aria-label="Primary navigation">
-        <div className="brand-lockup">
-          <span className="brand-mark" aria-hidden="true">✦</span>
-          <div>
-            <strong>FAC ISR SMS</strong>
-            <span>Safety management system</span>
-          </div>
-        </div>
-        <nav aria-label="Mission navigation" className="nav-list">
-          {navItems.map((item) => (
-            <button
-              aria-label={labels[item.labelKey]}
-              className={`nav-item ${activePath === item.path.split("#")[0] ? "is-active" : ""}`}
-              key={item.path}
-              onClick={() => setPath(item.path)}
-              type="button"
-            >
-              <Icon name={item.icon} />
-              <span>{labels[item.labelKey]}</span>
-            </button>
-          ))}
-        </nav>
-        <div className="package-status">
-          <div className="package-header"><Icon name="download" /><span>Data source</span></div>
-          <strong>Local package</strong>
-          <span className="mono">MAP-COLOMBIA-2024Q2</span>
-          <span className="package-ok"><Icon name="check" /> {labels.mapCurrent}</span>
-        </div>
-      </aside>
+  const clearSensitive = useCallback((nextMessage: Message, forgetSession: boolean) => {
+    requests.invalidate(); loadRequests.invalidate(); writes.invalidate(); safeModeRef.current = false; if (forgetSession) client.forgetSession(); setScope(emptyMissionScopedState()); setConnection("disconnected"); setMessage(nextMessage);
+  }, [client, loadRequests, requests, writes]);
 
-      <main className="main-frame">
-        <header className="top-bar">
-          <div className="mission-meta">
-            <Meta label="Mission ID" value="M24-0518-ISR" />
-            <Meta label="Mission name" value="Vigilancia frontera norte" wide />
-            <Meta label="Date (local)" value="18 May 2024 · 09:32" />
-            <Meta label="Crew role" value="Safety officer (read-only)" />
-          </div>
-          <div className="top-controls">
-            <span className="mode-label"><Icon name="check" /> {labels.offline}</span>
-            <button className="locale-toggle" onClick={() => setLocale(locale === "en" ? "es" : "en")} type="button" aria-label="Change language">
-              {locale.toUpperCase()} <span>/</span> {locale === "en" ? "ES" : "EN"}
-            </button>
-            <button className="theme-toggle" onClick={() => setNight(!night)} type="button" aria-label="Toggle day and night theme">
-              <span aria-hidden="true">☼</span><span className={`toggle-track ${night ? "is-night" : ""}`}><span /></span><span aria-hidden="true">☾</span>
-            </button>
-          </div>
-        </header>
+  const resetSession = useCallback((nextMessage: Message) => { setLockState("idle"); clearSensitive(nextMessage, true); }, [clearSensitive]);
 
-        <div className="classification-banner">{labels.unclassified}</div>
+  const enterSafeMode = useCallback(() => {
+    safeModeRef.current = true; writes.invalidate(); setConnection("safe-mode"); setMessage({ key: "readOnlySafeMode" });
+  }, [writes]);
 
-        <MissionSafetyStrip
-          mission={missionSafetyFixture}
-          safetyResult={{ status: "blocked", blockers: [{ code: "SAFETY_GATE_BLOCKED", explanation: "GATE 03 · Safety blocker", severity: "hard" }] }}
-          gates={missionGateFixture.map((gate) => ({ ...gate, label: labels[gate.gate === "maintenance" ? "gateMaintenance" : gate.gate === "operator" ? "gateOperator" : gate.gate === "safety" ? "gateSafety" : "gateCommander"] }))}
-          locale={locale}
-          governingRequirements={{ safety: { title: "Configuration out of scope", sourceExcerptEs: "La configuración declarada no está dentro del alcance autorizado.", translationEn: "The declared configuration is outside the authorized scope.", sourceEdition: "FAC ISR SMS 2024.2", sourceSection: "§ 4.3.1", freshness: "Current · 18 May 2024 09:25", evidenceHash: "sha256:ev-saf-00077", reviewerStatus: "Safety review required" } }}
-        />
+  const clearForError = useCallback((error: unknown) => {
+    resetSession(error instanceof SessionExpiredError ? { key: "sessionExpired" } : error instanceof EdgeApiError ? { text: errorLabel(labels, error.code) } : { key: "edgeDisconnected" });
+  }, [labels, resetSession]);
 
-        {activePath === "/sms" ? <SmsDashboard /> : activePath === "/research" ? <section className="research-workspace"><ResearchProtocolPanel authorized protocol={researchProtocolFixture} /><ResearchSessionPanel authorized session={researchSessionFixture} /></section> : <section className="workspace" aria-label={labels.mapWorkspace}>
-          <MapWorkspace packageDirectory={mapPackageFixture} route={mapRouteFixture} findings={mapFindingsFixture} mode={routeMode(path)} />
-          <aside className="evidence-rail" aria-label="Mission evidence and telemetry">
-            <TelemetryPanel {...telemetryFixture} locale={locale} />
-            <RiskPanel findings={mapFindingsFixture} residualBand="High" approvedReservePercent={telemetryFixture.aircraft.approvedMinimumReservePercent} />
-            <EvidencePanel labels={labels} />
-            <NotesPanel labels={labels} />
-          </aside>
-        </section>}
+  const loadData = useCallback(async (active: AuthenticatedSession): Promise<boolean> => {
+    const ticket = loadRequests.beginLatest(); setConnection("loading"); setMessage({ key: "loadingAuthoritative" });
+    try {
+      const [missions, packages, readiness, audit] = await Promise.all([
+        client.get<OperationalData["missions"]>("/api/missions", ticket.signal), client.get<OperationalData["packages"]>("/api/packages", ticket.signal),
+        client.readiness(ticket.signal), client.get<OperationalData["audit"]>("/api/audit/health", ticket.signal),
+      ]);
+      if (!ticket.isCurrent()) return false;
+      const safeMode = audit.state === "safe-mode" || Object.values(readiness.checks).some(({ detail }) => detail?.includes("read-only"));
+      safeModeRef.current = safeMode; if (safeMode) writes.invalidate();
+      const nextData = { missions, packages, readiness, audit };
+      setScope((current) => { if (current.session?.sessionId !== active.sessionId) return current; const nextSelected = missions.missions.some(({ missionId }) => missionId === current.selectedMissionId) ? current.selectedMissionId : missions.missions[0]?.missionId; return { ...current, session: active, data: nextData, selectedMissionId: nextSelected, signedExport: missionRevisionChanged(current.data, nextData, nextSelected) ? undefined : current.signedExport }; });
+      setConnection(safeMode ? "safe-mode" : "connected"); setMessage({ key: safeMode ? "readOnlySafeMode" : "connectedEdge" }); return true;
+    } catch (error) {
+      if (isAbort(error) || !ticket.isCurrent()) return false;
+      if (error instanceof EdgeApiError && isOperationalSafeModeFailure(error.status, error.code)) { enterSafeMode(); return false; }
+      if (error instanceof EdgeApiError && error.status === 403) { setConnection("forbidden"); setMessage({ key: "forbiddenRole" }); return false; }
+      clearForError(error); return false;
+    } finally { ticket.finish(); }
+  }, [client, clearForError, enterSafeMode, loadRequests, writes]);
 
-        <footer className="system-footer"><FooterMetric icon="crosshair" label="System status" value={labels.statusNominal} /><FooterMetric icon="wifi" label="Network" value={labels.networkDisconnected} /><FooterMetric icon="check" label="Data integrity" value={labels.verified} /><FooterMetric icon="clock" label="Time (local)" value="18 May 2024 09:32" mono /><FooterMetric icon="download" label="Power" value="100%" /></footer>
-      </main>
-    </div>
-  );
+  const beginPrincipal = useCallback(async (active: AuthenticatedSession): Promise<void> => {
+    requests.invalidate(); loadRequests.invalidate(); writes.invalidate(); safeModeRef.current = false; setLockState("idle"); setScope({ ...emptyMissionScopedState(), session: active }); await loadData(active);
+  }, [loadData, loadRequests, requests, writes]);
+
+  const validateSession = useCallback(async (): Promise<void> => {
+    const current = client.session(); if (current === undefined) { clearForError(new SessionExpiredError()); return; }
+    const ticket = requests.begin();
+    try {
+      const status = await client.sessionStatus(ticket.signal);
+      if (!ticket.isCurrent() || status.sessionId !== current.sessionId) return;
+      setScope((value) => value.session?.sessionId === status.sessionId ? { ...value, session: { ...value.session, ...status } } : value);
+    } catch (error) { if (!isAbort(error) && ticket.isCurrent()) clearForError(error); }
+    finally { ticket.finish(); }
+  }, [client, clearForError, requests]);
+
+  // Keep the scheduler tied only to server-provided deadlines. Locale/message
+  // changes may replace the validation callback, but must never postpone an
+  // already scheduled idle-expiry probe.
+  const validateSessionRef = useRef(validateSession);
+  validateSessionRef.current = validateSession;
+
+  useEffect(() => {
+    if (session === undefined) return;
+    let active = true; let timer: number | undefined;
+    const probe = async () => { await validateSessionRef.current(); const current = client.session(); if (active && current !== undefined) timer = window.setTimeout(() => { void probe(); }, probeDelay(current)); };
+    timer = window.setTimeout(() => { void probe(); }, probeDelay(session));
+    return () => { active = false; if (timer !== undefined) window.clearTimeout(timer); };
+  }, [client, session?.expiresAtUtc, session?.idleTimeoutMs, session?.lastActivityAtUtc, session?.sessionId]);
+  useEffect(() => () => { requests.invalidate(); loadRequests.invalidate(); writes.invalidate(); }, [loadRequests, requests, writes]);
+
+  const run = useCallback<RunOperation>(async (operation, success) => {
+    if (safeModeRef.current) { setMessage({ key: "readOnlyBlocked" }); return; }
+    const principalGeneration = requests.snapshot(); const ticket = writes.begin();
+    try {
+      await operation(ticket.signal);
+      if (!ticket.isCurrent() || !requests.isCurrent(principalGeneration)) return;
+      setMessage(success); const active = client.session(); if (active !== undefined) await loadData(active);
+    } catch (error) {
+      if (isAbort(error) || !ticket.isCurrent() || !requests.isCurrent(principalGeneration)) return;
+      if (error instanceof SessionExpiredError) clearForError(error);
+      else if (error instanceof EdgeApiError && isOperationalSafeModeFailure(error.status, error.code)) enterSafeMode();
+      else if (error instanceof EdgeApiError && error.status === 403) { setConnection("forbidden"); setMessage({ text: errorLabel(labels, error.code) }); }
+      else if (error instanceof EdgeApiError) setMessage({ text: errorLabel(labels, error.code) });
+      else setMessage({ key: "requestFailed" });
+    } finally { ticket.finish(); }
+  }, [client, clearForError, enterSafeMode, labels, loadData, requests, writes]);
+
+  const lock = useCallback(async () => {
+    const active = client.session(); if (active === undefined) { resetSession({ key: "locked" }); return; }
+    setLockState("pending"); clearSensitive({ key: "lockPending" }, false);
+    try { await client.lock(active.sessionId); setLockState("idle"); setMessage({ key: "locked" }); }
+    catch (error) { if (error instanceof SessionExpiredError) { setLockState("idle"); setMessage({ key: "locked" }); } else { setLockState("unconfirmed"); setMessage({ key: "lockUnconfirmed" }); } }
+  }, [clearSensitive, client, resetSession]);
+  const selectMission = useCallback((missionId: string) => {
+    writes.invalidate(); setScope((value) => value.selectedMissionId === missionId ? value : { ...value, selectedMissionId: missionId, signedExport: undefined });
+  }, [writes]);
+
+  if (session === undefined) return <LoginScreen client={client} connection={connection} labels={labels} lockState={lockState} message={messageText(message, labels)} locale={locale} onLocale={() => setLocale(locale === "en" ? "es" : "en")} onLogin={beginPrincipal} onRetryLock={() => { void lock(); }} />;
+  const safety = mission?.safetyResults.find(({ revisionId }) => revisionId === mission.currentRevisionId);
+  const stale = safety?.stale === true;
+  const blocked = safety === undefined || stale || safety.status !== "ready";
+  const canManage = session.roles.some((role) => role === "commander" || role === "safety-officer");
+  return <div className={`console-shell live-console ${night ? "theme-night" : "theme-day"}`}>
+    <aside className="side-rail" aria-label={labels.primaryNavigation}><Brand labels={labels} /><nav aria-label={labels.missionNavigation} className="live-nav">
+      <a href="#mission">{labels.overview}</a><a href="#safety">{labels.safetyReview}</a><a href="#checklists">{labels.checklistNav}</a><a href="#gates">{labels.gatesNav}</a><a href="#telemetry">{labels.telemetry}</a><a href="#system">{labels.systemNav}</a>
+    </nav><div className="deferred-list" aria-label={labels.deferredModules} tabIndex={0}>{DEFERRED.map(([key, fallback]) => <button disabled key={key} type="button"><span>{String(labels[key] ?? fallback)}</span><small>{labels.deferredRelease}</small></button>)}</div></aside>
+    <main className="main-frame live-main"><header className="top-bar live-topbar"><div><strong>{session.userId}</strong><span>{session.roles.map((role) => operatorLabel(labels, role)).join(" · ")}</span></div><div className="top-controls"><Status state={connection}>{messageText(message, labels)}</Status>
+      <button aria-label={labels.changeLanguage} className="locale-toggle" onClick={() => setLocale(locale === "en" ? "es" : "en")} type="button">{locale.toUpperCase()} / {locale === "en" ? "ES" : "EN"}</button>
+      <button aria-label={labels.toggleTheme} className="theme-toggle" onClick={() => setNight((value) => !value)} type="button">{night ? labels.day : labels.night}</button><button onClick={() => { void lock(); }} type="button">{labels.lock}</button></div></header>
+      <div className="classification-banner">{labels.unclassified}</div>
+      <section className="live-grid" id="mission" aria-labelledby="missions-heading"><article className="ops-card mission-list"><h1 id="missions-heading">{labels.missions}</h1>{data === undefined ? <StateBlock labels={labels} state="loading" /> : data.missions.missions.length === 0 ? <StateBlock labels={labels} state="blocked" detail={labels.noAssignedMissions} /> : data.missions.missions.map((item) => <button className={item.missionId === mission?.missionId ? "selected" : ""} key={item.missionId} onClick={() => selectMission(item.missionId)} type="button"><strong>{item.missionId}</strong><span>{labels.revision} {item.currentRevision.revision} · {operatorLabel(labels, item.currentRevision.state)}</span></button>)}<MissionCreator canManage={canManage} labels={labels} readOnly={readOnly} client={client} run={run} /></article>
+        <MissionRevision mission={mission} canManage={canManage} labels={labels} readOnly={readOnly} client={client} run={run} /></section>
+      <section className={`ops-card safety-card state-${stale ? "stale" : blocked ? "blocked" : "api-ready"}`} id="safety" aria-labelledby="safety-heading"><div className="card-heading"><div><span>{labels.serverOwnedEvaluation}</span><h2 id="safety-heading">{labels.missionStrip}</h2></div><Status state={stale ? "stale" : blocked ? "blocked" : "api-ready"}>{stale ? labels.stale : safety === undefined ? labels.unavailable : operatorLabel(labels, safety.status)}</Status></div>
+        {safety === undefined ? <StateBlock labels={labels} state="safe-mode" detail={labels.safetyUnavailable} /> : <><dl className="facts"><Fact label={labels.revision} value={safety.revisionId} /><Fact label={labels.evaluated} value={safety.evaluatedAtUtc ?? labels.apiTimeUnavailable} /><Fact label={labels.status} value={operatorLabel(labels, safety.status)} /></dl>{safety.blockers.length === 0 ? <p>{labels.noSafetyBlockers}</p> : <ul>{safety.blockers.map((item, index) => <li key={`${item.code}-${index}`}><strong>{item.code}</strong> {item.explanation ?? labels.serverBlocker}</li>)}</ul>}</>}
+      </section>
+      <Checklist mission={mission} labels={labels} readOnly={readOnly} client={client} run={run} /><GateGrid mission={mission} session={session} blocked={blocked} labels={labels} readOnly={readOnly} client={client} run={run} />
+      <TelemetryBoundary key={`${session.sessionId}:${mission?.currentRevisionId ?? "none"}`} revisionId={mission?.currentRevisionId} sessionId={session.sessionId} labels={labels} onValidateSession={validateSession} />
+      <SystemPanel data={data} mission={mission} session={session} labels={labels} readOnly={readOnly} client={client} run={run} signedExport={signedExport} onSignedExport={(value) => setScope((current) => ({ ...current, signedExport: value }))} />
+    </main></div>;
 }
 
-function Meta({ label, value, wide = false }: { label: string; value: string; wide?: boolean }): JSX.Element {
-  return <div className={`meta-block ${wide ? "is-wide" : ""}`}><span>{label}</span><strong>{value}</strong></div>;
+function LoginScreen({ client, connection, labels, lockState, message, locale, onLocale, onLogin, onRetryLock }: { client: EdgeApiClient; connection: ConnectionState; labels: Labels; lockState: LockState; message: string; locale: Locale; onLocale(): void; onLogin(session: AuthenticatedSession): Promise<void>; onRetryLock(): void }): JSX.Element {
+  const [busy, setBusy] = useState(false); const [error, setError] = useState<string>();
+  const submit = async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); if (lockState !== "idle") return; setBusy(true); setError(undefined); const form = new FormData(event.currentTarget); try { await onLogin(await client.login(String(form.get("userId") ?? ""), String(form.get("password") ?? ""))); } catch (reason) { setError(reason instanceof EdgeApiError ? errorLabel(labels, reason.code) : labels.edgeDisconnected); } finally { setBusy(false); } };
+  return <main className="login-screen theme-night"><Brand labels={labels} /><form className="login-card" onSubmit={(event) => void submit(event)}><span className="section-kicker">fac-isr-sms@0.2.0-rc.1</span><h1>{labels.signInTitle}</h1><Status state={connection}>{message}</Status><label>{labels.userId}<input autoComplete="username" disabled={lockState !== "idle"} name="userId" required /></label><label>{labels.password}<input autoComplete="current-password" disabled={lockState !== "idle"} name="password" required type="password" /></label>{error === undefined ? null : <p className="form-error" role="alert">{error}</p>}<button disabled={busy || lockState !== "idle"} type="submit">{busy ? labels.signingIn : labels.signIn}</button>{lockState === "unconfirmed" ? <button onClick={onRetryLock} type="button">{labels.retryLock}</button> : null}<button onClick={onLocale} type="button">{locale === "en" ? labels.spanish : labels.english}</button></form></main>;
 }
 
-function EvidencePanel({ labels }: { labels: ReturnType<typeof getLabels> }): JSX.Element { return <section className="rail-panel evidence-panel"><div className="rail-title"><h2>{labels.evidenceLatest}</h2><button type="button">View all</button></div><div className="evidence-table"><div className="evidence-row evidence-head"><span>ID</span><span>Type</span><span>Description</span><span>Time</span></div>{[["EV-SAF-00077", "HAZ", "Wildlife strike risk", "09:20"], ["EV-OPR-00142", "OPS", "Ops auth letter", "09:15"], ["EV-MNT-00091", "DOC", "Maint. release", "08:10"], ["EV-WTH-00056", "WX", "Weather brief", "08:05"]].map((row) => <div className="evidence-row" key={row[0]}>{row.map((value) => <span key={value} className={value.startsWith("EV-") ? "mono" : ""}>{value}</span>)}</div>)}</div></section>; }
-
-function NotesPanel({ labels }: { labels: ReturnType<typeof getLabels> }): JSX.Element { return <section className="rail-panel notes-panel"><div className="rail-title"><h2>{labels.notesSafety}</h2><button type="button">View all</button></div><p>Two high hazards remain with incomplete mitigations. See Hazards page for actions.</p><span className="note-author">— Safety officer</span></section>; }
-
-function FooterMetric({ icon, label, value, mono = false }: { icon: IconName; label: string; value: string; mono?: boolean }): JSX.Element { return <div className="footer-metric"><Icon name={icon} /><div><span>{label}</span><strong className={mono ? "mono" : ""}>{value}</strong></div></div>; }
-function Icon({ name }: { name: IconName }): JSX.Element {
-  const paths: Record<IconName, ReactNode> = { home: <path d="M3 10.5 12 3l9 7.5v9h-6v-5h-6v5H3z" />, shield: <path d="M12 3 20 6v5c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z" />, warning: <path d="m12 3 10 18H2zM12 9v5m0 3h.01" />, sliders: <path d="M4 6h16M4 12h16M4 18h16M8 4v4m8 2v4M10 16v4" />, risk: <path d="M4 19V5m0 14h16M8 15l3-4 3 2 4-6" />, route: <path d="M5 19c0-3 2-5 5-5h4c3 0 5-2 5-5M5 5h.01M19 19h.01" />, pulse: <path d="M2 12h4l2-6 4 12 2-6h8" />, file: <path d="M6 3h9l3 3v15H6zM15 3v4h4M9 12h6M9 16h6" />, folder: <path d="M3 6h7l2 2h9v11H3z" />, edit: <path d="m4 16-1 5 5-1 11-11-4-4zM13 6l4 4" />, settings: <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0-5v3m0 13v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1m-8.6 8.6-2.1 2.1" />, download: <path d="M12 3v12m-4-4 4 4 4-4M4 20h16" />, wifi: <path d="M3 8a14 14 0 0 1 18 0M6 12a9 9 0 0 1 12 0M9 16a4 4 0 0 1 6 0M12 20h.01" />, check: <path d="m5 12 4 4L19 6" />, stop: <path d="M5 5h14v14H5z" />, clock: <path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 5v5l3 2" />, layers: <path d="m12 3 9 5-9 5-9-5zM3 12l9 5 9-5M3 16l9 5 9-5" />, crosshair: <path d="M12 3v3m0 12v3M3 12h3m12 0h3M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z" /> };
-  return <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
+function JsonAlert({ message }: { message: string }): JSX.Element { return <p aria-label={message} className="form-error" ref={(node) => { node?.focus(); }} role="alert" tabIndex={-1}>{message}</p>; }
+function MissionCreator({ canManage, labels, readOnly, client, run }: { canManage: boolean; labels: Labels; readOnly: boolean; client: EdgeApiClient; run: RunOperation }): JSX.Element | null {
+  const [error, setError] = useState(false); if (!canManage) return null;
+  const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); if (readOnly) return; const value = String(new FormData(event.currentTarget).get("mission") ?? ""); try { const body = JSON.parse(value) as unknown; setError(false); void run((signal) => client.post("/api/missions", body, signal), { key: "missionCreated" }); } catch { setError(true); } };
+  return <details><summary>{labels.createMission}</summary><form className="inline-form" onSubmit={submit}><label>{labels.missionJson}<textarea name="mission" required /></label>{error ? <JsonAlert message={labels.missionJsonInvalid} /> : null}<button disabled={readOnly} type="submit">{labels.createMission}</button>{readOnly ? <StateBlock labels={labels} state="blocked" detail={labels.readOnlyBlocked} /> : null}</form></details>;
 }
+function MissionRevision({ mission, canManage, labels, readOnly, client, run }: { mission?: MissionView; canManage: boolean; labels: Labels; readOnly: boolean; client: EdgeApiClient; run: RunOperation }): JSX.Element {
+  const [error, setError] = useState(false); const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); if (mission === undefined || readOnly) return; const value = String(new FormData(event.currentTarget).get("revision") ?? ""); try { const body = JSON.parse(value) as unknown; setError(false); void run((signal) => client.post(`/api/missions/${encodeURIComponent(mission.missionId)}/revisions`, body, signal), { key: "revisionRecorded" }); } catch { setError(true); } };
+  if (mission === undefined) return <article className="ops-card"><h2>{labels.currentRevision}</h2><StateBlock labels={labels} state="blocked" detail={labels.selectMission} /></article>;
+  const revision = mission.currentRevision;
+  return <article className="ops-card"><h2>{labels.currentRevision}</h2><dl className="facts"><Fact label={labels.id} value={revision.id} /><Fact label={labels.revision} value={String(revision.revision)} /><Fact label={labels.state} value={operatorLabel(labels, revision.state)} /><Fact label={labels.configuration} value={revision.configuration ?? labels.notProvided} /></dl>{canManage ? <details><summary>{labels.createMaterialRevision}</summary><form className="inline-form" onSubmit={submit}><label>{labels.revisionChangeJson}<textarea name="revision" required /></label>{error ? <JsonAlert message={labels.revisionJsonInvalid} /> : null}<button disabled={readOnly} type="submit">{labels.submitRevision}</button>{readOnly ? <StateBlock labels={labels} state="blocked" detail={labels.readOnlyBlocked} /> : null}</form></details> : <StateBlock labels={labels} state="forbidden" detail={labels.revisionForbidden} />}</article>;
+}
+
+function Checklist({ mission, labels, readOnly, client, run }: { mission?: MissionView; labels: Labels; readOnly: boolean; client: EdgeApiClient; run: RunOperation }): JSX.Element {
+  const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); if (mission === undefined || readOnly) return; const form = new FormData(event.currentTarget); const itemId = String(form.get("itemId")); void run((signal) => client.post(`/api/revisions/${encodeURIComponent(mission.currentRevisionId)}/checklist-responses`, { responseId: `${mission.currentRevisionId}:${itemId}`, itemId, response: String(form.get("response")), reason: String(form.get("reason")), expectedRevisionId: mission.currentRevisionId }, signal), { key: "checklistRecorded" }); };
+  const responses = mission?.checklistResponses.filter(({ revisionId }) => revisionId === mission.currentRevisionId) ?? [];
+  return <section className="ops-card" id="checklists" aria-labelledby="checklist-heading"><h2 id="checklist-heading">{labels.itemizedChecklist}</h2>{responses.length === 0 ? <StateBlock labels={labels} state="blocked" detail={labels.noChecklist} /> : <ul className="record-list">{responses.map((item) => <li key={item.responseId}><strong>{item.itemId}</strong><span>{operatorLabel(labels, item.response)} · {item.actorUserId} · {item.occurredAtUtc}</span></li>)}</ul>}<form className="inline-form columns" onSubmit={submit}><label>{labels.itemId}<input name="itemId" required /></label><label>{labels.response}<select name="response"><option value="pass">{labels.responsePass}</option><option value="block">{labels.responseBlock}</option><option value="not-applicable">{labels.responseNotApplicable}</option></select></label><label>{labels.reason}<input name="reason" required /></label><button disabled={readOnly || mission === undefined || responses.length >= 128} type="submit">{labels.respondItem}</button>{readOnly ? <StateBlock labels={labels} state="blocked" detail={labels.readOnlyBlocked} /> : null}</form></section>;
+}
+
+function GateGrid({ mission, session, blocked, labels, readOnly, client, run }: { mission?: MissionView; session: AuthenticatedSession; blocked: boolean; labels: Labels; readOnly: boolean; client: EdgeApiClient; run: RunOperation }): JSX.Element {
+  const responses = mission?.checklistResponses.filter(({ revisionId }) => revisionId === mission.currentRevisionId) ?? [];
+  return <section className="gate-section" id="gates" aria-labelledby="gates-heading"><h2 id="gates-heading">{labels.fourGates}</h2>{readOnly ? <StateBlock labels={labels} state="blocked" detail={labels.readOnlyBlocked} /> : null}<div className="live-gates">{GATES.map((gate, index) => { const approval = mission?.gateApprovals.find((item) => item.missionRevisionId === mission.currentRevisionId && item.gate === gate); const required = ROLE_FOR_GATE[gate]; const allowed = required === "safety" ? session.roles.includes("safety-officer") : session.roles.includes(required);
+    const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); if (mission === undefined || readOnly) return; const form = new FormData(event.currentTarget); const aircraftId = gate === "operator" ? mission.currentRevision.aircraft?.[0]?.aircraftId : undefined; void run((signal) => client.post(`/api/revisions/${encodeURIComponent(mission.currentRevisionId)}/gates/${gate}`, { decision: String(form.get("decision")), reason: String(form.get("reason")), evidenceSnapshotId: String(mission.currentRevision.evidenceSnapshotId ?? ""), checklistResponseIds: responses.map(({ responseId }) => responseId), expectedRevisionId: mission.currentRevisionId, ...(aircraftId === undefined ? {} : { aircraftId }) }, signal), { text: labels.gateRecorded.replace("{gate}", operatorLabel(labels, gate)) }); };
+    const gateLabel = operatorLabel(labels, gate); const requiredLabel = operatorLabel(labels, required);
+    return <article className="ops-card gate-live" key={gate}><span>{labels.gate} 0{index + 1}</span><h3>{gateLabel}</h3><Status state={approval === undefined ? "blocked" : approval.decision === "accept" ? "api-ready" : "blocked"}>{approval === undefined ? labels.pending : operatorLabel(labels, approval.decision)}</Status><p>{labels.requiredRole}: {requiredLabel}</p>{allowed ? <form className="inline-form" onSubmit={submit}><label>{labels.decision}<select name="decision"><option value="accept" disabled={blocked}>{labels.accept}</option><option value="block">{labels.block}</option><option value="escalate">{labels.escalate}</option></select></label><label>{labels.reason}<input name="reason" required /></label><button disabled={readOnly || mission === undefined || responses.length === 0 || approval !== undefined || session.requiresReauthentication} type="submit">{labels.recordGate}</button></form> : <StateBlock labels={labels} state="forbidden" detail={labels.onlyAssigned.replace("{role}", requiredLabel)} />}{session.requiresReauthentication && allowed ? <StateBlock labels={labels} state="blocked" detail={labels.reauthenticationRequired} /> : null}</article>; })}</div></section>;
+}
+
+const TelemetryBoundary = memo(function TelemetryBoundary({ revisionId, sessionId, labels, onValidateSession }: { revisionId?: string; sessionId: string; labels: Labels; onValidateSession(): Promise<void> }): JSX.Element {
+  const [records, setRecords] = useState<readonly TelemetryRecord[]>([]); const [state, setState] = useState<"loading" | "connected" | "disconnected">("disconnected"); const validating = useRef(false);
+  useEffect(() => {
+    setRecords([]); if (revisionId === undefined || typeof EventSource === "undefined") { setState("disconnected"); return; }
+    let active = true; setState("loading"); const source = new EventSource(`/api/revisions/${encodeURIComponent(revisionId)}/telemetry/stream?window=50&follow=true`);
+    source.onopen = () => { if (active) setState("connected"); };
+    source.onmessage = ({ data: payload }) => { if (!active) return; try { const record = JSON.parse(payload) as TelemetryRecord; if (record.revisionId === revisionId) setRecords((current) => [...current.slice(-49), record]); } catch { setState("disconnected"); } };
+    source.onerror = () => { if (!active) return; setState("disconnected"); if (!validating.current) { validating.current = true; void onValidateSession().finally(() => { validating.current = false; }); } };
+    return () => { active = false; source.close(); };
+  }, [onValidateSession, revisionId, sessionId]);
+  const latest = records.at(-1); const stateLabel = state === "loading" ? labels.loading : state === "connected" ? labels.connected : labels.disconnected;
+  return <section className="ops-card" id="telemetry" aria-labelledby="telemetry-heading"><div className="card-heading"><h2 id="telemetry-heading">{labels.readOnlyTelemetry}</h2><Status state={state}>{stateLabel}</Status></div>{latest === undefined ? <StateBlock labels={labels} state={state} detail={labels.noTelemetry} /> : <><p>{String(latest.event.observedAtUtc ?? labels.apiTimeMissing)} · {labels.sequence} {latest.sequence}</p><pre tabIndex={0}>{JSON.stringify(latest.event, null, 2)}</pre></>}</section>;
+});
+
+function SystemPanel({ data, mission, session, labels, readOnly, client, run, signedExport, onSignedExport }: { data?: OperationalData; mission?: MissionView; session: AuthenticatedSession; labels: Labels; readOnly: boolean; client: EdgeApiClient; run: RunOperation; signedExport?: SignedMissionExport; onSignedExport(value: SignedMissionExport): void }): JSX.Element {
+  const [password, setPassword] = useState(""); const canReauthenticate = session.roles.some((role) => GATE_ROLES.includes(role)); const canExport = session.roles.some((role) => role === "commander" || role === "reviewer");
+  const reauth = () => void run(async (signal) => { await client.reauthenticate(password, signal); setPassword(""); }, { key: "reauthenticated" }); const exportMission = () => { if (mission !== undefined) void run(async (signal) => onSignedExport(await client.post<SignedMissionExport>(`/api/revisions/${encodeURIComponent(mission.currentRevisionId)}/export`, undefined, signal)), { key: "signedExportReceived" }); };
+  return <section className="system-grid" id="system" aria-labelledby="system-heading"><h2 id="system-heading">{labels.systemHeading}</h2><article className="ops-card"><h3>{labels.packages}</h3>{data?.packages.active.length ? data.packages.active.map((item) => <p key={`${item.packageId}:${item.version}`}><strong>{item.packageId}</strong> {item.version} · {labels.apiState}: {operatorLabel(labels, item.state)}</p>) : <StateBlock labels={labels} state="blocked" detail={labels.noActivePackage} />}{data?.packages.quarantined.length ? <Status state="blocked">{data.packages.quarantined.length} {labels.quarantined}</Status> : null}</article><article className="ops-card"><h3>{labels.readiness}</h3><Status state={data?.readiness.technicalReady ? "api-ready" : "blocked"}>{labels.technical}: {data?.readiness.technicalReady ? labels.ready : labels.notReady}</Status><Status state="blocked">{labels.operational}: {labels.notReady}</Status>{data === undefined ? null : <ul>{Object.entries(data.readiness.checks).map(([name, check]) => <li key={name}>{displayCheck(labels, name)}: {operatorLabel(labels, check.status)}{readinessDetail(labels, check.detail)}</li>)}</ul>}</article><article className="ops-card"><h3>{labels.auditHealth}</h3>{data === undefined ? <StateBlock labels={labels} state="loading" /> : <div data-testid="audit-facts"><Status state={data.audit.state === "healthy" ? "api-ready" : "safe-mode"}>{operatorLabel(labels, data.audit.state)}</Status><p>{data.audit.eventCount} {labels.events}</p>{data.audit.lastEventHash ? <code>{data.audit.lastEventHash}</code> : null}</div>}</article><article className="ops-card"><h3>{labels.signedExport}</h3>{canReauthenticate ? <><label>{labels.reauthPassword}<input onChange={(event) => setPassword(event.target.value)} type="password" value={password} /></label><button disabled={readOnly || password === ""} onClick={reauth} type="button">{labels.reauthenticate}</button></> : null}{canExport ? <button disabled={readOnly || mission === undefined || session.requiresReauthentication} onClick={exportMission} type="button">{labels.requestSignedExport}</button> : <StateBlock labels={labels} state="forbidden" detail={labels.exportRoleRequired} />}{readOnly ? <StateBlock labels={labels} state="blocked" detail={labels.readOnlyBlocked} /> : null}{signedExport === undefined ? null : <dl className="facts"><Fact label={labels.export} value={signedExport.exportId} /><Fact label={labels.key} value={signedExport.signatureKeyId} /><Fact label={labels.algorithm} value={signedExport.signatureAlgorithm} /><Fact label={labels.signature} value={signedExport.detachedSignature} /></dl>}</article></section>;
+}
+
+function Brand({ labels }: { labels: Labels }): JSX.Element { return <div className="brand-lockup"><span className="brand-mark" aria-hidden="true">✦</span><div><strong>FAC ISR SMS</strong><span>{labels.operationalCore} · 0.2.0-rc.1</span></div></div>; }
+function Fact({ label, value }: { label: string; value: string }): JSX.Element { return <div><dt>{label}</dt><dd>{value}</dd></div>; }
+function Status({ state, children }: { state: string; children: ReactNode }): JSX.Element { return <span className={`live-status state-${state}`} role="status">{children}</span>; }
+function StateBlock({ labels, state, detail }: { labels: Labels; state: string; detail?: string }): JSX.Element { const translated = state === "loading" ? labels.loading : state === "connected" ? labels.connected : state === "disconnected" ? labels.disconnected : state === "safe-mode" ? labels.safeMode : state === "forbidden" ? labels.forbiddenState : state === "stale" ? labels.stale : labels.blockedState; return <div className={`state-block state-${state}`} role="status"><strong>{translated}</strong>{detail ? <span>{detail}</span> : null}</div>; }

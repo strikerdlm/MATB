@@ -61,7 +61,21 @@ export interface AuditPersistence {
   tamperForFixture?(sequence: number, changes: Partial<AuditEvent>): Promise<void>;
 }
 
-export type AuditDatabase = SqlDatabase | Pick<EdgeDatabase, "sql">;
+export class AtomicDomainWriteError extends Error {
+  public constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "AtomicDomainWriteError";
+  }
+}
+
+export class AtomicConflictError extends Error {
+  public constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "AtomicConflictError";
+  }
+}
+
+export type AuditDatabase = SqlDatabase | Pick<EdgeDatabase, "sql" | "assertFencingToken">;
 
 export interface AuditLedgerOptions {
   readonly persistence?: AuditPersistence;
@@ -283,11 +297,13 @@ interface StoredAuditRow {
 /** SQLite persistence used by the edge node; the table is created without a schema-version bump. */
 export class SqliteAuditPersistence implements AuditPersistence {
   private readonly database: SqlDatabase;
+  private readonly edgeDatabase?: Pick<EdgeDatabase, "assertFencingToken">;
 
   public constructor(database: AuditDatabase) {
     this.database = resolveDatabase(database);
+    this.edgeDatabase = "assertFencingToken" in database ? database : undefined;
     this.database.exec(`
-      CREATE TABLE IF NOT EXISTS operational_audit_events (
+      CREATE TABLE IF NOT EXISTS audit_events (
         sequence INTEGER PRIMARY KEY,
         event_id TEXT NOT NULL UNIQUE,
         type TEXT NOT NULL,
@@ -307,8 +323,20 @@ export class SqliteAuditPersistence implements AuditPersistence {
   }
 
   public async append(event: AuditEvent): Promise<void> {
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      this.appendSync(event);
+      this.database.exec("COMMIT");
+    } catch (error) {
+      this.database.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  private appendSync(event: AuditEvent): void {
+    this.edgeDatabase?.assertFencingToken();
     this.database.prepare(`
-      INSERT INTO operational_audit_events
+      INSERT INTO audit_events
         (sequence, event_id, type, actor_user_id, mission_revision_id, occurred_at_utc,
          action, reason, evidence_snapshot_id, client_session_id, schema_version,
          payload_json, previous_hash, hash)
@@ -332,8 +360,12 @@ export class SqliteAuditPersistence implements AuditPersistence {
   }
 
   public async list(): Promise<readonly AuditEvent[]> {
+    return this.listSync();
+  }
+
+  private listSync(): AuditEvent[] {
     const rows = this.database
-      .prepare("SELECT * FROM operational_audit_events ORDER BY sequence ASC")
+      .prepare("SELECT * FROM audit_events ORDER BY sequence ASC")
       .all() as StoredAuditRow[];
     return rows.map((row) => deepFreeze({
       sequence: Number(row.sequence),
@@ -351,6 +383,42 @@ export class SqliteAuditPersistence implements AuditPersistence {
       previousHash: String(row.previous_hash),
       hash: String(row.hash),
     })) as AuditEvent[];
+  }
+
+  public commitAtomic(
+    inputs: readonly AuditEventInput[],
+    now: () => string,
+    schemaVersion: number,
+    writeDomain: () => void,
+  ): AuditEvent[] {
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      this.edgeDatabase?.assertFencingToken();
+      const integrity = this.database.prepare("PRAGMA quick_check").get() as Record<string, unknown>;
+      if (String(Object.values(integrity)[0] ?? "") !== "ok") throw new AuditWriteError("database integrity check failed; approval writes are disabled");
+      const existing = this.listSync();
+      const report = verifyEvents(existing);
+      if (!report.ok) throw new AuditWriteError("audit chain is corrupted; approval writes are disabled");
+      const events: AuditEvent[] = [];
+      let sequence = existing.length;
+      let previousHash = existing.at(-1)?.hash ?? GENESIS_HASH;
+      for (const input of inputs) {
+        const event = normalizeEvent(input, sequence, previousHash, now, schemaVersion);
+        if (existing.some(({ eventId }) => eventId === event.eventId) || events.some(({ eventId }) => eventId === event.eventId)) {
+          throw new Error("audit event ID already exists");
+        }
+        events.push(event);
+        sequence += 1;
+        previousHash = event.hash;
+      }
+      writeDomain();
+      for (const event of events) this.appendSync(event);
+      this.database.exec("COMMIT");
+      return events.map(cloneEvent);
+    } catch (error) {
+      this.database.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   public async tamperForFixture(sequence: number, changes: Partial<AuditEvent>): Promise<void> {
@@ -375,7 +443,7 @@ export class SqliteAuditPersistence implements AuditPersistence {
     if (Object.prototype.hasOwnProperty.call(changes, "hash")) add("hash", changes.hash);
     if (updates.length === 0) throw new Error("fixture tamper requires at least one field");
     bindings.push(sequence);
-    this.database.prepare(`UPDATE operational_audit_events SET ${updates.join(", ")} WHERE sequence = ?`).run(...bindings);
+    this.database.prepare(`UPDATE audit_events SET ${updates.join(", ")} WHERE sequence = ?`).run(...bindings);
   }
 }
 
@@ -407,6 +475,12 @@ export class AuditLedger {
 
   public appendAuditEvent(input: AuditEventInput): Promise<AuditEvent> {
     return this.append(input);
+  }
+
+  public commitAtomic(inputs: readonly AuditEventInput[], writeDomain: () => void): Promise<readonly AuditEvent[]> {
+    const operation = this.appendTail.then(() => this.commitAtomicInternal(inputs, writeDomain));
+    this.appendTail = operation.then(() => undefined, () => undefined);
+    return operation;
   }
 
   public async verifyAuditChain(): Promise<AuditVerificationReport> {
@@ -492,6 +566,25 @@ export class AuditLedger {
       throw new AuditWriteError("audit database cannot append; approval writes are disabled", { cause: error });
     }
     return cloneEvent(event);
+  }
+
+  private async commitAtomicInternal(inputs: readonly AuditEventInput[], writeDomain: () => void): Promise<readonly AuditEvent[]> {
+    if (this.readOnlySafeMode) throw new AuditWriteError("audit ledger is in read-only safe mode");
+    if (!(this.persistence instanceof SqliteAuditPersistence)) {
+      const events: AuditEvent[] = [];
+      writeDomain();
+      for (const input of inputs) events.push(await this.appendInternal(input));
+      return events;
+    }
+    try {
+      return this.persistence.commitAtomic(inputs, this.now, this.schemaVersion, writeDomain);
+    } catch (error) {
+      if (error instanceof AtomicConflictError) throw error;
+      this.readOnlySafeMode = true;
+      if (error instanceof AtomicDomainWriteError) throw error;
+      if (error instanceof AuditWriteError) throw error;
+      throw new AuditWriteError("atomic audit and domain commit failed; writes are disabled", { cause: error });
+    }
   }
 }
 

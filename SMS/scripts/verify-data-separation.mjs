@@ -185,14 +185,34 @@ async function verifyResearchContract(root, report) {
 
 async function verifyRuntime(root, report) {
   const serverPath = resolve(root, "apps/edge-api/dist/server.js");
+  const authPath = resolve(root, "apps/edge-api/dist/auth/index.js");
   let app;
   try {
-    const serverModule = await import(`${pathToFileURL(serverPath).href}?data-separation=${Date.now()}`);
-    app = await serverModule.buildServer({ databaseUrl: ":memory:", internet: "disabled" });
+    const [serverModule, authModule] = await Promise.all([
+      import(`${pathToFileURL(serverPath).href}?data-separation=${Date.now()}`),
+      import(`${pathToFileURL(authPath).href}?data-separation=${Date.now()}`),
+    ]);
+    const nowUtc = "2026-08-10T12:00:00.000Z";
+    const password = "correct horse battery staple";
+    const identityStore = new authModule.LocalIdentityStore({ now: () => nowUtc });
+    identityStore.register({ userId: "boundary-commander", displayName: "Boundary Commander", roles: ["commander"], missionIds: ["mission-1"], password });
+    const sessionManager = new authModule.SessionManager({
+      now: () => nowUtc,
+      idleTimeoutMs: 15 * 60_000,
+      maxLifetimeMs: 8 * 60 * 60_000,
+      reauthenticationIntervalMs: 5 * 60_000,
+      sessionIdFactory: () => "boundary-session",
+      sessionCredentialFactory: () => "boundary-credential",
+      csrfTokenFactory: () => "boundary-csrf",
+    });
+    app = await serverModule.buildServer({ databaseUrl: ":memory:", internet: "disabled" }, { identityStore, sessionManager });
     await app.ready();
+    const login = await app.inject({ method: "POST", url: "/api/auth/login", payload: { userId: "boundary-commander", password } });
+    if (login.statusCode !== 200) throw new Error(`data-separation probe login returned ${login.statusCode}`);
     const response = await app.inject({
       method: "POST",
       url: "/api/missions",
+      headers: { cookie: "__Host-sms_session=boundary-credential", "x-csrf-token": "boundary-csrf" },
       payload: {
         dataDomain: "research",
         nonDispatchable: true,

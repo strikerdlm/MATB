@@ -1,16 +1,11 @@
-name: SMS verification
+name: SMS cross-platform candidate verification
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - "SMS/**"
-      - ".github/workflows/sms-ci.yml"
+    branches: [main]
+    paths: ["SMS/**", ".github/workflows/sms-ci.yml", ".github/workflows/sms-release.yml"]
   pull_request:
-    paths:
-      - "SMS/**"
-      - ".github/workflows/sms-ci.yml"
+    paths: ["SMS/**", ".github/workflows/sms-ci.yml", ".github/workflows/sms-release.yml"]
 
 permissions:
   contents: read
@@ -19,34 +14,209 @@ concurrency:
   group: sms-verification-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  NODE_VERSION: 22.23.2
+  RELEASE_VERSION: 0.2.0-rc.1
+
 jobs:
-  verify:
-    name: Node 22 release gate
+  ubuntu-candidate:
+    name: Ubuntu 24.04 native + OCI candidate
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: SMS
     steps:
-      - name: Check out repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Check out exact source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
-      - name: Install Node.js 22
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - name: Use exact CI Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 22
+          node-version: 22.23.2
           cache: npm
           cache-dependency-path: SMS/package-lock.json
-      - name: Install locked dependencies
+      - name: Install locked development dependencies
         run: npm ci
-      - name: Install Chromium for console verification
+      - name: Install Chromium for the real console gates
         run: npx playwright install --with-deps chromium
-      - name: Build disconnected transfer bundle
-        run: npm run build:offline -- --output dist/offline-bundle
-      - name: Run release verification
-        run: npm run verify:all
-        env:
-          SMS_OCI_IMAGE: fac-isr-sms-edge:offline
-      - name: Verify disconnected transfer bundle
-        run: npm run verify:offline -- --bundle dist/offline-bundle --no-network
+      - name: Obtain official Node Linux runtime inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-inputs artifacts inventories evidence scan-output
+          curl --fail --silent --show-error --location "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" --output ".ci-inputs/node-v${NODE_VERSION}-linux-x64.tar.xz"
+          curl --fail --silent --show-error --location "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt" --output .ci-inputs/SHASUMS256.txt
+          curl --fail --silent --show-error --location "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt.asc" --output .ci-inputs/SHASUMS256.txt.asc
+          curl --fail --silent --show-error --location "https://raw.githubusercontent.com/nodejs/release-keys/b28073028e6d6855cfb53bf7fa0137599c01f967/gpg-only-active-keys/pubring.kbx" --output .ci-inputs/node-release-keyring.gpg
+      - name: Build exact signed-runtime Linux bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_EPOCH=$(git show -s --format=%ct "$GITHUB_SHA")
+          npm run build
+          npm run package:native -- --target linux-x64 --runtime-archive ".ci-inputs/node-v${NODE_VERSION}-linux-x64.tar.xz" --runtime-checksums .ci-inputs/SHASUMS256.txt --runtime-checksums-signature .ci-inputs/SHASUMS256.txt.asc --node-release-keyring .ci-inputs/node-release-keyring.gpg --output-dir artifacts --source-date-epoch "$SOURCE_EPOCH"
+          npm run release:evidence -- inventory --artifact "artifacts/fac-isr-sms-${RELEASE_VERSION}-linux-x64.tar.gz" --target linux-x64 --source-commit "$GITHUB_SHA" --output inventories/linux-x64.json
+      - name: Build exact Linux amd64 OCI image and archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_EPOCH=$(git show -s --format=%ct "$GITHUB_SHA")
+          docker pull "node:22.23.2-bookworm-slim@sha256:a17d50af28002a160548bd4225b3cfcb12c5efcb171f79e68758f2885fb1b066"
+          npm run package:oci:image -- --tag "fac-isr-sms-edge:${GITHUB_SHA}" --source-commit "$GITHUB_SHA" --timeout-seconds 180
+          npm run package:oci -- --image-ref "fac-isr-sms-edge:${GITHUB_SHA}" --output-dir artifacts --source-date-epoch "$SOURCE_EPOCH"
+          npm run release:evidence -- inventory --artifact "artifacts/fac-isr-sms-${RELEASE_VERSION}-linux-amd64.oci.tar" --target linux-amd64-oci --source-commit "$GITHUB_SHA" --output inventories/linux-amd64-oci.json
+      - name: Run complete Ubuntu CI against exact candidates
+        run: npm run verify:ci -- --platform linux --native-artifact "artifacts/fac-isr-sms-${{ env.RELEASE_VERSION }}-linux-x64.tar.gz" --oci-artifact "artifacts/fac-isr-sms-${{ env.RELEASE_VERSION }}-linux-amd64.oci.tar" --oci-image "fac-isr-sms-edge:${{ github.sha }}" --source-commit "${{ github.sha }}" --attestation-output evidence/ubuntu-ci.json
+      - name: Record exact clean Linux native and OCI smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run release:evidence -- attest --type native-linux-smoke --source-commit "$GITHUB_SHA" --platform ubuntu-24.04 --artifact "linux-x64=artifacts/fac-isr-sms-${RELEASE_VERSION}-linux-x64.tar.gz" --clean true --output evidence/linux-smoke.json
+          npm run release:evidence -- attest --type oci-linux-smoke --source-commit "$GITHUB_SHA" --platform ubuntu-24.04 --artifact "linux-amd64-oci=artifacts/fac-isr-sms-${RELEASE_VERSION}-linux-amd64.oci.tar" --clean true --output evidence/oci-smoke.json
+      - name: Verify OCI hardening contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker image inspect "fac-isr-sms-edge:${GITHUB_SHA}" > scan-output/oci-inspect.json
+          node -e 'const x=require("./scan-output/oci-inspect.json")[0];if(x.Os!=="linux"||x.Architecture!=="amd64"||x.Config.User!=="10001:10001")process.exit(1)'
+      - name: Scan exact OCI archive for vulnerabilities
+        id: oci_scan
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+        with:
+          image: oci-archive:SMS/artifacts/fac-isr-sms-${{ env.RELEASE_VERSION }}-linux-amd64.oci.tar
+          fail-build: true
+          severity-cutoff: high
+          output-format: json
+          grype-version: 0.110.0
+          cache-db: false
+      - name: Attest passed OCI vulnerability scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "${{ steps.oci_scan.outputs.json }}" scan-output/oci-vulnerabilities.json
+          npm run release:evidence -- attest --type oci-vulnerability-scan --source-commit "$GITHUB_SHA" --scanner anchore-grype-0.110.0 --input scan-output/oci-vulnerabilities.json --scanner-output-path scan-output/oci-vulnerabilities.json --threshold high --artifact "linux-amd64-oci=artifacts/fac-isr-sms-${RELEASE_VERSION}-linux-amd64.oci.tar" --output evidence/oci-scan.json
+      - name: Upload Ubuntu evidence only after gates
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sms-ubuntu-candidate-${{ github.sha }}
+          path: |
+            SMS/artifacts/
+            SMS/inventories/
+            SMS/evidence/
+            SMS/scan-output/
+          if-no-files-found: error
+          retention-days: 14
+
+  windows-candidate:
+    name: Windows Server 2022 native candidate
+    runs-on: windows-2022
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: SMS
+    steps:
+      - name: Check out exact source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Use exact CI Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.23.2
+          cache: npm
+          cache-dependency-path: SMS/package-lock.json
+      - name: Add native archive and GPG tools
+        shell: pwsh
+        run: '"C:\Program Files\Git\usr\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append'
+      - name: Require native Windows archive and signature tools
+        shell: pwsh
+        run: Get-Command gpgv.exe, unzip.exe, zipinfo.exe | Out-Null
+      - name: Install locked development dependencies
+        run: npm ci
+      - name: Install Chromium for real console gates
+        run: npx playwright install chromium
+      - name: Obtain official Node Windows runtime inputs
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force .ci-inputs, artifacts, inventories, evidence | Out-Null
+          Invoke-WebRequest "https://nodejs.org/dist/v$env:NODE_VERSION/node-v$env:NODE_VERSION-win-x64.zip" -OutFile ".ci-inputs/node-v$env:NODE_VERSION-win-x64.zip"
+          Invoke-WebRequest "https://nodejs.org/dist/v$env:NODE_VERSION/SHASUMS256.txt" -OutFile .ci-inputs/SHASUMS256.txt
+          Invoke-WebRequest "https://nodejs.org/dist/v$env:NODE_VERSION/SHASUMS256.txt.asc" -OutFile .ci-inputs/SHASUMS256.txt.asc
+          Invoke-WebRequest "https://raw.githubusercontent.com/nodejs/release-keys/b28073028e6d6855cfb53bf7fa0137599c01f967/gpg-only-active-keys/pubring.kbx" -OutFile .ci-inputs/node-release-keyring.gpg
+      - name: Build exact signed-runtime Windows ZIP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $SourceEpoch = (git show -s --format=%ct $env:GITHUB_SHA).Trim()
+          npm run build
+          npm run package:native -- --target win32-x64 --runtime-archive ".ci-inputs/node-v$env:NODE_VERSION-win-x64.zip" --runtime-checksums .ci-inputs/SHASUMS256.txt --runtime-checksums-signature .ci-inputs/SHASUMS256.txt.asc --node-release-keyring .ci-inputs/node-release-keyring.gpg --output-dir artifacts --source-date-epoch $SourceEpoch
+          npm run release:evidence -- inventory --artifact "artifacts/fac-isr-sms-$env:RELEASE_VERSION-win32-x64.zip" --target win32-x64 --source-commit $env:GITHUB_SHA --output inventories/win32-x64.json
+      - name: Run complete native Windows CI against actual ZIP
+        shell: pwsh
+        run: npm run verify:ci -- --platform windows --native-artifact "artifacts/fac-isr-sms-$env:RELEASE_VERSION-win32-x64.zip" --source-commit $env:GITHUB_SHA --attestation-output evidence/windows-ci.json
+      - name: Record exact clean Windows smoke
+        shell: pwsh
+        run: npm run release:evidence -- attest --type native-windows-smoke --source-commit $env:GITHUB_SHA --platform windows-2022 --artifact "win32-x64=artifacts/fac-isr-sms-$env:RELEASE_VERSION-win32-x64.zip" --clean true --output evidence/windows-smoke.json
+      - name: Upload Windows evidence only after gates
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sms-windows-candidate-${{ github.sha }}
+          path: |
+            SMS/artifacts/
+            SMS/inventories/
+            SMS/evidence/
+          if-no-files-found: error
+          retention-days: 14
+
+  cross-platform-evidence:
+    name: Exact cross-platform SBOM and dependency evidence
+    needs: [ubuntu-candidate, windows-candidate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: SMS
+    steps:
+      - name: Check out exact source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Use exact CI Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.23.2
+          cache: npm
+          cache-dependency-path: SMS/package-lock.json
+      - name: Install locked evidence tooling
+        run: npm ci
+      - name: Download exact Ubuntu candidate set
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: sms-ubuntu-candidate-${{ github.sha }}
+          path: SMS
+      - name: Download exact Windows candidate set
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: sms-windows-candidate-${{ github.sha }}
+          path: SMS
+      - name: Produce exact cross-platform SBOM and dependency scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence scan-output
+          npm run release:evidence -- sbom --source-commit "$GITHUB_SHA" --artifact "linux-x64=artifacts/fac-isr-sms-${RELEASE_VERSION}-linux-x64.tar.gz" --artifact "win32-x64=artifacts/fac-isr-sms-${RELEASE_VERSION}-win32-x64.zip" --artifact "linux-amd64-oci=artifacts/fac-isr-sms-${RELEASE_VERSION}-linux-amd64.oci.tar" --output evidence/sbom.cdx.json
+          npm audit --audit-level=low --json > scan-output/npm-audit.json
+          npm run release:evidence -- attest --type dependency-scan --source-commit "$GITHUB_SHA" --scanner "npm-audit-${NODE_VERSION}" --input scan-output/npm-audit.json --scanner-output-path scan-output/npm-audit.json --threshold low --artifact "linux-x64=artifacts/fac-isr-sms-${RELEASE_VERSION}-linux-x64.tar.gz" --artifact "win32-x64=artifacts/fac-isr-sms-${RELEASE_VERSION}-win32-x64.zip" --artifact "linux-amd64-oci=artifacts/fac-isr-sms-${RELEASE_VERSION}-linux-amd64.oci.tar" --output evidence/dependency-scan.json
+      - name: Upload cross-platform evidence only after gates
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sms-cross-platform-evidence-${{ github.sha }}
+          path: |
+            SMS/evidence/sbom.cdx.json
+            SMS/evidence/dependency-scan.json
+            SMS/scan-output/npm-audit.json
+          if-no-files-found: error
+          retention-days: 14

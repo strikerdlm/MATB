@@ -1,0 +1,123 @@
+name: SMS signed technical release
+
+on:
+  push:
+    tags: ["sms-v0.2.0-rc.1"]
+  workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        description: Successful SMS CI run for this exact commit (blank selects latest exact-head success)
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: sms-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-and-package:
+    name: Verify external signature and publish technical RC
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: sms-release
+    defaults:
+      run:
+        working-directory: SMS
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REQUESTED_RUN_ID: ${{ inputs.candidate_run_id }}
+      SMS_RELEASE_MANIFEST_B64: ${{ secrets.SMS_RELEASE_MANIFEST_B64 }}
+      SMS_RELEASE_SIGNATURE_B64: ${{ secrets.SMS_RELEASE_SIGNATURE_B64 }}
+      SMS_RELEASE_PUBLIC_KEY_B64: ${{ secrets.SMS_RELEASE_PUBLIC_KEY_B64 }}
+      SMS_MALWARE_SCAN_EVIDENCE_B64: ${{ secrets.SMS_MALWARE_SCAN_EVIDENCE_B64 }}
+      SMS_MALWARE_SCAN_OUTPUT_B64: ${{ secrets.SMS_MALWARE_SCAN_OUTPUT_B64 }}
+    steps:
+      - name: Check out exact tagged/manual source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Use exact verifier Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.23.2
+          cache: npm
+          cache-dependency-path: SMS/package-lock.json
+      - name: Install locked verifier dependencies
+        run: npm ci
+      - name: Resolve a successful cross-platform CI run for exact HEAD
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          RUN_ID=${REQUESTED_RUN_ID:-}
+          if [ -z "$RUN_ID" ]; then
+            RUN_ID=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/sms-ci.yml/runs?branch=main&event=push&head_sha=${GITHUB_SHA}&status=success&per_page=20" --jq '.workflow_runs | map(select(.head_sha == env.GITHUB_SHA and .head_branch == "main" and .event == "push" and .conclusion == "success")) | first | .id')
+          fi
+          [[ "$RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" > "$RUNNER_TEMP/candidate-run.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/sms-ci.yml" > "$RUNNER_TEMP/sms-ci-workflow.json"
+          gh api "repos/${GITHUB_REPOSITORY}/branches/main" > "$RUNNER_TEMP/main-branch.json"
+          node scripts/validate-release-ci-run.mjs --run "$RUNNER_TEMP/candidate-run.json" --workflow "$RUNNER_TEMP/sms-ci-workflow.json" --branch "$RUNNER_TEMP/main-branch.json" --source-commit "$GITHUB_SHA" --repository "$GITHUB_REPOSITORY" --run-id "$RUN_ID"
+          printf 'run_id=%s\n' "$RUN_ID" >> "$GITHUB_OUTPUT"
+      - name: Download exact-head Ubuntu candidate evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: sms-ubuntu-candidate-${{ github.sha }}
+          path: SMS/release-candidate
+          run-id: ${{ steps.candidate.outputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Download exact-head Windows candidate evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: sms-windows-candidate-${{ github.sha }}
+          path: SMS/release-candidate
+          run-id: ${{ steps.candidate.outputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Download exact-head cross-platform scan evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: sms-cross-platform-evidence-${{ github.sha }}
+          path: SMS/release-candidate
+          run-id: ${{ steps.candidate.outputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Materialize externally supplied public verification and signature records
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SMS_RELEASE_MANIFEST_B64"
+          test -n "$SMS_RELEASE_SIGNATURE_B64"
+          test -n "$SMS_RELEASE_PUBLIC_KEY_B64"
+          test -n "$SMS_MALWARE_SCAN_EVIDENCE_B64"
+          test -n "$SMS_MALWARE_SCAN_OUTPUT_B64"
+          mkdir -p release-candidate/evidence release-candidate/scan-output "$RUNNER_TEMP/sms-release-public"
+          printf '%s' "$SMS_RELEASE_MANIFEST_B64" | base64 --decode > release-candidate/release-evidence.json
+          printf '%s' "$SMS_RELEASE_SIGNATURE_B64" | base64 --decode > release-candidate/release-evidence.sig
+          printf '%s' "$SMS_RELEASE_PUBLIC_KEY_B64" | base64 --decode > "$RUNNER_TEMP/sms-release-public/release-public-key.pem"
+          printf '%s' "$SMS_MALWARE_SCAN_EVIDENCE_B64" | base64 --decode > release-candidate/evidence/malware-scan.json
+          printf '%s' "$SMS_MALWARE_SCAN_OUTPUT_B64" | base64 --decode > release-candidate/scan-output/malware-scan.json
+          chmod 0444 release-candidate/release-evidence.json release-candidate/release-evidence.sig release-candidate/evidence/malware-scan.json release-candidate/scan-output/malware-scan.json "$RUNNER_TEMP/sms-release-public/release-public-key.pem"
+      - name: Verify exact signed technical release without publishing
+        run: npm run verify:technical-release -- --candidate release-candidate --source-commit "${{ github.sha }}" --public-key "$RUNNER_TEMP/sms-release-public/release-public-key.pem"
+      - name: Prove institutional readiness remains blocked
+        shell: bash
+        run: |
+          set +e
+          npm run verify:operational -- --json --require-ready > "$RUNNER_TEMP/operational-readiness.json"
+          OPERATIONAL_EXIT=$?
+          set -e
+          node scripts/validate-operational-block.mjs "$RUNNER_TEMP/operational-readiness.json" "$OPERATIONAL_EXIT"
+      - name: Atomically assemble the complete technical RC after every gate
+        run: npm run verify:technical-release -- --candidate release-candidate --source-commit "${{ github.sha }}" --public-key "$RUNNER_TEMP/sms-release-public/release-public-key.pem" --publish-dir release-output
+      - name: Upload signed technical RC only after all gates
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: fac-isr-sms-0.2.0-rc.1-${{ github.sha }}
+          path: SMS/release-output/
+          if-no-files-found: error
+          retention-days: 30

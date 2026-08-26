@@ -23,14 +23,9 @@ export const KNOWN_LIMITATION_CATEGORIES = Object.freeze([
   "performance-validation",
 ]);
 export const ACCEPTANCE_EVIDENCE_PATHS = Object.freeze([
+  "docs/operator-guide.md",
   "docs/release/known-limitations.md",
-  "docs/release/release-manifest.json",
-  "docs/release/release-manifest.sig",
-  "docs/release/release-public-key.pem",
-  "docs/release/sbom.cdx.json",
-  "docs/release/security-scan.json",
   "docs/release/state-aviation-acceptance-checklist.md",
-  "docs/release/test-report.json",
   "docs/release/verification-matrix.md",
 ]);
 export const ACCEPTANCE_STATE_PATHS = Object.freeze([
@@ -39,7 +34,6 @@ export const ACCEPTANCE_STATE_PATHS = Object.freeze([
   "docs/release/state-aviation-acceptance-checklist.md",
   "docs/release/known-limitations.md",
   "docs/release/verification-matrix.md",
-  "docs/release/release-manifest.json",
 ]);
 const SHA256 = /^[a-f0-9]{64}$/u;
 const ACCEPTANCE_DECISIONS = new Set(["accept", "accept-with-conditions", "reject"]);

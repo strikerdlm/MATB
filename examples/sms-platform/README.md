@@ -137,22 +137,22 @@ npm run verify:offline
 npm run verify:evidence-offline
 npm run verify:no-c2
 npm run verify:data-separation
-npm run release:manifest
-npm run release:sign
-npm run release:verify
+npm run verify:ci -- --platform linux --local
+npm run verify:technical-release -- --candidate <candidate-directory> --source-commit <40-hex-commit> --public-key <external-public-key.pem>
+npm run verify:operational -- --require-ready
 npm run verify:matrix
 npm run acceptance:packets
 npm run verify:acceptance
 npm run verify:all
 ```
 
-The bare list identifies the scripts; parameterized workflows still require their parser arguments. `release:manifest` requires `-- --version <x.y.z>` matching `SMS/package.json` and generates the SBOM, security scan, and test report before the canonical manifest. `release:sign` requires an institution-issued key identifier and externally held signing input; only an authorized release custodian should run it. `release:verify` checks manifest integrity and reports readiness separately. Never create demonstration signing material or commit controlled material.
+The bare list identifies the scripts; parameterized workflows still require their parser arguments. Linux-local `verify:ci` exercises controlled TEST-ONLY platform fixtures and does not create production evidence. Production CI runs on Ubuntu 24.04 and Windows Server 2022 against the exact official-runtime artifacts. `verify:technical-release` requires all three exact artifact names/inventories, current SBOM/scans, clean native and OCI smoke evidence, the exact source commit, a detached signature, and an externally supplied public key. It can establish `technicalReady=true` but requires `operationalReady=false` for this RC. Never create demonstration institutional signing material or commit controlled material. See the [operator guide](../../SMS/docs/operator-guide.md).
 
 `verify:matrix` executes the evidence matrix and deliberately writes a report whose readiness remains false even when all technical requirements pass. `acceptance:packets` requires `-- --output <empty-directory> --as-of <exact-UTC>` and optionally one approved `--scope`; it generates deterministic unsigned reviewer packets outside `SMS/docs/release`. Those packets are not decisions.
 
 `acceptance:record` is intentionally omitted from the bulk command block because it is not a routine automated check. Its dry run requires a current generated packet plus a human-supplied controlled institutional decision; applying it is a separate mutating action. Never populate a template with fabricated reviewers, approvals, timestamps, evidence, or outcomes. Qualified institutional reviewers must resolve the RACAE/translation, operational checklist, risk authority, emergency response, cybersecurity/deployment, official geospatial data, human-factors, research separation, and training/safety-promotion scopes.
 
-`verify:acceptance` validates the recorded evidence as of an explicit UTC instant; `--require-ready` is an optional stricter gate. `verify:all` combines typecheck, lint, matrix generation, and acceptance verification. A passing build, test suite, matrix, release integrity check, or reviewer-packet generation can coexist with readiness remaining false. Only the controlled human institutional workflow may change that state.
+`verify:operational` (the current name for the institutional verifier; `verify:acceptance` remains a compatibility alias) validates the recorded evidence as of an explicit UTC instant. `--require-ready` is the strict gate and intentionally fails for 0.2.0-rc.1 while limitations/reviews remain open. `verify:all` combines typecheck, lint, matrix generation, and acceptance verification. A passing build, test suite, matrix, or technical-release gate can coexist with `operationalReady=false`. Only the controlled human institutional workflow may change that state.
 
 ## Safety interpretation
 

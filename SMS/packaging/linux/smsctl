@@ -1,0 +1,468 @@
+#!/bin/sh
+set -eu
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+PROGRAM=fac-isr-sms
+SERVICE_USER=fac-isr-sms
+SERVICE_UID=10001
+SERVICE_GID=10001
+
+fail() {
+  printf '%s\n' "$*" >&2
+  exit 1
+}
+
+[ "$#" -ge 1 ] || fail "usage: smsctl install|start|restart|status|stop|upgrade|backup|restore|uninstall"
+COMMAND=$1
+shift
+ROOT=/
+TEST_MODE=0
+BUNDLE=
+BACKUP=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --root) [ "$#" -ge 2 ] || fail "--root requires a value"; ROOT=$2; shift 2 ;;
+    --bundle) [ "$#" -ge 2 ] || fail "--bundle requires a value"; BUNDLE=$2; shift 2 ;;
+    --backup) [ "$#" -ge 2 ] || fail "--backup requires a value"; BACKUP=$2; shift 2 ;;
+    --test-mode) TEST_MODE=1; shift ;;
+    *) fail "unknown argument: $1" ;;
+  esac
+done
+
+case "$ROOT" in
+  /*) ;;
+  *) fail "--root must be absolute" ;;
+esac
+[ "$ROOT" != "" ] || fail "unsafe empty root"
+if [ "$TEST_MODE" -eq 0 ] && [ "$ROOT" != "/" ]; then fail "--root is test-only"; fi
+if [ "$TEST_MODE" -eq 0 ] && [ "$(id -u)" -ne 0 ]; then fail "root privileges are required"; fi
+
+root_path() {
+  if [ "$ROOT" = "/" ]; then printf '/%s\n' "${1#/}"; else printf '%s/%s\n' "${ROOT%/}" "${1#/}"; fi
+}
+
+OPT=$(root_path /opt/fac-isr-sms)
+ETC=$(root_path /etc/fac-isr-sms)
+VAR=$(root_path /var/lib/fac-isr-sms)
+RUN=$(root_path /run/fac-isr-sms)
+UNIT=$(root_path /etc/systemd/system/fac-isr-sms.service)
+
+portable_relative_path() {
+  candidate=$1
+  case "$candidate" in
+    ""|/*|*//*|.|./*|*/./*|*/.|..|../*|*/../*|*/..|*./*|*.|*[!A-Za-z0-9_./@+-]*) return 1 ;;
+  esac
+  return 0
+}
+
+verify_release_metadata() {
+  bundle=$1
+  expected_release=$(mktemp "${TMPDIR:-/tmp}/sms-release-expected.XXXXXX")
+  cat > "$expected_release" <<'EOF'
+{
+  "release": "fac-isr-sms@0.2.0-rc.1",
+  "target": "linux-x64",
+  "nodeVersion": "22.23.2",
+  "internet": "disabled",
+  "operationalReady": false,
+  "production": true,
+  "runtimeProvenance": "official-node-signed-checksums"
+}
+EOF
+  cmp -s "$expected_release" "$bundle/release.json" || { rm -f "$expected_release"; fail "bundle release provenance is not an official production linux-x64 release"; }
+  rm -f "$expected_release"
+}
+
+verify_bundle() {
+  bundle=$1
+  [ -d "$bundle" ] || fail "bundle directory does not exist"
+  [ ! -L "$bundle" ] || fail "bundle root cannot be a symbolic link"
+  [ -f "$bundle/inventory.json" ] && [ -f "$bundle/inventory.tsv" ] || fail "bundle inventory is missing"
+  [ -x "$bundle/runtime/bin/node" ] || fail "Node runtime is missing or not executable"
+  expected=$(mktemp "${TMPDIR:-/tmp}/sms-inventory-expected.XXXXXX")
+  actual=$(mktemp "${TMPDIR:-/tmp}/sms-inventory-actual.XXXXXX")
+  while IFS="$(printf '\t')" read -r path expected_hash expected_size expected_mode extra; do
+    [ -n "$path" ] && [ -z "$extra" ] || { rm -f "$expected" "$actual"; fail "bundle inventory record is invalid"; }
+    portable_relative_path "$path" || { rm -f "$expected" "$actual"; fail "bundle inventory path is not portable"; }
+    case "$expected_hash:$expected_size:$expected_mode" in
+      *[!0-9a-f:]*|*:*:*:*) rm -f "$expected" "$actual"; fail "bundle inventory metadata is invalid" ;;
+    esac
+    [ "${#expected_hash}" -eq 64 ] && [ -n "$expected_size" ] && [ "${#expected_mode}" -eq 3 ] || { rm -f "$expected" "$actual"; fail "bundle inventory metadata is invalid"; }
+    grep -F -x -- "$path" "$expected" >/dev/null 2>&1 && { rm -f "$expected" "$actual"; fail "bundle inventory contains a duplicate path"; }
+    file="$bundle/$path"
+    [ -f "$file" ] && [ ! -L "$file" ] || { rm -f "$expected" "$actual"; fail "bundle inventory entry is unsafe: $path"; }
+    [ "$(sha256sum "$file" | awk '{print $1}')" = "$expected_hash" ] || { rm -f "$expected" "$actual"; fail "bundle inventory hash mismatch: $path"; }
+    [ "$(wc -c < "$file" | tr -d ' ')" = "$expected_size" ] || { rm -f "$expected" "$actual"; fail "bundle inventory size mismatch: $path"; }
+    [ "$(stat -c '%a' "$file")" = "$expected_mode" ] || { rm -f "$expected" "$actual"; fail "bundle inventory mode mismatch: $path"; }
+    printf '%s\n' "$path" >> "$expected"
+  done < "$bundle/inventory.tsv"
+  find "$bundle" -type l -print -quit | grep -q . && { rm -f "$expected" "$actual"; fail "bundle symbolic links are forbidden"; }
+  find "$bundle" ! -type f ! -type d -print -quit | grep -q . && { rm -f "$expected" "$actual"; fail "unsupported bundle filesystem entry"; }
+  if ! find "$bundle" -mindepth 1 -exec /bin/sh -c '
+    root=$1
+    shift
+    for entry do
+      path=${entry#"$root"/}
+      case "$path" in ""|/*|*//*|.|./*|*/./*|*/.|..|../*|*/../*|*/..|*./*|*.|*[!A-Za-z0-9_./@+-]*) exit 1 ;; esac
+    done
+  ' sh "$bundle" {} +; then rm -f "$expected" "$actual"; fail "bundle contains a non-portable path"; fi
+  find "$bundle" -type f -printf '%P\n' | grep -v '^inventory.tsv$' | LC_ALL=C sort > "$actual"
+  LC_ALL=C sort -o "$expected" "$expected"
+  cmp -s "$expected" "$actual" || { rm -f "$expected" "$actual"; fail "bundle inventory path set mismatch"; }
+  rm -f "$expected" "$actual"
+  verify_release_metadata "$bundle"
+  printf '%s\n' "$(sha256sum "$bundle/inventory.json" | awk '{print substr($1,1,16)}')"
+}
+
+ensure_identity_and_layout() {
+  for path in "$(root_path /etc)" "$(root_path /var)" "$(root_path /opt)" "$ETC" "$VAR" "$RUN"; do [ ! -L "$path" ] || fail "unsafe symbolic installation path: $path"; done
+  if [ "$TEST_MODE" -eq 1 ]; then
+    mkdir -p "$ETC" "$VAR/data" "$VAR/packages" "$VAR/backups" "$RUN"
+    printf '%s:%s:%s\n' "$SERVICE_USER" "$SERVICE_UID" "$SERVICE_GID" > "$ETC/service-account"
+  else
+    if ! getent group "$SERVICE_USER" >/dev/null 2>&1; then groupadd --system --gid "$SERVICE_GID" "$SERVICE_USER"; fi
+    if ! getent passwd "$SERVICE_USER" >/dev/null 2>&1; then useradd --system --uid "$SERVICE_UID" --gid "$SERVICE_GID" --home-dir "$VAR" --shell /usr/sbin/nologin "$SERVICE_USER"; fi
+    mkdir -p "$ETC" "$VAR/data" "$VAR/packages" "$VAR/backups" "$RUN"
+    chown -R "$SERVICE_UID:$SERVICE_GID" "$VAR" "$RUN"
+    chown root:"$SERVICE_GID" "$ETC"
+  fi
+  chmod 0750 "$ETC"
+  chmod 0700 "$VAR" "$VAR/data" "$VAR/packages" "$VAR/backups" "$RUN"
+}
+
+write_unit() {
+  mkdir -p "$(dirname "$UNIT")"
+  cat > "$UNIT" <<'EOF'
+[Unit]
+Description=FAC ISR SMS operational-core edge service
+After=local-fs.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=fac-isr-sms
+Group=fac-isr-sms
+EnvironmentFile=/etc/fac-isr-sms/sms.env
+WorkingDirectory=/opt/fac-isr-sms/current
+ExecStart=/opt/fac-isr-sms/current/runtime/bin/node /opt/fac-isr-sms/current/app/scripts/start-edge.mjs
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+KillSignal=SIGTERM
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/fac-isr-sms /run/fac-isr-sms
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  chmod 0644 "$UNIT"
+}
+
+stage_release() {
+  bundle=$1
+  build_id=$(verify_bundle "$bundle")
+  inventory_hash=$(sha256sum "$bundle/inventory.json" | awk '{print substr($1,1,16)}')
+  release_id="0.2.0-rc.1-$inventory_hash"
+  destination="$OPT/releases/$release_id"
+  mkdir -p "$OPT/releases"
+  STAGED_CREATED=0
+  if [ ! -d "$destination" ]; then
+    staging="$OPT/releases/.staging-$release_id-$$"
+    [ ! -e "$staging" ] || fail "upgrade staging path already exists"
+    mkdir "$staging"
+    cp -a "$bundle/." "$staging/"
+    if [ "$TEST_MODE" -eq 1 ] && [ "${SMS_TEST_TAMPER_STAGE:-0}" = "1" ]; then chmod u+w "$staging/app/scripts/start-edge.mjs"; printf tampered >> "$staging/app/scripts/start-edge.mjs"; fi
+    verify_bundle "$staging" >/dev/null || { remove_immutable "$staging"; fail "staged bundle inventory verification failed"; }
+    find "$staging" -type d -exec chmod a-w {} +
+    find "$staging" -type f -exec chmod a-w {} +
+    mv "$staging" "$destination"
+    STAGED_CREATED=1
+  fi
+  STAGED_RELEASE=$release_id
+  STAGED_PATH=$destination
+  STAGED_BUILD=$build_id
+}
+
+discard_staged_release() {
+  [ "${STAGED_CREATED:-0}" -eq 1 ] || return 0
+  active=$(readlink "$OPT/current" 2>/dev/null || true)
+  [ "$active" != "releases/$STAGED_RELEASE" ] || return 0
+  remove_immutable "$STAGED_PATH"
+}
+
+switch_release() {
+  release_id=$1
+  new_link="$OPT/.current-$$"
+  ln -s "releases/$release_id" "$new_link"
+  mv -Tf "$new_link" "$OPT/current"
+}
+
+validate_tls_and_data() {
+  cert="$ETC/tls/server.crt"
+  key="$ETC/tls/server.key"
+  export_key="$ETC/tls/export.key"
+  [ -f "$cert" ] && [ ! -L "$cert" ] || fail "TLS certificate is missing or unsafe"
+  [ -f "$key" ] && [ ! -L "$key" ] || fail "TLS private key is missing or unsafe"
+  [ -f "$export_key" ] && [ ! -L "$export_key" ] || fail "export private key is missing or unsafe"
+  key_mode=$(stat -c '%a' "$key")
+  [ "$key_mode" = "600" ] || [ "$key_mode" = "400" ] || fail "TLS private key permissions must be 0400 or 0600; found $key_mode"
+  export_mode=$(stat -c '%a' "$export_key")
+  [ "$export_mode" = "600" ] || [ "$export_mode" = "400" ] || fail "export private key permissions must be 0400 or 0600; found $export_mode"
+  data_mode=$(stat -c '%a' "$VAR")
+  [ "$data_mode" = "700" ] || fail "data directory permissions must be 0700; found $data_mode"
+  [ ! -L "$ETC" ] && [ ! -L "$ETC/tls" ] || fail "config and TLS directories cannot be symbolic links"
+  [ "$(stat -c '%a' "$ETC")" = "750" ] && [ "$(stat -c '%a' "$ETC/tls")" = "750" ] || fail "config and TLS directory permissions must be 0750"
+  if [ "$TEST_MODE" -eq 0 ]; then
+    [ "$(stat -c '%u:%g' "$key")" = "$SERVICE_UID:$SERVICE_GID" ] || fail "TLS private key ownership must be $SERVICE_UID:$SERVICE_GID"
+    [ "$(stat -c '%u:%g' "$export_key")" = "$SERVICE_UID:$SERVICE_GID" ] || fail "export private key ownership must be $SERVICE_UID:$SERVICE_GID"
+    [ "$(stat -c '%u:%g' "$cert")" = "$SERVICE_UID:$SERVICE_GID" ] || fail "TLS certificate ownership must be $SERVICE_UID:$SERVICE_GID"
+    [ "$(stat -c '%u:%g' "$ETC")" = "0:$SERVICE_GID" ] || fail "config ownership must be root:$SERVICE_GID"
+    [ "$(stat -c '%u:%g' "$ETC/tls")" = "0:$SERVICE_GID" ] || fail "TLS directory ownership must be root:$SERVICE_GID"
+    [ "$(stat -c '%u:%g' "$VAR")" = "$SERVICE_UID:$SERVICE_GID" ] || fail "data ownership must be $SERVICE_UID:$SERVICE_GID"
+  fi
+}
+
+load_config() {
+  config="$ETC/sms.env"
+  [ -f "$config" ] && [ ! -L "$config" ] || fail "configuration file is missing or unsafe"
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ""|'#'*) continue ;; *=*) ;; *) fail "configuration record is invalid" ;; esac
+    name=${line%%=*}
+    value=${line#*=}
+    case "$name" in SMS_*) ;; *) fail "configuration variable is not permitted: $name" ;; esac
+    case "$name" in *[!A-Z0-9_]*) fail "configuration variable name is invalid: $name" ;; esac
+    export "$name=$value"
+  done < "$config"
+}
+
+service_is_running() {
+  if [ "$TEST_MODE" -eq 1 ]; then grep -q '^running ready$' "$RUN/service.state" 2>/dev/null
+  else systemctl is-active --quiet fac-isr-sms.service
+  fi
+}
+
+service_start() {
+  validate_tls_and_data
+  load_config
+  if [ "$TEST_MODE" -eq 1 ]; then
+    "$OPT/current/runtime/bin/node" --version >/dev/null || return $?
+    "$OPT/current/runtime/bin/node" "$OPT/current/app/scripts/start-edge.mjs" >/dev/null || return $?
+    printf 'running ready\n' > "$RUN/service.state"
+  else
+    systemctl daemon-reload
+    systemctl enable --now fac-isr-sms.service
+    attempt=0
+    while ! "$OPT/current/runtime/bin/node" "$OPT/current/app/scripts/edge-healthcheck.mjs" --ready >/dev/null 2>&1; do
+      attempt=$((attempt + 1)); [ "$attempt" -lt 30 ] || fail "service did not become ready"; sleep 1
+    done
+  fi
+}
+
+service_stop() {
+  if [ "$TEST_MODE" -eq 1 ]; then
+    mkdir -p "$VAR/data"
+    : > "$VAR/data/.service-stopped-for-test"
+    printf 'stopped\n' > "$RUN/service.state"
+  else systemctl stop fac-isr-sms.service
+  fi
+}
+
+remove_immutable() {
+  target=$1
+  if [ -e "$target" ]; then
+    find "$target" -type d -exec chmod u+w {} +
+    find "$target" -type f -exec chmod u+w {} +
+    rm -rf "$target"
+  fi
+}
+
+backup_create() {
+  mkdir -p "$VAR/backups"
+  output="$VAR/backups/fac-isr-sms-$(date -u +%Y%m%dT%H%M%SZ)-$$.tar.gz"
+  temporary="$output.tmp"
+  tar --sort=name --numeric-owner -czf "$temporary" -C "$VAR" data packages
+  chmod 0600 "$temporary"
+  mv "$temporary" "$output"
+  printf '%s\n' "$output"
+}
+
+backup_restore() {
+  source=$1
+  [ -f "$source" ] && [ ! -L "$source" ] || fail "backup is missing or unsafe"
+  staging="$VAR/.restore-$$"
+  rollback="$VAR/.rollback-$$"
+  mkdir "$staging"
+  if ! tar -tzf "$source" | while IFS= read -r path; do case "$path" in /*|*../*|../*) exit 1;; esac; done; then fail "unsafe backup path"; fi
+  if ! tar -tvzf "$source" | while IFS= read -r entry; do case "$entry" in -*|d*) ;; *) exit 1;; esac; done; then fail "unsafe link or special entry in backup"; fi
+  tar -xzf "$source" -C "$staging" --no-same-owner --no-same-permissions || fail "backup extraction failed"
+  find "$staging" -type l -print -quit | grep -q . && { rm -rf "$staging"; fail "backup symbolic links are forbidden"; }
+  find "$staging" ! -type f ! -type d -print -quit | grep -q . && { rm -rf "$staging"; fail "backup special entries are forbidden"; }
+  find "$staging" -type f -links +1 -print -quit | grep -q . && { rm -rf "$staging"; fail "backup hard links are forbidden"; }
+  if ! find "$staging" -mindepth 1 -exec /bin/sh -c '
+    root=$1
+    shift
+    for entry do
+      path=${entry#"$root"/}
+      case "$path" in ""|/*|*//*|.|./*|*/./*|*/.|..|../*|*/../*|*/..|*./*|*.|*[!A-Za-z0-9_./@+-]*) exit 1 ;; esac
+    done
+  ' sh "$staging" {} +; then rm -rf "$staging"; fail "backup contains a non-portable path"; fi
+  mkdir "$rollback"
+  old_data_moved=0
+  old_packages_moved=0
+  if [ -e "$VAR/data" ]; then
+    if mv "$VAR/data" "$rollback/data"; then old_data_moved=1
+    else rm -rf "$rollback" "$staging"; fail "restore failed before original data could be staged"
+    fi
+  fi
+  if [ "$TEST_MODE" -eq 1 ] && [ "${SMS_TEST_FAIL_RESTORE_AFTER_OLD_DATA_MOVE:-0}" = "1" ]; then
+    original_packages_staged=0
+  elif [ ! -e "$VAR/packages" ]; then
+    original_packages_staged=1
+  elif mv "$VAR/packages" "$rollback/packages"; then
+    old_packages_moved=1
+    original_packages_staged=1
+  else
+    original_packages_staged=0
+  fi
+  if [ "$original_packages_staged" -ne 1 ]; then
+    recovery_failed=0
+    if [ "$old_data_moved" -eq 1 ] && ! mv "$rollback/data" "$VAR/data"; then recovery_failed=1; fi
+    rm -rf "$staging"
+    [ "$recovery_failed" -eq 0 ] || fail "restore failed while staging packages and original data recovery also failed; recovery remains at $rollback"
+    rm -rf "$rollback"
+    fail "restore failed while staging original packages; original state was recovered"
+  fi
+  replacement_complete=0
+  if mv "$staging/data" "$VAR/data"; then
+    if [ "$TEST_MODE" -eq 1 ] && [ "${SMS_TEST_FAIL_RESTORE_AFTER_DATA_MOVE:-0}" = "1" ]; then :
+    elif mv "$staging/packages" "$VAR/packages"; then replacement_complete=1
+    fi
+  fi
+  if [ "$replacement_complete" -eq 1 ]; then
+    rm -rf "$rollback" "$staging"
+    chmod 0700 "$VAR/data" "$VAR/packages"
+    if [ "$TEST_MODE" -eq 0 ]; then chown -R "$SERVICE_UID:$SERVICE_GID" "$VAR/data" "$VAR/packages"; fi
+  else
+    rm -rf "$VAR/data" "$VAR/packages"
+    recovery_failed=0
+    if [ "$old_data_moved" -eq 1 ] && ! mv "$rollback/data" "$VAR/data"; then recovery_failed=1; fi
+    if [ "$old_packages_moved" -eq 1 ] && ! mv "$rollback/packages" "$VAR/packages"; then recovery_failed=1; fi
+    rm -rf "$staging"
+    [ "$recovery_failed" -eq 0 ] || fail "restore failed and original state recovery is incomplete; recovery remains at $rollback"
+    rm -rf "$rollback"
+    fail "restore failed; original data was recovered"
+  fi
+}
+
+case "$COMMAND" in
+  install)
+    [ -n "$BUNDLE" ] || fail "install requires --bundle"
+    ensure_identity_and_layout
+    stage_release "$BUNDLE"
+    switch_release "$STAGED_RELEASE"
+    if [ "$TEST_MODE" -eq 1 ] && [ "${SMS_TEST_MUTATE_SOURCE_AFTER_STAGE:-0}" = "1" ]; then
+      chmod u+w "$BUNDLE/config/sms.env.template"
+      printf 'SMS_SOURCE_MUTATED=1\n' > "$BUNDLE/config/sms.env.template"
+    fi
+    [ ! -L "$ETC/sms.env" ] || fail "unsafe symbolic configuration file"
+    if [ ! -f "$ETC/sms.env" ]; then cp "$STAGED_PATH/config/sms.env.template" "$ETC/sms.env"; chmod 0640 "$ETC/sms.env"; fi
+    [ ! -L "$ETC/tls" ] || fail "unsafe symbolic TLS directory"
+    mkdir -p "$ETC/tls"; chmod 0750 "$ETC/tls"
+    if [ "$TEST_MODE" -eq 0 ]; then chown root:"$SERVICE_GID" "$ETC/tls" "$ETC/sms.env"; fi
+    write_unit
+    if [ "$TEST_MODE" -eq 0 ]; then systemctl daemon-reload; fi
+    printf 'installed %s\n' "$STAGED_RELEASE"
+    ;;
+  start) service_start ;;
+  restart)
+    if [ "$TEST_MODE" -eq 1 ]; then service_stop; service_start; else systemctl restart fac-isr-sms.service; fi
+    ;;
+  status)
+    if [ "$TEST_MODE" -eq 1 ]; then [ -f "$RUN/service.state" ] || fail "stopped"; cat "$RUN/service.state"; grep -q '^running ready$' "$RUN/service.state" || exit 3
+    else load_config; systemctl status --no-pager fac-isr-sms.service; "$OPT/current/runtime/bin/node" "$OPT/current/app/scripts/edge-healthcheck.mjs" --ready; fi
+    ;;
+  stop) service_stop ;;
+  backup)
+    was_running=0
+    service_is_running && was_running=1 || true
+    [ "$was_running" -eq 0 ] || service_stop
+    if backup_output=$(backup_create); then
+      [ "$was_running" -eq 0 ] || service_start
+      printf '%s\n' "$backup_output"
+    else
+      [ "$was_running" -eq 0 ] || service_start
+      fail "backup failed; prior service state was restored"
+    fi
+    ;;
+  restore)
+    [ -n "$BACKUP" ] || fail "restore requires --backup"
+    was_running=0
+    service_is_running && was_running=1 || true
+    [ "$was_running" -eq 0 ] || service_stop
+    if (backup_restore "$BACKUP"); then
+      [ "$was_running" -eq 0 ] || service_start
+    else
+      [ "$was_running" -eq 0 ] || service_start
+      fail "restore failed; prior service state was restored"
+    fi
+    ;;
+  upgrade)
+    [ -n "$BUNDLE" ] || fail "upgrade requires --bundle"
+    old_link=$(readlink "$OPT/current") || fail "no current installation"
+    stage_release "$BUNDLE"
+    was_running=0
+    service_is_running && was_running=1 || true
+    [ "$was_running" -eq 0 ] || service_stop
+    if ! rollback_backup=$(backup_create); then
+      discard_staged_release
+      [ "$was_running" -eq 0 ] || service_start
+      fail "upgrade backup failed; old release was restarted"
+    fi
+    migration_failed=0
+    if [ "$TEST_MODE" -eq 1 ] && [ "${SMS_TEST_FAIL_MIGRATION_AFTER_STAGE:-0}" = "1" ]; then migration_failed=1
+    elif ! SMS_DATA_DIRECTORY="$VAR" SMS_RELEASE_BUILD_ID="$STAGED_BUILD" "$STAGED_PATH/install/linux/migrate"; then migration_failed=1
+    fi
+    if [ "$migration_failed" -eq 1 ]; then
+      backup_restore "$rollback_backup"
+      switch_release "${old_link#releases/}"
+      discard_staged_release
+      [ "$was_running" -eq 0 ] || service_start
+      fail "upgrade migration failed; data and immutable release were rolled back"
+    fi
+    switch_release "$STAGED_RELEASE"
+    if [ "$was_running" -eq 1 ] && ! (service_start); then
+      service_stop || true
+      (backup_restore "$rollback_backup") || fail "new release failed readiness and rollback data restore failed"
+      switch_release "${old_link#releases/}"
+      discard_staged_release
+      service_start || fail "new release failed readiness and old release could not be restarted"
+      fail "new release failed readiness; old release and data were restored"
+    fi
+    printf 'upgraded from %s to %s\n' "$old_link" "$STAGED_RELEASE"
+    ;;
+  uninstall)
+    service_stop
+    if [ "$TEST_MODE" -eq 0 ]; then systemctl disable fac-isr-sms.service >/dev/null 2>&1 || true; fi
+    remove_immutable "$OPT"
+    rm -rf "$ETC"
+    rm -f "$UNIT"
+    if [ "$TEST_MODE" -eq 0 ]; then systemctl daemon-reload; fi
+    printf 'uninstalled; data preserved at %s\n' "$VAR"
+    ;;
+  *) fail "unknown command: $COMMAND" ;;
+esac

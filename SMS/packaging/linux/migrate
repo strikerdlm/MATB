@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+
+: "${SMS_DATA_DIRECTORY:?SMS_DATA_DIRECTORY is required}"
+HERE=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+DATABASE="$SMS_DATA_DIRECTORY/data/edge.sqlite"
+if [ -f "$DATABASE" ]; then
+  exec "$HERE/runtime/bin/node" "$HERE/app/apps/edge-api/dist/admin/cli.js" diagnose --database "$DATABASE"
+fi

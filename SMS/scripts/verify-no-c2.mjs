@@ -137,6 +137,22 @@ function scanSource(root, path, contents, result) {
     result.forbidden.push({ id, file, ...lineAndColumn(sourceFile, node), detail });
   }
 
+  function approvedConsoleFetch(node) {
+    if (file !== "apps/console/src/api/client.ts") return false;
+    const target = node.arguments[0];
+    if (target === undefined || !ts.isCallExpression(target) || !ts.isIdentifier(target.expression) || target.expression.text !== "sameOriginPath") return false;
+    const [path, origin] = target.arguments;
+    const approvedPath = (ts.isStringLiteralLike(path) && path.text === "/readyz") || (ts.isIdentifier(path) && path.text === "path");
+    const approvedOrigin = ts.isPropertyAccessExpression(origin) && origin.expression.kind === ts.SyntaxKind.ThisKeyword && origin.name.text === "origin";
+    return approvedPath && approvedOrigin;
+  }
+
+  function approvedConsoleSse(node) {
+    if (file !== "apps/console/src/app/AppShell.tsx" || node.arguments === undefined) return false;
+    const target = node.arguments[0];
+    return target !== undefined && ts.isTemplateExpression(target) && target.head.text === "/api/revisions/";
+  }
+
   function visit(node) {
     const route = routeFromCall(node);
     if (route !== undefined) {
@@ -171,10 +187,10 @@ function scanSource(root, path, contents, result) {
     }
 
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "fetch") {
-      addForbidden("network-client", node, "unapproved fetch client in runtime source");
+      if (!approvedConsoleFetch(node)) addForbidden("network-client", node, "unapproved fetch client in runtime source");
     }
     if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && ["EventSource", "WebSocket"].includes(node.expression.text)) {
-      addForbidden("network-client", node, `unapproved ${node.expression.text} client in runtime source`);
+      if (node.expression.text !== "EventSource" || !approvedConsoleSse(node)) addForbidden("network-client", node, `unapproved ${node.expression.text} client in runtime source`);
     }
 
     ts.forEachChild(node, visit);

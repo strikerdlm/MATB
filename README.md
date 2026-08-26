@@ -552,7 +552,7 @@ permissions and verify Windows-to-WSL loopback forwarding. See the
 
 <h3>Prerequisites</h3>
 
-Use Node.js 22.x and npm. Docker with Linux-container support is needed only
+Use Node.js 22.23.2 and npm. Docker with Linux-container support is needed only
 for `build:offline` and container verification, not for the package tour.
 
 <h3>Install</h3>
@@ -627,6 +627,7 @@ npm test
 npm run typecheck
 npm run verify:no-c2
 npm run verify:data-separation
+npm run verify:ci -- --platform linux --local
 ```
 
 ```powershell
@@ -637,6 +638,14 @@ npm run typecheck
 npm run verify:no-c2
 npm run verify:data-separation
 ```
+
+The Linux-local CI command uses controlled TEST-ONLY platform fixtures and makes
+no production-candidate claim. Production CI additionally requires the exact
+official-runtime native bundle, Linux OCI candidate/image, and native platform
+smoke evidence. Native Windows verification runs on Windows Server 2022 without
+WSL or Docker. See the [0.2.0-rc.1 operator guide](SMS/docs/operator-guide.md)
+for standalone, tactical, Linux, Windows, OCI, bootstrap, keys, backup,
+upgrade, rollback, diagnostics, and limitation procedures.
 
 Run Docker/offline verification only on Linux, WSL2, or a Linux-container
 runtime with all pinned inputs staged. An offline *runtime* does not imply an
@@ -834,7 +843,7 @@ and [frontend guide](webui/frontend/README.md).
 | `SMS/tools/map-packager/` | Inspect/build manifests and controlled sign/verify of offline geo packages | Geo/release custodian | Directory + metadata + controlled signing/verification input → package manifest | Node 22.x | SMS guide CLI inventory | tool tests and `verify` | Signing requires externally controlled material and authority |
 | `SMS/tools/research/` | Record acquisition queries, acquire/copy/extract sources, verify hashes/offline/no-C2 | Evidence researcher | Registered source artifacts → provenance/query records | Node 22.x | SMS guide CLI inventory | tool tests; `verify:evidence-offline` | Search leads are not evidence until acquired and verified |
 | `build:offline` / `verify:offline` | Build/test Linux image and assemble/verify a disconnected transfer bundle | Deployment custodian | Locked dependencies, pinned image, local evidence → OCI archive/bundle | Linux containers/Docker | [SMS offline guide](examples/sms-platform/README.md) | `npm run verify:offline` | Build inputs must be staged; offline describes runtime/transfer boundary |
-| `release:manifest` / `release:sign` / `release:verify` | Generate SBOM, scan/test report, canonical manifest, controlled signature, integrity result | Release custodian | Versioned artifacts + external signing input → release evidence | Node 22.x | SMS guide | `npm run release:verify` | Signature/integrity is not operational acceptance |
+| `verify:ci` / `verify:technical-release` / `verify:operational` | Build/test both native targets, verify exact signed cross-platform candidate evidence, and independently check institutional readiness | CI, release custodian, institutional reviewer | Exact commit + three artifacts + fresh evidence + external public key → separate technical/operational results | Node 22.23.2; Ubuntu 24.04 and Windows Server 2022 | [Operator guide](SMS/docs/operator-guide.md) | named npm scripts | `technicalReady=true` never implies `operationalReady=true`; this RC remains operationally blocked |
 | `verify:no-c2` / `verify:data-separation` | Inspect absence of command paths and research/operations separation | Security/research reviewer | Built source/workspaces → verification result | Node 22.x | SMS guide | named npm scripts | Scope is repository software, not every deployment control |
 | `verify:matrix` / `verify:acceptance` | Execute evidence matrix and validate controlled acceptance state | Independent reviewer | Release/evidence records + exact UTC → report/readiness state | Node 22.x | SMS guide | named npm scripts | Matrix can pass while readiness remains false |
 | `acceptance:packets` | Generate deterministic unsigned reviewer packets | Review coordinator | Empty output directory + exact `--as-of` UTC + optional approved scope → packets | Node 22.x | SMS guide | `npm run verify:acceptance` | Packets are not decisions and remain unsigned |
@@ -859,9 +868,10 @@ npm run verify:offline
 npm run verify:evidence-offline
 npm run verify:no-c2
 npm run verify:data-separation
-npm run release:manifest
-npm run release:sign
-npm run release:verify
+npm run release:evidence
+npm run verify:ci -- --platform linux --local
+npm run verify:technical-release
+npm run verify:operational -- --require-ready
 npm run verify:matrix
 npm run acceptance:packets
 npm run verify:acceptance

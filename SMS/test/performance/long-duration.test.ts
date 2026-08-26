@@ -3,7 +3,7 @@ import { arch, cpus, platform, totalmem } from "node:os";
 import { resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { describe, expect, it } from "vitest";
-import { ReplayGateway } from "../../packages/telemetry/src/index.js";
+import { ReplayGateway } from "../../packages/telemetry/test-support/index.js";
 
 describe("accelerated long-duration replay", () => {
   it("preserves event order and retention across a synthetic 12-hour mission", async () => {

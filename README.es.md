@@ -547,7 +547,7 @@ predecibles y comprobar el reenvío loopback de Windows a WSL. Consulte el
 
 <h3>Prerrequisitos</h3>
 
-Use Node.js 22.x y npm. Docker con compatibilidad para contenedores Linux solo es necesario para
+Use Node.js 22.23.2 y npm. Docker con compatibilidad para contenedores Linux solo es necesario para
 `build:offline` y la verificación de contenedores, no para el recorrido de paquetes.
 
 <h3>Instalación</h3>
@@ -621,6 +621,7 @@ npm test
 npm run typecheck
 npm run verify:no-c2
 npm run verify:data-separation
+npm run verify:ci -- --platform linux --local
 ```
 
 ```powershell
@@ -631,6 +632,13 @@ npm run typecheck
 npm run verify:no-c2
 npm run verify:data-separation
 ```
+
+La compuerta CI local de Linux usa artefactos controlados marcados TEST-ONLY y no afirma que exista
+un candidato de producción. La CI de producción exige los paquetes nativos construidos con el Node
+oficial, el candidato/imagen OCI en Linux y pruebas de humo nativas. Windows se verifica en Windows
+Server 2022 sin WSL ni Docker. La [guía del operador 0.2.0-rc.1](SMS/docs/operator-guide.md)
+documenta los procedimientos autónomo, táctico, Linux, Windows, OCI, inicialización, claves,
+respaldo, actualización, reversión, diagnóstico y limitaciones.
 
 Ejecute la verificación Docker/sin conexión solo en Linux, WSL2 o un entorno de contenedores Linux
 con todas las entradas fijadas previamente preparadas. Un *entorno de ejecución* sin conexión no
@@ -828,7 +836,7 @@ y la [guía del frontend](webui/frontend/README.md).
 | `SMS/tools/map-packager/` | Inspeccionar/construir manifiestos y controlar firma/verificación de paquetes geográficos sin conexión | Custodio geográfico/de liberación | Directorio + metadatos + entrada controlada de firma/verificación → manifiesto del paquete | Node 22.x | Inventario CLI de la guía del SMS | Pruebas de herramienta y `verify` | La firma requiere material y autoridad controlados externamente |
 | `SMS/tools/research/` | Registrar consultas de adquisición, adquirir/copiar/extraer fuentes y verificar hashes/sin conexión/sin C2 | Investigador de evidencia | Artefactos de fuente registrados → registros de procedencia/consulta | Node 22.x | Inventario CLI de la guía del SMS | Pruebas de herramienta; `verify:evidence-offline` | Los resultados de búsqueda no son evidencia hasta que se adquieren y verifican |
 | `build:offline` / `verify:offline` | Compilar/probar la imagen Linux y ensamblar/verificar un paquete de transferencia desconectado | Custodio de despliegue | Dependencias bloqueadas, imagen fijada, evidencia local → archivo OCI/paquete | Contenedores Linux/Docker | [Guía sin conexión del SMS](examples/sms-platform/README.es.md) | `npm run verify:offline` | Las entradas de compilación deben prepararse; sin conexión describe el límite de ejecución/transferencia |
-| `release:manifest` / `release:sign` / `release:verify` | Generar SBOM, informe de escaneo/prueba, manifiesto canónico, firma controlada y resultado de integridad | Custodio de liberación | Artefactos versionados + entrada de firma externa → evidencia de liberación | Node 22.x | Guía del SMS | `npm run release:verify` | Firma/integridad no es aceptación operacional |
+| `verify:ci` / `verify:technical-release` / `verify:operational` | Compilar/probar ambos destinos nativos, verificar la evidencia firmada exacta del candidato multiplataforma y comprobar por separado la preparación institucional | CI, custodio de liberación, revisor institucional | Commit exacto + tres artefactos + evidencia vigente + clave pública externa → resultados técnicos/operacionales separados | Node 22.23.2; Ubuntu 24.04 y Windows Server 2022 | [Guía del operador](SMS/docs/operator-guide.md) | Scripts npm nombrados | `technicalReady=true` nunca implica `operationalReady=true`; este RC sigue operacionalmente bloqueado |
 | `verify:no-c2` / `verify:data-separation` | Inspeccionar la ausencia de rutas de mando y la separación investigación/operaciones | Revisor de seguridad de la información/investigación | Código compilado/espacios de trabajo → resultado de verificación | Node 22.x | Guía del SMS | Scripts npm nombrados | El alcance es el software del repositorio, no cada control de despliegue |
 | `verify:matrix` / `verify:acceptance` | Ejecutar la matriz de evidencia y validar el estado de aceptación controlado | Revisor independiente | Registros de liberación/evidencia + UTC exacto → informe/estado de preparación | Node 22.x | Guía del SMS | Scripts npm nombrados | La matriz puede pasar mientras la preparación permanece false |
 | `acceptance:packets` | Generar paquetes deterministas sin firmar para revisores | Coordinador de revisión | Directorio de salida vacío + UTC `--as-of` exacto + alcance aprobado opcional → paquetes | Node 22.x | Guía del SMS | `npm run verify:acceptance` | Los paquetes no son decisiones y permanecen sin firmar |
@@ -853,9 +861,10 @@ npm run verify:offline
 npm run verify:evidence-offline
 npm run verify:no-c2
 npm run verify:data-separation
-npm run release:manifest
-npm run release:sign
-npm run release:verify
+npm run release:evidence
+npm run verify:ci -- --platform linux --local
+npm run verify:technical-release
+npm run verify:operational -- --require-ready
 npm run verify:matrix
 npm run acceptance:packets
 npm run verify:acceptance

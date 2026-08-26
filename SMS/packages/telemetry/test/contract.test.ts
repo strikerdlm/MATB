@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  ReadOnlyTelemetryAdapterFixture,
-  canonicalizeTelemetry,
-  type CanonicalTelemetry,
-} from "../src/index.js";
+import { canonicalizeTelemetry, type CanonicalTelemetry } from "../src/index.js";
+import { ReadOnlyTelemetryAdapterFixture } from "../test-support/index.js";
 
 const validTelemetry: CanonicalTelemetry = {
   eventId: "telemetry-1",
