@@ -33,6 +33,51 @@ def within(child, parent, tol=0.5):
     )
 
 
+def test_questionnaire_sliders_emit_structured_raw_values():
+    from plugins.genericscales import Genericscales
+
+    obj = object.__new__(Genericscales)
+    obj.alias = "genericscales"
+    mental = MagicMock()
+    mental.get_title.return_value = "Mental demand"
+    mental.get_value.return_value = 7.0
+    temporal = MagicMock()
+    temporal.get_title.return_value = "Temporal demand"
+    temporal.get_value.return_value = 8.0
+    frustration_es = MagicMock()
+    frustration_es.get_title.return_value = "Frustración"
+    frustration_es.get_value.return_value = 4.0
+    obj.sliders = {
+        "slider_1": mental,
+        "slider_2": temporal,
+        "slider_3": frustration_es,
+    }
+    obj.logger = MagicMock(event_sequence=18)
+    obj.scenario_time = 900.0
+    obj._research_questionnaire_id = "questionnaire-000003"
+    obj._research_onset_s = 900.0
+    obj._research_started_monotonic_ns = 1_000_000_000
+    obj._research_event_sequence_start = 15
+    obj.parameters = {"maxdurationsec": 0}
+
+    with patch("plugins.genericscales.perf_counter_ns", return_value=3_500_000_000, create=True):
+        obj._record_research_scales()
+
+    trials = [call.args[0] for call in obj.logger.record_research_trial.call_args_list]
+    assert [trial["trial_id"] for trial in trials] == [
+        "questionnaire-000003-01",
+        "questionnaire-000003-02",
+        "questionnaire-000003-03",
+    ]
+    assert trials[0]["trial_type"] == "NASA-TLX"
+    assert trials[0]["raw_value"] == 7.0
+    assert trials[0]["raw_unit"] == "questionnaire_0_to_10"
+    assert trials[0]["rt_ms"] == 2_500.0
+    assert trials[1]["stimulus_id"] == "Temporal demand"
+    assert trials[2]["trial_type"] == "NASA-TLX"
+    assert trials[2]["stimulus_id"] == "Frustración"
+
+
 # ── Fixture ──────────────────────────────────────
 
 

@@ -208,7 +208,10 @@ class TestCheckIfMustExit:
 
         scheduler.check_if_must_exit()
 
-        scheduler.exit.assert_called_once_with(completed=False)
+        scheduler.exit.assert_called_once_with(
+            completed=False,
+            reason="window_closed",
+        )
 
 
 class TestParentWatchdog:
@@ -220,7 +223,10 @@ class TestParentWatchdog:
 
         scheduler.update(0.1)
 
-        scheduler.exit.assert_called_once_with(completed=False)
+        scheduler.exit.assert_called_once_with(
+            completed=False,
+            reason="parent_process_exited",
+        )
 
     @patch("core.scheduler._parent_process_alive", return_value=True)
     @patch("core.scheduler.monotonic", side_effect=(10.0, 10.25, 11.1))

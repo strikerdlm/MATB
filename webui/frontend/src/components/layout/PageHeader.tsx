@@ -44,11 +44,11 @@ export function PageHeader({
           {stats?.length ? (
             <div className="grid grid-cols-3 gap-2 sm:min-w-[21rem]">
               {stats.map((stat) => (
-                <div key={stat.label} className="metric-tile">
+                <div key={stat.label} className="metric-tile min-w-0">
                   <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                     {stat.label}
                   </p>
-                  <p className="mt-1 font-display text-2xl font-semibold leading-none text-foreground">
+                  <p className="mt-1 whitespace-nowrap font-display text-sm font-semibold leading-none text-foreground sm:text-2xl">
                     {stat.value}
                   </p>
                 </div>

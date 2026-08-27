@@ -1,0 +1,68 @@
+{
+  "block_duration_sec": 900,
+  "expected": {
+    "comm_events": 51,
+    "event_rate_per_min": 12.067,
+    "isa_probe_times_sec": [
+      45,
+      90,
+      135,
+      180,
+      225,
+      270,
+      315,
+      360,
+      405,
+      450,
+      495,
+      540,
+      585,
+      630,
+      675,
+      720,
+      765,
+      810,
+      855
+    ],
+    "sagat_freezes": 0,
+    "sysmon_light_events": 65,
+    "sysmon_scale_events": 65,
+    "task_events_total": 181
+  },
+  "generated_by": "matb_integration.scenario_builder",
+  "manifest_version": 1,
+  "parameters": {
+    "difficulty": 0.8,
+    "isa_concurrent": true,
+    "isa_probe_interval_sec": 45,
+    "isa_response_timeout_ms": 10000,
+    "isa_scale": "ISA_1_to_10",
+    "openmatb_alerttimeout_ms": 10000,
+    "openmatb_sysmon_lights": [
+      "1",
+      "2"
+    ],
+    "openmatb_sysmon_scales": [
+      "1",
+      "2",
+      "3",
+      "4"
+    ],
+    "resman_loss_per_min": 1000,
+    "track_target_proportion": 0.2
+  },
+  "questionnaires": {
+    "bedford": "bedford_en.txt",
+    "include_bedford": false,
+    "include_nasatlx": true,
+    "isa": "isa_en.txt",
+    "nasatlx": "nasatlx_en.txt"
+  },
+  "scenario": {
+    "filename": "high_workload.txt",
+    "line_count": 232,
+    "sha256": "acd20272fc63904821ac646f1ab6f7620dbfa61f87de768ce1318aa8bfdb954e"
+  },
+  "seed": 44,
+  "workload_level": "HIGH"
+}

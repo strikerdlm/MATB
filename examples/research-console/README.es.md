@@ -107,7 +107,8 @@ conjunto de datos de análisis.
 Con el frontend en el puerto 3100, visite:
 
 - `http://127.0.0.1:3100/` para el seguimiento;
-- `/upload` para ingerir el CSV y el manifiesto opcional;
+- `/upload` para la ingestión preferida del paquete científico `.matb.zip` o
+  del CSV heredado con manifiesto opcional;
 - `/visualization` para gráficos descriptivos;
 - `/analysis` para el análisis frecuentista y bayesiano y la exportación del paquete de investigación;
 - `/screen` para la evaluación inicial; y

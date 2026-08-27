@@ -101,7 +101,8 @@ tour as a completed visit or analysis dataset.
 With the frontend on port 3100, visit:
 
 - `http://127.0.0.1:3100/` for the tracker;
-- `/upload` for CSV and optional manifest ingestion;
+- `/upload` for preferred `.matb.zip` scientific-bundle ingestion or legacy CSV
+  plus optional manifest;
 - `/visualization` for descriptive charts;
 - `/analysis` for frequentist and Bayesian analysis plus research-bundle export;
 - `/screen` for the baseline screen; and

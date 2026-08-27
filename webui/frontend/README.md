@@ -73,10 +73,11 @@ read-only behavior, controller disconnect/reconnect, and 1280×720 and
   block's metrics (SYSMON d′, hit-rate, RT; COMM d′; NASA-TLX; Bedford; ISA) plus
   the visit's DEPDF fit (G₀/P₀/τ₀) once all three levels are ingested.
 - **Participants** (`/participants`) — list + add (auto-generates the active protocol visits; ASTRA uses T0, DM8, and DM15).
-- **Upload** (`/upload`) — tag + ingest an OpenMATB CSV, with guard feedback
-  (duplicate / filled-cell / validation). Optionally attach the adjacent
-  `*.txt.manifest.json` scenario manifest so the backend can store provenance and
-  validate workload/visit tags, expected probes, and questionnaire completion.
+- **Upload** (`/upload`) — tag and ingest the preferred checksum-verified
+  OpenMATB `.matb.zip` scientific bundle, or select legacy CSV mode. Legacy mode
+  can attach the adjacent `*.txt.manifest.json` so the backend can store
+  provenance and validate workload/visit tags, expected probes, and
+  questionnaire completion.
 - **Visualization** (`/visualization`) — Trajectories / Levels / DEPDF / Group tabs
   with PNG export on every chart (descriptive only; inferential stats are Phase 3).
 - **Analysis** (`/analysis`) — run the frequentist statistics engine via a

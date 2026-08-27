@@ -66,6 +66,8 @@ class Logger:
         self.maxfloats: int = 6  # Time logged at microsecond precision
         self.session_id: int | None = None
         self.lsl: Any = None
+        self.research_recorder: Any = None
+        self.event_sequence: int = 0
 
         self.session_id = find_the_first_available_session_number()
         self.mode: str = "w"
@@ -137,6 +139,11 @@ class Logger:
     def log_manual_entry(self, entry: str, key: str = "manual") -> None:
         slot: list[Any] = [perf_counter(), self.scenario_time, key, "", "", entry]
         self.write_single_slot(slot)
+
+    def record_research_trial(self, trial: dict[str, Any]) -> None:
+        """Forward one structured trial without altering the legacy CSV."""
+        if self.research_recorder is not None:
+            self.research_recorder.record_trial(trial)
 
     def record_boundary(self, event: str) -> None:
         self._write_synchronized_event(
@@ -224,6 +231,7 @@ class Logger:
         row: Any = self.slot(*values)
         self.add_row_to_queue(row)
         self.write_row_queue()
+        self.event_sequence = getattr(self, "event_sequence", 0) + 1
 
     @staticmethod
     def _sync_stream(stream: IO[str]) -> None:

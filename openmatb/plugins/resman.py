@@ -147,6 +147,28 @@ class Resman(AbstractPlugin):
     def get_response_timers(self) -> list[int]:
         return [t["_response_time"] for l, t in self.parameters["tank"].items() if t["target"] is not None]
 
+    def get_research_state(self) -> dict[str, Any]:
+        state = super().get_research_state()
+        tanks = self.parameters.get("tank", {})
+        for letter in ("a", "b"):
+            tank = tanks.get(letter)
+            if tank is None:
+                continue
+            level = float(tank["level"])
+            target = tank.get("target")
+            state[f"tank_{letter}_level"] = level
+            state[f"tank_{letter}_target"] = None if target is None else float(target)
+            state[f"tank_{letter}_deviation"] = None if target is None else level - float(target)
+            in_tolerance = tank.get("_is_in_tolerance")
+            if in_tolerance is None and target is not None:
+                radius = float(self.parameters.get("toleranceradius", 0))
+                in_tolerance = abs(level - float(target)) <= radius
+            state[f"tank_{letter}_in_tolerance"] = in_tolerance
+        state["pump_states_json"] = {
+            str(number): pump.get("state") for number, pump in self.parameters.get("pump", {}).items()
+        }
+        return state
+
     def create_widgets(self) -> None:
         super().create_widgets()
 

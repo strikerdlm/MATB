@@ -13,6 +13,7 @@ import {
   getStudyProtocol,
   getTracker,
   ingestCsv,
+  ingestBundle,
   IngestError,
   postScreen,
   runAnalysis,
@@ -133,6 +134,27 @@ describe("api client", () => {
     expect(form.get("overwrite")).toBe("true");
     expect(form.get("file")).toBeInstanceOf(File);
     expect(form.get("manifest")).toBeInstanceOf(File);
+  });
+
+  it("ingestBundle posts the immutable package to the dedicated endpoint", async () => {
+    global.fetch = mockFetch(201, {
+      id: 4, block_id: 9, bundle_sha256: "abc", schema_version: "matb-scientific-bundle-v1",
+      run_status: "complete", quality_status: "ok",
+    });
+    const file = new File([new Uint8Array([80, 75])], "run.matb.zip", { type: "application/zip" });
+
+    const result = await ingestBundle(file, {
+      participant_id: "P01", visit_ordinal: 2, workload_level: "HIGH", overwrite: false,
+    });
+
+    expect(result.quality_status).toBe("ok");
+    const [url, init] = (global.fetch as any).mock.calls[0];
+    expect(url).toContain("/ingest-bundle");
+    const form = init.body as FormData;
+    expect(form.get("file")).toBeInstanceOf(File);
+    expect(form.get("participant_id")).toBe("P01");
+    expect(form.get("visit_ordinal")).toBe("2");
+    expect(form.get("workload_level")).toBe("HIGH");
   });
 
   it("getMetricsLong hits /metrics/long with optional participant filter", async () => {

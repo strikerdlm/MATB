@@ -51,6 +51,10 @@ NASA_TLX_SUBSCALES_ES: tuple[str, ...] = (
 )
 
 _ALL_NASA_TLX_SUBSCALES: frozenset[str] = frozenset(NASA_TLX_SUBSCALES + NASA_TLX_SUBSCALES_ES)
+_NASA_TLX_TITLE_ALIASES: dict[str, str] = {
+    "Temporal demand": "Time pressure",
+    "Demanda temporal": "Time pressure",
+}
 
 ISA_TITLE: str = "Workload"
 ISA_TITLE_ES: str = "Carga de trabajo"
@@ -217,8 +221,16 @@ def _isa_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
     isa_rows = [
         r for r in rows
         if r.get("type") == "performance"
-        and r.get("module") == "genericscales"
-        and r.get("address") in (ISA_TITLE, ISA_TITLE_ES)
+        and (
+            (
+                r.get("module") == "genericscales"
+                and r.get("address") in (ISA_TITLE, ISA_TITLE_ES)
+            )
+            or (
+                r.get("module") == "instantaneousworkload"
+                and r.get("address") == "workload"
+            )
+        )
     ]
 
     probes: list[dict[str, Any]] = []
@@ -230,6 +242,11 @@ def _isa_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
 
     values = [p["value"] for p in probes]
     return {
+        "scale": (
+            "ISA_1_to_10"
+            if any(row.get("module") == "instantaneousworkload" for row in isa_rows)
+            else "legacy_1_to_5"
+        ),
         "n_probes_completed": len(values),
         "probes": probes,
         "mean": round(statistics.mean(values), 4) if values else None,
@@ -242,7 +259,10 @@ def _nasatlx_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
         r for r in rows
         if r.get("type") == "performance"
         and r.get("module") == "genericscales"
-        and r.get("address") in _ALL_NASA_TLX_SUBSCALES
+        and (
+            r.get("address") in _ALL_NASA_TLX_SUBSCALES
+            or r.get("address") in _NASA_TLX_TITLE_ALIASES
+        )
     ]
 
     # Accept both English and Spanish titles; normalise to English keys
@@ -250,7 +270,7 @@ def _nasatlx_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
     subscales: dict[str, float | None] = {s: None for s in NASA_TLX_SUBSCALES}
     for r in tlx_rows:
         addr = r["address"]
-        key = _ES_TO_EN.get(addr, addr)   # pass English through unchanged
+        key = _NASA_TLX_TITLE_ALIASES.get(addr, _ES_TO_EN.get(addr, addr))
         v = _float_or_none(r.get("value", ""))
         if v is not None and key in subscales:
             subscales[key] = round(v, 2)
@@ -265,6 +285,9 @@ def _nasatlx_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
         "raw_tlx": raw_tlx,
         "raw_tlx_method": "unweighted_mean_of_six_0_to_10",
         "unweighted_sum_0_60": unweighted_sum,
+        "raw_tlx_legacy_sum_0_60": unweighted_sum,
+        "raw_tlx_mean_0_10": raw_tlx,
+        "raw_tlx_0_100": round(raw_tlx * 10.0, 4) if raw_tlx is not None else None,
         "n_subscales_completed": len(filled),
         "complete": complete,
         "reason_code": None if complete else "incomplete_nasa_tlx",
@@ -516,6 +539,12 @@ def _tracking_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
         and (value := _float_or_none(row.get("value", ""))) is not None
     ]
     in_target = sum(target_samples)
+    mean_deviation = statistics.mean(deviations) if deviations else None
+    rms_deviation = (
+        math.sqrt(statistics.mean(value * value for value in deviations))
+        if deviations
+        else None
+    )
     return {
         "n_samples": len(target_samples),
         "in_target_count": in_target,
@@ -523,14 +552,10 @@ def _tracking_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
         if target_samples
         else None,
         "n_deviation_samples": len(deviations),
-        "mean_center_deviation": statistics.mean(deviations)
-        if deviations
-        else None,
-        "rms_center_deviation": math.sqrt(
-            statistics.mean(value * value for value in deviations)
-        )
-        if deviations
-        else None,
+        "mean_center_deviation": mean_deviation,
+        "rms_center_deviation": rms_deviation,
+        "mean_deviation": mean_deviation,
+        "rmse_deviation": rms_deviation,
         "p95_center_deviation": _percentile(deviations, 0.95)
         if deviations
         else None,
@@ -573,7 +598,8 @@ def _resman_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
     for tank in sorted(by_tank):
         values = by_tank[tank]
         tolerance = [bool(value) for value in values["in_tolerance"]]
-        deviations = [abs(float(value)) for value in values["deviation"]]
+        signed_deviations = [float(value) for value in values["deviation"]]
+        deviations = [abs(value) for value in signed_deviations]
         recoveries = [float(value) for value in values["response_time"]]
         all_tolerance.extend(tolerance)
         all_deviations.extend(deviations)
@@ -584,7 +610,14 @@ def _resman_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
             if tolerance
             else None,
             "n_deviation_samples": len(deviations),
+            "n_samples": len(deviations),
+            "mean_signed_deviation": statistics.mean(signed_deviations)
+            if signed_deviations
+            else None,
             "mean_abs_deviation": statistics.mean(deviations)
+            if deviations
+            else None,
+            "mean_absolute_deviation": statistics.mean(deviations)
             if deviations
             else None,
             "rms_deviation": math.sqrt(
@@ -621,7 +654,9 @@ def _resman_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
         if all_recoveries
         else None,
     }
-    return {"tanks": tank_metrics, "combined": combined}
+    result: dict[str, Any] = {"tanks": tank_metrics, "combined": combined}
+    result.update({f"tank_{tank}": metrics for tank, metrics in tank_metrics.items()})
+    return result
 
 
 def _activity_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
@@ -686,6 +721,7 @@ def convert_session(
     t_max = round(max(scenario_times), 3) if scenario_times else None
     duration = (t_max - (t_min or 0.0)) if t_max is not None else None
 
+    resource_management = _resman_metrics(rows)
     record: dict[str, Any] = {
         "participant_id": participant_id,
         "block_name": block_name,
@@ -706,7 +742,8 @@ def convert_session(
         "bedford": _bedford_metric(rows),
         "comm": _comm_metrics(rows),
         "tracking": _tracking_metrics(rows),
-        "resource_management": _resman_metrics(rows),
+        "resman": resource_management,
+        "resource_management": resource_management,
         "activity": _activity_metrics(rows),
     }
 

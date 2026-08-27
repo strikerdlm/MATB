@@ -63,31 +63,23 @@
 0:12:04;communications;radioprompt;own
 0:13:34;communications;radioprompt;other
 
-# ISA probes — every 90s (9 probes) [tasks auto-pause via BlockingPlugin]
-0:01:30;genericscales;filename;isa_en.txt
-0:01:30;genericscales;start
-0:03:00;genericscales;filename;isa_en.txt
-0:03:00;genericscales;start
-0:04:30;genericscales;filename;isa_en.txt
-0:04:30;genericscales;start
-0:06:00;genericscales;filename;isa_en.txt
-0:06:00;genericscales;start
-0:07:30;genericscales;filename;isa_en.txt
-0:07:30;genericscales;start
-0:09:00;genericscales;filename;isa_en.txt
-0:09:00;genericscales;start
-0:10:30;genericscales;filename;isa_en.txt
-0:10:30;genericscales;start
-0:12:00;genericscales;filename;isa_en.txt
-0:12:00;genericscales;start
-0:13:30;genericscales;filename;isa_en.txt
-0:13:30;genericscales;start
+# ISA probes — every 90s (9 probes) [concurrent ISA-10 prompts]
+0:01:30;instantaneousworkload;start
+0:03:00;instantaneousworkload;start
+0:04:30;instantaneousworkload;start
+0:06:00;instantaneousworkload;start
+0:07:30;instantaneousworkload;start
+0:09:00;instantaneousworkload;start
+0:10:30;instantaneousworkload;start
+0:12:00;instantaneousworkload;start
+0:13:30;instantaneousworkload;start
 
-# Block end — stop tasks, collect NASA-TLX
+# Block end — stop tasks, collect nasatlx_en.txt
 0:15:00;system;task_boundary
 0:15:00;sysmon;stop
 0:15:00;track;stop
 0:15:00;resman;stop
 0:15:00;communications;stop
+0:15:00;instantaneousworkload;stop
 0:15:00;genericscales;filename;nasatlx_en.txt
 0:15:00;genericscales;start

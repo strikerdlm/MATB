@@ -156,6 +156,19 @@ def test_isa_multiple_probes():
     assert m["sd"] is not None and m["sd"] > 0
 
 
+def test_isa_reads_concurrent_isa_10_plugin_rows() -> None:
+    rows = _csv_rows("""
+        logtime,scenario_time,type,module,address,value
+        1.0,90.0,performance,instantaneousworkload,workload,8
+    """)
+
+    m = _isa_metrics(rows)
+
+    assert m["scale"] == "ISA_1_to_10"
+    assert m["n_probes_completed"] == 1
+    assert m["mean"] == 8.0
+
+
 def test_isa_ignores_other_modules():
     rows = _csv_rows("""
         logtime,scenario_time,type,module,address,value
@@ -191,6 +204,18 @@ def test_nasatlx_full():
     assert m["complete"] is True
     assert m["mental_demand"] == pytest.approx(7.0)
     assert m["frustration"] == pytest.approx(2.0)
+    assert m["raw_tlx_legacy_sum_0_60"] == 31.0
+    assert m["raw_tlx_mean_0_10"] == pytest.approx(31 / 6, abs=1e-4)
+    assert m["raw_tlx_0_100"] == pytest.approx((31 / 6) * 10, abs=1e-3)
+
+
+def test_nasatlx_accepts_questionnaire_temporal_demand_title() -> None:
+    rows = _csv_rows("""
+        logtime,scenario_time,type,module,address,value
+        1.0,900.0,performance,genericscales,Temporal demand,8.0
+    """)
+
+    assert _nasatlx_metrics(rows)["time_pressure"] == 8.0
 
 
 def test_nasatlx_partial():
@@ -238,6 +263,30 @@ def test_comm_no_rows():
     m = _comm_metrics([])
     assert m["n_hits"] == 0
     assert m["d_prime"] is None
+
+
+def test_tracking_and_resource_metrics_preserve_raw_performance() -> None:
+    rows = _csv_rows("""
+        logtime,scenario_time,type,module,address,value
+        1.0,1.0,performance,track,center_deviation,10
+        1.1,1.0,performance,track,cursor_in_target,True
+        2.0,2.0,performance,track,center_deviation,30
+        2.1,2.0,performance,track,cursor_in_target,False
+        3.0,1.0,performance,resman,a_deviation,-200
+        3.1,1.0,performance,resman,a_in_tolerance,True
+        4.0,2.0,performance,resman,a_deviation,400
+        4.1,2.0,performance,resman,a_in_tolerance,False
+    """)
+
+    tracking = _tracking_metrics(rows)
+    resman = _resman_metrics(rows)
+
+    assert tracking["mean_deviation"] == 20.0
+    assert tracking["rmse_deviation"] == pytest.approx(math.sqrt(500))
+    assert tracking["in_target_pct"] == 50.0
+    assert resman["tank_a"]["mean_signed_deviation"] == 100.0
+    assert resman["tank_a"]["mean_absolute_deviation"] == 300.0
+    assert resman["tank_a"]["in_tolerance_pct"] == 50.0
 
 
 def test_tracking_metrics_include_target_coverage_deviation_and_recovery() -> None:

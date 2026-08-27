@@ -18,6 +18,7 @@ from pathlib import Path
 MATB_ROOT = Path(__file__).resolve().parent
 QUESTIONNAIRES_SRC = MATB_ROOT / "matb_integration" / "questionnaires"
 SCENARIOS_SRC = MATB_ROOT / "scenarios" / "military_aviation"
+WORKLOAD_PLUGIN_SRC = MATB_ROOT / "openmatb" / "plugins" / "instantaneousworkload.py"
 
 
 def _default_openmatb() -> Path | None:
@@ -33,6 +34,10 @@ def install(openmatb_path: Path) -> None:
             f"Is {openmatb_path} an OpenMATB installation?\n"
             f"Pass a local OpenMATB checkout/install root containing includes/."
         )
+    plugins = openmatb_path / "plugins"
+    plugins_init = plugins / "__init__.py"
+    if not plugins.is_dir() or not plugins_init.is_file():
+        sys.exit(f"Error: {plugins} is not a compatible OpenMATB plugins directory.")
 
     # Questionnaires
     q_dest = includes / "questionnaires"
@@ -45,10 +50,19 @@ def install(openmatb_path: Path) -> None:
     # Scenarios
     s_dest = includes / "scenarios" / "military_aviation"
     s_dest.mkdir(parents=True, exist_ok=True)
-    for src in sorted(SCENARIOS_SRC.glob("*.txt")):
+    for src in sorted((*SCENARIOS_SRC.glob("*.txt"), *SCENARIOS_SRC.glob("*.manifest.json"))):
         dst = s_dest / src.name
         shutil.copy2(src, dst)
         print(f"  scenario:      {src.name} → {dst}")
+
+    # The generated scenarios use the repository's concurrent ISA-10 plugin.
+    plugin_dest = plugins / WORKLOAD_PLUGIN_SRC.name
+    shutil.copy2(WORKLOAD_PLUGIN_SRC, plugin_dest)
+    import_line = "from .instantaneousworkload import Instantaneousworkload  # noqa: F401"
+    init_text = plugins_init.read_text(encoding="utf-8")
+    if import_line not in init_text:
+        plugins_init.write_text(init_text.rstrip() + "\n" + import_line + "\n", encoding="utf-8")
+    print(f"  plugin:        {WORKLOAD_PLUGIN_SRC.name} → {plugin_dest}")
 
     print(f"\nDone. To run a scenario:")
     print(f"  cd {openmatb_path}")

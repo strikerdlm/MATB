@@ -14,11 +14,11 @@ export default function UploadPage() {
       <PageHeader
         kicker="Data uplink"
         title="Ingest Session"
-        description="Attach an OpenMATB block to crew, visit, and workload metadata."
+        description="Attach a checksum-verified scientific bundle or legacy CSV to crew, visit, and workload metadata."
         stats={[
           { label: "Crew", value: participants.length },
           { label: "Visit plan", value: "Active" },
-          { label: "Format", value: "CSV" },
+          { label: "Preferred", value: ".matb.zip" },
         ]}
       />
       <UploadForm participants={participants} onIngested={() => void refreshTracker()} />

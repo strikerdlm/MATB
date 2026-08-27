@@ -34,6 +34,9 @@ def test_build_session_files_writes_adjacent_manifest(tmp_path: Path) -> None:
     assert manifest["scenario"]["filename"] == scenario_path.name
     assert manifest["scenario"]["sha256"] == sha256_text(scenario_path.read_text(encoding="utf-8"))
     assert manifest["expected"]["task_events_total"] > 0
+    assert manifest["parameters"]["isa_scale"] == "ISA_1_to_10"
+    assert manifest["parameters"]["isa_concurrent"] is True
+    assert manifest["parameters"]["isa_response_timeout_ms"] == 10_000
 
 
 def test_manifest_hash_changes_with_scenario_text(tmp_path: Path) -> None:

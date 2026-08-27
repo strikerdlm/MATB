@@ -142,7 +142,15 @@ def test_scenario_has_nasatlx(level):
 @pytest.mark.parametrize("level", _LEVELS)
 def test_scenario_has_isa_probes(level):
     s = build_block_scenario(level)
-    assert "isa_en.txt" in s
+    assert "instantaneousworkload;start" in s
+    assert "instantaneousworkload;stop" in s
+    assert ";genericscales;filename;isa_en.txt" not in s
+
+
+@pytest.mark.parametrize("level", _LEVELS)
+def test_isa_probes_are_concurrent_not_blocking_questionnaires(level):
+    s = build_block_scenario(level)
+    assert "[concurrent ISA-10 prompts]" in s
 
 
 @pytest.mark.parametrize("level", _LEVELS)

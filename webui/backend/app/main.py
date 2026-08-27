@@ -280,10 +280,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.routers import analysis, classic, exports, fits, ingest, liftoff, metrics, participants, screen, simulation, study, tracker  # noqa: E402
+from app.routers import analysis, bundles, classic, exports, fits, ingest, liftoff, metrics, participants, screen, simulation, study, tracker  # noqa: E402
 
 app.include_router(participants.router)
 app.include_router(ingest.router)
+app.include_router(bundles.router)
 app.include_router(tracker.router)
 app.include_router(metrics.router)
 app.include_router(fits.router)

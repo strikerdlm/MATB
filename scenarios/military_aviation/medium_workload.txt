@@ -131,41 +131,28 @@
 0:14:14;communications;radioprompt;own
 0:14:19;communications;radioprompt;own
 
-# ISA probes — every 60s (14 probes) [tasks auto-pause via BlockingPlugin]
-0:01:00;genericscales;filename;isa_en.txt
-0:01:00;genericscales;start
-0:02:00;genericscales;filename;isa_en.txt
-0:02:00;genericscales;start
-0:03:00;genericscales;filename;isa_en.txt
-0:03:00;genericscales;start
-0:04:00;genericscales;filename;isa_en.txt
-0:04:00;genericscales;start
-0:05:00;genericscales;filename;isa_en.txt
-0:05:00;genericscales;start
-0:06:00;genericscales;filename;isa_en.txt
-0:06:00;genericscales;start
-0:07:00;genericscales;filename;isa_en.txt
-0:07:00;genericscales;start
-0:08:00;genericscales;filename;isa_en.txt
-0:08:00;genericscales;start
-0:09:00;genericscales;filename;isa_en.txt
-0:09:00;genericscales;start
-0:10:00;genericscales;filename;isa_en.txt
-0:10:00;genericscales;start
-0:11:00;genericscales;filename;isa_en.txt
-0:11:00;genericscales;start
-0:12:00;genericscales;filename;isa_en.txt
-0:12:00;genericscales;start
-0:13:00;genericscales;filename;isa_en.txt
-0:13:00;genericscales;start
-0:14:00;genericscales;filename;isa_en.txt
-0:14:00;genericscales;start
+# ISA probes — every 60s (14 probes) [concurrent ISA-10 prompts]
+0:01:00;instantaneousworkload;start
+0:02:00;instantaneousworkload;start
+0:03:00;instantaneousworkload;start
+0:04:00;instantaneousworkload;start
+0:05:00;instantaneousworkload;start
+0:06:00;instantaneousworkload;start
+0:07:00;instantaneousworkload;start
+0:08:00;instantaneousworkload;start
+0:09:00;instantaneousworkload;start
+0:10:00;instantaneousworkload;start
+0:11:00;instantaneousworkload;start
+0:12:00;instantaneousworkload;start
+0:13:00;instantaneousworkload;start
+0:14:00;instantaneousworkload;start
 
-# Block end — stop tasks, collect NASA-TLX
+# Block end — stop tasks, collect nasatlx_en.txt
 0:15:00;system;task_boundary
 0:15:00;sysmon;stop
 0:15:00;track;stop
 0:15:00;resman;stop
 0:15:00;communications;stop
+0:15:00;instantaneousworkload;stop
 0:15:00;genericscales;filename;nasatlx_en.txt
 0:15:00;genericscales;start

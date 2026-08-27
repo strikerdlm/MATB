@@ -174,6 +174,19 @@ class AbstractPlugin:
         """Return the time since which responses are expected (list of int)"""
         pass
 
+    def get_research_state(self) -> dict[str, Any]:
+        """Return lifecycle state using the stable scientific-data field names."""
+        prefix = {
+            "track": "tracking",
+            "instantaneousworkload": "workload",
+        }.get(self.alias, self.alias)
+        if prefix not in {"sysmon", "communications", "tracking", "resman", "workload"}:
+            return {}
+        state: dict[str, Any] = {f"{prefix}_alive": bool(self.alive)}
+        if prefix in {"sysmon", "communications", "tracking", "resman"}:
+            state[f"automation_{prefix}"] = bool(self.parameters.get("automaticsolver", False))
+        return state
+
     def update_can_receive_key(self) -> None:
         """Update the ability of the plugin to receive either material or emulated inputs"""
 
