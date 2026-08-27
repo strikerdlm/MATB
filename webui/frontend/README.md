@@ -10,6 +10,14 @@ flow. The UI is browser-only and works on a headless Linux server because no
 desktop or X11 APIs are used; the shipped Playwright gate runs Chromium in
 headless mode.
 
+The `/classic/setup`, `/classic/session`, and `/classic/debrief` routes run the
+native classic OpenMATB + Polar H10 workflow. Setup scans, connects, and requires
+a live RR preflight; session runs automatic baseline/task/recovery timing; the
+debrief exposes separate MATB validity and physiology quality, HRV phases,
+retakes, audited selection, and verified Markdown/CSV/JSON artifacts. Platform
+and laboratory setup are documented in the
+[Polar H10 runbook](../../docs/research/polar-h10-classic-matb.md).
+
 ## Setup
 
 ```bash
@@ -97,6 +105,12 @@ read-only behavior, controller disconnect/reconnect, and 1280×720 and
   explicitly "exploratory" F/F₀ column. Append `?fast=1` for a reduced-trial
   dev/e2e run that exercises the same scoring logic. All participant-facing text
   is in `src/components/screen/strings_es.ts`.
+- **Classic** (`/classic/setup`) — native Windows/Linux Polar H10 scan,
+  connection, refreshable live RR preflight, allowlisted LOW/MEDIUM/HIGH
+  OpenMATB launch, automatic 5-minute baseline + 15-minute task, an explicit
+  post-task questionnaire state bounded at 10 minutes, 5-minute recovery, and a
+  sealed debrief with MATB workload outcomes, time/frequency-domain HRV, raw RR,
+  bilingual reports, visit exports, retained retakes, and SHA-256 inventory.
 
 ## Design system
 

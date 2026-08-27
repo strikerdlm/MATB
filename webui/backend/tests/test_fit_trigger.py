@@ -10,8 +10,8 @@ from app.models import DepdfFit, Participant, Visit
 from app.study_protocol import get_protocol
 
 # Ground truth for a guaranteed-valid Suhir fit (mirrors the suhir pipeline test).
-G0_TRUE, P0_TRUE, TAU0_TRUE = 40.0, 0.99, 12.0
-LEVEL_MWL = {"LOW": 44.0, "MEDIUM": 60.0, "HIGH": 80.0}
+G0_TRUE, P0_TRUE, TAU0_TRUE = 4.0, 0.99, 12.0
+LEVEL_MWL = {"LOW": 4.4, "MEDIUM": 6.0, "HIGH": 8.0}
 
 
 def _enroll(engine):
@@ -79,10 +79,10 @@ def test_fit_failure_does_not_break_ingestion(engine, sample_csv_bytes):
     )
     _enroll(engine)
     with Session(engine) as s:
-        b1 = ingest_csv(s, content=sample_csv_bytes(misses=(5.0,), raw_tlx=44.0),
+        b1 = ingest_csv(s, content=sample_csv_bytes(misses=(5.0,), raw_tlx=4.4),
                         filename="LOW.csv", participant_id="P01",
                         visit_ordinal=1, workload_level="LOW")
-        b2 = ingest_csv(s, content=sample_csv_bytes(misses=(5.0, 25.0), raw_tlx=60.0),
+        b2 = ingest_csv(s, content=sample_csv_bytes(misses=(5.0, 25.0), raw_tlx=6.0),
                         filename="MEDIUM.csv", participant_id="P01",
                         visit_ordinal=1, workload_level="MEDIUM")
         b3 = ingest_csv(s, content=no_tlx_csv, filename="HIGH.csv",

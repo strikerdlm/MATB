@@ -12,6 +12,8 @@ export function RouteShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "/";
   const isMissionRoute = pathname === "/mission"
     || pathname.startsWith("/mission/debrief")
+    || pathname.startsWith("/classic/session")
+    || pathname.startsWith("/classic/debrief")
     || pathname.startsWith("/liftoff/session")
     || pathname.startsWith("/liftoff/debrief");
 

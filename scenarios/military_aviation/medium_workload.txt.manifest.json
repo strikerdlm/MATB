@@ -55,8 +55,8 @@
   },
   "scenario": {
     "filename": "medium_workload.txt",
-    "line_count": 157,
-    "sha256": "60bb0b31e875995b50740a86e22e84cc146b4484572475e6f7e60ae6bd270092"
+    "line_count": 158,
+    "sha256": "cab4379c7e6afed764600c9aa8e8e17b6b31a8f434b535e53b39e19aa6daa1b2"
   },
   "seed": 43,
   "workload_level": "MEDIUM"

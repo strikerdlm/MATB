@@ -60,8 +60,8 @@
   },
   "scenario": {
     "filename": "high_workload.txt",
-    "line_count": 231,
-    "sha256": "2cf5df9d2bf6562b4b8fe8e62736f7ebfed6696d8235e3892c6ac20e0bba329a"
+    "line_count": 232,
+    "sha256": "acd20272fc63904821ac646f1ab6f7620dbfa61f87de768ce1318aa8bfdb954e"
   },
   "seed": 44,
   "workload_level": "HIGH"

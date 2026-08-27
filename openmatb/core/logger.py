@@ -7,14 +7,43 @@ from __future__ import annotations
 from collections import namedtuple
 from csv import DictWriter
 from datetime import datetime
+import json
+import math
+import os
 from pathlib import Path
-from time import perf_counter
+from time import perf_counter, perf_counter_ns, time_ns
 from typing import IO, Any
 
 from core.constants import PATHS, REPLAY_MODE
 from core.utils import find_the_first_available_session_number
 
 _logger: Logger | None = None
+OPENMATB_EVENT_SCHEMA_VERSION = "openmatb-synchronized-event-v2"
+
+
+def _sync_directory(path: Path) -> None:
+    """Persist a newly created capture-file directory entry on POSIX."""
+
+    if os.name == "nt":
+        return
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    descriptor = os.open(str(Path(path)), flags)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _json_safe(value: Any) -> Any:
+    """Normalize non-finite measurements while preserving raw CSV values."""
+
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return value
 
 
 def get_logger() -> Logger:
@@ -47,11 +76,20 @@ class Logger:
 
         self.file: IO[str] | None = None
         self.writer: DictWriter | None = None
+        self.events_file: IO[str] | None = None
+        self.events_sequence: int = 0
+        self.external_session_id: str | None = os.getenv("OPENMATB_SESSION_ID")
         self.queue: list[Any] = list()
 
         if not REPLAY_MODE:
-            self.path: Path = PATHS["SESSIONS"].joinpath(
-                self.datetime.strftime("%Y-%m-%d"), f"{self.session_id}_{self.datetime.strftime('%y%m%d_%H%M%S')}.csv"
+            configured_output = os.getenv("OPENMATB_OUTPUT_CSV")
+            self.path: Path = (
+                Path(configured_output)
+                if configured_output
+                else PATHS["SESSIONS"].joinpath(
+                    self.datetime.strftime("%Y-%m-%d"),
+                    f"{self.session_id}_{self.datetime.strftime('%y%m%d_%H%M%S')}.csv",
+                )
             )
             self.path.parent.mkdir(parents=True, exist_ok=True)
             self.open()
@@ -107,22 +145,52 @@ class Logger:
         if self.research_recorder is not None:
             self.research_recorder.record_trial(trial)
 
+    def record_boundary(self, event: str) -> None:
+        self._write_synchronized_event(
+            {"event": event, "scenario_time": float(self.scenario_time)},
+            durable=True,
+        )
+
     def __enter__(self) -> Logger:
         self.open()
         return self
 
     def __exit__(self, type: Any, value: Any, traceback: Any) -> None:
-        self.file.close()
+        self.close()
 
     def open(self) -> None:
-        create_header: bool = not (self.path.exists() and self.mode == "a")
-        self.file = open(str(self.path), self.mode, newline="")
+        path_existed = self.path.exists()
+        create_header: bool = not (path_existed and self.mode == "a")
+        mode = "x" if os.getenv("OPENMATB_OUTPUT_CSV") and self.mode == "w" else self.mode
+        self.file = open(str(self.path), mode, newline="", encoding="utf-8")
+        if os.name != "nt":
+            os.chmod(self.path, 0o600)
+        if not path_existed:
+            _sync_directory(self.path.parent)
         self.writer = DictWriter(self.file, fieldnames=self.fields_list)
         if create_header:
             self.writer.writeheader()
+            self.file.flush()
+        events_path = os.getenv("OPENMATB_EVENTS_JSONL")
+        if events_path and self.events_file is None:
+            event_destination = Path(events_path)
+            event_destination.parent.mkdir(parents=True, exist_ok=True)
+            self.events_file = event_destination.open("x", encoding="utf-8", newline="")
+            if os.name != "nt":
+                os.chmod(event_destination, 0o600)
+            _sync_directory(event_destination.parent)
 
     def close(self) -> None:
-        self.file.close()
+        if self.file is not None and not self.file.closed:
+            try:
+                self._sync_stream(self.file)
+            finally:
+                self.file.close()
+        if self.events_file is not None and not self.events_file.closed:
+            try:
+                self._sync_stream(self.events_file)
+            finally:
+                self.events_file.close()
 
     def add_row_to_queue(self, row: Any) -> None:
         self.queue.append(row)
@@ -148,6 +216,13 @@ class Logger:
                         for k, v in change_dict.items():
                             row_dict[k] = v
                     self.writer.writerow(row_dict)
+                    # Unit/replay adapters may provide a writer without an
+                    # underlying file object.  Flush eagerly for the native
+                    # research logger, while preserving that long-standing
+                    # writer-only contract.
+                    if self.file is not None:
+                        self.file.flush()
+                    self._write_synchronized_event({"row": row_dict})
                     if self.lsl is not None:
                         self.lsl.push(";".join([str(r) for r in row_dict.values()]))
                 self.empty_queue()
@@ -157,6 +232,51 @@ class Logger:
         self.add_row_to_queue(row)
         self.write_row_queue()
         self.event_sequence = getattr(self, "event_sequence", 0) + 1
+
+    @staticmethod
+    def _sync_stream(stream: IO[str]) -> None:
+        stream.flush()
+        os.fsync(stream.fileno())
+
+    def _write_synchronized_event(
+        self,
+        payload: dict[str, Any],
+        *,
+        durable: bool = False,
+    ) -> None:
+        # Some integrations construct lightweight logger adapters with
+        # ``__new__``.  Synchronized sidecar output is opt-in and must not
+        # alter those legacy adapters.
+        if getattr(self, "events_file", None) is None:
+            return
+        self.events_sequence += 1
+        record = {
+            "schema_version": OPENMATB_EVENT_SCHEMA_VERSION,
+            "session_id": self.external_session_id,
+            "sequence": self.events_sequence,
+            "received_monotonic_ns": str(perf_counter_ns()),
+            "received_utc_ns": str(time_ns()),
+            **payload,
+        }
+        self.events_file.write(
+            json.dumps(
+                _json_safe(record),
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                default=str,
+                allow_nan=False,
+            )
+            + "\n"
+        )
+        self.events_file.flush()
+        if durable:
+            # Boundary events drive physiology phase transitions in a separate
+            # process. Persist both logs at that boundary without imposing an
+            # fsync on every high-rate performance row.
+            if self.file is not None:
+                self._sync_stream(self.file)
+            self._sync_stream(self.events_file)
 
     def set_totaltime(self, totaltime: float) -> None:
         self.totaltime: float = totaltime

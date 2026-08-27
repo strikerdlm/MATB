@@ -222,6 +222,7 @@
 0:14:15;instantaneousworkload;start
 
 # Block end — stop tasks, collect nasatlx_en.txt
+0:15:00;system;task_boundary
 0:15:00;sysmon;stop
 0:15:00;track;stop
 0:15:00;resman;stop

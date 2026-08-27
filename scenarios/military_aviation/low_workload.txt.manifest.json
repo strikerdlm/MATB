@@ -50,8 +50,8 @@
   },
   "scenario": {
     "filename": "low_workload.txt",
-    "line_count": 84,
-    "sha256": "c90448a19f9d8bb1e44c698c2b51b6ef36ba9201f3e4d50490b78d73f2ec79de"
+    "line_count": 85,
+    "sha256": "adbdb605c61603b93781f287026e509a1f405e2c7594f93c32d2d2c69e5128e5"
   },
   "seed": 42,
   "workload_level": "LOW"

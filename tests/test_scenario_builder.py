@@ -120,6 +120,19 @@ def test_scenario_tasks_are_stopped(level):
 
 
 @pytest.mark.parametrize("level", _LEVELS)
+def test_scenario_emits_task_boundary_before_end_questionnaires(level):
+    lines = build_block_scenario(level).splitlines()
+    boundary_index = lines.index("0:15:00;system;task_boundary")
+    questionnaire_index = next(
+        index
+        for index, line in enumerate(lines)
+        if line == f"0:15:00;genericscales;filename;{NASATLX_QUESTIONNAIRE}"
+    )
+
+    assert boundary_index < questionnaire_index
+
+
+@pytest.mark.parametrize("level", _LEVELS)
 def test_scenario_has_nasatlx(level):
     s = build_block_scenario(level)
     assert NASATLX_QUESTIONNAIRE in s

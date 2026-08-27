@@ -105,10 +105,12 @@ under `parameters.scientific_scoring.tracking_range` and
 `parameters.scientific_scoring.resource_range`. Define and preregister them
 before inspecting outcomes.
 
-NASA-TLX remains a post-block instrument. Its legacy `raw_tlx` sum (0–60 for
-the repository's 0–10 items) is retained for compatibility, while
-`raw_tlx_mean_0_10` and `raw_tlx_0_100` make the scale explicit. Do not mix
-these representations in one analysis.
+NASA-TLX remains a post-block instrument. `raw_tlx` is the unweighted mean of
+all six repository items on their 0–10 response scale; incomplete instruments
+remain null. The former 0–60 sum is retained explicitly as
+`raw_tlx_legacy_sum_0_60` (and `unweighted_sum_0_60`), while
+`raw_tlx_mean_0_10` and `raw_tlx_0_100` make both analysis scales explicit. Do
+not mix these representations in one analysis.
 
 ## Research-console workflow
 

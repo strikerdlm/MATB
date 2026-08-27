@@ -4,9 +4,11 @@
 
 from __future__ import annotations
 
+import os
 import sys
+from functools import lru_cache
 from pathlib import Path
-from time import perf_counter_ns, time_ns
+from time import monotonic, perf_counter_ns, time_ns
 from typing import Any
 
 from pyglet.app import EventLoop
@@ -21,6 +23,66 @@ from core.scenario import Scenario
 from core.window import Window
 
 
+@lru_cache(maxsize=1)
+def _windows_process_api():
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    open_process = kernel32.OpenProcess
+    open_process.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    open_process.restype = wintypes.HANDLE
+    wait_for_single_object = kernel32.WaitForSingleObject
+    wait_for_single_object.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+    wait_for_single_object.restype = wintypes.DWORD
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = (wintypes.HANDLE,)
+    close_handle.restype = wintypes.BOOL
+    return ctypes, open_process, wait_for_single_object, close_handle
+
+
+def _windows_process_alive(process_id: int) -> bool:
+    """Probe a process handle without sending a Windows termination signal."""
+
+    synchronize = 0x00100000
+    wait_timeout = 0x00000102
+    error_access_denied = 5
+    ctypes, open_process, wait_for_single_object, close_handle = _windows_process_api()
+
+    handle = open_process(synchronize, False, process_id)
+    if not handle:
+        # A protected process can be alive even when it cannot be opened.  Our
+        # normal same-user parent is openable; avoid a false child shutdown if
+        # Windows explicitly reports access denied.
+        return ctypes.get_last_error() == error_access_denied
+    try:
+        return wait_for_single_object(handle, 0) == wait_timeout
+    finally:
+        close_handle(handle)
+
+
+def _parent_process_alive() -> bool:
+    """Watch only opt-in synchronized launches; legacy launches have no parent PID."""
+
+    raw = os.getenv("OPENMATB_PARENT_PID")
+    if raw is None:
+        return True
+    try:
+        parent_pid = int(raw)
+        if parent_pid <= 0:
+            return False
+        if sys.platform == "win32":
+            return _windows_process_alive(parent_pid)
+        os.kill(parent_pid, 0)
+    except (TypeError, ValueError, ProcessLookupError):
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
 class Scheduler:
     """
     This class manages events execution.
@@ -32,6 +94,8 @@ class Scheduler:
 
         self.clock: Clock = Clock("main")
         self.scenario_time: float = 0
+        self._last_parent_watchdog_check = float("-inf")
+        self._parent_watchdog_alive = True
         self.scenario_path: Path | None = scenario_path
 
         # Create the event loop
@@ -62,6 +126,7 @@ class Scheduler:
             get_logger().research_recorder = self.research_recorder
 
         Window.MainWindow.display_session_id()
+        get_logger().record_boundary("scenario_started")
         self.event_loop.run()
 
     def set_scenario(self, events: list[str] | None = None) -> None:
@@ -95,6 +160,9 @@ class Scheduler:
 
     def update(self, dt: float) -> None:
         try:
+            if not self._parent_alive_throttled():
+                self.exit(completed=False, reason="parent_process_exited")
+                return
             if Window.MainWindow.modal_dialog is not None:
                 if not self._dialog_paused:
                     self.execute_plugins_methods(self.get_active_plugins(), ["pause"])
@@ -153,6 +221,14 @@ class Scheduler:
                 get_logger().research_recorder = None
                 self.research_recorder = None
 
+    def _parent_alive_throttled(self) -> bool:
+        now = monotonic()
+        last = getattr(self, "_last_parent_watchdog_check", float("-inf"))
+        if now - last >= 1.0:
+            self._last_parent_watchdog_check = now
+            self._parent_watchdog_alive = _parent_process_alive()
+        return bool(getattr(self, "_parent_watchdog_alive", True))
+
     def update_timers(self, dt: float) -> None:
         # Update timers with dt
         if not self.is_scenario_time_paused():
@@ -188,10 +264,6 @@ class Scheduler:
                     self.joystick.reset_key_change(k)
 
     def check_if_must_exit(self) -> None:
-        # If no active plugin, and no remaining events, close the OpenMATB
-        if len(self.get_active_plugins()) == 0 and len(self.events_queue) == 0:
-            self.exit()
-
         # If the windows has been killed, exit the program
         if not Window.MainWindow.alive:
             # Be careful to stop all the plugins in case they're not
@@ -200,8 +272,19 @@ class Scheduler:
                 if plugin.alive:
                     stop_event: Event = Event(0, int(self.scenario_time), p_name, "stop")
                     self.execute_one_event(stop_event)
-            self._seal_research(status="partial", reason="window_closed")
-            self.exit()
+            self.exit(completed=False, reason="window_closed")
+            return
+
+        # A temporarily idle scenario can still contain future events.  Only
+        # all executed events plus no live plugin constitutes natural
+        # completion; closing the window never does.
+        all_events_done = all(event.done == 1 for event in self.events)
+        if (
+            all_events_done
+            and len(self.get_active_plugins()) == 0
+            and len(self.events_queue) == 0
+        ):
+            self.exit(completed=True)
 
     def execute_events(self) -> None:
         # Detect a potential blocking plugin
@@ -281,6 +364,8 @@ class Scheduler:
         command: str = event.command[0]
         if command == "pause":
             Window.MainWindow.pause_prompt()
+        elif command == "task_boundary":
+            get_logger().record_boundary("task_window_completed")
         event.done = 1
         get_logger().record_event(event)
 
@@ -327,9 +412,16 @@ class Scheduler:
 
         return None
 
-    def exit(self) -> None:
+    def exit(self, *, completed: bool = False, reason: str | None = None) -> None:
         get_logger().log_manual_entry("end")
-        self._seal_research(status="complete")
+        if completed:
+            get_logger().record_boundary("scenario_completed")
+        get_logger().record_boundary("scenario_finished")
+        self._seal_research(
+            status="complete" if completed else "partial",
+            reason=None if completed else (reason or "interrupted"),
+        )
+        get_logger().close()
         self.event_loop.exit()
         Window.MainWindow.close()  # needed for windows clean exit
         sys.exit(0)

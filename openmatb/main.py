@@ -10,6 +10,12 @@ import gettext
 import sys
 from pathlib import Path
 
+from launch_contract import activate_launch_contract, parse_launch_contract
+
+LAUNCH_CONTRACT = parse_launch_contract(sys.argv[1:])
+if LAUNCH_CONTRACT is not None:
+    activate_launch_contract(LAUNCH_CONTRACT)
+
 # Read and install the specified language iso
 # The LOCALE_PATH constant can't be set into constants.py because
 # the latter must be translated itself
@@ -48,7 +54,9 @@ class OpenMATB:
         else:
             # Show the scenario selector only if no scenario is set in config.ini
             ini_scenario: str = get_conf_value("Openmatb", "scenario_path").strip()
-            if ini_scenario:
+            if LAUNCH_CONTRACT is not None:
+                selected = LAUNCH_CONTRACT.scenario
+            elif ini_scenario:
                 selected = PATHS["SCENARIOS"].joinpath(ini_scenario)
             else:
                 selected = FileSelector(Window.MainWindow, "scenario").run()

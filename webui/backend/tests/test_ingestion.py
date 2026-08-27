@@ -6,6 +6,8 @@ from datetime import date
 import pytest
 from sqlmodel import Session, select
 
+from app.classic_models import ClassicSessionSelection
+from app.classic_persistence import SQLModelClassicPersistence
 from app.ingestion import IngestionError, ingest_csv
 from app.models import Block, BlockProvenance, Participant, Visit
 from app.study_protocol import get_protocol
@@ -75,6 +77,48 @@ def test_filled_cell_requires_overwrite(engine, sample_csv_bytes):
         prov = s.exec(select(BlockProvenance).where(BlockProvenance.block_id == block.id)).first()
         assert prov is not None
         assert prov.validation_status == "missing_manifest"
+
+
+def test_legacy_overwrite_cannot_replace_a_classic_selected_cell(
+    engine,
+    sample_csv_bytes,
+) -> None:
+    _participant_with_visits(engine)
+    persistence = SQLModelClassicPersistence(engine)
+    attempt = persistence.create_attempt(
+        participant_id="P01",
+        visit_ordinal=1,
+        workload_level="LOW",
+        scenario_name="military_aviation/low_workload.txt",
+        artifact_root="classic-selected",
+    )
+    persistence.finalize_attempt(
+        attempt.id,
+        task_validity="valid",
+        physiology_quality="good",
+        source_csv_filename="classic.csv",
+        source_csv_sha256="a" * 64,
+        metrics={"source": "classic"},
+        hrv={"phases": {}},
+    )
+
+    with Session(engine) as session:
+        selected = session.exec(select(ClassicSessionSelection)).one()
+        selected_block_id = selected.block_id
+        with pytest.raises(IngestionError, match="classic-selected"):
+            ingest_csv(
+                session,
+                content=sample_csv_bytes(misses=(9.0,)),
+                filename="legacy.csv",
+                participant_id="P01",
+                visit_ordinal=1,
+                workload_level="LOW",
+                overwrite=True,
+            )
+        session.rollback()
+        unchanged = session.get(Block, selected_block_id)
+        assert unchanged is not None
+        assert unchanged.source_csv_filename == "classic.csv"
 
 
 def test_unknown_visit_rejected(engine, sample_csv_bytes):

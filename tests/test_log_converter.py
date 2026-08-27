@@ -30,6 +30,7 @@ from matb_integration.log_converter import (
     _comm_metrics,
     _tracking_metrics,
     _resman_metrics,
+    _activity_metrics,
     convert_session,
     convert_to_jsonl,
     parse_csv,
@@ -198,7 +199,9 @@ def test_nasatlx_full():
     """)
     m = _nasatlx_metrics(rows)
     assert m["n_subscales_completed"] == 6
-    assert m["raw_tlx"] == pytest.approx(31.0, abs=0.01)
+    assert m["raw_tlx"] == pytest.approx(31.0 / 6.0, abs=0.01)
+    assert m["unweighted_sum_0_60"] == pytest.approx(31.0, abs=0.01)
+    assert m["complete"] is True
     assert m["mental_demand"] == pytest.approx(7.0)
     assert m["frustration"] == pytest.approx(2.0)
     assert m["raw_tlx_legacy_sum_0_60"] == 31.0
@@ -223,6 +226,9 @@ def test_nasatlx_partial():
     m = _nasatlx_metrics(rows)
     assert m["n_subscales_completed"] == 1
     assert m["physical_demand"] is None
+    assert m["raw_tlx"] is None
+    assert m["complete"] is False
+    assert m["reason_code"] == "incomplete_nasa_tlx"
 
 
 def test_nasatlx_no_rows():
@@ -281,6 +287,138 @@ def test_tracking_and_resource_metrics_preserve_raw_performance() -> None:
     assert resman["tank_a"]["mean_signed_deviation"] == 100.0
     assert resman["tank_a"]["mean_absolute_deviation"] == 300.0
     assert resman["tank_a"]["in_tolerance_pct"] == 50.0
+
+
+def test_tracking_metrics_include_target_coverage_deviation_and_recovery() -> None:
+    rows = _csv_rows("""
+        logtime,scenario_time,type,module,address,value
+        1.0,1.0,performance,track,cursor_in_target,True
+        1.1,1.1,performance,track,center_deviation,0
+        1.2,1.2,performance,track,cursor_in_target,False
+        1.3,1.3,performance,track,center_deviation,3
+        1.4,1.4,performance,track,cursor_in_target,1
+        1.5,1.5,performance,track,center_deviation,4
+        1.6,1.6,performance,track,response_time,1200
+        1.7,1.7,performance,track,response_time,800
+    """)
+
+    metrics = _tracking_metrics(rows)
+
+    assert metrics["n_samples"] == 3
+    assert metrics["in_target_pct"] == pytest.approx(66.6667)
+    assert metrics["mean_center_deviation"] == pytest.approx(7 / 3)
+    assert metrics["rms_center_deviation"] == pytest.approx(math.sqrt(25 / 3))
+    assert metrics["p95_center_deviation"] == pytest.approx(3.9)
+    assert metrics["n_recoveries"] == 2
+    assert metrics["mean_recovery_rt_ms"] == pytest.approx(1000.0)
+
+
+def test_resource_management_metrics_report_each_tank_and_combined_samples() -> None:
+    rows = _csv_rows("""
+        logtime,scenario_time,type,module,address,value
+        1.0,1.0,performance,resman,a_in_tolerance,True
+        1.1,1.1,performance,resman,a_deviation,-100
+        1.2,1.2,performance,resman,a_in_tolerance,False
+        1.3,1.3,performance,resman,a_deviation,200
+        1.4,1.4,performance,resman,a_response_time,4000
+        1.5,1.5,performance,resman,b_in_tolerance,1
+        1.6,1.6,performance,resman,b_deviation,50
+    """)
+
+    metrics = _resman_metrics(rows)
+
+    assert list(metrics["tanks"]) == ["a", "b"]
+    assert metrics["tanks"]["a"]["in_tolerance_pct"] == pytest.approx(50.0)
+    assert metrics["tanks"]["a"]["mean_abs_deviation"] == pytest.approx(150.0)
+    assert metrics["tanks"]["a"]["rms_deviation"] == pytest.approx(math.sqrt(25_000))
+    assert metrics["tanks"]["a"]["max_abs_deviation"] == pytest.approx(200.0)
+    assert metrics["tanks"]["a"]["mean_recovery_rt_ms"] == pytest.approx(4000.0)
+    assert metrics["combined"]["n_tolerance_samples"] == 3
+    assert metrics["combined"]["in_tolerance_pct"] == pytest.approx(200 / 3)
+    assert metrics["combined"]["mean_abs_deviation"] == pytest.approx(350 / 3)
+
+
+def test_activity_metrics_preserve_event_and_input_counts_by_module() -> None:
+    rows = _csv_rows("""
+        logtime,scenario_time,type,module,address,value
+        1.0,1.0,event,sysmon,self,start
+        1.1,1.1,event,track,self,start
+        1.2,1.2,input,keyboard,ENTER,press
+        1.3,1.3,performance,track,center_deviation,3
+        1.4,1.4,state,resman,tank-a-level,2500
+    """)
+
+    metrics = _activity_metrics(rows)
+
+    assert metrics == {
+        "total_rows": 5,
+        "event_count": 2,
+        "input_count": 1,
+        "performance_row_count": 1,
+        "state_row_count": 1,
+        "events_by_module": {"sysmon": 1, "track": 1},
+        "inputs_by_module": {"keyboard": 1},
+    }
+
+
+def test_convert_session_exposes_tracking_resource_and_activity_metrics(tmp_path: Path) -> None:
+    csv_path = tmp_path / "session.csv"
+    csv_path.write_text(
+        "logtime,scenario_time,type,module,address,value\n"
+        "1.0,1.0,performance,track,cursor_in_target,True\n"
+        "1.1,1.1,performance,resman,a_in_tolerance,True\n"
+        "1.2,1.2,input,keyboard,ENTER,press\n",
+        encoding="utf-8",
+    )
+
+    record = convert_session(csv_path)
+
+    assert record["tracking"]["in_target_pct"] == 100.0
+    assert record["resource_management"]["tanks"]["a"]["in_tolerance_pct"] == 100.0
+    assert record["activity"]["input_count"] == 1
+
+
+def test_converter_ignores_only_an_incomplete_final_csv_append(tmp_path: Path) -> None:
+    csv_path = tmp_path / "interrupted.csv"
+    csv_path.write_text(
+        "logtime,scenario_time,type,module,address,value\n"
+        "1.0,1.0,performance,track,cursor_in_target,True\n"
+        "2.0,2.0,performance,sysmon",
+        encoding="utf-8",
+    )
+
+    record = convert_session(csv_path)
+
+    assert record["n_rows"] == 1
+    assert record["source_recovery"] == {
+        "incomplete_final_csv_rows_ignored": 1,
+        "warning_codes": ["incomplete_final_csv_row_ignored"],
+    }
+    assert record["csv_path"] == "interrupted.csv"
+
+    csv_path.write_text(
+        "logtime,scenario_time,type,module,address,value\n"
+        "2.0,2.0,performance,sysmon\n"
+        "3.0,3.0,performance,track,cursor_in_target,True\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="malformed_csv_row"):
+        parse_csv(csv_path)
+
+
+def test_converter_rejects_malformed_middle_row_when_valid_final_row_has_no_newline(
+    tmp_path: Path,
+) -> None:
+    csv_path = tmp_path / "corrupt-middle.csv"
+    csv_path.write_text(
+        "logtime,scenario_time,type,module,address,value\n"
+        "1.0,1.0,performance,sysmon\n"
+        "2.0,2.0,performance,track,cursor_in_target,True",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="malformed_csv_row"):
+        convert_session(csv_path)
 
 
 # ── integration: smoke-test CSV ───────────────────────────────────────────────
@@ -369,7 +507,7 @@ def test_nasatlx_es_titles_recognised(tmp_path):
     assert t["n_subscales_completed"] == 6
     assert t["mental_demand"] == pytest.approx(7.0)
     assert t["effort"] == pytest.approx(8.0)
-    assert t["raw_tlx"] == pytest.approx(33.0)
+    assert t["raw_tlx"] == pytest.approx(5.5)
 
 
 def test_isa_es_title_recognised(tmp_path):

@@ -266,7 +266,7 @@ def test_scheduler_seals_research_recorder_and_detaches_logger(tmp_path: Path) -
     assert scheduler.research_recorder is None
 
 
-def test_window_close_marks_research_bundle_partial() -> None:
+def test_window_close_routes_through_reasoned_partial_exit() -> None:
     scheduler = object.__new__(Scheduler)
     scheduler.plugins = {}
     scheduler.events_queue = [MagicMock()]
@@ -277,8 +277,11 @@ def test_window_close_marks_research_bundle_partial() -> None:
     with patch("core.scheduler.Window.MainWindow", MagicMock(alive=False)):
         scheduler.check_if_must_exit()
 
-    scheduler._seal_research.assert_called_once_with(status="partial", reason="window_closed")
-    scheduler.exit.assert_called_once()
+    scheduler._seal_research.assert_not_called()
+    scheduler.exit.assert_called_once_with(
+        completed=False,
+        reason="window_closed",
+    )
 
 
 def test_research_sampling_failure_does_not_abort_task_loop() -> None:
