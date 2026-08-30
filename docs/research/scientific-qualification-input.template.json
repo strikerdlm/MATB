@@ -1,0 +1,15 @@
+{
+  "release_id": "v1.0.0",
+  "source_commit": "REPLACE_WITH_FROZEN_COMMIT",
+  "gates": {
+    "software_regression": "PENDING",
+    "deterministic_replay": "PENDING",
+    "licensing_review": "PENDING",
+    "privacy_review": "PENDING",
+    "timing_block_plus_physiology": "NOT_MEASURED",
+    "workload_calibration": "ENGINEERING_PRESET",
+    "test_retest_reliability": "PENDING",
+    "reference_dataset_reproducibility": "PENDING",
+    "matb_ii_comparator": "NOT_TESTED"
+  }
+}

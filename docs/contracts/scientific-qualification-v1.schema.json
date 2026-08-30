@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://strikerdlm.github.io/matb/schemas/scientific-qualification-v1.json",
+  "title": "MATB Scientific Qualification v1",
+  "type": "object",
+  "required": ["schema_version", "release_id", "gates", "eligible", "status", "blockers", "report_sha256"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "release_id": {"type": "string"},
+    "gates": {"type": "object"},
+    "eligible": {"type": "boolean"},
+    "status": {"enum": ["PASS", "BLOCKED"]},
+    "blockers": {"type": "array", "items": {"type": "string"}},
+    "report_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

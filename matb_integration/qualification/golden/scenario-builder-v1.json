@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "case_id": "scenario-builder-v1-seed42-duration900",
+  "profile_id": "MATB-EXTENDED-2.0",
+  "generator": "matb_integration.scenario_builder.build_block_scenario",
+  "conditions": {
+    "LOW": {
+      "seed": 42,
+      "block_duration_sec": 900,
+      "sha256": "ec1254df228d620b2c668923dcc1fd5e797073ff39cdc66ab39938f304c32d43",
+      "line_count": 92,
+      "event_line_count": 75
+    },
+    "MEDIUM": {
+      "seed": 43,
+      "block_duration_sec": 900,
+      "sha256": "c852203f12b6f6d139075350c84f7ca50dc5029518dd978c047fe5736ba789d9",
+      "line_count": 170,
+      "event_line_count": 153
+    },
+    "HIGH": {
+      "seed": 44,
+      "block_duration_sec": 900,
+      "sha256": "60a0dda601477106f60e1142704d69b9e21e3de9bdfed525d23a22f4b2eb5606",
+      "line_count": 249,
+      "event_line_count": 232
+    }
+  },
+  "claim_boundary": "Golden scenario hashes establish deterministic software generation only."
+}

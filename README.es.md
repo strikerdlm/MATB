@@ -29,6 +29,16 @@ LOW/MEDIUM/HIGH son preajustes de ingeniería pendientes de calibración humana,
 el control de calidad temporal del software no sustituye la calificación del
 inicio físico del estímulo.
 
+Las herramientas de calificación están en `matb_integration/qualification/`.
+Mantienen la conformidad del software, la temporización física específica del
+equipo, la calibración humana, la caracterización entre implementaciones y la
+elegibilidad de publicación como clases de evidencia independientes y con
+bloqueo seguro. Consulte
+[`docs/research/qualification-workflow.md`](docs/research/qualification-workflow.md).
+La exportación del núcleo público permanece bloqueada mientras estén pendientes
+las compuertas empíricas y la separación de la Consola de Investigación de
+sUAS/Liftoff.
+
 La Consola de Investigación es una aplicación FastAPI/Next.js enlazada a loopback, con SQLite y
 almacenamiento local de artefactos. Su superficie sUAS es un simulador sintético, no cinético y de
 supervisión. No contiene aeronaves reales, armas, selección de blancos, despacho autónomo, mapas del

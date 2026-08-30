@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "OPENMATB-1.4.5-DERIVED",
+  "status": "software_verified",
+  "selectable": true,
+  "implementation": {"name": "OpenMATB-derived runtime", "version": "1.4.5"},
+  "canonical_tasks": ["SYSMON", "TRACK", "COMM", "RESMAN"],
+  "behavior": {"scenario_format": "openmatb-text", "scheduling_display": true, "automation": "task-configured"},
+  "scoring": {"registry": "matb_integration/metrics_spec.json", "metrics_schema_version": "2.0"},
+  "logging": {"legacy_csv": true, "events_jsonl": true, "timing_qc": true, "lsl": "optional"},
+  "extensions": ["ISA", "NASA-TLX", "Bedford", "SAGAT"],
+  "provenance": {"upstream_license": "CeCILL-2.1", "runtime_version_file": "openmatb/VERSION"},
+  "claims": {"software_conformance": "TESTED", "physical_timing": "NOT_MEASURED", "human_equivalence": "NOT_TESTED"},
+  "known_deviations": ["Repository modifications add schema-versioned events, timing QC, and scientific metric contracts."]
+}

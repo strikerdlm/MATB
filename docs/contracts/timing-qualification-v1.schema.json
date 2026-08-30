@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://strikerdlm.github.io/matb/schemas/timing-qualification-v1.json",
+  "title": "MATB Timing Qualification v1",
+  "type": "object",
+  "required": ["schema_version", "use_tier", "source_commit", "rig", "physical_measurement", "measurement_summaries", "representative_full_block_recorded", "status", "issues", "report_sha256"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "use_tier": {"enum": ["block_level", "block_plus_physiology", "erp_event_related"]},
+    "source_commit": {"type": "string", "minLength": 7},
+    "rig": {"type": "object", "required": ["rig_id", "os", "display", "audio_device", "input_device"]},
+    "physical_measurement": {"type": "object", "required": ["measured"]},
+    "measurement_summaries": {"type": "array", "items": {"type": "object"}},
+    "representative_full_block_recorded": {"type": "boolean"},
+    "status": {"enum": ["PASS", "FAIL", "NOT_MEASURED"]},
+    "issues": {"type": "array", "items": {"type": "string"}},
+    "report_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}
