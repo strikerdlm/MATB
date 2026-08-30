@@ -37,6 +37,7 @@ from matb_integration.sagat.scenario_builder_ext import emit_freezes_for_block
 # ── OpenMATB sync-guard constants ─────────────────────────────────────────────
 # Mirror openmatb/plugins/sysmon.py defaults — kept in sync by test assertions.
 OPENMATB_ALERTTIMEOUT_MS: Final[int] = 10_000   # sysmon default alerttimeout
+OPENMATB_COMM_MAX_RESPONSE_DELAY_MS: Final[int] = 20_000
 OPENMATB_SYSMON_LIGHTS: Final[tuple[str, ...]] = ("1", "2")
 OPENMATB_SYSMON_SCALES: Final[tuple[str, ...]] = ("1", "2", "3", "4")
 
@@ -84,10 +85,10 @@ ISA_QUESTIONNAIRE_ES: Final[str] = "isa_es.txt"
 NASATLX_QUESTIONNAIRE_ES: Final[str] = "nasatlx_es.txt"
 BEDFORD_QUESTIONNAIRE_ES: Final[str] = "bedford_es.txt"
 
-# ── Latin-square counterbalancing ─────────────────────────────────────────────
+# ── Complete counterbalancing ─────────────────────────────────────────────────
 # All 6 permutations of 3 workload levels. Participant N → row N % 6.
-# Covers up to N=6 orthogonal orderings; groups of 6 are fully balanced.
-LATIN_SQUARE_3: Final[tuple[tuple[WorkloadLevel, ...], ...]] = (
+# This is complete permutation counterbalancing, not a 3-row Latin square.
+COMPLETE_COUNTERBALANCE_3: Final[tuple[tuple[WorkloadLevel, ...], ...]] = (
     (WorkloadLevel.LOW,    WorkloadLevel.MEDIUM, WorkloadLevel.HIGH),
     (WorkloadLevel.LOW,    WorkloadLevel.HIGH,   WorkloadLevel.MEDIUM),
     (WorkloadLevel.MEDIUM, WorkloadLevel.LOW,    WorkloadLevel.HIGH),
@@ -96,9 +97,13 @@ LATIN_SQUARE_3: Final[tuple[tuple[WorkloadLevel, ...], ...]] = (
     (WorkloadLevel.HIGH,   WorkloadLevel.MEDIUM, WorkloadLevel.LOW),
 )
 
+# Deprecated compatibility alias. New code and manuscripts must use the
+# scientifically precise COMPLETE_COUNTERBALANCE_3 name.
+LATIN_SQUARE_3 = COMPLETE_COUNTERBALANCE_3
+
 
 def block_order_for_participant(participant_id: str) -> tuple[WorkloadLevel, ...]:
-    """Return the Latin-square block order for a participant.
+    """Return the complete-counterbalancing order for a participant.
 
     Extracts the leading integer from `participant_id` (e.g. "P03" → 3).
     Participants with the same numeric suffix get the same order — use
@@ -106,7 +111,52 @@ def block_order_for_participant(participant_id: str) -> tuple[WorkloadLevel, ...
     """
     digits = "".join(c for c in participant_id if c.isdigit())
     n = int(digits) if digits else 0
-    return LATIN_SQUARE_3[n % len(LATIN_SQUARE_3)]
+    return COMPLETE_COUNTERBALANCE_3[n % len(COMPLETE_COUNTERBALANCE_3)]
+
+
+def _parse_scenario_time(value: str) -> float:
+    hours, minutes, seconds = (float(part) for part in value.split(":"))
+    return hours * 3600 + minutes * 60 + seconds
+
+
+def _scenario_density_details(scenario_text: str) -> dict[str, Any]:
+    """Describe generated event density/overlap from the compiled scenario."""
+    task_events: list[tuple[str, float, float]] = []
+    probe_times: list[float] = []
+    for raw_line in scenario_text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        fields = line.split(";")
+        if len(fields) < 3:
+            continue
+        onset = _parse_scenario_time(fields[0])
+        plugin, command = fields[1], fields[2]
+        if plugin == "sysmon" and command.endswith("-failure"):
+            task_events.append(("sysmon", onset, onset + OPENMATB_ALERTTIMEOUT_MS / 1000))
+        elif plugin == "communications" and command == "radioprompt":
+            task_events.append((
+                "communications",
+                onset,
+                onset + _COMM_PROMPT_SEC + OPENMATB_COMM_MAX_RESPONSE_DELAY_MS / 1000,
+            ))
+        elif plugin == "genericscales" and command == "start":
+            probe_times.append(onset)
+
+    overlap_pairs = 0
+    for index, (_, start, end) in enumerate(task_events):
+        for _, other_start, other_end in task_events[index + 1:]:
+            if start < other_end and other_start < end:
+                overlap_pairs += 1
+    task_onsets = [start for _, start, _ in task_events]
+    return {
+        "overlap_definition": "pairwise overlap of task response-availability intervals",
+        "concurrent_event_overlap_pairs": overlap_pairs,
+        "task_events_within_5s_of_probe": sum(
+            1 for onset in task_onsets if any(abs(onset - probe) <= 5 for probe in probe_times)
+        ),
+        "expected_active_primary_tasks": 4,
+    }
 
 
 # ── Time formatting ───────────────────────────────────────────────────────────
@@ -366,6 +416,7 @@ def _manifest_payload(
         for i in range(block_duration_sec // isa_interval)
         if isa_interval * (i + 1) < block_duration_sec
     ]
+    density_details = _scenario_density_details(scenario_text)
     return build_scenario_manifest(
         scenario_filename=scenario_filename,
         scenario_text=scenario_text,
@@ -382,6 +433,9 @@ def _manifest_payload(
             "resman_loss_per_min": RESMAN_LOSS_PER_MIN[level],
             "isa_probe_interval_sec": isa_interval,
             "openmatb_alerttimeout_ms": OPENMATB_ALERTTIMEOUT_MS,
+            "openmatb_comm_max_response_delay_ms": OPENMATB_COMM_MAX_RESPONSE_DELAY_MS,
+            "communications_prompt_duration_sec": _COMM_PROMPT_SEC,
+            "communications_own_callsign_ratio": _COMM_OWN_RATIO,
             "openmatb_sysmon_lights": list(OPENMATB_SYSMON_LIGHTS),
             "openmatb_sysmon_scales": list(OPENMATB_SYSMON_SCALES),
         },
@@ -398,8 +452,15 @@ def _manifest_payload(
             "comm_events": comm_n,
             "task_events_total": sysmon_n * 2 + comm_n,
             "event_rate_per_min": round((sysmon_n * 2 + comm_n) / (block_duration_sec / 60), 3),
+            "per_subtask_event_rate_per_min": {
+                "sysmon": round((sysmon_n * 2) / (block_duration_sec / 60), 3),
+                "communications": round(comm_n / (block_duration_sec / 60), 3),
+            },
+            "counterbalancing_method": "complete_permutation_counterbalancing_3_conditions",
+            "workload_label_status": "engineering_preset_pending_human_calibration",
             "isa_probe_times_sec": isa_times,
             "sagat_freezes": sagat_n_freezes,
+            **density_details,
         },
     )
 
@@ -409,7 +470,10 @@ def _write_scenario_with_manifest(
     scenario_text: str,
     **manifest_kwargs: Any,
 ) -> None:
-    out_path.write_text(scenario_text, encoding="utf-8")
+    # Hash and persisted bytes must be identical on every platform.  Without an
+    # explicit newline policy, Windows translates LF to CRLF after the manifest
+    # hash has already been computed from the in-memory LF text.
+    out_path.write_text(scenario_text, encoding="utf-8", newline="\n")
     manifest = _manifest_payload(
         scenario_filename=out_path.name,
         scenario_text=scenario_text,
@@ -470,12 +534,12 @@ def build_session_files(
 ) -> list[tuple[int, WorkloadLevel, Path]]:
     """Generate 3 counterbalanced scenario files for one participant.
 
-    Block order is determined by a Latin-square keyed on the numeric suffix
+    Block order is determined by complete permutation counterbalancing keyed on the numeric suffix
     of `participant_id`. Groups of 6 consecutive participant numbers are
     fully counterbalanced.
 
     Args:
-        participant_id: e.g. "P03" — numeric part drives Latin-square row.
+        participant_id: e.g. "P03" — numeric part drives counterbalancing row.
         output_dir: Directory to write scenario files into.
         block_duration_sec: Duration per block in seconds (default 900).
         base_seed: RNG seed offset; each block gets `base_seed + block_index`.

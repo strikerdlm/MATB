@@ -51,7 +51,7 @@ def test_fit_created_when_three_levels_present(engine, sample_csv_bytes):
         assert fit.g0 == __import__("pytest").approx(G0_TRUE, rel=2e-2)
         assert 0.0 < fit.p0 <= 1.0
         assert fit.hcf_source == "F0_default"
-        assert fit.mwl_source == "raw_tlx"
+        assert fit.mwl_source == "rtlx_mean_0_100"
 
 
 def test_no_fit_with_two_levels(engine, sample_csv_bytes):
@@ -67,7 +67,7 @@ def test_no_fit_with_two_levels(engine, sample_csv_bytes):
 
 def test_fit_failure_does_not_break_ingestion(engine, sample_csv_bytes):
     # One level has SYSMON data (so it ingests) but NO NASA-TLX row, so its
-    # raw_tlx is None. When the visit completes, fit_participant's MWL lookup
+    # rtlx_mean_0_100 is None. When the visit completes, fit_participant's MWL lookup
     # raises on the None -> the fit must be swallowed: all 3 Blocks stay
     # committed and no DepdfFit row is created.
     from app.models import Block

@@ -500,15 +500,16 @@ Sub-millisecond jitter is achievable on consumer hardware when `HandleJitter=tru
 
 ## Part 7 — Phase 9: Counterbalanced Block Ordering
 
-### 7.1 Latin-Square Assignment
+### 7.1 Complete-Permutation Assignment
 
 Replace the fixed `low → medium → high` order with participant-ID-driven assignment.
 
 ```python
 from itertools import permutations
 
-# 6-condition Latin square for 3 workload levels (low=L, medium=M, high=H):
-LATIN_SQUARE_3 = [
+# All 6 permutations for 3 workload levels (low=L, medium=M, high=H).
+# This is complete counterbalancing, not a three-row Latin square.
+COMPLETE_COUNTERBALANCE_3 = [
     ("L", "M", "H"),
     ("L", "H", "M"),
     ("M", "L", "H"),
@@ -673,7 +674,7 @@ OpenMATB (Cegarra et al. 2020, doi:10.3758/s13428-020-01364-w) is the only open-
 | 9 | SAGAT freeze-probe service | 8 | Medium | Ground-truth state captured at freeze; 3 levels scored |
 | 10 | LSL outlet (scenario markers) | 9 | Low | Markers visible in LabRecorder with <5 ms jitter |
 | 11 | LSL inlet (physio streams) | 9 | Medium | EEG and ECG streams logged to physio.jsonl |
-| 12 | Counterbalanced block ordering | 9 | Low | Latin-square verified for N=24 |
+| 12 | Counterbalanced block ordering | 9 | Low | Complete six-order counterbalancing verified for N=24 |
 | 13 | Practice block with criterion | 9 | Low | practice_pass flag logged |
 | 14 | Time-based block duration | 9 | Low | Blocks run exactly N minutes regardless of event count |
 | 15 | Fighter stressor pack | 10 | High | G-LOC, hypoxia, SD states with SA rebuild probes |

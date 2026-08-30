@@ -15,7 +15,7 @@ import yaml
 from matb_integration.suhir import hcf
 from matb_integration.suhir.calibration import estimate_p0, estimate_tau0, solve_g0
 from matb_integration.suhir.failure_events import failure_metrics, sysmon_failure_times
-from matb_integration.suhir.mwl import absolute_mwl
+from matb_integration.suhir.mwl import DEFAULT_MWL_SOURCE, absolute_mwl
 
 _CRITERIA_PATH = Path(__file__).with_name("failure_criteria.yaml")
 
@@ -32,7 +32,7 @@ def _criteria_version() -> int:
 def fit_participant(
     participant_id: str,
     blocks: dict[str, tuple[dict[str, Any], list[dict[str, str]]]],
-    source: str = "raw_tlx",
+    source: str = DEFAULT_MWL_SOURCE,
     hcf_store: dict[str, hcf.HCFEstimate] | None = None,
 ) -> dict[str, Any]:
     """Fit G0, P0, tau0 for one participant from LOW/MEDIUM/HIGH blocks.

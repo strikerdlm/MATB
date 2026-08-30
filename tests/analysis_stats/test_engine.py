@@ -16,10 +16,10 @@ def test_full_artifact_on_simulated_study(sim_study, sim_fits):
     assert len(fam["tests"]) == 6
     assert all(t["reject"] in (True, False) and 0 <= t["p_fdr"] <= 1 for t in fam["tests"])
     # strong simulated effects -> Q1 omnibus tests all survive -> Holm contrasts attached
-    q1_dprime = art["q1"]["sysmon_d_prime"]
-    assert q1_dprime["status"] == "ok"
-    assert q1_dprime["contrasts"] is not None
-    assert all("p_holm" in c for c in q1_dprime["contrasts"])
+    q1_sysmon = art["q1"]["sysmon_hit_rate"]
+    assert q1_sysmon["status"] == "ok"
+    assert q1_sysmon["contrasts"] is not None
+    assert all("p_holm" in c for c in q1_sysmon["contrasts"])
     # exploratory metrics carry no contrasts and are flagged
     assert art["q1"]["isa_mean"]["exploratory"] is True
     assert art["q1"]["isa_mean"].get("contrasts") is None
@@ -31,7 +31,7 @@ def test_full_artifact_on_simulated_study(sim_study, sim_fits):
     assert set(art["q4"]) == {"g0", "p0", "tau0"}
     assert art["q4"]["g0"]["status"] == "ok"
     # rmANOVA sensitivity for the three confirmatory metrics
-    assert set(art["rmanova"]) == {"sysmon_d_prime", "nasatlx_raw_tlx", "bedford"}
+    assert set(art["rmanova"]) == {"sysmon_hit_rate", "nasatlx_rtlx_mean_0_100", "bedford"}
     assert isinstance(art["caveats"], list) and art["caveats"]
 
 

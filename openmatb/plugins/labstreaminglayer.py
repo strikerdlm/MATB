@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from time import perf_counter_ns
 from typing import Any, Callable
 
 from core import validation
@@ -67,10 +68,18 @@ class Labstreaminglayer(Instructions):
             # and reset the marker to empty.
             self.parameters["marker"] = ""
 
-    def push(self, message: str) -> None:
+    def push(self, message: str) -> dict[str, float | int] | None:
         if self.stream_outlet is None:
-            return
-        self.stream_outlet.push_sample([message])
+            return None
+        started_ns = perf_counter_ns()
+        lsl_time = pylsl.local_clock()
+        self.stream_outlet.push_sample([message], lsl_time)
+        finished_ns = perf_counter_ns()
+        return {
+            "lsl_time_s": lsl_time,
+            "push_started_monotonic_ns": started_ns,
+            "push_finished_monotonic_ns": finished_ns,
+        }
 
     #        print(message)
 

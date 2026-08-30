@@ -4,7 +4,7 @@ Usage:
     python3 -m matb_integration.suhir.cli fit \
         --participant P01 \
         --low  LOW.csv  --medium MED.csv --high HIGH.csv \
-        --source raw_tlx --out P01_suhir.json
+        --source rtlx_mean_0_100 --out P01_suhir.json
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 
 from matb_integration.log_converter import convert_session, parse_csv
+from matb_integration.suhir.mwl import DEFAULT_MWL_SOURCE
 from matb_integration.suhir.pipeline import fit_participant
 
 
@@ -33,7 +34,12 @@ def main(argv: list[str] | None = None) -> int:
     fit.add_argument("--low", required=True)
     fit.add_argument("--medium", required=True)
     fit.add_argument("--high", required=True)
-    fit.add_argument("--source", default="raw_tlx")
+    fit.add_argument(
+        "--source",
+        default=DEFAULT_MWL_SOURCE,
+        choices=("rtlx_mean_0_100", "isa_mean", "bedford", "raw_tlx"),
+        help="MWL source; raw_tlx is a deprecated v1 compatibility sum",
+    )
     fit.add_argument("--out", required=True)
 
     args = parser.parse_args(argv)

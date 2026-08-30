@@ -27,7 +27,7 @@ def test_cli_bayes_writes_artifact(tmp_path, sim_study, sim_fits):
     f = tmp_path / "fits.json"
     out = tmp_path / "bayes.json"
     # one confirmatory metric only -> a single sampled model keeps this fast
-    rows = [r for r in sim_study if r["metric"] == "sysmon_d_prime"]
+    rows = [r for r in sim_study if r["metric"] == "sysmon_hit_rate"]
     m.write_text(json.dumps(rows))
     f.write_text(json.dumps([]))
     rc = main(["bayes", "--metrics-json", str(m), "--fits-json", str(f),
@@ -36,4 +36,4 @@ def test_cli_bayes_writes_artifact(tmp_path, sim_study, sim_fits):
     art = json.loads(out.read_text())
     assert art["bayes_version"]
     assert art["sampler"]["draws"] == 200
-    assert art["q2"]["sysmon_d_prime"]["status"] == "ok"
+    assert art["q2"]["sysmon_hit_rate"]["status"] == "ok"

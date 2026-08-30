@@ -28,6 +28,8 @@ from matb_integration.log_converter import (
     _isa_metrics,
     _nasatlx_metrics,
     _comm_metrics,
+    _track_metrics,
+    _resman_metrics,
     convert_session,
     convert_to_jsonl,
     parse_csv,
@@ -98,6 +100,8 @@ def test_sysmon_basic_counts():
     assert m["hit_rate"] == pytest.approx(0.5, abs=1e-4)
     assert m["mean_rt_ms"] == pytest.approx(1200.5, abs=0.1)
     assert m["d_prime"] is None  # no duration provided
+    assert m["dprime_observed_v2"] is None
+    assert m["observed_opportunity_status"] == "unavailable"
 
 
 def test_sysmon_d_prime_with_duration():
@@ -118,6 +122,37 @@ def test_sysmon_d_prime_with_duration():
     m = _sysmon_metrics(rows, alerttimeout_sec=10.0, n_indicators=6, scenario_duration_sec=900.0)
     assert m["d_prime"] is not None
     assert m["d_prime"] > 1.5  # high hit rate, 0 FA
+    assert m["dprime_estimated_v1"] == m["d_prime"]
+    assert m["estimated_confirmatory_eligible"] is False
+
+
+def test_sysmon_observed_dprime_requires_unique_target_and_nontarget_opportunities():
+    payloads = [
+        {"opportunity_id": "t1", "phase": "closed", "target": True, "outcome": "HIT"},
+        {"opportunity_id": "t2", "phase": "closed", "target": True, "outcome": "MISS"},
+        {"opportunity_id": "n1", "phase": "closed", "target": False, "outcome": "FA"},
+        {"opportunity_id": "n2", "phase": "closed", "target": False, "outcome": "CR"},
+    ]
+    rows = [
+        {"logtime": str(i), "scenario_time": str(i), "type": "performance",
+         "module": "sysmon", "address": "opportunity", "value": json.dumps(payload)}
+        for i, payload in enumerate(payloads)
+    ]
+    metrics = _sysmon_metrics(rows)
+    assert metrics["observed_opportunity_status"] == "complete"
+    assert metrics["dprime_observed_v2"] == pytest.approx(0.0)
+    assert metrics["observed_confirmatory_eligible"] is True
+
+
+def test_sysmon_observed_dprime_fails_closed_on_duplicate_outcome():
+    payload = {"opportunity_id": "t1", "phase": "closed", "target": True, "outcome": "HIT"}
+    rows = [
+        {"type": "performance", "module": "sysmon", "address": "opportunity", "value": json.dumps(payload)},
+        {"type": "performance", "module": "sysmon", "address": "opportunity", "value": json.dumps(payload)},
+    ]
+    metrics = _sysmon_metrics(rows)
+    assert metrics["observed_opportunity_status"] == "invalid"
+    assert metrics["dprime_observed_v2"] is None
 
 
 def test_sysmon_no_rows():
@@ -184,6 +219,11 @@ def test_nasatlx_full():
     m = _nasatlx_metrics(rows)
     assert m["n_subscales_completed"] == 6
     assert m["raw_tlx"] == pytest.approx(31.0, abs=0.01)
+    assert m["legacy_subscale_sum_0_60"] == pytest.approx(31.0, abs=0.01)
+    assert m["rtlx_mean_0_10"] == pytest.approx(31 / 6, abs=0.001)
+    assert m["rtlx_mean_0_100"] == pytest.approx((31 / 6) * 10, abs=0.001)
+    assert m["weighted_tlx_0_100"] is None
+    assert m["complete"] is True
     assert m["mental_demand"] == pytest.approx(7.0)
     assert m["frustration"] == pytest.approx(2.0)
 
@@ -196,6 +236,24 @@ def test_nasatlx_partial():
     m = _nasatlx_metrics(rows)
     assert m["n_subscales_completed"] == 1
     assert m["physical_demand"] is None
+    assert m["rtlx_mean_0_100"] is None
+    assert m["confirmatory_eligible"] is False
+
+
+def test_nasatlx_out_of_range_is_retained_for_legacy_but_v2_fails_closed():
+    rows = _csv_rows("""
+        logtime,scenario_time,type,module,address,value
+        1.0,900.0,performance,genericscales,Mental demand,11.0
+        1.1,900.0,performance,genericscales,Physical demand,3.0
+        1.2,900.0,performance,genericscales,Temporal demand,8.0
+        1.3,900.0,performance,genericscales,Performance,5.0
+        1.4,900.0,performance,genericscales,Effort,6.0
+        1.5,900.0,performance,genericscales,Frustration,2.0
+    """)
+    metrics = _nasatlx_metrics(rows)
+    assert metrics["raw_tlx"] == pytest.approx(35.0)
+    assert metrics["invalid_subscales"] == ["mental_demand"]
+    assert metrics["rtlx_mean_0_100"] is None
 
 
 def test_nasatlx_no_rows():
@@ -230,6 +288,38 @@ def test_comm_no_rows():
     m = _comm_metrics([])
     assert m["n_hits"] == 0
     assert m["d_prime"] is None
+
+
+def test_track_metrics_propagate_deviation_target_time_and_recovery():
+    rows = _csv_rows("""
+        logtime,scenario_time,type,module,address,value
+        1.0,1.0,performance,track,center_deviation,0.3
+        1.1,1.1,performance,track,center_deviation,0.4
+        1.2,1.2,performance,track,cursor_in_target,True
+        1.3,1.3,performance,track,cursor_in_target,False
+        1.4,1.4,performance,track,response_time,600
+    """)
+    metrics = _track_metrics(rows)
+    assert metrics["rmse_deviation"] == pytest.approx(math.sqrt(0.125), abs=0.0001)
+    assert metrics["mean_absolute_deviation"] == pytest.approx(0.35)
+    assert metrics["percent_time_in_target"] == 50.0
+    assert metrics["recovery_time_ms"]["mean"] == 600.0
+
+
+def test_resman_metrics_propagate_target_deviation_tolerance_and_recovery():
+    rows = _csv_rows("""
+        logtime,scenario_time,type,module,address,value
+        1.0,1.0,performance,resman,a_deviation,-100
+        1.1,1.1,performance,resman,a_deviation,200
+        1.2,1.2,performance,resman,a_in_tolerance,True
+        1.3,1.3,performance,resman,a_in_tolerance,False
+        1.4,1.4,performance,resman,a_response_time,2000
+    """)
+    metrics = _resman_metrics(rows)
+    assert metrics["mean_absolute_deviation"] == 150.0
+    assert metrics["percent_time_in_tolerance"] == 50.0
+    assert metrics["recovery_time_ms"]["median"] == 2000.0
+    assert metrics["by_tank"]["a"]["n_samples"] == 2
 
 
 # ── integration: smoke-test CSV ───────────────────────────────────────────────
@@ -285,6 +375,7 @@ def test_smoke_csv_jsonl_roundtrip(tmp_path):
         workload_level="LOW",
     )
     data = json.loads(line)
+    assert data["metrics_schema_version"] == "2.0"
     assert data["participant_id"] == "P00"
     assert data["workload_level"] == "LOW"
     assert "sysmon" in data and "isa" in data and "nasatlx" in data and "comm" in data

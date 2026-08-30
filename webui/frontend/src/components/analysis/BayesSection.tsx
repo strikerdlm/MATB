@@ -67,8 +67,10 @@ function BayesCard({ title, result }: { title: string; result: BayesModelResult 
 }
 
 const METRIC_LABELS: Record<string, string> = {
-  sysmon_d_prime: "SYSMON d′",
-  nasatlx_raw_tlx: "NASA-TLX (raw)",
+  sysmon_hit_rate: "SYSMON hit rate",
+  nasatlx_rtlx_mean_0_100: "RTLX mean (0–100)",
+  sysmon_d_prime: "SYSMON d′ (legacy)",
+  nasatlx_raw_tlx: "NASA-TLX legacy sum",
   bedford: "Bedford",
   g0: "G₀", p0: "P₀", tau0: "τ₀",
 };

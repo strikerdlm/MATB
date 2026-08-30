@@ -17,12 +17,15 @@ probabilistic mission-outcome model on OpenMATB `log_converter` output.
 ```bash
 python3 -m matb_integration.suhir.cli fit \
   --participant P01 --low LOW.csv --medium MED.csv --high HIGH.csv \
-  --source raw_tlx --out P01_suhir.json
+  --source rtlx_mean_0_100 --out P01_suhir.json
 ```
 
 ## Validity (read before citing)
 - Within-participant **comparative** model only (Suhir's framing); MWL ratios
   are anchored to each participant's LOW block.
+- The default TLX input is the complete-form unweighted RTLX mean on a 0–100
+  scale. `raw_tlx` remains selectable only to reproduce legacy v1 analyses; it
+  is a non-standard sum and is not confirmatory-eligible.
 - 3 MWL levels exactly-identify G0/P0/tau0 → no goodness-of-fit df.
 - TLX/ISA/Bedford are ordinal/interval; run the `--source` sensitivity sweep.
 - Phase 1 runs F = F0 (Eq. 5.16); per-participant HCF requires the external

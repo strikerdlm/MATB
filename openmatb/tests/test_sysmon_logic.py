@@ -5,6 +5,7 @@ stop_failure, etc.) using object.__new__() to bypass __init__.
 """
 
 from unittest.mock import MagicMock
+import json
 
 from core.constants import COLORS as C
 from plugins.sysmon import Sysmon
@@ -325,6 +326,11 @@ class TestStopFailure:
         s.start_failure(light)
         s.stop_failure(light, success=True)
         assert "HIT" in s.performance["signal_detection"]
+        opportunities = [json.loads(value) for value in s.performance["opportunity"]]
+        assert opportunities[0]["phase"] == "opened"
+        assert opportunities[1]["phase"] == "closed"
+        assert opportunities[1]["outcome"] == "HIT"
+        assert opportunities[1]["target"] is True
 
     def test_timeout_logs_miss(self):
         """Timeout logs MISS."""
@@ -334,6 +340,8 @@ class TestStopFailure:
         s.start_failure(light)
         s.stop_failure(light, success=False)
         assert "MISS" in s.performance["signal_detection"]
+        opportunities = [json.loads(value) for value in s.performance["opportunity"]]
+        assert opportunities[-1]["outcome"] == "MISS"
 
     def test_success_sets_freeze_timer(self):
         """Success freeze timer equals feedbackduration."""

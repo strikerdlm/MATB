@@ -11,7 +11,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-MANIFEST_VERSION = 1
+MANIFEST_VERSION = 2
+SUPPORTED_MANIFEST_VERSIONS = (1, 2)
+METRICS_SCHEMA_VERSION = "2.0"
 MANIFEST_GENERATOR = "matb_integration.scenario_builder"
 
 ScenarioManifest = dict[str, Any]
@@ -57,6 +59,10 @@ def build_scenario_manifest(
     """Build a versioned manifest for an OpenMATB scenario file."""
     manifest: ScenarioManifest = {
         "manifest_version": MANIFEST_VERSION,
+        "metrics_schema_version": METRICS_SCHEMA_VERSION,
+        "deprecations": {
+            "LATIN_SQUARE_3": "use COMPLETE_COUNTERBALANCE_3; six orders are complete permutation counterbalancing"
+        },
         "generated_by": MANIFEST_GENERATOR,
         "scenario": {
             "filename": scenario_filename,
@@ -64,6 +70,7 @@ def build_scenario_manifest(
             "line_count": len(scenario_text.splitlines()),
         },
         "workload_level": workload_level.upper(),
+        "workload_label_status": "engineering_preset_pending_human_calibration",
         "seed": seed,
         "block_duration_sec": block_duration_sec,
         "parameters": parameters,
@@ -91,12 +98,14 @@ def manifest_summary(manifest: ScenarioManifest | None) -> dict[str, Any] | None
     expected = manifest.get("expected") if isinstance(manifest.get("expected"), dict) else {}
     return {
         "manifest_version": manifest.get("manifest_version"),
+        "metrics_schema_version": manifest.get("metrics_schema_version"),
         "scenario_filename": scenario.get("filename"),
         "scenario_sha256": scenario.get("sha256"),
         "participant_id": manifest.get("participant_id"),
         "visit_ordinal": manifest.get("visit_ordinal"),
         "block_num": manifest.get("block_num"),
         "workload_level": manifest.get("workload_level"),
+        "workload_label_status": manifest.get("workload_label_status"),
         "seed": manifest.get("seed"),
         "block_duration_sec": manifest.get("block_duration_sec"),
         "expected_isa_probes": len(expected.get("isa_probe_times_sec") or []),
@@ -161,10 +170,16 @@ def validate_manifest_against_session(
     issues: list[ValidationIssue] = []
 
     version = manifest.get("manifest_version")
-    if version != MANIFEST_VERSION:
+    if version not in SUPPORTED_MANIFEST_VERSIONS:
         issues.append(issue(
             "error", "unsupported_manifest_version",
             "Scenario manifest version is unsupported.",
+            expected=list(SUPPORTED_MANIFEST_VERSIONS), observed=version,
+        ))
+    elif version < MANIFEST_VERSION:
+        issues.append(issue(
+            "warning", "legacy_manifest_version",
+            "Scenario manifest predates the current scientific provenance schema.",
             expected=MANIFEST_VERSION, observed=version,
         ))
 

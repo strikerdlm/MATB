@@ -7,6 +7,7 @@ from aircraft_monitor.research.protocol import WorkloadLevel
 from matb_integration.scenario_builder import build_session_files
 from matb_integration.scenario_manifest import (
     canonical_json,
+    sha256_file,
     sha256_text,
     validate_manifest_against_session,
 )
@@ -27,13 +28,17 @@ def test_build_session_files_writes_adjacent_manifest(tmp_path: Path) -> None:
 
     assert block_num == 1
     assert level in WorkloadLevel
-    assert manifest["manifest_version"] == 1
+    assert manifest["manifest_version"] == 2
+    assert manifest["metrics_schema_version"] == "2.0"
+    assert manifest["workload_label_status"] == "engineering_preset_pending_human_calibration"
     assert manifest["participant_id"] == "P03"
     assert manifest["block_num"] == 1
     assert manifest["workload_level"] == level.name
     assert manifest["scenario"]["filename"] == scenario_path.name
-    assert manifest["scenario"]["sha256"] == sha256_text(scenario_path.read_text(encoding="utf-8"))
+    assert manifest["scenario"]["sha256"] == sha256_file(scenario_path)
     assert manifest["expected"]["task_events_total"] > 0
+    assert manifest["expected"]["counterbalancing_method"] == "complete_permutation_counterbalancing_3_conditions"
+    assert "concurrent_event_overlap_pairs" in manifest["expected"]
 
 
 def test_manifest_hash_changes_with_scenario_text(tmp_path: Path) -> None:

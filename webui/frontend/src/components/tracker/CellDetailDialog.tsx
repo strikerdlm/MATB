@@ -40,15 +40,30 @@ export function CellDetailDialog({ cell, onClose }: { cell: TrackerCell | null; 
           <div className="space-y-3">
             <div>
               <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Performance</h4>
-              <Row label="SYSMON d′" value={fmt(data.metrics.sysmon?.d_prime)} />
+              <Row label="SYSMON d′ (observed)" value={fmt(data.metrics.sysmon?.dprime_observed_v2)} />
+              <Row
+                label="SYSMON d′ (estimated; exploratory)"
+                value={fmt(data.metrics.sysmon?.dprime_estimated_v1 ?? data.metrics.sysmon?.d_prime)}
+              />
               <Row label="Hit rate" value={fmt(data.metrics.sysmon?.hit_rate)} />
               <Row label="Misses" value={data.metrics.sysmon?.n_misses} />
               <Row label="Mean RT (ms)" value={fmt(data.metrics.sysmon?.mean_rt_ms, 0)} />
               <Row label="COMM d′" value={fmt(data.metrics.comm?.d_prime)} />
+              <Row label="TRACK RMSE" value={fmt(data.metrics.track?.rmse_deviation)} />
+              <Row label="TRACK time in target (%)" value={fmt(data.metrics.track?.percent_time_in_target, 1)} />
+              <Row label="RESMAN mean absolute deviation" value={fmt(data.metrics.resman?.mean_absolute_deviation, 1)} />
+              <Row label="RESMAN time in tolerance (%)" value={fmt(data.metrics.resman?.percent_time_in_tolerance, 1)} />
             </div>
             <div>
               <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Workload</h4>
-              <Row label="NASA-TLX (raw)" value={fmt(data.metrics.nasatlx?.raw_tlx, 1)} />
+              <Row label="RTLX mean (0–100)" value={fmt(data.metrics.nasatlx?.rtlx_mean_0_100, 1)} />
+              <Row
+                label="TLX legacy sum (exploratory)"
+                value={fmt(
+                  data.metrics.nasatlx?.legacy_subscale_sum_0_60 ?? data.metrics.nasatlx?.raw_tlx,
+                  1,
+                )}
+              />
               <Row label="Bedford" value={data.metrics.bedford?.value} />
               <Row label="ISA (mean)" value={fmt(data.metrics.isa?.mean, 2)} />
             </div>

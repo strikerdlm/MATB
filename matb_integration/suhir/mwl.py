@@ -9,14 +9,19 @@ from __future__ import annotations
 
 from typing import Any
 
+DEFAULT_MWL_SOURCE = "rtlx_mean_0_100"
+
 _SOURCES = {
+    "rtlx_mean_0_100": lambda rec: rec["nasatlx"]["rtlx_mean_0_100"],
+    # Compatibility-only v1 source: sum of available native 0-10 subscales.
+    # It is not the standard Raw TLX and may be based on an incomplete form.
     "raw_tlx": lambda rec: rec["nasatlx"]["raw_tlx"],
     "isa_mean": lambda rec: rec["isa"]["mean"],
     "bedford": lambda rec: rec["bedford"]["value"],
 }
 
 
-def absolute_mwl(record: dict[str, Any], source: str = "raw_tlx") -> float:
+def absolute_mwl(record: dict[str, Any], source: str = DEFAULT_MWL_SOURCE) -> float:
     """Scalar absolute MWL G from one block record for the chosen instrument."""
     if source not in _SOURCES:
         raise ValueError(f"unknown MWL source {source!r}; choose from {sorted(_SOURCES)}")
@@ -26,7 +31,11 @@ def absolute_mwl(record: dict[str, Any], source: str = "raw_tlx") -> float:
     return float(value)
 
 
-def mwl_ratio(record: dict[str, Any], baseline: dict[str, Any], source: str = "raw_tlx") -> float:
+def mwl_ratio(
+    record: dict[str, Any],
+    baseline: dict[str, Any],
+    source: str = DEFAULT_MWL_SOURCE,
+) -> float:
     """Dimensionless G/G0, anchored to the participant's baseline (LOW) block."""
     g = absolute_mwl(record, source)
     g0 = absolute_mwl(baseline, source)

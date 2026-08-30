@@ -19,7 +19,7 @@ export default function VisualizationPage() {
   const [fits, setFits] = useState<FitRow[]>([]);
   const [protocol, setProtocol] = useState<StudyProtocol | null>(null);
   const [pid, setPid] = useState("");
-  const [metric, setMetric] = useState("sysmon_d_prime");
+  const [metric, setMetric] = useState("sysmon_hit_rate");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {

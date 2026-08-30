@@ -1,0 +1,186 @@
+{
+  "schema_version": "2.0",
+  "metrics": {
+    "nasatlx.rtlx_mean_0_10": {
+      "metric_version": "2",
+      "unit": "score_0_10",
+      "equation": "mean of the six NASA-TLX subscale ratings",
+      "required_inputs": [
+        "mental_demand",
+        "physical_demand",
+        "time_pressure",
+        "performance",
+        "effort",
+        "frustration"
+      ],
+      "valid_input_range": [0, 10],
+      "missing_policy": "null unless all six valid subscales are observed",
+      "directionality": "higher_is_more_workload",
+      "measurement_basis": "observed_complete_questionnaire",
+      "confirmatory_eligible": true,
+      "references": ["NASA-TLX six-subscale rating contract", "Raw TLX unweighted scoring convention"]
+    },
+    "nasatlx.rtlx_mean_0_100": {
+      "metric_version": "2",
+      "unit": "score_0_100",
+      "equation": "10 * nasatlx.rtlx_mean_0_10",
+      "required_inputs": ["nasatlx.rtlx_mean_0_10"],
+      "missing_policy": "null unless rtlx_mean_0_10 is available",
+      "directionality": "higher_is_more_workload",
+      "measurement_basis": "observed_complete_questionnaire_rescaled",
+      "confirmatory_eligible": true,
+      "references": ["NASA-TLX six-subscale rating contract", "Raw TLX unweighted scoring convention"]
+    },
+    "nasatlx.weighted_tlx_0_100": {
+      "metric_version": "2",
+      "unit": "score_0_100",
+      "equation": "sum(subscale_rating_0_100 * pairwise_weight_0_5) / 15",
+      "required_inputs": ["six subscale ratings", "15 pairwise comparisons"],
+      "missing_policy": "null unless all pairwise weights were collected",
+      "directionality": "higher_is_more_workload",
+      "measurement_basis": "observed_weighted_questionnaire",
+      "confirmatory_eligible": true,
+      "references": ["NASA-TLX pairwise-weighted scoring contract"]
+    },
+    "nasatlx.legacy_subscale_sum_0_60": {
+      "metric_version": "1",
+      "unit": "legacy_sum_0_60",
+      "equation": "sum of available 0-10 subscale values",
+      "required_inputs": ["one or more numeric subscale ratings"],
+      "missing_policy": "null only when no numeric subscale is present",
+      "directionality": "higher_is_more_workload",
+      "measurement_basis": "legacy_derived_partial_allowed",
+      "confirmatory_eligible": false,
+      "deprecated_alias": "nasatlx.raw_tlx",
+      "references": ["MATB converter v1 compatibility contract"]
+    },
+    "sysmon.dprime_observed_v2": {
+      "metric_version": "2",
+      "unit": "dimensionless",
+      "equation": "Z((hits + 0.5)/(target opportunities + 1)) - Z((false alarms + 0.5)/(non-target opportunities + 1))",
+      "required_inputs": ["unique observed target opportunities", "unique observed non-target opportunities", "linked outcomes"],
+      "missing_policy": "null for absent, incomplete, duplicate, or ambiguous opportunity records",
+      "directionality": "higher_is_better",
+      "measurement_basis": "observed_protocol_defined_opportunities",
+      "confirmatory_eligible": true,
+      "correction": "Hautus log-linear",
+      "references": ["Signal detection theory", "Hautus log-linear correction"]
+    },
+    "sysmon.hit_rate": {
+      "metric_version": "1",
+      "unit": "proportion",
+      "equation": "hits / (hits + misses)",
+      "required_inputs": ["observed target opportunities with HIT or MISS outcomes"],
+      "valid_output_range": [0, 1],
+      "missing_policy": "null when no target opportunity is observed",
+      "directionality": "higher_is_better",
+      "measurement_basis": "observed_target_outcomes",
+      "confirmatory_eligible": true,
+      "references": ["Signal detection theory", "OpenMATB SYSMON logging contract"]
+    },
+    "sysmon.mean_rt_ms": {
+      "metric_version": "1",
+      "unit": "milliseconds",
+      "equation": "arithmetic mean of valid SYSMON response-time records",
+      "required_inputs": ["one or more finite observed response times"],
+      "missing_policy": "null when no finite response time is observed",
+      "directionality": "lower_is_better",
+      "measurement_basis": "observed_participant_responses",
+      "confirmatory_eligible": true,
+      "references": ["OpenMATB SYSMON logging contract"]
+    },
+    "track.rmse_deviation": {
+      "metric_version": "1",
+      "unit": "normalized_cursor_distance",
+      "equation": "sqrt(mean(center_deviation squared))",
+      "required_inputs": ["observed tracking center-deviation samples"],
+      "missing_policy": "null when no valid samples are observed",
+      "directionality": "lower_is_better",
+      "measurement_basis": "observed_runtime_samples",
+      "confirmatory_eligible": true,
+      "references": ["OpenMATB tracking runtime logging contract"]
+    },
+    "track.percent_time_in_target": {
+      "metric_version": "1",
+      "unit": "percent",
+      "equation": "100 * in-target samples / valid target-state samples",
+      "required_inputs": ["observed cursor-in-target states"],
+      "missing_policy": "null when no valid states are observed",
+      "directionality": "higher_is_better",
+      "measurement_basis": "observed_runtime_samples",
+      "confirmatory_eligible": true,
+      "references": ["OpenMATB tracking runtime logging contract"]
+    },
+    "resman.mean_absolute_deviation": {
+      "metric_version": "1",
+      "unit": "tank_level_units",
+      "equation": "mean(abs(observed tank level - configured target))",
+      "required_inputs": ["observed target-tank deviation samples"],
+      "missing_policy": "null when no valid target-tank samples are observed",
+      "directionality": "lower_is_better",
+      "measurement_basis": "observed_runtime_samples",
+      "confirmatory_eligible": true,
+      "references": ["OpenMATB resource-management runtime logging contract"]
+    },
+    "resman.percent_time_in_tolerance": {
+      "metric_version": "1",
+      "unit": "percent",
+      "equation": "100 * in-tolerance samples / valid tolerance-state samples",
+      "required_inputs": ["observed target-tank tolerance states"],
+      "missing_policy": "null when tolerance is disabled or no valid states are observed",
+      "directionality": "higher_is_better",
+      "measurement_basis": "observed_runtime_samples",
+      "confirmatory_eligible": true,
+      "references": ["OpenMATB resource-management runtime logging contract"]
+    },
+    "communications.d_prime": {
+      "metric_version": "1",
+      "unit": "dimensionless",
+      "equation": "Z((hits + 0.5)/(signal opportunities + 1)) - Z((false alarms + 0.5)/(non-signal opportunities + 1))",
+      "required_inputs": ["observed communications HIT", "MISS", "FA", "CR outcomes"],
+      "missing_policy": "null unless both signal and non-signal classes are observed",
+      "directionality": "higher_is_better",
+      "measurement_basis": "observed_communications_opportunities",
+      "confirmatory_eligible": true,
+      "correction": "Hautus log-linear",
+      "references": ["Signal detection theory", "Hautus log-linear correction", "OpenMATB communications logging contract"]
+    },
+    "bedford.value": {
+      "metric_version": "1",
+      "unit": "ordinal_score_1_10",
+      "equation": "last observed Bedford rating rounded to its integer category",
+      "required_inputs": ["one valid Bedford rating"],
+      "valid_input_range": [1, 10],
+      "missing_policy": "null when no valid rating is observed",
+      "directionality": "higher_is_more_workload",
+      "measurement_basis": "observed_questionnaire",
+      "confirmatory_eligible": true,
+      "references": ["Bedford workload scale contract"]
+    },
+    "isa.mean": {
+      "metric_version": "1",
+      "unit": "ordinal_score_1_10",
+      "equation": "arithmetic mean of valid ISA probe ratings within a block",
+      "required_inputs": ["one or more valid ISA probe ratings"],
+      "valid_input_range": [1, 10],
+      "missing_policy": "null when no valid probe rating is observed",
+      "directionality": "higher_is_more_workload",
+      "measurement_basis": "observed_repeated_questionnaire",
+      "confirmatory_eligible": true,
+      "references": ["Instantaneous Self-Assessment scale contract"]
+    },
+    "sysmon.dprime_estimated_v1": {
+      "metric_version": "1",
+      "unit": "dimensionless",
+      "equation": "legacy d-prime using correct rejections estimated from duration, indicator count, and alert timeout",
+      "required_inputs": ["hits", "misses", "false alarms", "duration", "indicator count", "alert timeout"],
+      "missing_policy": "null when duration or either signal class is unavailable",
+      "directionality": "higher_is_better",
+      "measurement_basis": "estimated_duration_windows",
+      "confirmatory_eligible": false,
+      "deprecated_alias": "sysmon.d_prime",
+      "correction": "Hautus log-linear",
+      "references": ["MATB converter v1 compatibility contract", "Hautus log-linear correction"]
+    }
+  }
+}

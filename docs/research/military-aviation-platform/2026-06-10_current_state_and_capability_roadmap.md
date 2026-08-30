@@ -33,7 +33,7 @@ The legacy `aircraft_monitor/` package remains in the repo, but the active resea
 
 ### 2.2 Implemented Research Capabilities
 
-**Scenario generation and counterbalancing.** `matb_integration/scenario_builder.py` generates LOW/MEDIUM/HIGH OpenMATB scenario files with event-rate tuning, track/resman difficulty parameters, ISA probe timing, optional NASA-TLX/Bedford, optional SAGAT freezes, and Latin-square workload ordering.
+**Scenario generation and counterbalancing.** `matb_integration/scenario_builder.py` generates LOW/MEDIUM/HIGH OpenMATB scenario files with event-rate tuning, track/resman difficulty parameters, ISA probe timing, optional NASA-TLX/Bedford, optional SAGAT freezes, and complete permutation counterbalancing across all six three-condition orders.
 
 **Log conversion and metrics.** `matb_integration/log_converter.py` converts OpenMATB CSV logs into structured JSONL-style records with SYSMON/COMM signal-detection metrics, reaction times, NASA-TLX, Bedford, ISA series, and SAGAT probe accuracy. The converter uses a Hautus-style log-linear correction for d-prime.
 

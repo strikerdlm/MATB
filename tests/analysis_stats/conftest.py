@@ -30,7 +30,11 @@ def simulate_metric_rows(metric: str, seed: int, n_participants: int = 12,
 def sim_study():
     """Three confirmatory metrics with the same known structure, distinct seeds."""
     rows = []
-    for seed, metric in ((42, "sysmon_d_prime"), (43, "nasatlx_raw_tlx"), (44, "bedford")):
+    for seed, metric in (
+        (42, "sysmon_hit_rate"),
+        (43, "nasatlx_rtlx_mean_0_100"),
+        (44, "bedford"),
+    ):
         rows.extend(simulate_metric_rows(metric, seed))
     return rows
 

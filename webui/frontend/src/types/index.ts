@@ -106,9 +106,24 @@ export interface BlockDetail {
   visit_ordinal: number;
   workload_level: string;
   metrics: {
-    sysmon?: { d_prime?: number | null; hit_rate?: number | null; n_misses?: number; mean_rt_ms?: number | null };
+    sysmon?: {
+      d_prime?: number | null;
+      dprime_observed_v2?: number | null;
+      dprime_estimated_v1?: number | null;
+      observed_dprime_status?: string;
+      hit_rate?: number | null;
+      n_misses?: number;
+      mean_rt_ms?: number | null;
+    };
+    track?: { rmse_deviation?: number | null; percent_time_in_target?: number | null };
+    resman?: { mean_absolute_deviation?: number | null; percent_time_in_tolerance?: number | null };
     comm?: { d_prime?: number | null };
-    nasatlx?: { raw_tlx?: number | null };
+    nasatlx?: {
+      rtlx_mean_0_100?: number | null;
+      legacy_subscale_sum_0_60?: number | null;
+      raw_tlx?: number | null;
+      complete?: boolean;
+    };
     bedford?: { value?: number | null };
     isa?: { mean?: number | null };
   };
@@ -122,6 +137,9 @@ export interface MetricRow {
   workload_level: "LOW" | "MEDIUM" | "HIGH";
   metric: string;
   value: number;
+  metrics_schema_version?: string;
+  metric_version?: string;
+  confirmatory_eligible?: boolean;
 }
 
 export interface CurvePoint { r: number; p: number; }

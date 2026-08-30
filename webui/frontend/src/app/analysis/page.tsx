@@ -15,11 +15,15 @@ import { buildLmmForestOption, buildRmcorrForestOption, lmmIntervalRows } from "
 import type { AnalysisArtifact, FigureOptionExport } from "@/types";
 
 const METRIC_LABELS: Record<string, string> = {
-  sysmon_d_prime: "SYSMON d′",
+  sysmon_dprime_observed_v2: "SYSMON d′ (observed v2)",
+  sysmon_dprime_estimated_v1: "SYSMON d′ (estimated v1)",
+  sysmon_d_prime: "SYSMON d′ (legacy alias)",
   sysmon_hit_rate: "SYSMON hit rate",
   sysmon_mean_rt_ms: "SYSMON mean RT (ms)",
   comm_d_prime: "COMM d′",
-  nasatlx_raw_tlx: "NASA-TLX (raw)",
+  nasatlx_rtlx_mean_0_100: "RTLX mean (0–100)",
+  nasatlx_legacy_sum_0_60: "NASA-TLX legacy sum (0–60)",
+  nasatlx_raw_tlx: "NASA-TLX legacy alias",
   bedford: "Bedford",
   isa_mean: "ISA (mean)",
 };
