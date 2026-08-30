@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "MATB-EXTENDED-2.0",
+  "status": "software_verified",
+  "selectable": true,
+  "implementation": {"name": "strikerdlm MATB research platform", "version": "2.0"},
+  "canonical_tasks": ["SYSMON", "TRACK", "COMM", "RESMAN"],
+  "behavior": {"scenario_format": "openmatb-text-plus-manifest-v2", "scheduling_display": true, "automation": "static-task-configured"},
+  "scoring": {"registry": "matb_integration/metrics_spec.json", "metrics_schema_version": "2.0"},
+  "logging": {"legacy_csv": true, "events_jsonl": true, "timing_qc": true, "lsl": "optional"},
+  "extensions": ["ISA", "NASA-TLX", "Bedford", "SAGAT", "research-console", "frequentist-analysis", "Bayesian-sensitivity"],
+  "provenance": {"root_license": "MIT", "embedded_runtime_license": "CeCILL-2.1"},
+  "claims": {"software_conformance": "TESTED", "physical_timing": "NOT_MEASURED", "human_equivalence": "NOT_TESTED"},
+  "known_deviations": ["Extended measures are separately versioned and are not canonical MATB-II outputs."]
+}

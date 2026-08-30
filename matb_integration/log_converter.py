@@ -118,11 +118,20 @@ def _d_prime(n_hits: int, n_misses: int, n_fa: int, n_cr: int) -> float | None:
 
 
 def _parse_csv(csv_path: Path) -> list[dict[str, str]]:
+    raw = Path(csv_path).read_bytes()
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        # Historical Windows/OpenMATB exports and investigator-created fixtures
+        # may use the active ANSI code page.  cp1252 is deliberately the only
+        # fallback: it is deterministic and covers the Spanish questionnaire
+        # labels used by this project.  Other encodings fail rather than being
+        # guessed silently.
+        text = raw.decode("cp1252")
     rows: list[dict[str, str]] = []
-    with open(csv_path, encoding="utf-8", newline="") as fh:
-        reader = csv.DictReader(fh)
-        for row in reader:
-            rows.append({k.strip(): v.strip() for k, v in row.items()})
+    reader = csv.DictReader(text.splitlines())
+    for row in reader:
+        rows.append({k.strip(): v.strip() for k, v in row.items()})
     return rows
 
 

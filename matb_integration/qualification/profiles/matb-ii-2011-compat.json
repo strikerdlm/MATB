@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "MATB-II-2011-COMPAT",
+  "status": "documented_not_selectable",
+  "selectable": false,
+  "implementation": {"name": "NASA MATB-II documented comparator", "version": "2011"},
+  "canonical_tasks": ["SYSMON", "TRACK", "COMM", "RESMAN"],
+  "behavior": {"scenario_format": "comparison-mapping-only", "scheduling_display": true, "automation": "documented-only"},
+  "scoring": {"registry": "pending-direct-conformance", "metrics_schema_version": "not-applicable"},
+  "logging": {"legacy_csv": false, "events_jsonl": false, "timing_qc": false, "lsl": "not-documented"},
+  "extensions": [],
+  "provenance": {"primary_reference": "NASA/TM-2011-217164", "direct_executable_test": "PENDING"},
+  "claims": {"software_conformance": "NOT_TESTED", "physical_timing": "NOT_MEASURED", "human_equivalence": "NOT_TESTED"},
+  "known_deviations": ["This profile is a documented comparator and cannot be selected until direct conformance and crossover work are complete."]
+}

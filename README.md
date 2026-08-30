@@ -29,6 +29,14 @@ aliases remain reproducible but exploratory. LOW/MEDIUM/HIGH are engineering
 presets pending human calibration, and software timing QC is not a substitute
 for physical-onset qualification.
 
+Qualification tooling now lives in `matb_integration/qualification/`. It keeps
+software conformance, rig-specific physical timing, human calibration,
+cross-implementation characterization, and public-release eligibility as
+independent fail-closed evidence classes. See
+[`docs/research/qualification-workflow.md`](docs/research/qualification-workflow.md).
+The public-core export remains deliberately blocked while empirical gates and
+Research Console decoupling from sUAS/Liftoff are pending.
+
 The Research Console is a loopback FastAPI/Next.js application with local
 SQLite and artifact storage. Its sUAS surface is a synthetic, non-kinetic,
 supervisory simulator. It has no real aircraft, weapon, targeting, autonomous

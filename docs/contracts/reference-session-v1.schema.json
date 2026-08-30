@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://strikerdlm.github.io/matb/schemas/reference-session-v1.json",
+  "title": "MATB Deidentified Reference Session v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "session_id", "participant_pseudonym", "locale", "scenario", "runtime", "metrics", "timing", "questionnaires", "exclusions", "artifacts"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "session_id": {"type": "string", "minLength": 1},
+    "participant_pseudonym": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
+    "locale": {"type": "object", "required": ["language", "instrument_version"]},
+    "scenario": {"type": "object", "required": ["profile_id", "sha256", "manifest_sha256"]},
+    "runtime": {"type": "object", "required": ["source_commit", "version"]},
+    "metrics": {"type": "object", "required": ["schema_version", "eligibility"]},
+    "timing": {"type": "object", "required": ["rig_id", "qualification_status", "session_qc_status"]},
+    "questionnaires": {"type": "array"},
+    "exclusions": {"type": "array"},
+    "artifacts": {"type": "array", "items": {"type": "object", "required": ["path", "sha256", "size_bytes"]}}
+  }
+}

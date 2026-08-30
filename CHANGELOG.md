@@ -13,6 +13,11 @@ All notable changes to the MATB military aviation research platform.
 - Preregisterable workload-calibration and hardware timing-qualification
   protocols. These are protocols and gates, not claims that validation has
   already occurred.
+- Fail-closed compatibility, conformance, physical-timing, calibration-study,
+  reference-session, BIDS-compatible event, and scientific-release contracts.
+- MATB-specific cross-platform CI, component licensing/citation metadata, and
+  an allowlisted public-core candidate exporter that refuses publication while
+  scientific or console-decoupling blockers remain.
 
 #### Changed
 - The DEPDF workload default is complete-form `rtlx_mean_0_100`; the v1
