@@ -2,11 +2,19 @@ import type { MetricRow } from "@/types";
 import { LEVELS } from "@/lib/tracker";
 
 export const METRICS: Record<string, { label: string; decimals: number; unit?: string }> = {
-  sysmon_d_prime: { label: "SYSMON d′", decimals: 3 },
+  sysmon_dprime_observed_v2: { label: "SYSMON d′ (observed v2)", decimals: 3 },
+  sysmon_dprime_estimated_v1: { label: "SYSMON d′ (estimated v1; exploratory)", decimals: 3 },
+  sysmon_d_prime: { label: "SYSMON d′ (legacy alias)", decimals: 3 },
   sysmon_hit_rate: { label: "SYSMON hit rate", decimals: 3 },
   sysmon_mean_rt_ms: { label: "SYSMON mean RT", decimals: 0, unit: "ms" },
+  track_rmse_deviation: { label: "TRACK RMS deviation", decimals: 3 },
+  track_percent_time_in_target: { label: "TRACK time in target", decimals: 1, unit: "%" },
+  resman_mean_absolute_deviation: { label: "RESMAN mean absolute deviation", decimals: 1 },
+  resman_percent_time_in_tolerance: { label: "RESMAN time in tolerance", decimals: 1, unit: "%" },
   comm_d_prime: { label: "COMM d′", decimals: 3 },
-  nasatlx_raw_tlx: { label: "NASA-TLX (raw)", decimals: 1 },
+  nasatlx_rtlx_mean_0_100: { label: "RTLX mean (0–100)", decimals: 1 },
+  nasatlx_legacy_sum_0_60: { label: "NASA-TLX legacy sum (0–60)", decimals: 1 },
+  nasatlx_raw_tlx: { label: "NASA-TLX legacy alias", decimals: 1 },
   bedford: { label: "Bedford", decimals: 0 },
   isa_mean: { label: "ISA (mean)", decimals: 2 },
 };

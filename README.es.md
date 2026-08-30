@@ -21,6 +21,14 @@ de Suhir intraparticipante y admite una evaluación neurocognitiva exploratoria.
 OpenMATB está versionado en `openmatb/` para desarrollo local y presentación de tareas; el instalador
 de recursos también admite un checkout compatible independiente cuando un estudio lo requiera.
 
+Las métricas científicas usan el registro aditivo v2 descrito en
+[`docs/research/scientific-foundation-v2.md`](docs/research/scientific-foundation-v2.md).
+El RTLX corregido y las métricas SYSMON basadas en oportunidades observadas son
+explícitos; los alias heredados siguen siendo reproducibles, pero exploratorios.
+LOW/MEDIUM/HIGH son preajustes de ingeniería pendientes de calibración humana, y
+el control de calidad temporal del software no sustituye la calificación del
+inicio físico del estímulo.
+
 La Consola de Investigación es una aplicación FastAPI/Next.js enlazada a loopback, con SQLite y
 almacenamiento local de artefactos. Su superficie sUAS es un simulador sintético, no cinético y de
 supervisión. No contiene aeronaves reales, armas, selección de blancos, despacho autónomo, mapas del

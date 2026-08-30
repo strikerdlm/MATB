@@ -1,6 +1,6 @@
 """
 Tests for:
-  - block_order_for_participant (Latin-square counterbalancing)
+  - block_order_for_participant (complete permutation counterbalancing)
   - build_session_files (generates 3 per-participant scenario files)
   - Bedford questionnaire file format
   - log_converter._bedford_metric
@@ -19,6 +19,7 @@ import pytest
 
 from aircraft_monitor.research.protocol import WorkloadLevel
 from matb_integration.scenario_builder import (
+    COMPLETE_COUNTERBALANCE_3,
     LATIN_SQUARE_3,
     block_order_for_participant,
     build_session_files,
@@ -38,10 +39,13 @@ BEDFORD_TXT = (
     / "matb_integration/questionnaires/bedford_en.txt"
 )
 
-# ── Latin-square ──────────────────────────────────────────────────────────────
+# ── Complete permutation counterbalancing ────────────────────────────────────
+
+def test_legacy_latin_square_name_is_an_alias():
+    assert LATIN_SQUARE_3 is COMPLETE_COUNTERBALANCE_3
 
 def test_latin_square_has_six_rows():
-    assert len(LATIN_SQUARE_3) == 6
+    assert len(COMPLETE_COUNTERBALANCE_3) == 6
 
 
 def test_latin_square_each_row_is_permutation():

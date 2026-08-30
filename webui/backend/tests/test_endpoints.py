@@ -44,7 +44,9 @@ def test_ingest_duplicate_returns_409(client, sample_csv_bytes):
 def test_ingest_endpoint_accepts_valid_manifest(client, sample_csv_bytes):
     _enroll(client)
     manifest = {
-        "manifest_version": 1,
+        "manifest_version": 2,
+        "metrics_schema_version": "2.0",
+        "workload_label_status": "engineering_preset_pending_human_calibration",
         "participant_id": "P01",
         "visit_ordinal": 1,
         "workload_level": "LOW",

@@ -212,7 +212,16 @@ def sample_csv_bytes():
     """Minimal OpenMATB-style CSV with SYSMON rows convert_session can parse."""
     def _build(misses: tuple[float, ...] = (5.0, 25.0), raw_tlx: float = 60.0) -> bytes:
         lines = ["scenario_time,type,module,address,value"]
-        lines.append(f"900.0,performance,genericscales,Mental demand,{raw_tlx}")
+        # The fixture argument is an RTLX 0-100 target. OpenMATB stores each
+        # complete questionnaire subscale natively on 0-10.
+        native_rating = raw_tlx / 10.0
+        for subscale in (
+            "Mental demand", "Physical demand", "Temporal demand",
+            "Performance", "Effort", "Frustration",
+        ):
+            lines.append(
+                f"900.0,performance,genericscales,{subscale},{native_rating}"
+            )
         for t in misses:
             lines.append(f"{t},performance,sysmon,signal_detection,MISS")
         lines.append("10.0,performance,sysmon,signal_detection,HIT")

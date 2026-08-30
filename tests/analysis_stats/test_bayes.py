@@ -16,11 +16,11 @@ FAST = {"draws": 300, "tune": 300, "chains": 2}
 
 
 def test_bayes_q2_recovers_known_effects(sim_fits):
-    rows = simulate_metric_rows("sysmon_d_prime", seed=42)
+    rows = simulate_metric_rows("sysmon_hit_rate", seed=42)
     art = run_bayes(rows, sim_fits, seed=20260604, **FAST,
                     created_utc="2026-06-04T00:00:00+00:00")
     assert art["bayes_version"] == BAYES_VERSION
-    q2 = art["q2"]["sysmon_d_prime"]
+    q2 = art["q2"]["sysmon_hit_rate"]
     assert q2["status"] == "ok"
     # truth: visit slope -0.05, MEDIUM-LOW 0.8, HIGH-LOW 1.6 (posterior means)
     assert q2["coefs"]["b_visit"]["mean"] == pytest.approx(-0.05, abs=0.05)
@@ -56,8 +56,8 @@ def test_bayes_insufficient_and_empty():
 
 
 def test_bayes_seed_reproducibility(sim_fits):
-    rows = simulate_metric_rows("nasatlx_raw_tlx", seed=43)
+    rows = simulate_metric_rows("nasatlx_rtlx_mean_0_100", seed=43)
     a = run_bayes(rows, [], seed=11, draws=200, tune=200, chains=2)
     b = run_bayes(rows, [], seed=11, draws=200, tune=200, chains=2)
-    assert a["q2"]["nasatlx_raw_tlx"]["coefs"]["b_visit"]["mean"] == \
-        b["q2"]["nasatlx_raw_tlx"]["coefs"]["b_visit"]["mean"]
+    assert a["q2"]["nasatlx_rtlx_mean_0_100"]["coefs"]["b_visit"]["mean"] == \
+        b["q2"]["nasatlx_rtlx_mean_0_100"]["coefs"]["b_visit"]["mean"]

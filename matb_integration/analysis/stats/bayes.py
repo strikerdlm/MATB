@@ -18,8 +18,8 @@ import pandas as pd
 from . import gates
 from .data import CONFIRMATORY_METRICS, fingerprint, fits_frame, metrics_frame
 
-BAYES_VERSION = "1.0.0"
-SPEC = "docs/superpowers/specs/2026-06-03-webui-phase3-statistics-design.md"
+BAYES_VERSION = "2.0.0"
+SPEC = "docs/research/scientific-foundation-v2.md"
 DEFAULT_SEED = 20260604
 RHAT_MAX = 1.01
 PRIORS = {
@@ -27,6 +27,7 @@ PRIORS = {
     "sds": "HalfNormal(sd(y)) for sigma_u (participant) and sigma_e (residual)",
 }
 CAVEATS = [
+    "Only v2 confirmatory metrics are fitted; legacy TLX sums and estimated SYSMON d-prime are excluded.",
     "Bayesian sensitivity re-fit of Q2/Q4 only; the frequentist artifact is primary.",
     "95% intervals are equal-tailed (ETI), not HDI.",
     "'not converged' (R-hat > 1.01 or any divergence) means the posterior summary "

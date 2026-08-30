@@ -13,7 +13,7 @@ G0_TRUE, P0_TRUE, TAU0_TRUE = 40.0, 0.99, 12.0
 def _block(raw_tlx, failure_times, duration):
     """Build a minimal (record, raw_rows) pair the pipeline consumes."""
     record = {
-        "nasatlx": {"raw_tlx": raw_tlx},
+        "nasatlx": {"rtlx_mean_0_100": raw_tlx, "raw_tlx": raw_tlx * 0.6},
         "isa": {"mean": raw_tlx / 20.0, "probes": []},
         "bedford": {"value": raw_tlx / 10.0},
         "scenario_time_max_s": duration,
@@ -43,8 +43,9 @@ def test_fit_participant_recovers_parameters_and_serializes():
         "MEDIUM": _block(60.0, _failures_for(60.0, duration), duration),
         "HIGH":   _block(80.0, _failures_for(80.0, duration), duration),
     }
-    out = fit_participant("P01", blocks, source="raw_tlx")
+    out = fit_participant("P01", blocks)
     assert out["participant_id"] == "P01"
+    assert out["mwl_source"] == "rtlx_mean_0_100"
     assert out["g0"] == pytest.approx(G0_TRUE, rel=2e-2)
     assert out["p0"] == pytest.approx(P0_TRUE, rel=2e-2)
     assert out["tau0"] == pytest.approx(TAU0_TRUE, rel=5e-2)

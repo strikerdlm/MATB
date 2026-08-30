@@ -22,6 +22,13 @@ neurocognitive screen. The OpenMATB task runtime is tracked in `openmatb/` for
 local development and task presentation; the asset installer also supports a
 separate compatible checkout when a study requires one.
 
+Scientific metrics use the additive v2 registry described in
+[`docs/research/scientific-foundation-v2.md`](docs/research/scientific-foundation-v2.md).
+Corrected RTLX and observed-opportunity SYSMON metrics are explicit; legacy
+aliases remain reproducible but exploratory. LOW/MEDIUM/HIGH are engineering
+presets pending human calibration, and software timing QC is not a substitute
+for physical-onset qualification.
+
 The Research Console is a loopback FastAPI/Next.js application with local
 SQLite and artifact storage. Its sUAS surface is a synthetic, non-kinetic,
 supervisory simulator. It has no real aircraft, weapon, targeting, autonomous

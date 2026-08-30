@@ -12,15 +12,19 @@ from typing import Any, Iterable
 
 import pandas as pd
 
-ALL_METRICS: tuple[str, ...] = (
-    "sysmon_d_prime", "sysmon_hit_rate", "sysmon_mean_rt_ms",
-    "comm_d_prime", "nasatlx_raw_tlx", "bedford", "isa_mean",
+from matb_integration.metrics_schema import LONG_METRIC_IDS
+
+ALL_METRICS: tuple[str, ...] = tuple(LONG_METRIC_IDS)
+CONFIRMATORY_METRICS: tuple[str, ...] = (
+    "sysmon_hit_rate", "nasatlx_rtlx_mean_0_100", "bedford",
 )
-CONFIRMATORY_METRICS: tuple[str, ...] = ("sysmon_d_prime", "nasatlx_raw_tlx", "bedford")
 LEVELS: tuple[str, ...] = ("LOW", "MEDIUM", "HIGH")
 VISIT_CENTER = 3.5  # mean of visit ordinals 1..6
 
 _METRIC_COLS = ("participant_id", "visit_ordinal", "workload_level", "metric", "value")
+_FINGERPRINT_METRIC_COLS = _METRIC_COLS + (
+    "metrics_schema_version", "metric_version", "confirmatory_eligible",
+)
 _FIT_COLS = ("participant_id", "visit_ordinal", "g0", "p0", "tau0")
 
 
@@ -32,7 +36,17 @@ def _frame(rows: Iterable[dict[str, Any]], cols: tuple[str, ...]) -> pd.DataFram
 
 
 def metrics_frame(rows: Iterable[dict[str, Any]]) -> pd.DataFrame:
-    df = _frame(rows, _METRIC_COLS)
+    supplied = list(rows)
+    schema_versions = {
+        str(row.get("metrics_schema_version") or "1.0")
+        for row in supplied
+    }
+    if len(schema_versions) > 1:
+        raise ValueError(
+            "mixed metrics_schema_version values require an explicit migration: "
+            f"{sorted(schema_versions)}"
+        )
+    df = _frame(supplied, _METRIC_COLS)
     df = df[df["value"].notna()].copy()
     if not df.empty:
         bad_lvl = set(df["workload_level"]) - set(LEVELS)
@@ -64,7 +78,7 @@ def fingerprint(metrics_rows: Iterable[dict[str, Any]],
         recs = [[r.get(c) for c in cols] for r in rows]
         return sorted(recs, key=lambda rec: json.dumps(rec, default=str))
     payload = json.dumps(
-        {"metrics": canon(metrics_rows, _METRIC_COLS),
+        {"metrics": canon(metrics_rows, _FINGERPRINT_METRIC_COLS),
          "fits": canon(fits_rows, _FIT_COLS)},
         separators=(",", ":"), default=str,
     )

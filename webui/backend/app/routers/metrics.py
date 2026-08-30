@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select
 
 from app.db import get_session
-from app.metrics_long import extract_long_metrics
+from app.metrics_long import extract_long_metrics, metric_metadata
 from app.models import Block, Visit
 from app.liftoff_models import LiftoffSession
 
@@ -24,13 +24,15 @@ def collect_metric_rows(session: Session, participant_id: str | None = None) -> 
     for block, visit in session.exec(query).all():
         record = json.loads(block.metrics_json)
         for metric, value in extract_long_metrics(record):
-            rows.append({
+            metric_row = {
                 "participant_id": visit.participant_id,
                 "visit_ordinal": visit.visit_ordinal,
                 "workload_level": block.workload_level,
                 "metric": metric,
                 "value": value,
-            })
+            }
+            metric_row.update(metric_metadata(metric, record))
+            rows.append(metric_row)
     return rows
 
 

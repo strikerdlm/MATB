@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any, Callable
 
 from core import validation
@@ -90,8 +91,16 @@ class Sysmon(AbstractPlugin):
 
         # Add private parameters
         # to any gauge
+        self._opportunity_counter: int = 0
         for gauge in self.get_all_gauges():
-            gauge.update({"_failuretimer": None, "_onfailure": False, "_milliresponsetime": 0, "_freezetimer": None})
+            gauge.update({
+                "_failuretimer": None,
+                "_onfailure": False,
+                "_milliresponsetime": 0,
+                "_freezetimer": None,
+                "_opportunity_id": None,
+                "_opportunity_opened_scenario_time": None,
+            })
 
         # and to scale only
         for gauge in self.get_scale_gauges():
@@ -228,6 +237,17 @@ class Sysmon(AbstractPlugin):
         if gauge["_onfailure"]:
             pass  # TODO : warn in case of multiple failure on the same gauge
         else:
+            self._opportunity_counter = getattr(self, "_opportunity_counter", 0) + 1
+            opportunity_id = f"sysmon-{self._opportunity_counter:06d}"
+            gauge["_opportunity_id"] = opportunity_id
+            gauge["_opportunity_opened_scenario_time"] = self.scenario_time
+            self.log_performance("opportunity", json.dumps({
+                "opportunity_id": opportunity_id,
+                "phase": "opened",
+                "target": True,
+                "indicator": gauge["name"],
+                "opened_scenario_time_s": self.scenario_time,
+            }, sort_keys=True))
             gauge["_onfailure"] = True
             if "default" in gauge:  # Light case
                 gauge["on"] = gauge["default"] != "on"
@@ -248,6 +268,9 @@ class Sysmon(AbstractPlugin):
         gauge["_failuretimer"] = delay
 
     def stop_failure(self, gauge: dict[str, Any], success: bool = False) -> None:
+        opportunity_id = gauge.get("_opportunity_id")
+        opened_scenario_time = gauge.get("_opportunity_opened_scenario_time")
+        response_time_ms = gauge["_milliresponsetime"]
         # Reset the gauge failure timer
         gauge["_onfailure"] = False
         gauge["_failuretimer"] = None
@@ -278,6 +301,17 @@ class Sysmon(AbstractPlugin):
         self.log_performance("name", gauge["name"])
         self.log_performance("signal_detection", sdt_string)
         self.log_performance("response_time", rt)
+        if opportunity_id is not None:
+            self.log_performance("opportunity", json.dumps({
+                "opportunity_id": opportunity_id,
+                "phase": "closed",
+                "target": True,
+                "indicator": gauge["name"],
+                "opened_scenario_time_s": opened_scenario_time,
+                "closed_scenario_time_s": self.scenario_time,
+                "response_time_ms": response_time_ms if success else None,
+                "outcome": sdt_string,
+            }, sort_keys=True))
 
         # Reset gauge to its nominal (default) state
         if "default" in gauge:  # Light case
@@ -285,6 +319,8 @@ class Sysmon(AbstractPlugin):
         else:  # Scale case
             gauge["_zone"] = 0
         gauge["_milliresponsetime"] = 0
+        gauge["_opportunity_id"] = None
+        gauge["_opportunity_opened_scenario_time"] = None
 
     def get_gauges_key_value(self, key: str, value: Any) -> list[dict[str, Any]]:
         gauge_list: list[dict[str, Any]] = list()
@@ -333,6 +369,12 @@ class Sysmon(AbstractPlugin):
                 self.log_performance("name", gauge["name"])
                 self.log_performance("signal_detection", "FA")
                 self.log_performance("response_time", float("nan"))
+                self.log_performance("opportunity_unlinked_response", json.dumps({
+                    "indicator": gauge["name"],
+                    "outcome": "FA",
+                    "scenario_time_s": self.scenario_time,
+                    "reason": "no_protocol_defined_nontarget_opportunity",
+                }, sort_keys=True))
 
                 # Set a negative feedback if relevant
                 if self.parameters["feedbacks"]["negative"]["active"]:

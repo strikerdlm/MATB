@@ -1,7 +1,8 @@
 """Engine orchestration: Q1-Q4 + multiplicity -> one JSON-serializable artifact.
 
-Multiplicity (spec section 3): BH-FDR at q=.05 over exactly the 6-test
-confirmatory family ({d', raw TLX, Bedford} x {Q1 omnibus, Q2 visit slope});
+Multiplicity: BH-FDR at q=.05 over exactly the 6-test v2 confirmatory family
+({observed SYSMON hit rate, complete RTLX 0-100, Bedford} x
+{Q1 omnibus, Q2 visit slope});
 pairwise Q1 contrasts only for FDR survivors, Holm-corrected within metric.
 Everything else is exploratory. If some planned tests are not estimable, the
 FDR correction runs over the available tests and both planned and actual
@@ -20,16 +21,17 @@ from .multiplicity import bh_fdr, holm
 from .rmanova import rm_anova_q1
 from .rmcorr import rm_corr, rm_corr_level_adjusted
 
-ENGINE_VERSION = "1.0.0"
-SPEC = "docs/superpowers/specs/2026-06-03-webui-phase3-statistics-design.md"
+ENGINE_VERSION = "2.0.0"
+SPEC = "docs/research/scientific-foundation-v2.md"
 FDR_Q = 0.05
 # Pre-specified exploratory coupling pairs (x = subjective workload, y = performance)
 Q3_PAIRS: tuple[tuple[str, str], ...] = tuple(
     (x, y)
-    for x in ("nasatlx_raw_tlx", "bedford", "isa_mean")
-    for y in ("sysmon_d_prime", "sysmon_mean_rt_ms", "comm_d_prime")
+    for x in ("nasatlx_rtlx_mean_0_100", "bedford", "isa_mean")
+    for y in ("sysmon_hit_rate", "sysmon_mean_rt_ms", "comm_d_prime")
 )
 CAVEATS = [
+    "Legacy summed TLX and duration-estimated SYSMON d-prime are exploratory only.",
     "Wald inference on REML fits; small-sample (n=12) p-values are approximate.",
     "Random intercepts only; random slopes not estimable at this n.",
     "Q2 primary slope is the level-adjusted common slope (additive model); "

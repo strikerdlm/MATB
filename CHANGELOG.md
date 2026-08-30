@@ -4,6 +4,29 @@ All notable changes to the MATB military aviation research platform.
 
 ## [Unreleased] — 2026-08-02
 
+### Scientific metrics foundation v2 — 2026-08-30
+
+#### Added
+- Versioned machine-readable metric definitions, explicit corrected RTLX,
+  observed-opportunity SYSMON d-prime, TRACK/RESMAN summaries, JSONL runtime
+  events, session timing-QC sidecars, and richer scenario provenance.
+- Preregisterable workload-calibration and hardware timing-qualification
+  protocols. These are protocols and gates, not claims that validation has
+  already occurred.
+
+#### Changed
+- The DEPDF workload default is complete-form `rtlx_mean_0_100`; the v1
+  `raw_tlx` sum remains available only for reproducibility and exploratory use.
+- All six three-condition sequences are now named complete permutation
+  counterbalancing. `LATIN_SQUARE_3` remains a compatibility alias.
+- Statistical outputs reject mixed metric-schema versions and carry metric
+  version and eligibility metadata.
+
+#### Scientific boundary
+- LOW/MEDIUM/HIGH remain engineering presets pending human calibration.
+- Software timing summaries do not establish physical visual/audio onset.
+- Legacy estimated d-prime and TLX sums are not confirmatory endpoints.
+
 ### Native sUAS C2 v1 — Linux/headless hardening
 
 #### Added
@@ -23,7 +46,7 @@ All notable changes to the MATB military aviation research platform.
 
 #### Verified
 - Native sUAS tests: 176 passed; slow/performance gates: 29 passed (including
-  seeded record/replay, six Latin orders, 25 recovery cycles, and the
+  seeded record/replay, six completely counterbalanced orders, 25 recovery cycles, and the
   eight-aircraft 6,000-tick budget).
 - Backend tests: 84 passed; frontend tests: 72 passed; typecheck and
   production build passed.
@@ -285,9 +308,9 @@ Confirmed working after three bug fixes below:
 - `matb_integration/scenario_builder.py` additions:
   - `BEDFORD_QUESTIONNAIRE` constant; `include_bedford` flag on
     `build_block_scenario()` to emit Bedford at block end
-  - `LATIN_SQUARE_3`: all 6 permutations of LOW/MEDIUM/HIGH; groups of 6
+  - `LATIN_SQUARE_3` (now a compatibility alias): all 6 permutations of LOW/MEDIUM/HIGH; groups of 6
     consecutive participants are fully counterbalanced
-  - `block_order_for_participant(participant_id)`: deterministic Latin-square
+  - `block_order_for_participant(participant_id)`: deterministic complete-permutation
     row from participant numeric suffix
   - `build_session_files(participant_id, output_dir, ...)`: generates 3
     named scenario files in counterbalanced order for one participant
@@ -301,7 +324,7 @@ Confirmed working after three bug fixes below:
   - Spearman ρ per participant (condition rank vs metric) + sign-test across N
   - Console summary + optional TSV output
   - CLI: `python -m matb_integration.analysis.descriptive <source> -o results.tsv`
-- `tests/test_latin_square_and_bedford.py`: 27 tests for Latin-square
+- `tests/test_latin_square_and_bedford.py`: 27 tests for complete-permutation
   properties, `build_session_files`, Bedford questionnaire format, Bedford
   metric parsing, and analysis pipeline (91 pass, 3 skip total suite)
 - `docs/implementation/phase8_feature_spec.md`: Phase 8–11 implementation

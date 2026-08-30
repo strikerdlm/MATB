@@ -9,14 +9,14 @@ from matb_integration.analysis.stats.data import (
 )
 
 
-def _mrow(p="P01", v=1, lvl="LOW", metric="sysmon_d_prime", value=2.0, **extra):
+def _mrow(p="P01", v=1, lvl="LOW", metric="sysmon_hit_rate", value=2.0, **extra):
     return {"participant_id": p, "visit_ordinal": v, "workload_level": lvl,
             "metric": metric, "value": value, **extra}
 
 
 def test_constants():
-    assert CONFIRMATORY_METRICS == ("sysmon_d_prime", "nasatlx_raw_tlx", "bedford")
-    assert len(ALL_METRICS) == 7 and set(CONFIRMATORY_METRICS) <= set(ALL_METRICS)
+    assert CONFIRMATORY_METRICS == ("sysmon_hit_rate", "nasatlx_rtlx_mean_0_100", "bedford")
+    assert len(ALL_METRICS) == 15 and set(CONFIRMATORY_METRICS) <= set(ALL_METRICS)
     assert VISIT_CENTER == 3.5
 
 
@@ -39,6 +39,22 @@ def test_metrics_frame_rejects_unknown_level_and_metric():
         metrics_frame([_mrow(lvl="EXTREME")])
     with pytest.raises(ValueError, match="metric"):
         metrics_frame([_mrow(metric="made_up")])
+
+
+def test_metrics_frame_rejects_mixed_schema_versions_without_migration():
+    with pytest.raises(ValueError, match="explicit migration"):
+        metrics_frame([
+            _mrow(metrics_schema_version="1.0"),
+            _mrow(p="P02", metrics_schema_version="2.0"),
+        ])
+
+
+def test_metrics_frame_treats_missing_schema_as_legacy_when_checking_mixes():
+    with pytest.raises(ValueError, match="explicit migration"):
+        metrics_frame([
+            _mrow(),
+            _mrow(p="P02", metrics_schema_version="2.0"),
+        ])
 
 
 def test_metrics_frame_empty():

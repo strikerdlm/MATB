@@ -29,6 +29,8 @@ import statistics
 from pathlib import Path
 from typing import Any
 
+from matb_integration.metrics_schema import METRICS_SCHEMA_VERSION
+
 NASA_TLX_SUBSCALES: tuple[str, ...] = (
     "Mental demand",
     "Physical demand",
@@ -37,6 +39,13 @@ NASA_TLX_SUBSCALES: tuple[str, ...] = (
     "Effort",
     "Frustration",
 )
+
+# OpenMATB's tracked full questionnaire uses "Time pressure", while the
+# integration/short forms use the standard dimension label "Temporal demand".
+# Keep the historical output key (`time_pressure`) but accept both source labels.
+NASA_TLX_SUBSCALE_ALIASES: dict[str, str] = {
+    "Temporal demand": "Time pressure",
+}
 
 # Spanish equivalents (Rolo-González et al., 2010; INSST NTP-544)
 NASA_TLX_SUBSCALES_ES: tuple[str, ...] = (
@@ -48,7 +57,9 @@ NASA_TLX_SUBSCALES_ES: tuple[str, ...] = (
     "Frustración",
 )
 
-_ALL_NASA_TLX_SUBSCALES: frozenset[str] = frozenset(NASA_TLX_SUBSCALES + NASA_TLX_SUBSCALES_ES)
+_ALL_NASA_TLX_SUBSCALES: frozenset[str] = frozenset(
+    NASA_TLX_SUBSCALES + NASA_TLX_SUBSCALES_ES + tuple(NASA_TLX_SUBSCALE_ALIASES)
+)
 
 ISA_TITLE: str = "Workload"
 ISA_TITLE_ES: str = "Carga de trabajo"
@@ -123,6 +134,103 @@ def _float_or_none(s: str) -> float | None:
         return None
 
 
+def _bool_or_none(value: Any) -> bool | None:
+    normalized = str(value).strip().lower()
+    if normalized in {"true", "1"}:
+        return True
+    if normalized in {"false", "0"}:
+        return False
+    return None
+
+
+def _summary(values: list[float]) -> dict[str, float | int | None]:
+    return {
+        "n": len(values),
+        "mean": round(statistics.mean(values), 4) if values else None,
+        "median": round(statistics.median(values), 4) if values else None,
+        "sd": round(statistics.stdev(values), 4) if len(values) > 1 else None,
+    }
+
+
+def _track_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
+    perf = [r for r in rows if r.get("type") == "performance" and r.get("module") == "track"]
+    deviations = [
+        value for row in perf
+        if row.get("address") == "center_deviation"
+        and (value := _float_or_none(row.get("value", ""))) is not None
+    ]
+    target_states = [
+        value for row in perf
+        if row.get("address") == "cursor_in_target"
+        and (value := _bool_or_none(row.get("value"))) is not None
+    ]
+    recovery_times = [
+        value for row in perf
+        if row.get("address") == "response_time"
+        and (value := _float_or_none(row.get("value", ""))) is not None
+    ]
+    return {
+        "n_samples": len(deviations),
+        "mean_absolute_deviation": round(statistics.mean(abs(v) for v in deviations), 4) if deviations else None,
+        "rmse_deviation": round(math.sqrt(statistics.mean(v * v for v in deviations)), 4) if deviations else None,
+        "percent_time_in_target": round(100 * sum(target_states) / len(target_states), 4) if target_states else None,
+        "recovery_time_ms": _summary(recovery_times),
+        "measurement_basis": "observed_runtime_samples",
+        "confirmatory_eligible": bool(deviations and target_states),
+    }
+
+
+def _resman_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
+    perf = [r for r in rows if r.get("type") == "performance" and r.get("module") == "resman"]
+    deviations: list[float] = []
+    tolerance_states: list[bool] = []
+    recovery_times: list[float] = []
+    by_tank_values: dict[str, dict[str, list[Any]]] = {}
+    for row in perf:
+        address = row.get("address", "")
+        tank = address.split("_", 1)[0] if "_" in address else "unknown"
+        bucket = by_tank_values.setdefault(tank, {"deviations": [], "tolerance": [], "recovery": []})
+        if address.endswith("_deviation"):
+            value = _float_or_none(row.get("value", ""))
+            if value is not None:
+                deviations.append(value)
+                bucket["deviations"].append(value)
+        elif address.endswith("_in_tolerance"):
+            state = _bool_or_none(row.get("value"))
+            if state is not None:
+                tolerance_states.append(state)
+                bucket["tolerance"].append(state)
+        elif address.endswith("_response_time"):
+            value = _float_or_none(row.get("value", ""))
+            if value is not None:
+                recovery_times.append(value)
+                bucket["recovery"].append(value)
+
+    by_tank: dict[str, Any] = {}
+    for tank, values in by_tank_values.items():
+        tank_deviations = values["deviations"]
+        tank_tolerance = values["tolerance"]
+        by_tank[tank] = {
+            "n_samples": len(tank_deviations),
+            "mean_absolute_deviation": round(statistics.mean(abs(v) for v in tank_deviations), 4)
+            if tank_deviations else None,
+            "percent_time_in_tolerance": round(100 * sum(tank_tolerance) / len(tank_tolerance), 4)
+            if tank_tolerance else None,
+            "recovery_time_ms": _summary(values["recovery"]),
+        }
+    return {
+        "n_samples": len(deviations),
+        "mean_absolute_deviation": round(statistics.mean(abs(v) for v in deviations), 4) if deviations else None,
+        "rmse_deviation": round(math.sqrt(statistics.mean(v * v for v in deviations)), 4) if deviations else None,
+        "percent_time_in_tolerance": round(100 * sum(tolerance_states) / len(tolerance_states), 4)
+        if tolerance_states else None,
+        "recovery_time_ms": _summary(recovery_times),
+        "by_tank": by_tank,
+        "measurement_basis": "observed_runtime_samples",
+        "confirmatory_eligible": bool(deviations and tolerance_states),
+    }
+
+
 def _sysmon_metrics(
     rows: list[dict[str, str]],
     alerttimeout_sec: float = SYSMON_ALERTTIMEOUT_SEC,
@@ -145,15 +253,63 @@ def _sysmon_metrics(
     rt_values = [v for r in rt_rows if (v := _float_or_none(r.get("value", ""))) is not None]
     mean_rt = round(statistics.mean(rt_values), 2) if rt_values else None
 
-    # Correct rejections: estimated from scenario duration and alerttimeout
-    d_prime: float | None = None
-    n_cr: int | None = None
+    # Legacy estimate retained verbatim for historical reproducibility. It is
+    # not confirmatory-eligible because non-target opportunities were not
+    # observed by the v1 runtime.
+    d_prime_estimated: float | None = None
+    n_cr_estimated: int | None = None
     if scenario_duration_sec is not None and scenario_duration_sec > 0:
         n_noise_intervals = math.floor(
             scenario_duration_sec * n_indicators / alerttimeout_sec
         ) - n_signals
-        n_cr = max(0, n_noise_intervals - n_fa)
-        d_prime = _d_prime(n_hits, n_misses, n_fa, n_cr)
+        n_cr_estimated = max(0, n_noise_intervals - n_fa)
+        d_prime_estimated = _d_prime(n_hits, n_misses, n_fa, n_cr_estimated)
+
+    observed_outcomes: dict[str, tuple[bool, str]] = {}
+    opportunity_issues: list[str] = []
+    for row in perf:
+        if row.get("address") != "opportunity":
+            continue
+        try:
+            payload = json.loads(row.get("value", ""))
+        except (json.JSONDecodeError, TypeError):
+            opportunity_issues.append("invalid_json")
+            continue
+        if not isinstance(payload, dict) or payload.get("phase") != "closed":
+            continue
+        opportunity_id = str(payload.get("opportunity_id") or "").strip()
+        target = payload.get("target")
+        outcome = str(payload.get("outcome") or "").upper()
+        if not opportunity_id or not isinstance(target, bool):
+            opportunity_issues.append("missing_id_or_target")
+            continue
+        allowed = {"HIT", "MISS"} if target else {"FA", "CR"}
+        if outcome not in allowed:
+            opportunity_issues.append(f"invalid_outcome:{opportunity_id}")
+            continue
+        if opportunity_id in observed_outcomes:
+            opportunity_issues.append(f"duplicate_outcome:{opportunity_id}")
+            continue
+        observed_outcomes[opportunity_id] = (target, outcome)
+
+    observed_hits = sum(1 for target, outcome in observed_outcomes.values() if target and outcome == "HIT")
+    observed_misses = sum(1 for target, outcome in observed_outcomes.values() if target and outcome == "MISS")
+    observed_fa = sum(1 for target, outcome in observed_outcomes.values() if not target and outcome == "FA")
+    observed_cr = sum(1 for target, outcome in observed_outcomes.values() if not target and outcome == "CR")
+    observed_targets = observed_hits + observed_misses
+    observed_nontargets = observed_fa + observed_cr
+    if opportunity_issues:
+        observed_status = "invalid"
+        dprime_observed = None
+    elif not observed_outcomes:
+        observed_status = "unavailable"
+        dprime_observed = None
+    elif observed_targets == 0 or observed_nontargets == 0:
+        observed_status = "insufficient_classes"
+        dprime_observed = None
+    else:
+        observed_status = "complete"
+        dprime_observed = _d_prime(observed_hits, observed_misses, observed_fa, observed_cr)
 
     return {
         "n_hits": n_hits,
@@ -161,8 +317,23 @@ def _sysmon_metrics(
         "n_false_alarms": n_fa,
         "n_signals": n_signals,
         "hit_rate": round(hit_rate, 4) if hit_rate is not None else None,
-        "d_prime": d_prime,
-        "n_correct_rejections": n_cr,
+        "d_prime": d_prime_estimated,
+        "dprime_estimated_v1": d_prime_estimated,
+        "n_correct_rejections": n_cr_estimated,
+        "n_correct_rejections_estimated": n_cr_estimated,
+        "estimated_measurement_basis": "estimated_duration_windows",
+        "estimated_confirmatory_eligible": False,
+        "dprime_observed_v2": dprime_observed,
+        "observed_n_hits": observed_hits,
+        "observed_n_misses": observed_misses,
+        "observed_n_false_alarms": observed_fa,
+        "observed_n_correct_rejections": observed_cr,
+        "n_observed_target_opportunities": observed_targets,
+        "n_observed_nontarget_opportunities": observed_nontargets,
+        "observed_opportunity_status": observed_status,
+        "observed_opportunity_issues": opportunity_issues,
+        "observed_measurement_basis": "observed_protocol_defined_opportunities",
+        "observed_confirmatory_eligible": observed_status == "complete",
         "mean_rt_ms": mean_rt,
     }
 
@@ -204,17 +375,35 @@ def _nasatlx_metrics(rows: list[dict[str, str]]) -> dict[str, Any]:
     subscales: dict[str, float | None] = {s: None for s in NASA_TLX_SUBSCALES}
     for r in tlx_rows:
         addr = r["address"]
-        key = _ES_TO_EN.get(addr, addr)   # pass English through unchanged
+        key = _ES_TO_EN.get(addr, NASA_TLX_SUBSCALE_ALIASES.get(addr, addr))
         v = _float_or_none(r.get("value", ""))
         if v is not None and key in subscales:
             subscales[key] = round(v, 2)
 
     filled = [v for v in subscales.values() if v is not None]
-    raw_tlx = round(sum(filled), 4) if filled else None
+    legacy_sum = round(sum(filled), 4) if filled else None
+    invalid_subscales = [
+        key.lower().replace(" ", "_")
+        for key, value in subscales.items()
+        if value is not None and not 0 <= value <= 10
+    ]
+    complete = len(filled) == len(NASA_TLX_SUBSCALES) and not invalid_subscales
+    rtlx_mean_0_10 = round(statistics.mean(filled), 4) if complete else None
+    rtlx_mean_0_100 = round(rtlx_mean_0_10 * 10, 4) if rtlx_mean_0_10 is not None else None
 
     return {
         **{k.lower().replace(" ", "_"): v for k, v in subscales.items()},
-        "raw_tlx": raw_tlx,
+        # Deprecated compatibility field. Its v1 semantics remain unchanged.
+        "raw_tlx": legacy_sum,
+        "legacy_subscale_sum_0_60": legacy_sum,
+        "rtlx_mean_0_10": rtlx_mean_0_10,
+        "rtlx_mean_0_100": rtlx_mean_0_100,
+        "weighted_tlx_0_100": None,
+        "weighted_tlx_available": False,
+        "complete": complete,
+        "invalid_subscales": invalid_subscales,
+        "measurement_basis": "observed_complete_questionnaire" if complete else "incomplete_or_invalid_questionnaire",
+        "confirmatory_eligible": complete,
         "n_subscales_completed": len(filled),
     }
 
@@ -451,6 +640,11 @@ def convert_session(
     duration = (t_max - (t_min or 0.0)) if t_max is not None else None
 
     record: dict[str, Any] = {
+        "metrics_schema_version": METRICS_SCHEMA_VERSION,
+        "metric_deprecations": {
+            "nasatlx.raw_tlx": "use nasatlx.rtlx_mean_0_100; raw_tlx preserves the legacy partial sum",
+            "sysmon.d_prime": "use sysmon.dprime_observed_v2 when complete observed opportunities exist",
+        },
         "participant_id": participant_id,
         "block_name": block_name,
         "workload_level": workload_level,
@@ -459,6 +653,8 @@ def convert_session(
         "scenario_time_min_s": t_min,
         "scenario_time_max_s": t_max,
         "sysmon": _sysmon_metrics(rows, alerttimeout_sec, sysmon_n_indicators, duration),
+        "track": _track_metrics(rows),
+        "resman": _resman_metrics(rows),
         "isa": _isa_metrics(rows),
         "nasatlx": _nasatlx_metrics(rows),
         "bedford": _bedford_metric(rows),

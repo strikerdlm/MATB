@@ -37,10 +37,15 @@ LEVEL_RANK: dict[str, int] = {"LOW": 1, "MEDIUM": 2, "HIGH": 3}
 # Metrics to analyse — dotted paths into the JSONL record dict
 METRICS: list[tuple[str, str]] = [
     ("sysmon.hit_rate",    "SYSMON hit rate"),
-    ("sysmon.d_prime",     "SYSMON d'"),
+    ("sysmon.dprime_observed_v2", "SYSMON observed d' v2"),
+    ("sysmon.dprime_estimated_v1", "SYSMON estimated d' v1 (exploratory)"),
     ("sysmon.mean_rt_ms",  "SYSMON mean RT (ms)"),
+    ("track.rmse_deviation", "TRACK RMS deviation"),
+    ("track.percent_time_in_target", "TRACK time in target (%)"),
+    ("resman.mean_absolute_deviation", "RESMAN mean absolute deviation"),
+    ("resman.percent_time_in_tolerance", "RESMAN time in tolerance (%)"),
     ("isa.mean",           "ISA mean"),
-    ("nasatlx.raw_tlx",    "NASA-TLX raw"),
+    ("nasatlx.rtlx_mean_0_100", "RTLX complete mean (0-100)"),
     ("bedford.value",      "Bedford"),
     ("comm.d_prime",       "COMM d'"),
     ("comm.hit_rate",      "COMM hit rate"),

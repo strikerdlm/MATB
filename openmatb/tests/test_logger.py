@@ -1,6 +1,8 @@
 """Tests for core.logger - Logger slot formatting, queue management, and record methods."""
 
 import importlib
+import io
+import json
 from collections import namedtuple
 from unittest.mock import MagicMock, patch
 
@@ -303,6 +305,15 @@ class TestLogManualEntry:
         args = lg.write_single_slot.call_args[0][0]
         assert args[2] == "custom"
 
+    @patch.object(_logger_module, "perf_counter", return_value=8.0)
+    def test_end_marker_writes_timing_qc(self, _mock_pc):
+        """Normal scheduler completion materializes the timing-QC sidecar."""
+        lg = _make_logger()
+        lg.write_single_slot = MagicMock()
+        lg.write_timing_qc = MagicMock()
+        lg.log_manual_entry("end", key="control")
+        lg.write_timing_qc.assert_called_once_with()
+
 
 # ── write_single_slot ────────────────────────────
 
@@ -378,3 +389,31 @@ class TestWriteRowQueue:
         lg.queue = [lg.slot(1.0, 0, "event", "sysmon", "self", "start")]
         lg.write_row_queue()
         mock_lsl.push.assert_called_once()
+
+
+class TestVersionedEventAndTimingQc:
+    @patch.object(_logger_module, "REPLAY_MODE", False)
+    def test_jsonl_event_is_additive_and_versioned(self):
+        events = io.StringIO()
+        lg = _make_logger(events_file=events, event_sequence=0)
+        lg.write_single_slot(
+            [1.0, 10.25, "event", "sysmon", "self", "start"],
+            metadata={"scheduled_scenario_time_s": 10.0, "scenario_line": 7},
+        )
+        payload = json.loads(events.getvalue())
+        assert payload["event_schema_version"] == "1.0"
+        assert payload["sequence"] == 1
+        assert payload["scenario_line"] == 7
+        assert payload["dispatch_lateness_ms"] == 250.0
+        assert lg.writer.writerow.call_count == 1  # legacy CSV remains present
+
+    @patch.object(_logger_module, "perf_counter_ns", side_effect=[1_000_000_000, 1_050_000_000])
+    def test_set_scenario_time_collects_update_intervals(self, _mock_ns):
+        lg = _make_logger()
+        lg.set_scenario_time(1.0)
+        lg.set_scenario_time(1.05)
+        summary = lg.timing_qc_summary()
+        assert summary["update_interval"]["n"] == 1
+        assert summary["update_interval"]["median_ms"] == 50.0
+        assert summary["scenario_delta"]["median_ms"] == 50.0
+        assert summary["physical_onset"]["available"] is False

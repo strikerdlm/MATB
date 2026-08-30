@@ -38,7 +38,7 @@ describe("scientific figure builders", () => {
         HIGH: { mean: [70, null, null, null, null, null], sd: [10, null, null, null, null, null], n: [4, 0, 0, 0, 0, 0] },
       },
     };
-    const option = buildGroupTrajectoryOption(group, "nasatlx_raw_tlx");
+    const option = buildGroupTrajectoryOption(group, "nasatlx_rtlx_mean_0_100");
     const series = option.series as Array<Record<string, unknown>>;
     expect(series).toHaveLength(9);
     expect(series[0].data).toEqual([40.2, null, null, null, null, null]);
@@ -48,10 +48,10 @@ describe("scientific figure builders", () => {
 
   it("extracts LMM interval rows with readable terms", () => {
     const rows = lmmIntervalRows({
-      nasatlx_raw_tlx: okLmm("visit_c", -1.2, -2.1, -0.3),
+      nasatlx_rtlx_mean_0_100: okLmm("visit_c", -1.2, -2.1, -0.3),
     }, "q2");
     expect(rows).toEqual([{
-      label: "NASA-TLX (raw): Visit slope",
+      label: "RTLX mean (0–100): Visit slope",
       estimate: -1.2,
       low: -2.1,
       high: -0.3,
@@ -61,7 +61,7 @@ describe("scientific figure builders", () => {
 
   it("builds serializable interval forest options that pass preflight", () => {
     const option = buildLmmForestOption({
-      nasatlx_raw_tlx: okLmm("visit_c", -1.2, -2.1, -0.3),
+      nasatlx_rtlx_mean_0_100: okLmm("visit_c", -1.2, -2.1, -0.3),
     }, "q2");
     expect(JSON.stringify(option)).toContain("Visit slope");
     expect(preflightScientificOption(option)).toEqual([]);
