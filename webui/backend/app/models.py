@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
+from sqlalchemy import Index, literal_column, text
 from sqlmodel import Field, SQLModel, UniqueConstraint
 
 
@@ -88,11 +89,24 @@ class AnalysisResult(SQLModel, table=True):
 
 
 class BayesResult(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint("fingerprint", "bayes_version"),
+        Index(
+            "uq_bayesresult_one_active",
+            literal_column("1"),
+            unique=True,
+            sqlite_where=text("status IN ('queued', 'running')"),
+        ),
+    )
     id: int | None = Field(default=None, primary_key=True)
     fingerprint: str = Field(index=True)            # input rows at job creation
     bayes_version: str
     status: str = "queued"                          # queued|running|done|failed
     artifact_json: str | None = None
     error: str | None = None
+    attempt_count: int = 1
+    error_history_json: str = "[]"
+    owner_token: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=_utcnow)
+    last_attempt_at: datetime = Field(default_factory=_utcnow, index=True)
     finished_at: datetime | None = None

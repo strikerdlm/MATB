@@ -45,6 +45,7 @@ def test_scheduling_is_deterministic_from_seed(tmp_path: Path) -> None:
     events2 = emit_freezes_for_block(output_dir=out2, **kwargs)
 
     assert [e.scenario_time_sec for e in events1] == [e.scenario_time_sec for e in events2]
+    assert all(isinstance(e.scenario_time_sec, int) for e in events1)
     assert [e.freeze_id for e in events1] == [e.freeze_id for e in events2]
 
 
@@ -253,6 +254,24 @@ def test_manifest_round_trip(tmp_path: Path) -> None:
         assert "scenario_time_sec" in f
         assert "probe_file" in f
         assert len(f["probe_ids"]) == 3
+        assert isinstance(f["scenario_time_sec"], int)
+
+
+def test_sagat_rejects_participant_ids_that_can_escape_output_directory(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="filesystem-safe"):
+        emit_freezes_for_block(
+            participant_id="../P03",
+            block_num=1,
+            block_duration_sec=900,
+            isa_probe_times_sec=[],
+            bank_path=EN_BANK,
+            output_dir=tmp_path,
+            n_freezes=3,
+            probes_per_freeze=3,
+            min_post_isa_stagger_sec=30.0,
+            min_inter_freeze_sec=120.0,
+            seed=42,
+        )
 
 
 def test_es_bank_emits_es_freeze_files(tmp_path: Path) -> None:

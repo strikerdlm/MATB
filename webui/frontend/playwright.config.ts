@@ -48,6 +48,7 @@ export default defineConfig({
   use: {
     ...devices["Desktop Chrome"],
     baseURL: "http://127.0.0.1:3100",
+    extraHTTPHeaders: { Origin: "http://127.0.0.1:3100" },
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "off",

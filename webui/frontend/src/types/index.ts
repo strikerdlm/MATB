@@ -6,6 +6,89 @@ export interface Participant {
   notes?: string | null;
 }
 
+export interface ComponentManifest {
+  schema_version: "1.0";
+  component_id: string;
+  component_version: string;
+  component_kind: "contracts" | "runtime" | "research" | "console" | "physiology" | "automation" | "simulation" | "governance";
+  stability: "stable" | "candidate" | "experimental";
+  distribution: "core" | "optional";
+  capabilities: string[];
+  requires: string[];
+  python_entrypoint: string | null;
+  license_expression: string;
+}
+
+export interface ConsoleCapabilities {
+  schema_version: "1.0";
+  components: ComponentManifest[];
+}
+
+export interface ExperimentTimelineEvent {
+  eventKey: string;
+  atSeconds: number;
+  durationSeconds: number | null;
+  task: string;
+  command: string;
+  value?: string | number | boolean;
+}
+
+export interface ExperimentSpec {
+  schema_version: "1.0";
+  experiment_id: string;
+  revision: number;
+  title: string;
+  seed: number;
+  profile_id: string;
+  duration_ns: number;
+  components: string[];
+  timeline: Array<{
+    event_key: string;
+    at_ns: number;
+    duration_ns: number | null;
+    component_id: string;
+    task: string;
+    event_type: "openmatb.command";
+    parameters: Record<string, string | number | boolean>;
+  }>;
+  metadata: Record<string, string | number | boolean>;
+}
+
+export interface ExperimentSummary {
+  sourceCommandCount: number;
+  sourceCommandRatePerMinute: number;
+  perTaskSourceCommandRatePerMinute: Record<string, number>;
+  stimulusOpportunityCount: number;
+  stimulusOpportunityRatePerMinute: number;
+  perTaskStimulusOpportunityRatePerMinute: Record<string, number>;
+  minimumStimulusRefractoryMsByTask: Record<string, number | null>;
+  overlapCount: number;
+  overlapPercent: number;
+  sysmonTargetOpportunities: number;
+  sysmonNontargetOpportunities: number;
+}
+
+export interface TimelineConstraint {
+  id: string;
+  label: string;
+  status: "pass" | "warning" | "fail";
+  detail: string;
+}
+
+export interface CompiledExperiment {
+  scenario_text: string;
+  manifest: {
+    source_commit: string;
+    source_dirty: boolean | null;
+    provenance_status: "complete" | "provisional_dirty_source_tree" | "provisional_unverified_source_tree" | "provisional_missing_source_commit" | "provisional_invalid_source_commit";
+    spec: { sha256: string };
+    scenario: { sha256: string };
+    summary: Record<string, unknown>;
+    claim_boundary: string;
+    [key: string]: unknown;
+  };
+}
+
 export interface Visit {
   id: number;
   participant_id: string;
@@ -139,6 +222,7 @@ export interface MetricRow {
   value: number;
   metrics_schema_version?: string;
   metric_version?: string;
+  scientific_source_status?: string;
   confirmatory_eligible?: boolean;
 }
 
@@ -291,6 +375,7 @@ export interface BayesJob {
   cached?: boolean;
   error?: string | null;
   created_at?: string;
+  last_attempt_at?: string;
   finished_at?: string | null;
   artifact?: BayesArtifact;
 }

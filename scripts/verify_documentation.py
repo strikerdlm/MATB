@@ -380,7 +380,10 @@ def _field_name(raw: str) -> str:
 
 
 def _field_value(raw: str) -> str:
-    return raw.strip().strip("\"'").strip()
+    value = raw.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"\"", "'"}:
+        return value[1:-1].strip()
+    return value
 
 
 def _is_credential_field(field: str) -> bool:
@@ -399,6 +402,7 @@ def _is_signed_state_field(field: str) -> bool:
 
 def _is_placeholder(value: str) -> bool:
     normalized = value.strip().lower()
+    runtime_reference = value.strip()
     return (
         not normalized
         or normalized in {
@@ -406,7 +410,27 @@ def _is_placeholder(value: str) -> bool:
             "synthetic", "redacted", "dummy", "test", "changeme", "replace-me", "n/a",
         }
         or (normalized.startswith("<") and normalized.endswith(">"))
-        or bool(re.fullmatch(r"\$[A-Z_][A-Z0-9_]*", value.strip()))
+        or bool(re.fullmatch(r"\$[A-Z_][A-Z0-9_]*", runtime_reference))
+        or bool(
+            re.fullmatch(
+                r"\$\{[A-Z_][A-Z0-9_]*(?::[-=?+][^}\r\n]*)?\}",
+                runtime_reference,
+            )
+        )
+        or bool(re.fullmatch(r"\$env:[A-Z_][A-Z0-9_]*", runtime_reference))
+        or bool(
+            re.fullmatch(
+                r"Read-Host(?:\s+(?:\"[^\"\r\n]*\"|'[^'\r\n]*'))?",
+                runtime_reference,
+                re.IGNORECASE,
+            )
+        )
+        or bool(
+            re.fullmatch(
+                r"\$\(<\s*(?:\"[^\"\r\n]+\"|'[^'\r\n]+'|[^()\r\n]+)\)",
+                runtime_reference,
+            )
+        )
     )
 
 

@@ -16,7 +16,7 @@ GOLDEN_DIR = Path(__file__).with_name("golden")
 
 
 def run_scenario_builder_golden(*, source_commit: str) -> dict[str, Any]:
-    case = json.loads((GOLDEN_DIR / "scenario-builder-v1.json").read_text(encoding="utf-8"))
+    case = json.loads((GOLDEN_DIR / "scenario-builder-v2.json").read_text(encoding="utf-8"))
     checks: list[dict[str, Any]] = []
     for level in WorkloadLevel:
         expected = case["conditions"][level.name]

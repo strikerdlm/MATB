@@ -43,7 +43,7 @@
       "references": ["NASA-TLX pairwise-weighted scoring contract"]
     },
     "nasatlx.legacy_subscale_sum_0_60": {
-      "metric_version": "1",
+      "metric_version": "2",
       "unit": "legacy_sum_0_60",
       "equation": "sum of available 0-10 subscale values",
       "required_inputs": ["one or more numeric subscale ratings"],
@@ -67,7 +67,7 @@
       "references": ["Signal detection theory", "Hautus log-linear correction"]
     },
     "sysmon.hit_rate": {
-      "metric_version": "1",
+      "metric_version": "2",
       "unit": "proportion",
       "equation": "hits / (hits + misses)",
       "required_inputs": ["observed target opportunities with HIT or MISS outcomes"],
@@ -76,18 +76,31 @@
       "directionality": "higher_is_better",
       "measurement_basis": "observed_target_outcomes",
       "confirmatory_eligible": true,
-      "references": ["Signal detection theory", "OpenMATB SYSMON logging contract"]
+      "references": ["Signal detection theory", "MATB explicit opportunity logging contract"],
+      "legacy_field": "sysmon.hit_rate_legacy_v1"
     },
     "sysmon.mean_rt_ms": {
+      "metric_version": "2",
+      "unit": "milliseconds",
+      "equation": "arithmetic mean of finite response times from complete, uniquely reconciled participant HIT outcomes on target opportunities while automation is inactive",
+      "required_inputs": ["one or more complete target-opportunity HIT lifecycles", "participant actor attribution", "finite response time", "automation inactive at response"],
+      "missing_policy": "null for absent, incomplete, duplicate, ambiguous, automated, or non-participant response records",
+      "directionality": "lower_is_better",
+      "measurement_basis": "observed_reconciled_pure_human_participant_responses",
+      "confirmatory_eligible": true,
+      "references": ["MATB explicit opportunity lifecycle and actor-attribution contract"],
+      "legacy_field": "sysmon.mean_rt_ms_legacy_v1"
+    },
+    "sysmon.mean_rt_ms_legacy_v1": {
       "metric_version": "1",
       "unit": "milliseconds",
-      "equation": "arithmetic mean of valid SYSMON response-time records",
-      "required_inputs": ["one or more finite observed response times"],
-      "missing_policy": "null when no finite response time is observed",
+      "equation": "arithmetic mean of finite legacy SYSMON response-time log rows",
+      "required_inputs": ["one or more finite legacy response times"],
+      "missing_policy": "null when no finite legacy response time is observed",
       "directionality": "lower_is_better",
-      "measurement_basis": "observed_participant_responses",
-      "confirmatory_eligible": true,
-      "references": ["OpenMATB SYSMON logging contract"]
+      "measurement_basis": "legacy_rows_without_lifecycle_or_actor_eligibility",
+      "confirmatory_eligible": false,
+      "references": ["OpenMATB legacy SYSMON logging contract"]
     },
     "track.rmse_deviation": {
       "metric_version": "1",
@@ -134,16 +147,17 @@
       "references": ["OpenMATB resource-management runtime logging contract"]
     },
     "communications.d_prime": {
-      "metric_version": "1",
+      "metric_version": "2",
       "unit": "dimensionless",
       "equation": "Z((hits + 0.5)/(signal opportunities + 1)) - Z((false alarms + 0.5)/(non-signal opportunities + 1))",
-      "required_inputs": ["observed communications HIT", "MISS", "FA", "CR outcomes"],
-      "missing_policy": "null unless both signal and non-signal classes are observed",
+      "required_inputs": ["complete explicit COMM opportunity lifecycle", "software presentation invocation", "response-window opening", "observed HIT/MISS/FA/CR outcome"],
+      "missing_policy": "null for legacy outcome-only logs or whenever any planned opportunity is missing, invalid, or incomplete",
       "directionality": "higher_is_better",
       "measurement_basis": "observed_communications_opportunities",
-      "confirmatory_eligible": true,
+      "confirmatory_eligible": false,
       "correction": "Hautus log-linear",
-      "references": ["Signal detection theory", "Hautus log-linear correction", "OpenMATB communications logging contract"]
+      "qualification_note": "Descriptive only in this release; confirmatory eligibility additionally requires a valid session-bound manifest and independent physical audio-onset qualification.",
+      "references": ["Signal detection theory", "Hautus log-linear correction", "MATB COMM opportunity lifecycle v1"]
     },
     "bedford.value": {
       "metric_version": "1",

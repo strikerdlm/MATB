@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
+  compileExperiment,
   createParticipant,
   createStudyContext,
   downloadResearchBundle,
+  getCapabilities,
   getBayesStatus,
   getFits,
   getLatestAnalysis,
@@ -18,6 +20,7 @@ import {
   runAnalysis,
   runBayes,
 } from "@/lib/api";
+import { buildExperimentSpec } from "@/lib/experiment-designer";
 
 beforeEach(() => { vi.restoreAllMocks(); });
 
@@ -31,6 +34,42 @@ function mockFetch(status: number, body: unknown) {
 }
 
 describe("api client", () => {
+  it("compileExperiment POSTs the canonical specification", async () => {
+    const compiled = {
+      scenario_text: "0:00:00;sysmon;start\n",
+      manifest: {
+        spec: { sha256: "a".repeat(64) },
+        scenario: { sha256: "b".repeat(64) },
+        summary: {},
+        claim_boundary: "software only",
+      },
+    };
+    global.fetch = mockFetch(200, compiled);
+    const spec = buildExperimentSpec([
+      { eventKey: "start", atSeconds: 0, durationSeconds: null, task: "sysmon", command: "start" },
+    ], 60, 42);
+
+    expect(await compileExperiment(spec)).toEqual(compiled);
+    const [url, init] = (global.fetch as any).mock.calls[0];
+    expect(url).toContain("/experiments/compile");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body).duration_ns).toBe(60_000_000_000);
+  });
+
+  it("getCapabilities GETs the versioned component registry", async () => {
+    const capabilities = {
+      schema_version: "1.0",
+      components: [{ component_id: "matb-console" }],
+    };
+    global.fetch = mockFetch(200, capabilities);
+
+    expect(await getCapabilities()).toEqual(capabilities);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/capabilities"),
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   it("getTracker GETs /tracker and returns cells", async () => {
     const cells = [{ participant_id: "P01", visit_ordinal: 1, scheduled_day: 0, workload_level: "LOW", present: true }];
     global.fetch = mockFetch(200, cells);
@@ -178,6 +217,13 @@ describe("api client", () => {
   it("getBayesStatus returns null on 404", async () => {
     global.fetch = mockFetch(404, { detail: "no Bayesian job yet" });
     expect(await getBayesStatus()).toBeNull();
+  });
+
+  it("getBayesStatus can bind polling to an exact job id", async () => {
+    global.fetch = mockFetch(200, { job_id: 17, status: "running" });
+    await getBayesStatus(17);
+    const [url] = (global.fetch as any).mock.calls[0];
+    expect(url).toContain("/analysis/bayes/status/17");
   });
 
   it("postScreen POSTs participant_id + payload + overwrite", async () => {

@@ -11,7 +11,7 @@ detalles de endpoints y pantallas, consulte la
 
 ## Requisitos y desarrollo nativo
 
-Use Python 3.12 y Node.js 20 o posterior. Desde la raíz del repositorio, cree
+Use Python 3.12 y Node.js 20.9 o posterior. Desde la raíz del repositorio, cree
 un venv e instale las dependencias del backend; después instale las dependencias
 Node del frontend:
 
@@ -24,6 +24,11 @@ npm install
 
 Ejecute la API en una terminal y la UI del navegador en otra. El puerto
 predeterminado de la API es 8000 y el del frontend es 3100.
+
+Use un único worker de Uvicorn por base de datos. La API adquiere un
+arrendamiento durable de instancia; un segundo backend vivo contra el mismo
+SQLite falla de forma segura en lugar de repartir trabajos bayesianos y
+escrituras entre ejecutores locales de procesos distintos.
 
 ```bash
 cd webui/backend
@@ -74,14 +79,17 @@ predeterminado.
 
 Inicie primero cualquiera de los servicios locales y después ejecute uno de
 estos comandos desde la raíz del repositorio. `BASE_URL` y `OUTPUT_DIR`
-sustituyen la dirección loopback y el directorio de salida del ZIP.
+sustituyen la dirección loopback y el directorio de salida del ZIP. Cargue el
+token de propietario creado por el lanzador para las mutaciones CLI.
 
 ```bash
+export MATB_API_TOKEN="$(<examples/output/research-console-service/api-token)"
 BASE_URL=http://127.0.0.1:8000 OUTPUT_DIR=/tmp/matb-console \
   bash examples/research-console/api_walkthrough.sh
 ```
 
 ```powershell
+$env:MATB_API_TOKEN = Read-Host "Token API de MATB"
 .\examples\research-console\api_walkthrough.ps1 -BaseUrl http://127.0.0.1:8000 -OutputDir C:\Temp\matb-console
 ```
 
@@ -101,6 +109,13 @@ muestra como `missing_manifest`; un manifiesto malformado o no coincidente se
 conserva con problemas de validación en vez de aceptarse silenciosamente. No
 interprete el recorrido de una sola fila como una visita completa ni como un
 conjunto de datos de análisis.
+
+Esta superficie carga CSV heredado, no el flujo autoritativo v3 de
+eventos/temporización. Cada registro derivado se marca como
+`legacy_csv_derived_not_reconciled_to_authoritative_event_stream`; la
+elegibilidad confirmatoria permanece falsa incluso con un manifiesto válido.
+La ingesta JSONL emparejada y la reconciliación por ID de evento son una
+compuerta explícita para la publicación pública.
 
 ## Navegador y limpieza
 

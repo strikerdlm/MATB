@@ -8,3 +8,8 @@ preserved in every source or binary redistribution.
 
 No root-level license statement relicenses third-party software. Release tooling
 must include both license texts and `THIRD_PARTY_NOTICES.md`.
+
+`component-map.json` is the machine-readable path-to-license map. Its most
+specific path prefix wins, while a nearer license or source-file SPDX notice
+always takes precedence. The map documents distribution boundaries; it is not
+a substitute for the independent licensing review that remains a release gate.

@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "resolution_rule": "The most specific path prefix wins; an SPDX file header or nearer license file overrides this map.",
+  "default_license_expression": "MIT",
+  "components": [
+    {
+      "component_id": "matb-original-components",
+      "path_prefix": "",
+      "license_expression": "MIT",
+      "license_file": "LICENSE",
+      "scope_note": "Repository-authored material except where a more specific component entry, nearer license, or file-level notice applies."
+    },
+    {
+      "component_id": "openmatb-runtime",
+      "path_prefix": "openmatb/",
+      "license_expression": "CECILL-2.1",
+      "license_file": "openmatb/LICENSE",
+      "scope_note": "Embedded and modified OpenMATB runtime; preserve upstream copyright, license, and modification provenance."
+    }
+  ],
+  "dependency_policy": "Python, JavaScript, browser, and system dependencies retain their upstream licenses and must be inventoried in the release SBOM."
+}

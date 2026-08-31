@@ -1,30 +1,23 @@
-"""MATB Research Console backend (Phase 1A)."""
+"""Composable MATB Research Console backend."""
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
+from importlib import import_module
 import os
-from pathlib import Path
 from urllib.parse import urlsplit
-import asyncio
-import json
-import math
 
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.components import configure_components
+from app.body_limits import ScientificRequestBodyLimitMiddleware
 from app.db import get_engine, init_db
-from app.hrv_task_client import HrvTaskClient
-from app.liftoff_persistence import SQLModelLiftoffPersistence
-from app.liftoff_runtime import LiftoffManager
-from app.simulation_persistence import SQLModelSimulationPersistence
-from app.simulation_runtime import SimulationManager
+from app.request_security import LoopbackRequestSecurityMiddleware
 from app.study_models import ensure_study_binding
 from app.study_protocol import selected_protocol
-from app.websocket.simulation import HubConflict
-from matb_integration.liftoff.receiver import LiftoffUdpReceiver
 
 
 _DEFAULT_FRONTEND_ORIGINS = (
@@ -33,6 +26,7 @@ _DEFAULT_FRONTEND_ORIGINS = (
     "http://127.0.0.1:3000",
     "http://127.0.0.1:3100",
 )
+_DEFAULT_ALLOWED_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "testserver"})
 
 
 def _parse_frontend_origins(raw: str | None) -> frozenset[str]:
@@ -75,104 +69,90 @@ def _parse_frontend_origins(raw: str | None) -> frozenset[str]:
     return frozenset(origins)
 
 
+def _parse_allowed_hosts(raw: str | None) -> frozenset[str]:
+    if raw is None:
+        return _DEFAULT_ALLOWED_HOSTS
+    values = raw.split(",")
+    if any(not value.strip() for value in values):
+        raise ValueError("MATB_ALLOWED_HOSTS must not contain empty entries")
+    hosts = set(_DEFAULT_ALLOWED_HOSTS)
+    for value in values:
+        host = value.strip().lower()
+        if (
+            host == "*"
+            or any(character.isspace() for character in host)
+            or ":" in host
+            or "/" in host
+            or "@" in host
+        ):
+            raise ValueError("MATB_ALLOWED_HOSTS must contain exact hostnames without ports")
+        hosts.add(host)
+    return frozenset(hosts)
+
+
+def _parse_api_token(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    if raw != raw.strip() or len(raw) < 32 or any(character.isspace() for character in raw):
+        raise ValueError("MATB_API_TOKEN must be at least 32 non-whitespace characters")
+    return raw
+
+
 _FRONTEND_ORIGINS = _parse_frontend_origins(os.getenv("MATB_FRONTEND_ORIGINS"))
-
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
-
-
-def _simulation_artifact_root() -> Path:
-    configured = os.getenv("MATB_SIMULATION_OUTPUT_DIR")
-    value = Path(configured) if configured else Path("exports") / "simulation"
-    return value if value.is_absolute() else _repo_root() / value
-
-
-def _simulation_scenario_root() -> Path:
-    configured = os.getenv("MATB_SIMULATION_SCENARIO_DIR")
-    value = Path(configured) if configured else Path("scenarios") / "suas"
-    return value if value.is_absolute() else _repo_root() / value
-
-
-def _liftoff_artifact_root() -> Path:
-    configured = os.getenv("MATB_LIFTOFF_OUTPUT_DIR")
-    value = Path(configured) if configured else Path("exports") / "liftoff"
-    return value if value.is_absolute() else _repo_root() / value
-
-
-def _liftoff_port() -> int:
-    raw = os.getenv("MATB_LIFTOFF_PORT", "9001")
-    try:
-        port = int(raw)
-    except ValueError as exc:
-        raise ValueError("MATB_LIFTOFF_PORT must be an integer in 1..65535") from exc
-    if not 1 <= port <= 65535:
-        raise ValueError("MATB_LIFTOFF_PORT must be an integer in 1..65535")
-    return port
-
-
-def _simulation_wall_time_scale() -> float:
-    """Return an accelerated wall-clock factor only for explicit test mode."""
-
-    if os.getenv("MATB_SIMULATION_TEST_MODE") != "1":
-        return 1.0
-    raw = os.getenv("MATB_SIMULATION_WALL_TIME_SCALE", "1.0")
-    try:
-        value = float(raw)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("MATB_SIMULATION_WALL_TIME_SCALE must be a finite decimal in [0.05, 1.0]") from exc
-    if not math.isfinite(value) or not 0.05 <= value <= 1.0:
-        raise ValueError("MATB_SIMULATION_WALL_TIME_SCALE must be a finite decimal in [0.05, 1.0]")
-    return value
+_ALLOWED_HOSTS = _parse_allowed_hosts(os.getenv("MATB_ALLOWED_HOSTS"))
+_API_TOKEN = _parse_api_token(os.getenv("MATB_API_TOKEN"))
+_COMPONENT_REGISTRY, _COMPONENT_PROVIDERS = configure_components()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
-    ensure_study_binding(get_engine(), selected_protocol())
-    liftoff_persistence = SQLModelLiftoffPersistence(get_engine())
-    liftoff_persistence.mark_orphaned_sessions()
-    liftoff_receiver = LiftoffUdpReceiver(
-        host=os.getenv("MATB_LIFTOFF_HOST", "127.0.0.1"),
-        port=_liftoff_port(),
+    model_modules = tuple(
+        module
+        for provider in _COMPONENT_PROVIDERS
+        for module in provider.model_modules
     )
-    await liftoff_receiver.start()
-    hrv_api_url = os.getenv("HRV_API_URL", "").strip()
-    hrv_client = (
-        HrvTaskClient(
-            base_url=hrv_api_url,
-            token=os.getenv("HRV_API_TOKEN", "").strip(),
-        )
-        if hrv_api_url
-        else None
+    init_db(component_model_modules=model_modules)
+    from app.routers.analysis import (
+        acquire_backend_instance_lease,
+        reconcile_interrupted_bayes_jobs,
+        release_backend_instance_lease,
+        shutdown_bayes_jobs,
     )
-    liftoff_manager = LiftoffManager(
-        artifact_root=_liftoff_artifact_root(),
-        receiver=liftoff_receiver,
-        persistence=liftoff_persistence,
-        hrv_client=hrv_client,
-    )
-    liftoff_manager.start_capture()
-    app.state.liftoff_manager = liftoff_manager
-    persistence = SQLModelSimulationPersistence(get_engine())
-    persistence.mark_orphaned_sessions()
-    manager = SimulationManager(
-        scenario_root=_simulation_scenario_root(),
-        artifact_root=_simulation_artifact_root(),
-        persistence=persistence,
-        wall_time_scale=_simulation_wall_time_scale(),
-    )
-    app.state.simulation_manager = manager
+
+    engine = get_engine()
+    acquire_backend_instance_lease(engine)
+    release_lease = True
     try:
-        yield
+        ensure_study_binding(engine, selected_protocol())
+        reconcile_interrupted_bayes_jobs(engine)
+        try:
+            async with AsyncExitStack() as cleanup:
+                for provider in _COMPONENT_PROVIDERS:
+                    # Register cleanup before startup so a partially initialized
+                    # provider is still unwound. AsyncExitStack also continues through
+                    # all callbacks if an earlier shutdown raises.
+                    cleanup.push_async_callback(provider.shutdown, app)
+                    await provider.startup(app)
+                yield
+        finally:
+            try:
+                shutdown_bayes_jobs(engine)
+            except BaseException:
+                # A live compute thread can still write through this process.
+                # Retain the durable lease until the PID exits so no second
+                # backend can enter the same research database concurrently.
+                release_lease = False
+                raise
     finally:
-        await liftoff_manager.shutdown()
-        await liftoff_receiver.stop()
-        await manager.shutdown()
+        if release_lease:
+            release_backend_instance_lease(engine)
 
 
 app = FastAPI(title="MATB Research Console", version="0.1.0", lifespan=lifespan)
 app.state.frontend_origins = _FRONTEND_ORIGINS
+app.state.allowed_hosts = _ALLOWED_HOSTS
+app.state.api_token = _API_TOKEN
+app.state.component_registry = _COMPONENT_REGISTRY
 
 
 @app.exception_handler(RequestValidationError)
@@ -195,6 +175,7 @@ async def request_validation_error(request: Request, exc: RequestValidationError
         },
     )
 
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=sorted(_FRONTEND_ORIGINS),
@@ -202,136 +183,46 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-from app.routers import analysis, exports, fits, ingest, liftoff, metrics, participants, screen, simulation, study, tracker  # noqa: E402
-
-app.include_router(participants.router)
-app.include_router(ingest.router)
-app.include_router(tracker.router)
-app.include_router(metrics.router)
-app.include_router(fits.router)
-app.include_router(analysis.router)
-app.include_router(screen.router)
-app.include_router(exports.router)
-app.include_router(simulation.router)
-app.include_router(study.router)
-app.include_router(liftoff.router)
+app.add_middleware(ScientificRequestBodyLimitMiddleware)
+app.add_middleware(LoopbackRequestSecurityMiddleware, settings=app.state)
 
 
-@app.websocket("/simulation/sessions/{session_id}/stream")
-async def simulation_stream(websocket: WebSocket, session_id: str) -> None:
-    """Serve one ordered controller or observer stream for a session."""
+_CORE_ROUTER_MODULES = (
+    "app.routers.analysis",
+    "app.routers.experiments",
+    "app.routers.exports",
+    "app.routers.fits",
+    "app.routers.ingest",
+    "app.routers.metrics",
+    "app.routers.participants",
+    "app.routers.screen",
+    "app.routers.study",
+    "app.routers.tracker",
+)
 
-    origin = websocket.headers.get("origin")
-    if origin is None or origin not in websocket.app.state.frontend_origins:
-        await websocket.close(code=4403)
-        return
-    manager = getattr(websocket.app.state, "simulation_manager", None)
-    if manager is None:
-        await websocket.close(code=4503)
-        return
-    try:
-        after_sequence = int(websocket.query_params.get("after_sequence", "0"))
-    except (TypeError, ValueError):
-        await websocket.close(code=4400)
-        return
-    if after_sequence < 0:
-        await websocket.close(code=4400)
-        return
-    lease = websocket.query_params.get("lease")
-    role = "controller" if lease else "observer"
-    controller_handshake_pending = False
-    subscription = None
-    try:
-        if lease:
-            await manager.controller_connected(session_id, lease)
-            controller_handshake_pending = True
-        else:
-            await manager.view(session_id)
-        subscription = await manager.hub.subscribe(
-            session_id,
-            role=role,
-            identity=lease if role == "controller" else None,
-        )
-        if lease:
-            await manager.controller_stream_established(session_id, lease)
-            controller_handshake_pending = False
-        # Subscribe before taking the snapshot. Any event published during
-        # snapshot capture is then queued behind the snapshot boundary rather
-        # than being lost between an old sequence and the first live frame.
-        initial = await manager.snapshot_envelope(session_id, after_sequence=after_sequence)
-    except HubConflict:
-        if lease and controller_handshake_pending:
-            await manager.controller_stream_failed(session_id, lease)
-        await websocket.close(code=4409)
-        return
-    except Exception:
-        # Do not expose lease/hash/path details during the pre-accept phase.
-        if lease and controller_handshake_pending:
-            try:
-                await manager.controller_stream_failed(session_id, lease)
-            except Exception:
-                pass
-        if subscription is not None:
-            await manager.hub.unsubscribe(subscription)
-        await websocket.close(code=4403 if lease else 4404)
-        return
 
-    await websocket.accept()
-    try:
-        await websocket.send_json(initial.as_json())
-        receive_task = asyncio.create_task(websocket.receive())
-        queue_task = asyncio.create_task(subscription.queue.get())
-        closed_task = asyncio.create_task(subscription._closed.wait())
-        while True:
-            done, _ = await asyncio.wait(
-                {receive_task, queue_task, closed_task},
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            if closed_task in done:
-                if not websocket.client_state.value == "DISCONNECTED":
-                    await websocket.close(code=subscription.closed_code or 4408)
-                break
-            if queue_task in done:
-                envelope = queue_task.result()
-                await websocket.send_json(envelope.as_json())
-                queue_task = asyncio.create_task(subscription.queue.get())
-            if receive_task in done:
-                message = receive_task.result()
-                if message.get("type") == "websocket.disconnect":
-                    break
-                raw = message.get("text")
-                if raw is None:
-                    await websocket.close(code=4400)
-                    break
-                try:
-                    payload = json.loads(raw)
-                except (TypeError, ValueError, json.JSONDecodeError):
-                    await websocket.close(code=4400)
-                    break
-                if payload != {"kind": "ping"}:
-                    await websocket.close(code=4400)
-                    break
-                await websocket.send_json({"kind": "pong"})
-                receive_task = asyncio.create_task(websocket.receive())
-    except WebSocketDisconnect:
-        pass
-    finally:
-        for task in (receive_task, queue_task, closed_task):
-            if not task.done():
-                task.cancel()
-        await manager.hub.unsubscribe(subscription)
-        try:
-            if role == "controller":
-                await manager.controller_disconnected(session_id, lease or "")
-            else:
-                await manager.observer_disconnected(session_id)
-        except Exception:
-            # A terminal session or an already-closed process needs no further
-            # lifecycle mutation; the durable session state remains authoritative.
-            pass
+def _include_router(module_name: str) -> None:
+    module = import_module(module_name)
+    app.include_router(module.router)
+
+
+for _router_module in _CORE_ROUTER_MODULES:
+    _include_router(_router_module)
+for _provider in _COMPONENT_PROVIDERS:
+    for _router_module in _provider.router_modules:
+        _include_router(_router_module)
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
+async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/capabilities")
+async def capabilities() -> dict[str, object]:
+    return {
+        "schema_version": "1.0",
+        "components": [
+            manifest.to_record() for manifest in _COMPONENT_REGISTRY.manifests()
+        ],
+    }

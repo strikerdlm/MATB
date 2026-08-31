@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://matb.science/contracts/experiment-spec-v1.schema.json",
+  "title": "MATB Experiment Specification V1",
+  "description": "Canonical, deterministic source specification compiled into runtime scenarios.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "experiment_id",
+    "revision",
+    "title",
+    "seed",
+    "profile_id",
+    "duration_ns",
+    "components",
+    "timeline",
+    "metadata"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "experiment_id": {"type": "string", "maxLength": 128, "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+    "revision": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+    "title": {"type": "string", "maxLength": 256, "pattern": "^\\S(?:[\\s\\S]*\\S)?$"},
+    "seed": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807},
+    "profile_id": {"type": "string", "maxLength": 256, "pattern": "^\\S(?:[\\s\\S]*\\S)?$"},
+    "duration_ns": {"type": "integer", "minimum": 1, "maximum": 86400000000000},
+    "components": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$"}
+    },
+    "timeline": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {"$ref": "#/$defs/timelineEvent"}
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/jsonValue"}
+    }
+  },
+  "$defs": {
+    "timelineEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_key", "at_ns", "duration_ns", "component_id", "task", "event_type", "parameters"],
+      "properties": {
+        "event_key": {"type": "string", "maxLength": 128, "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+        "at_ns": {"type": "integer", "minimum": 0, "maximum": 86400000000000},
+        "duration_ns": {
+          "anyOf": [
+            {"type": "integer", "minimum": 1, "maximum": 86400000000000},
+            {"type": "null"}
+          ]
+        },
+        "component_id": {"type": "string", "maxLength": 128, "pattern": "^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$"},
+        "task": {
+          "anyOf": [
+            {"type": "string", "maxLength": 128, "pattern": "^\\S(?:[\\s\\S]*\\S)?$"},
+            {"type": "null"}
+          ]
+        },
+        "event_type": {"type": "string", "maxLength": 128, "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"},
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/jsonValue"}
+        }
+      }
+    },
+    "jsonValue": {
+      "anyOf": [
+        {"type": "null"},
+        {"type": "boolean"},
+        {"type": "number"},
+        {"type": "string"},
+        {"type": "array", "items": {"$ref": "#/$defs/jsonValue"}},
+        {"type": "object", "additionalProperties": {"$ref": "#/$defs/jsonValue"}}
+      ]
+    }
+  }
+}

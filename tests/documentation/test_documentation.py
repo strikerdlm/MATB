@@ -418,6 +418,25 @@ def test_safety_rejects_credentials_tokens_and_lease_fields(tmp_path: Path) -> N
     assert any("lease" in error.lower() for error in errors)
 
 
+def test_safety_allows_runtime_credential_references_without_embedded_values(
+    tmp_path: Path,
+) -> None:
+    shell = tmp_path / "walkthrough.sh"
+    shell.write_text(
+        'api_token="${MATB_API_TOKEN:?Set MATB_API_TOKEN}"\n'
+        'MATB_API_TOKEN="$(<var/service/api-token)"\n',
+        encoding="utf-8",
+    )
+    powershell = tmp_path / "walkthrough.ps1"
+    powershell.write_text(
+        '[string]$ApiToken = $env:MATB_API_TOKEN\n'
+        '$env:MATB_API_TOKEN = Read-Host "MATB API token"\n',
+        encoding="utf-8",
+    )
+
+    assert find_safety_violations([shell, powershell]) == []
+
+
 def test_safety_rejects_signatures_and_pii_identity_fields(tmp_path: Path) -> None:
     bad = tmp_path / "identity.json"
     bad.write_text(

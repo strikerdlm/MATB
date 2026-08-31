@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://matb.science/contracts/timing-observation-v1.schema.json",
+  "title": "MATB Timing Observation V1",
+  "description": "One clock-domain observation linked to a scientific event. Physical timing records require physical evidence and a named rig.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "session_id",
+    "event_id",
+    "observation_id",
+    "observation_index",
+    "kind",
+    "clock_id",
+    "value",
+    "unit",
+    "evidence_source",
+    "method",
+    "rig_id",
+    "uncertainty_ns",
+    "details"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "session_id": {"type": "string", "format": "uuid"},
+    "event_id": {"type": "string", "format": "uuid"},
+    "observation_id": {
+      "type": "string",
+      "format": "uuid",
+      "$comment": "UUIDv5 derived from session_id, event_id, observation_index, kind, and clock_id; verify with the reference validator."
+    },
+    "observation_index": {"type": "integer", "minimum": 0},
+    "kind": {
+      "enum": [
+        "scheduled",
+        "dispatch_start",
+        "dispatch_end",
+        "physical_onset",
+        "physical_input",
+        "software_receipt",
+        "lsl_timestamp",
+        "external_trigger"
+      ]
+    },
+    "clock_id": {"type": "string", "pattern": "^\\S(?:[\\s\\S]*\\S)?$"},
+    "value": {"type": "number"},
+    "unit": {"enum": ["ns", "s"]},
+    "evidence_source": {"enum": ["software", "physical"]},
+    "method": {
+      "enum": [
+        "experiment_clock",
+        "software_clock",
+        "photodiode",
+        "audio_loopback",
+        "actuated_input",
+        "device_sensor",
+        "lsl_clock",
+        "parallel_port",
+        "serial_trigger"
+      ]
+    },
+    "rig_id": {
+      "anyOf": [
+        {"type": "string", "pattern": "^\\S(?:[\\s\\S]*\\S)?$"},
+        {"type": "null"}
+      ]
+    },
+    "uncertainty_ns": {
+      "anyOf": [
+        {"type": "integer", "minimum": 0},
+        {"type": "null"}
+      ]
+    },
+    "details": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/jsonValue"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"unit": {"const": "ns"}}, "required": ["unit"]},
+      "then": {"properties": {"value": {"type": "integer"}}}
+    },
+    {
+      "if": {"properties": {"kind": {"const": "scheduled"}}, "required": ["kind"]},
+      "then": {"properties": {"evidence_source": {"const": "software"}, "method": {"const": "experiment_clock"}, "unit": {"const": "ns"}, "rig_id": {"const": null}}}
+    },
+    {
+      "if": {"properties": {"kind": {"enum": ["dispatch_start", "dispatch_end", "software_receipt"]}}, "required": ["kind"]},
+      "then": {"properties": {"evidence_source": {"const": "software"}, "method": {"const": "software_clock"}, "unit": {"const": "ns"}, "rig_id": {"const": null}}}
+    },
+    {
+      "if": {"properties": {"kind": {"const": "physical_onset"}}, "required": ["kind"]},
+      "then": {"properties": {"evidence_source": {"const": "physical"}, "method": {"enum": ["photodiode", "audio_loopback", "device_sensor"]}, "unit": {"const": "ns"}, "rig_id": {"type": "string", "pattern": "^\\S(?:[\\s\\S]*\\S)?$"}}}
+    },
+    {
+      "if": {"properties": {"kind": {"const": "physical_input"}}, "required": ["kind"]},
+      "then": {"properties": {"evidence_source": {"const": "physical"}, "method": {"enum": ["actuated_input", "device_sensor"]}, "unit": {"const": "ns"}, "rig_id": {"type": "string", "pattern": "^\\S(?:[\\s\\S]*\\S)?$"}}}
+    },
+    {
+      "if": {"properties": {"kind": {"const": "lsl_timestamp"}}, "required": ["kind"]},
+      "then": {"properties": {"evidence_source": {"const": "software"}, "method": {"const": "lsl_clock"}, "unit": {"const": "s"}, "rig_id": {"const": null}}}
+    },
+    {
+      "if": {"properties": {"kind": {"const": "external_trigger"}}, "required": ["kind"]},
+      "then": {"properties": {"evidence_source": {"const": "software"}, "method": {"enum": ["parallel_port", "serial_trigger"]}, "unit": {"const": "ns"}, "rig_id": {"const": null}}}
+    }
+  ],
+  "$defs": {
+    "jsonValue": {
+      "anyOf": [
+        {"type": "null"},
+        {"type": "boolean"},
+        {"type": "number"},
+        {"type": "string"},
+        {"type": "array", "items": {"$ref": "#/$defs/jsonValue"}},
+        {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/jsonValue"}
+        }
+      ]
+    }
+  }
+}

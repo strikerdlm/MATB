@@ -25,6 +25,7 @@ from matb_integration.scenario_builder import (
     build_session_files,
     BEDFORD_QUESTIONNAIRE,
 )
+
 from matb_integration.log_converter import _bedford_metric, convert_session
 from matb_integration.analysis.descriptive import (
     _get,
@@ -33,6 +34,12 @@ from matb_integration.analysis.descriptive import (
     load_records,
     LEVEL_RANK,
 )
+
+_SESSION_PROVENANCE = {
+    "visit_ordinal": 1,
+    "source_commit": "a" * 40,
+    "source_dirty": False,
+}
 
 BEDFORD_TXT = (
     Path(__file__).resolve().parents[1]
@@ -91,7 +98,7 @@ def test_block_order_24_participants_fully_balanced():
 # ── build_session_files ───────────────────────────────────────────────────────
 
 def test_build_session_files_creates_three_files(tmp_path):
-    results = build_session_files("P02", tmp_path, block_duration_sec=60)
+    results = build_session_files("P02", tmp_path, block_duration_sec=60, **_SESSION_PROVENANCE)
     assert len(results) == 3
     for block_num, level, path in results:
         assert path.exists()
@@ -99,23 +106,48 @@ def test_build_session_files_creates_three_files(tmp_path):
 
 
 def test_build_session_files_naming(tmp_path):
-    results = build_session_files("P02", tmp_path, block_duration_sec=60)
+    results = build_session_files("P02", tmp_path, block_duration_sec=60, **_SESSION_PROVENANCE)
     for block_num, level, path in results:
         assert f"P02_block{block_num}_{level.value.upper()}" in path.name
 
 
 def test_build_session_files_order_matches_latin_square(tmp_path):
     expected_order = block_order_for_participant("P02")
-    results = build_session_files("P02", tmp_path, block_duration_sec=60)
+    results = build_session_files("P02", tmp_path, block_duration_sec=60, **_SESSION_PROVENANCE)
     actual_order = tuple(level for _, level, _ in results)
     assert actual_order == expected_order
 
 
 def test_build_session_files_reproducible(tmp_path):
-    r1 = build_session_files("P00", tmp_path / "a", block_duration_sec=60)
-    r2 = build_session_files("P00", tmp_path / "b", block_duration_sec=60)
+    r1 = build_session_files("P00", tmp_path / "a", block_duration_sec=60, **_SESSION_PROVENANCE)
+    r2 = build_session_files("P00", tmp_path / "b", block_duration_sec=60, **_SESSION_PROVENANCE)
     for (_, _, p1), (_, _, p2) in zip(r1, r2):
         assert p1.read_text() == p2.read_text()
+
+
+@pytest.mark.parametrize("visit", [True, 1.0, "1", 0, -1])
+def test_build_session_files_requires_exact_positive_visit(tmp_path, visit):
+    with pytest.raises(ValueError, match="exact positive integer"):
+        build_session_files(
+            "P02",
+            tmp_path,
+            visit_ordinal=visit,
+            source_commit="a" * 40,
+            source_dirty=False,
+            block_duration_sec=60,
+        )
+
+
+def test_build_session_files_rejects_unsafe_participant_filename(tmp_path):
+    with pytest.raises(ValueError, match="filesystem-safe"):
+        build_session_files(
+            "../P02",
+            tmp_path,
+            visit_ordinal=1,
+            source_commit="a" * 40,
+            source_dirty=False,
+            block_duration_sec=60,
+        )
 
 
 # ── Bedford questionnaire ─────────────────────────────────────────────────────

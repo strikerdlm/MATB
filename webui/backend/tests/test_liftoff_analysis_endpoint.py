@@ -9,6 +9,42 @@ from app.models import Visit
 from app.study_models import StudyParticipantContext
 
 
+def test_research_context_includes_liftoff_three_visit_grid(client, engine):
+    client.post("/participants", json={"id": "P01", "enrollment_date": "2026-06-01"})
+    with Session(engine) as session:
+        visit = session.exec(
+            select(Visit).where(Visit.participant_id == "P01", Visit.visit_ordinal == 1)
+        ).one()
+        session.add(LiftoffSession(
+            id="liftoff-valid",
+            participant_id="P01",
+            visit_id=visit.id,
+            attempt_number=1,
+            protocol_id="astra-2026",
+            protocol_version="1.0.0",
+            liftoff_build="test",
+            configuration_sha256="a" * 64,
+            track_id="track",
+            telemetry_profile="liftoff-telemetry-all-v1",
+            manifest_json='{"visit_code":"T0","visit_ordinal":1}',
+            status="FINISHED",
+            validity="valid",
+            artifact_root="/tmp/valid",
+            controller_lease_hash="b" * 64,
+            hrv_measurement_id="hrv-123",
+            sync_quality="good",
+            metrics_json='{"metrics_version":"liftoff-metrics-v1","primary":{"median_lap_time_s":61.2,"valid_laps":3},"telemetry":{"active_duration_s":900.0}}',
+        ))
+        session.commit()
+
+    context = client.get("/exports/research-context").json()
+    assert len(context["liftoff_tracker"]) == 3
+    assert context["liftoff_tracker"][0]["visit_code"] == "T0"
+    assert context["liftoff_tracker"][0]["present"] is True
+    assert context["liftoff_metrics_long"]
+    assert context["liftoff_tracker"][0]["hrv_measurement_id"] == "hrv-123"
+
+
 def test_liftoff_analysis_endpoint_runs_and_caches(client, engine):
     for index in range(3):
         participant_id = f"P{index + 1:02d}"

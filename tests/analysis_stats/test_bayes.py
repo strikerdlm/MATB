@@ -7,7 +7,11 @@ import pytest
 
 pytest.importorskip("pymc")  # Phase-3B-only dependency (webui/backend/requirements.txt)
 
-from matb_integration.analysis.stats.bayes import BAYES_VERSION, run_bayes  # noqa: E402
+from matb_integration.analysis.stats.bayes import (  # noqa: E402
+    BAYES_VERSION,
+    _convergence_summary,
+    run_bayes,
+)
 
 from .conftest import simulate_metric_rows
 
@@ -22,10 +26,11 @@ def test_bayes_q2_recovers_known_effects(sim_fits):
     assert art["bayes_version"] == BAYES_VERSION
     q2 = art["q2"]["sysmon_hit_rate"]
     assert q2["status"] == "ok"
-    # truth: visit slope -0.05, MEDIUM-LOW 0.8, HIGH-LOW 1.6 (posterior means)
-    assert q2["coefs"]["b_visit"]["mean"] == pytest.approx(-0.05, abs=0.05)
-    assert q2["coefs"]["b_med"]["mean"] == pytest.approx(0.8, abs=0.2)
-    assert q2["coefs"]["b_high"]["mean"] == pytest.approx(1.6, abs=0.25)
+    # Registered hit-rate-domain truth: learning +.01/visit and workload
+    # decrements of -.12/-.24 for MEDIUM/HIGH.
+    assert q2["coefs"]["b_visit"]["mean"] == pytest.approx(0.01, abs=0.02)
+    assert q2["coefs"]["b_med"]["mean"] == pytest.approx(-0.12, abs=0.04)
+    assert q2["coefs"]["b_high"]["mean"] == pytest.approx(-0.24, abs=0.05)
     lo, hi = q2["coefs"]["b_visit"]["eti95"]
     assert lo < q2["coefs"]["b_visit"]["mean"] < hi
     d = q2["diagnostics"]
@@ -43,7 +48,12 @@ def test_bayes_q2_recovers_known_effects(sim_fits):
     assert "HalfNormal(sd(y))" in s["priors"]["sds"]
     assert {"pymc", "arviz", "numpy", "pandas"} <= set(art["provenance"]["libraries"])
     assert len(art["provenance"]["fingerprint"]) == 64
-    json.dumps(art)  # JSON-serializable
+    json.dumps(art, allow_nan=False)  # strict JSON-serializable
+
+
+def test_bayes_rejects_one_chain_because_rhat_is_undefined():
+    with pytest.raises(ValueError, match="at least two chains"):
+        run_bayes([], [], draws=50, tune=50, chains=1)
 
 
 def test_bayes_insufficient_and_empty():
@@ -53,6 +63,25 @@ def test_bayes_insufficient_and_empty():
     assert all(v["status"] == "insufficient_data" for v in art["q4"].values())
     empty = run_bayes([], [], **FAST)
     assert all(v["status"] == "insufficient_data" for v in empty["q2"].values())
+    assert empty["all_converged"] is False
+    assert empty["convergence_summary"] == {
+        "models_planned": 6,
+        "models_fitted": 0,
+        "models_converged": 0,
+        "models_not_converged": 0,
+        "models_not_fitted": 6,
+    }
+
+
+def test_all_converged_requires_every_planned_model_to_fit_and_converge():
+    complete = [{"status": "ok", "converged": True} for _ in range(6)]
+    partial = complete[:5] + [{"status": "insufficient_data"}]
+    failed = complete[:5] + [{"status": "ok", "converged": False}]
+
+    assert _convergence_summary(complete)[0] is True
+    assert _convergence_summary(partial)[0] is False
+    assert _convergence_summary(failed)[0] is False
+    assert _convergence_summary(failed)[1]["models_not_converged"] == 1
 
 
 def test_bayes_seed_reproducibility(sim_fits):
@@ -61,3 +90,15 @@ def test_bayes_seed_reproducibility(sim_fits):
     b = run_bayes(rows, [], seed=11, draws=200, tune=200, chains=2)
     assert a["q2"]["nasatlx_rtlx_mean_0_100"]["coefs"]["b_visit"]["mean"] == \
         b["q2"]["nasatlx_rtlx_mean_0_100"]["coefs"]["b_visit"]["mean"]
+
+
+def test_bayes_excludes_ineligible_confirmatory_rows():
+    rows = [
+        dict(row, confirmatory_eligible=False)
+        for row in simulate_metric_rows("sysmon_hit_rate", seed=42)
+    ]
+    art = run_bayes(rows, [], **FAST)
+
+    assert art["q2"]["sysmon_hit_rate"]["status"] == "insufficient_data"
+    assert art["confirmatory_eligibility"]["rows_excluded"] == len(rows)
+    assert art["confirmatory_eligibility"]["rows_eligible"] == 0

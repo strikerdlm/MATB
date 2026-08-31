@@ -8,6 +8,7 @@ from time import perf_counter_ns
 from typing import Any, Callable
 
 from core import validation
+from core.recordsink import SinkCloseTimeout
 from plugins import Instructions
 
 try:
@@ -32,6 +33,7 @@ class Labstreaminglayer(Instructions):
         self.stream_info: Any | None = None
         self.stream_outlet: Any | None = None
         self.stop_on_end: bool = False
+        self._marker_queue: list[str] = []
 
         self.lsl_wait_msg: str = _("Please enable the OpenMATB stream into your LabRecorder.")
 
@@ -46,7 +48,7 @@ class Labstreaminglayer(Instructions):
             channel_count=1,
             nominal_srate=0,
             channel_format="string",
-            source_id="myuidw435368",
+            source_id=f"openmatb-{self.logger.scientific_session_id}",
         )
         self.stream_outlet = pylsl.StreamOutlet(self.stream_info)
 
@@ -61,12 +63,36 @@ class Labstreaminglayer(Instructions):
         elif self.parameters["streamsession"] is False and self.logger.lsl is not None:
             self.logger.lsl = None
 
-        if self.parameters["marker"] != "":
-            # A marker has been set. Push it to the outlet.
-            self.push(self.parameters["marker"])
-
-            # and reset the marker to empty.
+        direct_marker = str(self.parameters.get("marker") or "")
+        if direct_marker:
+            self._marker_queue = getattr(self, "_marker_queue", [])
+            self._marker_queue.append(direct_marker)
             self.parameters["marker"] = ""
+        self._flush_marker_queue()
+
+    def _flush_marker_queue(self) -> None:
+        """Submit every explicit marker before an update or outlet shutdown."""
+        direct_marker = str(self.parameters.get("marker") or "")
+        if direct_marker:
+            self._marker_queue = getattr(self, "_marker_queue", [])
+            self._marker_queue.append(direct_marker)
+            self.parameters["marker"] = ""
+        queued = list(getattr(self, "_marker_queue", []))
+        self._marker_queue = []
+        for marker in queued:
+            # Explicit markers share the same bounded asynchronous path and QC
+            # sidecar as automatic runtime records. A queue is essential because
+            # the scheduler can dispatch multiple same-tick parameter events.
+            self.logger.submit_lsl_marker(self, marker)
+
+    def set_parameter(self, keys_str: str, value: Any) -> dict[str, Any]:
+        if keys_str == "marker" and str(value):
+            self._marker_queue = getattr(self, "_marker_queue", [])
+            self._marker_queue.append(str(value))
+            # Keep the legacy scalar empty so update() cannot duplicate a queued
+            # marker while preserving AbstractPlugin's parameter return contract.
+            return super().set_parameter(keys_str, "")
+        return super().set_parameter(keys_str, value)
 
     def push(self, message: str) -> dict[str, float | int] | None:
         if self.stream_outlet is None:
@@ -84,6 +110,16 @@ class Labstreaminglayer(Instructions):
     #        print(message)
 
     def stop(self) -> None:
+        # Scheduler dispatches events after plugin updates. A marker immediately
+        # followed by stop would otherwise remain queued forever and lose its
+        # source-event link. Submit it before asking the logger to drain.
+        self._flush_marker_queue()
+        if not self.logger.close_async_sinks():
+            raise SinkCloseTimeout(
+                "async markers did not drain before the LSL outlet could be released"
+            )
+        if self.logger.lsl is self:
+            self.logger.lsl = None
         super().stop()
         self.stream_info = None
         self.stream_outlet = None

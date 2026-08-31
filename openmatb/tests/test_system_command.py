@@ -28,6 +28,12 @@ class TestSystemEventParsing:
         e = Event.parse_from_string(1, "0:01:00;system;pause")
         assert e.get_line_str() == "0:01:00;system;pause"
 
+    def test_parse_terminal_boundary_roundtrip(self):
+        event = Event.parse_from_string(2, "1:00:00;system;boundary")
+        assert event.plugin == "system"
+        assert event.command == ["boundary"]
+        assert event.get_line_str() == "1:00:00;system;boundary"
+
 
 class TestGetPluginsNameListExcludesSystem:
     def test_system_excluded(self):
@@ -44,14 +50,14 @@ class TestGetPluginsNameListExcludesSystem:
         assert "sysmon" in names
 
     def test_only_system_events(self):
-        """Scenario with only system events yields empty plugin set."""
+        """Scenario with only system events yields an empty stable sequence."""
         s = _make_scenario(
             events=[
                 Event(1, 60, "system", ["pause"]),
             ]
         )
         names = s.get_plugins_name_list()
-        assert names == set()
+        assert names == ()
 
 
 class TestCheckEventsSystemCommands:
@@ -101,6 +107,23 @@ class TestCheckEventsSystemCommands:
 
 
 class TestExecuteSystemCommand:
+    def test_boundary_is_an_intentional_noop_that_keeps_the_timeline_alive(
+        self, mock_window, monkeypatch
+    ):
+        import core.scheduler
+        from core.scheduler import Scheduler
+
+        mock_log = MagicMock()
+        monkeypatch.setattr(core.scheduler, "get_logger", lambda: mock_log)
+        scheduler = object.__new__(Scheduler)
+        scheduler.plugins = {}
+        event = Event(1, 3600, "system", ["boundary"])
+
+        scheduler.execute_one_event(event)
+
+        mock_window.pause_prompt.assert_not_called()
+        assert event.done == 1
+
     def test_pause_calls_pause_prompt(self, mock_window, monkeypatch):
         """execute_one_event() calls pause_prompt() for system;pause."""
         import core.scheduler
@@ -108,6 +131,10 @@ class TestExecuteSystemCommand:
 
         mock_log = MagicMock()
         monkeypatch.setattr(core.scheduler, "get_logger", lambda: mock_log)
+        # One defensive raw-clock read precedes the two validated ExperimentClock
+        # observations so a failed clock can still be terminalized with evidence.
+        monotonic_ticks = iter((900, 1_000, 1_125))
+        monkeypatch.setattr(core.scheduler, "perf_counter_ns", lambda: next(monotonic_ticks))
 
         sched = object.__new__(Scheduler)
         sched.plugins = {}
@@ -117,7 +144,11 @@ class TestExecuteSystemCommand:
 
         mock_window.pause_prompt.assert_called_once()
         assert event.done == 1
-        mock_log.record_event.assert_called_once_with(event)
+        mock_log.record_event.assert_called_once_with(
+            event,
+            dispatch_start_monotonic_ns=1_000,
+            dispatch_end_monotonic_ns=1_125,
+        )
 
     def test_normal_event_still_works(self, mock_window, monkeypatch):
         """Normal plugin events are still dispatched to the plugin."""

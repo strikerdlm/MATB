@@ -1,9 +1,55 @@
 """Tests for core.scenario - Scenario parsing and validation logic."""
 
+from hashlib import sha256
+import os
+import subprocess
+import sys
+from pathlib import Path
 from unittest.mock import MagicMock
+
+import pytest
 
 from core.event import Event
 from core.scenario import Scenario
+
+
+class TestScenarioProvenance:
+    def test_source_digest_covers_the_complete_scenario_text(self):
+        contents = ["# protocol\n", "0:00:00;sysmon;start\n", "0:01:00;sysmon;stop\n"]
+
+        assert Scenario.source_sha256(contents) == sha256("".join(contents).encode("utf-8")).hexdigest()
+
+    def test_source_digest_changes_when_an_experimental_command_changes(self):
+        first = ["0:00:10;sysmon;alerttimeout;10000\n"]
+        second = ["0:00:10;sysmon;alerttimeout;12000\n"]
+
+        assert Scenario.source_sha256(first) != Scenario.source_sha256(second)
+
+    def test_source_digest_preserves_programmatic_line_boundaries(self):
+        assert Scenario.source_sha256(["a", "bc"]) != Scenario.source_sha256(["ab", "c"])
+
+    @pytest.mark.parametrize("level", ["low", "medium", "high"])
+    def test_committed_reference_scenarios_parse_with_the_tracked_event_parser(
+        self, level
+    ):
+        scenario_path = (
+            Path(__file__).resolve().parents[2]
+            / "scenarios" / "military_aviation" / f"{level}_workload.txt"
+        )
+
+        contents = scenario_path.read_text(encoding="utf-8").splitlines()
+        events = [
+            Event.parse_from_string(line_number, line)
+            for line_number, line in enumerate(contents, start=1)
+            if line.strip() and not line.startswith("#")
+        ]
+        scenario = _make_scenario(events=events)
+
+        assert scenario.events
+        assert scenario.get_plugins_name_list() == (
+            "sysmon", "track", "resman", "communications", "genericscales"
+        )
+        assert all(event.time_sec >= 0 for event in events)
 
 
 def _make_scenario(**kwargs):
@@ -26,7 +72,7 @@ class TestGetPluginsNameList:
             ]
         )
         names = s.get_plugins_name_list()
-        assert names == {"sysmon", "track"}
+        assert names == ("sysmon", "track")
 
     def test_excludes_deprecated(self):
         """Filters out deprecated plugin names."""
@@ -42,10 +88,37 @@ class TestGetPluginsNameList:
         assert "sysmon" in names
 
     def test_empty_events(self):
-        """Empty event list yields empty set."""
+        """Empty event list yields an empty stable sequence."""
         s = _make_scenario(events=[])
         names = s.get_plugins_name_list()
-        assert names == set()
+        assert names == ()
+
+    def test_order_is_stable_across_python_hash_seeds(self):
+        ordering_path = Path(__file__).resolve().parents[1] / "core" / "ordering.py"
+        script = f"""
+import importlib.util
+spec = importlib.util.spec_from_file_location('openmatb_ordering', {str(ordering_path)!r})
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+print(','.join(module.unique_in_order(['track', 'sysmon', 'track', 'communications'])))
+"""
+        outputs = []
+        for seed in ("1", "777"):
+            environment = dict(os.environ)
+            environment["PYTHONHASHSEED"] = seed
+            completed = subprocess.run(
+                [sys.executable, "-c", script],
+                cwd=Path(__file__).resolve().parents[1],
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            outputs.append(completed.stdout.strip())
+        assert outputs == [
+            "track,sysmon,communications",
+            "track,sysmon,communications",
+        ]
 
 
 class TestGetPluginEvents:

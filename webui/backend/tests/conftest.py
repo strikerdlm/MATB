@@ -4,6 +4,8 @@ import sys
 from pathlib import Path
 import asyncio
 from datetime import date
+from importlib import import_module
+from importlib.util import find_spec
 
 import fastapi.concurrency
 import fastapi.dependencies.utils
@@ -16,12 +18,7 @@ from sqlmodel.pool import StaticPool
 
 from app import db as db_module
 from app.main import app
-from app.simulation_persistence import SQLModelSimulationPersistence
-from app.simulation_runtime import SimulationManager
-from app.liftoff_persistence import SQLModelLiftoffPersistence
-from app.liftoff_runtime import LiftoffManager
 from app.models import Participant, Visit
-from matb_integration.liftoff.receiver import ReceiverHealth
 
 # Make `matb_integration` importable (repo root is three levels up from this file).
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -42,6 +39,7 @@ class SyncASGIClient:
                 transport=transport,
                 base_url="http://testserver",
                 follow_redirects=True,
+                headers={"Origin": "http://localhost:3100"},
             ) as client:
                 return await client.request(method, url, **kwargs)
 
@@ -57,25 +55,6 @@ class SyncASGIClient:
         return self.request("PUT", url, **kwargs)
 
 
-class FakeLiftoffReceiver:
-    def __init__(self) -> None:
-        self._health = ReceiverHealth()
-
-    def inject_valid_packets(self, count: int) -> None:
-        self._health.received_packets += count
-        self._health.valid_packets += count
-
-    async def wait_ready(self, *, min_valid: int = 20, timeout_seconds: float = 2.0) -> bool:
-        del timeout_seconds
-        return self._health.valid_packets >= min_valid
-
-    def health(self) -> ReceiverHealth:
-        return ReceiverHealth(**{
-            field: getattr(self._health, field)
-            for field in self._health.__dataclass_fields__
-        })
-
-
 @pytest.fixture
 def anyio_backend():
     """Keep async backend tests deterministic on the supported asyncio loop."""
@@ -83,8 +62,11 @@ def anyio_backend():
     return "asyncio"
 
 
-def build_test_manager(*, engine, artifact_root: Path) -> SimulationManager:
+def build_test_manager(*, engine, artifact_root: Path):
     """Build a same-loop manager with durable metadata and explicit one-shot ticks."""
+
+    from app.simulation_persistence import SQLModelSimulationPersistence
+    from app.simulation_runtime import SimulationManager
 
     return SimulationManager(
         scenario_root=_REPO_ROOT / "scenarios" / "suas",
@@ -102,10 +84,12 @@ def engine_fixture():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    db_module._configure_sqlite_foreign_keys(engine)
     import app.models  # noqa: F401  (register tables)
-    import app.liftoff_models  # noqa: F401  (register Liftoff metadata tables)
-    import app.simulation_models  # noqa: F401  (register simulation tables)
     import app.study_models  # noqa: F401  (register study metadata/context tables)
+    for optional_models in ("app.liftoff_models", "app.simulation_models"):
+        if find_spec(optional_models) is not None:
+            import_module(optional_models)
     SQLModel.metadata.create_all(engine)
     yield engine
 
@@ -143,7 +127,11 @@ async def simulation_client(engine, tmp_path, monkeypatch):
     app.dependency_overrides[db_module.get_session] = _get_session_override
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=True)
     try:
-        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+            headers={"Origin": "http://localhost:3100"},
+        ) as client:
             yield client, manager
     finally:
         session.close()
@@ -153,6 +141,28 @@ async def simulation_client(engine, tmp_path, monkeypatch):
 
 @pytest.fixture
 async def liftoff_client(engine, tmp_path, monkeypatch):
+    from app.liftoff_persistence import SQLModelLiftoffPersistence
+    from app.liftoff_runtime import LiftoffManager
+    from matb_integration.liftoff.receiver import ReceiverHealth
+
+    class FakeLiftoffReceiver:
+        def __init__(self) -> None:
+            self._health = ReceiverHealth()
+
+        def inject_valid_packets(self, count: int) -> None:
+            self._health.received_packets += count
+            self._health.valid_packets += count
+
+        async def wait_ready(self, *, min_valid: int = 20, timeout_seconds: float = 2.0) -> bool:
+            del timeout_seconds
+            return self._health.valid_packets >= min_valid
+
+        def health(self) -> ReceiverHealth:
+            return ReceiverHealth(**{
+                field: getattr(self._health, field)
+                for field in self._health.__dataclass_fields__
+            })
+
     async def _run_direct(func, *args, **kwargs):
         return func(*args, **kwargs)
 
@@ -176,7 +186,11 @@ async def liftoff_client(engine, tmp_path, monkeypatch):
     app.state.liftoff_manager = manager
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=True)
     try:
-        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+            headers={"Origin": "http://localhost:3100"},
+        ) as client:
             yield client, manager
     finally:
         await manager.shutdown()
@@ -211,7 +225,7 @@ def client_fixture(engine, monkeypatch):
 def sample_csv_bytes():
     """Minimal OpenMATB-style CSV with SYSMON rows convert_session can parse."""
     def _build(misses: tuple[float, ...] = (5.0, 25.0), raw_tlx: float = 60.0) -> bytes:
-        lines = ["scenario_time,type,module,address,value"]
+        lines = ["logtime,scenario_time,type,module,address,value"]
         # The fixture argument is an RTLX 0-100 target. OpenMATB stores each
         # complete questionnaire subscale natively on 0-10.
         native_rating = raw_tlx / 10.0
@@ -220,11 +234,11 @@ def sample_csv_bytes():
             "Performance", "Effort", "Frustration",
         ):
             lines.append(
-                f"900.0,performance,genericscales,{subscale},{native_rating}"
+                f"900.0,900.0,performance,genericscales,{subscale},{native_rating}"
             )
         for t in misses:
-            lines.append(f"{t},performance,sysmon,signal_detection,MISS")
-        lines.append("10.0,performance,sysmon,signal_detection,HIT")
+            lines.append(f"{t},{t},performance,sysmon,signal_detection,MISS")
+        lines.append("10.0,10.0,performance,sysmon,signal_detection,HIT")
         return ("\n".join(lines) + "\n").encode("utf-8")
     return _build
 

@@ -14,18 +14,32 @@ from pathlib import Path
 
 from sqlmodel import Session, select
 
-from app.models import Block, BlockProvenance, Visit
+from app.models import Block, BlockProvenance, DepdfFit, Visit
 
 WORKLOAD_LEVELS = ("LOW", "MEDIUM", "HIGH")
 
 _log = logging.getLogger(__name__)
 
 
+def _reject_nonfinite_json(value: str) -> None:
+    raise ValueError(f"non-finite JSON constant is forbidden: {value}")
+
+
 class IngestionError(Exception):
     """Raised when a file cannot be mapped/validated; never silently mislabel."""
 
 
-def _convert_and_rows(content: bytes, level: str) -> tuple[dict, list[dict], list[dict]]:
+def _convert_and_rows(
+    content: bytes,
+    level: str,
+    *,
+    participant_id: str,
+    visit_ordinal: int,
+    source_csv_filename: str,
+    expected_target_opportunities: int | None = None,
+    expected_nontarget_opportunities: int | None = None,
+    expected_comm_opportunities: int | None = None,
+) -> tuple[dict, list[dict], list[dict]]:
     """Run convert_session and capture the raw SYSMON detection rows (timestamps).
 
     The Suhir fit needs the raw MISS timestamps; Block stores only the converted
@@ -37,7 +51,19 @@ def _convert_and_rows(content: bytes, level: str) -> tuple[dict, list[dict], lis
         fh.write(content)
         tmp = Path(fh.name)
     try:
-        record = convert_session(tmp, workload_level=level)
+        record = convert_session(
+            tmp,
+            participant_id=participant_id,
+            block_name=f"block_{visit_ordinal}",
+            workload_level=level,
+            expected_sysmon_target_opportunities=expected_target_opportunities,
+            expected_sysmon_nontarget_opportunities=expected_nontarget_opportunities,
+            expected_comm_opportunities=expected_comm_opportunities,
+        )
+        # The temporary extraction path is destroyed before this function
+        # returns and is not scientific provenance. Preserve the investigator-
+        # supplied source identity stored alongside its content digest.
+        record["csv_path"] = source_csv_filename
         # MISS rows only: that is all the Suhir fit consumes
         # (sysmon_failure_times filters to MISS), and it keeps metrics_json lean.
         all_rows = parse_csv(tmp)
@@ -64,7 +90,6 @@ def _validation_payload(
     source_csv_filename: str,
 ) -> dict:
     from matb_integration.scenario_manifest import (
-        canonical_json,
         manifest_summary,
         sha256_bytes,
         validate_manifest_against_session,
@@ -87,7 +112,10 @@ def _validation_payload(
 
     manifest_sha = sha256_bytes(manifest_content)
     try:
-        manifest = json.loads(manifest_content.decode("utf-8"))
+        manifest = json.loads(
+            manifest_content.decode("utf-8"),
+            parse_constant=_reject_nonfinite_json,
+        )
         if not isinstance(manifest, dict):
             raise ValueError("manifest root must be a JSON object")
     except Exception as exc:  # noqa: BLE001 — stored as validation metadata
@@ -112,11 +140,14 @@ def _validation_payload(
         visit_ordinal=visit_ordinal,
         workload_level=workload_level,
         source_csv_filename=source_csv_filename,
+        uploaded_manifest_sha256=manifest_sha,
     )
     return {
         "manifest_filename": manifest_filename,
         "manifest_sha256": manifest_sha,
-        "manifest_json": canonical_json(manifest),
+        # Preserve the exact UTF-8 bytes whose digest is recorded. Parsed and
+        # canonical views are derived on read; archival identity is byte-level.
+        "manifest_json": manifest_content.decode("utf-8"),
         "validation_status": validation_status(issues),
         "validation_issues": issues,
         "manifest_summary": manifest_summary(manifest),
@@ -162,33 +193,58 @@ def ingest_csv(
             f"cell already filled: {participant_id} visit {visit_ordinal} {workload_level}"
         )
 
-    record, sysmon_rows, csv_rows = _convert_and_rows(content, workload_level)
+    expected_target_opportunities: int | None = None
+    expected_nontarget_opportunities: int | None = None
+    expected_comm_opportunities: int | None = None
+    if manifest_content is not None:
+        try:
+            manifest_payload = json.loads(
+                manifest_content.decode("utf-8"),
+                parse_constant=_reject_nonfinite_json,
+            )
+            expected_payload = manifest_payload.get("expected", {})
+            target_value = expected_payload.get("sysmon_target_opportunities")
+            nontarget_value = expected_payload.get("sysmon_nontarget_opportunities")
+            comm_value = expected_payload.get("comm_events")
+            if (
+                isinstance(target_value, int)
+                and not isinstance(target_value, bool)
+                and target_value >= 0
+            ):
+                expected_target_opportunities = target_value
+            if (
+                isinstance(nontarget_value, int)
+                and not isinstance(nontarget_value, bool)
+                and nontarget_value >= 0
+            ):
+                expected_nontarget_opportunities = nontarget_value
+            if (
+                isinstance(comm_value, int)
+                and not isinstance(comm_value, bool)
+                and comm_value >= 0
+            ):
+                expected_comm_opportunities = comm_value
+        except (AttributeError, UnicodeDecodeError, ValueError):
+            pass
+
+    try:
+        record, sysmon_rows, csv_rows = _convert_and_rows(
+            content,
+            workload_level,
+            participant_id=participant_id,
+            visit_ordinal=visit_ordinal,
+            source_csv_filename=filename,
+            expected_target_opportunities=expected_target_opportunities,
+            expected_nontarget_opportunities=expected_nontarget_opportunities,
+            expected_comm_opportunities=expected_comm_opportunities,
+        )
+    except (UnicodeError, ValueError) as exc:
+        raise IngestionError(f"malformed CSV {filename!r}: {exc}") from exc
     sysmon = record.get("sysmon") or {}
     if not sysmon.get("n_signals") and not sysmon.get("n_misses"):
         raise IngestionError("no usable metrics in CSV (no SYSMON signal rows)")
     # Persist raw SYSMON detection rows (timestamps) the Suhir fit needs.
     record["_raw_sysmon_rows"] = sysmon_rows
-
-    if existing is not None:
-        old_provenance = session.exec(
-            select(BlockProvenance).where(BlockProvenance.block_id == existing.id)
-        ).first()
-        if old_provenance is not None:
-            session.delete(old_provenance)
-            session.flush()
-        session.delete(existing)
-        session.flush()
-
-    block = Block(
-        visit_id=visit.id,
-        workload_level=workload_level,
-        source_csv_filename=filename,
-        source_csv_sha256=sha,
-        metrics_json=json.dumps(record, ensure_ascii=False),
-    )
-    session.add(block)
-    session.commit()
-    session.refresh(block)
 
     validation = _validation_payload(
         manifest_content=manifest_content,
@@ -200,15 +256,79 @@ def ingest_csv(
         workload_level=workload_level,
         source_csv_filename=filename,
     )
-    session.add(BlockProvenance(
-        block_id=block.id,
-        manifest_filename=validation["manifest_filename"],
-        manifest_sha256=validation["manifest_sha256"],
-        manifest_json=validation["manifest_json"],
-        validation_status=validation["validation_status"],
-        validation_issues_json=json.dumps(validation["validation_issues"], ensure_ascii=False),
-    ))
-    session.commit()
+    internally_reconciled = bool(
+        sysmon.get("observed_opportunity_reconciled")
+        and sysmon.get("human_performance_eligible")
+    )
+    authoritative_source_reconciled = (
+        record.get("scientific_source_status")
+        == "authoritative_event_stream_reconciled"
+    )
+    confirmatory_eligible = (
+        internally_reconciled
+        and validation["validation_status"] == "ok"
+        and authoritative_source_reconciled
+    )
+    sysmon["observed_confirmatory_eligible"] = confirmatory_eligible
+    if not authoritative_source_reconciled:
+        sysmon["confirmatory_eligibility_basis"] = (
+            "ineligible_until_authoritative_event_stream_reconciliation"
+        )
+    elif confirmatory_eligible:
+        sysmon["confirmatory_eligibility_basis"] = (
+            "complete_human_opportunities_valid_manifest_and_reconciled_event_stream"
+        )
+    else:
+        sysmon["confirmatory_eligibility_basis"] = (
+            "ineligible_without_complete_opportunities_and_valid_session_bound_manifest"
+        )
+
+    try:
+        stale_fit = session.exec(
+            select(DepdfFit).where(DepdfFit.visit_id == visit.id)
+        ).first()
+        if stale_fit is not None:
+            # Any changed block invalidates the visit-level fit. Delete it in
+            # the same transaction as the replacement so a failed recompute
+            # can never leave a stale result attached to new inputs.
+            session.delete(stale_fit)
+        if existing is not None:
+            old_provenance = session.exec(
+                select(BlockProvenance).where(BlockProvenance.block_id == existing.id)
+            ).first()
+            if old_provenance is not None:
+                session.delete(old_provenance)
+                # No ORM relationship is declared between these evidence
+                # tables, so make the dependency order explicit under SQLite
+                # foreign-key enforcement.
+                session.flush()
+            session.delete(existing)
+            session.flush()
+
+        block = Block(
+            visit_id=visit.id,
+            workload_level=workload_level,
+            source_csv_filename=filename,
+            source_csv_sha256=sha,
+            metrics_json=json.dumps(record, ensure_ascii=False, allow_nan=False),
+        )
+        session.add(block)
+        session.flush()
+        assert block.id is not None
+        session.add(BlockProvenance(
+            block_id=block.id,
+            manifest_filename=validation["manifest_filename"],
+            manifest_sha256=validation["manifest_sha256"],
+            manifest_json=validation["manifest_json"],
+            validation_status=validation["validation_status"],
+            validation_issues_json=json.dumps(validation["validation_issues"], ensure_ascii=False),
+        ))
+        # Block and its scientific provenance are one atomic persistence unit.
+        session.commit()
+        session.refresh(block)
+    except Exception:
+        session.rollback()
+        raise
 
     _maybe_fit_visit(session, visit)
     return block
@@ -245,8 +365,6 @@ def _maybe_fit_visit(session: Session, visit: Visit) -> None:
         return
 
     from matb_integration.suhir.pipeline import fit_participant
-    from app.models import DepdfFit
-
     blocks_arg: dict[str, tuple[dict, list[dict]]] = {}
     for level, b in by_level.items():
         record = json.loads(b.metrics_json)

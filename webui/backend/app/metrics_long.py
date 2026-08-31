@@ -57,16 +57,40 @@ def extract_long_metrics(record: dict[str, Any]) -> list[tuple[str, float]]:
     return out
 
 
-def metric_metadata(metric: str, record: dict[str, Any]) -> dict[str, Any]:
+def metric_metadata(
+    metric: str,
+    record: dict[str, Any],
+    *,
+    provenance_validation_status: str | None = None,
+) -> dict[str, Any]:
     """Return explicit version/eligibility provenance for a long metric."""
     metadata = dict(_METADATA[metric])
-    if metric == "sysmon_dprime_observed_v2":
+    source_status = str(record.get("scientific_source_status") or "legacy_unspecified")
+    metadata["scientific_source_status"] = source_status
+    if metadata["confirmatory_eligible"]:
+        metadata["confirmatory_eligible"] = (
+            provenance_validation_status == "ok"
+            and source_status == "authoritative_event_stream_reconciled"
+        )
+    if metric in {
+        "sysmon_dprime_observed_v2",
+        "sysmon_hit_rate",
+        "sysmon_mean_rt_ms",
+    }:
         metadata["confirmatory_eligible"] = bool(
             (record.get("sysmon") or {}).get("observed_confirmatory_eligible")
-        )
+        ) and bool(metadata["confirmatory_eligible"])
     elif metric == "nasatlx_rtlx_mean_0_100":
         metadata["confirmatory_eligible"] = bool(
             (record.get("nasatlx") or {}).get("confirmatory_eligible")
-        )
+        ) and bool(metadata["confirmatory_eligible"])
+    elif metric == "bedford":
+        metadata["confirmatory_eligible"] = bool(
+            (record.get("bedford") or {}).get("confirmatory_eligible")
+        ) and bool(metadata["confirmatory_eligible"])
+    elif metric == "isa_mean":
+        metadata["confirmatory_eligible"] = bool(
+            (record.get("isa") or {}).get("confirmatory_eligible")
+        ) and bool(metadata["confirmatory_eligible"])
     metadata["metrics_schema_version"] = str(record.get("metrics_schema_version") or "1.0")
     return metadata
