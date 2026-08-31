@@ -66,10 +66,12 @@ seleccionado.
 Con el lanzador Linux/WSL2 activo, ejecute contra loopback:
 
 ```bash
+export MATB_API_TOKEN="$(<var/suas/api-token)"
 BASE_URL=http://127.0.0.1:8000 bash examples/suas-simulator/api_walkthrough.sh
 ```
 
 ```powershell
+$env:MATB_API_TOKEN = Read-Host "Token API de MATB"
 .\examples\suas-simulator\api_walkthrough.ps1 -BaseUrl http://127.0.0.1:8000
 ```
 

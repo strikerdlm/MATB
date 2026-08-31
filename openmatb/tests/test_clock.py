@@ -88,3 +88,44 @@ class TestClockTime:
         """Default time is 0.0."""
         c = self._make_clock()
         assert c.get_time() == 0.0
+
+
+class TestExperimentClock:
+    def test_observation_keeps_experiment_and_host_clock_domains_distinct(self):
+        """A scenario time must never overwrite its host monotonic observation."""
+        from core.experimentclock import ExperimentClock
+
+        readings = iter((5_000_000_000, 5_020_000_000))
+        clock = ExperimentClock(monotonic_ns=lambda: next(readings))
+
+        first = clock.observe(1_000_000_000)
+        second = clock.observe(1_010_000_000)
+
+        assert first.experiment_time_ns == 1_000_000_000
+        assert first.host_monotonic_ns == 5_000_000_000
+        assert second.experiment_time_ns == 1_010_000_000
+        assert second.host_monotonic_ns == 5_020_000_000
+
+    def test_observation_rejects_clock_regression(self):
+        """Regressing either authoritative clock would make event ordering ambiguous."""
+        from core.experimentclock import ExperimentClock
+
+        host_readings = iter((100, 99))
+        clock = ExperimentClock(monotonic_ns=lambda: next(host_readings))
+        clock.observe(10)
+        try:
+            clock.observe(11)
+        except RuntimeError as exc:
+            assert "host monotonic clock regressed" in str(exc)
+        else:
+            raise AssertionError("host clock regression was accepted")
+
+        stable_host = iter((200, 201))
+        clock = ExperimentClock(monotonic_ns=lambda: next(stable_host))
+        clock.observe(10)
+        try:
+            clock.observe(9)
+        except ValueError as exc:
+            assert "experiment time regressed" in str(exc)
+        else:
+            raise AssertionError("experiment clock regression was accepted")

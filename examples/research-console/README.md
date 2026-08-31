@@ -10,7 +10,7 @@ operational deployment. For endpoint and screen detail, see the
 
 ## Prerequisites and native development
 
-Use Python 3.12 and Node.js 20 or later. From the repository root, create a
+Use Python 3.12 and Node.js 20.9 or later. From the repository root, create a
 venv and install the backend dependencies, then install the frontend Node
 dependencies:
 
@@ -23,6 +23,10 @@ npm install
 
 Run the API in one terminal and the browser UI in another. The default API port
 is 8000 and the frontend port is 3100.
+
+Use one Uvicorn worker per database. The API acquires a durable instance lease;
+starting a second live backend against the same SQLite file fails closed instead
+of splitting Bayesian work and writes across process-local executors.
 
 ```bash
 cd webui/backend
@@ -69,14 +73,16 @@ development service unintentionally.
 
 Start either local service first, then run one of these from the repository
 root. `BASE_URL` and `OUTPUT_DIR` override the loopback address and ZIP output
-directory.
+directory. Load the owner-only token created by the launcher for CLI mutations.
 
 ```bash
+export MATB_API_TOKEN="$(<examples/output/research-console-service/api-token)"
 BASE_URL=http://127.0.0.1:8000 OUTPUT_DIR=/tmp/matb-console \
   bash examples/research-console/api_walkthrough.sh
 ```
 
 ```powershell
+$env:MATB_API_TOKEN = Read-Host "MATB API token"
 .\examples\research-console\api_walkthrough.ps1 -BaseUrl http://127.0.0.1:8000 -OutputDir C:\Temp\matb-console
 ```
 
@@ -95,6 +101,12 @@ The upload deliberately omits a scenario manifest. That is accepted and shown
 as `missing_manifest`; a malformed or mismatched manifest is retained with
 validation issues rather than silently accepted. Do not interpret the one-row
 tour as a completed visit or analysis dataset.
+
+This upload surface currently ingests legacy CSV, not the runtime's authoritative
+v3 event/timing stream. Every derived record and long-format metric carries
+`legacy_csv_derived_not_reconciled_to_authoritative_event_stream`; confirmatory
+eligibility stays false even when the optional scenario manifest is valid. Paired
+JSONL ingestion and event-ID reconciliation is an explicit public-release gate.
 
 ## Browser tour and cleanup
 

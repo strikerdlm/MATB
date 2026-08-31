@@ -88,6 +88,7 @@ export function BayesSection() {
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollRef = useRef<() => void>(() => {});
+  const activeJobId = useRef<number | undefined>(undefined);
 
   const stopPolling = useCallback(() => {
     if (timer.current) { clearInterval(timer.current); timer.current = null; }
@@ -95,8 +96,9 @@ export function BayesSection() {
 
   const poll = useCallback(async () => {
     try {
-      const s = await getBayesStatus();
+      const s = await getBayesStatus(activeJobId.current);
       setJob(s);
+      if (s) activeJobId.current = s.job_id;
       if (!s || s.status === "done" || s.status === "failed") {
         stopPolling();
       } else if (!timer.current) {
@@ -120,6 +122,7 @@ export function BayesSection() {
     try {
       const j = await runBayes();
       setJob(j);
+      activeJobId.current = j.job_id;
       if (j.status === "queued" || j.status === "running") {
         stopPolling();
         timer.current = setInterval(() => pollRef.current(), POLL_MS);

@@ -65,10 +65,12 @@ nonempty output directory. Delete only that chosen demo directory to reset it.
 With the WSL2/Linux launcher running, run either client against loopback:
 
 ```bash
+export MATB_API_TOKEN="$(<var/suas/api-token)"
 BASE_URL=http://127.0.0.1:8000 bash examples/suas-simulator/api_walkthrough.sh
 ```
 
 ```powershell
+$env:MATB_API_TOKEN = Read-Host "MATB API token"
 .\examples\suas-simulator\api_walkthrough.ps1 -BaseUrl http://127.0.0.1:8000
 ```
 

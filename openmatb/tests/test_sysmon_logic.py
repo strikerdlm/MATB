@@ -4,7 +4,7 @@ Tests the actual Sysmon plugin methods (determine_light_color, start_failure,
 stop_failure, etc.) using object.__new__() to bypass __init__.
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 import json
 
 from core.constants import COLORS as C
@@ -181,6 +181,27 @@ class TestStartFailure:
         assert light["_onfailure"] is True
         assert light["failure"] is False  # Consumed
 
+    def test_on_time_command_is_rejected_if_next_update_opens_after_a_stall(self):
+        s = _make_sysmon()
+        s.scenario_time = 10.0
+        s._scenario_dispatch_context = {
+            "scheduled_time_s": 10.0,
+            "dispatch_time_s": 10.0,
+            "source_line": 7,
+        }
+        s.set_parameter("lights-1-failure", True)
+        s.scenario_time = 12.0
+
+        with patch("plugins.abstractplugin.AbstractPlugin.compute_next_plugin_state", return_value=True):
+            s.compute_next_plugin_state()
+
+        light = s.parameters["lights"]["1"]
+        assert light["_onfailure"] is False
+        rejected = json.loads(s.performance["opportunity"][-1])
+        assert rejected["phase"] == "rejected"
+        assert rejected["outcome"] == "INVALID_STALLED_WINDOW"
+        assert rejected["reason"] == "target_window_opened_after_update_stall"
+
     def test_light_default_off_turns_on(self):
         """Default-off light toggles on on failure."""
         s = _make_sysmon()
@@ -343,6 +364,47 @@ class TestStopFailure:
         opportunities = [json.loads(value) for value in s.performance["opportunity"]]
         assert opportunities[-1]["outcome"] == "MISS"
 
+    def test_automatic_resolution_is_attributed_and_uses_its_actual_window(self):
+        """Automation cannot be reported as a participant HIT or a 10 s trial."""
+        s = _make_sysmon()
+        s.parameters["automaticsolver"] = True
+        s.parameters["automaticsolverdelay"] = 1250
+        light = s.parameters["lights"]["1"]
+        light["failure"] = True
+
+        s.start_failure(light)
+        s.scenario_time = 1.25
+        s.stop_failure(light, success=False)
+
+        opened, closed = [
+            json.loads(value) for value in s.performance["opportunity"]
+        ]
+        assert opened["duration_ms"] == 1250
+        assert opened["deadline_s"] == 1.25
+        assert opened["allocation_actor"] == "automation"
+        assert opened["automation_active"] is True
+        assert closed["scheduled_deadline_s"] == opened["deadline_s"]
+        assert closed["response_actor"] == "automation"
+        assert closed["automation_active"] is True
+        assert closed["outcome"] == "HIT"
+
+    def test_automated_nontarget_window_is_attributed_to_automation(self):
+        s = _make_sysmon()
+        s.parameters["automaticsolver"] = True
+        s.parameters["nontargetduration"] = 2000
+
+        s.open_nontarget_opportunity()
+        s.scenario_time = 2.0
+        s.close_nontarget_opportunity()
+
+        opened, closed = [
+            json.loads(value) for value in s.performance["opportunity"]
+        ]
+        assert opened["automation_active"] is True
+        assert opened["allocation_actor"] == "automation"
+        assert closed["automation_active"] is True
+        assert closed["response_actor"] == "automation"
+
     def test_success_sets_freeze_timer(self):
         """Success freeze timer equals feedbackduration."""
         s = _make_sysmon()
@@ -404,6 +466,256 @@ class TestStopFailure:
         light["_milliresponsetime"] = 2000
         s.stop_failure(light, success=True)
         assert light["_milliresponsetime"] == 0
+
+
+class TestNonTargetOpportunities:
+    def test_stalled_batch_rejects_nontarget_when_target_dispatch_is_pending(self):
+        """A late batch may not silently overlap target and non-target evidence."""
+        s = _make_sysmon()
+        s.parameters["nontargetduration"] = 2000
+        light = s.parameters["lights"]["1"]
+        light["failure"] = True
+        s.scenario_time = 25.0
+
+        s.open_nontarget_opportunity()
+
+        assert getattr(s, "_nontarget_opportunity_id", None) is None
+        rejected = json.loads(s.performance["opportunity"][-1])
+        assert rejected["phase"] == "rejected"
+        assert rejected["outcome"] == "INVALID_COLLAPSED_BATCH"
+        assert rejected["target"] is False
+
+        with patch("plugins.abstractplugin.AbstractPlugin.compute_next_plugin_state", return_value=True):
+            s.compute_next_plugin_state()
+        assert light["_onfailure"] is False
+
+    def test_same_batch_nontarget_then_target_is_rejected_symmetrically(self):
+        s = _make_sysmon()
+        s.parameters["nontargetduration"] = 2000
+        s.scenario_time = 10.0
+        s._scenario_dispatch_context = {
+            "scheduled_time_s": 10.0,
+            "dispatch_time_s": 10.0,
+            "source_line": 1,
+        }
+        s.open_nontarget_opportunity()
+        s._scenario_dispatch_context = {
+            "scheduled_time_s": 10.0,
+            "dispatch_time_s": 10.0,
+            "source_line": 2,
+        }
+
+        s.set_parameter("lights-1-failure", True)
+
+        payloads = [json.loads(value) for value in s.performance["opportunity"]]
+        assert payloads[-2]["outcome"] == "INVALID_COLLAPSED_BATCH"
+        assert payloads[-2]["target"] is False
+        assert payloads[-1]["outcome"] == "INVALID_COLLAPSED_BATCH"
+        assert payloads[-1]["target"] is True
+        assert s.parameters["lights"]["1"]["failure"] is False
+        assert getattr(s, "_nontarget_opportunity_id", None) is None
+
+    def test_same_batch_target_then_nontarget_rejects_both_orders(self):
+        s = _make_sysmon()
+        s.parameters["nontargetduration"] = 2000
+        s.scenario_time = 10.0
+        s._scenario_dispatch_context = {
+            "scheduled_time_s": 10.0,
+            "dispatch_time_s": 10.0,
+            "source_line": 1,
+        }
+        s.set_parameter("lights-1-failure", True)
+        s._scenario_dispatch_context = {
+            "scheduled_time_s": 10.0,
+            "dispatch_time_s": 10.0,
+            "source_line": 2,
+        }
+
+        s.open_nontarget_opportunity()
+
+        payloads = [json.loads(value) for value in s.performance["opportunity"]]
+        rejected = [item for item in payloads if item["phase"] == "rejected"]
+        assert [item["target"] for item in rejected] == [True, False]
+        assert all(item["outcome"] == "INVALID_COLLAPSED_BATCH" for item in rejected)
+        assert s.parameters["lights"]["1"]["failure"] is False
+        assert getattr(s, "_nontarget_opportunity_id", None) is None
+
+    def test_same_batch_target_target_with_different_durations_rejects_both(self):
+        s = _make_sysmon()
+        s.scenario_time = 10.0
+        s._scenario_dispatch_context = {
+            "scheduled_time_s": 10.0,
+            "dispatch_time_s": 10.0,
+            "source_line": 1,
+        }
+        s.parameters["alerttimeout"] = 5000
+        s.set_parameter("lights-1-failure", True)
+        s._scenario_dispatch_context = {
+            "scheduled_time_s": 10.0,
+            "dispatch_time_s": 10.0,
+            "source_line": 2,
+        }
+        s.parameters["alerttimeout"] = 9000
+
+        s.set_parameter("scales-1-failure", True)
+
+        rejected = [
+            json.loads(value)
+            for value in s.performance["opportunity"]
+            if json.loads(value)["phase"] == "rejected"
+        ]
+        assert [item["planned_duration_ms"] for item in rejected] == [5000, 9000]
+        assert all(item["outcome"] == "INVALID_COLLAPSED_BATCH" for item in rejected)
+        assert not any(gauge["failure"] for gauge in s.get_all_gauges())
+
+    def test_protocol_window_closes_as_observed_correct_rejection(self):
+        """Catch idle time being inferred instead of an explicit non-target trial."""
+        s = _make_sysmon()
+        s.parameters["nontargetduration"] = 2000
+
+        s.open_nontarget_opportunity()
+        s.scenario_time = 2.0
+        s.close_nontarget_opportunity(false_alarm=False)
+
+        opportunities = [json.loads(value) for value in s.performance["opportunity"]]
+        assert opportunities == [
+            {
+                "allocation_actor": "participant",
+                "automation_active": False,
+                "close_lateness_tolerance_ms": 200,
+                "deadline_s": 2.0,
+                "duration_ms": 2000,
+                "opened_scenario_time_s": 0,
+                "opportunity_id": "sysmon-000001",
+                "phase": "opened",
+                "target": False,
+            },
+            {
+                "automation_active": False,
+                "closed_scenario_time_s": 2.0,
+                "indicator": None,
+                "lateness_ms": 0,
+                "opened_scenario_time_s": 0,
+                "opportunity_id": "sysmon-000001",
+                "outcome": "CR",
+                "phase": "closed",
+                "reason": None,
+                "response_time_ms": None,
+                "response_actor": "participant",
+                "scheduled_deadline_s": 2.0,
+                "target": False,
+            },
+        ]
+
+    def test_false_alarm_is_linked_to_active_non_target_opportunity(self):
+        """Catch false responses with no observed non-target denominator."""
+        s = _make_sysmon()
+        s.parameters["nontargetduration"] = 2000
+        s.open_nontarget_opportunity()
+
+        with patch("plugins.abstractplugin.Window.MainWindow", MagicMock(modal_dialog=None)):
+            s.do_on_key("F1", "press", False)
+
+        opportunities = [json.loads(value) for value in s.performance["opportunity"]]
+        assert opportunities[-1]["target"] is False
+        assert opportunities[-1]["outcome"] == "FA"
+        assert opportunities[-1]["indicator"] == "F1"
+        assert "opportunity_unlinked_response" not in s.performance
+
+    def test_window_uses_absolute_scenario_deadline_after_a_stalled_update(self):
+        """A 2 s observation window cannot remain open after a 5 s GUI stall."""
+        s = _make_sysmon()
+        s.parameters["nontargetduration"] = 2000
+        s.open_nontarget_opportunity()
+        s.scenario_time = 5.0
+
+        with patch("plugins.abstractplugin.AbstractPlugin.compute_next_plugin_state", return_value=True):
+            s.compute_next_plugin_state()
+
+        assert s._nontarget_opportunity_id is None
+        closed = json.loads(s.performance["opportunity"][-1])
+        assert closed["closed_scenario_time_s"] == 5.0
+        assert closed["outcome"] == "INVALID_STALLED_WINDOW"
+        assert closed["reason"] == "window_closed_after_update_stall"
+        assert closed["lateness_ms"] == 3000
+
+
+class TestStopOpportunityCleanup:
+    def test_stop_invalidates_active_and_pending_target_evidence(self):
+        from plugins.abstractplugin import AbstractPlugin
+
+        s = _make_sysmon()
+        active = s.parameters["lights"]["1"]
+        active["failure"] = True
+        s.start_failure(active)
+        pending = s.parameters["scales"]["1"]
+        pending["failure"] = True
+        pending["_pending_alerttimeout_ms"] = 10_000
+        pending["_pending_dispatch_context"] = {"scheduled_time_s": 0.0}
+
+        with patch.object(AbstractPlugin, "stop") as parent_stop:
+            s.stop()
+
+        payloads = [json.loads(value) for value in s.performance["opportunity"]]
+        assert any(
+            payload["phase"] == "closed"
+            and payload["reason"] == "task_stopped_before_outcome"
+            for payload in payloads
+        )
+        assert any(
+            payload["phase"] == "rejected"
+            and payload["reason"] == "task_stopped_before_outcome"
+            for payload in payloads
+        )
+        assert not any(gauge["failure"] for gauge in s.get_all_gauges())
+        assert not s.get_gauges_on_failure()
+        parent_stop.assert_called_once_with()
+
+    def test_stop_invalidates_active_nontarget_evidence(self):
+        from plugins.abstractplugin import AbstractPlugin
+
+        s = _make_sysmon()
+        s.parameters["nontargetduration"] = 2000
+        s.open_nontarget_opportunity()
+
+        with patch.object(AbstractPlugin, "stop") as parent_stop:
+            s.stop()
+
+        closed = json.loads(s.performance["opportunity"][-1])
+        assert closed["phase"] == "closed"
+        assert closed["reason"] == "task_stopped_before_outcome"
+        assert s._nontarget_opportunity_id is None
+        parent_stop.assert_called_once_with()
+
+
+class TestAbsoluteFailureTiming:
+    def test_failure_deadline_and_hit_rt_use_actual_scenario_elapsed_time(self):
+        s = _make_sysmon()
+        s.scenario_time = 5.0
+        light = s.parameters["lights"]["1"]
+        light["failure"] = True
+        s.start_failure(light)
+        s.scenario_time = 7.75
+
+        s.stop_failure(light, success=True)
+
+        assert s.performance["response_time"][-1] == 2750
+
+    def test_failure_expires_after_stall_without_fixed_tick_drift(self):
+        s = _make_sysmon()
+        light = s.parameters["lights"]["1"]
+        light["failure"] = True
+        s.start_failure(light)
+        s.scenario_time = 12.0
+
+        with patch("plugins.abstractplugin.AbstractPlugin.compute_next_plugin_state", return_value=True):
+            s.compute_next_plugin_state()
+
+        assert light["_onfailure"] is False
+        assert "signal_detection" not in s.performance
+        closed = json.loads(s.performance["opportunity"][-1])
+        assert closed["outcome"] == "INVALID_STALLED_WINDOW"
+        assert closed["reason"] == "window_closed_after_update_stall"
 
 
 # ──────────────────────────────────────────────

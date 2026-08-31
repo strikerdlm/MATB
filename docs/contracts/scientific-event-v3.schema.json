@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://matb.science/contracts/scientific-event-v3.schema.json",
+  "title": "MATB Scientific Event V3",
+  "description": "Immutable, session-ordered scientific event. Clock-domain observations are separate TimingObservation records.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "session_id",
+    "event_id",
+    "sequence",
+    "component_id",
+    "component_version",
+    "task",
+    "event_type",
+    "scenario_time_ns",
+    "scenario_sha256",
+    "profile_id",
+    "source_commit",
+    "source_dirty",
+    "provenance_status",
+    "causation_id",
+    "correlation_id",
+    "opportunity_id",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": {"const": "3.0"},
+    "session_id": {"type": "string", "format": "uuid"},
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "$comment": "UUIDv5 derived from schema version, session_id, component_id, sequence, and event_type; verify with the reference validator."
+    },
+    "sequence": {"type": "integer", "minimum": 0},
+    "component_id": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$"},
+    "component_version": {"type": "string", "pattern": "^\\S(?:[\\s\\S]*\\S)?$"},
+    "task": {
+      "anyOf": [
+        {"type": "string", "pattern": "^\\S(?:[\\s\\S]*\\S)?$"},
+        {"type": "null"}
+      ]
+    },
+    "event_type": {"type": "string", "pattern": "^\\S(?:[\\s\\S]*\\S)?$"},
+    "scenario_time_ns": {"type": "integer", "minimum": 0},
+    "scenario_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "profile_id": {"type": "string", "pattern": "^\\S(?:[\\s\\S]*\\S)?$"},
+    "source_commit": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64}|unknown|unavailable)$"
+    },
+    "source_dirty": {"type": ["boolean", "null"]},
+    "provenance_status": {
+      "enum": [
+        "complete",
+        "provisional_dirty_source_tree",
+        "provisional_unverified_source_tree",
+        "provisional_missing_source_commit"
+      ]
+    },
+    "causation_id": {"$ref": "#/$defs/nullableUuid"},
+    "correlation_id": {"$ref": "#/$defs/nullableUuid"},
+    "opportunity_id": {"$ref": "#/$defs/nullableUuid"},
+    "payload": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/jsonValue"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "source_commit": {"pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+          "source_dirty": {"const": false}
+        },
+        "required": ["source_commit", "source_dirty"]
+      },
+      "then": {"properties": {"provenance_status": {"const": "complete"}}}
+    },
+    {
+      "if": {
+        "properties": {
+          "source_commit": {"pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+          "source_dirty": {"const": true}
+        },
+        "required": ["source_commit", "source_dirty"]
+      },
+      "then": {
+        "properties": {"provenance_status": {"const": "provisional_dirty_source_tree"}}
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "source_commit": {"pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+          "source_dirty": {"const": null}
+        },
+        "required": ["source_commit", "source_dirty"]
+      },
+      "then": {
+        "properties": {"provenance_status": {"const": "provisional_unverified_source_tree"}}
+      }
+    },
+    {
+      "if": {
+        "properties": {"source_commit": {"enum": ["unknown", "unavailable"]}},
+        "required": ["source_commit"]
+      },
+      "then": {
+        "properties": {
+          "source_dirty": {"const": null},
+          "provenance_status": {"const": "provisional_missing_source_commit"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "nullableUuid": {
+      "anyOf": [
+        {"type": "string", "format": "uuid"},
+        {"type": "null"}
+      ]
+    },
+    "jsonValue": {
+      "anyOf": [
+        {"type": "null"},
+        {"type": "boolean"},
+        {"type": "number"},
+        {"type": "string"},
+        {"type": "array", "items": {"$ref": "#/$defs/jsonValue"}},
+        {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/jsonValue"}
+        }
+      ]
+    }
+  }
+}

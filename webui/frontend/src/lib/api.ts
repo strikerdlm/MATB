@@ -2,6 +2,9 @@ import type {
   AnalysisArtifact,
   BayesJob,
   BlockDetail,
+  ConsoleCapabilities,
+  CompiledExperiment,
+  ExperimentSpec,
   FigureOptionExport,
   FitRow,
   IngestResult,
@@ -33,10 +36,29 @@ export class IngestError extends ApiError {
   }
 }
 
+export async function getCapabilities(): Promise<ConsoleCapabilities> {
+  const res = await request("/capabilities", { method: "GET" });
+  if (!res.ok) throw new ApiError(res.status, await detail(res));
+  return res.json();
+}
+
+export async function compileExperiment(spec: ExperimentSpec): Promise<CompiledExperiment> {
+  const res = await request("/experiments/compile", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(spec),
+  });
+  if (!res.ok) throw new ApiError(res.status, await detail(res));
+  return res.json();
+}
+
 async function detail(res: Response): Promise<string> {
   try {
     const body = await res.json();
-    return (body && (body.detail || body.message)) || res.statusText;
+    if (typeof body?.detail === "string") return body.detail;
+    if (typeof body?.detail?.message === "string") return body.detail.message;
+    if (typeof body?.message === "string") return body.message;
+    return res.statusText;
   } catch {
     return res.statusText;
   }
@@ -174,8 +196,9 @@ export async function runBayes(): Promise<BayesJob> {
   return res.json();
 }
 
-export async function getBayesStatus(): Promise<BayesJob | null> {
-  const res = await request("/analysis/bayes/status", { method: "GET" });
+export async function getBayesStatus(jobId?: number): Promise<BayesJob | null> {
+  const suffix = jobId === undefined ? "" : `/${encodeURIComponent(String(jobId))}`;
+  const res = await request(`/analysis/bayes/status${suffix}`, { method: "GET" });
   if (res.status === 404) return null;
   if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();

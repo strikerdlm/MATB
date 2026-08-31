@@ -2,6 +2,11 @@ cff-version: 1.2.0
 message: "If you use this software, cite the archived release and its exact version."
 title: "MATB Research Platform"
 type: software
+abstract: >-
+  A component-licensed human-factors research platform. Repository-authored
+  components use MIT; the embedded and modified openmatb/ runtime remains
+  under CECILL-2.1. See LICENSES/component-map.json for the authoritative
+  path-level distribution boundary.
 authors:
   - family-names: "Malpica"
     given-names: "Diego L."

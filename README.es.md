@@ -29,18 +29,31 @@ LOW/MEDIUM/HIGH son preajustes de ingeniería pendientes de calibración humana,
 el control de calidad temporal del software no sustituye la calificación del
 inicio físico del estímulo.
 
+Se publican contratos estrictos de eventos v3 y observaciones temporales
+separadas. El entorno de ejecución emite un sobre JSONL aditivo y ordenado que
+se identifica explícitamente como previo a v3 hasta completar la promoción y
+reconciliación de los pares de contratos; ya registra oportunidades
+objetivo/no objetivo explícitas de SYSMON y un espejo LSL opcional cuyos fallos
+quedan registrados. El motor de políticas y modos de fallo de automatización
+adaptativa está implementado como componente experimental; aún no es una
+intervención de bucle cerrado validada y presentada a participantes.
+
 Las herramientas de calificación están en `matb_integration/qualification/`.
 Mantienen la conformidad del software, la temporización física específica del
 equipo, la calibración humana, la caracterización entre implementaciones y la
 elegibilidad de publicación como clases de evidencia independientes y con
 bloqueo seguro. Consulte
 [`docs/research/qualification-workflow.md`](docs/research/qualification-workflow.md).
-La exportación del núcleo público permanece bloqueada mientras estén pendientes
-las compuertas empíricas y la separación de la Consola de Investigación de
-sUAS/Liftoff.
+El núcleo público candidato ya está desacoplado de los árboles de producto
+opcionales sUAS/Liftoff. La publicación continúa bloqueada deliberadamente por
+las compuertas de calificación empírica, revisión de privacidad/datos, SBOM de
+dependencias y licenciamiento final.
 
 La Consola de Investigación es una aplicación FastAPI/Next.js enlazada a loopback, con SQLite y
-almacenamiento local de artefactos. Su superficie sUAS es un simulador sintético, no cinético y de
+almacenamiento local de artefactos. Su ruta actual de carga OpenMATB acepta CSV heredado y un
+manifiesto opcional; las métricas derivadas quedan etiquetadas como
+`legacy_csv_derived_not_reconciled_to_authoritative_event_stream` y no son elegibles para análisis
+confirmatorio hasta implementar la reconciliación con JSONL v3. Su superficie sUAS es un simulador sintético, no cinético y de
 supervisión. No contiene aeronaves reales, armas, selección de blancos, despacho autónomo, mapas del
 mundo real, telemetría externa ni rutas de mando y control (C2).
 
@@ -60,8 +73,8 @@ institucionales fuera del repositorio y bajo los controles de custodia de la ins
 | Objetivo | Comience aquí | Entorno de ejecución | Ejemplo | Resultado esperado |
 | --- | --- | --- | --- | --- |
 | Generar escenarios de OpenMATB, convertir registros o probar el análisis DEPDF | `matb_integration/` y `openmatb/` | Python; OpenMATB versionado o compatible para presentar tareas a participantes | [Recorrido de investigación OpenMATB](examples/openmatb-research/README.es.md) | Tres escenarios/manifiestos, métricas JSONL sintéticas y un JSON DEPDF |
-| Ingerir sesiones, dar seguimiento a visitas, visualizar datos, analizar y exportar | `webui/` | Python 3.12+, Node 20+, navegador local | [Recorrido de la Consola de Investigación](examples/research-console/README.es.md) | Registros SQLite locales y `research-bundle.zip` |
-| Ejecutar una sesión de investigación sUAS determinista y segura para observadores | `matb_integration/suas/` y `webui/` | Python 3.12+; Node 20+ para el servicio de navegador | [Recorrido del simulador sUAS](examples/suas-simulator/README.es.md) | Eventos verificables por reproducción, métricas, informe final, manifiesto y sumas de comprobación |
+| Ingerir sesiones, dar seguimiento a visitas, visualizar datos, analizar y exportar | `webui/` | Python 3.12+, Node >=20.9, navegador local | [Recorrido de la Consola de Investigación](examples/research-console/README.es.md) | Registros SQLite locales y `research-bundle.zip` |
+| Ejecutar una sesión de investigación sUAS determinista y segura para observadores | `matb_integration/suas/` y `webui/` | Python 3.12+; Node >=20.9 para el servicio de navegador | [Recorrido del simulador sUAS](examples/suas-simulator/README.es.md) | Eventos verificables por reproducción, métricas, informe final, manifiesto y sumas de comprobación |
 | Evaluar contratos de paquetes de gestión de la seguridad operacional sin conexión | `SMS/` | Node 22.x; Docker solo para la imagen/paquete sin conexión | [Recorrido de capacidades del SMS](examples/sms-platform/README.es.md) | JSON determinista con un resultado del núcleo de seguridad operacional bloqueado deliberadamente |
 | Demostrar el monitor de terminal anterior | `aircraft_monitor/` | Python y una terminal | [Guía del monitor heredado](examples/legacy-monitor/README.es.md) | Flujo de eventos de UAV, caza, combinado o experimento en modo sin interfaz gráfica |
 
@@ -88,7 +101,8 @@ MATB/
 Los cuatro flujos principales se mantienen separados de forma deliberada:
 
 ```text
-Tracked/compatible OpenMATB -> session CSV + scenario manifest -> metrics -> DEPDF/statistics -> research bundle
+Tracked/compatible OpenMATB -> ordered pre-v3 JSONL + timing QC + legacy CSV + manifest -> future v3 pair/reconciliation
+Legacy CSV upload -> provisional Console metrics -> tracker/analysis/export (not event-stream reconciled)
 Browser -> FastAPI Research Console -> local SQLite/artifacts -> tracker/analysis/export
 Synthetic YAML -> deterministic sUAS engine -> observer-safe state -> replay/debrief artifacts
 Signed local evidence + read-only telemetry -> edge API/safety kernel -> console/audit -> offline verification
@@ -105,7 +119,7 @@ de solo lectura y ninguna aplicación expone un canal de mando del vehículo.
 | --- | --- | --- | --- | --- | --- | --- |
 | Git | Clonación/control de versiones | Obligatorio | Obligatorio | Obligatorio | Obligatorio | Obligatorio |
 | Python | El instalador de sUAS requiere 3.12+; use la misma versión para los flujos Python del repositorio | Obligatorio | Obligatorio | Obligatorio | No | Obligatorio |
-| Node.js | El lanzador comprueba 20+; el frontend usa npm | No | 20+ obligatorio | 20+ para el servicio de navegador | **22.x obligatorio** | No |
+| Node.js | El frontend requiere >=20.9; el lanzador lo exige | No | >=20.9 obligatorio | >=20.9 para el servicio de navegador | **22.x obligatorio** | No |
 | npm | Herramienta de dependencias/compilación basada en el archivo de bloqueo | No | Obligatorio para el frontend | Obligatorio para el servicio de navegador | Obligatorio | No |
 | Entorno OpenMATB | Versionado en `openmatb/`; un checkout compatible independiente es opcional | Específico del flujo | Solo para recopilar sesiones de tareas | No | No | No |
 | Xvfb | Pantalla X virtual para OpenMATB/Pyglet en Linux sin interfaz gráfica | Específico del flujo | No | No; la interfaz nativa usa navegador/modo sin interfaz gráfica | No | No en modo `--headless` |
@@ -194,8 +208,11 @@ $OpenMatbDir = (Resolve-Path (Join-Path $RepoRoot "openmatb")).Path
 & (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") (Join-Path $RepoRoot "install_to_openmatb.py") $OpenMatbDir
 ```
 
-El destino debe contener `includes/`, como ocurre en el entorno versionado. Para usar un checkout
-compatible independiente, sustituya `OPENMATB_DIR` o `$OpenMatbDir` por su ruta raíz.
+El instalador acepta directamente el entorno versionado. Un checkout independiente
+solo se acepta si implementa las capacidades requeridas de procedencia, reloj,
+registro acotado, oportunidades explícitas de SYSMon y ventana de respuesta COMM,
+y si su inventario WAV de comunicaciones supera la calificación de perfil temporal
+a nivel de bytes. Un directorio `includes/` por sí solo es deliberadamente insuficiente.
 
 <h3>Ejecución</h3>
 
@@ -221,11 +238,13 @@ de tareas versionada desde su directorio:
 ```bash
 REPO_ROOT="$(pwd)"
 cd "$REPO_ROOT/openmatb"
-"$REPO_ROOT/.venv-openmatb/bin/python" main.py
+MATB_SOURCE_COMMIT="$(git -C "$REPO_ROOT" rev-parse HEAD)" \
+  "$REPO_ROOT/.venv-openmatb/bin/python" main.py
 ```
 
 ```powershell
 $RepoRoot = (Get-Location).Path
+$env:MATB_SOURCE_COMMIT = (git -C $RepoRoot rev-parse HEAD).Trim()
 Push-Location (Join-Path $RepoRoot "openmatb")
 try {
   & (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") main.py
@@ -233,6 +252,18 @@ try {
   Pop-Location
 }
 ```
+
+`MATB_SOURCE_COMMIT` debe ser el identificador de objeto Git completo,
+congelado y en minúsculas (40 caracteres hexadecimales en repositorios SHA-1 o
+64 en SHA-256). Un valor ausente, centinela, abreviado o arbitrario permanece
+explícitamente provisional y no puede elevar la procedencia a `complete`.
+
+Configure `MATB_SOURCE_DIRTY=false` únicamente después de confirmar de forma
+independiente que el árbol de fuentes y los recursos exactos del estudio están
+limpios; use `true` cuando difieran del commit. Déjelo sin definir (o use
+`unknown` donde se admita) si el estado no fue comprobado. Un valor ausente
+registra deliberadamente `provisional_unverified_source_tree` y no presupone un
+árbol limpio.
 
 Para usar un checkout compatible independiente, ejecute su `main.py` desde ese
 checkout con el entorno seleccionado. Use `DISPLAY` y Xvfb solo en Linux sin
@@ -307,7 +338,7 @@ Consulte el [ejemplo completo de OpenMATB](examples/openmatb-research/README.es.
 
 <h3>Prerrequisitos</h3>
 
-Use Python 3.12+, Node 20+, npm y un navegador. La instalación inicial de dependencias necesita
+Use Python 3.12+, Node >=20.9, npm y un navegador. La instalación inicial de dependencias necesita
 acceso a la red o cachés preparados de Python/npm; el servicio instalado es local y puede funcionar
 sin conexión.
 
@@ -380,18 +411,26 @@ npm run dev -- --hostname 127.0.0.1 --port 3100
 
 Abra `http://127.0.0.1:3100/`.
 
+Ejecute exactamente un worker de Uvicorn por base de datos de la Consola. El
+backend mantiene un arrendamiento durable de instancia y rechaza un segundo
+proceso vivo para impedir que los trabajos bayesianos y las escrituras SQLite
+se dividan entre ejecutores locales competidores. Para escalar, asigne bases de
+datos/raíces de datos separadas; no use `--workers`.
+
 <h3>Prueba del ejemplo sintético</h3>
 
 Con el servicio en ejecución:
 
 ```bash
 REPO_ROOT="$(pwd)"
+export MATB_API_TOKEN="$(<"$REPO_ROOT/examples/output/research-console-service/api-token")"
 BASE_URL=http://127.0.0.1:8000 OUTPUT_DIR="$REPO_ROOT/examples/output/research-console-tour" \
   bash "$REPO_ROOT/examples/research-console/api_walkthrough.sh"
 ```
 
 ```powershell
 $RepoRoot = (Get-Location).Path
+$env:MATB_API_TOKEN = Read-Host "Token API de MATB"
 & (Join-Path $RepoRoot "examples\research-console\api_walkthrough.ps1") `
   -BaseUrl http://127.0.0.1:8000 -OutputDir (Join-Path $RepoRoot "examples\output\research-console-tour")
 ```
@@ -413,6 +452,12 @@ Invoke-RestMethod http://127.0.0.1:8000/health
 ```
 
 Los conjuntos de pruebas de backend y frontend se enumeran en la sección de operaciones.
+
+El navegador solo se admite desde orígenes exactos configurados. Las solicitudes
+CLI que cambian estado no tienen `Origin` de navegador y deben enviar el token
+Bearer de propietario mediante `MATB_API_TOKEN`; el lanzador combinado lo crea
+en `<data-dir>/api-token`. La validación de Host también bloquea
+el reenlace DNS contra loopback.
 
 <h3>Detención y limpieza</h3>
 
@@ -442,7 +487,7 @@ con `Join-Path`. Consulte la [guía de la Consola de Investigación](examples/re
 
 <h3>Prerrequisitos</h3>
 
-La CLI necesita Python 3.12+. El servicio de navegador añade Node 20+, npm y un navegador.
+La CLI necesita Python 3.12+. El servicio de navegador añade Node >=20.9, npm y un navegador.
 `install_suas.sh` y `run_suas.sh` son contratos para Linux/WSL2; PowerShell de Windows nativo
 puede ejecutar la CLI y puede llamar a un servicio alojado en WSL2.
 
@@ -795,7 +840,7 @@ liberación y evidencia detalladas se mantienen en sus guías especializadas.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `matb_integration/scenario_builder.py` | Generar escenarios LOW/MEDIUM/HIGH contrabalanceados | Diseñador del estudio | Protocolo, duración, semilla → escenarios de texto OpenMATB | Python | [Recorrido OpenMATB](examples/openmatb-research/README.es.md) | `pytest tests/test_scenario_builder.py tests/test_scenario_manifest.py tests/test_log_converter.py tests/suhir tests/analysis_stats tests/screen -q` | Las tareas generadas requieren el entorno OpenMATB versionado o uno compatible para su presentación |
 | `matb_integration/scenario_manifest.py` | Calcular hashes de escenarios y validar la procedencia de la sesión | Custodio de datos | Escenario/etiquetas/sondeos esperados → manifiesto adyacente y problemas de validación | Python | Recorrido OpenMATB | Mismo conjunto | La integridad del hash no establece la validez del protocolo ni el consentimiento |
-| `matb_integration/log_converter.py` | Convertir CSV de OpenMATB en métricas canónicas | Analista de investigación | CSV + seudónimo/carga de trabajo → métricas JSONL | Python | Recorrido OpenMATB | Mismo conjunto | La calidad de la entrada y las tareas ausentes limitan la inferencia |
+| `matb_integration/log_converter.py` | Convertir CSV heredado de OpenMATB en derivados de métricas versionados | Analista de investigación | CSV + seudónimo/carga de trabajo → métricas JSONL provisionales | Python | Recorrido OpenMATB | Mismo conjunto | Los derivados CSV no están reconciliados con el flujo autoritativo de eventos y no son elegibles para análisis confirmatorio |
 | `matb_integration/questionnaires/` | Recursos EN/ES de NASA-TLX, Bedford, ISA y SAGAT | Diseñador del estudio | Texto/YAML controlado → contenido configurado de cuestionario/sondeo | OpenMATB o cargador sUAS | Recorridos OpenMATB y sUAS | Pruebas de cuestionarios/SAGAT | Las escalas deben administrarse bajo un protocolo aprobado |
 | `matb_integration/analysis/` | Resultados descriptivos, motores frecuentistas MixedLM/rmcorr/rmANOVA/FDR y motores bayesianos de sensibilidad PyMC | Estadístico | Arreglos JSON `/metrics/long` y `/fits` → artefactos versionados | Python; el muestreo PyMC es opcional/lento | [Comandos de análisis OpenMATB](examples/openmatb-research/README.es.md) | Pruebas de análisis | Los conjuntos pequeños/incompletos pueden no ser estimables; los diagnósticos bayesianos gobiernan la interpretación |
 | `matb_integration/suhir/` | Ajustar parámetros DEPDF de Suhir y resúmenes de investigación de resultados de misión | Investigador de factores humanos | Tres registros de carga de trabajo → G0/P0/tau0 y curvas | Python/SciPy | Recorrido OpenMATB | Pruebas de Suhir; [guía DEPDF](matb_integration/suhir/README.md) | Modelo comparativo intraparticipante; tres niveles identifican exactamente los parámetros; no está certificado |
@@ -805,9 +850,9 @@ liberación y evidencia detalladas se mantienen en sus guías especializadas.
 
 | Módulo | Propósito | Usuario | Entradas → salidas | Entorno de ejecución | Ejemplo | Verificación | Limitación |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Seguimiento e ingestión de `webui/backend/` | Cuadrícula seudónima de participantes/visitas, comprobaciones CSV/manifiesto y ajustes | Custodio de datos | CSV + manifiesto opcional → filas SQLite de bloque/procedencia | FastAPI, Python 3.12+, puerto 8000 | [Recorrido de la consola](examples/research-console/README.es.md) | `cd webui/backend && python -m pytest -q` | Los controles de duplicados/relleno son controles de calidad de datos, no consentimiento |
+| Seguimiento e ingestión de `webui/backend/` | Cuadrícula seudónima de participantes/visitas, comprobaciones CSV/manifiesto y ajustes | Custodio de datos | CSV heredado + manifiesto opcional → filas SQLite provisionales de bloque/procedencia | FastAPI, Python 3.12+, un worker, puerto 8000 | [Recorrido de la consola](examples/research-console/README.es.md) | `cd webui/backend && python -m pytest -q` | La reconciliación con JSONL autoritativo es una compuerta de publicación; los controles de duplicados/relleno no son consentimiento |
 | Análisis y exportación de `webui/backend/` | Almacenar en caché resultados frecuentistas/bayesianos y construir paquetes reproducibles | Analista | Métricas/ajustes/figuras almacenados → registros de análisis y ZIP | FastAPI/PyMC en segundo plano | Recorrido de la consola | Pruebas de análisis/exportación del backend | La exportación sigue siendo datos de investigación bajo custodia del propietario |
-| Seguimiento, ingestión y visualización de `webui/frontend/` | Cuadrícula del navegador, carga y gráficos descriptivos | Personal de investigación | JSON del backend → UI local interactiva/PNG | Next.js, Node 20+, puerto 3100 | Recorrido de la consola | `npm test`, `npm run typecheck`, `npm run build` | Los gráficos descriptivos no son conclusiones inferenciales |
+| Seguimiento, ingestión y visualización de `webui/frontend/` | Cuadrícula del navegador, carga y gráficos descriptivos | Personal de investigación | JSON del backend → UI local interactiva/PNG | Next.js, Node >=20.9, puerto 3100 | Recorrido de la consola | `npm test`, `npm run typecheck`, `npm run build` | Los gráficos descriptivos no son conclusiones inferenciales |
 | Evaluación, análisis y exportación de `webui/frontend/` | Administrar la evaluación inicial, revisar análisis y solicitar el paquete | Personal de investigación | Ensayos sin procesar/artefactos del backend → resúmenes UI/solicitud de exportación | Navegador/Next.js | Recorrido de la consola | La evaluación es exploratoria; el navegador no es un dispositivo clínico |
 
 Los contratos de endpoints y evaluación se mantienen en la [guía del backend](webui/backend/README.md)
@@ -998,7 +1043,7 @@ preparada o una verificación sin evidencia registrada puedan tener éxito sin c
 
 | Síntoma | Comprobación y respuesta segura |
 | --- | --- |
-| El instalador rechaza Python o Node | Use Python 3.12+ para sUAS/Python del repositorio, Node 20+ para el lanzador de la Consola de Investigación y Node 22.x para `SMS/`; vuelva a crear solo el venv/instalación de ese flujo. |
+| El instalador rechaza Python o Node | Use Python 3.12+ para sUAS/Python del repositorio, Node >=20.9 para el lanzador de la Consola de Investigación y Node 22.x para `SMS/`; vuelva a crear solo el venv/instalación de ese flujo. |
 | Falta un módulo Python | Confirme que se ejecute el Python del venv seleccionado (`python -c "import sys; print(sys.executable)"`) e instale los requisitos correspondientes; no instale globalmente para ocultarlo. |
 | OpenMATB no encuentra un escenario | Ejecute `install_to_openmatb.py` contra `openmatb/` o un checkout compatible que contenga `includes/` y verifique `includes/scenarios/military_aviation/`. |
 | OpenMATB parpadea o Pyglet/la pantalla falla | Este es el límite de escritorio/X11. Comience en modo de ventana, valide Pyglet en el venv seleccionado y, en Linux sin interfaz gráfica, valide Xvfb y `DISPLAY`. sUAS no necesita X11 ni Pyglet. |
@@ -1110,6 +1155,10 @@ disponible intencionalmente; no debilite una comprobación para que pase.
 <a id="license"></a>
 ## 18. Licencia
 
-MATB se proporciona bajo la [Licencia MIT](LICENSE). La licencia no certifica su aptitud para uso
-clínico, de vuelo, defensa, crítico para la seguridad operacional ni operacional, y no sustituye la
-legislación aplicable, la gobernanza institucional, la revisión ética ni la aceptación humana.
+Los componentes originales de MATB se proporcionan bajo la [Licencia MIT](LICENSE). El entorno
+incorporado y modificado [`openmatb/`](openmatb) conserva la licencia
+[CeCILL v2.1](openmatb/LICENSE). Consulte el [mapa de licencias por componente](LICENSES/component-map.json)
+y los [avisos de terceros](THIRD_PARTY_NOTICES.md); se aplica el aviso más específico. Estas licencias
+no certifican la aptitud para uso clínico, de vuelo, defensa, crítico para la seguridad operacional ni
+operacional, y no sustituyen la legislación aplicable, la gobernanza institucional, la revisión ética,
+la revisión independiente de licencias ni la aceptación humana.

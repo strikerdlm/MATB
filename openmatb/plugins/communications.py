@@ -4,7 +4,8 @@
 
 from __future__ import annotations
 
-from math import copysign
+import json
+from math import copysign, isfinite
 from pathlib import Path
 from string import ascii_lowercase, ascii_uppercase, digits
 from typing import Any, Callable
@@ -19,6 +20,9 @@ from core.container import Container
 from core.pseudorandom import choice, randint, uniform, xeger
 from core.widgets import Radio, Simpletext
 from plugins.abstractplugin import AbstractPlugin
+
+
+_COMM_PRESENTATION_CEILING_S = 24.0
 
 
 class Communications(AbstractPlugin):
@@ -94,6 +98,9 @@ class Communications(AbstractPlugin):
         )
 
         self.parameters.update(new_par)
+        self._radioprompt_queue: list[str] = []
+        self._comm_opportunity_counter: int = 0
+        self._active_comm_opportunity: dict[str, Any] | None = None
         self.regenerate_callsigns()
 
         # Handle OWN radios information
@@ -227,23 +234,232 @@ class Communications(AbstractPlugin):
         )
 
         sources: list[Any] = []
+        failed_paths: list[str] = []
+        total_duration_s = 0.0
         for f in list_of_sounds:
             wav_path = self.sound_path.joinpath(f"{f}.wav")
             try:
                 source: Any = load(str(wav_path), streaming=False)
+                duration_s = float(source.duration)
+                if not isfinite(duration_s) or duration_s < 0:
+                    raise ValueError("audio source has no finite non-negative duration")
+                total_duration_s += duration_s
                 sources.append(source)
-            except Exception:
-                self.logger.log_manual_entry(f"Audio file missing or unreadable: {wav_path}")
+            except Exception:  # noqa: BLE001 - converted to invalid trial evidence below
+                failed_paths.append(str(wav_path))
 
-        if not sources:
-            return SourceGroup()
+        if failed_paths or len(sources) != len(list_of_sounds):
+            raise RuntimeError(
+                "audio prompt assets missing or unreadable: " + ", ".join(failed_paths[:3])
+            )
+        if (
+            not isfinite(total_duration_s)
+            or total_duration_s <= 0
+            or total_duration_s > _COMM_PRESENTATION_CEILING_S
+        ):
+            raise RuntimeError(
+                "audio prompt duration is unavailable or exceeds the qualified 24-second ceiling"
+            )
+        self._last_prompt_duration_s = total_duration_s
 
         group: Any = SourceGroup()
         for source in sources:
             group.add(source)
         return group
 
-    def prompt_for_a_new_target(self, destination: str, radio_name: str) -> None:
+    def _log_opportunity(self, opportunity: dict[str, Any], phase: str, **details: Any) -> None:
+        payload = {
+            "schema_version": "1.0",
+            "opportunity_id": opportunity["opportunity_id"],
+            "destination": opportunity["destination"],
+            "automation_active": bool(opportunity["automation_active"]),
+            "phase": phase,
+            **details,
+        }
+        self.log_performance(
+            "comm_opportunity_v1",
+            json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False),
+        )
+
+    def _new_opportunity(self, destination: str) -> dict[str, Any]:
+        self._comm_opportunity_counter = getattr(self, "_comm_opportunity_counter", 0) + 1
+        opportunity = {
+            "opportunity_id": f"comm-{self._comm_opportunity_counter:06d}",
+            "destination": destination,
+            "automation_active": bool(self.parameters.get("automaticsolver", False)),
+            "presentation_started": False,
+            "response_window_open": False,
+            "response_time_ms": 0,
+            "radio": None,
+        }
+        self._log_opportunity(opportunity, "opened")
+        return opportunity
+
+    def _invalidate_opportunity(
+        self, opportunity: dict[str, Any], reason: str, **details: Any
+    ) -> None:
+        self._log_opportunity(opportunity, "invalidated", reason=reason, **details)
+        if getattr(self, "_active_comm_opportunity", None) is opportunity:
+            radio = opportunity.get("radio")
+            if isinstance(radio, dict):
+                radio["is_prompting"] = False
+                self.disable_radio_target(radio)
+            self._active_comm_opportunity = None
+
+    def _close_active_opportunity(
+        self,
+        outcome: str,
+        response_time_ms: float | None,
+        *,
+        response_classification: str | None = None,
+        response_actor: str | None = None,
+    ) -> None:
+        opportunity = getattr(self, "_active_comm_opportunity", None)
+        if opportunity is None:
+            return
+        details: dict[str, Any] = {
+            "outcome": outcome,
+            "response_time_ms": response_time_ms,
+            "response_actor": (
+                response_actor
+                if response_actor is not None
+                else (
+                    "automation"
+                    if opportunity["automation_active"]
+                    else "participant"
+                )
+            ),
+        }
+        if details["response_actor"] not in {"participant", "automation"}:
+            raise ValueError("COMM response actor must be participant or automation")
+        if response_classification is not None:
+            details["response_classification"] = response_classification
+        details.update({
+            "closed_scenario_time_s": self.scenario_time,
+            "response_window_opened_scenario_time_s": opportunity.get(
+                "response_window_opened_scenario_time_s"
+            ),
+            "response_deadline_s": opportunity.get("response_deadline_s"),
+            "close_lateness_tolerance_ms": int(self.parameters["taskupdatetime"]),
+        })
+        self._log_opportunity(opportunity, "closed", **details)
+        self._active_comm_opportunity = None
+
+    def _open_response_window(self, *, opening_lateness_ms: int = 0) -> None:
+        opportunity = getattr(self, "_active_comm_opportunity", None)
+        if opportunity is None or opportunity["response_window_open"]:
+            return
+        opened_s = float(self.scenario_time)
+        deadline_s = opened_s + int(self.parameters["maxresponsedelay"]) / 1000.0
+        opportunity["response_window_open"] = True
+        opportunity["response_time_ms"] = 0
+        opportunity["response_window_opened_scenario_time_s"] = opened_s
+        opportunity["response_deadline_s"] = deadline_s
+        radio = opportunity.get("radio")
+        if opportunity["destination"] == "own" and isinstance(radio, dict):
+            radio["response_time"] = 0
+            radio["_response_window_opened_scenario_time_s"] = opened_s
+            radio["_response_deadline_s"] = deadline_s
+        self._log_opportunity(
+            opportunity,
+            "response_window_opened",
+            opened_scenario_time_s=opened_s,
+            deadline_s=deadline_s,
+            opening_lateness_ms=opening_lateness_ms,
+            close_lateness_tolerance_ms=int(self.parameters["taskupdatetime"]),
+        )
+
+    def _complete_presentation_if_ready(self) -> None:
+        opportunity = getattr(self, "_active_comm_opportunity", None)
+        if (
+            opportunity is None
+            or not opportunity.get("presentation_started")
+            or opportunity.get("response_window_open")
+            or getattr(self, "player", None) is None
+            or self.player.source is not None
+        ):
+            return
+        expected_end = opportunity.get("presentation_expected_end_scenario_time_s")
+        if not isinstance(expected_end, (int, float)) or not isfinite(float(expected_end)):
+            self._invalidate_opportunity(
+                opportunity, "presentation_timing_evidence_unavailable"
+            )
+            return
+        timing_error_ms = round(
+            (self.scenario_time - float(expected_end)) * 1000
+        )
+        tolerance_ms = int(self.parameters["taskupdatetime"])
+        if abs(timing_error_ms) > tolerance_ms:
+            early_completion = timing_error_ms < 0
+            self._invalidate_opportunity(
+                opportunity,
+                (
+                    "presentation_completed_before_expected_duration"
+                    if early_completion
+                    else "response_window_opened_after_update_stall"
+                ),
+                expected_end_scenario_time_s=float(expected_end),
+                observed_completion_scenario_time_s=self.scenario_time,
+                timing_error_ms=timing_error_ms,
+                lateness_ms=max(0, timing_error_ms),
+                earliness_ms=max(0, -timing_error_ms),
+                lateness_tolerance_ms=tolerance_ms,
+            )
+            return
+        prompted_radio = opportunity.get("radio")
+        if opportunity["destination"] == "own" and prompted_radio is not None:
+            prompted_radio["is_prompting"] = False
+            self.logger.log_manual_entry(
+                f"Target {prompted_radio['name']}:{prompted_radio['targetfreq']}"
+            )
+        self._open_response_window(opening_lateness_ms=max(0, timing_error_ms))
+
+    def _update_active_response_timing(self) -> None:
+        opportunity = getattr(self, "_active_comm_opportunity", None)
+        if opportunity is None or not opportunity.get("response_window_open"):
+            return
+        opened_s = opportunity.get("response_window_opened_scenario_time_s")
+        deadline_s = opportunity.get("response_deadline_s")
+        if not all(
+            isinstance(value, (int, float)) and isfinite(float(value))
+            for value in (opened_s, deadline_s)
+        ):
+            self._invalidate_opportunity(
+                opportunity, "response_window_timing_evidence_unavailable"
+            )
+            return
+        elapsed_ms = max(0, round((self.scenario_time - float(opened_s)) * 1000))
+        opportunity["response_time_ms"] = elapsed_ms
+        radio = opportunity.get("radio")
+        if opportunity["destination"] == "own" and isinstance(radio, dict):
+            radio["response_time"] = elapsed_ms
+        if self.scenario_time < float(deadline_s):
+            return
+        lateness_ms = max(0, round((self.scenario_time - float(deadline_s)) * 1000))
+        tolerance_ms = int(self.parameters["taskupdatetime"])
+        if lateness_ms > tolerance_ms:
+            self._invalidate_opportunity(
+                opportunity,
+                "response_window_closed_after_update_stall",
+                deadline_s=float(deadline_s),
+                observed_close_scenario_time_s=self.scenario_time,
+                lateness_ms=lateness_ms,
+                lateness_tolerance_ms=tolerance_ms,
+            )
+            return
+        if opportunity["destination"] == "other":
+            self.log_performance("response_time", float("nan"))
+            self.log_performance("sdt_value", "CR")
+            self._close_active_opportunity("CR", None)
+        elif isinstance(radio, dict):
+            self.record_target_missing(radio)
+
+    def prompt_for_a_new_target(
+        self,
+        destination: str,
+        radio_name: str,
+        opportunity: dict[str, Any],
+    ) -> bool:
         self.parameters["radioprompt"] = ""
         radio: dict[str, Any] = self.get_radios_by_key_value("name", radio_name)[0]
         radio_n: int = self.get_radios_number_by_key_value("name", radio_name)[0]
@@ -260,18 +476,99 @@ class Communications(AbstractPlugin):
             radio_n += 15
             random_frequency = self.get_rand_frequency(radio_n)
 
-        if destination == "own":
-            radio["targetfreq"] = random_frequency
-            radio["is_prompting"] = True
-
-        sound_group: Any = self.group_audio_files(callsign, radio_name, random_frequency)
-
         try:
+            sound_group: Any = self.group_audio_files(callsign, radio_name, random_frequency)
+            prompt_duration_s = float(getattr(self, "_last_prompt_duration_s"))
+            if (
+                not isfinite(prompt_duration_s)
+                or prompt_duration_s <= 0
+                or prompt_duration_s > _COMM_PRESENTATION_CEILING_S
+            ):
+                raise RuntimeError("prompt duration is outside the qualified timing profile")
             self.player: Any = Player()
             self.player.queue(sound_group)
             self.player.play()
-        except Exception:
-            self.logger.log_manual_entry("Audio prompt playback failed")
+        except Exception as exc:  # noqa: BLE001 - evidence must survive media backend failures
+            self.logger.log_manual_entry(f"Audio prompt playback failed: {type(exc).__name__}: {exc}")
+            self._invalidate_opportunity(opportunity, "presentation_failed")
+            return False
+
+        if destination == "own":
+            radio["targetfreq"] = random_frequency
+            radio["is_prompting"] = True
+        opportunity["presentation_started"] = True
+        opportunity["radio"] = radio
+        opportunity["presentation_started_scenario_time_s"] = self.scenario_time
+        opportunity["presentation_expected_end_scenario_time_s"] = (
+            self.scenario_time + prompt_duration_s
+        )
+        self._log_opportunity(
+            opportunity,
+            "presentation_started",
+            radio_name=radio_name,
+            software_play_invoked=True,
+            physical_onset_measured=False,
+            expected_duration_s=prompt_duration_s,
+            started_scenario_time_s=self.scenario_time,
+            expected_end_scenario_time_s=self.scenario_time + prompt_duration_s,
+            completion_lateness_tolerance_ms=int(self.parameters["taskupdatetime"]),
+        )
+        return True
+
+    def set_parameter(self, keys_str: str, value: Any) -> dict[str, Any]:
+        if keys_str == "radioprompt" and str(value).lower() in {"own", "other"}:
+            destination = str(value).lower()
+            context = getattr(self, "_scenario_dispatch_context", None)
+            scheduled = (
+                context.get("scheduled_time_s")
+                if isinstance(context, dict)
+                else None
+            )
+            if (
+                isinstance(scheduled, (int, float))
+                and not isinstance(scheduled, bool)
+                and isfinite(float(scheduled))
+                and (self.scenario_time - float(scheduled)) * 1000
+                > int(self.parameters["taskupdatetime"])
+            ):
+                opportunity = self._new_opportunity(destination)
+                self._invalidate_opportunity(
+                    opportunity,
+                    "prompt_command_dispatched_after_observable_onset",
+                    scheduled_scenario_time_s=float(scheduled),
+                    dispatch_scenario_time_s=self.scenario_time,
+                    source_line=context.get("source_line"),
+                )
+                return super().set_parameter(keys_str, "")
+            self._radioprompt_queue = getattr(self, "_radioprompt_queue", [])
+            self._radioprompt_queue.append(destination)
+            return super().set_parameter(keys_str, "")
+        return super().set_parameter(keys_str, value)
+
+    def _handle_radioprompt(self, destination: str) -> None:
+        opportunity = self._new_opportunity(destination)
+        if getattr(self, "_active_comm_opportunity", None) is not None:
+            self._invalidate_opportunity(opportunity, "prior_opportunity_active")
+            return
+        radio_name_to_prompt: str | None = None
+
+        if destination == "own":
+            non_target_radios: list[dict[str, Any]] = self.get_non_target_radios_list()
+            if len(non_target_radios) > 0:
+                radio_name_to_prompt = choice(
+                    non_target_radios, self.alias, self.scenario_time, 1
+                )["name"]
+        elif destination == "other":
+            radio_name_to_prompt = choice(
+                self.parameters["promptlist"], self.alias, self.scenario_time, 1
+            )
+
+        if radio_name_to_prompt is not None:
+            self._active_comm_opportunity = opportunity
+            self.prompt_for_a_new_target(destination, radio_name_to_prompt, opportunity)
+        else:
+            self._invalidate_opportunity(opportunity, "no_eligible_radio")
+            self.logger.log_manual_entry("Error. Could not trigger prompt")
 
     def get_rand_frequency(self, radio_n: int) -> float:
         return round(
@@ -350,53 +647,28 @@ class Communications(AbstractPlugin):
 
         self.set_sample_sounds()  # Check if sounds path has been renewed
 
-        if self.parameters["radioprompt"].lower() in ["own", "other"]:
-            radio_name_to_prompt: str | None = None
-
-            # If the prompt is relevant (own), select a radio among (available) non-target radios
-            if self.parameters["radioprompt"].lower() == "own":
-                non_target_radios: list[dict[str, Any]] = self.get_non_target_radios_list()
-                if len(non_target_radios) > 0:
-                    radio_name_to_prompt = choice(non_target_radios, self.alias, self.scenario_time, 1)["name"]
-            elif self.parameters["radioprompt"].lower() == "other":
-                radio_name_to_prompt = choice(self.parameters["promptlist"], self.alias, self.scenario_time, 1)
-
-            if radio_name_to_prompt is not None:
-                # If a new prompt is incoming and a prompt is still playing
-                # Pause and stop this prompt
-                prompting_radio_list: list[dict[str, Any]] | None = self.get_radios_by_key_value("is_prompting", True)
-                if prompting_radio_list is not None and len(prompting_radio_list) > 0:
-                    self.player.pause()
-                    del self.player
-                    prompting_radio: dict[str, Any] = prompting_radio_list[0]
-                    prompting_radio["is_prompting"] = False
-                    self.logger.log_manual_entry(f"Target {prompting_radio['name']}:{prompting_radio['targetfreq']}")
-
-                self.prompt_for_a_new_target(self.parameters["radioprompt"].lower(), radio_name_to_prompt)
+        direct_prompt = str(self.parameters.get("radioprompt") or "").lower()
+        if direct_prompt in {"own", "other"}:
+            self._radioprompt_queue = getattr(self, "_radioprompt_queue", [])
+            self._radioprompt_queue.append(direct_prompt)
+            self.parameters["radioprompt"] = ""
+        queued_prompts = list(getattr(self, "_radioprompt_queue", []))
+        self._radioprompt_queue = []
+        for index, prompt in enumerate(queued_prompts):
+            if index == 0:
+                self._handle_radioprompt(prompt)
             else:
-                self.log_manual_entry("Error. Could not trigger prompt", key="manual")
+                self._invalidate_opportunity(
+                    self._new_opportunity(prompt),
+                    "multiple_prompts_dispatched_in_one_update",
+                )
 
         if self.can_receive_keys:
             self.modulate_frequency()
 
-        # If a target is defined + auditory prompt has ended
-        # response can occur, so increment response_time
-        target_radios: list[dict[str, Any]] = self.get_target_radios_list()
         active: dict[str, Any] = self.get_active_radio_dict()
-
-        # Browse targeted radios
-        for radio in target_radios:
-            # Increment response time as soon as auditory prompting has ended
-            if not radio["is_prompting"]:
-                radio["response_time"] += self.parameters["taskupdatetime"]
-
-                # Record potential target miss
-                if radio["response_time"] >= self.parameters["maxresponsedelay"]:
-                    self.record_target_missing(radio)
-
-            elif self.player.source is None:  # If the radio prompt has just ended
-                radio["is_prompting"] = False
-                self.logger.log_manual_entry(f"Target {radio['name']}:{radio['targetfreq']}")
+        self._complete_presentation_if_ready()
+        self._update_active_response_timing()
 
         # If multiple radios must be modified
         # The automatic solver sticks to the first one (until it is tuned)
@@ -420,7 +692,9 @@ class Communications(AbstractPlugin):
                         active["currentfreq"] + copysign(0.1, active["targetfreq"] - active["currentfreq"]), 1
                     )
                 else:
-                    self.confirm_response()  # Emulate a response confirmation
+                    self.confirm_response(
+                        response_actor="automation"
+                    )  # Emulate a response confirmation
 
         active["currentfreq"] = self.keep_value_between(
             active["currentfreq"], up=self.parameters["airbandmaxMhz"], down=self.parameters["airbandminMhz"]
@@ -460,6 +734,8 @@ class Communications(AbstractPlugin):
     def disable_radio_target(self, radio: dict[str, Any]) -> None:
         radio["response_time"] = 0
         radio["targetfreq"] = None
+        radio.pop("_response_window_opened_scenario_time_s", None)
+        radio.pop("_response_deadline_s", None)
 
     def record_target_missing(self, target_radio: dict[str, Any]) -> None:
         self.log_performance("target_radio", target_radio["name"])
@@ -471,6 +747,7 @@ class Communications(AbstractPlugin):
         self.log_performance("response_deviation", float("nan"))
         self.log_performance("response_time", float("nan"))
         self.log_performance("sdt_value", "MISS")
+        self._close_active_opportunity("MISS", None)
 
         self.disable_radio_target(target_radio)
 
@@ -492,8 +769,20 @@ class Communications(AbstractPlugin):
         elif correct_radio is False and response_deviation != 0:
             return "BAD_RADIO_FREQ"
 
-    def confirm_response(self) -> None:
+    def confirm_response(self, *, response_actor: str = "participant") -> None:
         """Evaluate response performance and log it"""
+
+        opportunity = getattr(self, "_active_comm_opportunity", None)
+        if opportunity is not None and not opportunity.get("response_window_open"):
+            self.logger.log_manual_entry("COMM response ignored during audio presentation")
+            return
+        if opportunity is not None:
+            self._update_active_response_timing()
+            if getattr(self, "_active_comm_opportunity", None) is not opportunity:
+                self.logger.log_manual_entry(
+                    "COMM response ignored after response-window closure"
+                )
+                return
 
         # Retrieve the responded radio and the target radios
         responded_radio: dict[str, Any] = self.get_active_radio_dict()
@@ -541,13 +830,40 @@ class Communications(AbstractPlugin):
         self.log_performance("response_deviation", deviation)
         self.log_performance("response_time", rt)
         self.log_performance("sdt_value", sdt)
+        if opportunity is not None and sdt is not None:
+            # Signal-detection outcome and response-accuracy classification are
+            # distinct. An incorrect tune after an OWN prompt is a valid MISS,
+            # not an invalid opportunity; retain the richer legacy class too.
+            observed_outcome = (
+                "HIT"
+                if sdt == "HIT"
+                else "MISS"
+                if opportunity["destination"] == "own"
+                else "FA"
+            )
+            lifecycle_rt = (
+                opportunity.get("response_time_ms")
+                if opportunity["destination"] == "other"
+                else rt
+            )
+            self._close_active_opportunity(
+                observed_outcome,
+                float(lifecycle_rt)
+                if isinstance(lifecycle_rt, (int, float)) and lifecycle_rt == lifecycle_rt
+                else None,
+                response_classification=sdt,
+                response_actor=response_actor,
+            )
 
         # Response is good if both radio and frequency are correct
         if not response_needed:
             self.set_feedback(responded_radio, ft="negative")
         else:
+            if measure_radio is not None:
+                # One participant validation closes one opportunity. Prevent a
+                # later timeout from adding a second outcome to the same trial.
+                self.disable_radio_target(measure_radio)
             if good_radio and deviation == 0:
-                self.disable_radio_target(responded_radio)
                 self.set_feedback(responded_radio, ft="positive")
             else:
                 self.set_feedback(responded_radio, ft="negative")
@@ -581,4 +897,40 @@ class Communications(AbstractPlugin):
                 self.get_radio_dict_by_pos(next_active_n)["is_active"] = True
 
             elif key == self.parameters["keys"]["validateresponse"]:
-                self.confirm_response()
+                self.confirm_response(
+                    response_actor="automation" if emulate else "participant"
+                )
+
+    def stop(self) -> None:
+        queued_prompts = list(getattr(self, "_radioprompt_queue", []))
+        self._radioprompt_queue = []
+        for destination in queued_prompts:
+            opportunity = self._new_opportunity(destination)
+            self._invalidate_opportunity(
+                opportunity,
+                "task_stopped_before_presentation",
+            )
+        opportunity = getattr(self, "_active_comm_opportunity", None)
+        if opportunity is not None:
+            radio = opportunity.get("radio")
+            if isinstance(radio, dict) and radio.get("targetfreq") is not None:
+                self.disable_radio_target(radio)
+            self._invalidate_opportunity(opportunity, "task_stopped_before_outcome")
+        player = getattr(self, "player", None)
+        cleanup_error: Exception | None = None
+        if player is not None:
+            try:
+                pause = getattr(player, "pause", None)
+                if callable(pause):
+                    pause()
+            except Exception as exc:  # noqa: BLE001 - still attempt device release
+                cleanup_error = exc
+            try:
+                delete = getattr(player, "delete", None)
+                if callable(delete):
+                    delete()
+            except Exception as exc:  # noqa: BLE001 - surface after lifecycle closure
+                cleanup_error = cleanup_error or exc
+        super().stop()
+        if cleanup_error is not None:
+            raise RuntimeError("COMM audio backend cleanup failed") from cleanup_error

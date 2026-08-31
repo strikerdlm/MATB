@@ -21,6 +21,7 @@ class Sysmon(AbstractPlugin):
 
         self.validation_dict: dict[str, Callable[..., Any] | tuple[Callable[..., Any], list[str]]] = {
             "alerttimeout": validation.is_positive_integer,
+            "nontargetduration": validation.is_positive_integer,
             "automaticsolverdelay": validation.is_positive_integer,
             "allowanykey": validation.is_boolean,
             "lights-1-name": validation.is_string,
@@ -65,6 +66,7 @@ class Sysmon(AbstractPlugin):
 
         new_par: dict[str, Any] = dict(
             alerttimeout=10000,
+            nontargetduration=2000,
             automaticsolver=False,
             automaticsolverdelay=1000,
             displayautomationstate=True,
@@ -92,9 +94,14 @@ class Sysmon(AbstractPlugin):
         # Add private parameters
         # to any gauge
         self._opportunity_counter: int = 0
+        self._nontarget_opportunity_id: str | None = None
+        self._nontarget_opened_scenario_time: float | None = None
+        self._nontarget_remaining_ms: int | None = None
+        self._nontarget_deadline_s: float | None = None
         for gauge in self.get_all_gauges():
             gauge.update({
                 "_failuretimer": None,
+                "_failure_deadline_s": None,
                 "_onfailure": False,
                 "_milliresponsetime": 0,
                 "_freezetimer": None,
@@ -161,16 +168,52 @@ class Sysmon(AbstractPlugin):
         if not super().compute_next_plugin_state():
             return
 
+        nontarget_remaining_ms = getattr(self, "_nontarget_remaining_ms", None)
+        if nontarget_remaining_ms is not None:
+            deadline = getattr(self, "_nontarget_deadline_s", None)
+            if deadline is None:
+                deadline = self.scenario_time + nontarget_remaining_ms / 1000.0
+                self._nontarget_deadline_s = deadline
+            self._nontarget_remaining_ms = max(0, round((deadline - self.scenario_time) * 1000))
+            if self.scenario_time >= deadline:
+                lateness_ms = max(0, round((self.scenario_time - deadline) * 1000))
+                tolerance_ms = int(self.parameters["taskupdatetime"])
+                self.close_nontarget_opportunity(
+                    false_alarm=False,
+                    invalid_reason=(
+                        "window_closed_after_update_stall"
+                        if lateness_ms > tolerance_ms
+                        else None
+                    ),
+                )
+
         # For the gauges that are on failure
         for gauge in self.get_gauges_on_failure():
-            # Decrement their failure timer / increment their response time
-            gauge["_failuretimer"] -= self.parameters["taskupdatetime"]
-            gauge["_milliresponsetime"] += self.parameters["taskupdatetime"]
+            deadline = gauge.get("_failure_deadline_s")
+            if deadline is None:
+                deadline = self.scenario_time + gauge["_failuretimer"] / 1000.0
+                gauge["_failure_deadline_s"] = deadline
+            opened = gauge.get("_opportunity_opened_scenario_time")
+            if opened is not None:
+                gauge["_milliresponsetime"] = max(
+                    0,
+                    round((self.scenario_time - opened) * 1000),
+                )
+            gauge["_failuretimer"] = max(0, round((deadline - self.scenario_time) * 1000))
 
             # If the failure timer has ended by itself, stop failure and trigger a negative feedback
             # if possible (scale gauges)
-            if gauge["_failuretimer"] <= 0:
-                self.stop_failure(gauge, success=False)
+            if self.scenario_time >= deadline:
+                lateness_ms = max(0, round((self.scenario_time - deadline) * 1000))
+                self.stop_failure(
+                    gauge,
+                    success=False,
+                    invalid_reason=(
+                        "window_closed_after_update_stall"
+                        if lateness_ms > int(self.parameters["taskupdatetime"])
+                        else None
+                    ),
+                )
 
         for gauge in self.get_scale_gauges():
             if gauge["_feedbacktimer"] is not None:
@@ -233,20 +276,175 @@ class Sysmon(AbstractPlugin):
         color: tuple[int, ...] = light["oncolor"] if light["on"] else C["BACKGROUND"]
         return color
 
+    def _dispatch_context(self) -> dict[str, Any]:
+        context = getattr(self, "_scenario_dispatch_context", None)
+        return dict(context) if isinstance(context, dict) else {}
+
+    def _log_rejected_opportunity(
+        self,
+        *,
+        target: bool,
+        outcome: str,
+        reason: str,
+        indicator: str | None = None,
+        planned_duration_ms: int | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> None:
+        self._opportunity_counter = getattr(self, "_opportunity_counter", 0) + 1
+        payload = {
+            "dispatch_scenario_time_s": self.scenario_time,
+            "indicator": indicator,
+            "opportunity_id": f"sysmon-{self._opportunity_counter:06d}",
+            "outcome": outcome,
+            "phase": "rejected",
+            "planned_duration_ms": planned_duration_ms,
+            "reason": reason,
+            "target": target,
+        }
+        dispatch_context = context or self._dispatch_context()
+        if dispatch_context:
+            payload["scheduled_scenario_time_s"] = dispatch_context.get("scheduled_time_s")
+            payload["source_line"] = dispatch_context.get("source_line")
+        self.log_performance("opportunity", json.dumps(payload, sort_keys=True))
+
+    def _reject_pending_targets(self, *, reason: str) -> bool:
+        rejected = False
+        for pending_gauge in self.get_all_gauges():
+            if pending_gauge.get("failure") is not True:
+                continue
+            context = pending_gauge.pop("_pending_dispatch_context", None)
+            planned_duration_ms = pending_gauge.pop("_pending_alerttimeout_ms", None)
+            pending_gauge.pop("_pending_automation_active", None)
+            pending_gauge["failure"] = False
+            self._log_rejected_opportunity(
+                target=True,
+                outcome="INVALID_COLLAPSED_BATCH",
+                reason=reason,
+                indicator=str(pending_gauge.get("name", "unknown")),
+                planned_duration_ms=planned_duration_ms,
+                context=context,
+            )
+            rejected = True
+        return rejected
+
+    def _dispatch_is_late(self, context: dict[str, Any]) -> bool:
+        scheduled = context.get("scheduled_time_s")
+        if not isinstance(scheduled, (int, float)) or isinstance(scheduled, bool):
+            return False
+        lateness_ms = max(0.0, (self.scenario_time - float(scheduled)) * 1000.0)
+        return lateness_ms > int(self.parameters["taskupdatetime"])
+
+    def set_parameter(self, keys_str: str, value: Any) -> dict[str, Any]:
+        """Queue target commands only when their evidence window is observable."""
+        if not (keys_str.endswith("-failure") and value is True):
+            return super().set_parameter(keys_str, value)
+
+        context = self._dispatch_context()
+        keys = keys_str.split("-")
+        gauge = self.parameters[keys[0]][keys[1]]
+        automation_active = bool(self.parameters["automaticsolver"])
+        duration_ms = int(
+            self.parameters["automaticsolverdelay"]
+            if automation_active
+            else self.parameters["alerttimeout"]
+        )
+        rejected_reason: str | None = None
+        if self._dispatch_is_late(context):
+            rejected_reason = "target_command_dispatched_after_observable_onset"
+        elif getattr(self, "_nontarget_opportunity_id", None) is not None:
+            self.close_nontarget_opportunity(
+                invalid_reason="collapsed_due_batch_collision"
+            )
+            rejected_reason = "collapsed_due_batch_collision"
+        elif self._reject_pending_targets(reason="collapsed_due_batch_collision"):
+            rejected_reason = "collapsed_due_batch_collision"
+        elif self.get_gauges_on_failure():
+            rejected_reason = "target_window_already_active"
+
+        if rejected_reason is not None:
+            result = super().set_parameter(keys_str, False)
+            self._log_rejected_opportunity(
+                target=True,
+                outcome=(
+                    "INVALID_LATE_DISPATCH"
+                    if rejected_reason == "target_command_dispatched_after_observable_onset"
+                    else "INVALID_COLLAPSED_BATCH"
+                ),
+                reason=rejected_reason,
+                indicator=str(gauge.get("name", "unknown")),
+                planned_duration_ms=duration_ms,
+                context=context,
+            )
+            return result
+
+        gauge["_pending_alerttimeout_ms"] = duration_ms
+        gauge["_pending_automation_active"] = automation_active
+        gauge["_pending_dispatch_context"] = context
+        return super().set_parameter(keys_str, value)
+
     def start_failure(self, gauge: dict[str, Any]) -> None:
+        if getattr(self, "_nontarget_opportunity_id", None) is not None:
+            raise RuntimeError("cannot open a target opportunity during an active non-target opportunity")
         if gauge["_onfailure"]:
-            pass  # TODO : warn in case of multiple failure on the same gauge
+            gauge["failure"] = False
+            return
         else:
+            dispatch_context = gauge.get("_pending_dispatch_context") or {}
+            scheduled = dispatch_context.get("scheduled_time_s")
+            if (
+                isinstance(scheduled, (int, float))
+                and not isinstance(scheduled, bool)
+                and max(0.0, (self.scenario_time - float(scheduled)) * 1000.0)
+                > int(self.parameters["taskupdatetime"])
+            ):
+                planned_duration_ms = int(
+                    gauge.pop("_pending_alerttimeout_ms", self.parameters["alerttimeout"])
+                )
+                gauge["failure"] = False
+                gauge.pop("_pending_dispatch_context", None)
+                gauge.pop("_pending_automation_active", None)
+                self._log_rejected_opportunity(
+                    target=True,
+                    outcome="INVALID_STALLED_WINDOW",
+                    reason="target_window_opened_after_update_stall",
+                    indicator=str(gauge.get("name", "unknown")),
+                    planned_duration_ms=planned_duration_ms,
+                    context=dispatch_context,
+                )
+                return
             self._opportunity_counter = getattr(self, "_opportunity_counter", 0) + 1
             opportunity_id = f"sysmon-{self._opportunity_counter:06d}"
             gauge["_opportunity_id"] = opportunity_id
             gauge["_opportunity_opened_scenario_time"] = self.scenario_time
+            planned_duration_ms = int(
+                gauge.get("_pending_alerttimeout_ms")
+                or (
+                    self.parameters["automaticsolverdelay"]
+                    if self.parameters["automaticsolver"]
+                    else self.parameters["alerttimeout"]
+                )
+            )
+            automation_active = bool(
+                gauge.pop(
+                    "_pending_automation_active",
+                    self.parameters["automaticsolver"],
+                )
+            )
+            allocation_actor = "automation" if automation_active else "participant"
+            gauge["_opportunity_automation_active"] = automation_active
+            gauge["_opportunity_duration_ms"] = planned_duration_ms
             self.log_performance("opportunity", json.dumps({
+                "allocation_actor": allocation_actor,
+                "automation_active": automation_active,
+                "close_lateness_tolerance_ms": int(self.parameters["taskupdatetime"]),
+                "deadline_s": self.scenario_time + planned_duration_ms / 1000.0,
+                "duration_ms": planned_duration_ms,
                 "opportunity_id": opportunity_id,
                 "phase": "opened",
                 "target": True,
                 "indicator": gauge["name"],
                 "opened_scenario_time_s": self.scenario_time,
+                "scheduled_scenario_time_s": dispatch_context.get("scheduled_time_s"),
             }, sort_keys=True))
             gauge["_onfailure"] = True
             if "default" in gauge:  # Light case
@@ -260,23 +458,46 @@ class Sysmon(AbstractPlugin):
         gauge["failure"] = False
 
         # Schedule failure timing
-        delay: int = (
-            self.parameters["automaticsolverdelay"]
-            if self.parameters["automaticsolver"]
-            else self.parameters["alerttimeout"]
-        )
+        delay = int(gauge.pop("_pending_alerttimeout_ms", planned_duration_ms))
+        gauge.pop("_pending_dispatch_context", None)
         gauge["_failuretimer"] = delay
+        gauge["_failure_deadline_s"] = self.scenario_time + delay / 1000.0
 
-    def stop_failure(self, gauge: dict[str, Any], success: bool = False) -> None:
+    def stop_failure(
+        self,
+        gauge: dict[str, Any],
+        success: bool = False,
+        invalid_reason: str | None = None,
+        response_actor: str | None = None,
+    ) -> None:
         opportunity_id = gauge.get("_opportunity_id")
         opened_scenario_time = gauge.get("_opportunity_opened_scenario_time")
+        automation_active = bool(gauge.get("_opportunity_automation_active", False))
+        response_actor = str(
+            response_actor
+            or ("automation" if automation_active else "participant")
+        )
+        if response_actor not in {"participant", "automation"}:
+            raise ValueError("SYSMON response actor must be participant or automation")
         response_time_ms = gauge["_milliresponsetime"]
+        if opened_scenario_time is not None:
+            response_time_ms = max(
+                0,
+                round((self.scenario_time - opened_scenario_time) * 1000),
+            )
+        deadline = gauge.get("_failure_deadline_s")
+        lateness_ms = (
+            max(0, round((self.scenario_time - deadline) * 1000))
+            if isinstance(deadline, (int, float))
+            else None
+        )
         # Reset the gauge failure timer
         gauge["_onfailure"] = False
         gauge["_failuretimer"] = None
+        gauge["_failure_deadline_s"] = None
 
         # Set the (potential) feedback type (ft)
-        ft: str = "positive" if self.parameters["automaticsolver"] or success else "negative"
+        ft: str = "positive" if automation_active or success else "negative"
 
         # Does this feedback type (positive or negative) is currently active ?
         # If so, set the feedback type and duration, if the gauge has got one
@@ -293,24 +514,34 @@ class Sysmon(AbstractPlugin):
         if ft == "positive":
             sdt_string: str
             rt: int | float
-            sdt_string, rt = "HIT", gauge["_milliresponsetime"]
+            sdt_string, rt = "HIT", response_time_ms
         else:
             sdt_string, rt = "MISS", float("nan")
         sdt_string = "HIT" if ft == "positive" else "MISS"
 
-        self.log_performance("name", gauge["name"])
-        self.log_performance("signal_detection", sdt_string)
-        self.log_performance("response_time", rt)
+        if invalid_reason is None:
+            self.log_performance("name", gauge["name"])
+            self.log_performance("signal_detection", sdt_string)
+            self.log_performance("response_time", rt)
         if opportunity_id is not None:
             self.log_performance("opportunity", json.dumps({
+                "automation_active": automation_active,
                 "opportunity_id": opportunity_id,
                 "phase": "closed",
                 "target": True,
                 "indicator": gauge["name"],
+                "lateness_ms": lateness_ms,
                 "opened_scenario_time_s": opened_scenario_time,
                 "closed_scenario_time_s": self.scenario_time,
                 "response_time_ms": response_time_ms if success else None,
-                "outcome": sdt_string,
+                "outcome": (
+                    "INVALID_COLLAPSED_BATCH"
+                    if invalid_reason == "collapsed_due_batch_collision"
+                    else ("INVALID_STALLED_WINDOW" if invalid_reason else sdt_string)
+                ),
+                "reason": invalid_reason,
+                "response_actor": response_actor,
+                "scheduled_deadline_s": deadline,
             }, sort_keys=True))
 
         # Reset gauge to its nominal (default) state
@@ -321,6 +552,145 @@ class Sysmon(AbstractPlugin):
         gauge["_milliresponsetime"] = 0
         gauge["_opportunity_id"] = None
         gauge["_opportunity_opened_scenario_time"] = None
+        gauge["_opportunity_automation_active"] = None
+        gauge["_opportunity_duration_ms"] = None
+
+    def open_nontarget_opportunity(self) -> None:
+        """Open one explicit target-absent observation window.
+
+        Only protocol-defined windows contribute non-target opportunities to signal
+        detection metrics. Ordinary idle duration is intentionally never inferred as
+        a denominator.
+        """
+        context = self._dispatch_context()
+        if self._dispatch_is_late(context):
+            self._log_rejected_opportunity(
+                target=False,
+                outcome="INVALID_LATE_DISPATCH",
+                reason="nontarget_command_dispatched_after_observable_onset",
+                planned_duration_ms=int(self.parameters["nontargetduration"]),
+                context=context,
+            )
+            return
+        if getattr(self, "_nontarget_opportunity_id", None) is not None:
+            raise RuntimeError("a non-target opportunity is already active")
+        if len(self.get_gauges_on_failure()) > 0:
+            if context:
+                self._log_rejected_opportunity(
+                    target=False,
+                    outcome="INVALID_COLLAPSED_BATCH",
+                    reason="target_window_already_active",
+                    planned_duration_ms=int(self.parameters["nontargetduration"]),
+                    context=context,
+                )
+                return
+            raise RuntimeError("cannot open a non-target opportunity during an active target opportunity")
+        pending_targets = [
+            gauge for gauge in self.get_all_gauges() if gauge.get("failure") is True
+        ]
+        if pending_targets:
+            # A long frame stall can dispatch a target command and a later
+            # non-target command before the next plugin update consumes the
+            # target flag. Refuse to reclassify that interval as target-absent,
+            # preserve explicit invalid evidence, and let the next update open
+            # the pending target normally.
+            pending_indicators = sorted(
+                str(gauge.get("name", "unknown")) for gauge in pending_targets
+            )
+            self._reject_pending_targets(reason="collapsed_due_batch_collision")
+            self._log_rejected_opportunity(
+                target=False,
+                outcome="INVALID_COLLAPSED_BATCH",
+                reason="collapsed_due_batch_collision_with_pending_target",
+                indicator=",".join(pending_indicators),
+                planned_duration_ms=int(self.parameters["nontargetduration"]),
+                context=context,
+            )
+            return
+
+        duration_ms = int(self.parameters["nontargetduration"])
+        self._opportunity_counter = getattr(self, "_opportunity_counter", 0) + 1
+        opportunity_id = f"sysmon-{self._opportunity_counter:06d}"
+        self._nontarget_opportunity_id = opportunity_id
+        self._nontarget_opened_scenario_time = self.scenario_time
+        self._nontarget_remaining_ms = duration_ms
+        self._nontarget_deadline_s = self.scenario_time + duration_ms / 1000.0
+        self._nontarget_automation_active = bool(self.parameters["automaticsolver"])
+        self.log_performance("opportunity", json.dumps({
+            "allocation_actor": (
+                "automation"
+                if self._nontarget_automation_active
+                else "participant"
+            ),
+            "automation_active": self._nontarget_automation_active,
+            "close_lateness_tolerance_ms": int(self.parameters["taskupdatetime"]),
+            "deadline_s": self._nontarget_deadline_s,
+            "duration_ms": duration_ms,
+            "opened_scenario_time_s": self.scenario_time,
+            "opportunity_id": opportunity_id,
+            "phase": "opened",
+            "target": False,
+        }, sort_keys=True))
+
+    def close_nontarget_opportunity(
+        self,
+        false_alarm: bool = False,
+        indicator: str | None = None,
+        invalid_reason: str | None = None,
+        response_actor: str | None = None,
+    ) -> None:
+        """Close the active target-absent window as a CR or linked FA."""
+        opportunity_id = getattr(self, "_nontarget_opportunity_id", None)
+        if opportunity_id is None:
+            raise RuntimeError("no non-target opportunity is active")
+
+        opened_scenario_time = getattr(self, "_nontarget_opened_scenario_time", None)
+        response_time_ms: float | None = None
+        if false_alarm and opened_scenario_time is not None:
+            response_time_ms = max(0.0, (self.scenario_time - opened_scenario_time) * 1000.0)
+        deadline = getattr(self, "_nontarget_deadline_s", None)
+        lateness_ms = (
+            max(0, round((self.scenario_time - deadline) * 1000))
+            if deadline is not None
+            else None
+        )
+        automation_active = bool(
+            getattr(self, "_nontarget_automation_active", False)
+        )
+        response_actor = response_actor or (
+            "automation" if automation_active else "participant"
+        )
+        if response_actor not in {"participant", "automation"}:
+            raise ValueError("SYSMON response actor must be participant or automation")
+
+        self.log_performance("opportunity", json.dumps({
+            "automation_active": automation_active,
+            "closed_scenario_time_s": self.scenario_time,
+            "indicator": indicator,
+            "opened_scenario_time_s": opened_scenario_time,
+            "opportunity_id": opportunity_id,
+            "lateness_ms": lateness_ms,
+            "outcome": (
+                "INVALID_COLLAPSED_BATCH"
+                if invalid_reason == "collapsed_due_batch_collision"
+                else (
+                    "INVALID_STALLED_WINDOW"
+                    if invalid_reason is not None
+                    else ("FA" if false_alarm else "CR")
+                )
+            ),
+            "phase": "closed",
+            "reason": invalid_reason,
+            "response_time_ms": response_time_ms,
+            "response_actor": response_actor,
+            "scheduled_deadline_s": deadline,
+            "target": False,
+        }, sort_keys=True))
+        self._nontarget_opportunity_id = None
+        self._nontarget_opened_scenario_time = None
+        self._nontarget_remaining_ms = None
+        self._nontarget_deadline_s = None
+        self._nontarget_automation_active = None
 
     def get_gauges_key_value(self, key: str, value: Any) -> list[dict[str, Any]]:
         gauge_list: list[dict[str, Any]] = list()
@@ -328,6 +698,22 @@ class Sysmon(AbstractPlugin):
             if gauge[key] == value:
                 gauge_list.append(gauge)
         return gauge_list
+
+    def stop(self) -> None:
+        """Close every observable or queued opportunity before task teardown."""
+
+        self._reject_pending_targets(reason="task_stopped_before_outcome")
+        for gauge in list(self.get_gauges_on_failure()):
+            self.stop_failure(
+                gauge,
+                success=False,
+                invalid_reason="task_stopped_before_outcome",
+            )
+        if getattr(self, "_nontarget_opportunity_id", None) is not None:
+            self.close_nontarget_opportunity(
+                invalid_reason="task_stopped_before_outcome"
+            )
+        super().stop()
 
     def get_gauge_by_key(self, key: str) -> dict[str, Any]:
         return self.get_gauges_key_value("key", key)[0]
@@ -364,17 +750,28 @@ class Sysmon(AbstractPlugin):
         if state == "press":
             gauge: dict[str, Any] = self.get_gauge_by_key(key)
             if key in [g["key"] for g in self.get_gauges_on_failure()]:
-                self.stop_failure(gauge=gauge, success=True)
+                self.stop_failure(
+                    gauge=gauge,
+                    success=True,
+                    response_actor="automation" if emulate else "participant",
+                )
             else:
                 self.log_performance("name", gauge["name"])
                 self.log_performance("signal_detection", "FA")
                 self.log_performance("response_time", float("nan"))
-                self.log_performance("opportunity_unlinked_response", json.dumps({
-                    "indicator": gauge["name"],
-                    "outcome": "FA",
-                    "scenario_time_s": self.scenario_time,
-                    "reason": "no_protocol_defined_nontarget_opportunity",
-                }, sort_keys=True))
+                if getattr(self, "_nontarget_opportunity_id", None) is not None:
+                    self.close_nontarget_opportunity(
+                        false_alarm=True,
+                        indicator=gauge["name"],
+                        response_actor="automation" if emulate else "participant",
+                    )
+                else:
+                    self.log_performance("opportunity_unlinked_response", json.dumps({
+                        "indicator": gauge["name"],
+                        "outcome": "FA",
+                        "scenario_time_s": self.scenario_time,
+                        "reason": "no_protocol_defined_nontarget_opportunity",
+                    }, sort_keys=True))
 
                 # Set a negative feedback if relevant
                 if self.parameters["feedbacks"]["negative"]["active"]:

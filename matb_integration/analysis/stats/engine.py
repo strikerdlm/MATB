@@ -14,7 +14,8 @@ from typing import Any
 
 import pandas as pd
 
-from .data import (ALL_METRICS, CONFIRMATORY_METRICS, fingerprint,
+from .data import (ALL_METRICS, CONFIRMATORY_METRICS,
+                   confirmatory_eligibility_summary, fingerprint,
                    fits_frame, metrics_frame)
 from .lmm import fit_q1, fit_q2, fit_q4
 from .multiplicity import bh_fdr, holm
@@ -69,7 +70,15 @@ def run_analysis(metrics_rows: list[dict[str, Any]], fits_rows: list[dict[str, A
     metrics_rows, fits_rows = list(metrics_rows), list(fits_rows)
     mdf, fdf = metrics_frame(metrics_rows), fits_frame(fits_rows)
 
-    per_metric = {m: mdf[mdf["metric"] == m] for m in ALL_METRICS}
+    eligible_mdf = mdf[mdf["confirmatory_eligible"]] if not mdf.empty else mdf
+    per_metric = {
+        metric: (
+            eligible_mdf[eligible_mdf["metric"] == metric]
+            if metric in CONFIRMATORY_METRICS
+            else mdf[mdf["metric"] == metric]
+        )
+        for metric in ALL_METRICS
+    }
     q1 = {m: fit_q1(d) for m, d in per_metric.items()}
     q2 = {m: fit_q2(d) for m, d in per_metric.items()}
 
@@ -90,7 +99,8 @@ def run_analysis(metrics_rows: list[dict[str, Any]], fits_rows: list[dict[str, A
         tests.append({"metric": m, "test": qname, "p": p, "p_fdr": pa, "reject": rj})
     confirmatory = {"family_size_planned": len(planned),
                     "family_size_actual": len(avail),
-                    "fdr_q": FDR_Q, "tests": tests}
+                    "fdr_q": FDR_Q, "tests": tests,
+                    "eligibility": confirmatory_eligibility_summary(mdf)}
 
     # --- Q1 contrasts: only for FDR-surviving confirmatory omnibus tests ---
     survivors = {m for m, qname, _ in planned

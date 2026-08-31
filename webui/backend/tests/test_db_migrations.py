@@ -1,0 +1,187 @@
+from __future__ import annotations
+
+import pytest
+from sqlalchemy import inspect, text
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import create_engine
+
+from app.db import (
+    _audit_sqlite_foreign_keys,
+    _configure_sqlite_foreign_keys,
+    _migrate_analysisresult_v2,
+    _migrate_bayesresult_v3,
+)
+
+
+def _legacy_bayesresult_database(path):
+    engine = create_engine(f"sqlite:///{path}")
+    with engine.begin() as connection:
+        connection.execute(text("""
+            CREATE TABLE bayesresult (
+                id INTEGER PRIMARY KEY,
+                fingerprint VARCHAR NOT NULL,
+                bayes_version VARCHAR NOT NULL,
+                status VARCHAR NOT NULL,
+                artifact_json VARCHAR,
+                error VARCHAR,
+                created_at DATETIME NOT NULL,
+                finished_at DATETIME
+            )
+        """))
+        connection.execute(
+            text("""
+                INSERT INTO bayesresult
+                    (id, fingerprint, bayes_version, status, artifact_json,
+                     error, created_at, finished_at)
+                VALUES
+                    (1, :fingerprint, '1.0', 'failed', NULL, 'old failure',
+                     '2026-01-01T00:00:00Z', '2026-01-01T00:01:00Z'),
+                    (2, :fingerprint, '1.0', 'done', '{"result": true}', NULL,
+                     '2026-01-02T00:00:00Z', '2026-01-02T00:01:00Z')
+            """),
+            {"fingerprint": "a" * 64},
+        )
+    return engine
+
+
+def test_bayesresult_v3_migration_upgrades_and_archives_duplicates(tmp_path):
+    engine = _legacy_bayesresult_database(tmp_path / "legacy.sqlite3")
+
+    _migrate_bayesresult_v3(engine)
+    _migrate_bayesresult_v3(engine)  # restart/idempotence
+
+    with engine.begin() as connection:
+        columns = {
+            column["name"]
+            for column in inspect(connection).get_columns("bayesresult")
+        }
+        assert {
+            "attempt_count", "error_history_json", "last_attempt_at", "owner_token"
+        } <= columns
+        rows = connection.execute(
+            text("SELECT id, status, attempt_count, error_history_json FROM bayesresult")
+        ).mappings().all()
+        assert rows == [{
+            "id": 2,
+            "status": "done",
+            "attempt_count": 1,
+            "error_history_json": "[]",
+        }]
+        archived = connection.execute(
+            text("""
+                SELECT source_id, status, error, reason
+                FROM bayesresult_migration_archive_v1
+            """)
+        ).mappings().all()
+        assert archived == [{
+            "source_id": 1,
+            "status": "failed",
+            "error": "old failure",
+            "reason": "duplicate_fingerprint_and_bayes_version",
+        }]
+        versions = connection.execute(
+            text("SELECT version FROM matb_schema_migration")
+        ).scalars().all()
+        assert versions == ["bayesresult-v3"]
+
+        indexes = set(connection.execute(text("""
+            SELECT name FROM sqlite_master
+            WHERE type = 'index' AND tbl_name = 'bayesresult'
+        """)).scalars().all())
+        assert "uq_bayesresult_one_active" in indexes
+
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text("""
+                    INSERT INTO bayesresult
+                        (fingerprint, bayes_version, status, created_at)
+                    VALUES (:fingerprint, '1.0', 'queued', '2026-01-03T00:00:00Z')
+                """),
+                {"fingerprint": "a" * 64},
+            )
+    except IntegrityError:
+        pass
+    else:
+        raise AssertionError("migration did not enforce Bayesian cache-key uniqueness")
+
+
+def test_analysisresult_v2_migration_archives_duplicates_and_enforces_cache_key(
+    tmp_path,
+):
+    engine = create_engine(f"sqlite:///{tmp_path / 'legacy-analysis.sqlite3'}")
+    with engine.begin() as connection:
+        connection.execute(text("""
+            CREATE TABLE analysisresult (
+                id INTEGER PRIMARY KEY,
+                fingerprint VARCHAR NOT NULL,
+                engine_version VARCHAR NOT NULL,
+                artifact_json VARCHAR NOT NULL,
+                created_at DATETIME NOT NULL
+            )
+        """))
+        connection.execute(text("""
+            INSERT INTO analysisresult
+                (id, fingerprint, engine_version, artifact_json, created_at)
+            VALUES
+                (1, 'same', '2.0', '{"winner": false}', '2026-01-01T00:00:00Z'),
+                (2, 'same', '2.0', '{"winner": true}', '2026-01-02T00:00:00Z')
+        """))
+
+    _migrate_analysisresult_v2(engine)
+    _migrate_analysisresult_v2(engine)
+
+    with engine.begin() as connection:
+        rows = connection.execute(text(
+            "SELECT id, artifact_json FROM analysisresult ORDER BY id"
+        )).mappings().all()
+        assert rows == [{"id": 2, "artifact_json": '{"winner": true}'}]
+        archived = connection.execute(text("""
+            SELECT source_id, reason
+            FROM analysisresult_migration_archive_v1
+        """)).mappings().all()
+        assert archived == [{
+            "source_id": 1,
+            "reason": "duplicate_fingerprint_and_engine_version",
+        }]
+
+    with pytest.raises(IntegrityError):
+        with engine.begin() as connection:
+            connection.execute(text("""
+                INSERT INTO analysisresult
+                    (fingerprint, engine_version, artifact_json, created_at)
+                VALUES ('same', '2.0', '{}', '2026-01-03T00:00:00Z')
+            """))
+
+
+def test_sqlite_connections_enforce_foreign_keys(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'fk.sqlite3'}")
+    _configure_sqlite_foreign_keys(engine)
+    with engine.begin() as connection:
+        assert connection.execute(text("PRAGMA foreign_keys")).scalar_one() == 1
+        connection.execute(text("CREATE TABLE parent (id INTEGER PRIMARY KEY)"))
+        connection.execute(text(
+            "CREATE TABLE child (id INTEGER PRIMARY KEY, parent_id INTEGER "
+            "REFERENCES parent(id))"
+        ))
+
+    with pytest.raises(IntegrityError):
+        with engine.begin() as connection:
+            connection.execute(text("INSERT INTO child (id, parent_id) VALUES (1, 999)"))
+
+
+def test_startup_audit_rejects_legacy_foreign_key_orphans(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'orphan.sqlite3'}")
+    with engine.begin() as connection:
+        connection.execute(text("PRAGMA foreign_keys=OFF"))
+        connection.execute(text("CREATE TABLE parent (id INTEGER PRIMARY KEY)"))
+        connection.execute(text(
+            "CREATE TABLE child (id INTEGER PRIMARY KEY, parent_id INTEGER "
+            "REFERENCES parent(id))"
+        ))
+        connection.execute(text("INSERT INTO child (id, parent_id) VALUES (1, 999)"))
+    engine.dispose()
+
+    _configure_sqlite_foreign_keys(engine)
+    with pytest.raises(RuntimeError, match="foreign-key orphan.*child"):
+        _audit_sqlite_foreign_keys(engine)

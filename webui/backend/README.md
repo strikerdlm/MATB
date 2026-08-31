@@ -39,6 +39,11 @@ The launcher sets `MATB_DB_PATH`, `MATB_SIMULATION_OUTPUT_DIR`,
 directories, starts the API and built frontend together, and tears both down
 on Ctrl-C. No Windows service, X server, or external telemetry is needed.
 
+State-changing browser requests require an exact configured `Origin`; every
+request also passes a loopback `Host` allowlist. Origin-less CLI requests must
+send `Authorization: Bearer $MATB_API_TOKEN`. The combined launcher creates a
+stable owner-only token at `<data-dir>/api-token` when one is not supplied.
+
 ## Data model
 Participant -> Visit (timepoint 1-6) -> Block (LOW/MEDIUM/HIGH) -> metrics.
 Each Block may have one BlockProvenance row with manifest filename/SHA-256,

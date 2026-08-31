@@ -27,6 +27,7 @@ from matb_integration.log_converter import (
     _sysmon_metrics,
     _isa_metrics,
     _nasatlx_metrics,
+    _bedford_metric,
     _comm_metrics,
     _track_metrics,
     _resman_metrics,
@@ -81,6 +82,68 @@ def test_d_prime_undefined_no_noise():
     assert _d_prime(5, 5, 0, 0) is None
 
 
+def test_track_metrics_ignore_nonfinite_numeric_samples():
+    rows = _csv_rows("""
+        logtime,scenario_time,type,module,address,value
+        1.0,1.0,performance,track,center_deviation,inf
+        2.0,2.0,performance,track,center_deviation,-inf
+        3.0,3.0,performance,track,center_deviation,nan
+        4.0,4.0,performance,track,center_deviation,0.25
+        5.0,5.0,performance,track,cursor_in_target,true
+    """)
+
+    metrics = _track_metrics(rows)
+    assert metrics["n_samples"] == 1
+    assert metrics["mean_absolute_deviation"] == 0.25
+    assert metrics["rmse_deviation"] == 0.25
+
+
+def test_jsonl_conversion_never_emits_nonstandard_nonfinite_constants(tmp_path: Path):
+    source = tmp_path / "nonfinite.csv"
+    source.write_text(
+        "logtime,scenario_time,type,module,address,value\n"
+        "1,1,performance,track,center_deviation,inf\n"
+        "2,2,performance,track,center_deviation,nan\n"
+        "3,3,performance,sysmon,signal_detection,HIT\n",
+        encoding="utf-8",
+    )
+
+    line = convert_to_jsonl(source)
+
+    assert "Infinity" not in line
+    assert "NaN" not in line
+    json.loads(line, parse_constant=lambda value: pytest.fail(value))
+
+
+@pytest.mark.parametrize(
+    "header",
+    [
+        "logtime,scenario_time,type,module,address,address",
+        "logtime,scenario_time,type,module,address",
+    ],
+)
+def test_parse_csv_rejects_duplicate_or_missing_required_headers(
+    tmp_path: Path, header: str
+) -> None:
+    source = tmp_path / "malformed.csv"
+    source.write_text(header + "\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="CSV header"):
+        parse_csv(source)
+
+
+def test_parse_csv_rejects_rows_with_extra_fields(tmp_path: Path) -> None:
+    source = tmp_path / "malformed.csv"
+    source.write_text(
+        "logtime,scenario_time,type,module,address,value\n"
+        "1,1,performance,sysmon,signal_detection,HIT,unexpected\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="row 2"):
+        parse_csv(source)
+
+
 # ── unit: SYSMON ──────────────────────────────────────────────────────────────
 
 def test_sysmon_basic_counts():
@@ -97,8 +160,10 @@ def test_sysmon_basic_counts():
     assert m["n_misses"] == 1
     assert m["n_false_alarms"] == 1
     assert m["n_signals"] == 2
-    assert m["hit_rate"] == pytest.approx(0.5, abs=1e-4)
-    assert m["mean_rt_ms"] == pytest.approx(1200.5, abs=0.1)
+    assert m["hit_rate"] is None
+    assert m["hit_rate_legacy_v1"] == pytest.approx(0.5, abs=1e-4)
+    assert m["mean_rt_ms"] is None
+    assert m["mean_rt_ms_legacy_v1"] == pytest.approx(1200.5, abs=0.1)
     assert m["d_prime"] is None  # no duration provided
     assert m["dprime_observed_v2"] is None
     assert m["observed_opportunity_status"] == "unavailable"
@@ -127,32 +192,478 @@ def test_sysmon_d_prime_with_duration():
 
 
 def test_sysmon_observed_dprime_requires_unique_target_and_nontarget_opportunities():
-    payloads = [
-        {"opportunity_id": "t1", "phase": "closed", "target": True, "outcome": "HIT"},
+    closed_payloads = [
+        {"opportunity_id": "t1", "phase": "closed", "target": True, "outcome": "HIT", "response_time_ms": 500.0},
         {"opportunity_id": "t2", "phase": "closed", "target": True, "outcome": "MISS"},
-        {"opportunity_id": "n1", "phase": "closed", "target": False, "outcome": "FA"},
+        {"opportunity_id": "n1", "phase": "closed", "target": False, "outcome": "FA", "response_time_ms": 500.0},
         {"opportunity_id": "n2", "phase": "closed", "target": False, "outcome": "CR"},
     ]
+    payloads = [
+        {"opportunity_id": payload["opportunity_id"], "phase": "opened", "target": payload["target"]}
+        for payload in closed_payloads
+    ] + closed_payloads
     rows = [
         {"logtime": str(i), "scenario_time": str(i), "type": "performance",
          "module": "sysmon", "address": "opportunity", "value": json.dumps(payload)}
         for i, payload in enumerate(payloads)
     ]
-    metrics = _sysmon_metrics(rows)
+    metrics = _sysmon_metrics(
+        rows,
+        expected_target_opportunities=2,
+        expected_nontarget_opportunities=2,
+    )
     assert metrics["observed_opportunity_status"] == "complete"
     assert metrics["dprime_observed_v2"] == pytest.approx(0.0)
-    assert metrics["observed_confirmatory_eligible"] is True
+    assert metrics["observed_opportunity_reconciled"] is True
+    assert metrics["observed_confirmatory_eligible"] is False
+
+
+def test_sysmon_automation_is_reconciled_but_excluded_from_human_performance():
+    payloads = [
+        {
+            "opportunity_id": "auto-target",
+            "phase": "opened",
+            "target": True,
+            "response_actor": "automation",
+            "automation_active": True,
+            "duration_ms": 1000,
+            "opened_scenario_time_s": 0.0,
+            "deadline_s": 1.0,
+        },
+        {
+            "opportunity_id": "human-target",
+            "phase": "opened",
+            "target": True,
+            "response_actor": "participant",
+            "automation_active": False,
+        },
+        {
+            "opportunity_id": "human-noise",
+            "phase": "opened",
+            "target": False,
+            "response_actor": "participant",
+            "automation_active": False,
+        },
+        {
+            "opportunity_id": "auto-target",
+            "phase": "closed",
+            "target": True,
+            "outcome": "HIT",
+            "response_time_ms": 500.0,
+            "response_actor": "automation",
+            "automation_active": True,
+            "opened_scenario_time_s": 0.0,
+            "scheduled_deadline_s": 1.0,
+        },
+        {
+            "opportunity_id": "human-target",
+            "phase": "closed",
+            "target": True,
+            "outcome": "MISS",
+            "response_actor": "participant",
+            "automation_active": False,
+        },
+        {
+            "opportunity_id": "human-noise",
+            "phase": "closed",
+            "target": False,
+            "outcome": "CR",
+            "response_actor": "participant",
+            "automation_active": False,
+        },
+    ]
+    rows = [
+        {
+            "type": "performance",
+            "module": "sysmon",
+            "address": "opportunity",
+            "value": json.dumps(payload),
+        }
+        for payload in payloads
+    ]
+
+    metrics = _sysmon_metrics(
+        rows,
+        expected_target_opportunities=2,
+        expected_nontarget_opportunities=1,
+    )
+
+    assert metrics["observed_opportunity_status"] == "complete"
+    assert metrics["observed_opportunity_reconciled"] is True
+    assert metrics["n_automated_opportunities"] == 1
+    assert metrics["n_human_target_opportunities"] == 1
+    assert metrics["observed_n_hits"] == 0
+    assert metrics["observed_n_misses"] == 1
+    assert metrics["hit_rate"] == 0.0
+    assert metrics["human_performance_eligible"] is False
+
+
+def test_sysmon_corrected_rt_uses_only_reconciled_human_target_hits():
+    payloads = [
+        {
+            "opportunity_id": "automated-target",
+            "phase": "opened",
+            "target": True,
+            "automation_active": True,
+            "allocation_actor": "automation",
+        },
+        {
+            "opportunity_id": "human-target",
+            "phase": "opened",
+            "target": True,
+            "automation_active": False,
+            "allocation_actor": "participant",
+        },
+        {
+            "opportunity_id": "human-noise",
+            "phase": "opened",
+            "target": False,
+            "automation_active": False,
+            "allocation_actor": "participant",
+        },
+        {
+            "opportunity_id": "automated-target",
+            "phase": "closed",
+            "target": True,
+            "outcome": "HIT",
+            "response_time_ms": 100.0,
+            "automation_active": True,
+            "response_actor": "automation",
+        },
+        {
+            "opportunity_id": "human-target",
+            "phase": "closed",
+            "target": True,
+            "outcome": "HIT",
+            "response_time_ms": 900.0,
+            "automation_active": False,
+            "response_actor": "participant",
+        },
+        {
+            "opportunity_id": "human-noise",
+            "phase": "closed",
+            "target": False,
+            "outcome": "FA",
+            "response_time_ms": 200.0,
+            "automation_active": False,
+            "response_actor": "participant",
+        },
+    ]
+    rows = [
+        {
+            "type": "performance",
+            "module": "sysmon",
+            "address": "opportunity",
+            "value": json.dumps(payload),
+        }
+        for payload in payloads
+    ] + _csv_rows("""
+        logtime,scenario_time,type,module,address,value
+        1,1,performance,sysmon,response_time,100
+        2,2,performance,sysmon,response_time,900
+    """)
+
+    metrics = _sysmon_metrics(
+        rows,
+        expected_target_opportunities=2,
+        expected_nontarget_opportunities=1,
+    )
+
+    assert metrics["observed_opportunity_status"] == "complete"
+    assert metrics["mean_rt_ms"] == pytest.approx(900.0)
+    assert metrics["mean_rt_ms_legacy_v1"] == pytest.approx(500.0)
+    assert metrics["human_performance_eligible"] is False
+
+
+def test_sysmon_corrected_rt_is_null_when_lifecycle_is_invalid():
+    payloads = [
+        {
+            "opportunity_id": "target",
+            "phase": "opened",
+            "target": True,
+            "automation_active": False,
+        },
+        {
+            "opportunity_id": "target",
+            "phase": "closed",
+            "target": True,
+            "outcome": "HIT",
+            "response_time_ms": 700.0,
+            "automation_active": False,
+            "response_actor": "participant",
+        },
+        {
+            "opportunity_id": "target",
+            "phase": "closed",
+            "target": True,
+            "outcome": "HIT",
+            "response_time_ms": 700.0,
+            "automation_active": False,
+            "response_actor": "participant",
+        },
+    ]
+    rows = [
+        {
+            "type": "performance",
+            "module": "sysmon",
+            "address": "opportunity",
+            "value": json.dumps(payload),
+        }
+        for payload in payloads
+    ]
+
+    metrics = _sysmon_metrics(
+        rows,
+        expected_target_opportunities=1,
+        expected_nontarget_opportunities=0,
+    )
+
+
+def test_sysmon_response_outcomes_require_finite_nonnegative_response_time():
+    payloads = [
+        {
+            "opportunity_id": "target",
+            "phase": "opened",
+            "target": True,
+            "automation_active": False,
+        },
+        {
+            "opportunity_id": "target",
+            "phase": "closed",
+            "target": True,
+            "outcome": "HIT",
+            "response_time_ms": None,
+            "automation_active": False,
+            "response_actor": "participant",
+        },
+    ]
+    rows = [
+        {
+            "type": "performance",
+            "module": "sysmon",
+            "address": "opportunity",
+            "value": json.dumps(payload),
+        }
+        for payload in payloads
+    ]
+
+    metrics = _sysmon_metrics(
+        rows,
+        expected_target_opportunities=1,
+        expected_nontarget_opportunities=0,
+    )
+
+    assert metrics["observed_opportunity_status"] == "invalid"
+    assert "missing_response_time:target" in metrics["observed_opportunity_issues"]
+
+    assert metrics["observed_opportunity_status"] == "invalid"
+    assert metrics["mean_rt_ms"] is None
+
+
+def test_sysmon_automated_cr_is_excluded_from_human_nontarget_denominator():
+    payloads = [
+        {
+            "opportunity_id": "human-target",
+            "phase": "opened",
+            "target": True,
+            "automation_active": False,
+            "allocation_actor": "participant",
+        },
+        {
+            "opportunity_id": "automated-noise",
+            "phase": "opened",
+            "target": False,
+            "automation_active": True,
+            "allocation_actor": "automation",
+        },
+        {
+            "opportunity_id": "human-target",
+            "phase": "closed",
+            "target": True,
+            "outcome": "HIT",
+            "response_time_ms": 500.0,
+            "automation_active": False,
+            "response_actor": "participant",
+        },
+        {
+            "opportunity_id": "automated-noise",
+            "phase": "closed",
+            "target": False,
+            "outcome": "CR",
+            "automation_active": True,
+            "response_actor": "automation",
+        },
+    ]
+    rows = [
+        {
+            "type": "performance",
+            "module": "sysmon",
+            "address": "opportunity",
+            "value": json.dumps(payload),
+        }
+        for payload in payloads
+    ]
+
+    metrics = _sysmon_metrics(
+        rows,
+        expected_target_opportunities=1,
+        expected_nontarget_opportunities=1,
+    )
+
+    assert metrics["observed_opportunity_reconciled"] is True
+    assert metrics["n_human_target_opportunities"] == 1
+    assert metrics["n_human_nontarget_opportunities"] == 0
+    assert metrics["n_automation_exposed_opportunities"] == 1
+    assert metrics["dprime_observed_v2"] is None
+    assert metrics["human_performance_eligible"] is False
+
+
+def test_sysmon_lifecycle_timing_mismatch_invalidates_observed_evidence():
+    payloads = [
+        {
+            "opportunity_id": "t1",
+            "phase": "opened",
+            "target": True,
+            "duration_ms": 1000,
+            "opened_scenario_time_s": 0.0,
+            "deadline_s": 1.0,
+        },
+        {
+            "opportunity_id": "t1",
+            "phase": "closed",
+            "target": True,
+            "outcome": "HIT",
+            "opened_scenario_time_s": 0.0,
+            "scheduled_deadline_s": 10.0,
+        },
+    ]
+    rows = [
+        {
+            "type": "performance",
+            "module": "sysmon",
+            "address": "opportunity",
+            "value": json.dumps(payload),
+        }
+        for payload in payloads
+    ]
+
+    metrics = _sysmon_metrics(rows, expected_target_opportunities=1)
+
+    assert metrics["observed_opportunity_status"] == "invalid"
+    assert "deadline_mismatch:t1" in metrics["observed_opportunity_issues"]
 
 
 def test_sysmon_observed_dprime_fails_closed_on_duplicate_outcome():
     payload = {"opportunity_id": "t1", "phase": "closed", "target": True, "outcome": "HIT"}
     rows = [
+        {"type": "performance", "module": "sysmon", "address": "opportunity", "value": json.dumps(
+            {"opportunity_id": "t1", "phase": "opened", "target": True}
+        )},
         {"type": "performance", "module": "sysmon", "address": "opportunity", "value": json.dumps(payload)},
         {"type": "performance", "module": "sysmon", "address": "opportunity", "value": json.dumps(payload)},
     ]
     metrics = _sysmon_metrics(rows)
     assert metrics["observed_opportunity_status"] == "invalid"
     assert metrics["dprime_observed_v2"] is None
+
+
+def test_sysmon_hit_rate_is_derived_from_reconciled_opportunities_and_rejects_channel_tampering():
+    payloads = [
+        {"opportunity_id": "t1", "phase": "opened", "target": True},
+        {"opportunity_id": "t2", "phase": "opened", "target": True},
+        {"opportunity_id": "n1", "phase": "opened", "target": False},
+        {"opportunity_id": "t1", "phase": "closed", "target": True, "outcome": "HIT", "response_time_ms": 500.0},
+        {"opportunity_id": "t2", "phase": "closed", "target": True, "outcome": "MISS"},
+        {"opportunity_id": "n1", "phase": "closed", "target": False, "outcome": "CR"},
+    ]
+    rows = [
+        {"type": "performance", "module": "sysmon", "address": "opportunity", "value": json.dumps(payload)}
+        for payload in payloads
+    ] + [
+        {"type": "performance", "module": "sysmon", "address": "signal_detection", "value": "HIT"},
+        {"type": "performance", "module": "sysmon", "address": "signal_detection", "value": "HIT"},
+    ]
+
+    metrics = _sysmon_metrics(
+        rows,
+        expected_target_opportunities=2,
+        expected_nontarget_opportunities=1,
+    )
+
+    assert metrics["hit_rate_legacy_v1"] == 1.0
+    assert metrics["hit_rate"] is None
+    assert metrics["observed_opportunity_status"] == "invalid"
+    assert any("legacy_opportunity_channel_mismatch" in issue for issue in metrics["observed_opportunity_issues"])
+
+
+def test_sysmon_stalled_nontarget_window_is_never_confirmatory_evidence():
+    payloads = [
+        {
+            "opportunity_id": "n1",
+            "phase": "opened",
+            "target": False,
+            "duration_ms": 2000,
+            "opened_scenario_time_s": 0.0,
+            "deadline_s": 2.0,
+        },
+        {
+            "opportunity_id": "n1",
+            "phase": "closed",
+            "target": False,
+            "outcome": "INVALID_STALLED_WINDOW",
+            "opened_scenario_time_s": 0.0,
+            "scheduled_deadline_s": 2.0,
+            "closed_scenario_time_s": 5.0,
+            "lateness_ms": 3000,
+        },
+    ]
+    rows = [
+        {
+            "type": "performance",
+            "module": "sysmon",
+            "address": "opportunity",
+            "value": json.dumps(payload),
+        }
+        for payload in payloads
+    ]
+
+    metrics = _sysmon_metrics(
+        rows,
+        expected_target_opportunities=0,
+        expected_nontarget_opportunities=1,
+    )
+
+    assert metrics["observed_opportunity_status"] == "invalid"
+    assert metrics["dprime_observed_v2"] is None
+    assert metrics["observed_confirmatory_eligible"] is False
+    assert "invalid_outcome:n1" in metrics["observed_opportunity_issues"]
+
+
+def test_sysmon_observed_dprime_is_incomplete_for_unclosed_or_unplanned_gaps():
+    payloads = [
+        {"opportunity_id": "t1", "phase": "opened", "target": True},
+        {"opportunity_id": "t1", "phase": "closed", "target": True, "outcome": "HIT", "response_time_ms": 500.0},
+        {"opportunity_id": "n1", "phase": "opened", "target": False},
+    ]
+    rows = [
+        {"type": "performance", "module": "sysmon", "address": "opportunity", "value": json.dumps(payload)}
+        for payload in payloads
+    ]
+
+    metrics = _sysmon_metrics(
+        rows,
+        expected_target_opportunities=2,
+        expected_nontarget_opportunities=1,
+    )
+
+    assert metrics["observed_opportunity_status"] == "incomplete"
+    assert metrics["dprime_observed_v2"] is None
+    assert metrics["observed_confirmatory_eligible"] is False
+    assert "unclosed_opportunity:n1" in metrics["observed_opportunity_issues"]
+    assert any(
+        issue.startswith("expected_target_count_mismatch")
+        for issue in metrics["observed_opportunity_issues"]
+    )
 
 
 def test_sysmon_no_rows():
@@ -202,6 +713,38 @@ def test_isa_no_probes():
     m = _isa_metrics([])
     assert m["n_probes_completed"] == 0
     assert m["mean"] is None
+
+
+def test_isa_out_of_range_values_are_retained_as_invalid_but_not_scored():
+    rows = _csv_rows("""
+        logtime,scenario_time,type,module,address,value
+        1.0,90.0,performance,genericscales,Workload,999
+        2.0,180.0,performance,genericscales,Workload,5
+    """)
+    metrics = _isa_metrics(rows)
+    assert metrics["mean"] == 5.0
+    assert metrics["n_invalid_probes"] == 1
+    assert metrics["invalid_probes"][0]["value_raw"] == 999.0
+    assert metrics["confirmatory_eligible"] is False
+
+
+def test_questionnaires_record_nonfinite_or_missing_values_as_invalid():
+    rows = _csv_rows("""
+        logtime,scenario_time,type,module,address,value
+        1.0,90.0,performance,genericscales,Workload,nan
+        2.0,900.0,performance,genericscales,Mental demand,nan
+        3.0,900.0,performance,genericscales,Bedford,
+    """)
+
+    isa = _isa_metrics(rows)
+    tlx = _nasatlx_metrics(rows)
+    bedford = _bedford_metric(rows)
+
+    assert isa["n_invalid_probes"] == 1
+    assert isa["invalid_probes"][0]["reason"] == "missing_or_nonfinite_isa_value"
+    assert tlx["invalid_subscales"] == ["mental_demand"]
+    assert tlx["invalid_observations"][0]["reason"] == "missing_or_nonfinite_value"
+    assert bedford["invalid_values"][0]["reason"] == "missing_or_nonfinite_value"
 
 
 # ── unit: NASA-TLX ────────────────────────────────────────────────────────────
@@ -262,9 +805,80 @@ def test_nasatlx_no_rows():
     assert m["raw_tlx"] is None
 
 
+def test_bedford_out_of_range_value_is_not_rounded_into_a_metric():
+    rows = _csv_rows("""
+        logtime,scenario_time,type,module,address,value
+        1.0,900.0,performance,genericscales,Bedford,999
+    """)
+    metrics = _bedford_metric(rows)
+    assert metrics["value"] is None
+    assert metrics["value_raw"] == 999.0
+    assert metrics["valid"] is False
+    assert metrics["invalid_values"]
+
+
+def test_duplicate_bedford_presentations_are_retained_but_ineligible():
+    rows = _csv_rows("""
+        logtime,scenario_time,type,module,address,value
+        1.0,900.0,performance,genericscales,Bedford,4
+        2.0,901.0,performance,genericscales,Bedford,6
+    """)
+
+    metrics = _bedford_metric(rows)
+
+    assert metrics["value"] is None
+    assert metrics["value_raw"] is None
+    assert metrics["n_observations"] == 2
+    assert [item["value_raw"] for item in metrics["observations"]] == [4.0, 6.0]
+    assert metrics["valid"] is False
+    assert metrics["confirmatory_eligible"] is False
+
+
+def test_duplicate_tlx_subscale_invalidates_corrected_questionnaire():
+    rows = _csv_rows("""
+        logtime,scenario_time,type,module,address,value
+        1,900,performance,genericscales,Mental demand,4
+        2,900,performance,genericscales,Mental demand,5
+        3,900,performance,genericscales,Physical demand,2
+        4,900,performance,genericscales,Time pressure,3
+        5,900,performance,genericscales,Performance,6
+        6,900,performance,genericscales,Effort,5
+        7,900,performance,genericscales,Frustration,1
+    """)
+
+    metrics = _nasatlx_metrics(rows)
+
+    assert metrics["n_rows_observed"] == 7
+    assert metrics["duplicate_subscales"] == ["mental_demand"]
+    assert metrics["complete"] is False
+    assert metrics["rtlx_mean_0_100"] is None
+    assert metrics["confirmatory_eligible"] is False
+
+
 # ── unit: COMM ────────────────────────────────────────────────────────────────
 
-def test_comm_sdt_counts():
+def _comm_opportunity_row(
+    logtime: float,
+    scenario_time: float,
+    opportunity_id: str,
+    destination: str,
+    phase: str,
+    **details,
+) -> str:
+    payload = {
+        "schema_version": "1.0",
+        "opportunity_id": opportunity_id,
+        "destination": destination,
+        "phase": phase,
+        **details,
+    }
+    return (
+        f'{logtime},{scenario_time},performance,communications,comm_opportunity_v1,'
+        f'"{json.dumps(payload, sort_keys=True).replace(chr(34), chr(34) * 2)}"'
+    )
+
+
+def test_comm_legacy_outcomes_are_preserved_but_not_promoted_to_observed_metrics():
     rows = _csv_rows("""
         logtime,scenario_time,type,module,address,value
         1.0,53.0,performance,communications,sdt_value,HIT
@@ -273,7 +887,51 @@ def test_comm_sdt_counts():
         4.0,85.0,performance,communications,sdt_value,CR
         5.0,53.0,performance,communications,response_time,2500.0
     """)
-    m = _comm_metrics(rows)
+    m = _comm_metrics(rows, expected_opportunities=4)
+    assert m["n_hits"] == 0
+    assert m["n_misses"] == 0
+    assert m["n_false_alarms"] == 0
+    assert m["n_correct_rejections"] == 0
+    assert m["d_prime"] is None
+    assert m["mean_rt_ms"] is None
+    assert m["n_hits_legacy_v1"] == 1
+    assert m["n_misses_legacy_v1"] == 1
+    assert m["n_false_alarms_legacy_v1"] == 1
+    assert m["n_correct_rejections_legacy_v1"] == 1
+    assert m["d_prime_legacy_v1"] is not None
+    assert m["mean_rt_ms_legacy_v1"] == pytest.approx(2500.0, abs=0.1)
+    assert m["observed_opportunity_status"] == "unavailable"
+    assert m["observed_opportunity_reconciled"] is False
+
+
+def test_comm_complete_explicit_lifecycles_are_counted_and_reconciled():
+    lines = ["logtime,scenario_time,type,module,address,value"]
+    trial_specs = (
+        ("comm-000001", "own", "HIT", 1250.0),
+        ("comm-000002", "own", "MISS", None),
+        ("comm-000003", "other", "FA", 800.0),
+        ("comm-000004", "other", "CR", None),
+    )
+    now = 1.0
+    for opportunity_id, destination, outcome, response_time_ms in trial_specs:
+        lines.append(_comm_opportunity_row(now, now, opportunity_id, destination, "opened"))
+        now += 0.1
+        lines.append(_comm_opportunity_row(
+            now, now, opportunity_id, destination, "presentation_started",
+            software_play_invoked=True, physical_onset_measured=False,
+        ))
+        now += 0.1
+        lines.append(_comm_opportunity_row(now, now, opportunity_id, destination, "response_window_opened"))
+        now += 0.1
+        lines.append(_comm_opportunity_row(
+            now, now, opportunity_id, destination, "closed",
+            outcome=outcome, response_time_ms=response_time_ms,
+        ))
+        now += 0.1
+    rows = _csv_rows("\n".join(lines))
+
+    m = _comm_metrics(rows, expected_opportunities=4)
+
     assert m["n_hits"] == 1
     assert m["n_misses"] == 1
     assert m["n_false_alarms"] == 1
@@ -281,11 +939,139 @@ def test_comm_sdt_counts():
     assert m["hit_rate"] == pytest.approx(0.5, abs=1e-4)
     assert m["fa_rate"] == pytest.approx(0.5, abs=1e-4)
     assert m["d_prime"] is not None
-    assert m["mean_rt_ms"] == pytest.approx(2500.0, abs=0.1)
+    assert m["mean_rt_ms"] == pytest.approx(1025.0, abs=0.1)
+    assert m["n_opened_opportunities"] == 4
+    assert m["n_observed_opportunities"] == 4
+    assert m["observed_opportunity_status"] == "complete"
+    assert m["observed_opportunity_reconciled"] is True
+    assert m["observed_confirmatory_eligible"] is False
+    assert m["physical_onset_qualified"] is False
+
+
+def test_comm_automation_is_reconciled_but_excluded_from_human_metrics():
+    lines = ["logtime,scenario_time,type,module,address,value"]
+    trials = (
+        ("auto", "own", "HIT", 400.0, True, "automation"),
+        ("human-signal", "own", "MISS", None, False, "participant"),
+        ("human-noise", "other", "CR", None, False, "participant"),
+    )
+    now = 1.0
+    for opportunity_id, destination, outcome, rt, automation_active, actor in trials:
+        shared = {"automation_active": automation_active}
+        lines.append(_comm_opportunity_row(
+            now, now, opportunity_id, destination, "opened", **shared
+        ))
+        now += 0.1
+        lines.append(_comm_opportunity_row(
+            now, now, opportunity_id, destination, "presentation_started",
+            software_play_invoked=True, physical_onset_measured=False, **shared,
+        ))
+        now += 0.1
+        lines.append(_comm_opportunity_row(
+            now, now, opportunity_id, destination, "response_window_opened", **shared
+        ))
+        now += 0.1
+        lines.append(_comm_opportunity_row(
+            now, now, opportunity_id, destination, "closed",
+            outcome=outcome, response_time_ms=rt, response_actor=actor, **shared,
+        ))
+        now += 0.1
+
+    metrics = _comm_metrics(_csv_rows("\n".join(lines)), expected_opportunities=3)
+
+    assert metrics["observed_opportunity_status"] == "complete"
+    assert metrics["observed_opportunity_reconciled"] is True
+    assert metrics["n_automated_opportunities"] == 1
+    assert metrics["n_observed_opportunities"] == 3
+    assert metrics["n_human_observed_opportunities"] == 2
+    assert metrics["n_hits"] == 0
+    assert metrics["n_misses"] == 1
+    assert metrics["n_correct_rejections"] == 1
+    assert metrics["human_performance_eligible"] is False
+
+
+def test_comm_participant_intervention_during_automation_is_not_pure_human_data():
+    lines = ["logtime,scenario_time,type,module,address,value"]
+    shared = {"automation_active": True}
+    lines.extend([
+        _comm_opportunity_row(1, 1, "mixed", "own", "opened", **shared),
+        _comm_opportunity_row(
+            2, 2, "mixed", "own", "presentation_started",
+            software_play_invoked=True, physical_onset_measured=False, **shared,
+        ),
+        _comm_opportunity_row(
+            3, 3, "mixed", "own", "response_window_opened", **shared,
+        ),
+        _comm_opportunity_row(
+            4, 4, "mixed", "own", "closed", outcome="HIT",
+            response_time_ms=500.0, response_actor="participant", **shared,
+        ),
+    ])
+
+    metrics = _comm_metrics(_csv_rows("\n".join(lines)), expected_opportunities=1)
+
+    assert metrics["observed_opportunity_reconciled"] is True
+    assert metrics["n_observed_opportunities"] == 1
+    assert metrics["n_human_observed_opportunities"] == 0
+    assert metrics["n_automation_exposed_opportunities"] == 1
+    assert metrics["n_participant_interventions_during_automation"] == 1
+    assert metrics["n_hits"] == 0
+    assert metrics["human_performance_eligible"] is False
+
+
+def test_comm_expected_count_mismatch_nulls_corrected_aggregate():
+    lines = ["logtime,scenario_time,type,module,address,value"]
+    for index, (destination, outcome) in enumerate(
+        (("own", "HIT"), ("own", "MISS"), ("other", "FA"), ("other", "CR")),
+        start=1,
+    ):
+        opportunity_id = f"comm-{index:06d}"
+        lines.extend([
+            _comm_opportunity_row(index, index, opportunity_id, destination, "opened"),
+            _comm_opportunity_row(
+                index + 0.1, index + 0.1, opportunity_id, destination,
+                "presentation_started", software_play_invoked=True,
+                physical_onset_measured=False,
+            ),
+            _comm_opportunity_row(
+                index + 0.2, index + 0.2, opportunity_id, destination,
+                "response_window_opened",
+            ),
+            _comm_opportunity_row(
+                index + 0.3, index + 0.3, opportunity_id, destination, "closed",
+                outcome=outcome,
+                response_time_ms=500.0 if outcome in {"HIT", "FA"} else None,
+            ),
+        ])
+
+    metrics = _comm_metrics(_csv_rows("\n".join(lines)), expected_opportunities=5)
+
+    assert metrics["observed_opportunity_status"] == "count_mismatch"
+    assert metrics["n_opened_opportunities"] == 4
+    assert metrics["n_observed_opportunities"] == 0
+    assert metrics["n_hits"] == 0
+    assert metrics["d_prime"] is None
+    assert metrics["mean_rt_ms"] is None
+
+
+def test_comm_invalid_or_incomplete_lifecycle_fails_closed():
+    lines = [
+        "logtime,scenario_time,type,module,address,value",
+        _comm_opportunity_row(1, 1, "comm-000001", "own", "opened"),
+        _comm_opportunity_row(2, 2, "comm-000001", "own", "presentation_started"),
+        _comm_opportunity_row(3, 3, "comm-000001", "own", "invalidated", reason="task_stopped"),
+    ]
+    m = _comm_metrics(_csv_rows("\n".join(lines)), expected_opportunities=1)
+
+    assert m["n_observed_opportunities"] == 0
+    assert m["d_prime"] is None
+    assert m["observed_opportunity_status"] == "invalid"
+    assert m["observed_opportunity_reconciled"] is False
+    assert any("invalidated" in issue for issue in m["observed_opportunity_issues"])
 
 
 def test_comm_no_rows():
-    m = _comm_metrics([])
+    m = _comm_metrics([], expected_opportunities=0)
     assert m["n_hits"] == 0
     assert m["d_prime"] is None
 
@@ -324,6 +1110,34 @@ def test_resman_metrics_propagate_target_deviation_tolerance_and_recovery():
 
 # ── integration: smoke-test CSV ───────────────────────────────────────────────
 
+def test_csv_conversion_is_explicitly_marked_as_unreconciled_legacy_source(tmp_path):
+    csv_path = tmp_path / "session.csv"
+    csv_path.write_text(
+        "logtime,scenario_time,type,module,address,value\n",
+        encoding="utf-8",
+    )
+
+    record = convert_session(csv_path)
+
+    assert record["scientific_source_status"] == (
+        "legacy_csv_derived_not_reconciled_to_authoritative_event_stream"
+    )
+
+
+def test_extra_metadata_cannot_overwrite_scientific_contract_fields(tmp_path: Path):
+    csv_path = tmp_path / "session.csv"
+    csv_path.write_text(
+        "logtime,scenario_time,type,module,address,value\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="reserved conversion fields"):
+        convert_session(
+            csv_path,
+            extra_metadata={"scientific_source_status": "forged"},
+        )
+
+
 @pytest.mark.skipif(not SMOKE_CSV.exists(), reason="Smoke-test CSV not present")
 def test_smoke_csv_sysmon_counts():
     """Session 27: 3 MISSes confirmed during smoke test, no HITs or FAs."""
@@ -337,7 +1151,8 @@ def test_smoke_csv_sysmon_counts():
     assert s["n_misses"] == 3
     assert s["n_hits"] == 0
     assert s["n_false_alarms"] == 0
-    assert s["hit_rate"] == pytest.approx(0.0)   # 0 / (0+3) = 0.0
+    assert s["hit_rate"] is None
+    assert s["hit_rate_legacy_v1"] == pytest.approx(0.0)  # 0 / (0+3) = 0.0
 
 
 @pytest.mark.skipif(not SMOKE_CSV.exists(), reason="Smoke-test CSV not present")
@@ -345,8 +1160,10 @@ def test_smoke_csv_comm_miss():
     """Session 27: 1 COMM MISS at t=85.4s (own callsign, no response)."""
     result = convert_session(SMOKE_CSV)
     c = result["comm"]
-    assert c["n_misses"] == 1
+    assert c["n_misses"] == 0
     assert c["n_hits"] == 0
+    assert c["n_misses_legacy_v1"] == 1
+    assert c["observed_opportunity_status"] == "unavailable"
 
 
 @pytest.mark.skipif(not SMOKE_CSV.exists(), reason="Smoke-test CSV not present")
@@ -376,6 +1193,9 @@ def test_smoke_csv_jsonl_roundtrip(tmp_path):
     )
     data = json.loads(line)
     assert data["metrics_schema_version"] == "2.0"
+    assert data["scientific_source_status"] == (
+        "legacy_csv_derived_not_reconciled_to_authoritative_event_stream"
+    )
     assert data["participant_id"] == "P00"
     assert data["workload_level"] == "LOW"
     assert "sysmon" in data and "isa" in data and "nasatlx" in data and "comm" in data
@@ -594,6 +1414,76 @@ def test_sagat_manifest_cross_check(tmp_path):
     assert out["n_freezes_executed"] == 1
     executed_flags = [f["executed"] for f in out["freeze_details"]]
     assert executed_flags == [True, False]
+
+
+def test_convert_session_selects_only_the_exact_participant_block_sagat_manifest(
+    tmp_path,
+):
+    csv_path = tmp_path / "session.csv"
+    csv_path.write_text(
+        "logtime,scenario_time,type,module,address,value\n", encoding="utf-8"
+    )
+    for participant in ("P01", "P02"):
+        manifest = {
+            "participant_id": participant,
+            "block_num": 1,
+            "seed": 42,
+            "bank": "sagat_generic_en.txt",
+            "freezes": [{
+                "freeze_id": f"{participant}_b1_f1",
+                "scenario_time_sec": 300.0,
+                "probe_file": f"{participant}_freeze1.txt",
+                "probe_ids": ["g_a"],
+            }],
+        }
+        (tmp_path / f"{participant}_block1_sagat_manifest.json").write_text(
+            json.dumps(manifest), encoding="utf-8"
+        )
+
+    record = convert_session(
+        csv_path,
+        participant_id="P01",
+        block_name="block_1",
+        sagat_manifest_dir=tmp_path,
+    )
+
+    assert record["sagat"]["manifest_status"] == "verified"
+    assert record["sagat"]["n_freezes_planned"] == 1
+    assert record["sagat"]["freeze_details"][0]["freeze_id"] == "P01_b1_f1"
+
+
+def test_convert_session_rejects_wrong_identity_sagat_manifest_without_crashing(
+    tmp_path,
+):
+    csv_path = tmp_path / "session.csv"
+    csv_path.write_text(
+        "logtime,scenario_time,type,module,address,value\n", encoding="utf-8"
+    )
+    wrong = {
+        "participant_id": "P02",
+        "block_num": 1,
+        "seed": 42,
+        "bank": "sagat_generic_en.txt",
+        "freezes": [{
+            "freeze_id": "P02_b1_f1",
+            "scenario_time_sec": 300.0,
+            "probe_file": "wrong.txt",
+            "probe_ids": ["g_a"],
+        }],
+    }
+    exact_name = tmp_path / "P01_block1_sagat_manifest.json"
+    exact_name.write_text(json.dumps(wrong), encoding="utf-8")
+
+    record = convert_session(
+        csv_path,
+        participant_id="P01",
+        block_name="block_1",
+        sagat_manifest_path=exact_name,
+    )
+
+    assert record["sagat"]["manifest_status"] == "invalid"
+    assert record["sagat"]["n_freezes_planned"] is None
+    assert "participant_id_mismatch" in record["sagat"]["manifest_issues"]
 
 
 def test_sagat_snapshot_round_trip():

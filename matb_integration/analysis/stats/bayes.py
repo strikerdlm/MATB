@@ -16,9 +16,10 @@ import numpy as np
 import pandas as pd
 
 from . import gates
-from .data import CONFIRMATORY_METRICS, fingerprint, fits_frame, metrics_frame
+from .data import (CONFIRMATORY_METRICS, confirmatory_eligibility_summary,
+                   fingerprint, fits_frame, metrics_frame)
 
-BAYES_VERSION = "2.0.0"
+BAYES_VERSION = "2.2.0"
 SPEC = "docs/research/scientific-foundation-v2.md"
 DEFAULT_SEED = 20260604
 RHAT_MAX = 1.01
@@ -33,6 +34,13 @@ CAVEATS = [
     "'not converged' (R-hat > 1.01 or any divergence) means the posterior summary "
     "is unreliable and must not be reported.",
 ]
+
+
+def _finite_float(value: Any, *, field: str) -> float:
+    observed = float(value)
+    if not np.isfinite(observed):
+        raise ValueError(f"Bayesian diagnostic {field} is non-finite")
+    return observed
 
 
 def _fit_one(df: pd.DataFrame, *, include_levels: bool, seed: int, draws: int,
@@ -67,24 +75,35 @@ def _fit_one(df: pd.DataFrame, *, include_levels: bool, seed: int, draws: int,
                           random_seed=seed, progressbar=False,
                           compute_convergence_checks=False)
     var_names += ["sigma_u", "sigma_e"]
-    summ = az.summary(idata, var_names=var_names, ci_prob=0.95)
+    # Participant effects are not scientific coefficients exposed by this
+    # artifact, but they are sampled parameters and must participate in the
+    # convergence gate.  Excluding ``u`` could label a model converged while
+    # one or more participant effects still mix poorly.
+    summ = az.summary(idata, var_names=[*var_names, "u"], ci_prob=0.95)
     divergences = int(idata.sample_stats["diverging"].sum())
     coefs: dict[str, Any] = {}
     for name in var_names:
         row = summ.loc[name]
         coefs[name] = {
-            "mean": float(row["mean"]), "sd": float(row["sd"]),
-            "eti95": [float(row["eti95_lb"]), float(row["eti95_ub"])],
-            "r_hat": float(row["r_hat"]),
-            "ess_bulk": float(row["ess_bulk"]), "ess_tail": float(row["ess_tail"]),
+            "mean": _finite_float(row["mean"], field=f"{name}.mean"),
+            "sd": _finite_float(row["sd"], field=f"{name}.sd"),
+            "eti95": [
+                _finite_float(row["eti95_lb"], field=f"{name}.eti95_lb"),
+                _finite_float(row["eti95_ub"], field=f"{name}.eti95_ub"),
+            ],
+            "r_hat": _finite_float(row["r_hat"], field=f"{name}.r_hat"),
+            "ess_bulk": _finite_float(row["ess_bulk"], field=f"{name}.ess_bulk"),
+            "ess_tail": _finite_float(row["ess_tail"], field=f"{name}.ess_tail"),
         }
-    max_r_hat = float(summ["r_hat"].max())
+    max_r_hat = _finite_float(summ["r_hat"].max(), field="max_r_hat")
     return {
         "status": "ok",
         "n_obs": int(len(df)), "n_participants": int(len(uniques)),
         "coefs": coefs,
         "diagnostics": {"max_r_hat": max_r_hat,
-                        "min_ess_bulk": float(summ["ess_bulk"].min()),
+                        "min_ess_bulk": _finite_float(
+                            summ["ess_bulk"].min(), field="min_ess_bulk"
+                        ),
                         "divergences": divergences},
         "converged": bool(max_r_hat <= RHAT_MAX and divergences == 0),
     }
@@ -99,23 +118,51 @@ def _guarded(df: pd.DataFrame, gate_reason: str | None, **kw) -> dict[str, Any]:
         return {"status": "not_estimable", "detail": f"{type(e).__name__}: {e}"}
 
 
+def _convergence_summary(
+    results: list[dict[str, Any]],
+) -> tuple[bool, dict[str, int]]:
+    """Summarize the complete preregistered Bayesian model family.
+
+    ``all_converged`` is deliberately stronger than "all models that happened
+    to fit converged": every planned Q2/Q4 model must be fitted and pass the
+    diagnostic gate.
+    """
+
+    fitted = [result for result in results if result.get("status") == "ok"]
+    converged = [result for result in fitted if result.get("converged") is True]
+    not_converged = len(fitted) - len(converged)
+    summary = {
+        "models_planned": len(results),
+        "models_fitted": len(fitted),
+        "models_converged": len(converged),
+        "models_not_converged": not_converged,
+        "models_not_fitted": len(results) - len(fitted),
+    }
+    return len(results) > 0 and len(converged) == len(results), summary
+
+
 def run_bayes(metrics_rows: list[dict[str, Any]], fits_rows: list[dict[str, Any]],
               *, seed: int = DEFAULT_SEED, draws: int = 1000, tune: int = 1000,
               chains: int = 4, created_utc: str | None = None) -> dict[str, Any]:
+    if isinstance(chains, bool) or not isinstance(chains, int) or chains < 2:
+        raise ValueError("Bayesian convergence diagnostics require at least two chains")
     metrics_rows, fits_rows = list(metrics_rows), list(fits_rows)
     mdf, fdf = metrics_frame(metrics_rows), fits_frame(fits_rows)
+    eligible_mdf = mdf[mdf["confirmatory_eligible"]] if not mdf.empty else mdf
     kw = {"seed": seed, "draws": draws, "tune": tune, "chains": chains}
 
     q2 = {}
     for m in CONFIRMATORY_METRICS:
-        d = mdf[mdf["metric"] == m]
+        d = eligible_mdf[eligible_mdf["metric"] == m]
         q2[m] = _guarded(d, gates.gate_q2(d), include_levels=True, **kw)
     q4 = {}
     for param in ("g0", "p0", "tau0"):
         d = fdf.rename(columns={param: "value"})
         q4[param] = _guarded(d, gates.gate_q4(fdf), include_levels=False, **kw)
 
-    fitted = [r for r in list(q2.values()) + list(q4.values()) if r["status"] == "ok"]
+    all_converged, convergence_summary = _convergence_summary(
+        list(q2.values()) + list(q4.values())
+    )
     return {
         "bayes_version": BAYES_VERSION, "spec": SPEC,
         "sampler": {"seed": seed, "chains": chains, "draws": draws, "tune": tune,
@@ -127,7 +174,9 @@ def run_bayes(metrics_rows: list[dict[str, Any]], fits_rows: list[dict[str, Any]
             "libraries": _libraries(), "created_utc": created_utc,
         },
         "q2": q2, "q4": q4,
-        "all_converged": bool(fitted) and all(r["converged"] for r in fitted),
+        "confirmatory_eligibility": confirmatory_eligibility_summary(mdf),
+        "all_converged": all_converged,
+        "convergence_summary": convergence_summary,
         "caveats": list(CAVEATS),
     }
 

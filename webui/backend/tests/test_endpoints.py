@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import io
+import csv
+import hashlib
 import json
 import zipfile
 
-from sqlmodel import Session, select
-
-from app.liftoff_models import LiftoffSession
-from app.models import Visit
-
+import pytest
 
 def _enroll(client):
     client.post("/participants", json={"id": "P01", "enrollment_date": "2026-06-01"})
@@ -41,28 +39,112 @@ def test_ingest_duplicate_returns_409(client, sample_csv_bytes):
     assert r.status_code == 409
 
 
+def test_ingest_rejects_csv_over_the_explicit_file_cap(client, monkeypatch):
+    monkeypatch.setattr("app.routers.ingest.MAX_SESSION_CSV_BYTES", 16)
+    response = client.post(
+        "/ingest",
+        files={"file": ("oversized.csv", b"x" * 17, "text/csv")},
+        data={
+            "participant_id": "P01",
+            "visit_ordinal": "1",
+            "workload_level": "LOW",
+        },
+    )
+    assert response.status_code == 413
+    assert response.json()["detail"]["code"] == "session_csv_too_large"
+
+
+def test_ingest_rejects_manifest_over_the_explicit_file_cap(client, monkeypatch, sample_csv_bytes):
+    monkeypatch.setattr("app.routers.ingest.MAX_SESSION_MANIFEST_BYTES", 16)
+    response = client.post(
+        "/ingest",
+        files={
+            "file": ("session.csv", sample_csv_bytes(), "text/csv"),
+            "manifest": ("session.manifest.json", b"x" * 17, "application/json"),
+        },
+        data={
+            "participant_id": "P01",
+            "visit_ordinal": "1",
+            "workload_level": "LOW",
+        },
+    )
+    assert response.status_code == 413
+    assert response.json()["detail"]["code"] == "session_manifest_too_large"
+
+
 def test_ingest_endpoint_accepts_valid_manifest(client, sample_csv_bytes):
     _enroll(client)
+    scenario_sha256 = "a" * 64
     manifest = {
-        "manifest_version": 2,
-        "metrics_schema_version": "2.0",
+            "manifest_version": 3,
+            "metrics_schema_version": "2.0",
+            "generated_by": {
+                "component": "matb_integration.scenario_builder",
+                "version": "3.0.0",
+                "source_commit": "b" * 40,
+                "source_dirty": False,
+                "provenance_status": "complete",
+            },
         "workload_label_status": "engineering_preset_pending_human_calibration",
+        "artifact_scope": "session_bound",
         "participant_id": "P01",
         "visit_ordinal": 1,
         "workload_level": "LOW",
         "block_duration_sec": 900,
-        "scenario": {"filename": "run1.txt", "sha256": "abc"},
-        "questionnaires": {"include_nasatlx": True},
-        "expected": {"isa_probe_times_sec": [], "sagat_freezes": 0},
+        "seed": 42,
+        "scenario": {"filename": "run1.txt", "sha256": scenario_sha256},
+        "questionnaires": {
+            "isa": "isa_en.txt",
+            "nasatlx": "nasatlx_en.txt",
+            "bedford": "bedford_en.txt",
+            "include_nasatlx": True,
+            "include_bedford": False,
+        },
+            "expected": {
+                "sysmon_target_opportunities": 0,
+                "sysmon_nontarget_opportunities": 0,
+                "comm_events": 0,
+                "isa_probe_times_sec": [],
+            "sagat_freezes": 0,
+        },
     }
+    manifest_content = json.dumps(manifest).encode("utf-8")
+    generated_by = manifest["generated_by"]
+    evidence = {
+        "schema_version": "1.0",
+        "status": "verified",
+        "scenario_sha256": scenario_sha256,
+        "adjacent_manifest_filename": "run1.txt.manifest.json",
+        "scenario_manifest_sha256": hashlib.sha256(manifest_content).hexdigest(),
+        "manifest_identity": {
+            "manifest_schema_version": "3",
+            "metrics_schema_version": "2.0",
+            "experiment_spec_sha256": None,
+            "experiment_seed": 42,
+            "scenario_compiler_id": generated_by["component"],
+            "scenario_compiler_version": generated_by["version"],
+            "manifest_source_commit": generated_by["source_commit"],
+            "manifest_source_dirty": False,
+            "manifest_provenance_status": "complete",
+        },
+    }
+    runtime_rows = io.StringIO()
+    writer = csv.writer(runtime_rows, lineterminator="\n")
+    writer.writerow([0, 0, "scenario_path", "", "", "run1.txt"])
+    writer.writerow([0, 0, "scenario_sha256", "", "", scenario_sha256])
+    writer.writerow([
+        0, 0, "scenario_manifest_evidence", "", "",
+        json.dumps(evidence, sort_keys=True),
+    ])
+    content = sample_csv_bytes(misses=(5.0, 25.0)) + runtime_rows.getvalue().encode()
     files = {
-        "file": ("run1.csv", sample_csv_bytes(misses=(5.0, 25.0)), "text/csv"),
-        "manifest": ("run1.txt.manifest.json", json.dumps(manifest).encode("utf-8"), "application/json"),
+        "file": ("run1.csv", content, "text/csv"),
+        "manifest": ("run1.txt.manifest.json", manifest_content, "application/json"),
     }
     data = {"participant_id": "P01", "visit_ordinal": "1", "workload_level": "LOW"}
     r = client.post("/ingest", files=files, data=data)
     assert r.status_code == 201, r.text
-    assert r.json()["validation"]["status"] == "ok"
+    assert r.json()["validation"]["status"] == "ok", r.json()
 
 
 def test_block_detail_endpoint(client, sample_csv_bytes):
@@ -112,35 +194,57 @@ def test_research_context_and_bundle_exports(client, sample_csv_bytes):
         assert manifest["figure_count"] == 1
 
 
-def test_research_context_includes_liftoff_three_visit_grid(client, engine):
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"figures": [None]},
+        {"figures": [{"name": "missing-option"}]},
+        {"figures": [{"name": "x", "option": {}, "extra": True}]},
+        {"figures": [{"name": "same name", "option": {}}, {"name": "same-name", "option": {}}]},
+        {"figures": [{"name": f"figure-{index}", "option": {}} for index in range(17)]},
+    ],
+)
+def test_research_bundle_rejects_ambiguous_or_unbounded_figure_sets(client, payload):
+    response = client.post("/exports/research-bundle", json=payload)
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "invalid_request"
+
+
+def test_research_bundle_rejects_nonfinite_or_oversized_figure_options(client):
+    nonfinite = client.post(
+        "/exports/research-bundle",
+        content=b'{"figures":[{"name":"bad","option":{"value":NaN}}]}',
+        headers={"content-type": "application/json"},
+    )
+    oversized = client.post(
+        "/exports/research-bundle",
+        json={"figures": [{"name": "large", "option": {"value": "x" * 300_000}}]},
+    )
+
+    assert nonfinite.status_code == 422
+    assert nonfinite.json()["detail"]["code"] == "invalid_request"
+    assert oversized.status_code == 422
+    assert oversized.json()["detail"]["code"] == "invalid_request"
+
+
+def test_research_exports_omit_stale_inference_after_new_ingest(client, sample_csv_bytes):
+    stale = client.post("/analysis/run").json()
     _enroll(client)
-    with Session(engine) as session:
-        visit = session.exec(select(Visit).where(Visit.participant_id == "P01", Visit.visit_ordinal == 1)).one()
-        session.add(LiftoffSession(
-            id="liftoff-valid",
-            participant_id="P01",
-            visit_id=visit.id,
-            attempt_number=1,
-            protocol_id="astra-2026",
-            protocol_version="1.0.0",
-            liftoff_build="test",
-            configuration_sha256="a" * 64,
-            track_id="track",
-            telemetry_profile="liftoff-telemetry-all-v1",
-            manifest_json='{"visit_code":"T0","visit_ordinal":1}',
-            status="FINISHED",
-            validity="valid",
-            artifact_root="/tmp/valid",
-            controller_lease_hash="b" * 64,
-            hrv_measurement_id="hrv-123",
-            sync_quality="good",
-            metrics_json='{"metrics_version":"liftoff-metrics-v1","primary":{"median_lap_time_s":61.2,"valid_laps":3},"telemetry":{"active_duration_s":900.0}}',
-        ))
-        session.commit()
+    files = {"file": ("new.csv", sample_csv_bytes(misses=(7.0,)), "text/csv")}
+    data = {"participant_id": "P01", "visit_ordinal": "1", "workload_level": "LOW"}
+    assert client.post("/ingest", files=files, data=data).status_code == 201
 
     context = client.get("/exports/research-context").json()
-    assert len(context["liftoff_tracker"]) == 3
-    assert context["liftoff_tracker"][0]["visit_code"] == "T0"
-    assert context["liftoff_tracker"][0]["present"] is True
-    assert context["liftoff_metrics_long"]
-    assert context["liftoff_tracker"][0]["hrv_measurement_id"] == "hrv-123"
+
+    assert context["analysis_latest"] is None
+    assert context["analysis_status"] == "stale_artifact_omitted"
+    assert context["current_data_fingerprint"] != stale["provenance"]["fingerprint"]
+
+    bundle = client.post("/exports/research-bundle", json={})
+    assert bundle.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(bundle.content)) as archive:
+        manifest = json.loads(archive.read("manifest.json"))
+        assert manifest["analysis_status"] == "stale_artifact_omitted"
+        assert manifest["current_data_fingerprint"] == context["current_data_fingerprint"]
+        assert json.loads(archive.read("analysis_latest.json")) is None

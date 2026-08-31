@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -13,8 +15,17 @@ from core.constants import DEPRECATED, REPLAY_MODE, SYSTEM_COMMANDS, SYSTEM_PSEU
 from core.constants import PATHS as P
 from core.error import get_errors
 from core.event import Event
-from core.logger import get_logger
+from core.ordering import unique_in_order
 from core.utils import get_conf_value
+
+
+@dataclass(frozen=True, slots=True)
+class ScenarioSource:
+    """Scenario bytes resolved before any plugin constructor can emit records."""
+
+    contents: tuple[str, ...]
+    scenario_path: Path | None
+    scenario_sha256: str
 
 
 class Scenario:
@@ -23,28 +34,25 @@ class Scenario:
     and checks that some criteria are met (e.g., acceptable values)
     """
 
-    def __init__(self, contents: list[str] | None = None, scenario_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        contents: list[str] | None = None,
+        scenario_path: Path | None = None,
+        *,
+        source: ScenarioSource | None = None,
+    ) -> None:
         self.events: list[Event] = list()
         self.plugins: dict[str, Any] = dict()
-
-        if contents is None:
-            if scenario_path is not None:
-                sp: Path = scenario_path
-            else:
-                sp = P["SCENARIOS"].joinpath(get_conf_value("Openmatb", "scenario_path"))
-
-            if sp.exists():
-                with open(sp, "r") as f:
-                    contents = f.readlines()
-                get_logger().log_manual_entry(sp, key="scenario_path")
-            else:
-                get_errors().add_error(_("%s was not found") % str(sp), fatal=True)
+        resolved = source or self.resolve_source(contents, scenario_path=scenario_path)
+        self.scenario_path = resolved.scenario_path
+        self.scenario_sha256 = resolved.scenario_sha256
+        resolved_contents = resolved.contents
 
         # Convert the scenario content into a list of events #
         # (Squeeze empty and commented [#] lines)
         self.events = [
             Event.parse_from_string(line_n, line_str)
-            for line_n, line_str in enumerate(contents)
+            for line_n, line_str in enumerate(resolved_contents)
             if len(line_str.strip()) > 0 and not line_str.startswith("#")
         ]
 
@@ -76,6 +84,51 @@ class Scenario:
             get_errors().add_error(
                 _("There were some errors in the scenario. See the %s file.") % P["SCENARIO_ERRORS"].name, fatal=True
             )
+
+    @classmethod
+    def resolve_source(
+        cls,
+        contents: list[str] | None = None,
+        *,
+        scenario_path: Path | None = None,
+    ) -> ScenarioSource:
+        """Read and hash the scenario without constructing record-emitting plugins."""
+
+        resolved_path: Path | None = None
+        source_digest: str | None = None
+        resolved_contents = contents
+        if resolved_contents is None:
+            path = (
+                scenario_path
+                if scenario_path is not None
+                else P["SCENARIOS"].joinpath(
+                    get_conf_value("Openmatb", "scenario_path")
+                )
+            )
+            if path.exists():
+                resolved_path = path
+                source_bytes = path.read_bytes()
+                source_text = source_bytes.decode("utf-8")
+                resolved_contents = source_text.splitlines(keepends=True)
+                source_digest = sha256(source_bytes).hexdigest()
+            else:
+                get_errors().add_error(_("%s was not found") % str(path), fatal=True)
+                resolved_contents = []
+        normalized_contents = tuple(resolved_contents)
+        return ScenarioSource(
+            contents=normalized_contents,
+            scenario_path=resolved_path,
+            scenario_sha256=source_digest or cls.source_sha256(normalized_contents),
+        )
+
+    @staticmethod
+    def source_sha256(contents: list[str] | tuple[str, ...]) -> str:
+        """Hash canonical UTF-8 source while preserving every logical boundary."""
+        canonical = "".join(
+            line if line.endswith(("\n", "\r")) else f"{line}\n"
+            for line in contents
+        )
+        return sha256(canonical.encode("utf-8")).hexdigest()
 
     def reload_plugins(self) -> None:
         for name, plugin in self.plugins.items():
@@ -254,8 +307,13 @@ class Scenario:
 
         return validation_dict
 
-    def get_plugins_name_list(self) -> set[str]:
-        return set([e.plugin for e in self.events if e.plugin not in DEPRECATED and e.plugin != SYSTEM_PSEUDO_PLUGIN])
+    def get_plugins_name_list(self) -> tuple[str, ...]:
+        """Return unique plugin names in first source-occurrence order."""
+        return unique_in_order(
+            e.plugin
+            for e in self.events
+            if e.plugin not in DEPRECATED and e.plugin != SYSTEM_PSEUDO_PLUGIN
+        )
 
 
 # This dictionary associates to each parameter name a checking method

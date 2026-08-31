@@ -46,3 +46,25 @@ def test_empty_inputs_never_crash():
 def test_artifact_is_json_serializable(sim_study, sim_fits):
     import json
     json.dumps(run_analysis(sim_study, sim_fits))
+
+
+def test_confirmatory_models_exclude_ineligible_rows_fail_closed(sim_study):
+    rows = [dict(row, confirmatory_eligible=False) for row in sim_study]
+
+    art = run_analysis(rows, [])
+
+    assert art["confirmatory"]["family_size_actual"] == 0
+    assert art["confirmatory"]["eligibility"]["rows_excluded"] == len(rows)
+    assert art["confirmatory"]["eligibility"]["rows_eligible"] == 0
+    assert all(
+        art["q1"][metric]["status"] == "insufficient_data"
+        for metric in ("sysmon_hit_rate", "nasatlx_rtlx_mean_0_100", "bedford")
+    )
+    assert all(result["status"] == "insufficient_data" for result in art["rmanova"].values())
+
+
+def test_exploratory_outputs_may_retain_ineligible_rows(sim_study):
+    rows = [dict(row, confirmatory_eligible=False) for row in sim_study]
+    art = run_analysis(rows, [])
+
+    assert any(entry["canonical"]["status"] == "ok" for entry in art["q3"])

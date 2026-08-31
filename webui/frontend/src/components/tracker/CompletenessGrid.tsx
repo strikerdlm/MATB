@@ -5,8 +5,13 @@ import type { LiftoffTrackerCell, TrackerCell } from "@/types";
 import { cn } from "@/lib/utils";
 
 export function CompletenessGrid({
-  cells, liftoffCells = [], onCellClick,
-}: { cells: TrackerCell[]; liftoffCells?: LiftoffTrackerCell[]; onCellClick?: (c: TrackerCell) => void }) {
+  cells, liftoffCells = [], showLiftoff = false, onCellClick,
+}: {
+  cells: TrackerCell[];
+  liftoffCells?: LiftoffTrackerCell[];
+  showLiftoff?: boolean;
+  onCellClick?: (c: TrackerCell) => void;
+}) {
   const rows = byParticipant(cells);
   const { filled, total } = summarize(cells);
   const pct = total ? Math.round((filled / total) * 100) : 0;
@@ -36,7 +41,7 @@ export function CompletenessGrid({
             <tr className="bg-white/[0.04] font-mono uppercase tracking-[0.14em] text-muted-foreground">
               <th className="sticky left-0 z-10 bg-[#111214] px-3 py-3 text-left font-medium">Participant</th>
               {visitOrdinals.map((ordinal) => (
-                <th key={ordinal} colSpan={4} className="border-l border-white/10 px-2 py-3 text-center font-medium">
+                <th key={ordinal} colSpan={showLiftoff ? 4 : 3} className="border-l border-white/10 px-2 py-3 text-center font-medium">
                   Visit {ordinal}
                 </th>
               ))}
@@ -63,7 +68,7 @@ export function CompletenessGrid({
                         ><span className="sr-only">{c.workload_level}</span></button>
                       </td>
                     )),
-                    <td key={`${ordinal}-liftoff`} className="border-l border-white/10 p-0">
+                    ...(showLiftoff ? [<td key={`${ordinal}-liftoff`} className="border-l border-white/10 p-0">
                       <div
                         title={`${liftoff?.visit_code ?? `Visit ${ordinal}`} · Liftoff · ${liftoff?.state ?? "absent"}`}
                         className={cn(
@@ -77,7 +82,7 @@ export function CompletenessGrid({
                           (!liftoff || liftoff.state === "absent") && "bg-white/[0.035] text-muted-foreground",
                         )}
                       >FPV</div>
-                    </td>,
+                    </td>] : []),
                   ];
                 })}
                 <td className="border-l border-white/10 px-3 py-2 text-right font-mono tabular-nums text-muted-foreground">
@@ -91,7 +96,7 @@ export function CompletenessGrid({
       <div className="flex flex-wrap items-center gap-4 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
         <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 bg-success/80" /> present</span>
         <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 bg-white/[0.12]" /> expected</span>
-        <span>columns per visit: {LEVELS.join(" / ")} / FPV</span>
+        <span>columns per visit: {LEVELS.join(" / ")}{showLiftoff ? " / FPV" : ""}</span>
       </div>
     </div>
   );

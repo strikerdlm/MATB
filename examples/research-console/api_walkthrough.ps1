@@ -1,10 +1,13 @@
 param(
     [string]$BaseUrl = $env:BASE_URL,
-    [string]$OutputDir = $env:OUTPUT_DIR
+    [string]$OutputDir = $env:OUTPUT_DIR,
+    [string]$ApiToken = $env:MATB_API_TOKEN
 )
 
 $ErrorActionPreference = "Stop"
 if (-not $BaseUrl) { $BaseUrl = "http://127.0.0.1:8000" }
+if (-not $ApiToken) { throw "Set MATB_API_TOKEN or pass -ApiToken" }
+$authHeaders = @{ Authorization = "Bearer $ApiToken" }
 $BaseUrl = $BaseUrl.TrimEnd("/")
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
 if (-not $OutputDir) { $OutputDir = Join-Path $RepoRoot "examples/output/research-console" }
@@ -16,14 +19,14 @@ $participants = @(Invoke-RestMethod -Uri "$BaseUrl/participants")
 if ($participants.id -contains $participantId) {
     Write-Host "Synthetic participant already exists; continuing."
 } else {
-    Invoke-RestMethod -Method Post -Uri "$BaseUrl/participants" -ContentType "application/json" `
+    Invoke-RestMethod -Method Post -Uri "$BaseUrl/participants" -Headers $authHeaders -ContentType "application/json" `
         -Body '{"id":"SYNTH-P01","enrollment_date":"2026-08-14"}' | Out-Host
 }
 $csv = Get-Item (Join-Path $RepoRoot "examples/openmatb-research/fixtures/low.csv")
-Invoke-RestMethod -Method Post -Uri "$BaseUrl/ingest" -Form @{
+Invoke-RestMethod -Method Post -Uri "$BaseUrl/ingest" -Headers $authHeaders -Form @{
     participant_id = $participantId; visit_ordinal = "1"; workload_level = "LOW"; file = $csv
 } | Out-Host
-$analysis = Invoke-RestMethod -Method Post -Uri "$BaseUrl/analysis/run"
+$analysis = Invoke-RestMethod -Method Post -Uri "$BaseUrl/analysis/run" -Headers $authHeaders
 $analysisStatuses = [ordered]@{}
 foreach ($property in $analysis.q1.PSObject.Properties) {
     $analysisStatuses[$property.Name] = $property.Value.status
@@ -36,6 +39,6 @@ if ($analysisStatuses.Count -eq 0 -or $invalidAnalysisStatuses.Count -ne 0) {
 [pscustomobject]@{ analysis_status = $analysisStatuses } | ConvertTo-Json -Depth 4 | Write-Host
 Invoke-RestMethod -Uri "$BaseUrl/tracker" | Out-Host
 Invoke-RestMethod -Uri "$BaseUrl/exports/research-context" | Out-Host
-Invoke-WebRequest -Method Post -Uri "$BaseUrl/exports/research-bundle" -ContentType "application/json" `
+Invoke-WebRequest -Method Post -Uri "$BaseUrl/exports/research-bundle" -Headers $authHeaders -ContentType "application/json" `
     -Body '{"figures":[]}' -OutFile (Join-Path $OutputDir "research-bundle.zip")
 Write-Host "Wrote $(Join-Path $OutputDir 'research-bundle.zip')"

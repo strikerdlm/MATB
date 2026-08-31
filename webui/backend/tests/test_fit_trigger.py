@@ -73,9 +73,9 @@ def test_fit_failure_does_not_break_ingestion(engine, sample_csv_bytes):
     from app.models import Block
 
     no_tlx_csv = (
-        b"scenario_time,type,module,address,value\n"
-        b"5.0,performance,sysmon,signal_detection,MISS\n"
-        b"25.0,performance,sysmon,signal_detection,MISS\n"
+        b"logtime,scenario_time,type,module,address,value\n"
+        b"5.0,5.0,performance,sysmon,signal_detection,MISS\n"
+        b"25.0,25.0,performance,sysmon,signal_detection,MISS\n"
     )
     _enroll(engine)
     with Session(engine) as s:

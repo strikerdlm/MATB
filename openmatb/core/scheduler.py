@@ -4,8 +4,12 @@
 
 from __future__ import annotations
 
+from collections import deque
+from math import isfinite
+import os
 import sys
 from pathlib import Path
+from time import perf_counter_ns
 from typing import Any
 
 from pyglet.app import EventLoop
@@ -14,9 +18,11 @@ from core.clock import Clock
 from core.constants import REPLAY_MODE, SYSTEM_PSEUDO_PLUGIN
 from core.error import get_errors
 from core.event import Event
+from core.experimentclock import ExperimentClock
 from core.joystick import joystick
 from core.logger import get_logger
 from core.scenario import Scenario
+from core.scenarioprovenance import load_adjacent_scenario_manifest
 from core.window import Window
 
 
@@ -27,7 +33,7 @@ class Scheduler:
 
     def __init__(self, scenario_path: Path | None = None) -> None:
         with open("VERSION", "r") as f:
-            get_logger().log_manual_entry(f.read().strip(), key="version")
+            self.runtime_version = f.read().strip()
 
         self.clock: Clock = Clock("main")
         self.scenario_time: float = 0
@@ -44,8 +50,32 @@ class Scheduler:
         self.event_loop.run()
 
     def set_scenario(self, events: list[str] | None = None) -> None:
+        # Resolve the module-level clock dynamically so tests and qualification
+        # harnesses can inject a clock without changing the production contract.
+        self.experiment_clock = ExperimentClock(monotonic_ns=lambda: perf_counter_ns())
         scenario_path: Path | None = self.scenario_path if events is None else None
-        self.scenario: Scenario = Scenario(events, scenario_path=scenario_path)
+        source = Scenario.resolve_source(events, scenario_path=scenario_path)
+        bound_manifest = load_adjacent_scenario_manifest(
+            source.scenario_path,
+            scenario_sha256=source.scenario_sha256,
+        )
+        logger = get_logger()
+        logger.configure_scientific_context(
+            scenario_sha256=source.scenario_sha256,
+            profile_id=os.environ.get("MATB_PROFILE_ID", "openmatb-1.4.5-derived"),
+            source_commit=os.environ.get("MATB_SOURCE_COMMIT", "unavailable"),
+            component_version=getattr(self, "runtime_version", "unavailable"),
+            scenario_manifest_evidence=bound_manifest.evidence,
+            source_dirty=self._source_dirty_from_environment(),
+        )
+        # Bootstrap facts become authoritative records only after the immutable
+        # scenario/runtime/source context is installed. This prevents a clean
+        # session from beginning with provenance-null JSONL events.
+        logger.archive_scenario_manifest(bound_manifest)
+        self.scenario = Scenario(source=source)
+        logger.log_manual_entry(self.runtime_version, key="version")
+        if self.scenario.scenario_path is not None:
+            logger.log_manual_entry(self.scenario.scenario_path, key="scenario_path")
 
         self.events: list[Event] = self.scenario.events
         self.plugins: dict[str, Any] = self.scenario.plugins
@@ -63,7 +93,7 @@ class Scheduler:
         self.scenario_time = 0
 
         # We store events in a list in case their execution is delayed by a blocking event
-        self.events_queue: list[Event] = list()
+        self.events_queue: deque[Event] = deque()
         self.blocking_plugin: Any | None = None
 
         # Store the plugins that could be paused by a *blocking* event
@@ -71,32 +101,136 @@ class Scheduler:
 
         # Track whether plugins have been paused due to a modal dialog (e.g. pause prompt)
         self._dialog_paused: bool = False
+        self._dispatch_failed: bool = False
+        self._dispatch_failure: dict[str, Any] | None = None
+
+    @staticmethod
+    def _source_dirty_from_environment() -> bool | None:
+        raw = os.environ.get("MATB_SOURCE_DIRTY")
+        if raw is None:
+            return None
+        normalized = raw.strip().lower()
+        if normalized in {"1", "true", "yes"}:
+            return True
+        if normalized in {"0", "false", "no"}:
+            return False
+        return None
 
     def update(self, dt: float) -> None:
-        if Window.MainWindow.modal_dialog is not None:
-            if not self._dialog_paused:
-                self.execute_plugins_methods(self.get_active_plugins(), ["pause"])
-                self._dialog_paused = True
+        # A failed scenario command invalidates the complete session. Hosts that
+        # catch the propagated exception must not advance clocks/plugins or
+        # accidentally retry/continue the experimental timeline.
+        if getattr(self, "_dispatch_failed", False):
             return
+        failure_phase = "modal_dialog_pause"
+        try:
+            if Window.MainWindow.modal_dialog is not None:
+                if not self._dialog_paused:
+                    self.execute_plugins_methods(self.get_active_plugins(), ["pause"])
+                    self._dialog_paused = True
+                return
 
-        if self._dialog_paused:
-            self.execute_plugins_methods(self.get_active_plugins(), ["resume"])
-            self._dialog_paused = False
+            failure_phase = "modal_dialog_resume"
+            if self._dialog_paused:
+                self.execute_plugins_methods(self.get_active_plugins(), ["resume"])
+                self._dialog_paused = False
 
-        if not get_errors().is_empty():
-            get_errors().show_errors()
+            failure_phase = "runtime_error_display"
+            if not get_errors().is_empty():
+                get_errors().show_errors()
 
-        self.update_timers(dt)
-        self.update_joystick()
-        self.update_active_plugins()
-        self.execute_events()
-        self.check_if_must_exit()
+            failure_phase = "scenario_clock_update"
+            self.update_timers(dt)
+            failure_phase = "joystick_update"
+            self.update_joystick()
+            failure_phase = "plugin_update"
+            self.update_active_plugins()
+            failure_phase = "event_dispatch"
+            self.execute_events()
+            failure_phase = "exit_check"
+            self.check_if_must_exit()
+        except Exception as exc:
+            # Command dispatch and clock paths already capture richer evidence.
+            # Every other update phase still invalidates the complete session.
+            if not getattr(self, "_dispatch_failed", False):
+                self._terminalize_runtime_phase_failure(
+                    exc,
+                    failure_phase=failure_phase,
+                )
+            raise
+
+    def _terminalize_runtime_phase_failure(
+        self,
+        exc: Exception,
+        *,
+        failure_phase: str,
+    ) -> None:
+        self._dispatch_failed = True
+        self._dispatch_failure = {
+            "failure_phase": failure_phase,
+            "error_type": type(exc).__name__,
+            "error_message": str(exc)[:4096],
+            "failure_evidence_status": "in_memory_and_manual_log_attempted",
+        }
+        self.pause_scenario_time = True
+        if hasattr(self, "events_queue"):
+            self.events_queue.clear()
+        try:
+            get_logger().log_manual_entry(
+                f"{failure_phase}: {type(exc).__name__}: {exc}",
+                key="runtime_phase_failure",
+            )
+        except Exception as evidence_exc:  # noqa: BLE001 - preserve origin
+            self._dispatch_failure["failure_evidence_status"] = "write_failed"
+            self._dispatch_failure["failure_evidence_error"] = (
+                f"{type(evidence_exc).__name__}: {evidence_exc}"
+            )[:4096]
 
     def update_timers(self, dt: float) -> None:
-        # Update timers with dt
-        if not self.is_scenario_time_paused():
-            self.scenario_time += dt
-            get_logger().set_scenario_time(self.scenario_time)
+        if isinstance(dt, bool) or not isinstance(dt, (int, float)) or not isfinite(dt):
+            exc = ValueError("scheduler dt must be a finite non-negative number")
+            self._terminalize_scenario_clock_failure(exc)
+            raise exc
+        if dt < 0:
+            exc = ValueError("scheduler dt must be non-negative")
+            self._terminalize_scenario_clock_failure(exc)
+            raise exc
+        if self.is_scenario_time_paused():
+            return
+        candidate = self.scenario_time + float(dt)
+        if not isfinite(candidate) or candidate < self.scenario_time:
+            exc = RuntimeError("scenario clock advance is non-finite or regressed")
+            self._terminalize_scenario_clock_failure(exc)
+            raise exc
+        experiment_clock = getattr(self, "experiment_clock", None)
+        if experiment_clock is None:
+            experiment_clock = ExperimentClock(monotonic_ns=lambda: perf_counter_ns())
+            self.experiment_clock = experiment_clock
+        try:
+            experiment_clock.observe(int(round(candidate * 1_000_000_000)))
+            get_logger().set_scenario_time(candidate)
+        except Exception as exc:
+            self._terminalize_scenario_clock_failure(exc)
+            raise
+        self.scenario_time = candidate
+
+    def _terminalize_scenario_clock_failure(self, exc: Exception) -> None:
+        self._dispatch_failed = True
+        self._dispatch_failure = {
+            "failure_phase": "scenario_clock_update",
+            "error_type": type(exc).__name__,
+            "error_message": str(exc)[:4096],
+        }
+        self.pause_scenario_time = True
+        if hasattr(self, "events_queue"):
+            self.events_queue.clear()
+        logger = get_logger()
+        try:
+            logger.log_manual_entry(
+                f"{type(exc).__name__}: {exc}", key="scenario_clock_failure"
+            )
+        except Exception:  # noqa: BLE001 - preserve the originating clock failure
+            pass
 
     def update_active_plugins(self) -> None:
         for p in self.get_active_plugins():
@@ -127,8 +261,14 @@ class Scheduler:
                     self.joystick.reset_key_change(k)
 
     def check_if_must_exit(self) -> None:
-        # If no active plugin, and no remaining events, close the OpenMATB
-        if len(self.get_active_plugins()) == 0 and len(self.events_queue) == 0:
+        # An empty due-event queue is not an empty scenario: delayed first starts
+        # and idle gaps between task blocks legitimately have no active plugin.
+        unfinished_events = any(event.done != 1 for event in self.events)
+        if (
+            len(self.get_active_plugins()) == 0
+            and len(self.events_queue) == 0
+            and not unfinished_events
+        ):
             self.exit()
 
         # If the windows has been killed, exit the program
@@ -142,23 +282,31 @@ class Scheduler:
             self.exit()
 
     def execute_events(self) -> None:
+        if getattr(self, "_dispatch_failed", False):
+            return
         # Detect a potential blocking plugin
         active_blocking_plugin: Any | None = self.get_active_blocking_plugin()
 
         # Execute scenario events in case the scenario timer is running
         if not self.is_scenario_time_paused():
             if active_blocking_plugin is None:
-                event: Event | None = self.get_event_at_scenario_time(self.scenario_time)
-                if event is not None:
+                # Drain due events by scheduled time then source line. Re-check the
+                # modal/blocking state after each dispatch: an instruction or pause
+                # event owns the UI before any later due event is allowed to run.
+                while (event := self.get_event_at_scenario_time(self.scenario_time)) is not None:
                     self.execute_one_event(event)
+                    blocker = self.get_active_blocking_plugin()
+                    main_window = Window.MainWindow
+                    if (main_window is not None and main_window.modal_dialog is not None) or (
+                        blocker is not None and blocker.alive
+                    ):
+                        if blocker is not None and blocker.alive:
+                            self._pause_for_blocking_plugin(blocker)
+                        break
 
             # Check if a blocking plugin has started so to pause concurrent plugins
             elif active_blocking_plugin.alive:
-                # Toggle scenario_time pause only once
-                if not self.is_scenario_time_paused():
-                    self.pause_scenario()
-                    self.paused_plugins = self.get_active_non_blocking_plugins()
-                    self.execute_plugins_methods(self.paused_plugins, methods=["pause", "hide"])
+                self._pause_for_blocking_plugin(active_blocking_plugin)
 
         # In Replay mode: IT IS the play/pause button that manages the scenario resuming
         elif active_blocking_plugin is None:
@@ -183,44 +331,156 @@ class Scheduler:
         return self.is_scenario_time_paused()
 
     def get_active_blocking_plugin(self) -> Any | None:
-        p: list[Any] = self.get_plugins_by_states([("blocking", True), ("paused", False)])
+        p: list[Any] = self.get_plugins_by_states(
+            [("alive", True), ("blocking", True), ("paused", False)]
+        )
         if len(p) > 0:
             return p[0]
 
     def get_active_non_blocking_plugins(self) -> list[Any]:
-        return self.get_plugins_by_states([("blocking", False), ("paused", False)])
+        return self.get_plugins_by_states(
+            [("alive", True), ("blocking", False), ("paused", False)]
+        )
+
+    def _pause_for_blocking_plugin(self, blocking_plugin: Any) -> None:
+        """Freeze experiment time in the same dispatch that starts a blocker."""
+        if not blocking_plugin.alive or self.is_scenario_time_paused():
+            return
+        self.pause_scenario()
+        self.paused_plugins = self.get_active_non_blocking_plugins()
+        self.execute_plugins_methods(self.paused_plugins, methods=["pause", "hide"])
 
     def get_active_plugins(self) -> list[Any]:
         return self.get_plugins_by_states([("alive", True)])
 
     def execute_one_event(self, event: Event) -> None:
-        if event.plugin == SYSTEM_PSEUDO_PLUGIN:
-            self._execute_system_command(event)
-            return
+        experiment_clock = getattr(self, "experiment_clock", None)
+        if experiment_clock is None:
+            experiment_clock = ExperimentClock(monotonic_ns=lambda: perf_counter_ns())
+            self.experiment_clock = experiment_clock
+        dispatch_experiment_time_ns = int(round(
+            float(getattr(self, "scenario_time", event.time_sec)) * 1_000_000_000
+        ))
+        dispatch_start_monotonic_ns = perf_counter_ns()
+        failure_phase = "clock_acquisition"
+        try:
+            dispatch_start_monotonic_ns = experiment_clock.observe(
+                dispatch_experiment_time_ns
+            ).host_monotonic_ns
+            failure_phase = "command_dispatch"
+            if event.plugin == SYSTEM_PSEUDO_PLUGIN:
+                self._execute_system_command(event)
+            else:
+                # Set the plugin corresponding to the event
+                plugin: Any = self.plugins[event.plugin]
+                plugin._scenario_dispatch_context = {
+                    "scheduled_time_s": event.time_sec,
+                    "dispatch_time_s": getattr(self, "scenario_time", event.time_sec),
+                    "source_line": event.line,
+                }
 
-        # Set the plugin corresponding to the event
-        plugin: Any = self.plugins[event.plugin]
+                try:
+                    # If one argument, assume it is a plugin method to execute
+                    if len(event.command) == 1:
+                        getattr(plugin, event.command[0])()
 
-        # If one argument, assume it is a plugin method to execute
-        if len(event.command) == 1:
-            getattr(plugin, event.command[0])()
-
-        # If two arguments in the 'command' field, suppose a (parameter, value) to update
-        elif len(event.command) == 2:
-            plugin.set_parameter(event.command[0], event.command[1])
+                    # If two arguments in the 'command' field, suppose a (parameter, value) to update
+                    elif len(event.command) == 2:
+                        plugin.set_parameter(event.command[0], event.command[1])
+                    else:
+                        raise ValueError(
+                            "scenario event command must contain one or two fields"
+                        )
+                finally:
+                    del plugin._scenario_dispatch_context
+            failure_phase = "clock_acquisition"
+            dispatch_end_monotonic_ns = experiment_clock.observe(
+                dispatch_experiment_time_ns
+            ).host_monotonic_ns
+        except Exception as exc:
+            try:
+                dispatch_end_monotonic_ns = experiment_clock.observe(
+                    dispatch_experiment_time_ns
+                ).host_monotonic_ns
+            except Exception:
+                dispatch_end_monotonic_ns = max(
+                    dispatch_start_monotonic_ns, perf_counter_ns()
+                )
+            # A failed command is terminal for this event and invalidates the
+            # session. Clear the due batch and freeze state before touching the
+            # logger so even a secondary sink failure cannot permit a retry.
+            self._terminalize_dispatch_failure(
+                event,
+                exc,
+                failure_phase=failure_phase,
+            )
+            try:
+                get_logger().record_event_failure(
+                    event,
+                    dispatch_start_monotonic_ns=dispatch_start_monotonic_ns,
+                    dispatch_end_monotonic_ns=dispatch_end_monotonic_ns,
+                    error_type=type(exc).__name__,
+                    error_message=str(exc),
+                    failure_phase=failure_phase,
+                )
+            except Exception as evidence_exc:  # noqa: BLE001 - preserve origin
+                self._dispatch_failure["failure_evidence_status"] = "write_failed"
+                self._dispatch_failure["failure_evidence_error"] = (
+                    f"{type(evidence_exc).__name__}: {evidence_exc}"
+                )[:4096]
+            else:
+                self._dispatch_failure["failure_evidence_status"] = "persisted"
+            raise
 
         event.done = 1
 
         # The event can be logged whenever inside the method, since self.durations remain
         # constant all along it
-        get_logger().record_event(event)
+        try:
+            get_logger().record_event(
+                event,
+                dispatch_start_monotonic_ns=dispatch_start_monotonic_ns,
+                dispatch_end_monotonic_ns=dispatch_end_monotonic_ns,
+            )
+        except Exception as exc:
+            # The command already mutated runtime state, but no authoritative
+            # event record exists. Freeze immediately; attempting another JSONL
+            # write would only hit the logger's fail-stop state and could never
+            # serve as scientific evidence for this failure.
+            self._terminalize_dispatch_failure(
+                event,
+                exc,
+                failure_phase="authoritative_event_logging",
+            )
+            raise
+
+    def _terminalize_dispatch_failure(
+        self,
+        event: Event,
+        exc: Exception,
+        *,
+        failure_phase: str,
+    ) -> None:
+        """Make any dispatch/logging failure an in-memory terminal state."""
+
+        event.done = 1
+        self._dispatch_failed = True
+        self._dispatch_failure = {
+            "scenario_line": event.line,
+            "plugin": event.plugin,
+            "command": list(event.command),
+            "failure_phase": failure_phase,
+            "error_type": type(exc).__name__,
+            "error_message": str(exc)[:4096],
+        }
+        self.pause_scenario_time = True
+        if hasattr(self, "events_queue"):
+            self.events_queue.clear()
 
     def _execute_system_command(self, event: Event) -> None:
         command: str = event.command[0]
         if command == "pause":
             Window.MainWindow.pause_prompt()
-        event.done = 1
-        get_logger().record_event(event)
 
     def execute_plugins_methods(self, plugins: list[Any], methods: str | list[str]) -> None:
         if len(plugins) == 0:
@@ -241,6 +501,11 @@ class Scheduler:
         return [p for _, p in plugins.items()]
 
     def get_event_at_scenario_time(self, scenario_time: float) -> Event | None:
+        # Once a due batch is materialized, drain it without repeatedly
+        # rescanning/sorting the entire scenario for every event.
+        if self.events_queue:
+            return self.unqueue_event()
+
         # Retrieve (simultaneous) events matching scenario_duration_sec
         # We look to the most precise point in the near future that might matches a set of event time(s)
         events_time: list[Event] = [event for event in self.events if event.time_sec <= scenario_time]
@@ -248,20 +513,21 @@ class Scheduler:
         # Filter events that are either done or already in the queue
         events_time = [event for event in events_time if event.done != 1]
 
-        # Sort them according to their line number (ascending order)
-        # and append the listed events in the correct order
-        for event in sorted(events_time, key=lambda x: x.line):
-            if event not in self.events_queue:
-                self.events_queue.append(event)
+        # Task-oriented scenario files group sections by source line.  After a
+        # frame stall, scheduled time must remain the primary ordering key.
+        self.events_queue.extend(
+            sorted(events_time, key=lambda x: (x.time_sec, x.line))
+        )
 
         return self.unqueue_event()
 
     def unqueue_event(self) -> Event | None:
-        # If some events must be executed, unstack the next event
-        if len(self.events_queue) > 0:
-            event: Event = self.events_queue[0]
-            del self.events_queue[0]
-            return event
+        if not isinstance(self.events_queue, deque):
+            # Compatibility with external harnesses and older replay fixtures;
+            # production queues remain deque-backed for O(1) batch draining.
+            self.events_queue = deque(self.events_queue)
+        if self.events_queue:
+            return self.events_queue.popleft()
 
         return None
 

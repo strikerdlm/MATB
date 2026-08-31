@@ -2,28 +2,109 @@
 
 from __future__ import annotations
 
-import io
+import hashlib
 import json
 import re
 import zipfile
+from collections.abc import Iterator
 from datetime import datetime, timezone
+from tempfile import SpooledTemporaryFile
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends
-from fastapi.responses import Response
+from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi.responses import Response, StreamingResponse
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    field_validator,
+    model_validator,
+)
 from sqlmodel import Session, select
 
 from app.completeness import build_completeness_grid
 from app.completeness import build_liftoff_completeness_grid
+from app.components import is_component_active
 from app.db import get_session
 from app.models import AnalysisResult, BayesResult, BlockProvenance, Participant, Visit
-from app.liftoff_models import LiftoffArtifact, LiftoffDeviation, LiftoffSession
-from app.routers.fits import collect_full_fit_rows
+from app.routers.analysis import artifact_data_fingerprint
+from app.routers.fits import collect_fit_rows, collect_full_fit_rows
 from app.routers.metrics import collect_liftoff_metric_rows, collect_metric_rows
 
 router = APIRouter(prefix="/exports", tags=["exports"])
 
 BUNDLE_VERSION = "research-bundle-v1"
+_LIFTOFF_ANALYSIS_VERSION = "liftoff-analysis-v1"
+MAX_BUNDLE_FIGURES = 16
+MAX_FIGURE_OPTION_BYTES = 256 * 1024
+MAX_TOTAL_FIGURE_OPTION_BYTES = 4 * 1024 * 1024
+
+
+def _safe_name(name: str) -> str:
+    out = re.sub(r"[^A-Za-z0-9_.-]+", "-", name.strip()).strip("-")
+    return out[:96] or "figure"
+
+
+def _finite_json_bytes(value: Any) -> bytes:
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+
+
+class ResearchFigureV1(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    name: str | None = Field(default=None, max_length=96)
+    option: dict[str, JsonValue]
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str | None) -> str | None:
+        if value is not None and (not value.strip() or value != value.strip()):
+            raise ValueError("figure name must be non-empty and trimmed")
+        return value
+
+    @field_validator("option")
+    @classmethod
+    def validate_option(cls, value: dict[str, JsonValue]) -> dict[str, JsonValue]:
+        try:
+            size = len(_finite_json_bytes(value))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("figure option must contain finite JSON values") from exc
+        if size > MAX_FIGURE_OPTION_BYTES:
+            raise ValueError(
+                f"figure option exceeds {MAX_FIGURE_OPTION_BYTES} UTF-8 JSON bytes"
+            )
+        return value
+
+
+class ResearchBundleRequestV1(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    figures: list[ResearchFigureV1] = Field(
+        default_factory=list,
+        max_length=MAX_BUNDLE_FIGURES,
+    )
+
+    @model_validator(mode="after")
+    def validate_figure_set(self) -> "ResearchBundleRequestV1":
+        total = sum(len(_finite_json_bytes(figure.option)) for figure in self.figures)
+        if total > MAX_TOTAL_FIGURE_OPTION_BYTES:
+            raise ValueError(
+                "combined figure options exceed the research-bundle limit"
+            )
+        names = [
+            _safe_name(figure.name or f"figure-{index}")
+            for index, figure in enumerate(self.figures, start=1)
+        ]
+        if len(names) != len(set(names)):
+            raise ValueError("figure names must be unique after filename normalization")
+        return self
 
 
 def _jsonable(value: Any) -> Any:
@@ -33,12 +114,14 @@ def _jsonable(value: Any) -> Any:
 
 
 def _dumps(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True, default=_jsonable) + "\n"
-
-
-def _safe_name(name: str) -> str:
-    out = re.sub(r"[^A-Za-z0-9_.-]+", "-", name.strip()).strip("-")
-    return out[:96] or "figure"
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        indent=2,
+        sort_keys=True,
+        default=_jsonable,
+        allow_nan=False,
+    ) + "\n"
 
 
 def _participants(session: Session) -> list[dict[str, Any]]:
@@ -65,35 +148,71 @@ def _visits(session: Session) -> list[dict[str, Any]]:
     } for v in rows]
 
 
-def _latest_analysis(session: Session) -> dict[str, Any] | None:
-    from matb_integration.analysis.liftoff import LIFTOFF_ANALYSIS_VERSION
+def _latest_analysis(
+    session: Session,
+    current_data_fingerprint: str,
+) -> tuple[dict[str, Any] | None, str]:
+    from matb_integration.analysis.stats import ENGINE_VERSION
 
     row = session.exec(
         select(AnalysisResult)
-        .where(AnalysisResult.engine_version != LIFTOFF_ANALYSIS_VERSION)
+        .where(
+            AnalysisResult.engine_version == ENGINE_VERSION,
+            AnalysisResult.fingerprint == current_data_fingerprint,
+        )
         .order_by(AnalysisResult.created_at.desc(), AnalysisResult.id.desc())
     ).first()
-    return json.loads(row.artifact_json) if row is not None else None
+    if row is not None:
+        artifact = json.loads(row.artifact_json)
+        if artifact_data_fingerprint(artifact) == current_data_fingerprint:
+            return artifact, "current"
+        return None, "invalid_artifact_omitted"
+    previous = session.exec(
+        select(AnalysisResult)
+        .where(AnalysisResult.engine_version == ENGINE_VERSION)
+        .order_by(AnalysisResult.created_at.desc(), AnalysisResult.id.desc())
+    ).first()
+    return (None, "stale_artifact_omitted") if previous is not None else (None, "not_run")
 
 
 def _latest_liftoff_analysis(session: Session) -> dict[str, Any] | None:
-    from matb_integration.analysis.liftoff import LIFTOFF_ANALYSIS_VERSION
-
     row = session.exec(
         select(AnalysisResult)
-        .where(AnalysisResult.engine_version == LIFTOFF_ANALYSIS_VERSION)
+        .where(AnalysisResult.engine_version == _LIFTOFF_ANALYSIS_VERSION)
         .order_by(AnalysisResult.created_at.desc(), AnalysisResult.id.desc())
     ).first()
     return json.loads(row.artifact_json) if row is not None else None
 
 
-def _latest_bayes(session: Session) -> dict[str, Any] | None:
-    row = session.exec(
+def _latest_bayes(
+    session: Session,
+    current_data_fingerprint: str,
+) -> tuple[dict[str, Any] | None, str]:
+    from matb_integration.analysis.stats.bayes import BAYES_VERSION
+
+    rows = session.exec(
         select(BayesResult)
-        .where(BayesResult.status == "done")
+        .where(
+            BayesResult.status == "done",
+            BayesResult.bayes_version == BAYES_VERSION,
+        )
         .order_by(BayesResult.finished_at.desc(), BayesResult.id.desc())  # type: ignore[arg-type]
-    ).first()
-    return json.loads(row.artifact_json) if row is not None and row.artifact_json else None
+    ).all()
+    invalid_artifact = False
+    for row in rows:
+        if not row.artifact_json:
+            invalid_artifact = True
+            continue
+        try:
+            artifact = json.loads(row.artifact_json)
+        except json.JSONDecodeError:
+            invalid_artifact = True
+            continue
+        if artifact_data_fingerprint(artifact) == current_data_fingerprint:
+            return artifact, "current"
+    if rows:
+        return None, "invalid_artifact_omitted" if invalid_artifact else "stale_artifact_omitted"
+    return None, "not_run"
 
 
 def _block_provenance(session: Session) -> list[dict[str, Any]]:
@@ -119,61 +238,28 @@ def _block_provenance(session: Session) -> list[dict[str, Any]]:
 
 
 def _liftoff_provenance(session: Session) -> list[dict[str, Any]]:
-    sessions = session.exec(
-        select(LiftoffSession).order_by(
-            LiftoffSession.participant_id,
-            LiftoffSession.visit_id,
-            LiftoffSession.attempt_number,
-        )
-    ).all()
-    deviations = session.exec(select(LiftoffDeviation)).all()
-    artifacts = session.exec(select(LiftoffArtifact)).all()
-    deviations_by_session: dict[str, list[dict[str, Any]]] = {}
-    for row in deviations:
-        deviations_by_session.setdefault(row.session_id, []).append({
-            "phase": row.phase,
-            "code": row.code,
-            "severity": row.severity,
-            "disposition": row.disposition,
-            "received_utc": row.received_utc.isoformat(),
-        })
-    artifacts_by_session: dict[str, list[dict[str, Any]]] = {}
-    for row in artifacts:
-        artifacts_by_session.setdefault(row.session_id, []).append({
-            "kind": row.kind,
-            "relative_path": row.relative_path,
-            "sha256": row.sha256,
-            "size_bytes": row.size_bytes,
-        })
-    return [{
-        "session_id": row.id,
-        "participant_id": row.participant_id,
-        "visit_id": row.visit_id,
-        "attempt_number": row.attempt_number,
-        "status": row.status,
-        "validity": row.validity,
-        "manifest": json.loads(row.manifest_json),
-        "configuration_sha256": row.configuration_sha256,
-        "hrv_measurement_id": row.hrv_measurement_id,
-        "hrv_file_sha256": row.hrv_file_sha256,
-        "sync_quality": row.sync_quality,
-        "deviations": deviations_by_session.get(row.id, []),
-        "artifacts": artifacts_by_session.get(row.id, []),
-    } for row in sessions]
+    from app.liftoff_research import liftoff_provenance
+
+    return liftoff_provenance(session)
 
 
 def build_research_context(session: Session) -> dict[str, Any]:
+    from matb_integration.analysis.stats import fingerprint
+
     participants = _participants(session)
     tracker = build_completeness_grid(session)
     metrics = collect_metric_rows(session)
+    analysis_fit_rows = collect_fit_rows(session)
+    current_data_fingerprint = fingerprint(metrics, analysis_fit_rows)
     fits = collect_full_fit_rows(session)
-    analysis = _latest_analysis(session)
-    bayes = _latest_bayes(session)
+    analysis, analysis_status = _latest_analysis(session, current_data_fingerprint)
+    bayes, bayes_status = _latest_bayes(session, current_data_fingerprint)
     provenance = _block_provenance(session)
-    liftoff_tracker = build_liftoff_completeness_grid(session)
-    liftoff_metrics = collect_liftoff_metric_rows(session)
-    liftoff_provenance = _liftoff_provenance(session)
-    liftoff_analysis = _latest_liftoff_analysis(session)
+    liftoff_active = is_component_active("matb-liftoff")
+    liftoff_tracker = build_liftoff_completeness_grid(session) if liftoff_active else []
+    liftoff_metrics = collect_liftoff_metric_rows(session) if liftoff_active else []
+    liftoff_provenance = _liftoff_provenance(session) if liftoff_active else []
+    liftoff_analysis = _latest_liftoff_analysis(session) if liftoff_active else None
     status_counts: dict[str, int] = {}
     for row in provenance:
         status = row["validation_status"]
@@ -181,13 +267,16 @@ def build_research_context(session: Session) -> dict[str, Any]:
     return {
         "bundle_version": BUNDLE_VERSION,
         "created_utc": datetime.now(timezone.utc).isoformat(),
+        "current_data_fingerprint": current_data_fingerprint,
         "participants": participants,
         "visits": _visits(session),
         "tracker": tracker,
         "metrics_long": metrics,
         "fits": fits,
         "analysis_latest": analysis,
+        "analysis_status": analysis_status,
         "bayes_latest": bayes,
+        "bayes_status": bayes_status,
         "block_provenance": provenance,
         "liftoff_tracker": liftoff_tracker,
         "liftoff_metrics_long": liftoff_metrics,
@@ -214,6 +303,12 @@ def _caveats_md(context: dict[str, Any]) -> str:
         lines += ["## Analysis Caveats", ""]
         lines += [f"- {c}" for c in analysis["caveats"]]
         lines.append("")
+    if context.get("analysis_status") not in {"current", "not_run"}:
+        lines.append(
+            f"- Frequentist inference omitted: {context['analysis_status']}."
+        )
+    if context.get("bayes_status") not in {"current", "not_run"}:
+        lines.append(f"- Bayesian inference omitted: {context['bayes_status']}.")
     lines += ["## Validation Issues", ""]
     any_issue = False
     for row in context.get("block_provenance", []):
@@ -229,7 +324,9 @@ def _caveats_md(context: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _bundle_manifest(context: dict[str, Any], figures: list[dict[str, Any]]) -> dict[str, Any]:
+def _bundle_manifest(
+    context: dict[str, Any], figures: list[ResearchFigureV1]
+) -> dict[str, Any]:
     analysis = context.get("analysis_latest") or {}
     analysis_prov = analysis.get("provenance") or {}
     return {
@@ -238,6 +335,9 @@ def _bundle_manifest(context: dict[str, Any], figures: list[dict[str, Any]]) -> 
         "counts": context["counts"],
         "validation_status_counts": context["validation_status_counts"],
         "analysis_fingerprint": analysis_prov.get("fingerprint"),
+        "current_data_fingerprint": context["current_data_fingerprint"],
+        "analysis_status": context["analysis_status"],
+        "bayes_status": context["bayes_status"],
         "figure_count": len(figures),
     }
 
@@ -249,13 +349,12 @@ def research_context(session: Session = Depends(get_session)) -> dict[str, Any]:
 
 @router.post("/research-bundle")
 def research_bundle(
-    payload: dict[str, Any] | None = Body(default=None),
+    payload: ResearchBundleRequestV1 | None = Body(default=None),
     session: Session = Depends(get_session),
 ) -> Response:
-    payload = payload or {}
-    figures = payload.get("figures") if isinstance(payload.get("figures"), list) else []
+    figures = [] if payload is None else payload.figures
     context = build_research_context(session)
-    buf = io.BytesIO()
+    buf = SpooledTemporaryFile(max_size=8 * 1024 * 1024, mode="w+b")
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("manifest.json", _dumps(_bundle_manifest(context, figures)))
         zf.writestr("participants.json", _dumps(context["participants"]))
@@ -279,18 +378,40 @@ def research_bundle(
                 select(BlockProvenance).where(BlockProvenance.block_id == row["block_id"])
             ).first()
             if prov and prov.manifest_json:
-                name = _safe_name(prov.manifest_filename or f"block-{prov.block_id}.manifest.json")
-                zf.writestr(f"scenario_manifests/{name}", prov.manifest_json)
+                exact_bytes = prov.manifest_json.encode("utf-8")
+                observed_sha = hashlib.sha256(exact_bytes).hexdigest()
+                if observed_sha != prov.manifest_sha256:
+                    raise HTTPException(
+                        status_code=500,
+                        detail={
+                            "code": "stored_manifest_integrity_failure",
+                            "message": f"manifest bytes for block {prov.block_id} do not match recorded SHA-256",
+                        },
+                    )
+                original = _safe_name(
+                    prov.manifest_filename or f"block-{prov.block_id}.manifest.json"
+                )
+                # Prefix the database identity so same-named source manifests
+                # from different visits cannot collide inside the ZIP.
+                name = f"block-{prov.block_id}-{original}"
+                zf.writestr(f"scenario_manifests/{name}", exact_bytes)
 
         for idx, fig in enumerate(figures, start=1):
-            if not isinstance(fig, dict) or "option" not in fig:
-                continue
-            name = _safe_name(str(fig.get("name") or f"figure-{idx}"))
-            zf.writestr(f"figures/{name}.option.json", _dumps(fig["option"]))
+            name = _safe_name(fig.name or f"figure-{idx}")
+            zf.writestr(f"figures/{name}.option.json", _dumps(fig.option))
 
     filename = f"matb_research_bundle_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.zip"
-    return Response(
-        content=buf.getvalue(),
+
+    def chunks() -> Iterator[bytes]:
+        try:
+            buf.seek(0)
+            while chunk := buf.read(64 * 1024):
+                yield chunk
+        finally:
+            buf.close()
+
+    return StreamingResponse(
+        chunks(),
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

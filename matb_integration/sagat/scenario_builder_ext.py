@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import json
 import random
+import re
 from dataclasses import dataclass
+from math import ceil, floor
 from pathlib import Path
 from typing import Final
 
@@ -33,7 +35,7 @@ class FreezeSchedulingError(RuntimeError):
 
 @dataclass(frozen=True)
 class FreezeEvent:
-    scenario_time_sec: float
+    scenario_time_sec: int
     freeze_id: str
     probe_file_path: Path
 
@@ -59,6 +61,8 @@ def emit_freezes_for_block(
     """
     if probes_per_freeze != 3:
         raise ValueError("probes_per_freeze must be 3 (1 per SA level)")
+    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", participant_id) is None:
+        raise ValueError("participant_id must be a filesystem-safe research identifier")
 
     output_dir.mkdir(parents=True, exist_ok=True)
     bank = load_probes(bank_path)
@@ -135,7 +139,7 @@ def _schedule_freezes(
     min_post_isa_stagger_sec: float,
     min_inter_freeze_sec: float,
     rng: random.Random,
-) -> list[float]:
+) -> list[int]:
     lo = BLOCK_EDGE_BUFFER_SEC
     hi = block_duration_sec - BLOCK_EDGE_BUFFER_SEC
     if hi <= lo:
@@ -143,8 +147,14 @@ def _schedule_freezes(
             f"Block too short ({block_duration_sec}s) for edge buffers"
         )
 
+    compiled_onsets = range(ceil(lo), floor(hi) + 1)
+    if n_freezes > len(compiled_onsets):
+        raise FreezeSchedulingError("More freezes requested than whole-second onsets")
     for _ in range(MAX_SAMPLER_RETRIES):
-        candidate = sorted(rng.uniform(lo, hi) for _ in range(n_freezes))
+        # OpenMATB executes integer-second text. Quantize before validation and
+        # persist only those executable onsets so manifests, probe headers, and
+        # runtime lines cannot disagree or lose a second of refractory margin.
+        candidate = sorted(rng.sample(compiled_onsets, n_freezes))
         if _all_staggered(
             candidate,
             isa_probe_times_sec,
@@ -162,7 +172,7 @@ def _schedule_freezes(
 
 
 def _all_staggered(
-    candidate: list[float],
+    candidate: list[int],
     isa_times: list[float],
     min_post_isa_stagger_sec: float,
     min_inter_freeze_sec: float,

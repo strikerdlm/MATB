@@ -6,12 +6,15 @@ Scenario line format: HH:MM:SS;plugin;command[;value]
 Compatible with OpenMATB v1.4+.
 
 Calibration against Pontiggia et al. (2024) combined event rates
-(LOW ≈ 3/min, HIGH ≈ 23.5/min) using alerttimeout=10000 ms, block=900 s:
+(LOW ≈ 3/min, HIGH ≈ 23.5/min) using alerttimeout=10000 ms, block=900 s.
+COMM density is constrained by a verified 24 s upper bound for the pinned
+audio profile + 20 s response window + one-second refractory guard, so no
+prompt can supersede another:
 
-  Level   SYSMON   COMM   Total   /min
-  LOW       32      12     44     2.9   ← matches Pontiggia LOW
-  MEDIUM    80      32    112     7.5
-  HIGH     130      51    181    12.1   ← Pontiggia HIGH includes RESMAN pumps
+  Level   Targets   Non-targets   COMM   Total   /min
+  LOW        16          16          4      36     2.4
+  MEDIUM     40          40         10      90     6.0
+  HIGH       65          65         16     146     9.7   ← before feasibility reductions
 
 Monotonic ISA/NASA-TLX increase is the primary validity criterion;
 exact event rates are secondary.
@@ -24,20 +27,37 @@ fail at the sync-guard assertions — update here to match.
 from __future__ import annotations
 
 import random
+import re
+import os
+import subprocess
 import sys
+from bisect import bisect_left
+from math import ceil, floor
 from pathlib import Path
 from typing import Any, Final
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from aircraft_monitor.research.protocol import ResearchProtocol, WorkloadLevel
+from matb_integration.communications_profile import (
+    COMM_AUDIO_INVENTORY_SHA256,
+    COMM_AUDIO_PROFILE_ID,
+    COMM_MAX_RESPONSE_DELAY_MS,
+    COMM_MIN_ONSET_SEPARATION_SEC,
+    COMM_PROMPT_UPPER_BOUND_SEC,
+    COMM_RESPONSE_AVAILABILITY_SEC,
+    COMM_VOICE_GENDER,
+    COMM_VOICE_IDIOM,
+    verify_communications_audio_profile,
+)
 from matb_integration.scenario_manifest import build_scenario_manifest, write_manifest
 from matb_integration.sagat.scenario_builder_ext import emit_freezes_for_block
 
 # ── OpenMATB sync-guard constants ─────────────────────────────────────────────
 # Mirror openmatb/plugins/sysmon.py defaults — kept in sync by test assertions.
 OPENMATB_ALERTTIMEOUT_MS: Final[int] = 10_000   # sysmon default alerttimeout
-OPENMATB_COMM_MAX_RESPONSE_DELAY_MS: Final[int] = 20_000
+OPENMATB_NONTARGET_DURATION_MS: Final[int] = 2_000
+OPENMATB_COMM_MAX_RESPONSE_DELAY_MS: Final[int] = COMM_MAX_RESPONSE_DELAY_MS
 OPENMATB_SYSMON_LIGHTS: Final[tuple[str, ...]] = ("1", "2")
 OPENMATB_SYSMON_SCALES: Final[tuple[str, ...]] = ("1", "2", "3", "4")
 
@@ -72,7 +92,9 @@ ISA_PROBE_INTERVAL_SEC: Final[dict[WorkloadLevel, int]] = {
 
 # Fixed OpenMATB timing parameters
 _EVENTS_REFRACTORY_SEC: Final[float] = 1.0
-_COMM_PROMPT_SEC: Final[float] = 13.0   # average_auditory_prompt_duration
+_COMM_PROMPT_SEC: Final[float] = float(COMM_PROMPT_UPPER_BOUND_SEC)
+_COMM_RESPONSE_AVAILABILITY_SEC: Final[int] = COMM_RESPONSE_AVAILABILITY_SEC
+_COMM_MIN_ONSET_SEPARATION_SEC: Final[int] = COMM_MIN_ONSET_SEPARATION_SEC
 _COMM_OWN_RATIO: Final[float] = 0.50    # fraction that are own-callsign
 
 # Questionnaire filenames (relative to OpenMATB includes/questionnaires/)
@@ -134,6 +156,12 @@ def _scenario_density_details(scenario_text: str) -> dict[str, Any]:
         plugin, command = fields[1], fields[2]
         if plugin == "sysmon" and command.endswith("-failure"):
             task_events.append(("sysmon", onset, onset + OPENMATB_ALERTTIMEOUT_MS / 1000))
+        elif plugin == "sysmon" and command == "open_nontarget_opportunity":
+            task_events.append((
+                "sysmon",
+                onset,
+                onset + OPENMATB_NONTARGET_DURATION_MS / 1000,
+            ))
         elif plugin == "communications" and command == "radioprompt":
             task_events.append((
                 "communications",
@@ -167,6 +195,54 @@ def _fmt_time(sec: float) -> str:
     return f"{s // 3600}:{(s % 3600) // 60:02d}:{s % 60:02d}"
 
 
+def _nontarget_opportunity_times(
+    *,
+    target_onsets_sec: list[float],
+    block_duration_sec: int,
+    requested: int,
+    probe_times_sec: list[float],
+) -> list[int]:
+    """Schedule explicit target-absent windows outside every possible target window.
+
+    OpenMATB scenario times have whole-second resolution. Target onsets are therefore
+    floored exactly as they are when written, and the alert timeout receives a
+    one-second guard before a non-target window may begin.
+    """
+    duration_sec = OPENMATB_NONTARGET_DURATION_MS // 1000
+    target_intervals = [
+        (int(onset), int(onset) + OPENMATB_ALERTTIMEOUT_MS // 1000 + 1)
+        for onset in target_onsets_sec
+    ]
+    probe_intervals = [(int(probe) - 1, int(probe) + 1) for probe in probe_times_sec]
+    reserved = target_intervals + probe_intervals
+
+    candidates: list[int] = []
+    previous = -10_000
+    for onset in range(5, block_duration_sec - duration_sec - 5):
+        end = onset + duration_sec
+        if onset < previous + duration_sec + 1:
+            continue
+        if any(onset < reserved_end and reserved_start < end for reserved_start, reserved_end in reserved):
+            continue
+        candidates.append(onset)
+        previous = onset
+
+    if not candidates:
+        raise ValueError(
+            "scenario cannot provide any explicit SYSMON non-target opportunity "
+            "without overlapping target response windows"
+        )
+    target_count = min(requested, len(candidates))
+    if len(candidates) == target_count:
+        return candidates
+
+    # Select across the complete block rather than taking an early-session cluster.
+    return [
+        candidates[int((index + 0.5) * len(candidates) / target_count)]
+        for index in range(target_count)
+    ]
+
+
 # ── Event count calculations (mirror OpenMATB scenario_generation.py) ─────────
 
 def _sysmon_event_count(
@@ -174,10 +250,12 @@ def _sysmon_event_count(
     block_duration_sec: int,
     alerttimeout_sec: float = OPENMATB_ALERTTIMEOUT_MS / 1000,
 ) -> int:
-    """Return per-indicator-type failure count (lights count == scales count).
+    """Return the task-wide target-opportunity count.
 
-    Replicates OpenMATB add_scenario_phase() SYSMON branch logic.
-    Total SYSMON events = result × (len(LIGHTS) + len(SCALES)).
+    The legacy generator applied this count independently to light and scale
+    classes. The runtime, however, owns one task-wide target evidence window.
+    Applying the demand ratio once preserves physically observable windows;
+    an equal target-absent denominator supplies the paired SYSMON demand.
     """
     failure_duration = alerttimeout_sec + _EVENTS_REFRACTORY_SEC
     single_ratio = failure_duration / block_duration_sec
@@ -189,25 +267,116 @@ def _sysmon_event_count(
 def _comm_event_count(level: WorkloadLevel, block_duration_sec: int) -> int:
     """Return total COMM (communications) event count for the block.
 
-    Replicates OpenMATB add_scenario_phase() COMMUNICATIONS branch logic.
+    Scale the requested demand by the full physical opportunity boundary.
+    Unlike upstream's prompt-only estimate, this reserves the complete audio,
+    response, and refractory interval so every target remains observable.
     """
-    single_duration = _COMM_PROMPT_SEC + _EVENTS_REFRACTORY_SEC
+    single_duration = _COMM_MIN_ONSET_SEPARATION_SEC
     single_ratio = single_duration / block_duration_sec
     return int(DIFFICULTY[level] / single_ratio)
 
 
 # ── Event distribution ────────────────────────────────────────────────────────
 
-def _uniform_times(
+def _separated_whole_second_times(
     start_sec: float,
     end_sec: float,
     n: int,
     rng: random.Random,
-) -> list[float]:
-    """Return n onset times uniformly distributed over [start_sec, end_sec]."""
+    *,
+    minimum_separation_sec: int,
+    blocked_times_sec: tuple[float, ...] = (),
+    response_availability_sec: int = 0,
+    schedule_label: str = "COMM prompts",
+    reduce_to_capacity: bool = False,
+) -> list[int]:
+    """Return deterministic whole-second onsets with a hard separation.
+
+    OpenMATB text has whole-second resolution, so feasibility is checked after
+    applying that exact resolution. Random slack is distributed across the
+    complete feasible range without ever allowing a rendered collision.
+    """
     if n <= 0:
         return []
-    return sorted(rng.uniform(start_sec, end_sec) for _ in range(n))
+    start = ceil(start_sec)
+    end = floor(end_sec)
+    blockers = tuple(int(value) for value in blocked_times_sec)
+    candidates = [
+        onset
+        for onset in range(start, end + 1)
+        if not any(
+            onset <= blocker < onset + response_availability_sec
+            for blocker in blockers
+        )
+    ]
+    next_index = [
+        bisect_left(candidates, onset + minimum_separation_sec)
+        for onset in candidates
+    ]
+    capacity = [0] * (len(candidates) + 1)
+    for index in range(len(candidates) - 1, -1, -1):
+        capacity[index] = max(
+            capacity[index + 1],
+            1 + capacity[next_index[index]],
+        )
+    if capacity[0] < n and not reduce_to_capacity:
+        raise ValueError(
+            f"unable to schedule {n} {schedule_label} between {start}s and {end}s "
+            f"with {minimum_separation_sec}s minimum onset separation outside modal freezes"
+        )
+    if reduce_to_capacity:
+        # Short training blocks can contain modal ISA/SAGAT freezes that leave
+        # no complete physical response window for the requested demand.  A
+        # smaller, observable denominator is scientifically preferable to an
+        # impossible prompt whose evidence window is silently truncated.
+        n = min(n, capacity[0])
+    selected: list[int] = []
+    cursor = 0
+    remaining = n
+    while remaining:
+        choices = [
+            index
+            for index in range(cursor, len(candidates))
+            if 1 + capacity[next_index[index]] >= remaining
+        ]
+        chosen = rng.choice(choices)
+        selected.append(candidates[chosen])
+        cursor = next_index[chosen]
+        remaining -= 1
+    return selected
+
+
+def _sysmon_failure_schedule(
+    *,
+    start_sec: float,
+    end_sec: float,
+    count: int,
+    indicators: tuple[str, ...],
+    rng: random.Random,
+    minimum_indicator_separation_sec: int = 11,
+    blocked_times_sec: tuple[float, ...] = (),
+    reduce_to_capacity: bool = False,
+) -> list[tuple[float, str]]:
+    """Schedule failures so every event opens a distinct task-wide opportunity."""
+    if not indicators:
+        raise ValueError("SYSMON failure scheduling requires at least one indicator")
+    times = _separated_whole_second_times(
+        start_sec,
+        end_sec,
+        count,
+        rng,
+        minimum_separation_sec=minimum_indicator_separation_sec,
+        blocked_times_sec=blocked_times_sec,
+        response_availability_sec=minimum_indicator_separation_sec,
+        schedule_label="SYSMON target opportunities",
+        reduce_to_capacity=reduce_to_capacity,
+    )
+    assignments: list[str] = []
+    while len(assignments) < len(times):
+        batch = list(indicators)
+        rng.shuffle(batch)
+        assignments.extend(batch)
+    return list(zip(times, assignments[:len(times)]))
 
 
 def _comm_prompts(n: int, own_ratio: float, rng: random.Random) -> list[str]:
@@ -253,6 +422,7 @@ def build_block_scenario(
         Scenario file content as a string.
     """
     rng = random.Random(seed)
+    verify_communications_audio_profile()
     lines: list[str] = []
 
     difficulty = DIFFICULTY[level]
@@ -264,11 +434,67 @@ def build_block_scenario(
     sysmon_n = _sysmon_event_count(level, block_duration_sec)
     comm_n = _comm_event_count(level, block_duration_sec)
     n_isa = block_duration_sec // isa_interval
-
-    # sysmon_n = events_N per indicator CLASS (lights and scales each get sysmon_n events)
-    # Total SYSMON = sysmon_n (lights) + sysmon_n (scales) = 2 × sysmon_n
-    # Mirrors OpenMATB add_scenario_phase(): light_list = choices(light_names, events_N)
-    total_task_events = sysmon_n * 2 + comm_n
+    isa_times = [
+        isa_interval * (i + 1)
+        for i in range(n_isa)
+        if isa_interval * (i + 1) < block_duration_sec
+    ]
+    sagat_events = []
+    if include_sagat:
+        if sagat_bank is None or sagat_output_dir is None:
+            raise ValueError(
+                "include_sagat=True requires sagat_bank and sagat_output_dir"
+            )
+        sagat_events = emit_freezes_for_block(
+            participant_id=participant_id,
+            block_num=block_num,
+            block_duration_sec=block_duration_sec,
+            isa_probe_times_sec=isa_times,
+            bank_path=sagat_bank,
+            output_dir=sagat_output_dir,
+            n_freezes=sagat_n_freezes,
+            probes_per_freeze=3,
+            min_post_isa_stagger_sec=30.0,
+            min_inter_freeze_sec=120.0,
+            seed=seed + block_num * 100 + 7,
+        )
+    blocker_times = tuple([
+        *isa_times,
+        *(event.scenario_time_sec for event in sagat_events),
+    ])
+    comm_times = _separated_whole_second_times(
+        5.0,
+        block_duration_sec - (_COMM_RESPONSE_AVAILABILITY_SEC + 1),
+        comm_n,
+        rng,
+        minimum_separation_sec=_COMM_MIN_ONSET_SEPARATION_SEC,
+        blocked_times_sec=blocker_times,
+        response_availability_sec=_COMM_RESPONSE_AVAILABILITY_SEC,
+        reduce_to_capacity=True,
+    )
+    comm_n = len(comm_times)
+    prompts = _comm_prompts(comm_n, _COMM_OWN_RATIO, rng)
+    indicators = tuple(
+        [f"lights-{indicator}" for indicator in OPENMATB_SYSMON_LIGHTS]
+        + [f"scales-{indicator}" for indicator in OPENMATB_SYSMON_SCALES]
+    )
+    target_schedule = _sysmon_failure_schedule(
+        start_sec=5.0,
+        end_sec=block_duration_sec - 15.0,
+        count=sysmon_n,
+        indicators=indicators,
+        rng=rng,
+        blocked_times_sec=blocker_times,
+        reduce_to_capacity=True,
+    )
+    target_times = [time for time, _indicator in target_schedule]
+    nontarget_times = _nontarget_opportunity_times(
+        target_onsets_sec=target_times,
+        block_duration_sec=block_duration_sec,
+        requested=max(12, sysmon_n),
+        probe_times_sec=list(blocker_times),
+    )
+    total_task_events = len(target_schedule) + len(nontarget_times) + comm_n
     rate = total_task_events / (block_duration_sec / 60)
 
     # ── Header ────────────────────────────────────────────────────────────────
@@ -276,9 +502,10 @@ def build_block_scenario(
         f"# OpenMATB military aviation scenario — {level.value.upper()} workload",
         f"# Generated by matb_integration.scenario_builder (seed={seed})",
         f"# Block: {block_duration_sec}s ({block_duration_sec // 60} min) | "
-        f"difficulty={difficulty} | SYSMON={sysmon_n}+{sysmon_n} COMM={comm_n} "
+        f"difficulty={difficulty} | SYSMON={len(target_schedule)} target+"
+        f"{len(nontarget_times)} non-target COMM={comm_n} "
         f"total={total_task_events} ({rate:.1f}/min)",
-        f"# ISA: every {isa_interval}s ({n_isa} probes) | "
+        f"# ISA: every {isa_interval}s ({len(isa_times)} probes) | "
         f"TRACK targetproportion={track_prop} | "
         f"RESMAN losspermin={resman_loss}",
         "",
@@ -295,58 +522,33 @@ def build_block_scenario(
     lines.append(f"0:00:00;track;targetproportion;{track_prop}")
     lines.append(f"0:00:00;resman;tank-a-lossperminute;{resman_loss}")
     lines.append(f"0:00:00;resman;tank-b-lossperminute;{resman_loss}")
+    lines.append(f"0:00:00;sysmon;nontargetduration;{OPENMATB_NONTARGET_DURATION_MS}")
+    lines.append(f"0:00:00;communications;voiceidiom;{COMM_VOICE_IDIOM}")
+    lines.append(f"0:00:00;communications;voicegender;{COMM_VOICE_GENDER}")
+    lines.append(
+        f"0:00:00;communications;maxresponsedelay;{OPENMATB_COMM_MAX_RESPONSE_DELAY_MS}"
+    )
     lines.append("")
-
-    # ── ISA probe times (reserved — events distributed around probes) ─────────
-    isa_times = [isa_interval * (i + 1) for i in range(n_isa) if isa_interval * (i + 1) < block_duration_sec]
-
-    # ── SAGAT freezes (optional) ─────────────────────────────────────────────
-    sagat_events = []
-    if include_sagat:
-        if sagat_bank is None or sagat_output_dir is None:
-            raise ValueError(
-                "include_sagat=True requires sagat_bank and sagat_output_dir"
-            )
-        # The runtime task engine is not vendored. The emitted scenario
-        # references probe filenames only, so callers must put generated
-        # freeze files in the task runner's questionnaires directory before
-        # launching the session.
-        sagat_events = emit_freezes_for_block(
-            participant_id=participant_id,
-            block_num=block_num,
-            block_duration_sec=block_duration_sec,
-            isa_probe_times_sec=isa_times,
-            bank_path=sagat_bank,
-            output_dir=sagat_output_dir,
-            n_freezes=sagat_n_freezes,
-            probes_per_freeze=3,
-            min_post_isa_stagger_sec=30.0,
-            min_inter_freeze_sec=120.0,
-            seed=seed + block_num * 100 + 7,
-        )
 
     # ── SYSMON failure events ─────────────────────────────────────────────────
     lines.append(
-        f"# SYSMON failures — {sysmon_n} light events + {sysmon_n} scale events = {sysmon_n * 2} total"
+        f"# SYSMON failures — {len(target_schedule)} task-wide serial target opportunities"
     )
-    # sysmon_n events chosen uniformly from available indicators (with replacement)
-    light_times = _uniform_times(5.0, block_duration_sec - 15.0, sysmon_n, rng)
-    light_indicators = [rng.choice(list(OPENMATB_SYSMON_LIGHTS)) for _ in light_times]
-    for t, ind in sorted(zip(light_times, light_indicators)):
-        lines.append(f"{_fmt_time(t)};sysmon;lights-{ind}-failure;True")
+    for t, indicator in target_schedule:
+        lines.append(f"{_fmt_time(t)};sysmon;{indicator}-failure;True")
 
     lines.append("")
-    scale_times = _uniform_times(5.0, block_duration_sec - 15.0, sysmon_n, rng)
-    scale_indicators = [rng.choice(list(OPENMATB_SYSMON_SCALES)) for _ in scale_times]
-    for t, ind in sorted(zip(scale_times, scale_indicators)):
-        lines.append(f"{_fmt_time(t)};sysmon;scales-{ind}-failure;True")
+    lines.append(
+        f"# SYSMON explicit non-target opportunities — {len(nontarget_times)} "
+        f"windows × {OPENMATB_NONTARGET_DURATION_MS} ms"
+    )
+    for t in nontarget_times:
+        lines.append(f"{_fmt_time(t)};sysmon;open_nontarget_opportunity")
 
     lines.append("")
 
     # ── COMM events ───────────────────────────────────────────────────────────
     lines.append(f"# COMM events — {comm_n} total ({_COMM_OWN_RATIO*100:.0f}% own-callsign)")
-    comm_times = _uniform_times(5.0, block_duration_sec - 20.0, comm_n, rng)
-    prompts = _comm_prompts(comm_n, _COMM_OWN_RATIO, rng)
     for t, prompt in sorted(zip(comm_times, prompts)):
         lines.append(f"{_fmt_time(t)};communications;radioprompt;{prompt}")
 
@@ -407,9 +609,10 @@ def _manifest_payload(
     visit_ordinal: int | None = None,
     sagat_manifest_path: Path | None = None,
     sagat_n_freezes: int = 0,
+    source_commit: str = "unknown",
+    source_dirty: bool | None = None,
 ) -> dict[str, Any]:
-    sysmon_n = _sysmon_event_count(level, block_duration_sec)
-    comm_n = _comm_event_count(level, block_duration_sec)
+    comm_n = scenario_text.count(";communications;radioprompt;")
     isa_interval = ISA_PROBE_INTERVAL_SEC[level]
     isa_times = [
         isa_interval * (i + 1)
@@ -417,6 +620,11 @@ def _manifest_payload(
         if isa_interval * (i + 1) < block_duration_sec
     ]
     density_details = _scenario_density_details(scenario_text)
+    sysmon_light_events = scenario_text.count(";sysmon;lights-")
+    sysmon_scale_events = scenario_text.count(";sysmon;scales-")
+    sysmon_targets = sysmon_light_events + sysmon_scale_events
+    sysmon_nontargets = scenario_text.count(";sysmon;open_nontarget_opportunity")
+    task_events_total = sysmon_targets + sysmon_nontargets + comm_n
     return build_scenario_manifest(
         scenario_filename=scenario_filename,
         scenario_text=scenario_text,
@@ -427,14 +635,23 @@ def _manifest_payload(
         block_num=block_num,
         visit_ordinal=visit_ordinal,
         sagat_manifest_path=sagat_manifest_path,
+        source_commit=source_commit,
+        source_dirty=source_dirty,
         parameters={
             "difficulty": DIFFICULTY[level],
             "track_target_proportion": TRACK_TARGET_PROPORTION[level],
             "resman_loss_per_min": RESMAN_LOSS_PER_MIN[level],
             "isa_probe_interval_sec": isa_interval,
             "openmatb_alerttimeout_ms": OPENMATB_ALERTTIMEOUT_MS,
+            "openmatb_nontarget_duration_ms": OPENMATB_NONTARGET_DURATION_MS,
             "openmatb_comm_max_response_delay_ms": OPENMATB_COMM_MAX_RESPONSE_DELAY_MS,
             "communications_prompt_duration_sec": _COMM_PROMPT_SEC,
+            "communications_audio_profile_id": COMM_AUDIO_PROFILE_ID,
+            "communications_audio_inventory_sha256": COMM_AUDIO_INVENTORY_SHA256,
+            "communications_voice_idiom": COMM_VOICE_IDIOM,
+            "communications_voice_gender": COMM_VOICE_GENDER,
+            "communications_response_availability_sec": _COMM_RESPONSE_AVAILABILITY_SEC,
+            "communications_minimum_onset_separation_sec": _COMM_MIN_ONSET_SEPARATION_SEC,
             "communications_own_callsign_ratio": _COMM_OWN_RATIO,
             "openmatb_sysmon_lights": list(OPENMATB_SYSMON_LIGHTS),
             "openmatb_sysmon_scales": list(OPENMATB_SYSMON_SCALES),
@@ -447,13 +664,15 @@ def _manifest_payload(
             "include_bedford": include_bedford,
         },
         expected={
-            "sysmon_light_events": sysmon_n,
-            "sysmon_scale_events": sysmon_n,
+            "sysmon_light_events": sysmon_light_events,
+            "sysmon_scale_events": sysmon_scale_events,
+            "sysmon_target_opportunities": sysmon_targets,
+            "sysmon_nontarget_opportunities": sysmon_nontargets,
             "comm_events": comm_n,
-            "task_events_total": sysmon_n * 2 + comm_n,
-            "event_rate_per_min": round((sysmon_n * 2 + comm_n) / (block_duration_sec / 60), 3),
+            "task_events_total": task_events_total,
+            "event_rate_per_min": round(task_events_total / (block_duration_sec / 60), 3),
             "per_subtask_event_rate_per_min": {
-                "sysmon": round((sysmon_n * 2) / (block_duration_sec / 60), 3),
+                "sysmon": round((sysmon_targets + sysmon_nontargets) / (block_duration_sec / 60), 3),
                 "communications": round(comm_n / (block_duration_sec / 60), 3),
             },
             "counterbalancing_method": "complete_permutation_counterbalancing_3_conditions",
@@ -486,6 +705,9 @@ def build_protocol_scenarios(
     protocol: ResearchProtocol,
     output_dir: Path,
     block_duration_sec: int = 900,
+    *,
+    source_commit: str = "unknown",
+    source_dirty: bool | None = None,
 ) -> dict[str, Path]:
     """Generate one scenario file per demand block in the protocol.
 
@@ -519,6 +741,8 @@ def build_protocol_scenarios(
             bedford_questionnaire=BEDFORD_QUESTIONNAIRE,
             include_nasatlx=True,
             include_bedford=False,
+            source_commit=source_commit,
+            source_dirty=source_dirty,
         )
         paths[block.name] = out_path
     return paths
@@ -527,6 +751,10 @@ def build_protocol_scenarios(
 def build_session_files(
     participant_id: str,
     output_dir: Path,
+    *,
+    visit_ordinal: int,
+    source_commit: str,
+    source_dirty: bool,
     block_duration_sec: int = 900,
     base_seed: int = 42,
     include_nasatlx: bool = True,
@@ -540,6 +768,9 @@ def build_session_files(
 
     Args:
         participant_id: e.g. "P03" — numeric part drives counterbalancing row.
+        visit_ordinal: Visit bound into every adjacent manifest.
+        source_commit: Full lowercase Git object id for the generator source.
+        source_dirty: Whether that source checkout contained uncommitted changes.
         output_dir: Directory to write scenario files into.
         block_duration_sec: Duration per block in seconds (default 900).
         base_seed: RNG seed offset; each block gets `base_seed + block_index`.
@@ -549,6 +780,14 @@ def build_session_files(
     Returns:
         List of (block_number, WorkloadLevel, file_path) in presentation order.
     """
+    if (
+        isinstance(visit_ordinal, bool)
+        or not isinstance(visit_ordinal, int)
+        or visit_ordinal < 1
+    ):
+        raise ValueError("visit_ordinal must be an exact positive integer")
+    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", participant_id) is None:
+        raise ValueError("participant_id must be a filesystem-safe research identifier")
     output_dir.mkdir(parents=True, exist_ok=True)
     order = block_order_for_participant(participant_id)
     results: list[tuple[int, WorkloadLevel, Path]] = []
@@ -577,10 +816,44 @@ def build_session_files(
             include_bedford=include_bedford,
             participant_id=participant_id,
             block_num=block_num,
+            visit_ordinal=visit_ordinal,
+            source_commit=source_commit,
+            source_dirty=source_dirty,
         )
         results.append((block_num, level, out_path))
 
     return results
+
+
+def detect_generator_source_provenance(repo_root: Path) -> tuple[str, bool | None]:
+    """Resolve a full Git source identity, or return an explicit missing sentinel."""
+    configured_commit = os.getenv("MATB_SOURCE_COMMIT")
+    configured_dirty = os.getenv("MATB_SOURCE_DIRTY")
+    if configured_commit is not None:
+        if configured_dirty is None or configured_dirty.strip().lower() == "unknown":
+            dirty: bool | None = None
+        elif configured_dirty.strip().lower() == "true":
+            dirty = True
+        elif configured_dirty.strip().lower() == "false":
+            dirty = False
+        else:
+            raise ValueError("MATB_SOURCE_DIRTY must be true, false, unknown, or unset")
+        return configured_commit, dirty
+    commit = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if commit.returncode != 0:
+        return "unknown", None
+    status = subprocess.run(
+        ["git", "-C", str(repo_root), "status", "--porcelain", "--untracked-files=normal"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return commit.stdout.strip(), None if status.returncode != 0 else bool(status.stdout)
 
 
 # ── CLI entry point ───────────────────────────────────────────────────────────
@@ -610,7 +883,14 @@ if __name__ == "__main__":
         default=42,
         help="Base RNG seed (default: 42).",
     )
+    parser.add_argument("--participant-id", help="Optional participant binding (requires --visit-ordinal).")
+    parser.add_argument("--visit-ordinal", type=int, help="Optional visit binding (requires --participant-id).")
     args = parser.parse_args()
+    if (args.participant_id is None) != (args.visit_ordinal is None):
+        parser.error("--participant-id and --visit-ordinal must be supplied together")
+    source_commit, source_dirty = detect_generator_source_provenance(
+        Path(__file__).resolve().parents[1]
+    )
 
     for i, level in enumerate(WorkloadLevel):
         text = build_block_scenario(
@@ -631,5 +911,10 @@ if __name__ == "__main__":
             bedford_questionnaire=BEDFORD_QUESTIONNAIRE,
             include_nasatlx=True,
             include_bedford=False,
+            participant_id=args.participant_id,
+            visit_ordinal=args.visit_ordinal,
+            block_num=i + 1 if args.participant_id is not None else None,
+            source_commit=source_commit,
+            source_dirty=source_dirty,
         )
         print(f"Written: {out}")

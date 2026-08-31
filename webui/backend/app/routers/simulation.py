@@ -8,6 +8,7 @@ or filesystem implementation detail is returned from an ordinary public view.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import io
 from collections.abc import Awaitable, Callable, Mapping
@@ -17,7 +18,17 @@ from typing import Any, TypeVar
 from uuid import UUID
 import zipfile
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    Header,
+    HTTPException,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from fastapi.responses import Response
 from sqlmodel import Session, select
 import yaml
@@ -35,6 +46,7 @@ from app.simulation_runtime import (
     SimulationManager,
     SimulationNotFound,
 )
+from app.websocket.simulation import HubConflict
 from app.simulation_schemas import (
     ArtifactView,
     CommandRequest,
@@ -660,4 +672,112 @@ def _sanitize_public(value: Any, *, key: str | None = None) -> Any:
     return value
 
 
-__all__ = ["get_simulation_manager", "router"]
+@router.websocket("/sessions/{session_id}/stream")
+async def simulation_stream(websocket: WebSocket, session_id: str) -> None:
+    """Serve one ordered controller or observer stream for a session."""
+
+    origin = websocket.headers.get("origin")
+    if origin is None or origin not in websocket.app.state.frontend_origins:
+        await websocket.close(code=4403)
+        return
+    manager = getattr(websocket.app.state, "simulation_manager", None)
+    if manager is None:
+        await websocket.close(code=4503)
+        return
+    try:
+        after_sequence = int(websocket.query_params.get("after_sequence", "0"))
+    except (TypeError, ValueError):
+        await websocket.close(code=4400)
+        return
+    if after_sequence < 0:
+        await websocket.close(code=4400)
+        return
+    lease = websocket.query_params.get("lease")
+    role = "controller" if lease else "observer"
+    controller_handshake_pending = False
+    subscription = None
+    try:
+        if lease:
+            await manager.controller_connected(session_id, lease)
+            controller_handshake_pending = True
+        else:
+            await manager.view(session_id)
+        subscription = await manager.hub.subscribe(
+            session_id,
+            role=role,
+            identity=lease if role == "controller" else None,
+        )
+        if lease:
+            await manager.controller_stream_established(session_id, lease)
+            controller_handshake_pending = False
+        initial = await manager.snapshot_envelope(session_id, after_sequence=after_sequence)
+    except HubConflict:
+        if lease and controller_handshake_pending:
+            await manager.controller_stream_failed(session_id, lease)
+        await websocket.close(code=4409)
+        return
+    except Exception:
+        if lease and controller_handshake_pending:
+            try:
+                await manager.controller_stream_failed(session_id, lease)
+            except Exception:
+                pass
+        if subscription is not None:
+            await manager.hub.unsubscribe(subscription)
+        await websocket.close(code=4403 if lease else 4404)
+        return
+
+    await websocket.accept()
+    receive_task = asyncio.create_task(websocket.receive())
+    queue_task = asyncio.create_task(subscription.queue.get())
+    closed_task = asyncio.create_task(subscription._closed.wait())
+    try:
+        await websocket.send_json(initial.as_json())
+        while True:
+            done, _ = await asyncio.wait(
+                {receive_task, queue_task, closed_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if closed_task in done:
+                if websocket.client_state.value != "DISCONNECTED":
+                    await websocket.close(code=subscription.closed_code or 4408)
+                break
+            if queue_task in done:
+                envelope = queue_task.result()
+                await websocket.send_json(envelope.as_json())
+                queue_task = asyncio.create_task(subscription.queue.get())
+            if receive_task in done:
+                message = receive_task.result()
+                if message.get("type") == "websocket.disconnect":
+                    break
+                raw = message.get("text")
+                if raw is None:
+                    await websocket.close(code=4400)
+                    break
+                try:
+                    payload = json.loads(raw)
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    await websocket.close(code=4400)
+                    break
+                if payload != {"kind": "ping"}:
+                    await websocket.close(code=4400)
+                    break
+                await websocket.send_json({"kind": "pong"})
+                receive_task = asyncio.create_task(websocket.receive())
+    except WebSocketDisconnect:
+        pass
+    finally:
+        for task in (receive_task, queue_task, closed_task):
+            if not task.done():
+                task.cancel()
+        await manager.hub.unsubscribe(subscription)
+        try:
+            if role == "controller":
+                await manager.controller_disconnected(session_id, lease or "")
+            else:
+                await manager.observer_disconnected(session_id)
+        except Exception:
+            pass
+
+
+__all__ = ["get_simulation_manager", "router", "simulation_stream"]

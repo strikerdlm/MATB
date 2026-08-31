@@ -29,16 +29,29 @@ aliases remain reproducible but exploratory. LOW/MEDIUM/HIGH are engineering
 presets pending human calibration, and software timing QC is not a substitute
 for physical-onset qualification.
 
+Strict v3 event and separate timing-observation contracts are published. The
+runtime emits an ordered additive JSONL envelope that explicitly identifies
+itself as pre-v3 until contract-pair promotion and reconciliation are complete;
+it already records explicit SYSMON target/non-target opportunities and an
+optional fail-observable LSL mirror. The adaptive-automation policy and
+failure-model engine is implemented as an experimental component; it is not yet
+a validated participant-facing closed-loop intervention.
+
 Qualification tooling now lives in `matb_integration/qualification/`. It keeps
 software conformance, rig-specific physical timing, human calibration,
 cross-implementation characterization, and public-release eligibility as
 independent fail-closed evidence classes. See
 [`docs/research/qualification-workflow.md`](docs/research/qualification-workflow.md).
-The public-core export remains deliberately blocked while empirical gates and
-Research Console decoupling from sUAS/Liftoff are pending.
+The candidate public core is decoupled from optional sUAS/Liftoff product trees.
+Public release remains deliberately blocked by empirical qualification,
+privacy/data-review, dependency-SBOM, and final licensing gates.
 
 The Research Console is a loopback FastAPI/Next.js application with local
-SQLite and artifact storage. Its sUAS surface is a synthetic, non-kinetic,
+SQLite and artifact storage. Its current OpenMATB upload path accepts legacy CSV
+plus an optional scenario manifest; derived Console metrics are labeled
+`legacy_csv_derived_not_reconciled_to_authoritative_event_stream` and remain
+confirmatory-ineligible until paired v3 JSONL reconciliation is implemented.
+Its sUAS surface is a synthetic, non-kinetic,
 supervisory simulator. It has no real aircraft, weapon, targeting, autonomous
 dispatch, real-world map, external telemetry, or command-and-control (C2) path.
 
@@ -59,8 +72,8 @@ out of the repository and under the owning institution's custody controls.
 | Goal | Start here | Runtime | Example | Expected output |
 | --- | --- | --- | --- | --- |
 | Generate OpenMATB scenarios, convert logs, or try DEPDF analysis | `matb_integration/` and `openmatb/` | Python; tracked or compatible OpenMATB for participant task presentation | [OpenMATB research tour](examples/openmatb-research/README.md) | Three scenarios/manifests, synthetic JSONL metrics, and one DEPDF JSON |
-| Ingest sessions, track visits, visualize data, analyze, and export | `webui/` | Python 3.12+, Node 20+, local browser | [Research Console walkthrough](examples/research-console/README.md) | Local SQLite records and `research-bundle.zip` |
-| Run a deterministic, observer-safe sUAS research session | `matb_integration/suas/` and `webui/` | Python 3.12+; Node 20+ for browser service | [sUAS simulator walkthrough](examples/suas-simulator/README.md) | Replay-verifiable events, metrics, debrief, manifest, and checksums |
+| Ingest sessions, track visits, visualize data, analyze, and export | `webui/` | Python 3.12+, Node >=20.9, local browser | [Research Console walkthrough](examples/research-console/README.md) | Local SQLite records and `research-bundle.zip` |
+| Run a deterministic, observer-safe sUAS research session | `matb_integration/suas/` and `webui/` | Python 3.12+; Node >=20.9 for browser service | [sUAS simulator walkthrough](examples/suas-simulator/README.md) | Replay-verifiable events, metrics, debrief, manifest, and checksums |
 | Evaluate offline safety-management package contracts | `SMS/` | Node 22.x; Docker only for the offline image/bundle | [SMS capability tour](examples/sms-platform/README.md) | Deterministic JSON with a deliberately blocked safety-kernel result |
 | Demonstrate the older terminal monitor | `aircraft_monitor/` | Python and a terminal | [Legacy monitor guide](examples/legacy-monitor/README.md) | Headless UAV, fighter, combined, or experiment event stream |
 
@@ -87,7 +100,8 @@ MATB/
 The four primary flows are deliberately separate:
 
 ```text
-Tracked/compatible OpenMATB -> session CSV + scenario manifest -> metrics -> DEPDF/statistics -> research bundle
+Tracked/compatible OpenMATB -> ordered pre-v3 JSONL + timing QC + legacy CSV + manifest -> future v3 pair/reconciliation
+Legacy CSV upload -> provisional Console metrics -> tracker/analysis/export (not event-stream reconciled)
 Browser -> FastAPI Research Console -> local SQLite/artifacts -> tracker/analysis/export
 Synthetic YAML -> deterministic sUAS engine -> observer-safe state -> replay/debrief artifacts
 Signed local evidence + read-only telemetry -> edge API/safety kernel -> console/audit -> offline verification
@@ -104,7 +118,7 @@ read-only, and neither application exposes a vehicle-command channel.
 | --- | --- | --- | --- | --- | --- | --- |
 | Git | Clone/source control | Required | Required | Required | Required | Required |
 | Python | 3.12+ is required by the sUAS installer; use the same version for repository Python workflows | Required | Required | Required | No | Required |
-| Node.js | Launcher checks 20+; frontend uses npm | No | 20+ required | 20+ for browser service | **22.x required** | No |
+| Node.js | Frontend requires >=20.9; launcher enforces it | No | >=20.9 required | >=20.9 for browser service | **22.x required** | No |
 | npm | Lockfile-based dependency/build tool | No | Required for frontend | Required for browser service | Required | No |
 | OpenMATB runtime | Tracked in `openmatb/`; a separate compatible checkout is optional | Workflow-specific | Only to collect task sessions | No | No | No |
 | Xvfb | Virtual X display for OpenMATB/Pyglet on headless Linux | Workflow-specific | No | No—the native UI is browser/headless | No | No in `--headless` mode |
@@ -193,9 +207,11 @@ $OpenMatbDir = (Resolve-Path (Join-Path $RepoRoot "openmatb")).Path
 & (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") (Join-Path $RepoRoot "install_to_openmatb.py") $OpenMatbDir
 ```
 
-The target must contain `includes/`, which the tracked runtime does. To use a
-separate compatible checkout, replace `OPENMATB_DIR` or `$OpenMatbDir` with its
-root path.
+The installer accepts the tracked runtime directly. A separate checkout is
+accepted only when it implements the required provenance, clock, bounded-log,
+explicit SYSMon-opportunity, and COMM-response-window capabilities and its
+pinned communications WAV inventory passes byte-level timing-profile
+qualification. An `includes/` directory alone is deliberately insufficient.
 
 <h3>Run</h3>
 
@@ -221,11 +237,13 @@ window from its directory:
 ```bash
 REPO_ROOT="$(pwd)"
 cd "$REPO_ROOT/openmatb"
-"$REPO_ROOT/.venv-openmatb/bin/python" main.py
+MATB_SOURCE_COMMIT="$(git -C "$REPO_ROOT" rev-parse HEAD)" \
+  "$REPO_ROOT/.venv-openmatb/bin/python" main.py
 ```
 
 ```powershell
 $RepoRoot = (Get-Location).Path
+$env:MATB_SOURCE_COMMIT = (git -C $RepoRoot rev-parse HEAD).Trim()
 Push-Location (Join-Path $RepoRoot "openmatb")
 try {
   & (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") main.py
@@ -233,6 +251,17 @@ try {
   Pop-Location
 }
 ```
+
+`MATB_SOURCE_COMMIT` must resolve to the frozen, full lowercase Git object ID
+(40 hexadecimal characters for SHA-1 repositories or 64 for SHA-256). Missing,
+sentinel, abbreviated, or arbitrary values remain explicitly provisional and
+cannot upgrade runtime provenance to `complete`.
+
+Set `MATB_SOURCE_DIRTY=false` only after independently confirming that the exact
+source tree and study assets are clean; use `true` whenever they differ from the
+commit. Leave it unset (or use `unknown` in tooling that accepts it) when the
+state was not checked. An unset value intentionally records
+`provisional_unverified_source_tree` rather than guessing that the tree was clean.
 
 For a separate compatible checkout, run its `main.py` from that checkout using
 the selected environment. Use `DISPLAY` and Xvfb only on a Linux/headless host;
@@ -309,7 +338,7 @@ display/flicker/Pyglet failures belong to the OpenMATB/X11 boundary: validate
 
 <h3>Prerequisites</h3>
 
-Use Python 3.12+, Node 20+, npm, and a browser. Initial dependency installation
+Use Python 3.12+, Node >=20.9, npm, and a browser. Initial dependency installation
 needs network access or prepared Python/npm caches; the installed service is
 local and offline-capable.
 
@@ -382,18 +411,25 @@ npm run dev -- --hostname 127.0.0.1 --port 3100
 
 Open `http://127.0.0.1:3100/`.
 
+Run exactly one Uvicorn worker for each Research Console database. The backend
+holds a durable database-instance lease and rejects a second live process so
+Bayesian jobs and SQLite writes cannot split across competing process-local
+executors. Scale by assigning separate databases/data roots, not `--workers`.
+
 <h3>Try the synthetic example</h3>
 
 With the service running:
 
 ```bash
 REPO_ROOT="$(pwd)"
+export MATB_API_TOKEN="$(<"$REPO_ROOT/examples/output/research-console-service/api-token")"
 BASE_URL=http://127.0.0.1:8000 OUTPUT_DIR="$REPO_ROOT/examples/output/research-console-tour" \
   bash "$REPO_ROOT/examples/research-console/api_walkthrough.sh"
 ```
 
 ```powershell
 $RepoRoot = (Get-Location).Path
+$env:MATB_API_TOKEN = Read-Host "MATB API token"
 & (Join-Path $RepoRoot "examples\research-console\api_walkthrough.ps1") `
   -BaseUrl http://127.0.0.1:8000 -OutputDir (Join-Path $RepoRoot "examples\output\research-console-tour")
 ```
@@ -415,6 +451,11 @@ Invoke-RestMethod http://127.0.0.1:8000/health
 ```
 
 Backend and frontend suites are listed under operations below.
+
+The browser is admitted only from configured exact origins. State-changing
+CLI requests have no browser `Origin`, so they must send the owner-only bearer
+token from `MATB_API_TOKEN`; the combined launcher creates it at
+`<data-dir>/api-token`. Host validation also blocks loopback DNS rebinding.
 
 <h3>Stop and clean up</h3>
 
@@ -444,7 +485,7 @@ the call operator `&` with `Join-Path`. See the [Research Console guide](example
 
 <h3>Prerequisites</h3>
 
-The CLI needs Python 3.12+. The browser service adds Node 20+, npm, and a
+The CLI needs Python 3.12+. The browser service adds Node >=20.9, npm, and a
 browser. `install_suas.sh` and `run_suas.sh` are Linux/WSL2 contracts; native
 Windows PowerShell may run the CLI and may call a service hosted in WSL2.
 
@@ -799,7 +840,7 @@ endpoint, release, and evidence explanations stay in their specialist guides.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `matb_integration/scenario_builder.py` | Generate LOW/MEDIUM/HIGH counterbalanced scenarios | Study designer | Protocol, duration, seed → OpenMATB text scenarios | Python | [OpenMATB tour](examples/openmatb-research/README.md) | `pytest tests/test_scenario_builder.py tests/test_scenario_manifest.py tests/test_log_converter.py tests/suhir tests/analysis_stats tests/screen -q` | Generated tasks require the tracked or a compatible OpenMATB runtime for presentation |
 | `matb_integration/scenario_manifest.py` | Hash scenarios and validate session provenance | Data steward | Scenario/tags/expected probes → adjacent manifest and validation issues | Python | OpenMATB tour | Same suite | Hash integrity does not establish protocol validity or consent |
-| `matb_integration/log_converter.py` | Convert OpenMATB CSV into canonical metrics | Research analyst | CSV + pseudonym/workload → JSONL metrics | Python | OpenMATB tour | Same suite | Input quality and missing tasks constrain inference |
+| `matb_integration/log_converter.py` | Convert legacy OpenMATB CSV into versioned metric derivatives | Research analyst | CSV + pseudonym/workload → provisional JSONL metrics | Python | OpenMATB tour | Same suite | CSV derivatives are explicitly not authoritative-event-stream reconciled and remain confirmatory-ineligible |
 | `matb_integration/questionnaires/` | EN/ES NASA-TLX, Bedford, ISA, and SAGAT assets | Study designer | Controlled text/YAML → configured questionnaire/probe content | OpenMATB or sUAS loader | OpenMATB and sUAS tours | Questionnaire/SAGAT tests | Scales must be administered under an approved protocol |
 | `matb_integration/analysis/` | Descriptive outputs plus frequentist MixedLM/rmcorr/rmANOVA/FDR and Bayesian PyMC sensitivity engines | Statistician | `/metrics/long` and `/fits` JSON arrays → versioned artifacts | Python; PyMC sampling is optional/slow | [OpenMATB analysis commands](examples/openmatb-research/README.md) | Analysis tests | Small/incomplete datasets may be not estimable; Bayesian diagnostics govern interpretation |
 | `matb_integration/suhir/` | Fit Suhir DEPDF parameters and mission-outcome research summaries | Human-factors researcher | Three workload records → G0/P0/tau0 and curves | Python/SciPy | OpenMATB tour | Suhir tests; [DEPDF guide](matb_integration/suhir/README.md) | Within-participant comparative model; three levels exactly identify parameters; not certified |
@@ -809,9 +850,9 @@ endpoint, release, and evidence explanations stay in their specialist guides.
 
 | Module | Purpose | User | Inputs → outputs | Runtime | Example | Verification | Limitation |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `webui/backend/` tracker and ingestion | Pseudonymous participant/visit grid, CSV/manifest checks, fits | Data steward | CSV + optional manifest → SQLite block/provenance rows | FastAPI, Python 3.12+, port 8000 | [Console walkthrough](examples/research-console/README.md) | `cd webui/backend && python -m pytest -q` | Duplicate/fill guards are data-quality controls, not consent |
+| `webui/backend/` tracker and ingestion | Pseudonymous participant/visit grid, CSV/manifest checks, fits | Data steward | Legacy CSV + optional manifest → provisional SQLite block/provenance rows | FastAPI, Python 3.12+, one worker, port 8000 | [Console walkthrough](examples/research-console/README.md) | `cd webui/backend && python -m pytest -q` | Paired authoritative JSONL reconciliation remains a named release gate; duplicate/fill guards are not consent |
 | `webui/backend/` analysis and export | Cache frequentist/Bayesian results and build reproducible bundles | Analyst | Stored metrics/fits/figures → analysis records and ZIP | FastAPI/background PyMC | Console walkthrough | Backend analysis/export tests | Export remains research data under owner custody |
-| `webui/frontend/` tracker, ingestion, and visualization | Browser grid, upload, descriptive charts | Research staff | Backend JSON → interactive local UI/PNG | Next.js, Node 20+, port 3100 | Console walkthrough | `npm test`, `npm run typecheck`, `npm run build` | Descriptive plots are not inferential conclusions |
+| `webui/frontend/` tracker, ingestion, and visualization | Browser grid, upload, descriptive charts | Research staff | Backend JSON → interactive local UI/PNG | Next.js, Node >=20.9, port 3100 | Console walkthrough | `npm test`, `npm run typecheck`, `npm run build` | Descriptive plots are not inferential conclusions |
 | `webui/frontend/` screen, analysis, and export | Administer baseline screen, review analyses, request bundle | Research staff | Raw trials/backend artifacts → UI summaries/export request | Browser/Next.js | Console walkthrough | Screen is exploratory; browser is not a clinical device |
 
 Endpoint and screen contracts are maintained in the [backend guide](webui/backend/README.md)
@@ -1001,7 +1042,7 @@ base image, or verification without registered evidence can succeed offline.
 
 | Symptom | Check and safe response |
 | --- | --- |
-| Installer rejects Python or Node | Use Python 3.12+ for sUAS/repository Python, Node 20+ for the Research Console launcher, and Node 22.x for `SMS/`; recreate only that workflow's venv/install. |
+| Installer rejects Python or Node | Use Python 3.12+ for sUAS/repository Python, Node >=20.9 for the Research Console launcher, and Node 22.x for `SMS/`; recreate only that workflow's venv/install. |
 | Python module is missing | Confirm the selected venv's Python is running (`python -c "import sys; print(sys.executable)"`) and install the matching requirements; do not install globally to mask it. |
 | OpenMATB cannot find a scenario | Run `install_to_openmatb.py` against `openmatb/` or a compatible checkout containing `includes/`, then verify `includes/scenarios/military_aviation/`. |
 | OpenMATB flickers or Pyglet/display fails | This is the desktop/X11 boundary. Start windowed, validate Pyglet in the selected venv, and on headless Linux validate Xvfb and `DISPLAY`. sUAS needs neither X11 nor Pyglet. |
@@ -1113,7 +1154,11 @@ controlled evidence; do not weaken a check to make it green.
 <a id="license"></a>
 ## 18. License
 
-MATB is provided under the [MIT License](LICENSE). The license does not certify
-fitness for clinical, flight, defense, safety-critical, or operational use and
-does not replace applicable law, institutional governance, ethics review, or
-human acceptance.
+Repository-authored MATB components are provided under the [MIT License](LICENSE).
+The embedded and modified [`openmatb/`](openmatb) runtime remains under
+[CeCILL v2.1](openmatb/LICENSE). See the [component license map](LICENSES/component-map.json)
+and [third-party notices](THIRD_PARTY_NOTICES.md) for the path-level boundary;
+the most specific notice applies. These licenses do not certify fitness for
+clinical, flight, defense, safety-critical, or operational use and do not
+replace applicable law, institutional governance, ethics review, independent
+licensing review, or human acceptance.

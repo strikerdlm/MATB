@@ -60,9 +60,14 @@ if [[ ( "$backend_bind" != "127.0.0.1" && "$backend_bind" != "localhost" ) || ( 
     echo "non-loopback binds require an explicit MATB_FRONTEND_ORIGINS" >&2
     exit 2
   fi
+  if [[ -z "${MATB_ALLOWED_HOSTS:-}" ]]; then
+    echo "non-loopback binds require an explicit MATB_ALLOWED_HOSTS" >&2
+    exit 2
+  fi
   frontend_origins="$MATB_FRONTEND_ORIGINS"
 else
   frontend_origins="http://localhost:$frontend_port,http://127.0.0.1:$frontend_port"
+  MATB_ALLOWED_HOSTS="localhost,127.0.0.1"
 fi
 
 VENV="${MATB_VENV:-$REPO_ROOT/.venv}"
@@ -77,6 +82,20 @@ if port_in_use "$frontend_bind" "$frontend_port"; then echo "frontend port is al
 umask 077
 mkdir -p "$data_dir/db" "$data_dir/exports" "$data_dir/logs"
 chmod 700 "$data_dir" "$data_dir/db" "$data_dir/exports" "$data_dir/logs"
+api_token_file="$data_dir/api-token"
+if [[ -z "${MATB_API_TOKEN:-}" ]]; then
+  if [[ -f "$api_token_file" ]]; then
+    MATB_API_TOKEN="$(<"$api_token_file")"
+  else
+    MATB_API_TOKEN="$($python_bin -c 'import secrets; print(secrets.token_urlsafe(32))')"
+    printf '%s\n' "$MATB_API_TOKEN" >"$api_token_file"
+    chmod 600 "$api_token_file"
+  fi
+fi
+if [[ ${#MATB_API_TOKEN} -lt 32 || "$MATB_API_TOKEN" =~ [[:space:]] ]]; then
+  echo "MATB_API_TOKEN must contain at least 32 non-whitespace characters" >&2
+  exit 2
+fi
 
 backend_pid=""
 frontend_pid=""
@@ -97,8 +116,10 @@ trap cleanup EXIT INT TERM
 export MATB_DB_PATH="$data_dir/db/matb-webui.db"
 export MATB_SIMULATION_OUTPUT_DIR="$data_dir/exports"
 export MATB_FRONTEND_ORIGINS="$frontend_origins"
+export MATB_ALLOWED_HOSTS
 export MATB_SIMULATION_SCENARIO_DIR="$REPO_ROOT/scenarios/suas"
 export MATB_BACKEND_PORT="$backend_port"
+export MATB_API_TOKEN
 
 pushd "$REPO_ROOT/webui/backend" >/dev/null
 setsid "$python_bin" -m uvicorn app.main:app --host "$backend_bind" --port "$backend_port" >"$data_dir/logs/backend.log" 2>&1 &
@@ -116,6 +137,7 @@ sUAS console is running (offline, research-only).
   Frontend: http://localhost:$frontend_port/mission/setup
   Backend:  http://$backend_bind:$backend_port/health
   Data:     $data_dir
+  CLI token file: $api_token_file (owner-only)
 Press Ctrl-C to stop both services.
 EOF
 

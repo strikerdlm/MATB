@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  allowedDevOrigins: ["127.0.0.1"],
   experimental: { optimizePackageImports: ["lucide-react", "echarts-for-react"] },
   async rewrites() {
     const apiUrl = process.env.API_URL || "http://localhost:8000";

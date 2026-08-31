@@ -34,18 +34,30 @@ Duplicate, malformed, or ambiguous opportunity outcomes invalidate observed d-pr
 
 Legacy CSV remains unchanged. Each session additionally produces:
 
-- `*.events.jsonl`: ordered schema-versioned records with scenario time,
-  `perf_counter` clock-domain timestamps, scheduled event time, dispatch lateness,
-  and LSL clock time when streamed;
+- `*.events.jsonl`: the authoritative ordered runtime envelope with scenario
+  time, `perf_counter` clock-domain timestamps, scheduled event time, dispatch
+  lateness, provenance, and explicit `scientific_contract_status`. This additive
+  envelope is deliberately marked `not_scientific_event_v3` until the published
+  `ScientificEventV3`/`TimingObservationV1` contract pair is emitted and
+  reconciled end to end;
+- `*.lsl_observations.jsonl`: source-event-linked accepted, dropped, or failed
+  mirror attempts; LSL is optional and never the sole scientific record;
 - `*.timing_qc.json`: update intervals, scenario deltas, long stalls, event
   dispatch lateness, logger latency, LSL push-call latency, runtime metadata, and
   an explicit statement that physical onset is unavailable without hardware.
 
-SYSMON opens and closes uniquely identified target opportunities. The current
-continuous-monitoring runtime does not invent non-target windows; observed d-prime
-therefore remains unavailable until a study protocol explicitly defines and logs
-non-target opportunities. Direct hits, misses, false alarms, response time, and hit
-rate remain usable.
+SYSMON opens and closes uniquely identified target and protocol-defined
+non-target opportunities. Generated canonical scenarios schedule the non-target
+windows explicitly; the runtime still refuses to infer them from elapsed time.
+Observed d-prime is available only when unique lifecycle outcomes, actor identity,
+automation state, planned counts, and the session-bound manifest reconcile.
+
+The Research Console currently ingests legacy CSV plus an optional manifest, not
+the authoritative runtime JSONL. Converter records therefore carry
+`scientific_source_status:
+legacy_csv_derived_not_reconciled_to_authoritative_event_stream`, and Console
+long-format metrics remain confirmatory-ineligible until paired event-stream
+ingestion and event-ID reconciliation are implemented.
 
 ## Analysis migration
 
@@ -60,8 +72,12 @@ is allowed to be null when the historical log did not capture its required evide
 
 ## Advancement gates
 
-Adaptive automation, trust experiments, workload-triggered handoffs, and claims of
-EEG/ERP-grade synchronization remain downstream work. They may begin only after:
+The experimental adaptive-automation component now separates allocation policy,
+quality, and failure realization and records handoff audit links. Participant-facing
+runtime integration, trust claims, closed-loop workload intervention, and
+EEG/ERP-grade synchronization remain downstream work. The optional LSL mirror is
+implemented, but streaming support alone is not timing qualification. Promotion
+may occur only after:
 
 1. converter/runtime regression tests pass;
 2. the timing qualification protocol has a signed hardware report for the intended rig;
