@@ -214,6 +214,141 @@ registro acotado, oportunidades explícitas de SYSMon y ventana de respuesta COM
 y si su inventario WAV de comunicaciones supera la calificación de perfil temporal
 a nivel de bytes. Un directorio `includes/` por sí solo es deliberadamente insuficiente.
 
+<h4>Configuración del control RC en Windows: Hitec Aurora 9 y RealFlight InterLink</h4>
+
+El entorno OpenMATB versionado acepta un solo dispositivo de control de juegos
+de Windows al iniciarse. Usa los ejes `X` y `Y` de ese dispositivo para
+seguimiento y sus botones numerados o direcciones de la cruceta para respuestas
+discretas. Actualmente abre el primer control que devuelve Windows, no permite
+cambiarlo en caliente y no convierte ejes RC adicionales como `Z`, `Rx` o `Ry`
+en botones. Califique el hardware, cable, puerto USB, versión de Windows y mapeo
+exactos antes de recopilar datos de participantes.
+
+Use estas rutas de hardware en orden:
+
+1. **RealFlight G2 InterLink existente:** conecte el InterLink por USB y use su
+   puerto trasero de interfaz del transmisor con el cable de entrenamiento PPM
+   original o uno de compatibilidad conocida. El InterLink G2 original fue
+   diseñado para recibir un transmisor de campo FM/PPM por este puerto. No
+   fuerce un adaptador de 6 pines en el conector Multi-I/O/entrenamiento de
+   3,5 mm del Aurora.
+2. **Alternativa específica para el Aurora:** use una [interfaz USB IKARUS #3031037](https://shop.ikarus.net/en/commander-und-interfaces/947-usb-interfaceset-fur-35-mm-schulerbuchse-spektrum.html)
+   u otra interfaz que acepte explícitamente una señal PPM de entrenamiento
+   mono de 3,5 mm y aparezca en Windows como control de juegos estándar.
+3. **Alternativa solo como control:** use el [Spektrum InterLink DX](https://www.spektrumrc.com/product/spektrum-interlink-dx-simulator-controller-with-usb-plug/SPMRFTX1.html)
+   directamente como control de OpenMATB. No requiere el Aurora.
+
+El Spektrum WS2000 no es una interfaz para el Aurora: recibe DSM2/DSMX, mientras
+que el Aurora 9 usa Hitec AFHSS. El Hitec HPP-22 es una interfaz de
+programación/firmware, no una interfaz de control de juegos de Windows.
+
+Cree una memoria de modelo dedicada en el Aurora llamada `OPENMATB`:
+
+1. Seleccione un modelo de avión sencillo sin mezclas.
+2. Desactive tasas duales, exponencial, mezclas por condición de vuelo y
+   acoplamiento de canales. Ajuste los centros de salida a 0% y el recorrido
+   aproximadamente a -100%/+100%.
+3. Asigne cada control MATB a su propio canal de salida. Prefiera controles
+   centrados de tres posiciones para pares de comandos, de modo que el retorno
+   al centro libere el botón virtual.
+4. Conecte el cable de entrenamiento/interfaz según la secuencia de encendido
+   de los manuales del Aurora y de la interfaz USB. En el Aurora, abra
+   **Multi-I/O**, seleccione **T.Pupil** y elija salida PPM si el firmware muestra
+   una opción de modulación.
+
+La siguiente distribución de nueve canales cubre todas las tareas activas salvo
+gestión de recursos:
+
+| Canal Aurora | Posición negativa/primera | Posición positiva/segunda |
+| --- | --- | --- |
+| 1 | Eje X de seguimiento | Eje X de seguimiento |
+| 2 | Eje Y de seguimiento | Eje Y de seguimiento |
+| 3 | `JOY_BTN_1`: luz 1 SYSMon | `JOY_BTN_2`: luz 2 SYSMon |
+| 4 | `JOY_BTN_3`: escala 1 SYSMon | `JOY_BTN_4`: escala 2 SYSMon |
+| 5 | `JOY_BTN_5`: escala 3 SYSMon | `JOY_BTN_6`: escala 4 SYSMon |
+| 6 | `JOY_BTN_7`: radio anterior | `JOY_BTN_8`: radio siguiente |
+| 7 | `JOY_BTN_10`: bajar frecuencia | `JOY_BTN_9`: subir frecuencia |
+| 8 | Sin uso | `JOY_BTN_11`: validar respuesta |
+| 9 | Reserva | Reserva |
+
+La programación solo se muestra y no requiere canal de control. La gestión de
+recursos no se incluye porque las asignaciones de sus bombas siguen siendo solo
+de teclado.
+
+Antes de iniciar OpenMATB, pulse Win+R, ejecute `joy.cpl`, seleccione el control
+y abra **Propiedades > Prueba**. El hardware solo supera la comprobación si:
+
+- el dispositivo aparece en cada reconexión sin error de controlador;
+- los dos controles de seguimiento se centran de forma consistente y alcanzan
+  el recorrido completo;
+- cada comando produce un único botón o estado de cruceta previsto y se libera
+  al volver a neutro;
+- mantener los dos controles de frecuencia mantiene pulsado el estado
+  correspondiente;
+- operar un control no mueve un eje o botón no relacionado; y
+- la numeración de botones permanece igual después de reiniciar y reconectar el
+  USB.
+
+Anote los números observados. La tabla anterior es la distribución lógica
+requerida, no una promesa de que un adaptador concreto los asigne
+automáticamente.
+
+Si la interfaz ya informa dos ejes adecuados y al menos 11 botones, úsela
+directamente. Si los interruptores del Aurora aparecen solo como ejes
+adicionales, se necesita una capa de traducción en Windows porque OpenMATB no
+lee actualmente esos ejes como teclas de respuesta. Una opción reproducible es
+[vJoy](https://github.com/jshafer817/vJoy/releases) con
+[Joystick Gremlin](https://whitemagic.github.io/JoystickGremlin/quickstart.html):
+
+1. Cree `vJoy Device 1` con solo `X` y `Y` habilitados, 11 botones y sin POV.
+2. En un perfil nuevo de Joystick Gremlin, asigne los dos canales físicos de
+   seguimiento a `X` y `Y` de vJoy y añada una pequeña zona muerta central
+   medida.
+3. Para los canales 3-7, asigne el rango negativo al primer botón de la tabla y
+   el positivo al segundo. Deje un intervalo neutro alrededor de cero que no
+   pulse ningún botón. Asigne el valor positivo del canal 8 al botón 11.
+4. Configure los botones 9 y 10 como estados mantenidos, no como macros de un
+   solo pulso. Configure los demás rangos para liberar sus botones cuando el
+   control vuelva a neutro.
+5. Active el perfil y repita la prueba completa de `joy.cpl` en `vJoy Device`.
+   Guarde el perfil con el protocolo del estudio y registre las versiones de
+   vJoy y Joystick Gremlin y la suma de comprobación del perfil.
+
+OpenMATB debe enumerar `vJoy Device` en primer lugar. Si responde a la interfaz
+física, detenga la calificación: no dependa de un orden accidental de
+dispositivos de Windows para datos de participantes. Use un control con botones
+directos o implemente la selección del dispositivo en
+`openmatb/core/joystick.py` antes de continuar.
+
+Añada el mapa lógico de botones observado antes de los comandos `start` de las
+tareas en el escenario seleccionado:
+
+```text
+# SYSMon: dos luces y cuatro escalas
+0:00:00;sysmon;lights-1-key;JOY_BTN_1
+0:00:00;sysmon;lights-2-key;JOY_BTN_2
+0:00:00;sysmon;scales-1-key;JOY_BTN_3
+0:00:00;sysmon;scales-2-key;JOY_BTN_4
+0:00:00;sysmon;scales-3-key;JOY_BTN_5
+0:00:00;sysmon;scales-4-key;JOY_BTN_6
+
+# Comunicaciones: selección de radio, sintonización mantenida y validación
+0:00:00;communications;keys-selectradioup;JOY_BTN_7
+0:00:00;communications;keys-selectradiodown;JOY_BTN_8
+0:00:00;communications;keys-tunefrequencyup;JOY_BTN_9
+0:00:00;communications;keys-tunefrequencydown;JOY_BTN_10
+0:00:00;communications;keys-validateresponse;JOY_BTN_11
+```
+
+Ejecute un escenario de aceptación sin participantes que contenga TRACK,
+SYSMon, comunicaciones y programación, pero no gestión de recursos. Verifique
+las seis respuestas SYSMon, ambas direcciones de selección de radio, ambas
+direcciones de sintonización mantenida, la validación y el seguimiento
+simultáneo en dos ejes. Rechace la configuración si falta alguna entrada, se
+duplica, queda atascada o cambia su numeración entre ejecuciones. Conserve el
+escenario, perfil del control, identidad del dispositivo, registro de
+calibración y registro de entradas con la configuración del estudio.
+
 <h3>Ejecución</h3>
 
 Genere la estructura del protocolo confirmado en el repositorio sin iniciar OpenMATB:
