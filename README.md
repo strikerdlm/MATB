@@ -213,6 +213,131 @@ explicit SYSMon-opportunity, and COMM-response-window capabilities and its
 pinned communications WAV inventory passes byte-level timing-profile
 qualification. An `includes/` directory alone is deliberately insufficient.
 
+<h4>Windows RC controller setup: Hitec Aurora 9 and RealFlight InterLink</h4>
+
+The tracked OpenMATB runtime accepts one Windows game-controller device when it
+starts. It uses that device's `X` and `Y` axes for tracking and its numbered
+buttons or hat directions for discrete responses. It currently opens the first
+controller returned by Windows, does not hot-swap controllers, and does not
+convert extra RC axes such as `Z`, `Rx`, or `Ry` into buttons. Qualify the exact
+hardware, cable, USB port, Windows build, and mapping before collecting
+participant data.
+
+Use these hardware routes in order:
+
+1. **Existing RealFlight G2 InterLink:** connect the InterLink by USB and use
+   its rear transmitter-interface port with the original or a known-compatible
+   PPM trainer lead. The original G2 InterLink was designed to accept an FM/PPM
+   field transmitter through this port. Do not force a 6-pin adapter into the
+   Aurora's 3.5-mm Multi-I/O/trainer socket.
+2. **Aurora-specific fallback:** use an [IKARUS USB interface #3031037](https://shop.ikarus.net/en/commander-und-interfaces/947-usb-interfaceset-fur-35-mm-schulerbuchse-spektrum.html)
+   or another interface that explicitly accepts a 3.5-mm mono PPM trainer
+   signal and appears in Windows as a standard game controller.
+3. **Controller-only fallback:** use the [Spektrum InterLink DX](https://www.spektrumrc.com/product/spektrum-interlink-dx-simulator-controller-with-usb-plug/SPMRFTX1.html)
+   directly as the OpenMATB controller. This does not require the Aurora.
+
+The Spektrum WS2000 is not an Aurora interface: it receives DSM2/DSMX, whereas
+the Aurora 9 uses Hitec AFHSS. The Hitec HPP-22 is a programming/firmware
+interface, not a Windows game-controller interface.
+
+Create a dedicated Aurora model memory named `OPENMATB`:
+
+1. Select a simple airplane model with no mixing.
+2. Disable dual rates, exponential, flight-condition mixing, and channel
+   coupling. Set output centers to 0% and travel to approximately -100%/+100%.
+3. Assign each MATB control to its own output channel. Prefer centered
+   three-position controls for pairs of commands so returning the control to
+   center releases the virtual button.
+4. Connect the trainer/interface cable using the power sequence in the Aurora
+   and USB-interface manuals. On the Aurora, open **Multi-I/O**, select
+   **T.Pupil**, and select PPM output if the firmware presents a modulation
+   choice.
+
+The following nine-channel layout covers every active task except resource
+management:
+
+| Aurora channel | Negative/first position | Positive/second position |
+| --- | --- | --- |
+| 1 | Tracking X axis | Tracking X axis |
+| 2 | Tracking Y axis | Tracking Y axis |
+| 3 | `JOY_BTN_1`: SYSMon light 1 | `JOY_BTN_2`: SYSMon light 2 |
+| 4 | `JOY_BTN_3`: SYSMon scale 1 | `JOY_BTN_4`: SYSMon scale 2 |
+| 5 | `JOY_BTN_5`: SYSMon scale 3 | `JOY_BTN_6`: SYSMon scale 4 |
+| 6 | `JOY_BTN_7`: previous radio | `JOY_BTN_8`: next radio |
+| 7 | `JOY_BTN_10`: frequency down | `JOY_BTN_9`: frequency up |
+| 8 | Unused | `JOY_BTN_11`: validate response |
+| 9 | Spare | Spare |
+
+Scheduling is display-only and needs no control channel. Resource management is
+not included in this layout because its pump bindings remain keyboard-only.
+
+Before starting OpenMATB, press Win+R, run `joy.cpl`, select the controller, and
+open **Properties > Test**. The hardware passes only if:
+
+- the device appears on every reconnect without a vendor driver error;
+- the two tracking controls center consistently and reach their full ranges;
+- every command produces one intended button or hat state and releases when
+  returned to neutral;
+- holding the two frequency controls keeps the corresponding state pressed;
+- operating one control does not move an unrelated axis or button; and
+- the same button numbering remains after a reboot and USB reconnect.
+
+Write down the observed button numbers. The table above is the required logical
+layout, not a promise that a particular adapter will assign those numbers
+automatically.
+
+If the interface already reports two suitable axes and at least 11 buttons,
+use it directly. If Aurora switch channels appear only as additional axes, a
+Windows translation layer is required because OpenMATB does not currently read
+those axes as response keys. One reproducible bridge is [vJoy](https://github.com/jshafer817/vJoy/releases)
+with [Joystick Gremlin](https://whitemagic.github.io/JoystickGremlin/quickstart.html):
+
+1. Create `vJoy Device 1` with only `X` and `Y` enabled, 11 buttons, and no POV.
+2. In a new Joystick Gremlin profile, map the two physical tracking channels to
+   vJoy `X` and `Y` and add a small measured center dead zone.
+3. For channels 3-7, map the negative range to the first button in the table and
+   the positive range to the second. Leave a neutral interval around zero that
+   presses neither button. Map channel 8 positive to button 11.
+4. Configure buttons 9 and 10 as held states, not one-shot macros. Configure the
+   remaining switch ranges to release their buttons when the control returns to
+   neutral.
+5. Activate the profile and repeat the complete `joy.cpl` test on `vJoy Device`.
+   Save the profile with the study protocol and record the vJoy and Joystick
+   Gremlin versions and profile checksum.
+
+OpenMATB must enumerate `vJoy Device` first. If it instead reacts to the
+physical interface, stop qualification: do not depend on an incidental Windows
+device order for participant data. Use a direct-button controller or implement
+controller selection in `openmatb/core/joystick.py` before proceeding.
+
+Add the observed logical button map before the task `start` commands in the
+selected scenario:
+
+```text
+# SYSMon: two lights and four scales
+0:00:00;sysmon;lights-1-key;JOY_BTN_1
+0:00:00;sysmon;lights-2-key;JOY_BTN_2
+0:00:00;sysmon;scales-1-key;JOY_BTN_3
+0:00:00;sysmon;scales-2-key;JOY_BTN_4
+0:00:00;sysmon;scales-3-key;JOY_BTN_5
+0:00:00;sysmon;scales-4-key;JOY_BTN_6
+
+# Communications: radio selection, held tuning, and validation
+0:00:00;communications;keys-selectradioup;JOY_BTN_7
+0:00:00;communications;keys-selectradiodown;JOY_BTN_8
+0:00:00;communications;keys-tunefrequencyup;JOY_BTN_9
+0:00:00;communications;keys-tunefrequencydown;JOY_BTN_10
+0:00:00;communications;keys-validateresponse;JOY_BTN_11
+```
+
+Run a non-participant acceptance scenario containing TRACK, SYSMon,
+communications, and scheduling but no resource management. Verify all six
+SYSMon responses, both radio-selection directions, both held tuning directions,
+validation, and simultaneous two-axis tracking. Reject the setup if any input
+is missing, duplicated, stuck, or changes numbering between runs. Preserve the
+scenario, controller profile, device identity, calibration record, and input
+log with the study configuration.
+
 <h3>Run</h3>
 
 Generate the committed protocol shape without starting OpenMATB:
