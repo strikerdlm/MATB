@@ -451,7 +451,8 @@ Windows PowerShell may run the CLI and may call a service hosted in WSL2.
 For native one-click use, see the
 [MATB UAS Windows launchers](windows-launchers/README.md). They provide setup,
 the interactive console, PRACTICE/LOW/MEDIUM/HIGH technical runs, replay
-verification, and identity-checked shutdown of tracked processes.
+verification, diagnostics, results access, and identity-checked shutdown of
+tracked processes.
 
 <h3>Install</h3>
 
