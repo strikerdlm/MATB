@@ -614,6 +614,11 @@ The CLI needs Python 3.12+. The browser service adds Node >=20.9, npm, and a
 browser. `install_suas.sh` and `run_suas.sh` are Linux/WSL2 contracts; native
 Windows PowerShell may run the CLI and may call a service hosted in WSL2.
 
+For native one-click use, see the
+[MATB UAS Windows launchers](windows-launchers/README.md). They provide setup,
+the interactive console, PRACTICE/LOW/MEDIUM/HIGH technical runs, replay
+verification, and identity-checked shutdown of tracked processes.
+
 <h3>Install</h3>
 
 Linux/WSL2 service installation:
