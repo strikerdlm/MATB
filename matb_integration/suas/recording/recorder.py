@@ -264,7 +264,10 @@ class SessionRecorder:
 
     @staticmethod
     def _fsync_path(path: Path) -> None:
-        with path.open("rb") as stream:
+        # Windows FlushFileBuffers requires a writable file handle.  Opening
+        # the completed gzip in update mode keeps this durability barrier
+        # portable without changing its contents.
+        with path.open("r+b") as stream:
             os.fsync(stream.fileno())
 
     @staticmethod
