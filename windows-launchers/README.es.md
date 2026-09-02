@@ -56,6 +56,14 @@ calibración humana.
 ## Seguridad y solución de problemas
 
 - El lanzador no cambia la política de ejecución de PowerShell.
+- Los accesos de simulación funcionan aunque el Explorador de archivos los
+  inicie desde un directorio distinto al repositorio.
+- La consola detecta el commit Git y el estado del árbol antes de iniciar el
+  backend. En un clon limpio, el diseñador registra procedencia `complete`. La
+  advertencia provisional permanece deliberadamente si el árbol tiene cambios,
+  Git no puede comprobarlo o el código proviene de un ZIP sin metadatos Git.
+  Reinicie la consola con el acceso `99` y luego `01` después de actualizar los
+  lanzadores para que el nuevo proceso reciba esta información.
 - Si los puertos 8000 o 3100 pertenecen a otro programa, el inicio se detiene.
 - El acceso de detención comprueba PID, ejecutable exacto y hora de inicio;
   cuando Windows permite consultar esa información, también valida la línea

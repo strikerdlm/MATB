@@ -88,6 +88,13 @@ $env:MATB_FRONTEND_ORIGINS = "http://127.0.0.1:$FrontendPort,http://localhost:$F
 $env:MATB_BACKEND_PORT = [string]$BackendPort
 $env:API_URL = "http://127.0.0.1:$BackendPort"
 $env:NEXT_PUBLIC_API_URL = "http://127.0.0.1:$BackendPort"
+$sourceProvenance = Get-MatbUasSourceProvenance -RepoRoot $repoRoot
+$env:MATB_SOURCE_COMMIT = $sourceProvenance.Commit
+if ($null -eq $sourceProvenance.Dirty) {
+    Remove-Item Env:MATB_SOURCE_DIRTY -ErrorAction SilentlyContinue
+} else {
+    $env:MATB_SOURCE_DIRTY = $sourceProvenance.Dirty.ToString().ToLowerInvariant()
+}
 
 $backendOut = Join-Path $logRoot "backend.stdout.log"
 $backendErr = Join-Path $logRoot "backend.stderr.log"
@@ -132,6 +139,8 @@ try {
         frontend_started_at_utc = $frontendProcess.StartTime.ToUniversalTime().ToString("o")
         frontend_port = $FrontendPort
         frontend_url = $frontendUrl
+        source_commit = $sourceProvenance.Commit
+        source_dirty = $sourceProvenance.Dirty
     }
     $state | ConvertTo-Json | Set-Content -LiteralPath $statePath -Encoding utf8
 
@@ -146,6 +155,17 @@ try {
     Write-Host "Backend:  $backendHealth"
     Write-Host "Data:     $serviceRoot"
     Write-Host "Logs:     $logRoot"
+    $sourceTree = if ($null -eq $sourceProvenance.Dirty) {
+        "unverified"
+    } elseif ($sourceProvenance.Dirty) {
+        "dirty"
+    } else {
+        "clean"
+    }
+    Write-Host "Source:   $($sourceProvenance.Commit) ($sourceTree)"
+    if ($sourceProvenance.Commit -eq "unavailable" -or $sourceProvenance.Dirty -ne $false) {
+        Write-Warning "Source provenance is provisional; Experiment Designer previews will preserve that warning."
+    }
     if (-not $NoBrowser) {
         Start-Process $frontendUrl
     }
