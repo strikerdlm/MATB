@@ -87,6 +87,8 @@ class ProtocolController:
         *,
         participant_id: str,
         locale: Locale | str,
+        block_order: Sequence[WorkloadProfile | str] | None = None,
+        initial_validity: str = "valid",
         monotonic_clock: Callable[[], float] | None = None,
     ) -> None:
         if not isinstance(scenario, ScenarioDefinition):
@@ -102,9 +104,12 @@ class ProtocolController:
         self.participant_id = participant_id
         self.locale = resolved_locale
         self.block_order: tuple[WorkloadProfile, ...] = (
-            WorkloadProfile.PRACTICE,
-            *participant_order,
+            (WorkloadProfile.PRACTICE, *participant_order)
+            if block_order is None
+            else tuple(WorkloadProfile(item) for item in block_order)
         )
+        if not self.block_order or len(set(self.block_order)) != len(self.block_order):
+            raise ValueError("block_order must contain unique workload profiles")
         missing = [profile.value for profile in self.block_order if profile.value not in scenario.blocks]
         if missing:
             raise ProtocolError("block_order_violation", f"scenario is missing block {missing[0]}")
@@ -114,7 +119,9 @@ class ProtocolController:
         self.active_probe: ActiveProbe | None = None
         self.private_probe: RenderedProbe | None = None
         self.sagat_due_ms: int | None = None
-        self.validity = "valid"
+        if not isinstance(initial_validity, str) or not initial_validity:
+            raise ValueError("initial_validity must be non-empty")
+        self.validity = initial_validity
         self.protocol_deviations: list[dict[str, object]] = []
         self.isa_scores: dict[str, IsaScore] = {}
         self.sagat_answers: list[ProbeAnswer] = []
@@ -311,7 +318,11 @@ class ProtocolController:
         active = self.active_probe
         if active is None or active.kind not in {"ISA", "SAGAT"}:
             raise ProtocolError("no_active_probe")
-        self.validity = "valid_with_deviation"
+        self.validity = (
+            "technical_only_with_deviation"
+            if self.validity.startswith("technical_only")
+            else "valid_with_deviation"
+        )
         self.protocol_deviations.append({
             "code": "probe_timeout",
             "kind": active.kind,
@@ -334,7 +345,11 @@ class ProtocolController:
     def interrupt_probe(self, reason: str = "probe_interrupted") -> None:
         if not self.probe_active:
             raise ProtocolError("no_active_probe")
-        self.validity = "valid_with_deviation"
+        self.validity = (
+            "technical_only_with_deviation"
+            if self.validity.startswith("technical_only")
+            else "valid_with_deviation"
+        )
         self.protocol_deviations.append({
             "code": "probe_interrupted", "reason": reason,
             "block_id": self.current_block_id,

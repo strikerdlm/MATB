@@ -308,6 +308,17 @@ def test_backend_instance_lease_recovers_a_dead_local_owner(engine, monkeypatch)
     assert release_backend_instance_lease(engine, owner_token="replacement") is True
 
 
+def test_pid_probe_treats_windows_invalid_parameter_as_dead(monkeypatch):
+    def raise_missing_process(_pid: int, _signal: int) -> None:
+        error = OSError("The parameter is incorrect")
+        error.winerror = 87
+        raise error
+
+    monkeypatch.setattr(analysis_module.os, "kill", raise_missing_process)
+
+    assert analysis_module._pid_is_alive(987654321) is False
+
+
 def test_worker_cannot_transition_a_job_owned_by_another_process(engine):
     with Session(engine) as session:
         row = BayesResult(

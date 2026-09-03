@@ -78,6 +78,40 @@ function Get-MatbUasDataRoot {
     return [System.IO.Path]::GetFullPath((Join-Path $RepoRoot "exports\windows-suas"))
 }
 
+function Get-MatbUasSourceProvenance {
+    param([Parameter(Mandatory)][string]$RepoRoot)
+
+    $unavailable = [pscustomobject]@{
+        Commit = "unavailable"
+        Dirty = $null
+    }
+    $gitCommand = Get-Command git.exe -ErrorAction SilentlyContinue
+    if (-not $gitCommand) {
+        return $unavailable
+    }
+
+    $commit = (& $gitCommand.Source -C $RepoRoot rev-parse --verify HEAD 2>$null | Select-Object -Last 1)
+    if ($LASTEXITCODE -ne 0 -or -not $commit) {
+        return $unavailable
+    }
+    $commit = $commit.Trim().ToLowerInvariant()
+    if ($commit -notmatch '^(?:[0-9a-f]{40}|[0-9a-f]{64})$') {
+        return $unavailable
+    }
+
+    $status = @(& $gitCommand.Source -C $RepoRoot status --porcelain --untracked-files=normal 2>$null)
+    if ($LASTEXITCODE -ne 0) {
+        return [pscustomobject]@{
+            Commit = $commit
+            Dirty = $null
+        }
+    }
+    return [pscustomobject]@{
+        Commit = $commit
+        Dirty = ($status.Count -gt 0)
+    }
+}
+
 function Get-MatbUasLatestSealedRun {
     param([Parameter(Mandatory)][string]$RepoRoot)
 

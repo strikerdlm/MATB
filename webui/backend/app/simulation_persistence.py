@@ -11,13 +11,26 @@ from sqlmodel import Session, select
 
 from matb_integration.suas.recording.records import ArtifactInfo
 
-from .simulation_models import ProtocolDeviation, SimulationArtifact, SimulationBlock, SimulationSession
+from .simulation_models import (
+    ProtocolDeviation,
+    SimulationArtifact,
+    SimulationBlock,
+    SimulationSession,
+    TechnicalProtocolDeviation,
+    TechnicalSimulationArtifact,
+    TechnicalSimulationBlock,
+    TechnicalSimulationSession,
+)
+
+
+SessionRow = SimulationSession | TechnicalSimulationSession
+BlockRow = SimulationBlock | TechnicalSimulationBlock
 
 
 class SimulationPersistence(Protocol):
-    def load_session(self, session_id: str) -> SimulationSession | None: ...
+    def load_session(self, session_id: str) -> SessionRow | None: ...
 
-    def load_block(self, session_id: str, block_id: str) -> SimulationBlock | None: ...
+    def load_block(self, session_id: str, block_id: str) -> BlockRow | None: ...
 
     def update_session(self, session_id: str, **fields: object) -> None: ...
     def update_block(self, session_id: str, block_id: str, **fields: object) -> None: ...
@@ -43,15 +56,17 @@ class SQLModelSimulationPersistence:
     def __init__(self, engine: Any) -> None:
         self.engine = engine
 
-    def load_session(self, session_id: str) -> SimulationSession | None:
+    def load_session(self, session_id: str) -> SessionRow | None:
         with Session(self.engine) as db:
             row = db.get(SimulationSession, session_id)
+            if row is None:
+                row = db.get(TechnicalSimulationSession, session_id)
             if row is None:
                 return None
             db.expunge(row)
             return row
 
-    def load_block(self, session_id: str, block_id: str) -> SimulationBlock | None:
+    def load_block(self, session_id: str, block_id: str) -> BlockRow | None:
         with Session(self.engine) as db:
             row = db.exec(
                 select(SimulationBlock).where(
@@ -59,6 +74,13 @@ class SQLModelSimulationPersistence:
                     SimulationBlock.block_id == block_id,
                 )
             ).one_or_none()
+            if row is None:
+                row = db.exec(
+                    select(TechnicalSimulationBlock).where(
+                        TechnicalSimulationBlock.session_id == session_id,
+                        TechnicalSimulationBlock.block_id == block_id,
+                    )
+                ).one_or_none()
             if row is None:
                 return None
             db.expunge(row)
@@ -78,6 +100,17 @@ class SQLModelSimulationPersistence:
                 row.interrupted_at = datetime.now().astimezone()
                 db.add(row)
                 changed += 1
+            technical_rows = db.exec(
+                select(TechnicalSimulationSession).where(
+                    TechnicalSimulationSession.lifecycle.in_(("RUNNING", "PAUSED"))
+                )
+            ).all()
+            for row in technical_rows:
+                row.lifecycle = "INTERRUPTED"
+                row.validity = "technical_only_with_deviation"
+                row.interrupted_at = datetime.now().astimezone()
+                db.add(row)
+                changed += 1
             if changed:
                 db.commit()
         return changed
@@ -86,6 +119,8 @@ class SQLModelSimulationPersistence:
         self._check_fields(fields, _SESSION_FIELDS)
         with Session(self.engine) as db:
             row = db.get(SimulationSession, session_id)
+            if row is None:
+                row = db.get(TechnicalSimulationSession, session_id)
             if row is None:
                 raise KeyError(session_id)
             for key, value in fields.items():
@@ -103,6 +138,13 @@ class SQLModelSimulationPersistence:
                 )
             ).one_or_none()
             if row is None:
+                row = db.exec(
+                    select(TechnicalSimulationBlock).where(
+                        TechnicalSimulationBlock.session_id == session_id,
+                        TechnicalSimulationBlock.block_id == block_id,
+                    )
+                ).one_or_none()
+            if row is None:
                 raise KeyError(f"{session_id}/{block_id}")
             for key, value in fields.items():
                 setattr(row, key, value)
@@ -114,7 +156,9 @@ class SQLModelSimulationPersistence:
         simulation_time_ms: int, detail: Mapping[str, object],
     ) -> None:
         with Session(self.engine) as db:
-            db.add(ProtocolDeviation(
+            technical = db.get(TechnicalSimulationSession, session_id) is not None
+            deviation_model = TechnicalProtocolDeviation if technical else ProtocolDeviation
+            db.add(deviation_model(
                 session_id=session_id,
                 block_id=block_id,
                 code=code,
@@ -126,14 +170,16 @@ class SQLModelSimulationPersistence:
 
     def replace_artifacts(self, session_id: str, artifacts: Sequence[ArtifactInfo]) -> None:
         with Session(self.engine) as db:
-            old = db.exec(select(SimulationArtifact).where(SimulationArtifact.session_id == session_id)).all()
+            technical = db.get(TechnicalSimulationSession, session_id) is not None
+            artifact_model = TechnicalSimulationArtifact if technical else SimulationArtifact
+            old = db.exec(select(artifact_model).where(artifact_model.session_id == session_id)).all()
             for row in old:
                 db.delete(row)
             for artifact in artifacts:
                 relative = artifact.path.name
                 if artifact.path.parent.name == "checkpoints":
                     relative = f"checkpoints/{relative}"
-                db.add(SimulationArtifact(
+                db.add(artifact_model(
                     session_id=session_id,
                     kind=artifact.kind,
                     relative_path=relative,
@@ -158,10 +204,10 @@ class InMemorySimulationPersistence:
         self.deviations: list[dict[str, object]] = []
         self.artifacts: dict[str, tuple[ArtifactInfo, ...]] = {}
 
-    def load_session(self, session_id: str) -> SimulationSession | None:
+    def load_session(self, session_id: str) -> SessionRow | None:
         return None
 
-    def load_block(self, session_id: str, block_id: str) -> SimulationBlock | None:
+    def load_block(self, session_id: str, block_id: str) -> BlockRow | None:
         return None
 
     def mark_orphaned_sessions(self) -> int:

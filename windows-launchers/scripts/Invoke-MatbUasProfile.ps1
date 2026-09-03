@@ -24,7 +24,12 @@ if (-not (Test-Path -LiteralPath $scenarioPath -PathType Leaf)) {
 $env:PYTHONUTF8 = "1"
 $env:PYTHONDONTWRITEBYTECODE = "1"
 if ($Ticks -eq 0) {
-    $ticksText = & $pythonPath -c "from pathlib import Path; import sys; from matb_integration.suas.engine.runtime import TICK_MS; from matb_integration.suas.scenarios.loader import load_scenario; loaded=load_scenario(Path(sys.argv[1])); print(loaded.definition.blocks[sys.argv[2]].duration_ms // TICK_MS)" $scenarioPath $WorkloadProfile
+    Push-Location $repoRoot
+    try {
+        $ticksText = & $pythonPath -c "from pathlib import Path; import sys; from matb_integration.suas.engine.runtime import TICK_MS; from matb_integration.suas.scenarios.loader import load_scenario; loaded=load_scenario(Path(sys.argv[1])); print(loaded.definition.blocks[sys.argv[2]].duration_ms // TICK_MS)" $scenarioPath $WorkloadProfile
+    } finally {
+        Pop-Location
+    }
     if ($LASTEXITCODE -ne 0 -or -not $ticksText) {
         throw "Could not derive the configured duration for $WorkloadProfile."
     }

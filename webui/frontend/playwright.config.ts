@@ -25,7 +25,9 @@ const isolatedEnv = {
   MATB_SIMULATION_OUTPUT_DIR: path.join(e2eRoot, "exports"),
   MATB_SIMULATION_SCENARIO_DIR: scenarioRoot,
   MATB_SIMULATION_TEST_MODE: "1",
-  MATB_SIMULATION_WALL_TIME_SCALE: "0.1",
+  // Keep browser tests accelerated while leaving enough real time for a
+  // rendered mouse/keyboard command to settle before the next protocol gate.
+  MATB_SIMULATION_WALL_TIME_SCALE: process.env.MATB_SIMULATION_WALL_TIME_SCALE ?? "0.5",
   MATB_BACKEND_PORT: "8000",
 };
 

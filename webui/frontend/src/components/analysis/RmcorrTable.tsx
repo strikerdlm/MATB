@@ -1,12 +1,16 @@
+"use client";
+
 import { StatBadge } from "@/components/analysis/StatBadge";
 import { fmtCi, fmtNum, fmtP } from "@/lib/format";
 import type { AnalysisArtifact } from "@/types";
+import { useAppLocale } from "@/lib/i18n";
 
 export function RmcorrTable({ q3 }: { q3: AnalysisArtifact["q3"] }) {
+  const { copy } = useAppLocale();
   return (
     <div className="data-table-wrap overflow-x-auto">
       <div className="border-b border-white/10 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-        Q3 - repeated-measures correlation (exploratory; canonical + level-adjusted sensitivity)
+        Q3 - {copy("correlación de medidas repetidas (exploratoria; canónica + sensibilidad ajustada por nivel)", "repeated-measures correlation (exploratory; canonical + level-adjusted sensitivity)")}
       </div>
       <table className="data-table">
         <thead>
@@ -15,10 +19,10 @@ export function RmcorrTable({ q3 }: { q3: AnalysisArtifact["q3"] }) {
             <th className="px-4 py-2">y</th>
             <th className="px-4 py-2">r</th>
             <th className="px-4 py-2">df</th>
-            <th className="px-4 py-2">95% CI</th>
+            <th className="px-4 py-2">IC 95%</th>
             <th className="px-4 py-2">p</th>
-            <th className="px-4 py-2">r (level-adj)</th>
-            <th className="px-4 py-2">Status</th>
+            <th className="px-4 py-2">r ({copy("ajustada por nivel", "level-adj")})</th>
+            <th className="px-4 py-2">{copy("Estado", "Status")}</th>
           </tr>
         </thead>
         <tbody>

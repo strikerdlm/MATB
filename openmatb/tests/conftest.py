@@ -11,7 +11,16 @@ import builtins
 import configparser
 import sys
 import types
+from pathlib import Path
 from unittest.mock import MagicMock
+
+# OpenMATB runs its tests from this subdirectory, while provenance integration
+# tests also import the sibling ``matb_integration`` package from the repo root.
+# Append instead of prepending so OpenMATB's own ``core`` and ``tests`` packages
+# retain precedence.
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPOSITORY_ROOT) not in sys.path:
+    sys.path.append(str(_REPOSITORY_ROOT))
 
 # ──────────────────────────────────────────────
 # 1. Install gettext identity function

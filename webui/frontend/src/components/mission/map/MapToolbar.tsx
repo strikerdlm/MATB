@@ -33,7 +33,7 @@ export function MapToolbar({ locale, layers, onToggleLayer, onZoomIn, onZoomOut,
   ];
 
   return (
-    <div className="absolute left-3 top-3 z-10 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-1 rounded border border-white/10 bg-black/75 p-1 backdrop-blur" aria-label="Map controls">
+    <div className="absolute left-3 top-3 z-10 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-1 rounded border border-white/10 bg-black/75 p-1 backdrop-blur" aria-label={t(locale, "map.title")}>
       {layerLabels.map(([layer, label]) => (
         <button
           key={layer}

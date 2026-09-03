@@ -4,7 +4,7 @@
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { ES } from "@/components/screen/strings_es";
+import { useScreenStrings } from "@/components/screen/strings";
 import { Button } from "@/components/ui/button";
 import { genChoiceSides, type ChoiceTrial, type ScreenConfig } from "@/lib/screen";
 
@@ -24,6 +24,7 @@ export function ChoiceRT({
   rng: () => number;
   onDone: (trials: ChoiceTrial[]) => void;
 }) {
+  const strings = useScreenStrings();
   const practiceCount = config.practiceTrials;
   const scoredCount = config.choiceRtTrials;
   const totalTrials = scoredCount + practiceCount;
@@ -150,9 +151,10 @@ export function ChoiceRT({
   if (stage === "instructions") {
     return (
       <Instructions
-        title={ES.choiceRt.title}
-        body={ES.choiceRt.instructions}
+        title={strings.choiceRt.title}
+        body={strings.choiceRt.instructions}
         onStart={startPractice}
+        startLabel={strings.common.start}
       />
     );
   }
@@ -160,8 +162,8 @@ export function ChoiceRT({
   if (stage === "interstitial") {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 text-center">
-        <p className="max-w-md text-sm text-muted-foreground">{ES.common.practiceDone}</p>
-        <Button onClick={startScored}>{ES.common.continue}</Button>
+        <p className="max-w-md text-sm text-muted-foreground">{strings.common.practiceDone}</p>
+        <Button onClick={startScored}>{strings.common.continue}</Button>
       </div>
     );
   }
@@ -176,7 +178,7 @@ export function ChoiceRT({
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-8">
       {inPractice && (
         <p className="text-xs uppercase tracking-wide text-muted-foreground">
-          {ES.common.practice}
+          {strings.common.practice}
         </p>
       )}
       <div className="flex h-40 w-40 items-center justify-center">
@@ -191,16 +193,18 @@ function Instructions({
   title,
   body,
   onStart,
+  startLabel,
 }: {
   title: string;
   body: string;
   onStart: () => void;
+  startLabel: string;
 }) {
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 text-center">
       <h3 className="text-xl font-semibold">{title}</h3>
       <p className="max-w-md text-sm leading-relaxed text-muted-foreground">{body}</p>
-      <Button onClick={onStart}>{ES.common.start}</Button>
+      <Button onClick={onStart}>{startLabel}</Button>
     </div>
   );
 }

@@ -4,12 +4,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Check, ChevronRight, Loader2, Radio, ShieldCheck } from "lucide-react";
 import { listVisits } from "@/lib/api";
-import {
-  createSimulationSession,
-  getSimulationSession,
-  SimulationApiError,
-} from "@/lib/simulation/api";
+import { createSimulationSession, SimulationApiError } from "@/lib/simulation/api";
+import { storePreparedSessionLease } from "@/lib/simulation/lease";
 import { STRINGS, t, type TranslationKey } from "@/lib/simulation/i18n";
+import { useAppLocale } from "@/lib/i18n";
 import type { Participant, Visit } from "@/types";
 import type { Locale, PreparedSession, ScenarioSummary } from "@/types/simulation";
 import { Button } from "@/components/ui/button";
@@ -17,9 +15,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
-const LEASE_KEY_PREFIX = "matb.simulation.";
-const LEASE_KEY_SUFFIX = ".lease";
-const TERMINAL_LIFECYCLES = new Set(["FINISHED", "ABORTED"]);
 const EMPTY_VISITS: Visit[] = [];
 const PROFILE_ORDER = ["PRACTICE", "LOW", "MEDIUM", "HIGH"] as const;
 
@@ -44,36 +39,7 @@ function errorMessage(reason: unknown, locale: Locale): string {
   return t(locale, "setup.prepare_error");
 }
 
-function leaseKey(sessionId: string): string {
-  return `${LEASE_KEY_PREFIX}${sessionId}${LEASE_KEY_SUFFIX}`;
-}
-
-/**
- * Remove stale controller leases only when the backend confirms that the
- * corresponding session is terminal.  An unreachable session is retained so
- * an operator never loses the ability to recover an active run.
- */
-async function clearTerminalLeases(currentSessionId: string): Promise<void> {
-  if (typeof window === "undefined") return;
-  const keys: string[] = [];
-  for (let index = 0; index < window.sessionStorage.length; index += 1) {
-    const key = window.sessionStorage.key(index);
-    if (key && key.startsWith(LEASE_KEY_PREFIX) && key.endsWith(LEASE_KEY_SUFFIX)) keys.push(key);
-  }
-
-  await Promise.all(keys.map(async (key) => {
-    const sessionId = key.slice(LEASE_KEY_PREFIX.length, -LEASE_KEY_SUFFIX.length);
-    if (!sessionId || sessionId === currentSessionId) return;
-    try {
-      const session = await getSimulationSession(sessionId);
-      if (TERMINAL_LIFECYCLES.has(session.lifecycle)) window.sessionStorage.removeItem(key);
-    } catch {
-      // Keep the lease if the session cannot be confirmed as terminal.
-    }
-  }));
-}
-
-function scenarioFleet(_scenario: ScenarioSummary): string {
+function scenarioFleet(): string {
   // The installed protocol supports a bounded 2–8 synthetic fleet.  The
   // scenario's exact count is authoritative in the live snapshot, while the
   // setup summary communicates the safe operating range.
@@ -94,10 +60,10 @@ export function MissionSetupForm({
   visitsLoader = listVisits,
 }: MissionSetupFormProps) {
   const router = useRouter();
+  const { simulationLocale: locale } = useAppLocale();
   const [participantId, setParticipantId] = useState("");
   const [visitOrdinal, setVisitOrdinal] = useState("");
   const [scenarioId, setScenarioId] = useState("");
-  const [locale, setLocale] = useState<Locale>("en");
   const [acknowledged, setAcknowledged] = useState(false);
   const [visits, setVisits] = useState<Visit[]>(initialVisits);
   const [visitsLoading, setVisitsLoading] = useState(false);
@@ -150,7 +116,7 @@ export function MissionSetupForm({
     return () => {
       mounted = false;
     };
-  }, [initialVisits, participantId, visitsLoader]);
+  }, [initialVisits, locale, participantId, visitsLoader]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -169,10 +135,7 @@ export function MissionSetupForm({
       });
       // Confirm old sessions before deleting their leases, and never put the
       // lease in the URL, page state, or any rendered diagnostic.
-      await clearTerminalLeases(prepared.id);
-      if (typeof window !== "undefined") {
-        window.sessionStorage.setItem(leaseKey(prepared.id), prepared.controller_lease);
-      }
+      await storePreparedSessionLease(prepared);
       router.push(`/mission?session=${encodeURIComponent(prepared.id)}`);
     } catch (reason: unknown) {
       setSubmitError(errorMessage(reason, locale));
@@ -283,7 +246,7 @@ export function MissionSetupForm({
                     <option value="">—</option>
                     {scenarios.map((scenario) => (
                       <option key={scenario.scenario_id} value={scenario.scenario_id}>
-                        {scenario.title || scenario.scenario_id}
+                        {scenario.titles?.[locale] || scenario.title || scenario.scenario_id}
                       </option>
                     ))}
                   </select>
@@ -293,18 +256,10 @@ export function MissionSetupForm({
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="mission-language">{labels["setup.language"]}</Label>
-                  <select
-                    id="mission-language"
-                    aria-label={labels["setup.language"]}
-                    value={locale}
-                    onChange={(event) => setLocale(event.target.value as Locale)}
-                    disabled={submitting}
-                    className="h-10 w-full rounded-[3px] border border-input bg-black/40 px-3 text-sm outline-none transition focus:border-white/60 focus:ring-2 focus:ring-white/15 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <option value="en">{labels["setup.language_en"]}</option>
-                    <option value="es-CO">{labels["setup.language_es_co"]}</option>
-                  </select>
+                  <Label>{labels["setup.language"]}</Label>
+                  <div className="flex h-10 items-center rounded-[3px] border border-input bg-black/20 px-3 text-sm text-muted-foreground">
+                    {locale === "es-CO" ? labels["setup.language_es_co"] : labels["setup.language_en"]}
+                  </div>
                 </div>
               </div>
 
@@ -341,7 +296,7 @@ export function MissionSetupForm({
           <Card className={cn("h-fit", !selectedScenario && "opacity-80")}>
             <CardHeader>
               <CardTitle className="font-display text-lg uppercase tracking-wide">{labels["setup.manifest"]}</CardTitle>
-              <CardDescription>{selectedScenario?.title || "—"}</CardDescription>
+              <CardDescription>{selectedScenario?.titles?.[locale] || selectedScenario?.title || "—"}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 font-mono text-xs">
               <dl className="space-y-3">
@@ -351,7 +306,7 @@ export function MissionSetupForm({
                 </div>
                 <div className="flex items-baseline justify-between gap-3 border-b border-white/10 pb-2">
                   <dt className="text-muted-foreground">{labels["setup.fleet_range"]}</dt>
-                  <dd className="text-right text-foreground">{selectedScenario ? scenarioFleet(selectedScenario) : "2–8 sUAS"}</dd>
+                  <dd className="text-right text-foreground">{selectedScenario ? scenarioFleet() : "2–8 sUAS"}</dd>
                 </div>
                 <div className="flex items-baseline justify-between gap-3 border-b border-white/10 pb-2">
                   <dt className="text-muted-foreground">{labels["setup.profiles"]}</dt>
@@ -363,7 +318,7 @@ export function MissionSetupForm({
                 </div>
                 <div className="flex items-baseline justify-between gap-3">
                   <dt className="text-muted-foreground">{labels["setup.offline"]}</dt>
-                  <dd className="inline-flex items-center gap-1.5 text-success"><Check className="h-3.5 w-3.5" aria-hidden="true" /> local runtime</dd>
+                  <dd className="inline-flex items-center gap-1.5 text-success"><Check className="h-3.5 w-3.5" aria-hidden="true" /> {locale === "es-CO" ? "ejecución local" : "local runtime"}</dd>
                 </div>
               </dl>
             </CardContent>

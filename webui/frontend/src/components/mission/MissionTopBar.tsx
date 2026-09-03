@@ -35,6 +35,7 @@ export function MissionTopBar({ session, locale, connection, canControl, onStart
   const isPaused = session.lifecycle === "PAUSED";
   const protocolGateActive = ["ISA_ACTIVE", "SAGAT_ACTIVE", "POST_BLOCK_ACTIVE"].includes(session.protocol_phase ?? "");
   const readyForNextBlock = isPaused && session.protocol_phase === "READY_FOR_BLOCK";
+  const technical = session.record_class === "technical_only";
 
   return (
     <header className="mission-panel flex min-h-[68px] flex-wrap items-center justify-between gap-3 rounded-none border-x-0 border-t-0 px-4 py-3 lg:px-6">
@@ -42,10 +43,12 @@ export function MissionTopBar({ session, locale, connection, canControl, onStart
         <div className="flex h-9 w-9 items-center justify-center border border-success/40 bg-success/10 text-success" aria-hidden="true"><Radio className="h-4 w-4" /></div>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-            <span>MISSION {session.id}</span><span aria-hidden="true">·</span><span>{session.active_block_id ?? "READY"}</span>
+            <span>{t(locale, "mission.label")} {session.id}</span><span aria-hidden="true">·</span><span>{session.active_block_id ?? t(locale, "mission.ready")}</span>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-3 text-sm font-semibold uppercase tracking-wide text-foreground">
-            <span>{session.participant_id}</span>
+            {technical
+              ? <><span className="text-warning">{locale === "es-CO" ? "MODO TÉCNICO" : "TECHNICAL MODE"}</span><span>{session.selected_block_id}</span></>
+              : <span>{session.participant_id}</span>}
             <span className={connectionTone[connection]} aria-label={t(locale, "a11y.connection", { status: t(locale, connectionKey) })}>
               <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-current align-middle" aria-hidden="true" />{t(locale, connectionKey)}
             </span>
@@ -59,14 +62,15 @@ export function MissionTopBar({ session, locale, connection, canControl, onStart
         {isPaused && !readyForNextBlock && <Button type="button" size="sm" variant="success" onClick={onResume} disabled={!canControl || busy || protocolGateActive}><Play className="mr-2 h-3.5 w-3.5" aria-hidden="true" />{t(locale, "lifecycle.resume")}</Button>}
         {confirmFinish ? (
           <div className="flex items-center gap-1" role="group" aria-label={t(locale, "confirm.finish")}>
-            <Button type="button" size="sm" variant="destructive" onClick={() => { setConfirmFinish(false); onFinish(); }} disabled={!canControl || busy}>Confirm</Button>
+            <Button type="button" size="sm" variant="destructive" onClick={() => { setConfirmFinish(false); onFinish(); }} disabled={!canControl || busy}>{t(locale, "common.confirm")}</Button>
             <Button type="button" size="sm" variant="ghost" onClick={() => setConfirmFinish(false)}>×</Button>
           </div>
         ) : (
           <Button type="button" size="sm" variant="outline" onClick={() => setConfirmFinish(true)} disabled={!canControl || busy || ["FINISHED", "ABORTED", "INTERRUPTED"].includes(session.lifecycle)}><Flag className="mr-2 h-3.5 w-3.5" aria-hidden="true" />{t(locale, "lifecycle.finish")}</Button>
         )}
-        {!canControl && <span className="sr-only"><ShieldAlert />Observer mode: commands are disabled.</span>}
+        {!canControl && <span className="sr-only"><ShieldAlert />{t(locale, "mission.observer_disabled")}</span>}
       </div>
+      {technical && <div className="w-full border-t border-warning/20 pt-2 font-mono text-[10px] uppercase tracking-wider text-warning">{locale === "es-CO" ? "No apto para análisis de participantes" : "Not eligible for participant analysis"}</div>}
     </header>
   );
 }

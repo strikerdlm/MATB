@@ -59,6 +59,12 @@ def _pid_is_alive(pid: int) -> bool:
         return False
     except PermissionError:
         return True
+    except OSError as exc:
+        # Windows reports a missing process as ERROR_INVALID_PARAMETER rather
+        # than ProcessLookupError for os.kill(pid, 0).
+        if getattr(exc, "winerror", None) == 87:
+            return False
+        raise
     return True
 
 

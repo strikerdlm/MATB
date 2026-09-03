@@ -15,6 +15,7 @@ import {
   withScientificDefaults,
 } from "@/lib/figures";
 import { cn } from "@/lib/utils";
+import { useAppLocale } from "@/lib/i18n";
 
 const ReactECharts = dynamic(() => import("echarts-for-react"), { ssr: false }) as ComponentType<any>;
 
@@ -84,6 +85,7 @@ export function ScientificChart({
   className,
   showExports = true,
 }: ScientificChartProps) {
+  const { copy } = useAppLocale();
   const chartRef = useRef<ChartHandle | null>(null);
   const mergedOption = useMemo(() => withScientificDefaults(option), [option]);
   const preflight = useMemo(() => preflightScientificOption(mergedOption), [mergedOption]);
@@ -131,13 +133,13 @@ export function ScientificChart({
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            <ExportButton label="Download SVG" onClick={() => exportDataUrl("svg")}>
+            <ExportButton label={copy("Descargar SVG", "Download SVG")} onClick={() => exportDataUrl("svg")}>
               <Download className="h-4 w-4" />
             </ExportButton>
-            <ExportButton label="Download PNG" onClick={() => exportDataUrl("png")}>
+            <ExportButton label={copy("Descargar PNG", "Download PNG")} onClick={() => exportDataUrl("png")}>
               <FileImage className="h-4 w-4" />
             </ExportButton>
-            <ExportButton label="Download ECharts JSON" onClick={exportJson}>
+            <ExportButton label={copy("Descargar JSON de ECharts", "Download ECharts JSON")} onClick={exportJson}>
               <FileJson className="h-4 w-4" />
             </ExportButton>
           </div>

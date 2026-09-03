@@ -378,12 +378,29 @@ def test_isa_interval_decreasing():
 
 _OPENMATB_PATH = Path("/root/repos/openmatb")
 _HAS_DISPLAY = bool(os.environ.get("DISPLAY"))
-_HAS_OPENMATB = _OPENMATB_PATH.is_dir()
+
+
+def _is_accessible_directory(path: Path) -> bool:
+    try:
+        return path.is_dir()
+    except OSError:
+        return False
+
+
+_HAS_OPENMATB = _is_accessible_directory(_OPENMATB_PATH)
 
 _sync_skip = pytest.mark.skipif(
     not (_HAS_DISPLAY and _HAS_OPENMATB),
     reason="Requires DISPLAY env var and /root/repos/openmatb",
 )
+
+
+def test_inaccessible_openmatb_sync_path_is_treated_as_unavailable(monkeypatch):
+    def deny_access(_path: Path) -> bool:
+        raise PermissionError("inaccessible optional checkout")
+
+    monkeypatch.setattr(Path, "is_dir", deny_access)
+    assert _is_accessible_directory(_OPENMATB_PATH) is False
 
 
 @_sync_skip

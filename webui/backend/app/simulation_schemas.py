@@ -16,6 +16,9 @@ from typing_extensions import TypeAliasType
 
 
 Locale: TypeAlias = Literal["en", "es-CO"]
+SessionMode: TypeAlias = Literal["research", "interactive_technical"]
+RecordClass: TypeAlias = Literal["research", "technical_only"]
+WorkloadProfile: TypeAlias = Literal["PRACTICE", "LOW", "MEDIUM", "HIGH"]
 Lifecycle: TypeAlias = Literal[
     "PREPARED",
     "RUNNING",
@@ -47,13 +50,23 @@ class CreateSimulationSession(BaseModel):
     locale: Locale
 
 
+class CreateTechnicalSimulationSession(BaseModel):
+    """Strict contract for a direct, non-participant interactive launch."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    scenario_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+    block_id: WorkloadProfile
+    locale: Locale
+
+
 class SessionView(BaseModel):
     """Public session metadata that never includes a controller lease."""
 
     model_config = ConfigDict(extra="forbid")
 
     id: str
-    participant_id: str = Field(pattern=r"^P[0-9]{2,6}$")
+    participant_id: str | None = Field(default=None, pattern=r"^P[0-9]{2,6}$")
     visit_id: int | None = Field(default=None, ge=1)
     visit_ordinal: int | None = Field(default=None, ge=1, le=16)
     scenario_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
@@ -62,6 +75,9 @@ class SessionView(BaseModel):
     lifecycle: Lifecycle
     active_block_id: str | None = None
     validity: str = "valid"
+    session_mode: SessionMode = "research"
+    record_class: RecordClass = "research"
+    selected_block_id: WorkloadProfile | None = None
     block_order: list[str] = Field(default_factory=list)
     protocol_phase: str = "READY_FOR_BLOCK"
     current_block_index: int = Field(default=0, ge=0)
@@ -166,9 +182,21 @@ class ScenarioSummary(BaseModel):
     scenario_sha256: str | None = None
     title: str | None = None
     description: str | None = None
+    titles: dict[Locale, str] = Field(default_factory=dict)
+    descriptions: dict[Locale, str] = Field(default_factory=dict)
     aircraft_count: int | None = Field(default=None, ge=2, le=8)
     block_order: list[str] = Field(default_factory=list)
     locales: list[Locale] = Field(default_factory=list)
+    profile_details: dict[WorkloadProfile, "ScenarioProfileSummary"] = Field(default_factory=dict)
+
+
+class ScenarioProfileSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    duration_seconds: int = Field(ge=1)
+    aircraft_count: int = Field(ge=1, le=8)
+    contact_count: int = Field(ge=0)
+    calibration_status: Literal["engineering_preset_pending_human_calibration"]
 
 
 class ScenarioValidationView(BaseModel):

@@ -35,7 +35,12 @@ import yaml
 
 from app.db import get_session
 from app.models import Visit
-from app.simulation_models import SimulationArtifact, SimulationSession
+from app.simulation_models import (
+    SimulationArtifact,
+    SimulationSession,
+    TechnicalSimulationArtifact,
+    TechnicalSimulationSession,
+)
 from app.simulation_runtime import (
     InvalidLease,
     InvalidTransition,
@@ -52,6 +57,7 @@ from app.simulation_schemas import (
     CommandRequest,
     CommandResultView,
     CreateSimulationSession,
+    CreateTechnicalSimulationSession,
     ErrorDetail,
     FinishRequest,
     LifecycleRequest,
@@ -59,6 +65,7 @@ from app.simulation_schemas import (
     RecoverRequest,
     RecoveryView,
     ScenarioSummary,
+    ScenarioProfileSummary,
     ScenarioValidationView,
     SessionView,
 )
@@ -189,14 +196,26 @@ def _scenario_summary(loaded: Any) -> ScenarioSummary:
     # PRACTICE-first order is stable for scenario listing even though each
     # participant receives a counterbalanced LOW/MEDIUM/HIGH order at prepare.
     block_order = [block_id for block_id in ("PRACTICE", "LOW", "MEDIUM", "HIGH") if block_id in definition.blocks]
+    profile_details = {
+        block_id: ScenarioProfileSummary(
+            duration_seconds=max(1, definition.blocks[block_id].duration_ms // 1_000),
+            aircraft_count=len(definition.blocks[block_id].aircraft_ids),
+            contact_count=len(definition.blocks[block_id].contact_ids),
+            calibration_status="engineering_preset_pending_human_calibration",
+        )
+        for block_id in block_order
+    }
     return ScenarioSummary(
         scenario_id=definition.scenario_id,
         scenario_sha256=loaded.sha256,
         title=title,
         description=description,
+        titles={getattr(key, "value", str(key)): value for key, value in definition.title.items()},
+        descriptions={getattr(key, "value", str(key)): value for key, value in definition.description.items()},
         aircraft_count=len(definition.aircraft),
         block_order=block_order,
         locales=locales,
+        profile_details=profile_details,
     )
 
 
@@ -286,21 +305,54 @@ async def prepare_session(
     return await _managed(manager.prepare(body, db))
 
 
-def _session_view_from_row(row: SimulationSession, db: Session) -> SessionView:
+@router.post(
+    "/technical-sessions",
+    response_model=PreparedSession,
+    status_code=status.HTTP_201_CREATED,
+)
+async def prepare_technical_session(
+    body: CreateTechnicalSimulationSession,
+    manager: SimulationManager = Depends(get_simulation_manager),
+    db: Session = Depends(get_session),
+) -> PreparedSession:
+    """Prepare a direct one-block launch that is never participant data."""
+
+    return await _managed(manager.prepare_technical(body, db))
+
+
+SessionMetadataRow = SimulationSession | TechnicalSimulationSession
+
+
+def _session_row(db: Session, session_id: str) -> SessionMetadataRow | None:
+    row = db.get(SimulationSession, session_id)
+    if row is not None:
+        return row
+    return db.get(TechnicalSimulationSession, session_id)
+
+
+def _session_view_from_row(row: SessionMetadataRow, db: Session) -> SessionView:
     """Rehydrate public metadata for a sealed session after a process restart."""
 
     try:
         manifest = json.loads(row.manifest_json)
     except (TypeError, ValueError, json.JSONDecodeError):
         manifest = {}
-    block_order = manifest.get("block_order", []) if isinstance(manifest, Mapping) else []
+    technical = isinstance(row, TechnicalSimulationSession)
+    selected_block_id = row.selected_block_id if technical else None
+    block_order = (
+        [selected_block_id]
+        if selected_block_id is not None
+        else manifest.get("block_order", []) if isinstance(manifest, Mapping) else []
+    )
     if not isinstance(block_order, list) or not all(isinstance(item, str) for item in block_order):
         block_order = []
-    visit = db.get(Visit, row.visit_id)
+    visit_id = getattr(row, "visit_id", None)
+    participant_id = getattr(row, "participant_id", None)
+    visit = db.get(Visit, visit_id) if visit_id is not None else None
     return SessionView(
         id=row.id,
-        participant_id=row.participant_id,
-        visit_id=row.visit_id,
+        participant_id=participant_id,
+        visit_id=visit_id,
         visit_ordinal=visit.visit_ordinal if visit is not None else None,
         scenario_id=row.scenario_id,
         scenario_sha256=row.scenario_sha256,
@@ -308,6 +360,9 @@ def _session_view_from_row(row: SimulationSession, db: Session) -> SessionView:
         lifecycle=row.lifecycle,
         active_block_id=row.active_block_id,
         validity=row.validity,
+        session_mode="interactive_technical" if technical else "research",
+        record_class="technical_only" if technical else "research",
+        selected_block_id=selected_block_id,
         block_order=block_order,
         state_version=0,
         simulation_time_ms=0,
@@ -327,7 +382,7 @@ async def get_session_view(
     try:
         return await manager.view(session_id)
     except SimulationNotFound:
-        row = db.get(SimulationSession, session_id)
+        row = _session_row(db, session_id)
         if row is None:
             raise _error(status.HTTP_404_NOT_FOUND, "simulation_not_found", "simulation not found")
         return _session_view_from_row(row, db)
@@ -466,7 +521,7 @@ async def _terminal_session(
     try:
         view = await manager.view(session_id)
     except SimulationNotFound:
-        row = db.get(SimulationSession, session_id)
+        row = _session_row(db, session_id)
         if row is None:
             raise _error(status.HTTP_404_NOT_FOUND, "simulation_not_found", "simulation not found")
         view = _session_view_from_row(row, db)
@@ -500,10 +555,12 @@ def _artifact_views(
     manager: SimulationManager,
     db: Session,
 ) -> list[ArtifactView]:
+    technical = db.get(TechnicalSimulationSession, session_id) is not None
+    artifact_model = TechnicalSimulationArtifact if technical else SimulationArtifact
     rows = db.exec(
-        select(SimulationArtifact)
-        .where(SimulationArtifact.session_id == session_id)
-        .order_by(SimulationArtifact.relative_path)
+        select(artifact_model)
+        .where(artifact_model.session_id == session_id)
+        .order_by(artifact_model.relative_path)
     ).all()
     if rows:
         views: list[ArtifactView] = []
@@ -554,13 +611,17 @@ def _session_run_dir(session_id: str, manager: SimulationManager, db: Session) -
     active = manager.active
     if active is not None and active.session_id == session_id:
         return active.recorder.run_dir
-    row = db.get(SimulationSession, session_id)
+    row = _session_row(db, session_id)
     if row is None:
         return None
     # The path is trusted only as an internal server-side lookup.  It is never
     # returned to the browser and is constrained to the configured artifact
     # root where possible.
-    configured_root = manager.artifact_root.resolve()
+    configured_root = (
+        (manager.artifact_root / "technical").resolve()
+        if isinstance(row, TechnicalSimulationSession)
+        else manager.artifact_root.resolve()
+    )
     path = Path(row.artifact_root)
     if not path.is_absolute():
         path = configured_root / path
@@ -590,7 +651,13 @@ async def get_debrief(
         # Aborted runs are intentionally partial and have no debrief artifact;
         # expose a stable, explicitly incomplete public view instead.
         if view.lifecycle == "ABORTED":
-            return {"status": "partial_unverified", "timeline": []}
+            return {
+                "status": "partial_unverified",
+                "timeline": [],
+                "session_mode": view.session_mode,
+                "record_class": view.record_class,
+                "selected_block_id": view.selected_block_id,
+            }
         raise _error(status.HTTP_404_NOT_FOUND, "debrief_not_found", "debrief artifact not found") from exc
     if not isinstance(payload, dict):
         raise _error(status.HTTP_500_INTERNAL_SERVER_ERROR, "invalid_debrief", "debrief artifact is not a JSON object")
@@ -628,6 +695,9 @@ async def get_public_bundle(
         "scenario_sha256": view.scenario_sha256,
         "lifecycle": view.lifecycle,
         "validity": view.validity,
+        "session_mode": view.session_mode,
+        "record_class": view.record_class,
+        "selected_block_id": view.selected_block_id,
         "private_files_excluded": ["events.jsonl", "questionnaires.json", "scenario.yaml", "checkpoints/"],
     }
     buffer = io.BytesIO()

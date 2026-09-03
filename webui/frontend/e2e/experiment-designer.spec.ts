@@ -4,6 +4,7 @@ import { expect, test } from "./core-fixtures";
 
 test("experiment designer compiles a real deterministic scenario accessibly", async ({ page }, testInfo) => {
   await page.goto("/experiments");
+  await page.locator("#app-language").selectOption("en");
 
   await expect(page.getByRole("heading", { name: "Experiment Designer" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Experiment timeline" })).toBeVisible();
@@ -28,6 +29,7 @@ test("experiment designer compiles a real deterministic scenario accessibly", as
 test("experiment designer keeps controls and content inside a mobile viewport", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/experiments");
+  await page.locator("#app-language").selectOption("en");
 
   await expect(page.getByRole("heading", { name: "Experiment Designer" })).toBeVisible();
   await expect(page.getByRole("button", { name: /add event/i })).toBeVisible();

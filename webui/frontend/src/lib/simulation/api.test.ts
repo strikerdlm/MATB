@@ -2,13 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   SimulationApiError,
   createSimulationSession,
+  createTechnicalSimulationSession,
   getSimulationState,
   simulationWsUrl,
   submitSimulationCommand,
   transitionSession,
 } from "@/lib/simulation/api";
 import { resetApiBaseCache } from "@/lib/runtime-config";
-import type { PreparedSession, SessionView, WorldSnapshot } from "@/types/simulation";
+import type { PreparedSession, WorldSnapshot } from "@/types/simulation";
 
 function mockFetch(status: number, body: unknown) {
   return vi.fn().mockResolvedValue({
@@ -21,6 +22,7 @@ function mockFetch(status: number, body: unknown) {
 
 const prepared: PreparedSession = {
   id: "sim-1", participant_id: "P01", visit_id: 1, visit_ordinal: 1,
+  session_mode: "research", record_class: "research", selected_block_id: null,
   scenario_id: "reference_area_search", scenario_sha256: "a".repeat(64), locale: "es-CO",
   lifecycle: "PREPARED", active_block_id: null, validity: "valid",
   block_order: ["LOW", "MEDIUM", "HIGH"], state_version: 0, simulation_time_ms: 0,
@@ -28,7 +30,7 @@ const prepared: PreparedSession = {
   controller_lease: "secret",
 };
 
-const { controller_lease: _controllerLease, ...session } = prepared;
+const session = { ...prepared, controller_lease: undefined };
 const snapshot = { scenario_id: "reference_area_search" } as unknown as WorldSnapshot;
 
 describe("simulation API adapter", () => {
@@ -51,6 +53,22 @@ describe("simulation API adapter", () => {
     await transitionSession(prepared.id, "start", "secret", { block_id: "PRACTICE" });
     const [, transitionInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(new Headers(transitionInit.headers).get("X-Simulation-Controller")).toBe("secret");
+  });
+
+  it("prepares a segregated technical session through its dedicated endpoint", async () => {
+    global.fetch = mockFetch(201, prepared);
+    await createTechnicalSimulationSession({
+      scenario_id: "reference_area_search",
+      block_id: "HIGH",
+      locale: "es-CO",
+    });
+    const [url, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toContain("/simulation/technical-sessions");
+    expect(JSON.parse(init.body as string)).toEqual({
+      scenario_id: "reference_area_search",
+      block_id: "HIGH",
+      locale: "es-CO",
+    });
   });
 
   it("converts local HTTP API bases to WebSocket URLs", () => {

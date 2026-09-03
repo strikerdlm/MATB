@@ -21,11 +21,11 @@ export async function selectSetup(
   locale: TestLocale = "en",
 ): Promise<void> {
   await expect(page.locator("#mission-participant")).toBeVisible();
+  await page.locator("#app-language").selectOption(locale === "es-CO" ? "es-419" : "en");
   await page.locator("#mission-participant").selectOption(participant);
   await expect(page.locator("#mission-visit")).toBeEnabled();
   await page.locator("#mission-visit").selectOption("1");
   await page.locator("#mission-scenario").selectOption(scenario);
-  await page.locator("#mission-language").selectOption(locale);
 }
 
 function participantFor(testInfo: TestInfo, offset: number): string {

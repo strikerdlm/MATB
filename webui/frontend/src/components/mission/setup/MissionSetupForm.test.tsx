@@ -36,6 +36,7 @@ const scenarios: ScenarioSummary[] = [{
 }];
 const preparedSession: PreparedSession = {
   id: "sim-1", participant_id: "P01", visit_id: 1, visit_ordinal: 1,
+  session_mode: "research", record_class: "research", selected_block_id: null,
   scenario_id: "reference_area_search", scenario_sha256: "abcdef0123456789".repeat(4), locale: "es-CO",
   lifecycle: "PREPARED", active_block_id: null, validity: "valid", block_order: ["LOW", "MEDIUM", "HIGH"],
   state_version: 0, simulation_time_ms: 0, created_at: null, started_at: null,
@@ -47,7 +48,6 @@ async function completeAndSubmit(user: ReturnType<typeof userEvent.setup>) {
   await waitFor(() => expect(screen.getByRole("option", { name: "1" })).toBeInTheDocument());
   await user.selectOptions(screen.getByLabelText(/visit/i), "1");
   await user.selectOptions(screen.getByLabelText(/scenario/i), "reference_area_search");
-  await user.selectOptions(screen.getByLabelText(/language/i), "es-CO");
   await user.click(screen.getByRole("checkbox", { name: /research instrument/i }));
   await user.click(screen.getByRole("button", { name: /prepare session/i }));
 }
@@ -62,7 +62,7 @@ describe("MissionSetupForm", () => {
     window.sessionStorage.clear();
   });
 
-  it("requires participant visit scenario locale and acknowledgement", async () => {
+  it("requires participant visit scenario and acknowledgement", async () => {
     const user = userEvent.setup();
     render(<MissionSetupForm participants={participants} scenarios={scenarios} />);
     expect(screen.getByRole("button", { name: /prepare session/i })).toBeDisabled();
@@ -70,7 +70,6 @@ describe("MissionSetupForm", () => {
     await waitFor(() => expect(screen.getByRole("option", { name: "1" })).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText(/visit/i), "1");
     await user.selectOptions(screen.getByLabelText(/scenario/i), "reference_area_search");
-    await user.selectOptions(screen.getByLabelText(/language/i), "es-CO");
     expect(screen.getByRole("button", { name: /prepare session/i })).toBeDisabled();
     await user.click(screen.getByRole("checkbox", { name: /research instrument/i }));
     expect(screen.getByRole("button", { name: /prepare session/i })).toBeEnabled();

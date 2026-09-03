@@ -25,6 +25,14 @@ The stop launcher validates the recorded PID, exact executable, and start
 time; when Windows permits that inspection, it also validates the command
 line. It does not stop unrelated Python or Node processes.
 
+Profile shortcuts are independent of the directory from which Explorer starts
+them. The console also detects the Git commit and worktree state before it
+starts the backend. Experiment Designer provenance is `complete` only for a
+verified clean clone; a modified tree, unavailable Git check, or ZIP without
+Git metadata correctly remains provisional. After updating the launchers, stop
+the old console with shortcut `99` and start it again with shortcut `01` so the
+new backend process receives the provenance values.
+
 `91 - Abrir resultados MATB UAS.cmd` opens the latest sealed technical run and
 the service log directory in Explorer when present. It only opens paths below
 `exports/windows-suas/`; shortcut `90` remains the full replay and checksum

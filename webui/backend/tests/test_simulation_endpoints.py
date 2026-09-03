@@ -7,6 +7,9 @@ import zipfile
 from uuid import uuid4
 
 import pytest
+from sqlmodel import Session
+
+from app.simulation_models import SimulationSession, TechnicalSimulationSession
 
 
 async def _prepare(client, *, scenario_id: str = "reference_area_search"):
@@ -19,6 +22,94 @@ async def _prepare(client, *, scenario_id: str = "reference_area_search"):
             "locale": "en",
         },
     )
+
+
+async def _prepare_technical(client, *, block_id: str = "LOW"):
+    return await client.post(
+        "/simulation/technical-sessions",
+        json={
+            "scenario_id": "reference_area_search",
+            "block_id": block_id,
+            "locale": "es-CO",
+        },
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("block_id", ["PRACTICE", "LOW", "MEDIUM", "HIGH"])
+async def test_technical_session_launches_selected_profile_without_research_identity(
+    simulation_client,
+    engine,
+    block_id: str,
+) -> None:
+    client, manager = simulation_client
+    prepared = await _prepare_technical(client, block_id=block_id)
+    assert prepared.status_code == 201, prepared.text
+    body = prepared.json()
+    assert body["participant_id"] is None
+    assert body["visit_id"] is None
+    assert body["session_mode"] == "interactive_technical"
+    assert body["record_class"] == "technical_only"
+    assert body["selected_block_id"] == block_id
+    assert body["block_order"] == [block_id]
+    assert body["next_block_id"] == block_id
+    assert body["validity"] == "technical_only"
+
+    with Session(engine) as db:
+        assert db.get(SimulationSession, body["id"]) is None
+        technical = db.get(TechnicalSimulationSession, body["id"])
+        assert technical is not None
+        assert technical.selected_block_id == block_id
+
+    headers = {"X-Simulation-Controller": body["controller_lease"]}
+    started = await client.post(
+        f"/simulation/sessions/{body['id']}/start",
+        json={"block_id": block_id},
+        headers=headers,
+    )
+    assert started.status_code == 200, started.text
+    assert started.json()["active_block_id"] == block_id
+    await manager.tick_once()
+    finished = await client.post(
+        f"/simulation/sessions/{body['id']}/finish",
+        json={"disposition": "complete"},
+        headers=headers,
+    )
+    assert finished.status_code == 200, finished.text
+    debrief = await client.get(f"/simulation/sessions/{body['id']}/debrief")
+    assert debrief.status_code == 200, debrief.text
+    assert debrief.json()["record_class"] == "technical_only"
+    manifest = json.loads((manager.active.recorder.run_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["selected_block_id"] == block_id
+    assert manifest["record_class"] == "technical_only"
+    assert "participant_id" not in manifest
+    assert "visit_ordinal" not in manifest
+    assert "block_order" not in manifest
+
+
+@pytest.mark.anyio
+async def test_technical_session_rejects_research_fields_and_other_profile(simulation_client) -> None:
+    client, _manager = simulation_client
+    contaminated = await client.post(
+        "/simulation/technical-sessions",
+        json={
+            "scenario_id": "reference_area_search",
+            "block_id": "LOW",
+            "locale": "es-CO",
+            "participant_id": "P01",
+        },
+    )
+    assert contaminated.status_code == 422
+
+    prepared = await _prepare_technical(client, block_id="LOW")
+    body = prepared.json()
+    wrong = await client.post(
+        f"/simulation/sessions/{body['id']}/start",
+        json={"block_id": "HIGH"},
+        headers={"X-Simulation-Controller": body["controller_lease"]},
+    )
+    assert wrong.status_code == 409
+    assert wrong.json()["detail"]["code"] == "invalid_transition"
 
 
 @pytest.mark.anyio

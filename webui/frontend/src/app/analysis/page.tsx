@@ -13,6 +13,7 @@ import { ScientificChart } from "@/components/charts/EChart";
 import { downloadResearchBundle, getResearchContext, runAnalysis } from "@/lib/api";
 import { buildLmmForestOption, buildRmcorrForestOption, lmmIntervalRows } from "@/lib/figures";
 import type { AnalysisArtifact, FigureOptionExport } from "@/types";
+import { useAppLocale } from "@/lib/i18n";
 
 const METRIC_LABELS: Record<string, string> = {
   sysmon_dprime_observed_v2: "SYSMON d′ (observed v2)",
@@ -52,6 +53,7 @@ function hasRmcorrRows(artifact: AnalysisArtifact): boolean {
 }
 
 export default function AnalysisPage() {
+  const { copy } = useAppLocale();
   const [artifact, setArtifact] = useState<AnalysisArtifact | null>(null);
   const [running, setRunning] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -110,9 +112,9 @@ export default function AnalysisPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        kicker="Analysis engine"
-        title="Statistical Analysis"
-        description="Pre-specified Q1-Q4 pipeline: LMM, rmcorr, rmANOVA sensitivity, and BH-FDR."
+        kicker={copy("Motor de análisis", "Analysis engine")}
+        title={copy("Análisis estadístico", "Statistical Analysis")}
+        description={copy("Flujo preespecificado Q1-Q4: LMM, rmcorr, sensibilidad rmANOVA y BH-FDR.", "Pre-specified Q1-Q4 pipeline: LMM, rmcorr, rmANOVA sensitivity, and BH-FDR.")}
         actions={
           <>
           {artifact && (
@@ -122,7 +124,7 @@ export default function AnalysisPage() {
               disabled={exporting}
             >
               <Download className="h-4 w-4" />
-              {exporting ? "Exporting..." : "Research bundle"}
+              {exporting ? copy("Exportando…", "Exporting...") : copy("Paquete de investigación", "Research bundle")}
             </Button>
           )}
           <Button
@@ -130,7 +132,7 @@ export default function AnalysisPage() {
             disabled={running}
           >
             <Play className="h-4 w-4" />
-            {running ? "Running..." : "Run analysis"}
+            {running ? copy("Ejecutando…", "Running...") : copy("Ejecutar análisis", "Run analysis")}
           </Button>
           </>
         }
@@ -144,7 +146,7 @@ export default function AnalysisPage() {
 
       {!artifact && !error && (
         <div className="flex h-48 items-center justify-center rounded-[6px] border border-dashed border-white/15">
-          <p className="text-muted-foreground">No analysis yet — ingest data, then run.</p>
+          <p className="text-muted-foreground">{copy("Aún no hay análisis: incorpore los datos y luego ejecútelo.", "No analysis yet — ingest data, then run.")}</p>
         </div>
       )}
 
@@ -153,19 +155,19 @@ export default function AnalysisPage() {
           <section className="space-y-4">
             <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
               <div className="metric-tile p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Participants</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{copy("Participantes", "Participants")}</p>
                 <p className="mt-1 text-2xl font-semibold">{artifact.provenance.n_participants}</p>
               </div>
               <div className="metric-tile p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Metric rows</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{copy("Filas de métricas", "Metric rows")}</p>
                 <p className="mt-1 text-2xl font-semibold">{artifact.provenance.n_metric_rows}</p>
               </div>
               <div className="metric-tile p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">DEPDF fits</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{copy("Ajustes DEPDF", "DEPDF fits")}</p>
                 <p className="mt-1 text-2xl font-semibold">{artifact.provenance.n_fit_rows}</p>
               </div>
               <div className="metric-tile p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">FDR family</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{copy("Familia FDR", "FDR family")}</p>
                 <p className="mt-1 text-2xl font-semibold">
                   {artifact.confirmatory.family_size_actual}/{artifact.confirmatory.family_size_planned}
                 </p>
@@ -175,17 +177,17 @@ export default function AnalysisPage() {
           </section>
 
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold">Q1 — workload-level effects (LMM)</h3>
+            <h3 className="text-sm font-semibold">Q1 — {copy("efectos del nivel de carga (LMM)", "workload-level effects (LMM)")}</h3>
             {lmmIntervalRows(artifact.q1, "q1").length > 0 ? (
               <ScientificChart
                 figureId="Figure Q1"
                 exportName={`q1-workload-effects-${artifact.provenance.fingerprint.slice(0, 12)}`}
                 option={buildLmmForestOption(artifact.q1, "q1")}
                 height={lmmHeight(lmmIntervalRows(artifact.q1, "q1").length)}
-                caption="Workload-level fixed effects and eligible Holm-corrected contrasts from the pre-specified LMM analysis. Error bars show 95% Wald confidence intervals."
+                caption={copy("Efectos fijos del nivel de carga y contrastes elegibles con corrección de Holm del análisis LMM preespecificado. Las barras muestran intervalos de confianza de Wald del 95%.", "Workload-level fixed effects and eligible Holm-corrected contrasts from the pre-specified LMM analysis. Error bars show 95% Wald confidence intervals.")}
               />
             ) : (
-              <FigureEmptyState label="No estimable Q1 interval estimates yet." />
+              <FigureEmptyState label={copy("Aún no hay estimaciones de intervalo Q1 calculables.", "No estimable Q1 interval estimates yet.")} />
             )}
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
               {Object.entries(artifact.q1).map(([m, r]) => (
@@ -195,17 +197,17 @@ export default function AnalysisPage() {
           </section>
 
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold">Q2 — trajectories across visits (LMM)</h3>
+            <h3 className="text-sm font-semibold">Q2 — {copy("trayectorias entre visitas (LMM)", "trajectories across visits (LMM)")}</h3>
             {lmmIntervalRows(artifact.q2, "q2").length > 0 ? (
               <ScientificChart
                 figureId="Figure Q2"
                 exportName={`q2-visit-slopes-${artifact.provenance.fingerprint.slice(0, 12)}`}
                 option={buildLmmForestOption(artifact.q2, "q2")}
                 height={lmmHeight(lmmIntervalRows(artifact.q2, "q2").length)}
-                caption="Level-adjusted common visit slopes from the pre-specified longitudinal LMM analysis. Error bars show 95% Wald confidence intervals."
+                caption={copy("Pendientes comunes de visita ajustadas por nivel del análisis LMM longitudinal preespecificado. Las barras muestran intervalos de confianza de Wald del 95%.", "Level-adjusted common visit slopes from the pre-specified longitudinal LMM analysis. Error bars show 95% Wald confidence intervals.")}
               />
             ) : (
-              <FigureEmptyState label="No estimable Q2 interval estimates yet." />
+              <FigureEmptyState label={copy("Aún no hay estimaciones de intervalo Q2 calculables.", "No estimable Q2 interval estimates yet.")} />
             )}
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
               {Object.entries(artifact.q2).map(([m, r]) => (
@@ -215,33 +217,33 @@ export default function AnalysisPage() {
           </section>
 
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold">Q3 — repeated-measures coupling</h3>
+            <h3 className="text-sm font-semibold">Q3 — {copy("asociación de medidas repetidas", "repeated-measures coupling")}</h3>
             {hasRmcorrRows(artifact) ? (
               <ScientificChart
                 figureId="Figure Q3"
                 exportName={`q3-rmcorr-${artifact.provenance.fingerprint.slice(0, 12)}`}
                 option={buildRmcorrForestOption(artifact.q3)}
                 height={Math.max(360, Math.min(720, artifact.q3.length * 56 + 120))}
-                caption="Canonical repeated-measures correlations with level-adjusted sensitivity estimates when available. Error bars show Fisher-z 95% confidence intervals."
+                caption={copy("Correlaciones canónicas de medidas repetidas con estimaciones de sensibilidad ajustadas por nivel cuando están disponibles. Las barras muestran intervalos de confianza del 95% mediante z de Fisher.", "Canonical repeated-measures correlations with level-adjusted sensitivity estimates when available. Error bars show Fisher-z 95% confidence intervals.")}
               />
             ) : (
-              <FigureEmptyState label="No estimable Q3 repeated-measures correlations yet." />
+              <FigureEmptyState label={copy("Aún no hay correlaciones Q3 de medidas repetidas calculables.", "No estimable Q3 repeated-measures correlations yet.")} />
             )}
             <RmcorrTable q3={artifact.q3} />
           </section>
 
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold">Q4 — DEPDF parameter drift (exploratory)</h3>
+            <h3 className="text-sm font-semibold">Q4 — {copy("deriva de parámetros DEPDF (exploratoria)", "DEPDF parameter drift (exploratory)")}</h3>
             {lmmIntervalRows(artifact.q4, "q4").length > 0 ? (
               <ScientificChart
                 figureId="Figure Q4"
                 exportName={`q4-depdf-drift-${artifact.provenance.fingerprint.slice(0, 12)}`}
                 option={buildLmmForestOption(artifact.q4, "q4")}
                 height={lmmHeight(lmmIntervalRows(artifact.q4, "q4").length)}
-                caption="Exploratory visit slopes for fitted DEPDF parameters. Error bars show 95% Wald confidence intervals."
+                caption={copy("Pendientes exploratorias por visita para los parámetros DEPDF ajustados. Las barras muestran intervalos de confianza de Wald del 95%.", "Exploratory visit slopes for fitted DEPDF parameters. Error bars show 95% Wald confidence intervals.")}
               />
             ) : (
-              <FigureEmptyState label="No estimable Q4 DEPDF drift estimates yet." />
+              <FigureEmptyState label={copy("Aún no hay estimaciones Q4 calculables de deriva DEPDF.", "No estimable Q4 DEPDF drift estimates yet.")} />
             )}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               {Object.entries(artifact.q4).map(([param, r]) => (
@@ -251,7 +253,7 @@ export default function AnalysisPage() {
           </section>
 
           <section className="space-y-2">
-            <h3 className="text-sm font-semibold">rmANOVA sensitivity (descriptive)</h3>
+            <h3 className="text-sm font-semibold">{copy("Sensibilidad rmANOVA (descriptiva)", "rmANOVA sensitivity (descriptive)")}</h3>
             {Object.entries(artifact.rmanova).map(([m, r]) => (
               <p key={m} className="text-sm text-muted-foreground">
                 <span className="font-mono text-xs">{METRIC_LABELS[m] ?? m}</span>{" "}
@@ -270,8 +272,8 @@ export default function AnalysisPage() {
             <p>
               Engine v{artifact.engine_version} · fingerprint{" "}
               <span className="font-mono">{artifact.provenance.fingerprint.slice(0, 12)}…</span> ·{" "}
-              {artifact.provenance.n_metric_rows} metric rows · {artifact.provenance.n_fit_rows}{" "}
-              fits · {artifact.provenance.n_participants} participants ·{" "}
+              {artifact.provenance.n_metric_rows} {copy("filas de métricas", "metric rows")} · {artifact.provenance.n_fit_rows}{" "}
+              {copy("ajustes", "fits")} · {artifact.provenance.n_participants} {copy("participantes", "participants")} ·{" "}
               {Object.entries(artifact.provenance.libraries)
                 .map(([k, v]) => `${k} ${v}`)
                 .join(" · ")}

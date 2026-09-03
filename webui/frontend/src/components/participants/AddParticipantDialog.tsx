@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createParticipant } from "@/lib/api";
+import { useAppLocale } from "@/lib/i18n";
 
 export function AddParticipantDialog({ onCreated }: { onCreated: () => void }) {
+  const { copy } = useAppLocale();
   const [open, setOpen] = useState(false);
   const [id, setId] = useState("");
   const [date, setDate] = useState("");
@@ -28,17 +30,17 @@ export function AddParticipantDialog({ onCreated }: { onCreated: () => void }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild><Button>Add participant</Button></DialogTrigger>
+      <DialogTrigger asChild><Button>{copy("Agregar participante", "Add participant")}</Button></DialogTrigger>
       <DialogContent>
-        <DialogHeader><DialogTitle>Add participant</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{copy("Agregar participante", "Add participant")}</DialogTitle></DialogHeader>
         <div className="space-y-3">
-          <div><Label htmlFor="pid">ID (e.g. P01)</Label><Input id="pid" value={id} onChange={(e) => setId(e.target.value)} /></div>
-          <div><Label htmlFor="pdate">Enrollment date</Label><Input id="pdate" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
-          <div><Label htmlFor="psex">Sex (optional)</Label><Input id="psex" value={sex} onChange={(e) => setSex(e.target.value)} /></div>
-          <div><Label htmlFor="page">Age band (optional)</Label><Input id="page" value={ageBand} onChange={(e) => setAgeBand(e.target.value)} /></div>
+          <div><Label htmlFor="pid">{copy("ID (p. ej., P01)", "ID (e.g. P01)")}</Label><Input id="pid" value={id} onChange={(e) => setId(e.target.value)} /></div>
+          <div><Label htmlFor="pdate">{copy("Fecha de inclusión", "Enrollment date")}</Label><Input id="pdate" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+          <div><Label htmlFor="psex">{copy("Sexo (opcional)", "Sex (optional)")}</Label><Input id="psex" value={sex} onChange={(e) => setSex(e.target.value)} /></div>
+          <div><Label htmlFor="page">{copy("Grupo de edad (opcional)", "Age band (optional)")}</Label><Input id="page" value={ageBand} onChange={(e) => setAgeBand(e.target.value)} /></div>
           {err && <p className="text-sm text-danger">{err}</p>}
           <Button onClick={submit} disabled={busy || !id || !date} className="w-full">
-            {busy ? "Saving..." : "Create (generates T0, DM8, and DM15 visits)"}
+            {busy ? copy("Guardando…", "Saving...") : copy("Crear (genera visitas T0, DM8 y DM15)", "Create (generates T0, DM8, and DM15 visits)")}
           </Button>
         </div>
       </DialogContent>

@@ -218,6 +218,9 @@ def build_public_debrief(
     public = {
         "status": "sealed" if str(replay.status) == "match" else "partial_unverified",
         "validity": validity,
+        "session_mode": manifest.get("session_mode", "research"),
+        "record_class": manifest.get("record_class", "research"),
+        "selected_block_id": manifest.get("selected_block_id"),
         "session_id": manifest.get("session_id"),
         "scenario_id": manifest.get("scenario_id"),
         "scenario_sha256": manifest.get("scenario_sha256"),

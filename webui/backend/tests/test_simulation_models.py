@@ -14,11 +14,13 @@ from app.simulation_models import (
     SimulationArtifact,
     SimulationBlock,
     SimulationSession,
+    TechnicalSimulationSession,
 )
 from app.simulation_schemas import (
     ArtifactView,
     CommandRequest,
     CreateSimulationSession,
+    CreateTechnicalSimulationSession,
     ErrorDetail,
     FinishRequest,
     LifecycleRequest,
@@ -77,6 +79,25 @@ def test_simulation_metadata_round_trip(engine) -> None:
         db.add(row)
         db.commit()
         assert db.get(SimulationSession, "sim-001").locale == "es-CO"
+
+
+def test_technical_session_has_no_participant_or_visit_columns(engine) -> None:
+    with Session(engine) as db:
+        db.add(TechnicalSimulationSession(
+            id="sim-tech-001",
+            scenario_id="reference_area_search",
+            scenario_sha256="a" * 64,
+            selected_block_id="HIGH",
+            manifest_json='{"record_class":"technical_only"}',
+            locale="es-CO",
+            artifact_root="exports/simulation/technical/sim-tech-001",
+        ))
+        db.commit()
+        row = db.get(TechnicalSimulationSession, "sim-tech-001")
+        assert row is not None
+        assert row.record_class == "technical_only"
+        assert not hasattr(row, "participant_id")
+        assert not hasattr(row, "visit_id")
 
 
 def test_block_id_is_unique_per_simulation(engine) -> None:
@@ -174,6 +195,29 @@ def test_create_schema_forbids_unknown_fields() -> None:
             scenario_id="reference_area_search",
             locale="en",
             participant_name="Jane Doe",
+        )
+
+    with pytest.raises(ValidationError):
+        CreateTechnicalSimulationSession(
+            scenario_id="reference_area_search",
+            block_id="LOW",
+            locale="es-CO",
+            participant_id="P01",
+        )
+
+
+def test_technical_create_schema_accepts_only_programmed_profiles() -> None:
+    request = CreateTechnicalSimulationSession(
+        scenario_id="reference_area_search",
+        block_id="HIGH",
+        locale="es-CO",
+    )
+    assert request.block_id == "HIGH"
+    with pytest.raises(ValidationError):
+        CreateTechnicalSimulationSession(
+            scenario_id="reference_area_search",
+            block_id="HARD",
+            locale="es-CO",
         )
 
 

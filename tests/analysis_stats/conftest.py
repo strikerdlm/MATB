@@ -86,9 +86,11 @@ def sim_fits():
     rng = np.random.default_rng(99)
     rows = []
     for p in range(6):
+        participant_intercept = rng.normal(0, 1.0)
         for v in range(1, 7):
             rows.append({"participant_id": f"P{p:02d}", "visit_ordinal": v,
-                         "g0": float(40.0 + 0.5 * (v - 3.5) + rng.normal(0, 0.3)),
+                         "g0": float(40.0 + participant_intercept
+                                     + 0.5 * (v - 3.5) + rng.normal(0, 0.3)),
                          "p0": float(np.clip(0.99 + rng.normal(0, 0.002), 0, 1)),
                          "tau0": float(12.0 + rng.normal(0, 0.5))})
     return rows
