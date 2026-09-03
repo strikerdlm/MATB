@@ -11,16 +11,7 @@ $dataRoot = Get-MatbUasDataRoot -RepoRoot $repoRoot
 $runsRoot = Join-Path $dataRoot "runs"
 
 if (-not $RunDirectory) {
-    if (-not (Test-Path -LiteralPath $runsRoot -PathType Container)) {
-        throw "No Windows sUAS runs were found."
-    }
-    $latestRun = Get-ChildItem -LiteralPath $runsRoot -Directory |
-        Where-Object {
-            (Test-Path -LiteralPath (Join-Path $_.FullName "manifest.json") -PathType Leaf) -and
-            (Test-Path -LiteralPath (Join-Path $_.FullName "checksums.sha256") -PathType Leaf)
-        } |
-        Sort-Object LastWriteTimeUtc -Descending |
-        Select-Object -First 1
+    $latestRun = Get-MatbUasLatestSealedRun -RepoRoot $repoRoot
     if (-not $latestRun) {
         throw "No sealed Windows sUAS runs were found. Incomplete runs were ignored."
     }
