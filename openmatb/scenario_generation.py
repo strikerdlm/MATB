@@ -11,6 +11,7 @@ the CLI (scenario_generator.py) and the UI (scenario_generator_ui.py).
 
 from __future__ import annotations
 
+import builtins
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -20,6 +21,12 @@ from typing import Any
 
 from core.constants import PATHS
 from core.event import Event
+
+
+def _(message: str) -> str:
+    """Translate when the application installed gettext; otherwise return English."""
+    translator = getattr(builtins, "_", None)
+    return translator(message) if callable(translator) else message
 
 
 # ── Dataclasses ──────────────────────────────────────────────────────────────
@@ -140,7 +147,7 @@ def distribute_events(
     plugin_name: str,
     step_duration_sec: int,
 ) -> list[str | Event]:
-    print(f"Distributing {len(cmd_list)} {plugin_name} events in time")
+    print(_("Distributing %s %s events in time") % (len(cmd_list), plugin_name))
     total_event_duration: float = len(cmd_list) * single_duration
     rest_sec: float = step_duration_sec - total_event_duration
 
@@ -201,7 +208,7 @@ def add_scenario_phase(
 
         # ── SYSMON ──
         if plugin_name == "sysmon":
-            print("System monitoring | computing events")
+            print(_("System monitoring | computing events"))
             failure_duration_sec: float = (
                 plugin.parameters["alerttimeout"] / 1000 + config.events_refractory_duration
             )
@@ -228,13 +235,13 @@ def add_scenario_phase(
 
         # ── TRACKING ──
         elif plugin_name == "track":
-            print("Tracking | computing events")
+            print(_("Tracking | computing events"))
             scenario_lines.append(Event(start_line, start_sec, plugin_name, ["targetproportion", 1 - difficulty]))
             start_line += 1
 
         # ── COMMUNICATIONS ──
         elif plugin_name == "communications":
-            print("Communications | computing events")
+            print(_("Communications | computing events"))
             averaged_duration_sec: int = config.average_auditory_prompt_duration
             single_duration_sec: float = averaged_duration_sec + config.events_refractory_duration
             communication_ratio: float = difficulty
@@ -254,7 +261,7 @@ def add_scenario_phase(
                     p = prompt_list.count("own") / len(prompt_list)
             else:
                 prompt_list = choices(promptlist, event_num, True)
-            print("Communications | List :" + " - ".join(prompt_list))
+            print(_("Communications | List: %s") % " - ".join(prompt_list))
 
             cmd_list = [["radioprompt", p] for p in prompt_list]
             scenario_lines = distribute_events(
@@ -263,7 +270,7 @@ def add_scenario_phase(
 
         # ── RESMAN ──
         elif plugin_name == "resman":
-            print("Resources management | computing events")
+            print(_("Resources management | computing events"))
             pumps: dict[str, dict[str, Any]] = plugin.parameters["pump"]
             infinite_capacity: int = sum([p["flow"] for k, p in pumps.items() if k in ["2", "4"]])
             finite_capacity: int = sum([p["flow"] for k, p in pumps.items() if k in ["5", "6"]])
@@ -280,7 +287,7 @@ def add_scenario_phase(
 
         # ── SCHEDULING ──
         elif plugin_name == "scheduling":
-            print("Scheduling | computing events")
+            print(_("Scheduling | computing events"))
             # Difficulty controls minduration: lower difficulty = higher minduration (easier)
             min_duration: int = int(5000 * (1 - difficulty) + 500)
             scenario_lines.append(Event(start_line, start_sec, plugin_name,
@@ -316,7 +323,7 @@ def _insert_inter_block_events(
 
     for ie in inter_events:
         # Pause all active tasks before inter-block event
-        scenario_lines.append(f"Inter-block: {ie.type} ({ie.filename})")
+        scenario_lines.append(_("Inter-block: %s (%s)") % (ie.type, ie.filename))
 
         # Add the inter-block start event
         scenario_lines.append(Event(start_line, current_time, ie.type, [ie.filename]))
@@ -361,9 +368,11 @@ def generate_scenario(config: ScenarioConfig, plugins: dict[str, Any]) -> list[s
         avg_difficulty: float = (
             sum(block.plugins.values()) / len(block.plugins) if block.plugins else 0
         )
-        ch_str: str = f"Block n\u00b0 {i + 1}. Technical load = {round(avg_difficulty * 100, 1)} %"
+        ch_str: str = _("Block no. %s. Technical load = %s %%") % (
+            i + 1, round(avg_difficulty * 100, 1)
+        )
         scenario_lines.append(ch_str)
-        print("\nAdding " + ch_str)
+        print("\n" + _("Adding %s") % ch_str)
 
         # Recalculate start_time after potential inter-block additions
         start_time_sec = sum(b.duration_sec for b in config.blocks[:i]) + cumulative_extra_time
@@ -406,10 +415,10 @@ def format_scenario_lines(scenario_lines: list[str | Event], config: ScenarioCon
     """Format scenario lines into a list of strings (same format as the output file)."""
     date_str: str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     result: list[str] = [
-        "# OpenMATB scenario generator",
+        _("# OpenMATB scenario generator"),
         "",
-        f"# Name: {config.scenario_name}",
-        f"# Date: {date_str}",
+        _("# Name: %s") % config.scenario_name,
+        _("# Date: %s") % date_str,
         "",
     ]
     for evt in scenario_lines:
@@ -443,5 +452,5 @@ def write_scenario_file(scenario_lines: list[str | Event], config: ScenarioConfi
             elif isinstance(evt, str):
                 scenario_f.write("\n# " + evt + "\n")
 
-    print(f"\nScenario generated: {scenario_path!s}")
+    print("\n" + _("Scenario generated: %s") % scenario_path)
     return scenario_path

@@ -1,0 +1,495 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: OpenMATB 1.4.5\n"
+"Language: es_CO\n"
+"Language-Team: Español aeronáutico (Colombia)\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid " does not exist"
+msgstr " no existe"
+
+msgid "# Date: %s"
+msgstr "# Fecha: %s"
+
+msgid "# Name: %s"
+msgstr "# Nombre: %s"
+
+msgid "# OpenMATB scenario generator"
+msgstr "# Generador de escenarios de OpenMATB"
+
+msgid "%s was not found"
+msgstr "No se encontró %s"
+
+msgid "%s | click"
+msgstr "%s | clic"
+
+msgid "%s | computing next state"
+msgstr "%s | calculando el estado siguiente"
+
+msgid "%s | creating widgets"
+msgstr "%s | creando componentes"
+
+msgid "%s | refreshing widgets"
+msgstr "%s | actualizando componentes"
+
+msgid "+ Add"
+msgstr "+ Añadir"
+
+msgid "+ Instructions"
+msgstr "+ Instrucciones"
+
+msgid "+ Questionnaire"
+msgstr "+ Cuestionario"
+
+msgid "AUTO"
+msgstr "AUTO"
+
+msgid "Adding %s"
+msgstr "Añadiendo %s"
+
+msgid "Advanced settings — %s"
+msgstr "Configuración avanzada — %s"
+
+msgid "Alert timeout (ms)"
+msgstr "Tiempo límite de alerta (ms)"
+
+msgid "Allow any key"
+msgstr "Permitir cualquier tecla"
+
+msgid "Apply"
+msgstr "Aplicar"
+
+msgid "Audio prompt duration:"
+msgstr "Duración del mensaje de audio:"
+
+msgid "BLOCK CONFIGURATION"
+msgstr "CONFIGURACIÓN DE BLOQUES"
+
+msgid "Block %s"
+msgstr "Bloque %s"
+
+msgid "Block %s: duration too short for communications"
+msgstr "Bloque %s: duración insuficiente para comunicaciones"
+
+msgid "Block %s: no active plugin"
+msgstr "Bloque %s: no hay tareas activas"
+
+msgid "Block %s: zero duration"
+msgstr "Bloque %s: duración igual a cero"
+
+msgid "Block no. %s. Technical load = %s %%"
+msgstr "Bloque n.º %s. Carga técnica = %s %%"
+
+msgid "Blue"
+msgstr "Azul"
+
+msgid "Callsign \t\t %s"
+msgstr "Distintivo de llamada \t\t %s"
+
+msgid "Communications"
+msgstr "Comunicaciones"
+
+msgid "Communications ratio:"
+msgstr "Proporción de comunicaciones objetivo:"
+
+msgid "Communications | List: %s"
+msgstr "Comunicaciones | Lista: %s"
+
+msgid "Communications | computing events"
+msgstr "Comunicaciones | calculando eventos"
+
+msgid "Config error: %s"
+msgstr "Error de configuración: %s"
+
+msgid "Config loaded: %s"
+msgstr "Configuración cargada: %s"
+
+msgid "Config saved: %s"
+msgstr "Configuración guardada: %s"
+
+msgid "Continue"
+msgstr "Continuar"
+
+msgid "Cursor color"
+msgstr "Color de la retícula"
+
+msgid "Distributing %s %s events in time"
+msgstr "Distribuyendo %s eventos de %s en el tiempo"
+
+msgid "Duration"
+msgstr "Duración"
+
+msgid "Elapsed time \t %s"
+msgstr "Tiempo transcurrido \t %s"
+
+msgid "English"
+msgstr "Inglés"
+
+msgid "Enter: Select"
+msgstr "INTRO: Seleccionar"
+
+msgid "Error on line %s. %s "
+msgstr "Error en la línea %s. %s "
+
+msgid "Error on line %s. Invalid system command: %s"
+msgstr "Error en la línea %s. Comando de sistema no válido: %s"
+
+msgid "Error on line %s. Maximum length of an event is 2 (parameter;value)."
+msgstr "Error en la línea %s. La longitud máxima de un evento es 2 (parámetro;valor)."
+
+msgid "Error on line %s. Method (%s) is not available for the plugin (%s)"
+msgstr "Error en la línea %s. El método (%s) no está disponible para el complemento (%s)"
+
+msgid "Error on line %s. The %s plugin does not have a %s parameter"
+msgstr "Error en la línea %s. El complemento %s no tiene el parámetro %s"
+
+msgid "Error on line %s. This event does not trigger any command."
+msgstr "Error en la línea %s. Este evento no activa ningún comando."
+
+msgid "Error(s)"
+msgstr "Error(es)"
+
+msgid "Error. No placement found for the [%s] alias"
+msgstr "Error. No se encontró una ubicación para el alias [%s]"
+
+msgid "Error: %s"
+msgstr "Error: %s"
+
+msgid "Esc: Quit"
+msgstr "ESC: Salir"
+
+msgid "Exit"
+msgstr "Salir"
+
+msgid "Exit OpenMATB?"
+msgstr "¿Salir de OpenMATB?"
+
+msgid "Eye tracker"
+msgstr "Seguimiento ocular"
+
+msgid "Female"
+msgstr "Femenina"
+
+msgid "French"
+msgstr "Francés"
+
+msgid "GLOBAL SETTINGS"
+msgstr "CONFIGURACIÓN GENERAL"
+
+msgid "Generic Trigger"
+msgstr "Disparador genérico"
+
+msgid "Generic scales"
+msgstr "Escalas genéricas"
+
+msgid "Green"
+msgstr "Verde"
+
+msgid "In config.ini, [%s] parameter must be a boolean (true or false, not %s). Defaulting to False"
+msgstr "En config.ini, el parámetro [%s] debe ser booleano (true o false, no %s). Se usará False"
+
+msgid "In config.ini, [%s] parameter must be a float (not %s)"
+msgstr "En config.ini, el parámetro [%s] debe ser un número decimal (no %s)"
+
+msgid "In config.ini, [%s] parameter must be a list of floats (not %s)"
+msgstr "En config.ini, el parámetro [%s] debe ser una lista de números decimales (no %s)"
+
+msgid "In config.ini, [%s] parameter must be an integer (not %s)"
+msgstr "En config.ini, el parámetro [%s] debe ser un número entero (no %s)"
+
+msgid "In config.ini, the specified font is not available. A default font will be used."
+msgstr "La fuente indicada en config.ini no está disponible. Se utilizará una fuente predeterminada."
+
+msgid "In config.ini, the specified screen index exceeds the number of available screens (%s). Last screen selected."
+msgstr "El índice de pantalla indicado en config.ini excede el número de pantallas disponibles (%s). Se seleccionó la última pantalla."
+
+msgid "Instructions"
+msgstr "Instrucciones"
+
+msgid "Inter-block: %s (%s)"
+msgstr "Entre bloques: %s (%s)"
+
+msgid "Joystick force"
+msgstr "Fuerza del joystick"
+
+msgid "Lab streaming layer"
+msgstr "Lab Streaming Layer (LSL)"
+
+msgid "Load a config"
+msgstr "Cargar una configuración"
+
+msgid "MANUAL"
+msgstr "MANUAL"
+
+msgid "Male"
+msgstr "Masculina"
+
+msgid "Min duration (ms)"
+msgstr "Duración mínima (ms)"
+
+msgid "Multiple session files match the desired session ID (%s)"
+msgstr "Varios archivos corresponden al identificador de sesión solicitado (%s)"
+
+msgid "No error"
+msgstr "Sin errores"
+
+msgid "No files found"
+msgstr "No se encontraron archivos"
+
+msgid "No joystick found"
+msgstr "No se encontró un joystick"
+
+msgid "OpenMATB - Scenario generator"
+msgstr "OpenMATB - Generador de escenarios"
+
+msgid "OpenMATB — Scenario Generator"
+msgstr "OpenMATB — Generador de escenarios"
+
+msgid "PREVIEW"
+msgstr "VISTA PREVIA"
+
+msgid "Parallel port"
+msgstr "Puerto paralelo"
+
+msgid "Pause"
+msgstr "Pausa"
+
+msgid "Performance"
+msgstr "Rendimiento"
+
+msgid "Please enable the OpenMATB stream into your LabRecorder."
+msgstr "Active el flujo de OpenMATB en LabRecorder."
+
+msgid "Press SPACE to continue"
+msgstr "Presione ESPACIO para continuar"
+
+msgid "Press SPACE to validate"
+msgstr "Presione ESPACIO para confirmar"
+
+msgid "Preview"
+msgstr "Vista previa"
+
+msgid "Pump status"
+msgstr "Estado de las bombas"
+
+msgid "Python Parallel module is missing. Skipping parallel plugin"
+msgstr "No está disponible el módulo Python Parallel. Se omitirá el complemento de puerto paralelo"
+
+msgid "Red"
+msgstr "Rojo"
+
+msgid "Refractory duration:"
+msgstr "Intervalo refractario:"
+
+msgid "Remaining time \t %s"
+msgstr "Tiempo restante \t %s"
+
+msgid "Resources management"
+msgstr "Gestión de recursos"
+
+msgid "Resources management | computing events"
+msgstr "Gestión de recursos | calculando eventos"
+
+msgid "SAVE"
+msgstr "GUARDAR"
+
+msgid "Saved: %s"
+msgstr "Guardado: %s"
+
+msgid "Hide %s"
+msgstr "Ocultar %s"
+
+msgid "Pause %s"
+msgstr "Pausar %s"
+
+msgid "Resume %s"
+msgstr "Reanudar %s"
+
+msgid "Show %s"
+msgstr "Mostrar %s"
+
+msgid "Start %s"
+msgstr "Iniciar %s"
+
+msgid "Stop %s"
+msgstr "Detener %s"
+
+msgid "with keys %s"
+msgstr "con las teclas %s"
+
+msgid "Scenario error: %s is not a valid plugin name (l. %s)"
+msgstr "Error de escenario: %s no es un nombre de complemento válido (lín. %s)"
+
+msgid "Scenario generated: %s"
+msgstr "Escenario generado: %s"
+
+msgid "Scenario name is empty"
+msgstr "El nombre del escenario está vacío"
+
+msgid "Scenario name:"
+msgstr "Nombre del escenario:"
+
+msgid "Scheduling"
+msgstr "Programación"
+
+msgid "Scheduling | computing events"
+msgstr "Programación | calculando eventos"
+
+msgid "Select"
+msgstr "Seleccionar"
+
+msgid "Select a questionnaire"
+msgstr "Seleccione un cuestionario"
+
+msgid "Select a scenario"
+msgstr "Seleccione un escenario"
+
+msgid "Select a session"
+msgstr "Seleccione una sesión"
+
+msgid "Select an instructions file"
+msgstr "Seleccione un archivo de instrucciones"
+
+msgid "Session ID: %s"
+msgstr "Identificador de sesión: %s"
+
+msgid "Spanish"
+msgstr "Español"
+
+msgid "Status: Generating preview..."
+msgstr "Estado: generando vista previa..."
+
+msgid "Status: Ready"
+msgstr "Estado: listo"
+
+msgid "Status: Saving..."
+msgstr "Estado: guardando..."
+
+msgid "System monitoring"
+msgstr "Vigilancia de sistemas"
+
+msgid "System monitoring | computing events"
+msgstr "Vigilancia de sistemas | calculando eventos"
+
+msgid "The (%s) plugin does not have a start command."
+msgstr "El complemento (%s) no tiene un comando start."
+
+msgid "The (%s) plugin does not have a stop command."
+msgstr "El complemento (%s) no tiene un comando stop."
+
+msgid "The desired session file (ID=%s) does not exist"
+msgstr "El archivo de sesión solicitado (ID=%s) no existe"
+
+msgid "The physical parallel port was not found."
+msgstr "No se encontró el puerto paralelo físico."
+
+msgid "There were some errors in the scenario. See the %s file."
+msgstr "Se encontraron errores en el escenario. Consulte el archivo %s."
+
+msgid "Tolerance radius"
+msgstr "Radio de tolerancia"
+
+msgid "Tracking"
+msgstr "Seguimiento"
+
+msgid "Tracking | computing events"
+msgstr "Seguimiento | calculando eventos"
+
+msgid "UP/DOWN: Navigate"
+msgstr "ARRIBA/ABAJO: Navegar"
+
+msgid "Voice gender"
+msgstr "Género de la voz"
+
+msgid "Voice language"
+msgstr "Idioma de la voz"
+
+msgid "Warning"
+msgstr "Advertencia"
+
+msgid "Warning on line %s. Parameter (%s) has no verification method"
+msgstr "Advertencia en la línea %s. El parámetro (%s) no tiene un método de verificación"
+
+msgid "Warning, queue is empty"
+msgstr "Advertencia: la cola está vacía"
+
+msgid "Warning: %s"
+msgstr "Advertencia: %s"
+
+msgid "Warning: sound path %s does not exist. Check voiceidiom/voicegender combination."
+msgstr "Advertencia: la ruta de audio %s no existe. Compruebe la combinación voiceidiom/voicegender."
+
+msgid "Yellow"
+msgstr "Amarillo"
+
+msgid "You hit the Escape key"
+msgstr "Presionó la tecla Escape"
+
+msgid "min."
+msgstr "min."
+
+msgid "must be (R,G,B,a) or hexadecimal (e.g., #00ff00) values (not %s)"
+msgstr "debe contener valores (R,G,B,a) o hexadecimales (por ejemplo, #00ff00), no %s"
+
+msgid "should be (R,G,B,a) values each comprised between 0 and 255 (not %s)"
+msgstr "debe contener valores (R,G,B,a), cada uno entre 0 y 255 (no %s)"
+
+msgid "should be a boolean (not %s)."
+msgstr "debe ser un valor booleano (no %s)."
+
+msgid "should be a float between 0 and 1 (included) (not %s)"
+msgstr "debe ser un número decimal entre 0 y 1, inclusive (no %s)"
+
+msgid "should be a natural (0 included) integer (not %s)."
+msgstr "debe ser un número entero natural, incluido 0 (no %s)."
+
+msgid "should be a positive (0 excluded) integer (not %s)."
+msgstr "debe ser un número entero positivo, excluido 0 (no %s)."
+
+msgid "should be a positive float (not %s)"
+msgstr "debe ser un número decimal positivo (no %s)"
+
+msgid "should be a string (not %s)."
+msgstr "debe ser una cadena de caracteres (no %s)."
+
+msgid "should be a valid regex expression (not %s)"
+msgstr "debe ser una expresión regular válida (no %s)"
+
+msgid "should be an acceptable (keyboard or joystick) key value (not %s). See documentation."
+msgstr "debe ser una tecla válida del teclado o del joystick (no %s). Consulte la documentación."
+
+msgid "should be an acceptable joystick key value (not %s). See documentation."
+msgstr "debe ser un botón válido del joystick (no %s). Consulte la documentación."
+
+msgid "should be an acceptable keyboard key value (not %s). See documentation."
+msgstr "debe ser una tecla válida del teclado (no %s). Consulte la documentación."
+
+msgid "should be available either in the Instruction or Questionnaire folder (not %s)"
+msgstr "debe estar disponible en la carpeta de instrucciones o cuestionarios (no %s)"
+
+msgid "should be composed of letters [a-z] or digits [0-9] (not %s in %s)"
+msgstr "debe estar compuesto por letras [a-z] o dígitos [0-9] (no %s en %s)"
+
+msgid "should be composed of valid callsigns (not %s)"
+msgstr "debe estar compuesto por distintivos de llamada válidos (no %s)"
+
+msgid "should be comprised in %s (not %s)"
+msgstr "debe estar incluido en %s (no %s)"
+
+msgid "⊕ Clone"
+msgstr "⊕ Duplicar"
+
+msgid "✉ Instructions"
+msgstr "✉ Instrucciones"
+
+msgid "✕ Remove"
+msgstr "✕ Eliminar"
+
+msgid "💾 Save config"
+msgstr "💾 Guardar configuración"
+
+msgid "📂 Load config"
+msgstr "📂 Cargar configuración"

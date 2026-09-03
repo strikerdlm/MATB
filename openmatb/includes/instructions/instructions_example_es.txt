@@ -1,0 +1,12 @@
+# Las instrucciones admiten etiquetas HTML simples.
+# Separe las páginas mediante una línea que contenga únicamente tres guiones.
+
+<h1>Ejemplo de instrucciones</h1>
+
+<p>Lea cada indicación antes de continuar. Presione la tecla ESPACIO para avanzar.</p>
+
+---
+
+<h1>Fin del ejemplo</h1>
+
+<p>Cuando esté preparado, continúe con el escenario.</p>

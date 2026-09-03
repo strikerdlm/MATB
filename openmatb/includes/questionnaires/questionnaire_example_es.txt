@@ -1,0 +1,5 @@
+# Formato: título;pregunta;anclaje inferior/anclaje superior;mínimo/máximo/valor inicial
+# Las líneas que comienzan con # son comentarios.
+
+Conciencia situacional;¿Qué tan bien comprendió el estado actual de las tareas?;Muy baja/Muy alta;0/10/5
+Confianza;¿Qué tanta confianza tiene en la exactitud de sus respuestas?;Ninguna/Total;0/10/5

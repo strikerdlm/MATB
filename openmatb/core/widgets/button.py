@@ -44,7 +44,7 @@ class Button(AbstractWidget):
 
     def on_mouse_click(self) -> Any:
         if self.verbose:
-            print(self.name, "Click")
+            print(_("%s | click") % self.name)
         return self.callback()
 
 

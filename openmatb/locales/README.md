@@ -9,6 +9,15 @@ You can edit locales with a software like poedit. New translations (.po & .mo fi
 placed into locales/xx_XX/LC_MESSAGES/  and renamed openmatb.po & openmatb.mo.
 xx_XX being the short code of the locale (see below).
 
+The Colombian Spanish catalog is maintained in `es_CO/LC_MESSAGES`. Validate
+coverage, refresh the POT template, and compile the binary catalog with:
+
+```console
+python locales/build_catalog.py --locale es_CO --check --write-template --compile
+```
+
+The checker rejects missing translations and changes to `%s` placeholders.
+
 
 Below you can find a list a locale short codes
 https://stackoverflow.com/questions/3191664/list-of-all-locales-and-their-short-codes
