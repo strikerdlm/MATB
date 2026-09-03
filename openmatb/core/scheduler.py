@@ -15,6 +15,7 @@ from typing import Any
 from pyglet.app import EventLoop
 
 from core.clock import Clock
+from core.controlbridge import StdioControlBridge
 from core.constants import REPLAY_MODE, SYSTEM_PSEUDO_PLUGIN
 from core.error import get_errors
 from core.event import Event
@@ -31,13 +32,18 @@ class Scheduler:
     This class manages events execution.
     """
 
-    def __init__(self, scenario_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        scenario_path: Path | None = None,
+        control_bridge: StdioControlBridge | None = None,
+    ) -> None:
         with open("VERSION", "r") as f:
             self.runtime_version = f.read().strip()
 
         self.clock: Clock = Clock("main")
         self.scenario_time: float = 0
         self.scenario_path: Path | None = scenario_path
+        self.control_bridge = control_bridge
 
         # Create the event loop
         self.clock.schedule(self.update)
@@ -46,8 +52,60 @@ class Scheduler:
         self.joystick: Any = joystick
         self.set_scenario()
 
+        if self.control_bridge is not None:
+            self.control_bridge.start()
+            self.clock.schedule(self._poll_control_bridge)
+            self.control_bridge.emit(
+                "ready",
+                scenario=str(self.scenario_path) if self.scenario_path is not None else None,
+                session_csv=str(get_logger().path),
+            )
+
         Window.MainWindow.display_session_id()
         self.event_loop.run()
+
+    def _poll_control_bridge(self, _dt: float) -> None:
+        if self.control_bridge is None:
+            return
+        for message in self.control_bridge.drain():
+            command = message["command"].strip().lower()
+            if command == "status":
+                self.control_bridge.emit(
+                    "status",
+                    paused=self.is_scenario_time_paused(),
+                    scenario_time_seconds=round(self.scenario_time, 3),
+                    active_plugins=[plugin.alias for plugin in self.get_active_plugins()],
+                )
+            elif command == "pause":
+                self._operator_pause()
+            elif command == "resume":
+                self._operator_resume()
+            elif command == "abort":
+                self.control_bridge.emit("aborted", scenario_time_seconds=round(self.scenario_time, 3))
+                self.exit(completion="aborted")
+            else:
+                self.control_bridge.emit("command_rejected", command=command, reason="unsupported_command")
+
+    def _operator_pause(self) -> None:
+        if self.control_bridge is None:
+            return
+        if not self.is_scenario_time_paused():
+            self.pause_scenario()
+            self.execute_plugins_methods(self.get_active_non_blocking_plugins(), methods="pause")
+        self.control_bridge.emit("paused", scenario_time_seconds=round(self.scenario_time, 3))
+
+    def _operator_resume(self) -> None:
+        if self.control_bridge is None:
+            return
+        if self.get_active_blocking_plugin() is not None or Window.MainWindow.modal_dialog is not None:
+            self.control_bridge.emit("command_rejected", command="resume", reason="participant_prompt_active")
+            return
+        self.execute_plugins_methods(
+            self.get_plugins_by_states([("alive", True), ("paused", True)]),
+            methods="resume",
+        )
+        self.resume_scenario()
+        self.control_bridge.emit("resumed", scenario_time_seconds=round(self.scenario_time, 3))
 
     def set_scenario(self, events: list[str] | None = None) -> None:
         # Resolve the module-level clock dynamically so tests and qualification
@@ -279,7 +337,7 @@ class Scheduler:
                 if plugin.alive:
                     stop_event: Event = Event(0, int(self.scenario_time), p_name, "stop")
                     self.execute_one_event(stop_event)
-            self.exit()
+            self.exit(completion="window_closed")
 
     def execute_events(self) -> None:
         if getattr(self, "_dispatch_failed", False):
@@ -531,8 +589,15 @@ class Scheduler:
 
         return None
 
-    def exit(self) -> None:
+    def exit(self, *, completion: str = "completed") -> None:
         get_logger().log_manual_entry("end")
+        if self.control_bridge is not None:
+            self.control_bridge.emit(
+                "finished",
+                completion=completion,
+                scenario_time_seconds=round(self.scenario_time, 3),
+                session_csv=str(get_logger().path),
+            )
         self.event_loop.exit()
         Window.MainWindow.close()  # needed for windows clean exit
         sys.exit(0)

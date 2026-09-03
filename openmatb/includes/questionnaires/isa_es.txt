@@ -1,0 +1,1 @@
+Carga de trabajo;Indique su nivel actual de carga de trabajo.;Muy baja/Excesiva;1/5/3

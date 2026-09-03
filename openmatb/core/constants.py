@@ -3,6 +3,7 @@
 # License : CeCILL, version 2.1 (see the LICENSE file)
 
 import configparser
+import os
 import sys
 from pathlib import Path
 
@@ -41,6 +42,8 @@ SYSTEM_PSEUDO_PLUGIN: str = "system"
 SYSTEM_COMMANDS: list[str] = ["pause", "boundary"]
 
 PATHS: dict[str, Path] = {k.upper(): Path(".", k) for k in ["plugins", "sessions"]}
+if configured_sessions := os.environ.get("MATB_OPENMATB_SESSION_DIR"):
+    PATHS["SESSIONS"] = Path(configured_sessions).expanduser().resolve()
 PATHS.update(
     {k.upper(): Path(".", "includes", k) for k in ["img", "instructions", "scenarios", "sounds", "questionnaires"]}
 )

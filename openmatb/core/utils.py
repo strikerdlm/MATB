@@ -1,6 +1,7 @@
 # Copyright 2023-2026, by Julien Cegarra & Benoît Valéry. All rights reserved.
 # Institut National Universitaire Champollion (Albi, France).
 # License : CeCILL, version 2.1 (see the LICENSE file)
+import os
 import sys
 from typing import Any, Optional
 
@@ -56,7 +57,12 @@ def has_conf_value(section: str, key: str) -> bool:
 
 
 def get_conf_value(section: str, key: str, val_type: Optional[type] = None) -> Any:
-    value: str = CONFIG[section][key]
+    environment_key = {
+        ("Openmatb", "screen_index"): "MATB_OPENMATB_SCREEN_INDEX",
+        ("Openmatb", "fullscreen"): "MATB_OPENMATB_FULLSCREEN",
+        ("Openmatb", "display_session_number"): "MATB_OPENMATB_DISPLAY_SESSION_NUMBER",
+    }.get((section, key))
+    value: str = os.environ.get(environment_key, CONFIG[section][key]) if environment_key else CONFIG[section][key]
 
     # Boolean boolean values
     if key in ["fullscreen", "highlight_aoi", "hide_on_pause", "display_session_number"]:

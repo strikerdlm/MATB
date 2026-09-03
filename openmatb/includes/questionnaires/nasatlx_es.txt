@@ -1,0 +1,6 @@
+Demanda mental;¿Cuánta actividad mental y perceptiva requirió la tarea?;Baja/Alta;0/10/5
+Demanda física;¿Cuánta actividad física requirió la tarea?;Baja/Alta;0/10/5
+Demanda temporal;¿Cuánta presión temporal sintió debido al ritmo de la tarea?;Baja/Alta;0/10/5
+Rendimiento;¿Qué tan satisfecho está con su rendimiento en la tarea?;Bueno/Deficiente;0/10/5
+Esfuerzo;¿Cuánto tuvo que esforzarse para alcanzar su nivel de rendimiento?;Bajo/Alto;0/10/5
+Frustración;¿Cuánto se sintió inseguro, desalentado, irritado o estresado?;Baja/Alta;0/10/5

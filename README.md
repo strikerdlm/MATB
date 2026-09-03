@@ -1211,6 +1211,7 @@ base image, or verification without registered evidence can succeed offline.
 
 For advanced detail, use the [research evidence review](docs/research/military-aviation-platform/research_evidence_review.md),
 [scale validation](docs/research/scales/sagat_validation.md),
+[OpenMATB frontend control](docs/implementation/openmatb-frontend-control.md),
 [sUAS verification](docs/implementation/suas-c2-v1-verification.md),
 [SMS verification matrix](SMS/docs/release/verification-matrix.md),
 [known limitations](SMS/docs/release/known-limitations.md), and

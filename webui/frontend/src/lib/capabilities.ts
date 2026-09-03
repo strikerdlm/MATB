@@ -1,12 +1,13 @@
 import type { ConsoleCapabilities } from "@/types";
 
 export interface ProductRoute {
-  componentId: "matb-liftoff" | "matb-suas";
+  componentId: "matb-liftoff" | "matb-suas" | "matb-openmatb";
   href: string;
   label: string;
 }
 
 const OPTIONAL_ROUTES: readonly ProductRoute[] = [
+  { componentId: "matb-openmatb", href: "/openmatb/setup", label: "OpenMATB" },
   { componentId: "matb-liftoff", href: "/liftoff/setup", label: "Liftoff" },
   { componentId: "matb-suas", href: "/mission/setup", label: "Mission" },
 ];

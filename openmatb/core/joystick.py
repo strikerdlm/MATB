@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import pyglet.input
-
 from core.constants import REPLAY_MODE
 from core.error import get_errors
 from core.logger import get_logger
@@ -89,13 +87,19 @@ class Joystick:
 
 joykey: dict[str, bool] | None = None
 joystick: Joystick | None = None
-# Search and find a joystick
-joysticks: list[Any] = pyglet.input.get_joysticks()
-
 if not REPLAY_MODE:
-    if len(joysticks) > 0:
-        joystick_device: Any = joysticks[0]
-        joystick = Joystick(joystick_device)
+    # DirectInput/WMI discovery can be denied on managed Windows stations. A
+    # joystick is optional: OpenMATB must still start so mouse/keyboard control
+    # remains available.
+    try:
+        import pyglet.input
+
+        joysticks: list[Any] = pyglet.input.get_joysticks()
+    except OSError as exc:
+        joysticks = []
+        get_errors().add_error(_(f"Joystick discovery unavailable: {exc}"))
+    if joysticks:
+        joystick = Joystick(joysticks[0])
         joykey = joystick.keys
-    else:
+    elif get_errors().is_empty():
         get_errors().add_error(_("No joystick found"))

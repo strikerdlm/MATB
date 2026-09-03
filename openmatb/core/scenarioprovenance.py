@@ -217,8 +217,11 @@ def _validate_builder_payload(
     parameters = _require_exact_keys(
         payload.get("parameters"),
         required=_BUILDER_PARAMETER_KEYS,
+        optional={"suite_profile_name"},
         label="scenario-builder parameters",
     )
+    if parameters.get("suite_profile_name", workload_level) not in {"PRACTICE", "LOW", "MEDIUM", "HIGH"}:
+        raise ScenarioProvenanceError("scenario-builder suite profile name is malformed")
     for key in ("difficulty", "track_target_proportion", "communications_own_callsign_ratio"):
         if not _is_finite_number(parameters[key], minimum=0) or float(parameters[key]) > 1:
             raise ScenarioProvenanceError(f"scenario-builder parameter {key} is malformed")
@@ -502,6 +505,12 @@ def _validate_builder_payload(
                 include_nasatlx=questionnaires["include_nasatlx"],
                 include_bedford=questionnaires["include_bedford"],
                 include_sagat=False,
+                workload_settings={
+                    "difficulty": parameters["difficulty"],
+                    "track_target_proportion": parameters["track_target_proportion"],
+                    "resman_loss_per_min": parameters["resman_loss_per_min"],
+                    "isa_probe_interval_sec": parameters["isa_probe_interval_sec"],
+                },
             )
         except Exception as exc:
             raise ScenarioProvenanceError(

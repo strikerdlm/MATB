@@ -112,6 +112,7 @@ def test_live_bayesian_compute_failure_retains_backend_database_lease(
 def test_auto_component_discovery_ignores_only_an_absent_entrypoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(components_module, "_ACTIVE_REGISTRY", components_module._ACTIVE_REGISTRY)
     def absent(entrypoint: str):
         module_name = entrypoint.split(":", 1)[0]
         raise ModuleNotFoundError(f"No module named {module_name!r}", name=module_name)
