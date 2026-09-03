@@ -1,0 +1,3 @@
+# Scenario artifacts are hashed byte-for-byte; keep their canonical LF encoding.
+scenarios/military_aviation/*.txt text eol=lf
+scenarios/military_aviation/*.json text eol=lf

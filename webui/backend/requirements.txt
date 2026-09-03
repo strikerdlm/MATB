@@ -14,7 +14,9 @@ PyYAML>=6.0
 
 # Required by the Phase 3A statistics engine (matb_integration.analysis.stats)
 pandas>=2.3
-statsmodels>=0.14.6
+# MixedLM 0.15.0 can report non-convergence for the deterministic Q4 fixture
+# on the Windows CI runner; retain the validated scientific-analysis series.
+statsmodels>=0.14.6,<0.15.0
 # PyTensor's Python 3.12 compiler path still imports the setuptools-provided
 # distutils shim; 68.1.2 is the tested compatible shim for this project.
 setuptools==68.1.2
