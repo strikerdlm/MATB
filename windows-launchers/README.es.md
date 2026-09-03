@@ -6,12 +6,12 @@ PowerShell 7, Python 3.12 o posterior, Node.js 20 o posterior y npm.
 
 ## Primer uso
 
-1. Ejecute `00 - Preparar MATB UAS.cmd`. Este paso comprueba el entorno,
-   instala dependencias faltantes, compila la interfaz y ejecuta pruebas
-   focalizadas.
-2. Ejecute `01 - Abrir consola UAS.cmd`. El lanzador inicia los servicios
-   locales, espera las comprobaciones de salud y abre
-   `http://127.0.0.1:3100/mission/setup`.
+1. Ejecute `01 - Abrir consola UAS.cmd`. Este acceso comprueba el entorno,
+   instala dependencias faltantes, actualiza la compilación si es necesario,
+   inicia los servicios locales y abre la guía paso a paso en
+   `http://127.0.0.1:3100/start`.
+2. Use `00 - Preparar MATB UAS.cmd` solamente si desea preparar el equipo y
+   ejecutar las pruebas focalizadas sin abrir la consola.
 3. Mantenga abierta la ventana supervisora. Presione `Ctrl+C` allí o ejecute
    `99 - Detener MATB UAS.cmd` para finalizar los procesos registrados.
 

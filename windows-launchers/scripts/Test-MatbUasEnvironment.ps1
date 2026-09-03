@@ -110,7 +110,7 @@ if ($state) {
             -Port ([int]$state.frontend_port) `
             -RepoRoot $repoRoot
         $backendHealthy = $backendTracked -and (Test-MatbUasHttp -Uri ("http://127.0.0.1:{0}/health" -f $state.backend_port))
-        $frontendHealthy = $frontendTracked -and (Test-MatbUasHttp -Uri ("http://127.0.0.1:{0}/mission/setup" -f $state.frontend_port))
+        $frontendHealthy = $frontendTracked -and (Test-MatbUasHttp -Uri ("http://127.0.0.1:{0}/start" -f $state.frontend_port))
         Write-DiagnosticLine -Label "Backend" -Value ("PID {0}; tracked={1}; healthy={2}" -f $state.backend_pid, $backendTracked, $backendHealthy) -Kind $(if ($backendHealthy) { "ok" } else { "warning" })
         Write-DiagnosticLine -Label "Frontend" -Value ("PID {0}; tracked={1}; healthy={2}" -f $state.frontend_pid, $frontendTracked, $frontendHealthy) -Kind $(if ($frontendHealthy) { "ok" } else { "warning" })
         if (-not $backendHealthy -or -not $frontendHealthy) {

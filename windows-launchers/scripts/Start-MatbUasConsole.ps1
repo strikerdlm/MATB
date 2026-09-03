@@ -15,6 +15,46 @@ if ($BackendPort -eq $FrontendPort) {
 }
 
 $repoRoot = Get-MatbUasRepoRoot
+$frontendUrl = "http://127.0.0.1:$FrontendPort/start"
+$backendHealth = "http://127.0.0.1:$BackendPort/health"
+$dataRoot = Get-MatbUasDataRoot -RepoRoot $repoRoot
+$serviceRoot = Join-Path $dataRoot "service"
+$statePath = Join-Path $serviceRoot "service-state.json"
+
+# Avoid rebuilding underneath an already healthy console. If no healthy
+# tracked console exists, make this launcher a one-click prepare-and-start path.
+$runningState = Read-MatbUasState -StatePath $statePath
+if ($runningState) {
+    $runningBackend = Test-MatbUasTrackedProcess `
+        -ProcessId ([int]$runningState.backend_pid) `
+        -ExpectedExecutable ([string]$runningState.backend_executable) `
+        -ExpectedStartedAtUtc $runningState.backend_started_at_utc `
+        -Role backend -Port ([int]$runningState.backend_port) -RepoRoot $repoRoot
+    $runningFrontend = Test-MatbUasTrackedProcess `
+        -ProcessId ([int]$runningState.frontend_pid) `
+        -ExpectedExecutable ([string]$runningState.frontend_executable) `
+        -ExpectedStartedAtUtc $runningState.frontend_started_at_utc `
+        -Role frontend -Port ([int]$runningState.frontend_port) -RepoRoot $repoRoot
+    if ($runningBackend -and $runningFrontend -and
+        (Test-MatbUasHttp -Uri $backendHealth) -and
+        (Test-MatbUasHttp -Uri $frontendUrl)) {
+        Write-Host "MATB UAS is already running."
+        if (-not $NoBrowser) { Start-Process $frontendUrl }
+        return
+    }
+    # A tracked but unhealthy/old console must release .next and the database
+    # before preparation repairs dependencies or rebuilds the frontend.
+    if ($runningFrontend) {
+        Stop-MatbUasTrackedProcess -ProcessId ([int]$runningState.frontend_pid) -ExpectedExecutable ([string]$runningState.frontend_executable) -ExpectedStartedAtUtc $runningState.frontend_started_at_utc -Role frontend -Port ([int]$runningState.frontend_port) -RepoRoot $repoRoot | Out-Null
+    }
+    if ($runningBackend) {
+        Stop-MatbUasTrackedProcess -ProcessId ([int]$runningState.backend_pid) -ExpectedExecutable ([string]$runningState.backend_executable) -ExpectedStartedAtUtc $runningState.backend_started_at_utc -Role backend -Port ([int]$runningState.backend_port) -RepoRoot $repoRoot | Out-Null
+    }
+    Remove-MatbUasStateFile -StatePath $statePath -DataRoot $dataRoot
+}
+
+& (Join-Path $PSScriptRoot "Initialize-MatbUas.ps1") -SkipTests
+
 $pythonPath = Get-MatbUasPython -RepoRoot $repoRoot
 $nodePath = Get-MatbUasNode
 $frontendRoot = Join-Path $repoRoot "webui\frontend"
@@ -26,18 +66,13 @@ if (-not (Test-Path -LiteralPath $nextCli -PathType Leaf) -or
     throw "The frontend is not prepared. Run '00 - Preparar MATB UAS.cmd' first."
 }
 
-$dataRoot = Get-MatbUasDataRoot -RepoRoot $repoRoot
-$serviceRoot = Join-Path $dataRoot "service"
 $dbRoot = Join-Path $serviceRoot "db"
 $artifactRoot = Join-Path $serviceRoot "runs"
 $logRoot = Join-Path $serviceRoot "logs"
-$statePath = Join-Path $serviceRoot "service-state.json"
 foreach ($directory in @($dataRoot, $serviceRoot, $dbRoot, $artifactRoot, $logRoot)) {
     New-MatbUasDirectory -Path $directory
 }
 
-$backendHealth = "http://127.0.0.1:$BackendPort/health"
-$frontendUrl = "http://127.0.0.1:$FrontendPort/mission/setup"
 $existingState = Read-MatbUasState -StatePath $statePath
 if ($existingState) {
     $backendTracked = Test-MatbUasTrackedProcess `
@@ -84,6 +119,8 @@ $env:PYTHONDONTWRITEBYTECODE = "1"
 $env:MATB_DB_PATH = Join-Path $dbRoot "matb-webui.db"
 $env:MATB_SIMULATION_OUTPUT_DIR = $artifactRoot
 $env:MATB_SIMULATION_SCENARIO_DIR = Join-Path $repoRoot "scenarios\suas"
+$env:MATB_OPENMATB_PYTHON = $pythonPath
+$env:MATB_OPENMATB_OUTPUT_DIR = $artifactRoot
 $env:MATB_FRONTEND_ORIGINS = "http://127.0.0.1:$FrontendPort,http://localhost:$FrontendPort"
 $env:MATB_BACKEND_PORT = [string]$BackendPort
 $env:API_URL = "http://127.0.0.1:$BackendPort"

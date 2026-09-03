@@ -38,7 +38,7 @@ $env:PYTHONUTF8 = "1"
 $env:PYTHONDONTWRITEBYTECODE = "1"
 Write-Host "Python: $pythonPath"
 
-& $pythonPath -c "import fastapi, pydantic, sqlmodel, uvicorn, yaml" 2>$null
+& $pythonPath -c "import fastapi, pydantic, pyglet, pylsl, rstr, sqlmodel, uvicorn, yaml" 2>$null
 $pythonDependenciesReady = ($LASTEXITCODE -eq 0)
 if (-not $pythonDependenciesReady) {
     if ($SkipInstall) {
@@ -60,7 +60,15 @@ Write-Host "Node: $nodePath"
 
 $frontendRoot = Join-Path $repoRoot "webui\frontend"
 $nextModule = Join-Path $frontendRoot "node_modules\next\dist\bin\next"
-if (-not (Test-Path -LiteralPath $nextModule -PathType Leaf)) {
+$packageLock = Join-Path $frontendRoot "package-lock.json"
+$dependencyStamp = Join-Path $frontendRoot "node_modules\.matb-package-lock.sha256"
+$packageLockHash = (Get-FileHash -LiteralPath $packageLock -Algorithm SHA256).Hash.ToLowerInvariant()
+$frontendDependenciesReady = (
+    (Test-Path -LiteralPath $nextModule -PathType Leaf) -and
+    (Test-Path -LiteralPath $dependencyStamp -PathType Leaf) -and
+    ((Get-Content -LiteralPath $dependencyStamp -Raw).Trim().ToLowerInvariant() -eq $packageLockHash)
+)
+if (-not $frontendDependenciesReady) {
     if ($SkipInstall) {
         throw "Frontend dependencies are missing and -SkipInstall was selected."
     }
@@ -71,6 +79,7 @@ if (-not (Test-Path -LiteralPath $nextModule -PathType Leaf)) {
         if ($LASTEXITCODE -ne 0) {
             throw "Frontend dependency installation failed."
         }
+        $packageLockHash | Set-Content -LiteralPath $dependencyStamp -Encoding ascii -NoNewline
     } finally {
         Pop-Location
     }

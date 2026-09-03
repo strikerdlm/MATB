@@ -75,3 +75,48 @@ def test_participant_token_is_required_for_acknowledgement(engine, tmp_path):
         manager.acknowledge_instructions(prepared.session.id, "wrong-token")
     ready = manager.acknowledge_instructions(prepared.session.id, prepared.participant_token)
     assert ready.lifecycle == "READY"
+
+
+def test_native_process_exit_before_ready_is_reported_immediately(engine, tmp_path, monkeypatch):
+    _seed_visit(engine)
+    manager = _manager(engine, tmp_path)
+
+    class FailedProcess:
+        def __init__(self) -> None:
+            self.pid = 12345
+            self.returncode = 1
+            self.stdin = None
+            self.stdout = asyncio.StreamReader()
+            self.stderr = asyncio.StreamReader()
+            self.stdout.feed_eof()
+            self.stderr.feed_data(b"ModuleNotFoundError: No module named 'rstr'\n")
+            self.stderr.feed_eof()
+
+        async def wait(self) -> int:
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.returncode = 1
+
+        def kill(self) -> None:
+            self.returncode = 1
+
+    async def create_failed_process(*_args, **_kwargs):
+        return FailedProcess()
+
+    monkeypatch.setattr("app.openmatb_runtime.asyncio.create_subprocess_exec", create_failed_process)
+    monkeypatch.setattr("app.openmatb_runtime._WindowsJob", lambda _pid: None)
+
+    async def run() -> str:
+        prepared = await manager.create_session(
+            CreateOpenMatbSession(participant_id="P01", visit_ordinal=1),
+        )
+        manager.acknowledge_instructions(prepared.session.id, prepared.participant_token)
+        with pytest.raises(OpenMatbRuntimeError, match="openmatb_dependency_missing"):
+            await manager.start_block(prepared.session.id, prepared.controller_lease)
+        return prepared.session.id
+
+    session_id = asyncio.run(run())
+    failed = manager.session_view(session_id)
+    assert failed.lifecycle == "FAILED"
+    assert failed.last_error == "openmatb_dependency_missing"

@@ -14,6 +14,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 from typing_extensions import TypeAliasType
 
+from app.participant_ids import PARTICIPANT_ID_PATTERN
+
 
 Locale: TypeAlias = Literal["en", "es-CO"]
 SessionMode: TypeAlias = Literal["research", "interactive_technical"]
@@ -44,7 +46,7 @@ JsonValue = TypeAliasType(
 class CreateSimulationSession(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    participant_id: str = Field(pattern=r"^P[0-9]{2,6}$")
+    participant_id: str = Field(pattern=PARTICIPANT_ID_PATTERN)
     visit_ordinal: int = Field(ge=1, le=16)
     scenario_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
     locale: Locale
@@ -66,7 +68,7 @@ class SessionView(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str
-    participant_id: str | None = Field(default=None, pattern=r"^P[0-9]{2,6}$")
+    participant_id: str | None = Field(default=None, pattern=PARTICIPANT_ID_PATTERN)
     visit_id: int | None = Field(default=None, ge=1)
     visit_ordinal: int | None = Field(default=None, ge=1, le=16)
     scenario_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")

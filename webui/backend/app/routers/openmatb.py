@@ -25,6 +25,13 @@ router = APIRouter(prefix="/openmatb", tags=["openmatb"])
 _CONTROLLER = "X-OpenMATB-Controller"
 _PARTICIPANT = "X-OpenMATB-Participant"
 
+_ERROR_MESSAGES = {
+    "openmatb_dependency_missing": "OpenMATB dependencies are missing. Run the Windows preparation launcher, then try again.",
+    "openmatb_launch_failed": "OpenMATB closed before its participant window was ready. Review the station checks and service logs.",
+    "openmatb_ready_timeout": "OpenMATB did not report a ready participant window within 20 seconds.",
+    "openmatb_job_assignment_failed": "Windows could not attach OpenMATB to the supervised process group.",
+}
+
 
 def manager(request: Request) -> OpenMatbManager:
     value = getattr(request.app.state, "openmatb_manager", None)
@@ -44,11 +51,18 @@ def _translate(exc: OpenMatbRuntimeError) -> HTTPException:
         code = status.HTTP_403_FORBIDDEN
     elif exc.code.endswith("_not_found") or exc.code in {"participant_not_found", "visit_not_found"}:
         code = status.HTTP_404_NOT_FOUND
-    elif exc.code in {"openmatb_ready_timeout", "openmatb_unavailable"}:
+    elif exc.code in {
+        "openmatb_dependency_missing",
+        "openmatb_job_assignment_failed",
+        "openmatb_launch_failed",
+        "openmatb_ready_timeout",
+        "openmatb_unavailable",
+    }:
         code = status.HTTP_503_SERVICE_UNAVAILABLE
     else:
         code = status.HTTP_409_CONFLICT
-    return HTTPException(code, detail={"code": exc.code, "message": exc.code.replace("_", " ")})
+    message = _ERROR_MESSAGES.get(exc.code, exc.code.replace("_", " "))
+    return HTTPException(code, detail={"code": exc.code, "message": message})
 
 
 def _managed(call):

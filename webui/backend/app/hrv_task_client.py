@@ -9,6 +9,8 @@ from uuid import UUID
 import httpx
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError
 
+from app.participant_ids import PARTICIPANT_ID_PATTERN
+
 HRV_CONTRACT_VERSION = "task-session-hrv-v1"
 HRV_SCHEMA_SHA256 = "d4b837800725d9071fe98d21f34539495ba02c26f785b92d75c504bb47e201a0"
 HRV_COMMIT = "0fea35b7"
@@ -30,7 +32,7 @@ class PolarRecordingMetadataRequest(BaseModel):
     recorder_version: str = Field(min_length=1, max_length=64)
     capture_id: UUID
     external_session_id: UUID
-    participant_id: str = Field(pattern=r"^P[0-9]{2,6}$")
+    participant_id: str = Field(pattern=PARTICIPANT_ID_PATTERN)
     recording_start_utc: AwareDatetime
     recording_end_utc: AwareDatetime
     start_monotonic_ns: int = Field(ge=0)
@@ -55,7 +57,7 @@ class TaskSessionHrvRequest(BaseModel):
 
     contract_version: Literal["task-session-hrv-v1"] = HRV_CONTRACT_VERSION
     external_session_id: UUID
-    participant_id: str = Field(pattern=r"^P[0-9]{2,6}$")
+    participant_id: str = Field(pattern=PARTICIPANT_ID_PATTERN)
     rr_filename: str = Field(min_length=1, max_length=255)
     rr_content: str = Field(min_length=1, max_length=5_000_000)
     rr_file_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")

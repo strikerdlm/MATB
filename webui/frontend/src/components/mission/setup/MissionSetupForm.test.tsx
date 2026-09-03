@@ -45,7 +45,7 @@ const preparedSession: PreparedSession = {
 
 async function completeAndSubmit(user: ReturnType<typeof userEvent.setup>) {
   await user.selectOptions(screen.getByLabelText(/participant/i), "P01");
-  await waitFor(() => expect(screen.getByRole("option", { name: "1" })).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByRole("option", { name: /V1/ })).toBeInTheDocument());
   await user.selectOptions(screen.getByLabelText(/visit/i), "1");
   await user.selectOptions(screen.getByLabelText(/scenario/i), "reference_area_search");
   await user.click(screen.getByRole("checkbox", { name: /research instrument/i }));
@@ -67,7 +67,7 @@ describe("MissionSetupForm", () => {
     render(<MissionSetupForm participants={participants} scenarios={scenarios} />);
     expect(screen.getByRole("button", { name: /prepare session/i })).toBeDisabled();
     await user.selectOptions(screen.getByLabelText(/participant/i), "P01");
-    await waitFor(() => expect(screen.getByRole("option", { name: "1" })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("option", { name: /V1/ })).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText(/visit/i), "1");
     await user.selectOptions(screen.getByLabelText(/scenario/i), "reference_area_search");
     expect(screen.getByRole("button", { name: /prepare session/i })).toBeDisabled();

@@ -177,6 +177,7 @@ class _ProcessHandle:
     block: str
     process: asyncio.subprocess.Process
     ready: asyncio.Event = field(default_factory=asyncio.Event)
+    exited: asyncio.Event = field(default_factory=asyncio.Event)
     session_csv: Path | None = None
     stderr: list[str] = field(default_factory=list)
     monitor: asyncio.Task[None] | None = None
@@ -220,13 +221,32 @@ class OpenMatbManager:
             db.commit()
 
     def readiness(self) -> OpenMatbReadiness:
+        runtime_dependencies = False
+        if self.python_executable.is_file():
+            try:
+                probe = subprocess.run(
+                    [str(self.python_executable), "-c", "import pyglet, rstr"],
+                    cwd=self.openmatb_root,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=10,
+                    check=False,
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+                )
+                runtime_dependencies = probe.returncode == 0
+            except (OSError, subprocess.TimeoutExpired):
+                runtime_dependencies = False
         checks = {
             "python": self.python_executable.is_file(),
+            "runtime_dependencies": runtime_dependencies,
             "openmatb": (self.openmatb_root / "main.py").is_file(),
             "questionnaires_es": all((self.openmatb_root / "includes" / "questionnaires" / name).is_file() for name in (ISA_QUESTIONNAIRE_ES, NASATLX_QUESTIONNAIRE_ES, BEDFORD_QUESTIONNAIRE_ES)),
             "graphical_display": platform.system() == "Windows" or bool(os.getenv("DISPLAY") or os.getenv("WAYLAND_DISPLAY")),
         }
         warnings = []
+        if not checks["runtime_dependencies"]:
+            warnings.append("OpenMATB Python dependencies are missing or cannot be imported. Run the Windows preparation launcher again.")
         if not checks["graphical_display"]:
             warnings.append("Linux requires an active X11 or Wayland display for the participant window.")
         return OpenMatbReadiness(
@@ -462,24 +482,48 @@ class OpenMatbManager:
                     kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
                 else:
                     kwargs["start_new_session"] = True
-                process = await asyncio.create_subprocess_exec(*command, **kwargs)
+                try:
+                    process = await asyncio.create_subprocess_exec(*command, **kwargs)
+                except OSError as exc:
+                    row.lifecycle = "FAILED"; row.active_pid = None; row.last_error = "openmatb_launch_failed"
+                    db.add(row); db.commit()
+                    raise OpenMatbRuntimeError("openmatb_launch_failed") from exc
                 try:
                     windows_job = _WindowsJob(process.pid) if os.name == "nt" else None
                 except OSError as exc:
                     process.terminate()
                     await process.wait()
+                    row.lifecycle = "FAILED"; row.active_pid = None; row.last_error = "openmatb_job_assignment_failed"
+                    db.add(row); db.commit()
                     raise OpenMatbRuntimeError("openmatb_job_assignment_failed") from exc
                 handle = _ProcessHandle(session_id=session_id, block=block, process=process, windows_job=windows_job)
                 self._handles[session_id] = handle
                 row.lifecycle = "STARTING"; row.active_pid = process.pid; row.started_at = row.started_at or _utcnow(); row.last_error = None
                 db.add(row); db.commit()
                 handle.monitor = asyncio.create_task(self._monitor(handle))
+            ready_wait = asyncio.create_task(handle.ready.wait())
+            exited_wait = asyncio.create_task(handle.exited.wait())
             try:
-                await asyncio.wait_for(handle.ready.wait(), timeout=20)
-            except TimeoutError:
-                await self._terminate(handle)
-                self._set_failure(session_id, "openmatb_ready_timeout")
-                raise OpenMatbRuntimeError("openmatb_ready_timeout")
+                done, _ = await asyncio.wait(
+                    {ready_wait, exited_wait}, timeout=20, return_when=asyncio.FIRST_COMPLETED,
+                )
+                if not done:
+                    await self._terminate(handle)
+                    self._set_failure(session_id, "openmatb_ready_timeout")
+                    raise OpenMatbRuntimeError("openmatb_ready_timeout")
+                if handle.exited.is_set() and not handle.ready.is_set():
+                    failure = self._launch_failure_code(handle)
+                    self._set_failure(session_id, failure)
+                    raise OpenMatbRuntimeError(failure)
+                if handle.process.returncode not in {None, 0}:
+                    failure = self._launch_failure_code(handle)
+                    self._set_failure(session_id, failure)
+                    raise OpenMatbRuntimeError(failure)
+            finally:
+                for waiter in (ready_wait, exited_wait):
+                    if not waiter.done():
+                        waiter.cancel()
+                await asyncio.gather(ready_wait, exited_wait, return_exceptions=True)
             with Session(self.engine) as db:
                 row = db.get(OpenMatbSuiteSession, session_id)
                 assert row is not None
@@ -508,9 +552,12 @@ class OpenMatbManager:
                 handle.stderr.append(line.decode("utf-8", errors="replace").strip())
                 del handle.stderr[:-20]
 
-        await asyncio.gather(stdout_reader(), stderr_reader(), handle.process.wait())
-        if handle.windows_job is not None:
-            handle.windows_job.close()
+        try:
+            await asyncio.gather(stdout_reader(), stderr_reader(), handle.process.wait())
+        finally:
+            handle.exited.set()
+            if handle.windows_job is not None:
+                handle.windows_job.close()
         async with self._lock:
             with Session(self.engine) as db:
                 row = db.get(OpenMatbSuiteSession, handle.session_id)
@@ -518,9 +565,9 @@ class OpenMatbManager:
                     self._handles.pop(handle.session_id, None)
                     return
                 row.active_pid = None
-                if handle.process.returncode != 0:
+                if not handle.ready.is_set() or handle.process.returncode != 0:
                     row.lifecycle = "FAILED"
-                    row.last_error = "\n".join(handle.stderr[-5:])[:2000] or f"openmatb_exit_{handle.process.returncode}"
+                    row.last_error = self._launch_failure_code(handle)
                 else:
                     row.active_session_csv = str(handle.session_csv) if handle.session_csv else None
                     if handle.block == "PRACTICE":
@@ -530,6 +577,13 @@ class OpenMatbManager:
                         row.lifecycle = "AWAITING_SCALE"
                 db.add(row); db.commit()
             self._handles.pop(handle.session_id, None)
+
+    @staticmethod
+    def _launch_failure_code(handle: _ProcessHandle) -> str:
+        diagnostic = "\n".join(handle.stderr).lower()
+        if "no module named" in diagnostic or "modulenotfounderror" in diagnostic:
+            return "openmatb_dependency_missing"
+        return "openmatb_launch_failed"
 
     async def pause(self, session_id: str, lease: str) -> OpenMatbSessionView:
         return await self._command(session_id, lease, "pause", "PAUSED", {"RUNNING"})

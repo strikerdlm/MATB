@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Check, ChevronRight, Loader2, Radio, ShieldCheck } from "lucide-react";
 import { listVisits } from "@/lib/api";
@@ -14,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { GuidedSteps, type GuidedStepState } from "@/components/layout/GuidedSteps";
+import { isParticipantId } from "@/lib/participant-id";
 
 const EMPTY_VISITS: Visit[] = [];
 const PROFILE_ORDER = ["PRACTICE", "LOW", "MEDIUM", "HIGH"] as const;
@@ -31,6 +34,12 @@ export interface MissionSetupFormProps {
 
 function errorMessage(reason: unknown, locale: Locale): string {
   if (reason instanceof SimulationApiError) {
+    const fields = reason.context?.fields;
+    if (reason.code === "invalid_request" && Array.isArray(fields) && fields.includes("body.participant_id")) {
+      return locale === "es-CO"
+        ? "El código del participante no es compatible. Use P seguido de 2 a 6 dígitos, por ejemplo P01."
+        : "The participant code is not compatible. Use P followed by 2 to 6 digits, for example P01.";
+    }
     const candidate = `error.${reason.code}` as TranslationKey;
     if (Object.prototype.hasOwnProperty.call(STRINGS.en, candidate)) return t(locale, candidate);
     return reason.message;
@@ -60,7 +69,7 @@ export function MissionSetupForm({
   visitsLoader = listVisits,
 }: MissionSetupFormProps) {
   const router = useRouter();
-  const { simulationLocale: locale } = useAppLocale();
+  const { simulationLocale: locale, copy } = useAppLocale();
   const [participantId, setParticipantId] = useState("");
   const [visitOrdinal, setVisitOrdinal] = useState("");
   const [scenarioId, setScenarioId] = useState("");
@@ -75,10 +84,15 @@ export function MissionSetupForm({
     () => scenarios.find((scenario) => scenario.scenario_id === scenarioId) ?? null,
     [scenarioId, scenarios],
   );
+  const participantIsValid = !participantId || isParticipantId(participantId);
   const canSubmit = Boolean(
-    participantId && visitOrdinal && scenarioId && locale && acknowledged
+    participantId && participantIsValid && visitOrdinal && scenarioId && locale && acknowledged
       && !loading && !visitsLoading && !submitting,
   );
+
+  useEffect(() => {
+    if (scenarios.length === 1) setScenarioId((current) => current || scenarios[0].scenario_id);
+  }, [scenarios]);
 
   useEffect(() => {
     let mounted = true;
@@ -95,6 +109,7 @@ export function MissionSetupForm({
     const provided = initialVisits.filter((visit) => visit.participant_id === participantId);
     if (provided.length > 0) {
       setVisits(provided);
+      setVisitOrdinal(String(provided[0].visit_ordinal));
       setVisitsLoading(false);
       return () => {
         mounted = false;
@@ -105,7 +120,10 @@ export function MissionSetupForm({
     setVisitsLoading(true);
     void visitsLoader(participantId)
       .then((rows) => {
-        if (mounted) setVisits(rows);
+        if (mounted) {
+          setVisits(rows);
+          setVisitOrdinal(rows[0] ? String(rows[0].visit_ordinal) : "");
+        }
       })
       .catch((reason: unknown) => {
         if (mounted) setVisitsError(reason instanceof Error ? reason.message : t(locale, "setup.load_error"));
@@ -145,6 +163,9 @@ export function MissionSetupForm({
   }
 
   const labels = STRINGS[locale];
+  const state = (complete: boolean, current: boolean): GuidedStepState => complete ? "complete" : current ? "current" : "upcoming";
+  const identityReady = Boolean(participantId && participantIsValid);
+  const protocolReady = Boolean(identityReady && visitOrdinal && scenarioId);
 
   return (
     <main className="min-h-screen bg-background px-4 py-8 text-foreground sm:px-6 lg:px-10">
@@ -170,6 +191,16 @@ export function MissionSetupForm({
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span>{labels["app.research_only"]}</span>
         </div>
+
+        <GuidedSteps
+          label={copy("Pasos para crear una misión", "Steps to create a mission")}
+          steps={[
+            { title: copy("Participante", "Participant"), description: copy("Seleccione un código P01–P999999.", "Select a P01–P999999 code."), state: state(identityReady, true) },
+            { title: copy("Visita y escenario", "Visit and scenario"), description: copy("Confirme la visita y el escenario instalado.", "Confirm the visit and installed scenario."), state: state(protocolReady, identityReady) },
+            { title: copy("Confirmación", "Confirmation"), description: copy("Confirme el uso como instrumento de investigación.", "Confirm use as a research instrument."), state: state(acknowledged, protocolReady) },
+            { title: copy("Continuar", "Continue"), description: copy("Cree la sesión y vaya al panel de misión.", "Create the session and continue to the mission console."), state: state(false, canSubmit) },
+          ]}
+        />
 
         {loadError && (
           <div role="alert" className="border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
@@ -206,7 +237,12 @@ export function MissionSetupForm({
                     ))}
                   </select>
                   {!loading && participants.length === 0 && (
-                    <p className="text-xs text-muted-foreground">{labels["setup.no_participants"]}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {labels["setup.no_participants"]} <Link href="/participants" className="text-info underline underline-offset-2">{copy("Crear participante", "Create participant")}</Link>
+                    </p>
+                  )}
+                  {participantId && !participantIsValid && (
+                    <p role="alert" className="text-xs text-danger">{copy("Este registro antiguo no puede iniciar una misión. Cree un código como P01.", "This older record cannot start a mission. Create a code such as P01.")}</p>
                   )}
                 </div>
 
@@ -226,7 +262,7 @@ export function MissionSetupForm({
                       .sort((left, right) => left.visit_ordinal - right.visit_ordinal)
                       .map((visit) => (
                         <option key={visit.id} value={String(visit.visit_ordinal)}>
-                          {visit.visit_ordinal}
+                          {copy("Día", "Day")} {visit.scheduled_day} · V{visit.visit_ordinal}
                         </option>
                       ))}
                   </select>
@@ -288,7 +324,7 @@ export function MissionSetupForm({
                 className="w-full sm:w-auto"
               >
                 {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <ChevronRight className="mr-2 h-4 w-4" aria-hidden="true" />}
-                {submitting ? labels["setup.preparing"] : labels["setup.prepare_session"]}
+                {submitting ? labels["setup.preparing"] : copy("Crear sesión y continuar al panel", "Create session and continue to console")}
               </Button>
             </CardContent>
           </Card>

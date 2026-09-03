@@ -7,6 +7,8 @@ from typing import Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.participant_ids import PARTICIPANT_ID_PATTERN
+
 LiftoffAction: TypeAlias = Literal[
     "baseline/start",
     "baseline/finish",
@@ -40,7 +42,7 @@ class LiftoffConfiguration(BaseModel):
 class CreateLiftoffSession(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    participant_id: str = Field(pattern=r"^P[0-9]{2,6}$")
+    participant_id: str = Field(pattern=PARTICIPANT_ID_PATTERN)
     visit_ordinal: int = Field(ge=1, le=16)
     configuration: LiftoffConfiguration
     polar_recording_confirmed: bool

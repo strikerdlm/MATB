@@ -10,6 +10,18 @@ def test_create_participant_generates_astra_visits(client):
     assert all(v["status"] == "planned" for v in visits)
 
 
+def test_create_participant_rejects_id_that_other_research_workflows_cannot_use(client):
+    response = client.post(
+        "/participants",
+        json={"id": "pilot-01", "enrollment_date": "2026-06-01"},
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["code"] == "invalid_request"
+    assert "body.id" in detail["context"]["fields"]
+
+
 def test_list_participants(client):
     client.post("/participants", json={"id": "P01", "enrollment_date": "2026-06-01"})
     client.post("/participants", json={"id": "P02", "enrollment_date": "2026-06-02"})

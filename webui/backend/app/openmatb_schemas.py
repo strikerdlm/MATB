@@ -7,6 +7,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.participant_ids import PARTICIPANT_ID_PATTERN
+
 
 Lifecycle = Literal[
     "INSTRUCTIONS", "READY", "STARTING", "RUNNING", "PAUSED",
@@ -125,7 +127,7 @@ class OpenMatbReadiness(BaseModel):
 
 class CreateOpenMatbSession(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    participant_id: str = Field(pattern=r"^P[0-9]{2,6}$")
+    participant_id: str = Field(pattern=PARTICIPANT_ID_PATTERN)
     visit_ordinal: int = Field(ge=1, le=16)
     preset_id: str = "matb-fac-standard"
     preset_version: str = "1.0.0"
@@ -144,7 +146,7 @@ class PreparedOpenMatbSession(BaseModel):
 class OpenMatbSessionView(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: str
-    participant_id: str
+    participant_id: str = Field(pattern=PARTICIPANT_ID_PATTERN)
     visit_ordinal: int
     visit_code: str
     scheduled_day: int
