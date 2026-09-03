@@ -4,10 +4,12 @@
 session are required. This template is committed as a release gate, not as
 evidence that hardware qualification passed.**
 
-Preflight on 2026-09-03: the bounded, address-redacted Bleak scan was attempted,
-but Windows returned `BleakBluetoothNotAvailableReason.POWERED_OFF`. No H10
-discovery, connection, or sample claim can be made from that attempt. Turn on
-the Bluetooth radio and rerun the matrix below.
+Preflight on 2026-09-03: the first bounded, address-redacted Bleak scan returned
+`BleakBluetoothNotAvailableReason.POWERED_OFF`. After Bluetooth was enabled, a
+second eight-second address-redacted scan completed without an adapter error
+and returned zero Polar H10 candidates. The radio availability check therefore
+passed, but H10 discovery, connection, and sampling remain unverified. Activate
+the strap/device and rerun the matrix below.
 
 ## Configuration record
 
