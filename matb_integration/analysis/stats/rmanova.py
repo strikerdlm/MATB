@@ -17,6 +17,9 @@ def rm_anova_q1(df: pd.DataFrame) -> dict[str, Any]:
     if n_cc < MIN_COMPLETE_CASE:
         return {"status": "insufficient_data",
                 "detail": f"only {n_cc} complete-case participants (< {MIN_COMPLETE_CASE})"}
+    if cc["value"].nunique(dropna=False) < 2:
+        return {"status": "not_estimable",
+                "detail": "constant response has no estimable within-subject variance"}
     try:
         from statsmodels.stats.anova import AnovaRM
 
@@ -24,11 +27,12 @@ def rm_anova_q1(df: pd.DataFrame) -> dict[str, Any]:
                       within=["workload_level"], aggregate_func="mean").fit()
         row = res.anova_table.iloc[0]
         f, df1, df2 = float(row["F Value"]), float(row["Num DF"]), float(row["Den DF"])
-        if not np.isfinite(f) or f < 0:
+        p = float(row["Pr > F"])
+        if not np.isfinite(f) or f < 0 or not np.isfinite(p):
             return {"status": "not_estimable",
-                    "detail": "non-finite or negative F (degenerate within-subject variance)"}
+                    "detail": "invalid F or p value (degenerate within-subject variance)"}
         return {"status": "ok", "F": f, "df": [df1, df2],
-                "p": float(row["Pr > F"]),
+                "p": p,
                 "partial_eta_sq": f * df1 / (f * df1 + df2),
                 "complete_case_n": n_cc,
                 "note": "complete-case, visit-averaged; descriptive sensitivity only"}
