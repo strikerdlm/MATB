@@ -4,6 +4,7 @@ import type {
   CommandRequest,
   CommandResultView,
   CreateSimulationSession,
+  CreateTechnicalSimulationSession,
   DebriefView,
   FinishRequest,
   LifecycleRequest,
@@ -13,7 +14,6 @@ import type {
   ScenarioSummary,
   ScenarioValidationView,
   SessionView,
-  StreamEnvelope,
   WorldSnapshot,
 } from "@/types/simulation";
 
@@ -76,6 +76,15 @@ export async function validateSimulationScenario(file: File | Blob): Promise<Sce
 
 export async function createSimulationSession(body: CreateSimulationSession): Promise<PreparedSession> {
   return simulationRequest<PreparedSession>("/simulation/sessions", jsonInit("POST", body));
+}
+
+export async function createTechnicalSimulationSession(
+  body: CreateTechnicalSimulationSession,
+): Promise<PreparedSession> {
+  return simulationRequest<PreparedSession>(
+    "/simulation/technical-sessions",
+    jsonInit("POST", body),
+  );
 }
 
 export type SessionTransition = "start" | "pause" | "resume" | "finish";
@@ -166,6 +175,7 @@ export const simulationApi = {
   listSimulationScenarios,
   validateSimulationScenario,
   createSimulationSession,
+  createTechnicalSimulationSession,
   getSimulationSession,
   transitionSession,
   recoverSimulationSession,

@@ -1,8 +1,11 @@
+"use client";
+
 import React from "react";
 
 import { formatTimelineTime } from "@/lib/experiment-designer";
 import { cn } from "@/lib/utils";
 import type { ExperimentTimelineEvent } from "@/types";
+import { useAppLocale } from "@/lib/i18n";
 
 const ROWS = [
   { task: "sysmon", label: "SYSMON" },
@@ -35,22 +38,23 @@ export function ExperimentTimeline({
   selectedKey,
   onSelect,
 }: ExperimentTimelineProps) {
+  const { copy } = useAppLocale();
   const tickCount = 6;
   const ticks = Array.from({ length: tickCount + 1 }, (_, index) => (
     Math.round((durationSeconds / tickCount) * index)
   ));
 
   return (
-    <section className="overflow-hidden border border-white/15 bg-black/30" aria-label="Experiment timeline">
+    <section className="overflow-hidden border border-white/15 bg-black/30" aria-label={copy("Línea de tiempo del experimento", "Experiment timeline")}>
       <div className="overflow-x-auto">
         <div className="min-w-[58rem]">
           <div className="grid grid-cols-[8.5rem_minmax(45rem,1fr)] border-b border-white/15 bg-white/[0.025]">
             <div className="border-r border-white/15 px-4 py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-              Tasks
+              {copy("Tareas", "Tasks")}
             </div>
             <div className="relative h-14">
               <span className="absolute left-3 top-2 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
-                Time mm:ss
+                {copy("Tiempo mm:ss", "Time mm:ss")}
               </span>
               {ticks.map((tick, index) => (
                 <span
@@ -79,7 +83,7 @@ export function ExperimentTimeline({
                 >
                   {rowEvents.length === 0 ? (
                     <p className="absolute inset-0 flex items-center px-4 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/50">
-                      No events assigned
+                      {copy("Sin eventos asignados", "No events assigned")}
                     </p>
                   ) : null}
                   {rowEvents.map((event) => {
@@ -103,7 +107,7 @@ export function ExperimentTimeline({
                             : "hover:border-white/70",
                         )}
                         style={{ left: `${left}%`, width: `${width}%`, minWidth: "1rem" }}
-                        title={`${event.command} at ${formatTimelineTime(event.atSeconds)}`}
+                        title={`${event.command} · ${copy("en", "at")} ${formatTimelineTime(event.atSeconds)}`}
                       >
                         <span className="block truncate font-semibold">{event.command}</span>
                         <span className="mt-1 block truncate opacity-75">

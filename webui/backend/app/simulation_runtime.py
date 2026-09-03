@@ -36,7 +36,7 @@ from matb_integration.suas.recording.recorder import SessionRecorder
 from matb_integration.suas.recording.checkpoints import load_checkpoint
 from matb_integration.suas.recording.replay import ReplayVerifier, event_chain_hash
 from matb_integration.suas.scenarios.loader import load_scenario
-from matb_integration.suas.scenarios.manifest import build_session_manifest
+from matb_integration.suas.scenarios.manifest import build_session_manifest, build_technical_session_manifest
 from matb_integration.suas.scenarios.profiles import block_order_for_participant
 from matb_integration.suas.research.protocol import (
     ActiveProbe, ProtocolController, ProtocolError, ProtocolPhase,
@@ -44,10 +44,16 @@ from matb_integration.suas.research.protocol import (
 from matb_integration.suas.research.scoring import ProbeAnswer
 
 from .models import Participant, Visit
-from .simulation_models import SimulationBlock, SimulationSession
+from .simulation_models import (
+    SimulationBlock,
+    SimulationSession,
+    TechnicalSimulationBlock,
+    TechnicalSimulationSession,
+)
 from .simulation_persistence import InMemorySimulationPersistence, SimulationPersistence
 from .simulation_schemas import (
-    CommandRequest, CreateSimulationSession, FinishRequest, PreparedSession, RecoveryView, SessionView,
+    CommandRequest, CreateSimulationSession, CreateTechnicalSimulationSession, FinishRequest,
+    PreparedSession, RecoveryView, SessionView,
 )
 from .websocket.simulation import SimulationHub, StreamEnvelope, StreamKind
 
@@ -89,8 +95,8 @@ class _QueuedCommand:
 @dataclass(slots=True)
 class RuntimeHandle:
     session_id: str
-    participant_id: str
-    visit_id: int
+    participant_id: str | None
+    visit_id: int | None
     locale: str
     scenario: Any
     manifest: dict[str, object]
@@ -110,6 +116,9 @@ class RuntimeHandle:
     protocol: ProtocolController | None = None
     probe_timeout_task: asyncio.Task[Any] | None = None
     block_closed: bool = False
+    session_mode: str = "research"
+    record_class: str = "research"
+    selected_block_id: str | None = None
 
 
 def _utcnow() -> datetime:
@@ -223,6 +232,7 @@ class SimulationManager:
                 validity="valid",
                 artifact_root=str(run_dir),
             ))
+            db.flush()
             for index, block_id in enumerate(("PRACTICE", *(item.value for item in order)), start=0):
                 db.add(SimulationBlock(
                     session_id=session_id, block_id=block_id, profile=block_id,
@@ -230,6 +240,99 @@ class SimulationManager:
                 ))
             db.commit()
             self.persistence.update_session(session_id, lifecycle="PREPARED")
+            return self._prepared_view(handle, lease)
+
+    async def prepare_technical(
+        self,
+        request: CreateTechnicalSimulationSession,
+        db: Session,
+    ) -> PreparedSession:
+        """Prepare one directly selected block outside the research protocol."""
+
+        async with self._lock:
+            if self._handle is not None and self._handle.lifecycle not in {"FINISHED", "ABORTED"}:
+                raise SimulationConflict("an active session already exists")
+            scenario_root = self.scenario_root.resolve()
+            scenario_path = self.scenario_root / f"{request.scenario_id}.yaml"
+            resolved_scenario = scenario_path.resolve()
+            if (
+                not scenario_path.is_file()
+                or resolved_scenario.parent != scenario_root
+                or not resolved_scenario.is_file()
+            ):
+                raise SimulationNotFound("scenario not found")
+            loaded = load_scenario(resolved_scenario)
+            if request.block_id not in loaded.definition.blocks:
+                raise SimulationNotFound("scenario block not found")
+            session_id = self._new_session_id()
+            manifest = build_technical_session_manifest(
+                loaded,
+                block_id=request.block_id,
+                locale=request.locale,
+                ui_version=self._ui_version,
+                engine_version=ENGINE_VERSION,
+            )
+            manifest["session_id"] = session_id
+            lease = secrets.token_urlsafe(32)
+            run_dir = self.artifact_root / "technical" / session_id
+            recorder = SessionRecorder(run_dir, manifest, loaded.normalized_yaml)
+            handle = RuntimeHandle(
+                session_id=session_id,
+                participant_id=None,
+                visit_id=None,
+                locale=request.locale,
+                scenario=loaded,
+                manifest=manifest,
+                recorder=recorder,
+                lease_hash=self._hash_lease(lease),
+                validity="technical_only",
+                session_mode="interactive_technical",
+                record_class="technical_only",
+                selected_block_id=request.block_id,
+                protocol=ProtocolController(
+                    loaded.definition,
+                    participant_id=session_id,
+                    locale=Locale(request.locale),
+                    block_order=(request.block_id,),
+                    initial_validity="technical_only",
+                    monotonic_clock=lambda: asyncio.get_running_loop().time(),
+                ),
+            )
+            self._handle = handle
+            self._append(handle, RecordKind.LIFECYCLE, {
+                "event": "session_prepared",
+                "scenario_id": loaded.definition.scenario_id,
+                "session_mode": "interactive_technical",
+                "record_class": "technical_only",
+                "selected_block_id": request.block_id,
+            }, 0, 0)
+            db.add(TechnicalSimulationSession(
+                id=session_id,
+                scenario_id=loaded.definition.scenario_id,
+                scenario_sha256=loaded.sha256,
+                selected_block_id=request.block_id,
+                manifest_json=canonical_json(manifest),
+                locale=request.locale,
+                lifecycle="PREPARED",
+                validity="technical_only",
+                record_class="technical_only",
+                artifact_root=str(run_dir),
+            ))
+            db.flush()
+            db.add(TechnicalSimulationBlock(
+                session_id=session_id,
+                block_id=request.block_id,
+                profile=request.block_id,
+                order_index=0,
+                lifecycle="PREPARED",
+                validity="technical_only",
+            ))
+            db.commit()
+            self.persistence.update_session(
+                session_id,
+                lifecycle="PREPARED",
+                validity="technical_only",
+            )
             return self._prepared_view(handle, lease)
 
     async def start(self, session_id: str, block_id: str, lease: str) -> SessionView:
@@ -452,6 +555,8 @@ class SimulationManager:
                 code="invalid_protocol_payload", applied_tick=None, state_version=self._version(handle),
             )
 
+        handle.validity = protocol.validity
+
         if protocol.active_probe is not None:
             await self._publish_protocol_probe_locked(handle, protocol.active_probe)
         elif protocol.phase is ProtocolPhase.BLOCK_RUNNING:
@@ -523,6 +628,7 @@ class SimulationManager:
                 result = handle.protocol.timeout_active_probe()
             except ProtocolError:
                 return
+            handle.validity = handle.protocol.validity
             self.persistence.update_session(
                 handle.session_id,
                 lifecycle=handle.lifecycle,
@@ -718,16 +824,17 @@ class SimulationManager:
             handle.recorder = reopened
             handle.sequence = previous_sequence + 1
             handle.lifecycle = "PAUSED"
-            handle.validity = "valid_with_deviation"
+            recovery_validity = self._deviated_validity(handle)
+            handle.validity = recovery_validity
             self.persistence.update_session(
-                session_id, lifecycle="PAUSED", validity="valid_with_deviation", active_block_id=handle.active_block_id,
+                session_id, lifecycle="PAUSED", validity=recovery_validity, active_block_id=handle.active_block_id,
             )
             if handle.active_block_id:
                 self.persistence.update_block(
                     session_id,
                     handle.active_block_id,
                     lifecycle="PAUSED",
-                    validity="valid_with_deviation",
+                    validity=recovery_validity,
                     was_interrupted=True,
                     recovered_from_checkpoint=checkpoint_version,
                     simulation_finished_ms=None,
@@ -764,7 +871,15 @@ class SimulationManager:
             raise RecordingError("persisted manifest is invalid") from exc
         if not isinstance(manifest, dict) or manifest.get("scenario_sha256") != loaded.sha256:
             raise RecordingError("persisted manifest does not match scenario")
-        configured_root = self.artifact_root.resolve()
+        technical = isinstance(row, TechnicalSimulationSession)
+        session_mode = "interactive_technical" if technical else "research"
+        record_class = "technical_only" if technical else "research"
+        selected_block_id = row.selected_block_id if technical else None
+        configured_root = (
+            (self.artifact_root / "technical").resolve()
+            if technical
+            else self.artifact_root.resolve()
+        )
         run_dir = Path(row.artifact_root)
         if not run_dir.is_absolute():
             run_dir = configured_root / run_dir
@@ -783,10 +898,13 @@ class SimulationManager:
         engine = SimulationEngine(loaded.definition, block_id)
         engine.restore(engine_snapshot)
         lease = secrets.token_urlsafe(32)
+        recovered_validity = "technical_only_with_deviation" if technical else "valid_with_deviation"
+        participant_id = getattr(row, "participant_id", None)
+        visit_id = getattr(row, "visit_id", None)
         handle = RuntimeHandle(
             session_id=session_id,
-            participant_id=row.participant_id,
-            visit_id=int(row.visit_id),
+            participant_id=participant_id,
+            visit_id=int(visit_id) if visit_id is not None else None,
             locale=row.locale,
             scenario=loaded,
             manifest=manifest,
@@ -795,11 +913,16 @@ class SimulationManager:
             lifecycle="INTERRUPTED",
             active_block_id=block_id,
             engine=engine,
-            validity="valid_with_deviation",
+            validity=recovered_validity,
+            session_mode=session_mode,
+            record_class=record_class,
+            selected_block_id=selected_block_id,
             protocol=ProtocolController(
                 loaded.definition,
-                participant_id=row.participant_id,
+                participant_id=participant_id or session_id,
                 locale=Locale(row.locale),
+                block_order=(selected_block_id,) if technical and selected_block_id else None,
+                initial_validity=recovered_validity,
                 monotonic_clock=lambda: asyncio.get_running_loop().time(),
             ),
         )
@@ -826,12 +949,12 @@ class SimulationManager:
         handle.sequence = previous_sequence + 1
         handle.lifecycle = "PAUSED"
         self._handle = handle
-        self.persistence.update_session(session_id, lifecycle="PAUSED", validity="valid_with_deviation", active_block_id=block_id)
+        self.persistence.update_session(session_id, lifecycle="PAUSED", validity=recovered_validity, active_block_id=block_id)
         self.persistence.update_block(
             session_id,
             block_id,
             lifecycle="PAUSED",
-            validity="valid_with_deviation",
+            validity=recovered_validity,
             was_interrupted=True,
             recovered_from_checkpoint=checkpoint_version,
         )
@@ -972,7 +1095,7 @@ class SimulationManager:
         handle.sequence += 1
         record = SessionRecord(
             session_id=handle.session_id,
-            block_id=handle.active_block_id or "PRACTICE",
+            block_id=handle.active_block_id or handle.selected_block_id or "PRACTICE",
             sequence=handle.sequence,
             simulation_time_ms=time_ms,
             wall_time_utc=self._wall_clock(),
@@ -1170,12 +1293,19 @@ class SimulationManager:
         }
         protocol_validity = str(protocol.get("validity", "valid"))
         effective_validity = handle.validity if handle.validity != "valid" else protocol_validity
+        protocol_order = (
+            [handle.selected_block_id] if handle.session_mode == "interactive_technical" and handle.selected_block_id
+            else list(handle.manifest.get("block_order", []))
+        )
         return SessionView(
             id=handle.session_id, participant_id=handle.participant_id, visit_id=handle.visit_id,
             scenario_id=handle.scenario.definition.scenario_id, scenario_sha256=handle.scenario.sha256,
             locale=handle.locale, lifecycle=handle.lifecycle, active_block_id=handle.active_block_id,
-            block_order=list(handle.manifest["block_order"]), state_version=self._version(handle),
+            block_order=list(protocol_order), state_version=self._version(handle),
             simulation_time_ms=self._time(handle), validity=effective_validity,
+            session_mode=handle.session_mode,
+            record_class=handle.record_class,
+            selected_block_id=handle.selected_block_id,
             protocol_phase=str(protocol["protocol_phase"]),
             current_block_index=int(protocol["current_block_index"]),
             active_probe=protocol["active_probe"],
@@ -1191,21 +1321,26 @@ class SimulationManager:
         severity: str = "fatal",
     ) -> None:
         handle.lifecycle = "INTERRUPTED"
-        handle.validity = "invalid"
+        interrupted_validity = (
+            "technical_only_with_deviation"
+            if handle.record_class == "technical_only"
+            else "invalid"
+        )
+        handle.validity = interrupted_validity
         self._cancel_tasks(handle)
         now = self._time(handle)
         self.persistence.update_session(
             handle.session_id,
             lifecycle="INTERRUPTED",
             interrupted_at=_utcnow(),
-            validity="invalid",
+            validity=interrupted_validity,
         )
         if handle.active_block_id:
             self.persistence.update_block(
                 handle.session_id,
                 handle.active_block_id,
                 lifecycle="INTERRUPTED",
-                validity="invalid",
+                validity=interrupted_validity,
                 was_interrupted=True,
             )
         self.persistence.add_deviation(handle.session_id, handle.active_block_id, code, severity, now, detail)
@@ -1229,6 +1364,14 @@ class SimulationManager:
 
     def _prepared_view(self, handle: RuntimeHandle, lease: str) -> PreparedSession:
         return PreparedSession.model_validate({**self._view(handle).model_dump(), "controller_lease": lease})
+
+    @staticmethod
+    def _deviated_validity(handle: RuntimeHandle) -> str:
+        return (
+            "technical_only_with_deviation"
+            if handle.record_class == "technical_only"
+            else "valid_with_deviation"
+        )
 
 
 def _command_envelope(request: CommandRequest) -> CommandEnvelope:

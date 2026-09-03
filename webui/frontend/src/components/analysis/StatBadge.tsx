@@ -1,5 +1,8 @@
+"use client";
+
 import { cn } from "@/lib/utils";
 import type { AnalysisStatus } from "@/types";
+import { useAppLocale } from "@/lib/i18n";
 
 const STYLES: Record<AnalysisStatus, string> = {
   ok: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
@@ -13,12 +16,18 @@ const LABELS: Record<AnalysisStatus, string> = {
 };
 
 export function StatBadge({ status, detail }: { status: AnalysisStatus; detail?: string }) {
+  const { locale } = useAppLocale();
+  const labels: Record<AnalysisStatus, string> = locale === "en" ? LABELS : {
+    ok: "correcto",
+    insufficient_data: "datos insuficientes",
+    not_estimable: "no calculable",
+  };
   return (
     <span
       title={detail}
       className={cn("inline-block rounded-[3px] border px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.12em]", STYLES[status])}
     >
-      {LABELS[status]}
+      {labels[status]}
     </span>
   );
 }

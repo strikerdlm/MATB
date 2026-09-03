@@ -43,6 +43,7 @@ test("Liftoff setup keeps lease private and completes the phase workflow", async
   await primeTelemetry();
 
   await page.goto("/liftoff/setup");
+  await page.locator("#app-language").selectOption("en");
   await expect(page.getByText("Telemetry ready", { exact: false })).toBeVisible();
   expect((await new AxeBuilder({ page: page as never }).analyze()).violations).toEqual([]);
   await page.getByLabel("Participant").selectOption("P01");

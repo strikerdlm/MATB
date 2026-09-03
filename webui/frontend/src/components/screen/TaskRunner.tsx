@@ -7,7 +7,7 @@ import { ChoiceRT } from "@/components/screen/ChoiceRT";
 import { NBack } from "@/components/screen/NBack";
 import { SimpleRT } from "@/components/screen/SimpleRT";
 import { Tracking } from "@/components/screen/Tracking";
-import { ES } from "@/components/screen/strings_es";
+import { useScreenStrings } from "@/components/screen/strings";
 import {
   FAST_CONFIG, SCREEN_CONFIG, mulberry32,
   type ChoiceTrial, type NbackTrial, type RtTrial, type ScreenPayload,
@@ -19,6 +19,7 @@ export function TaskRunner({ fast, onComplete }: {
   fast: boolean;
   onComplete: (payload: ScreenPayload) => void;
 }) {
+  const strings = useScreenStrings();
   const config = fast ? FAST_CONFIG : SCREEN_CONFIG;
   const seed = useMemo(() => Math.floor(Math.random() * 2 ** 31), []);
   const rng = useMemo(() => mulberry32(seed), [seed]);
@@ -30,7 +31,7 @@ export function TaskRunner({ fast, onComplete }: {
   return (
     <div className="flex min-h-[70vh] flex-col">
       <p className="mb-4 text-center text-xs text-muted-foreground">
-        {ES.common.subtestOf(Math.min(step + 1, SUBTEST_COUNT), SUBTEST_COUNT)}
+        {strings.common.subtestOf(Math.min(step + 1, SUBTEST_COUNT), SUBTEST_COUNT)}
       </p>
       {step === 0 && (
         <SimpleRT config={config} rng={rng} onDone={(trials: RtTrial[]) => {

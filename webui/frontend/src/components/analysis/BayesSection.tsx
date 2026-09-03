@@ -10,10 +10,12 @@ import { getBayesStatus, runBayes } from "@/lib/api";
 import { buildBayesForestOption } from "@/lib/figures";
 import { fmtNum } from "@/lib/format";
 import type { BayesJob, BayesModelResult } from "@/types";
+import { useAppLocale } from "@/lib/i18n";
 
 const POLL_MS = 2000;
 
 function BayesCard({ title, result }: { title: string; result: BayesModelResult }) {
+  const { copy } = useAppLocale();
   return (
     <div className="mission-panel space-y-2 p-4">
       <div className="flex items-center justify-between">
@@ -21,7 +23,7 @@ function BayesCard({ title, result }: { title: string; result: BayesModelResult 
         <div className="flex items-center gap-2">
           {result.status === "ok" && result.converged === false && (
             <span className="rounded-[3px] border border-danger/40 bg-danger/10 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-danger">
-              not converged
+              {copy("sin convergencia", "not converged")}
             </span>
           )}
           <StatBadge status={result.status} detail={result.detail} />
@@ -32,8 +34,8 @@ function BayesCard({ title, result }: { title: string; result: BayesModelResult 
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                <th className="py-1 pr-2">Param</th>
-                <th className="py-1 pr-2">mean</th>
+                <th className="py-1 pr-2">{copy("Parámetro", "Param")}</th>
+                <th className="py-1 pr-2">{copy("media", "mean")}</th>
                 <th className="py-1 pr-2">95% ETI</th>
                 <th className="py-1 pr-2">R̂</th>
                 <th className="py-1">ESS</th>
@@ -55,8 +57,8 @@ function BayesCard({ title, result }: { title: string; result: BayesModelResult 
           </table>
           {result.diagnostics && (
             <p className="text-xs text-muted-foreground">
-              max R̂ {result.diagnostics.max_r_hat.toFixed(3)} · min ESS{" "}
-              {Math.round(result.diagnostics.min_ess_bulk)} · divergences{" "}
+              R̂ máx. {result.diagnostics.max_r_hat.toFixed(3)} · ESS mín. {" "}
+              {Math.round(result.diagnostics.min_ess_bulk)} · {copy("divergencias", "divergences")}{" "}
               {result.diagnostics.divergences}
             </p>
           )}
@@ -84,6 +86,7 @@ function hasBayesRows(section: Record<string, BayesModelResult>, names: string[]
 }
 
 export function BayesSection() {
+  const { copy } = useAppLocale();
   const [job, setJob] = useState<BayesJob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -140,10 +143,10 @@ export function BayesSection() {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-            Bayesian sensitivity (Q2/Q4 - PyMC, async)
+            {copy("Sensibilidad bayesiana (Q2/Q4 - PyMC, asíncrona)", "Bayesian sensitivity (Q2/Q4 - PyMC, async)")}
           </h3>
           <p className="text-xs text-muted-foreground">
-            Hierarchical NUTS re-fit with pre-specified priors; separate artifact.
+            {copy("Reajuste NUTS jerárquico con distribuciones previas preespecificadas; artefacto independiente.", "Hierarchical NUTS re-fit with pre-specified priors; separate artifact.")}
           </p>
         </div>
         <Button
@@ -152,7 +155,7 @@ export function BayesSection() {
           disabled={running}
         >
           <FlaskConical className="h-4 w-4" />
-          {running ? `Job ${job?.status}...` : "Run Bayesian sensitivity"}
+          {running ? `${copy("Tarea", "Job")} ${job?.status}...` : copy("Ejecutar sensibilidad bayesiana", "Run Bayesian sensitivity")}
         </Button>
       </div>
 
@@ -163,11 +166,11 @@ export function BayesSection() {
       )}
       {job?.status === "failed" && (
         <p className="rounded-[4px] border border-danger/40 bg-danger/10 px-4 py-2 text-sm text-danger">
-          Job failed: {job.error}
+          {copy("La tarea falló", "Job failed")}: {job.error}
         </p>
       )}
       {!job && !error && (
-        <p className="text-sm text-muted-foreground">No Bayesian job yet.</p>
+        <p className="text-sm text-muted-foreground">{copy("Aún no hay una tarea bayesiana.", "No Bayesian job yet.")}</p>
       )}
 
       {art && (
@@ -179,7 +182,7 @@ export function BayesSection() {
                 exportName={`bayes-q2-${art.provenance.fingerprint.slice(0, 12)}`}
                 option={buildBayesForestOption(art, "q2")}
                 height={420}
-                caption="Bayesian sensitivity estimates for Q2. Points show posterior means; intervals show 95% equal-tailed intervals."
+                caption={copy("Estimaciones de sensibilidad bayesiana para Q2. Los puntos muestran medias posteriores y los intervalos, intervalos de colas iguales del 95%.", "Bayesian sensitivity estimates for Q2. Points show posterior means; intervals show 95% equal-tailed intervals.")}
               />
             )}
             {hasBayesRows(art.q4, ["b_visit"]) && (
@@ -188,7 +191,7 @@ export function BayesSection() {
                 exportName={`bayes-q4-${art.provenance.fingerprint.slice(0, 12)}`}
                 option={buildBayesForestOption(art, "q4")}
                 height={360}
-                caption="Bayesian sensitivity estimates for exploratory DEPDF parameter drift. Points show posterior means; intervals show 95% equal-tailed intervals."
+                caption={copy("Estimaciones de sensibilidad bayesiana para la deriva exploratoria de parámetros DEPDF. Los puntos muestran medias posteriores y los intervalos, intervalos de colas iguales del 95%.", "Bayesian sensitivity estimates for exploratory DEPDF parameter drift. Points show posterior means; intervals show 95% equal-tailed intervals.")}
               />
             )}
           </div>
@@ -203,8 +206,8 @@ export function BayesSection() {
             ))}
           </div>
           <p className="text-xs text-muted-foreground">
-            Sampler: seed {art.sampler.seed} · {art.sampler.chains} chains ·{" "}
-            {art.sampler.draws} draws / {art.sampler.tune} tune · priors:{" "}
+            {copy("Muestreador", "Sampler")}: {copy("semilla", "seed")} {art.sampler.seed} · {art.sampler.chains} {copy("cadenas", "chains")} ·{" "}
+            {art.sampler.draws} {copy("muestras", "draws")} / {art.sampler.tune} {copy("ajuste", "tune")} · {copy("previas", "priors")}:{" "}
             {art.sampler.priors.coefficients}; {art.sampler.priors.sds} ·{" "}
             {Object.entries(art.provenance.libraries).map(([k, v]) => `${k} ${v}`).join(" · ")}
           </p>

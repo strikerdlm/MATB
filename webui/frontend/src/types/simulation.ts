@@ -6,6 +6,8 @@ export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue
 export type Locale = "en" | "es-CO";
 export type Lifecycle = "PREPARED" | "RUNNING" | "PAUSED" | "FINISHED" | "ABORTED" | "INTERRUPTED";
 export type Profile = "PRACTICE" | "LOW" | "MEDIUM" | "HIGH";
+export type SessionMode = "research" | "interactive_technical";
+export type RecordClass = "research" | "technical_only";
 
 export type AircraftMode =
   | "READY"
@@ -154,7 +156,7 @@ export interface WorldSnapshot {
 
 export interface SessionView {
   id: string;
-  participant_id: string;
+  participant_id: string | null;
   visit_id: number | null;
   visit_ordinal: number | null;
   scenario_id: string;
@@ -163,6 +165,9 @@ export interface SessionView {
   lifecycle: Lifecycle;
   active_block_id: string | null;
   validity: string;
+  session_mode: SessionMode;
+  record_class: RecordClass;
+  selected_block_id: Profile | null;
   block_order: Profile[];
   state_version: number;
   simulation_time_ms: number;
@@ -183,6 +188,12 @@ export interface CreateSimulationSession {
   locale: Locale;
 }
 
+export interface CreateTechnicalSimulationSession {
+  scenario_id: string;
+  block_id: Profile;
+  locale: Locale;
+}
+
 export interface PreparedSession extends SessionView {
   controller_lease: string;
 }
@@ -196,9 +207,17 @@ export interface ScenarioSummary {
   scenario_sha256: string | null;
   title: string | null;
   description: string | null;
+  titles?: Partial<Record<Locale, string>>;
+  descriptions?: Partial<Record<Locale, string>>;
   aircraft_count: number | null;
   block_order: Profile[];
   locales: Locale[];
+  profile_details?: Partial<Record<Profile, {
+    duration_seconds: number;
+    aircraft_count: number;
+    contact_count: number;
+    calibration_status: "engineering_preset_pending_human_calibration";
+  }>>;
 }
 
 export interface ScenarioValidationView {

@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { ES } from "@/components/screen/strings_es";
+import { useScreenStrings } from "@/components/screen/strings";
 import { Button } from "@/components/ui/button";
 import { genNbackSequence, type NbackTrial, type ScreenConfig } from "@/lib/screen";
 
@@ -20,6 +20,7 @@ export function NBack({
   rng: () => number;
   onDone: (trials: NbackTrial[]) => void;
 }) {
+  const strings = useScreenStrings();
   const soaMs = config.nbackSoaMs;
   // Two independent sequences, generated once (rng is stateful). Practice uses
   // a short separate sequence (config.practiceTrials + 2, single target).
@@ -141,7 +142,6 @@ export function NBack({
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => clearTimers, []);
@@ -149,9 +149,10 @@ export function NBack({
   if (stage === "instructions") {
     return (
       <Instructions
-        title={ES.nback.title}
-        body={ES.nback.instructions}
+        title={strings.nback.title}
+        body={strings.nback.instructions}
         onStart={startPractice}
+        startLabel={strings.common.start}
       />
     );
   }
@@ -159,8 +160,8 @@ export function NBack({
   if (stage === "interstitial") {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 text-center">
-        <p className="max-w-md text-sm text-muted-foreground">{ES.common.practiceDone}</p>
-        <Button onClick={startScored}>{ES.common.continue}</Button>
+        <p className="max-w-md text-sm text-muted-foreground">{strings.common.practiceDone}</p>
+        <Button onClick={startScored}>{strings.common.continue}</Button>
       </div>
     );
   }
@@ -175,7 +176,7 @@ export function NBack({
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-8">
       {inPractice && (
         <p className="text-xs uppercase tracking-wide text-muted-foreground">
-          {ES.common.practice}
+          {strings.common.practice}
         </p>
       )}
       <div className="flex h-40 w-40 items-center justify-center">
@@ -191,16 +192,18 @@ function Instructions({
   title,
   body,
   onStart,
+  startLabel,
 }: {
   title: string;
   body: string;
   onStart: () => void;
+  startLabel: string;
 }) {
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 text-center">
       <h3 className="text-xl font-semibold">{title}</h3>
       <p className="max-w-md text-sm leading-relaxed text-muted-foreground">{body}</p>
-      <Button onClick={onStart}>{ES.common.start}</Button>
+      <Button onClick={onStart}>{startLabel}</Button>
     </div>
   );
 }

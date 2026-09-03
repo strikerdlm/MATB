@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { ES } from "@/components/screen/strings_es";
+import { useScreenStrings } from "@/components/screen/strings";
 import { Button } from "@/components/ui/button";
 import { targetPosition, type ScreenConfig } from "@/lib/screen";
 
@@ -24,6 +24,7 @@ export function Tracking({
   config: ScreenConfig;
   onDone: (result: TrackingResult) => void;
 }) {
+  const strings = useScreenStrings();
   const scoredSeconds = config.trackingSeconds;
   const practiceSeconds = scoredSeconds >= 10 ? 10 : 3;
 
@@ -137,11 +138,11 @@ export function Tracking({
   if (stage === "instructions") {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 text-center">
-        <h3 className="text-xl font-semibold">{ES.tracking.title}</h3>
+        <h3 className="text-xl font-semibold">{strings.tracking.title}</h3>
         <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
-          {ES.tracking.instructions}
+          {strings.tracking.instructions}
         </p>
-        <Button onClick={startPractice}>{ES.common.start}</Button>
+        <Button onClick={startPractice}>{strings.common.start}</Button>
       </div>
     );
   }
@@ -149,8 +150,8 @@ export function Tracking({
   if (stage === "interstitial") {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 text-center">
-        <p className="max-w-md text-sm text-muted-foreground">{ES.common.practiceDone}</p>
-        <Button onClick={startScored}>{ES.common.continue}</Button>
+        <p className="max-w-md text-sm text-muted-foreground">{strings.common.practiceDone}</p>
+        <Button onClick={startScored}>{strings.common.continue}</Button>
       </div>
     );
   }
@@ -164,7 +165,7 @@ export function Tracking({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between text-xs uppercase tracking-wide text-muted-foreground">
-        <span>{inPractice ? ES.common.practice : ""}</span>
+        <span>{inPractice ? strings.common.practice : ""}</span>
         <span className="tabular-nums">{remaining}s</span>
       </div>
       <div

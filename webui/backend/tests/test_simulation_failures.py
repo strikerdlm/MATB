@@ -10,9 +10,9 @@ import pytest
 from sqlmodel import Session
 
 from app.models import Participant, Visit
-from app.simulation_persistence import InMemorySimulationPersistence
+from app.simulation_persistence import InMemorySimulationPersistence, SQLModelSimulationPersistence
 from app.simulation_runtime import SimulationManager
-from app.simulation_schemas import CommandRequest, CreateSimulationSession
+from app.simulation_schemas import CommandRequest, CreateSimulationSession, CreateTechnicalSimulationSession
 from matb_integration.suas.recording.records import RecordingError
 
 
@@ -116,3 +116,51 @@ async def test_recovery_requires_existing_lease(engine, tmp_path) -> None:
     manager.active.lifecycle = "INTERRUPTED"
     with pytest.raises(Exception):
         await manager.recover(prepared.id, None, checkpoint_version=1)
+
+
+@pytest.mark.anyio
+async def test_process_restart_recovery_preserves_technical_classification(engine, tmp_path) -> None:
+    scenario_root = Path(__file__).resolve().parents[3] / "scenarios" / "suas"
+    artifact_root = tmp_path / "exports"
+    persistence = SQLModelSimulationPersistence(engine)
+    original = SimulationManager(
+        scenario_root=scenario_root,
+        artifact_root=artifact_root,
+        persistence=persistence,
+        run_background_tasks=False,
+    )
+    with Session(engine) as db:
+        prepared = await original.prepare_technical(
+            CreateTechnicalSimulationSession(
+                scenario_id="reference_area_search",
+                block_id="HIGH",
+                locale="en",
+            ),
+            db,
+        )
+    await original.start(prepared.id, "HIGH", prepared.controller_lease)
+    for _ in range(50):
+        await original.tick_once()
+    await original.shutdown()
+    original.active.recorder.close()
+
+    recovered_manager = SimulationManager(
+        scenario_root=scenario_root,
+        artifact_root=artifact_root,
+        persistence=persistence,
+        run_background_tasks=False,
+    )
+    recovered = await recovered_manager.recover(
+        prepared.id,
+        None,
+        checkpoint_version=1,
+        confirm_process_restart=True,
+    )
+    assert recovered.session_mode == "interactive_technical"
+    assert recovered.record_class == "technical_only"
+    assert recovered.selected_block_id == "HIGH"
+    assert recovered.block_order == ["HIGH"]
+    assert recovered.participant_id is None
+    assert recovered.visit_id is None
+    assert recovered.validity == "technical_only_with_deviation"
+    await recovered_manager.shutdown()

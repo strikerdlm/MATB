@@ -1,6 +1,10 @@
+"use client";
+
 import { SidebarNav } from "@/components/layout/SidebarNav";
+import { useAppLocale, type AppLocale } from "@/lib/i18n";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const { locale, setLocale, tr } = useAppLocale();
   return (
     <div className="mission-grid flex min-h-screen flex-col text-foreground md:flex-row">
       <aside className="relative z-10 w-full shrink-0 border-b border-white/10 bg-black/75 backdrop-blur md:min-h-screen md:w-72 md:border-b-0 md:border-r">
@@ -8,10 +12,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground">
-                Research console
+                {tr("brand.console")}
               </p>
               <h1 className="mt-2 font-display text-3xl font-semibold uppercase leading-none text-white">
-                MATB
+                MATB-FAC
               </h1>
             </div>
             <div className="mt-1 h-9 w-9 border border-white/20 bg-white text-center font-display text-xl font-semibold leading-9 text-black">
@@ -20,24 +24,37 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="mt-5 grid grid-cols-2 gap-2 font-mono text-[10px] uppercase tracking-[0.16em]">
             <div className="border border-white/10 px-2 py-2 text-muted-foreground">
-              Mode
-              <span className="mt-1 block text-foreground">Ops</span>
+              {tr("shell.mode")}
+              <span className="mt-1 block text-foreground">{tr("shell.operations")}</span>
             </div>
             <div className="border border-white/10 px-2 py-2 text-muted-foreground">
-              Link
+              {tr("shell.link")}
               <span className="mt-1 inline-flex items-center gap-1.5 text-success">
                 <span className="h-1.5 w-1.5 rounded-full bg-success" />
-                Live
+                {tr("shell.live")}
               </span>
             </div>
           </div>
         </div>
         <SidebarNav />
-        <div className="hidden px-5 pb-6 pt-3 md:block">
+        <div className="px-5 pb-6 pt-3">
           <div className="signal-sweep h-px bg-white/10" />
           <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-            Longitudinal human performance lab
+            {tr("brand.lab")}
           </p>
+          <p className="mt-2 text-[10px] leading-4 text-muted-foreground">{tr("brand.author")}</p>
+          <label htmlFor="app-language" className="mt-5 block font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+            {tr("language.label")}
+          </label>
+          <select
+            id="app-language"
+            value={locale}
+            onChange={(event) => setLocale(event.target.value as AppLocale)}
+            className="native-select mt-2 w-full"
+          >
+            <option value="es-419">{tr("language.spanish")}</option>
+            <option value="en">{tr("language.english")}</option>
+          </select>
         </div>
       </aside>
       <main className="relative min-w-0 flex-1 overflow-auto">

@@ -1,17 +1,20 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { RouteShell } from "@/components/layout/RouteShell";
+import { AppLocaleProvider } from "@/lib/i18n";
 
 export const metadata: Metadata = {
-  title: "MATB Research Console",
-  description: "Longitudinal MATB study tracker",
+  title: "MATB-FAC",
+  description: "Longitudinal Human Performance Lab",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="es-419" className="dark">
       <body className="font-sans antialiased">
-        <RouteShell>{children}</RouteShell>
+        <AppLocaleProvider>
+          <RouteShell>{children}</RouteShell>
+        </AppLocaleProvider>
       </body>
     </html>
   );
