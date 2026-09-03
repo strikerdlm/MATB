@@ -9,6 +9,10 @@ Run `00 - Preparar MATB UAS.cmd` once, then use
 its supervisor window open and press `Ctrl+C`, or run
 `99 - Detener MATB UAS.cmd`, to stop the exact tracked services.
 
+`02 - Diagnosticar MATB UAS.cmd` performs a read-only check of the runtimes,
+dependencies, production build, scenario, ports, tracked processes, HTTP
+health, and latest sealed run. A stopped console with free ports is healthy.
+
 The `PRACTICE`, `LOW`, `MEDIUM`, and `HIGH` shortcuts execute the complete
 configured block duration headlessly, write to a unique directory under
 `exports/windows-suas/runs/`, and verify replay plus checksums. These are
@@ -28,3 +32,8 @@ verified clean clone; a modified tree, unavailable Git check, or ZIP without
 Git metadata correctly remains provisional. After updating the launchers, stop
 the old console with shortcut `99` and start it again with shortcut `01` so the
 new backend process receives the provenance values.
+
+`91 - Abrir resultados MATB UAS.cmd` opens the latest sealed technical run and
+the service log directory in Explorer when present. It only opens paths below
+`exports/windows-suas/`; shortcut `90` remains the full replay and checksum
+verification action.

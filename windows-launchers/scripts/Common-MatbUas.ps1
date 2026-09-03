@@ -112,6 +112,24 @@ function Get-MatbUasSourceProvenance {
     }
 }
 
+function Get-MatbUasLatestSealedRun {
+    param([Parameter(Mandatory)][string]$RepoRoot)
+
+    $runsRoot = Join-Path (Get-MatbUasDataRoot -RepoRoot $RepoRoot) "runs"
+    if (-not (Test-Path -LiteralPath $runsRoot -PathType Container)) {
+        return $null
+    }
+    return Get-ChildItem -LiteralPath $runsRoot -Directory |
+        Where-Object {
+            (Test-Path -LiteralPath (Join-Path $_.FullName "manifest.json") -PathType Leaf) -and
+            (Test-Path -LiteralPath (Join-Path $_.FullName "checksums.sha256") -PathType Leaf) -and
+            (Test-Path -LiteralPath (Join-Path $_.FullName "replay-verification.json") -PathType Leaf) -and
+            -not (Test-Path -LiteralPath (Join-Path $_.FullName "partial-run.json") -PathType Leaf)
+        } |
+        Sort-Object LastWriteTimeUtc -Descending |
+        Select-Object -First 1
+}
+
 function New-MatbUasDirectory {
     param([Parameter(Mandatory)][string]$Path)
     if (-not (Test-Path -LiteralPath $Path -PathType Container)) {

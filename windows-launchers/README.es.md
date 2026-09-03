@@ -15,6 +15,11 @@ PowerShell 7, Python 3.12 o posterior, Node.js 20 o posterior y npm.
 3. Mantenga abierta la ventana supervisora. Presione `Ctrl+C` allí o ejecute
    `99 - Detener MATB UAS.cmd` para finalizar los procesos registrados.
 
+`02 - Diagnosticar MATB UAS.cmd` revisa, sin modificar datos, las versiones de
+Python y Node, dependencias, compilación, escenario, puertos, procesos
+registrados, salud HTTP y la última ejecución sellada. Una consola detenida con
+los puertos libres se considera un estado normal.
+
 La consola se enlaza únicamente a loopback. Los datos, registros y estados de
 proceso se guardan bajo `exports/windows-suas/service/`, una ruta ignorada por
 Git. No use identidades personales; la consola acepta participantes
@@ -37,6 +42,11 @@ participante.
 
 `90 - Verificar ultima simulacion.cmd` vuelve a verificar el directorio técnico
 más reciente sin modificarlo.
+
+`91 - Abrir resultados MATB UAS.cmd` abre en el Explorador la ejecución técnica
+sellada más reciente y, si existe, la carpeta de logs del servicio. Solo abre
+rutas bajo `exports/windows-suas/`; use el acceso `90` para recalcular la
+verificación criptográfica y el replay.
 
 ## Escenarios adicionales
 

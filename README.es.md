@@ -629,7 +629,8 @@ puede ejecutar la CLI y puede llamar a un servicio alojado en WSL2.
 Para uso nativo con un solo clic, consulte los
 [lanzadores de MATB UAS para Windows](windows-launchers/README.es.md). Incluyen
 preparación, consola interactiva, simulaciones técnicas PRACTICE/LOW/MEDIUM/HIGH,
-verificación de replay y detención segura de los procesos registrados.
+diagnóstico, acceso a resultados, verificación de replay y detención segura de
+los procesos registrados.
 
 <h3>Instalación</h3>
 
