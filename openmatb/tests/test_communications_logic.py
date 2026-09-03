@@ -641,3 +641,25 @@ class TestVoiceSwitching:
         logged_msg = c.logger.log_manual_entry.call_args[0][0]
         assert "Warning" in logged_msg
         assert "does not exist" in logged_msg
+
+    def test_prompt_sound_ids_prefer_contextual_radio_fragment(self, tmp_path):
+        c = _make_comms_for_voice()
+        c.sound_path = tmp_path
+        (tmp_path / "com_1_frequency.wav").touch()
+
+        sound_ids = c._prompt_sound_ids("AB1", "COM_1", 123.4)
+
+        assert sound_ids == (
+            ["empty"] * 20
+            + ["a", "b", "1", "a", "b", "1"]
+            + ["com_1_frequency"]
+            + ["1", "2", "3", "point", "4", "empty"]
+        )
+
+    def test_prompt_sound_ids_retain_legacy_fragment_fallback(self, tmp_path):
+        c = _make_comms_for_voice()
+        c.sound_path = tmp_path
+
+        sound_ids = c._prompt_sound_ids("AB1", "COM_1", 123.4)
+
+        assert sound_ids[26:29] == ["radio", "com_1", "frequency"]

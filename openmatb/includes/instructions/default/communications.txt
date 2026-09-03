@@ -1,3 +1,5 @@
 <h1>Presentación de las tareas</h1>
 
 <p>En la tarea de comunicaciones (COMM), el participante debe responder a instrucciones sonoras para sintonizar las frecuencias de sus radios. Debe atender únicamente los mensajes dirigidos a su distintivo de llamada e ignorar los dirigidos a otros distintivos.</p>
+
+<p>Las voces de estas instrucciones son generadas por inteligencia artificial; no corresponden a una persona ni a una comunicación ATS real.</p>

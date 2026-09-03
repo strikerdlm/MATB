@@ -221,17 +221,25 @@ class Communications(AbstractPlugin):
                     li = li.replace(s, "")
         return callsign
 
-    def group_audio_files(self, callsign: str, radio_name: str, freq: float) -> Any:
-        list_of_sounds: list[str] = (
+    def _prompt_sound_ids(self, callsign: str, radio_name: str, freq: float) -> list[str]:
+        contextual_radio = f"{radio_name.lower()}_frequency"
+        contextual_path = self.sound_path.joinpath(f"{contextual_radio}.wav")
+        radio_instruction = (
+            [contextual_radio]
+            if contextual_path.is_file()
+            else ["radio", radio_name.lower(), "frequency"]
+        )
+        return (
             ["empty"] * 20
             + [c.lower() for c in callsign]
             + [c.lower() for c in callsign]
-            + ["radio"]
-            + [radio_name.lower()]
-            + ["frequency"]
+            + radio_instruction
             + [c.lower().replace(".", "point") for c in str(freq)]
             + ["empty"]
         )
+
+    def group_audio_files(self, callsign: str, radio_name: str, freq: float) -> Any:
+        list_of_sounds = self._prompt_sound_ids(callsign, radio_name, freq)
 
         sources: list[Any] = []
         failed_paths: list[str] = []

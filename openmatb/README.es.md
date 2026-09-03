@@ -90,7 +90,7 @@ language=es_CO
 
 También están disponibles `en_EN` y `fr_FR`. El locale `es_CO` incluye la
 interfaz principal, el generador de escenarios, mensajes de validación,
-instrucciones, cuestionarios y voces sintéticas masculina y femenina para COMM.
+instrucciones, cuestionarios y dos voces sintéticas para COMM.
 
 Las letras de los distintivos de llamada se reproducen mediante el alfabeto de
 deletreo radiotelefónico OACI. Las cifras se expresan en español y el separador
@@ -164,6 +164,17 @@ communications;voicegender;female
 Los valores válidos de `voiceidiom` son `spanish`, `english` y `french`; los de
 `voicegender` son `female` y `male`. Estos valores no se traducen porque forman
 parte del formato del escenario.
+
+Las voces españolas distribuidas son generadas por inteligencia artificial con
+la API de voz de OpenAI y se reproducen desde archivos WAV locales: OpenMATB no
+necesita una credencial ni conexión de red durante una sesión. `female` y `male`
+son selectores históricos de compatibilidad y no clasificaciones de género de
+las voces de OpenAI. El manifiesto auditable y el procedimiento de regeneración
+se documentan en [includes/sounds/spanish](includes/sounds/spanish/README.md).
+
+La referencia a OACI describe el alfabeto radiotelefónico y la lectura de cifras
+de frecuencia. El mensaje completo sigue siendo una instrucción experimental de
+MATB y no se presenta como fraseología ATS operacional ni certificada.
 
 ## Desarrollo y pruebas
 

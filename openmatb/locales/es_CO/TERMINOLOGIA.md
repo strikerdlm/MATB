@@ -28,6 +28,10 @@ Fuentes normativas y de orientación consultadas:
 - OACI, *Procedimientos para los servicios de navegación aérea — Abreviaturas y códigos de la OACI* (PANS-ABC, Doc 8400), referenciado en esta [documentación oficial OACI](https://www.icao.int/sites/default/files/sp-files/SAM/Documents/GREPECAS/2008/CNSCOMM06/CNSC06NI02.pdf).
 - OACI, *Procedimientos para los servicios de navegación aérea — Gestión del tránsito aéreo* (PANS-ATM, Doc 4444), relacionado con el empleo de fraseología normalizada en esta [orientación oficial OACI](https://www.icao.int/sites/default/files/sp-files/SAM/Documents/2014-SAMIG13/SAMIG13_NE20.pdf).
 - OACI, Anexo 10, Volumen II, disposiciones sobre procedimientos de comunicaciones y fraseología.
+- OACI, *Manual de radiotelefonía* (Doc 9432), catálogo oficial disponible en la [tienda de la OACI](https://store.icao.int/en/manual-of-radiotelephony-doc-9432).
 
 La localización no constituye aprobación de la OACI ni valida OpenMATB para uso
-operacional, entrenamiento certificado o comunicaciones ATS reales.
+operacional, entrenamiento certificado o comunicaciones ATS reales. En COMM,
+la alineación se limita al alfabeto radiotelefónico internacional y a la lectura
+individual de cifras con «decimal»; la sintaxis completa sigue la tarea
+experimental de MATB y no se declara fraseología ATS normalizada.
