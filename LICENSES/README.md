@@ -6,6 +6,11 @@ otherwise. The embedded and modified OpenMATB tree is governed by
 `openmatb/LICENSE` (CeCILL v2.1); its copyright and provenance notices must be
 preserved in every source or binary redistribution.
 
+The Polar HR advertisement parser is mapped to `LicenseRef-Polar-SDK` and the
+unaltered Polar SDK license text is included. The HRV calculation port retains
+the pinned upstream MIT license and revision provenance. These notices do not
+claim that Polar endorses, certifies, or is affiliated with MATB.
+
 No root-level license statement relicenses third-party software. Release tooling
 must include both license texts and `THIRD_PARTY_NOTICES.md`.
 

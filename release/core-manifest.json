@@ -9,7 +9,9 @@
     "physical_timing_qualification_pending",
     "cross_implementation_characterization_pending",
     "public_reference_dataset_pending",
-    "privacy_and_licensing_reviews_pending"
+    "privacy_and_licensing_reviews_pending",
+    "polar_h10_hardware_acceptance_pending",
+    "polar_internal_recording_license_qualification_pending"
   ],
   "include": [
     ".github/workflows/matb-ci.yml",

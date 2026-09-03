@@ -38,11 +38,13 @@ describe("console capabilities", () => {
       "matb-console",
       "matb-contracts",
       "matb-liftoff",
+      "matb-physiology",
       "matb-research",
       "matb-suas",
     ]);
 
     expect(productRoutes(capabilities)).toEqual([
+      { componentId: "matb-physiology", href: "/physiology/polar-h10", label: "Polar H10" },
       { componentId: "matb-liftoff", href: "/liftoff/setup", label: "Liftoff" },
       { componentId: "matb-suas", href: "/mission/setup", label: "Mission" },
     ]);

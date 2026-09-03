@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, Users, Upload, BarChart3, FlaskConical, Brain, Gamepad2, Radar, SlidersHorizontal, MonitorPlay } from "lucide-react";
+import { LayoutGrid, Users, Upload, BarChart3, FlaskConical, Brain, Gamepad2, Radar, SlidersHorizontal, MonitorPlay, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getCapabilities } from "@/lib/api";
 import { hasComponent, productRoutes } from "@/lib/capabilities";
@@ -33,8 +33,8 @@ export function SidebarNav() {
   }, []);
   const optionalItems = capabilities ? productRoutes(capabilities).map((route) => ({
     href: route.href,
-    labelKey: (route.componentId === "matb-liftoff" ? "nav.liftoff" : route.componentId === "matb-openmatb" ? "nav.openmatb" : "nav.mission") as AppTranslationKey,
-    icon: route.componentId === "matb-liftoff" ? Gamepad2 : route.componentId === "matb-openmatb" ? MonitorPlay : Radar,
+    labelKey: (route.componentId === "matb-liftoff" ? "nav.liftoff" : route.componentId === "matb-openmatb" ? "nav.openmatb" : route.componentId === "matb-physiology" ? "nav.physiology" : "nav.mission") as AppTranslationKey,
+    icon: route.componentId === "matb-liftoff" ? Gamepad2 : route.componentId === "matb-openmatb" ? MonitorPlay : route.componentId === "matb-physiology" ? Activity : Radar,
     enabled: true,
   })) : [];
   const technicalItems = capabilities && hasComponent(capabilities, "matb-suas") ? [{

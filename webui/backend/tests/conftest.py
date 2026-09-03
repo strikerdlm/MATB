@@ -87,7 +87,9 @@ def engine_fixture():
     db_module._configure_sqlite_foreign_keys(engine)
     import app.models  # noqa: F401  (register tables)
     import app.study_models  # noqa: F401  (register study metadata/context tables)
-    for optional_models in ("app.liftoff_models", "app.openmatb_models", "app.simulation_models"):
+    for optional_models in (
+        "app.liftoff_models", "app.openmatb_models", "app.physiology_models", "app.simulation_models"
+    ):
         if find_spec(optional_models) is not None:
             import_module(optional_models)
     SQLModel.metadata.create_all(engine)

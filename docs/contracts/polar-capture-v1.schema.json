@@ -1,0 +1,135 @@
+{
+  "additionalProperties": false,
+  "description": "Durable capture state without a Bluetooth address.",
+  "properties": {
+    "artifact_state": {
+      "default": "none",
+      "enum": [
+        "none",
+        "partial",
+        "finalized",
+        "incomplete"
+      ],
+      "title": "Artifact State",
+      "type": "string"
+    },
+    "capture_id": {
+      "title": "Capture Id",
+      "type": "string"
+    },
+    "connection_epoch": {
+      "default": 0,
+      "title": "Connection Epoch",
+      "type": "integer"
+    },
+    "device_alias": {
+      "title": "Device Alias",
+      "type": "string"
+    },
+    "ended_at_utc": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ended At Utc"
+    },
+    "gap_count": {
+      "default": 0,
+      "title": "Gap Count",
+      "type": "integer"
+    },
+    "incomplete_reasons": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Incomplete Reasons",
+      "type": "array"
+    },
+    "lifecycle": {
+      "enum": [
+        "created",
+        "starting",
+        "capturing",
+        "stopping",
+        "complete",
+        "failed"
+      ],
+      "title": "Lifecycle",
+      "type": "string"
+    },
+    "matb_session_id": {
+      "title": "Matb Session Id",
+      "type": "string"
+    },
+    "matb_session_kind": {
+      "title": "Matb Session Kind",
+      "type": "string"
+    },
+    "participant_pseudonym": {
+      "title": "Participant Pseudonym",
+      "type": "string"
+    },
+    "requested_settings": {
+      "additionalProperties": true,
+      "title": "Requested Settings",
+      "type": "object"
+    },
+    "resolved_settings": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Resolved Settings"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "started_at_utc": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Started At Utc"
+    },
+    "stream_counters": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "Stream Counters",
+      "type": "object"
+    }
+  },
+  "required": [
+    "capture_id",
+    "participant_pseudonym",
+    "matb_session_kind",
+    "matb_session_id",
+    "device_alias",
+    "lifecycle",
+    "requested_settings"
+  ],
+  "title": "PolarCaptureV1",
+  "type": "object"
+}

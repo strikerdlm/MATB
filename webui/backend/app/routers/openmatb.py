@@ -129,9 +129,16 @@ def acknowledge(session_id: str, body: EmptyRequest, token: str | None = Header(
 
 
 @router.post("/sessions/{session_id}/start", response_model=OpenMatbSessionView)
-async def start(session_id: str, body: EmptyRequest, lease: str | None = Header(default=None, alias=_CONTROLLER), runtime: OpenMatbManager = Depends(manager)):
+async def start(session_id: str, body: EmptyRequest, request: Request, lease: str | None = Header(default=None, alias=_CONTROLLER), runtime: OpenMatbManager = Depends(manager)):
     del body
-    return await _managed_async(lambda: runtime.start_block(session_id, _required(lease, "openmatb_controller_required")))
+    result = await _managed_async(lambda: runtime.start_block(session_id, _required(lease, "openmatb_controller_required")))
+    physiology = getattr(request.app.state, "polar_manager", None)
+    if physiology is not None and result.active_block is not None:
+        await physiology.system_marker_for_session(
+            "openmatb", session_id, result.active_block,
+            {"block_index": result.current_block_index, "automatic": True},
+        )
+    return result
 
 
 @router.post("/sessions/{session_id}/pause", response_model=OpenMatbSessionView)
@@ -153,10 +160,22 @@ def repeat_practice(session_id: str, body: EmptyRequest, lease: str | None = Hea
 
 
 @router.post("/sessions/{session_id}/abort", response_model=OpenMatbSessionView)
-async def abort(session_id: str, body: AbortRequest, lease: str | None = Header(default=None, alias=_CONTROLLER), runtime: OpenMatbManager = Depends(manager)):
-    return await _managed_async(lambda: runtime.abort(session_id, _required(lease, "openmatb_controller_required"), body.reason))
+async def abort(session_id: str, body: AbortRequest, request: Request, lease: str | None = Header(default=None, alias=_CONTROLLER), runtime: OpenMatbManager = Depends(manager)):
+    result = await _managed_async(lambda: runtime.abort(session_id, _required(lease, "openmatb_controller_required"), body.reason))
+    physiology = getattr(request.app.state, "polar_manager", None)
+    if physiology is not None:
+        await physiology.system_marker_for_session("openmatb", session_id, "ABORTED", {"reason": body.reason})
+    return result
 
 
 @router.post("/sessions/{session_id}/scales", response_model=OpenMatbSessionView)
-def submit_scales(session_id: str, body: WorkloadScaleRequest, token: str | None = Header(default=None, alias=_PARTICIPANT), runtime: OpenMatbManager = Depends(manager)):
-    return _managed(lambda: runtime.submit_scale(session_id, _required(token, "openmatb_participant_token_required"), body))
+async def submit_scales(session_id: str, body: WorkloadScaleRequest, request: Request, token: str | None = Header(default=None, alias=_PARTICIPANT), runtime: OpenMatbManager = Depends(manager)):
+    result = _managed(lambda: runtime.submit_scale(session_id, _required(token, "openmatb_participant_token_required"), body))
+    physiology = getattr(request.app.state, "polar_manager", None)
+    if physiology is not None:
+        label = "RECOVERY" if result.lifecycle == "COMPLETE" else "BETWEEN_BLOCKS"
+        await physiology.system_marker_for_session(
+            "openmatb", session_id, label,
+            {"completed_block_index": max(0, result.current_block_index - 1), "automatic": True},
+        )
+    return result

@@ -1,0 +1,137 @@
+{
+  "$defs": {
+    "PolarArtifactEntryV1": {
+      "additionalProperties": false,
+      "properties": {
+        "relative_path": {
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "row_count": {
+          "minimum": 0,
+          "title": "Row Count",
+          "type": "integer"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "relative_path",
+        "schema_id",
+        "row_count",
+        "size_bytes",
+        "sha256"
+      ],
+      "title": "PolarArtifactEntryV1",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Integrity and provenance record finalized after all writers close.",
+  "properties": {
+    "algorithm_versions": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Algorithm Versions",
+      "type": "object"
+    },
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/PolarArtifactEntryV1"
+      },
+      "title": "Artifacts",
+      "type": "array"
+    },
+    "capture_id": {
+      "title": "Capture Id",
+      "type": "string"
+    },
+    "clock_model": {
+      "additionalProperties": true,
+      "title": "Clock Model",
+      "type": "object"
+    },
+    "ended_at_utc": {
+      "format": "date-time",
+      "title": "Ended At Utc",
+      "type": "string"
+    },
+    "incomplete_reasons": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Incomplete Reasons",
+      "type": "array"
+    },
+    "matb_session_id": {
+      "title": "Matb Session Id",
+      "type": "string"
+    },
+    "matb_session_kind": {
+      "title": "Matb Session Kind",
+      "type": "string"
+    },
+    "participant_pseudonym": {
+      "title": "Participant Pseudonym",
+      "type": "string"
+    },
+    "requested_settings": {
+      "additionalProperties": true,
+      "title": "Requested Settings",
+      "type": "object"
+    },
+    "resolved_settings": {
+      "additionalProperties": true,
+      "title": "Resolved Settings",
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "started_at_utc": {
+      "format": "date-time",
+      "title": "Started At Utc",
+      "type": "string"
+    },
+    "stream_counters": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "Stream Counters",
+      "type": "object"
+    }
+  },
+  "required": [
+    "capture_id",
+    "participant_pseudonym",
+    "matb_session_kind",
+    "matb_session_id",
+    "started_at_utc",
+    "ended_at_utc",
+    "requested_settings",
+    "resolved_settings",
+    "clock_model",
+    "stream_counters",
+    "algorithm_versions",
+    "artifacts"
+  ],
+  "title": "PolarArtifactManifestV1",
+  "type": "object"
+}

@@ -1,0 +1,105 @@
+{
+  "additionalProperties": false,
+  "description": "Capabilities resolved from the connected device before capture.",
+  "properties": {
+    "acc_ranges_g": {
+      "default": [],
+      "items": {
+        "type": "integer"
+      },
+      "title": "Acc Ranges G",
+      "type": "array"
+    },
+    "acc_resolutions_bits": {
+      "default": [],
+      "items": {
+        "type": "integer"
+      },
+      "title": "Acc Resolutions Bits",
+      "type": "array"
+    },
+    "acc_sample_rates_hz": {
+      "default": [],
+      "items": {
+        "type": "integer"
+      },
+      "title": "Acc Sample Rates Hz",
+      "type": "array"
+    },
+    "battery_percent": {
+      "anyOf": [
+        {
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Battery Percent"
+    },
+    "device_alias": {
+      "title": "Device Alias",
+      "type": "string"
+    },
+    "ecg_resolutions_bits": {
+      "default": [],
+      "items": {
+        "type": "integer"
+      },
+      "title": "Ecg Resolutions Bits",
+      "type": "array"
+    },
+    "ecg_sample_rates_hz": {
+      "default": [],
+      "items": {
+        "type": "integer"
+      },
+      "title": "Ecg Sample Rates Hz",
+      "type": "array"
+    },
+    "firmware": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Firmware"
+    },
+    "internal_recording_qualified": {
+      "default": false,
+      "title": "Internal Recording Qualified",
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "streams": {
+      "items": {
+        "enum": [
+          "hr_rr",
+          "ecg",
+          "acc"
+        ],
+        "type": "string"
+      },
+      "title": "Streams",
+      "type": "array"
+    }
+  },
+  "required": [
+    "device_alias",
+    "streams"
+  ],
+  "title": "PolarDeviceCapabilitiesV1",
+  "type": "object"
+}
