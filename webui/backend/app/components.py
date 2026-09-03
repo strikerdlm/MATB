@@ -28,6 +28,7 @@ class ConsoleComponentProvider(Protocol):
 
 _OPTIONAL_ENTRYPOINTS = {
     "matb-liftoff": "app.liftoff_component:provider",
+    "matb-openmatb": "app.openmatb_component:provider",
     "matb-suas": "app.simulation_component:provider",
 }
 

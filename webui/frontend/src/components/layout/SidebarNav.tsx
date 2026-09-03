@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, Users, Upload, BarChart3, FlaskConical, Brain, Gamepad2, Radar, SlidersHorizontal } from "lucide-react";
+import { LayoutGrid, Users, Upload, BarChart3, FlaskConical, Brain, Gamepad2, Radar, SlidersHorizontal, MonitorPlay } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getCapabilities } from "@/lib/api";
 import { hasComponent, productRoutes } from "@/lib/capabilities";
@@ -33,8 +33,8 @@ export function SidebarNav() {
   }, []);
   const optionalItems = capabilities ? productRoutes(capabilities).map((route) => ({
     href: route.href,
-    labelKey: (route.componentId === "matb-liftoff" ? "nav.liftoff" : "nav.mission") as AppTranslationKey,
-    icon: route.componentId === "matb-liftoff" ? Gamepad2 : Radar,
+    labelKey: (route.componentId === "matb-liftoff" ? "nav.liftoff" : route.componentId === "matb-openmatb" ? "nav.openmatb" : "nav.mission") as AppTranslationKey,
+    icon: route.componentId === "matb-liftoff" ? Gamepad2 : route.componentId === "matb-openmatb" ? MonitorPlay : Radar,
     enabled: true,
   })) : [];
   const technicalItems = capabilities && hasComponent(capabilities, "matb-suas") ? [{
@@ -51,6 +51,7 @@ export function SidebarNav() {
         const active = pathname === href
           || (href === "/mission/setup" && pathname.startsWith("/mission") && !pathname.startsWith("/mission/test"))
           || (href === "/liftoff/setup" && pathname.startsWith("/liftoff"));
+        const routeActive = active || (href === "/openmatb/setup" && pathname.startsWith("/openmatb"));
         const base = "group flex shrink-0 items-center gap-3 rounded-[3px] border px-3 py-3 text-xs font-semibold uppercase tracking-[0.12em] transition-all";
         if (!enabled)
           return (
@@ -70,15 +71,15 @@ export function SidebarNav() {
           <Link
             key={href}
             href={href}
-            aria-current={active ? "page" : undefined}
+            aria-current={routeActive ? "page" : undefined}
             className={cn(
               base,
-              active
+              routeActive
                 ? "border-white bg-white text-black shadow-[0_0_40px_rgb(255_255_255/0.14)]"
                 : "border-white/10 text-muted-foreground hover:border-white/30 hover:bg-white/[0.04] hover:text-foreground",
             )}
           >
-            <span className={cn("font-mono text-[10px]", active ? "text-black/60" : "text-muted-foreground/50")}>
+            <span className={cn("font-mono text-[10px]", routeActive ? "text-black/60" : "text-muted-foreground/50")}>
               {String(index + 1).padStart(2, "0")}
             </span>
             <Icon className="h-4 w-4" /> {label}

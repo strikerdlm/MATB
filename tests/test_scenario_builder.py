@@ -503,3 +503,21 @@ def test_build_block_scenario_with_sagat_emits_two_lines_per_freeze(tmp_path):
         for nontarget in nontarget_times
         for freeze in freeze_times
     )
+
+
+def test_custom_workload_settings_are_emitted_without_changing_profile_identity():
+    scenario = build_block_scenario(
+        WorkloadLevel.MEDIUM,
+        block_duration_sec=180,
+        workload_settings={
+            "difficulty": 0.65,
+            "track_target_proportion": 0.4,
+            "resman_loss_per_min": 725,
+            "isa_probe_interval_sec": 45,
+        },
+    )
+
+    assert "difficulty=0.65" in scenario
+    assert "0:00:00;track;targetproportion;0.4" in scenario
+    assert "0:00:00;resman;tank-a-lossperminute;725" in scenario
+    assert "# ISA: every 45s" in scenario

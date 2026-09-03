@@ -34,7 +34,7 @@ import sys
 from bisect import bisect_left
 from math import ceil, floor
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, Mapping
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -249,6 +249,7 @@ def _sysmon_event_count(
     level: WorkloadLevel,
     block_duration_sec: int,
     alerttimeout_sec: float = OPENMATB_ALERTTIMEOUT_MS / 1000,
+    difficulty: float | None = None,
 ) -> int:
     """Return the task-wide target-opportunity count.
 
@@ -260,11 +261,15 @@ def _sysmon_event_count(
     failure_duration = alerttimeout_sec + _EVENTS_REFRACTORY_SEC
     single_ratio = failure_duration / block_duration_sec
     max_n = int(1 / single_ratio)
-    target_n = int(DIFFICULTY[level] / single_ratio)
+    target_n = int((DIFFICULTY[level] if difficulty is None else difficulty) / single_ratio)
     return min(max_n, target_n)
 
 
-def _comm_event_count(level: WorkloadLevel, block_duration_sec: int) -> int:
+def _comm_event_count(
+    level: WorkloadLevel,
+    block_duration_sec: int,
+    difficulty: float | None = None,
+) -> int:
     """Return total COMM (communications) event count for the block.
 
     Scale the requested demand by the full physical opportunity boundary.
@@ -273,7 +278,7 @@ def _comm_event_count(level: WorkloadLevel, block_duration_sec: int) -> int:
     """
     single_duration = _COMM_MIN_ONSET_SEPARATION_SEC
     single_ratio = single_duration / block_duration_sec
-    return int(DIFFICULTY[level] / single_ratio)
+    return int((DIFFICULTY[level] if difficulty is None else difficulty) / single_ratio)
 
 
 # ── Event distribution ────────────────────────────────────────────────────────
@@ -405,6 +410,7 @@ def build_block_scenario(
     sagat_n_freezes: int = 3,
     participant_id: str = "P00",
     block_num: int = 1,
+    workload_settings: Mapping[str, float | int] | None = None,
 ) -> str:
     """Generate a single-block OpenMATB scenario as a string.
 
@@ -425,14 +431,19 @@ def build_block_scenario(
     verify_communications_audio_profile()
     lines: list[str] = []
 
-    difficulty = DIFFICULTY[level]
-    track_prop = TRACK_TARGET_PROPORTION[level]
-    resman_loss = RESMAN_LOSS_PER_MIN[level]
-    isa_interval = ISA_PROBE_INTERVAL_SEC[level]
+    settings = workload_settings or {}
+    difficulty = float(settings.get("difficulty", DIFFICULTY[level]))
+    track_prop = float(settings.get("track_target_proportion", TRACK_TARGET_PROPORTION[level]))
+    resman_loss = int(settings.get("resman_loss_per_min", RESMAN_LOSS_PER_MIN[level]))
+    isa_interval = int(settings.get("isa_probe_interval_sec", min(ISA_PROBE_INTERVAL_SEC[level], block_duration_sec)))
+    if not 0 <= difficulty <= 1 or not 0.05 <= track_prop <= 1 or not 0 <= resman_loss <= 2_000:
+        raise ValueError("workload settings are outside the supported range")
+    if not 15 <= isa_interval <= block_duration_sec:
+        raise ValueError("ISA interval must be between 15 seconds and the block duration")
     end_time = _fmt_time(block_duration_sec)
 
-    sysmon_n = _sysmon_event_count(level, block_duration_sec)
-    comm_n = _comm_event_count(level, block_duration_sec)
+    sysmon_n = _sysmon_event_count(level, block_duration_sec, difficulty=difficulty)
+    comm_n = _comm_event_count(level, block_duration_sec, difficulty=difficulty)
     n_isa = block_duration_sec // isa_interval
     isa_times = [
         isa_interval * (i + 1)
@@ -611,9 +622,15 @@ def _manifest_payload(
     sagat_n_freezes: int = 0,
     source_commit: str = "unknown",
     source_dirty: bool | None = None,
+    workload_settings: Mapping[str, float | int] | None = None,
+    profile_name: str | None = None,
 ) -> dict[str, Any]:
     comm_n = scenario_text.count(";communications;radioprompt;")
-    isa_interval = ISA_PROBE_INTERVAL_SEC[level]
+    settings = workload_settings or {}
+    difficulty = float(settings.get("difficulty", DIFFICULTY[level]))
+    track_prop = float(settings.get("track_target_proportion", TRACK_TARGET_PROPORTION[level]))
+    resman_loss = int(settings.get("resman_loss_per_min", RESMAN_LOSS_PER_MIN[level]))
+    isa_interval = int(settings.get("isa_probe_interval_sec", ISA_PROBE_INTERVAL_SEC[level]))
     isa_times = [
         isa_interval * (i + 1)
         for i in range(block_duration_sec // isa_interval)
@@ -638,9 +655,10 @@ def _manifest_payload(
         source_commit=source_commit,
         source_dirty=source_dirty,
         parameters={
-            "difficulty": DIFFICULTY[level],
-            "track_target_proportion": TRACK_TARGET_PROPORTION[level],
-            "resman_loss_per_min": RESMAN_LOSS_PER_MIN[level],
+            "difficulty": difficulty,
+            "suite_profile_name": profile_name or level.name,
+            "track_target_proportion": track_prop,
+            "resman_loss_per_min": resman_loss,
             "isa_probe_interval_sec": isa_interval,
             "openmatb_alerttimeout_ms": OPENMATB_ALERTTIMEOUT_MS,
             "openmatb_nontarget_duration_ms": OPENMATB_NONTARGET_DURATION_MS,
