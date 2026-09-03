@@ -14,7 +14,12 @@ def test_component_license_map_is_deterministic_and_resolves_openmatb() -> None:
     assert payload["default_license_expression"] == "MIT"
     components = payload["components"]
     assert len({component["component_id"] for component in components}) == len(components)
-    assert [component["path_prefix"] for component in components] == ["", "openmatb/"]
+    assert [component["path_prefix"] for component in components] == [
+        "",
+        "matb_integration/physiology/analysis.py",
+        "matb_integration/physiology/broadcast.py",
+        "openmatb/",
+    ]
 
     for component in components:
         assert (ROOT / component["license_file"]).is_file()
@@ -24,6 +29,16 @@ def test_component_license_map_is_deterministic_and_resolves_openmatb() -> None:
         key=lambda component: len(component["path_prefix"]),
     )
     assert openmatb["license_expression"] == "CECILL-2.1"
+
+    polar = max(
+        (
+            component
+            for component in components
+            if "matb_integration/physiology/broadcast.py".startswith(component["path_prefix"])
+        ),
+        key=lambda component: len(component["path_prefix"]),
+    )
+    assert polar["license_expression"] == "LicenseRef-Polar-SDK"
 
 
 def test_public_release_keeps_component_license_evidence() -> None:

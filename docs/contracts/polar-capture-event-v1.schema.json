@@ -1,0 +1,53 @@
+{
+  "additionalProperties": false,
+  "description": "Sequenced resumable monitor event. High-rate raw data is never included.",
+  "properties": {
+    "capture_id": {
+      "title": "Capture Id",
+      "type": "string"
+    },
+    "event_type": {
+      "enum": [
+        "status",
+        "hr",
+        "quality",
+        "preview",
+        "marker",
+        "gap",
+        "error"
+      ],
+      "title": "Event Type",
+      "type": "string"
+    },
+    "occurred_at_utc": {
+      "format": "date-time",
+      "title": "Occurred At Utc",
+      "type": "string"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sequence": {
+      "minimum": 1,
+      "title": "Sequence",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "capture_id",
+    "sequence",
+    "event_type",
+    "occurred_at_utc",
+    "payload"
+  ],
+  "title": "PolarCaptureEventV1",
+  "type": "object"
+}

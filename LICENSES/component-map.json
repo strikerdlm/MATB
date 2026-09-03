@@ -11,6 +11,20 @@
       "scope_note": "Repository-authored material except where a more specific component entry, nearer license, or file-level notice applies."
     },
     {
+      "component_id": "hrv-pinned-calculations",
+      "path_prefix": "matb_integration/physiology/analysis.py",
+      "license_expression": "MIT",
+      "license_file": "LICENSES/HRV-MIT.txt",
+      "scope_note": "Minimum HRV equations and Lipponen-Tarvainen detector ported from strikerdlm/HRV commit ef086092cfc57c74171f9ac9374b8ba24ceb0e6a."
+    },
+    {
+      "component_id": "polar-hr-advertisement-protocol",
+      "path_prefix": "matb_integration/physiology/broadcast.py",
+      "license_expression": "LicenseRef-Polar-SDK",
+      "license_file": "LICENSES/Polar_SDK_License.txt",
+      "scope_note": "Polar manufacturer advertisement parsing derived from the official Polar BLE SDK; no affiliation or endorsement is claimed."
+    },
+    {
       "component_id": "openmatb-runtime",
       "path_prefix": "openmatb/",
       "license_expression": "CECILL-2.1",

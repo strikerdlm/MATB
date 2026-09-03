@@ -1,0 +1,9 @@
+# Optional Windows-native Polar H10 component (Python 3.12 qualification set)
+bleak==3.0.2
+polar-python==1.1.1
+pyarrow>=18,<25
+
+# HRV calculation stack; versions remain constrained by requirements.txt.
+numpy>=1.26
+scipy>=1.11
+pandas>=2.3

@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "sources": [
+    {
+      "role": "hrv_equations_and_artifact_detector",
+      "repository": "strikerdlm/HRV",
+      "revision": "ef086092cfc57c74171f9ac9374b8ba24ceb0e6a",
+      "path": "app/hrv_core.py",
+      "sha256": "2f3422d65cbb69d820da2524b64fa214ce0143101a52f5d5821f66dc5d1fe5d4",
+      "license": "MIT",
+      "local_scope": "matb_integration/physiology/analysis.py"
+    },
+    {
+      "role": "polar_hr_advertisement_fields",
+      "repository": "polarofficial/polar-ble-sdk",
+      "revision": "3d15da61dd0c63e6be2582d03fd80f6c7ba02e11",
+      "path": "sources/Android/android-communications/library/src/main/java/com/polar/androidcommunications/api/ble/model/advertisement/BlePolarHrAdvertisement.kt",
+      "sha256": "9429ab6429c840b61797b4fd0c99ca3a085516bca4991cdf82c9db2afda6c7e9",
+      "license": "LicenseRef-Polar-SDK",
+      "local_scope": "matb_integration/physiology/broadcast.py"
+    },
+    {
+      "role": "polar_hr_advertisement_container",
+      "repository": "polarofficial/polar-ble-sdk",
+      "revision": "3d15da61dd0c63e6be2582d03fd80f6c7ba02e11",
+      "path": "sources/Android/android-communications/library/src/main/java/com/polar/androidcommunications/api/ble/model/advertisement/BleAdvertisementContent.kt",
+      "sha256": "0d0976323d9c5c58daf9951d659b68311a2746c9372105de62387d4dd234a373",
+      "license": "LicenseRef-Polar-SDK",
+      "local_scope": "matb_integration/physiology/broadcast.py"
+    }
+  ]
+}

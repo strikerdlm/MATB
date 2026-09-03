@@ -4,6 +4,24 @@ All notable changes to the MATB military aviation research platform.
 
 ## [Unreleased] — 2026-08-02
 
+### Native Polar H10 physiology — Release A candidate — 2026-09-03
+
+#### Added
+- Optional Windows-native H10 scan/broadcast, HRS RR, ECG 130 Hz, selectable
+  ACC, bounded Parquet capture, controller-leased monitoring, and automatic
+  OpenMATB phase markers.
+- Pinned HRV calculation provenance, conservative gap-aware five-minute phase
+  descriptors, and descriptive task-minus-baseline lnRMSSD/mean-HR changes.
+- Strict capture/device/event/manifest schemas, privacy and checksum controls,
+  simulated packet/transport tests, license mapping, and a pending physical
+  hardware acceptance matrix.
+
+#### Scientific boundary
+- No workload class, probability, autonomic-balance label, fitness-for-duty
+  conclusion, or operational alert is emitted.
+- Polar internal recording remains disabled pending license and H10 hardware
+  qualification; this candidate does not claim physical-device acceptance.
+
 ### Scientific metrics foundation v2 — 2026-08-30
 
 #### Added
