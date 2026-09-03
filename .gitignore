@@ -7,3 +7,9 @@ webui/frontend/playwright-report/
 .matb-core-e2e/
 /.worktrees/
 /exports/
+
+# Local secrets
+.env.local
+
+# Local test artifacts
+.test-tmp/
