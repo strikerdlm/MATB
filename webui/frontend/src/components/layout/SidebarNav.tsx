@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, Users, Upload, BarChart3, FlaskConical, Brain, Gamepad2, Radar, SlidersHorizontal, MonitorPlay, Activity } from "lucide-react";
+import { Home, LayoutGrid, Users, Upload, BarChart3, FlaskConical, Brain, Gamepad2, Radar, SlidersHorizontal, MonitorPlay, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getCapabilities } from "@/lib/api";
 import { hasComponent, productRoutes } from "@/lib/capabilities";
@@ -11,6 +11,7 @@ import { useAppLocale, type AppTranslationKey } from "@/lib/i18n";
 import type { ConsoleCapabilities } from "@/types";
 
 const CORE_ITEMS = [
+  { href: "/start", labelKey: "nav.start" as AppTranslationKey, icon: Home, enabled: true },
   { href: "/", labelKey: "nav.tracker" as AppTranslationKey, icon: LayoutGrid, enabled: true },
   { href: "/experiments", labelKey: "nav.designer" as AppTranslationKey, icon: SlidersHorizontal, enabled: true },
   { href: "/participants", labelKey: "nav.participants" as AppTranslationKey, icon: Users, enabled: true },

@@ -4,9 +4,11 @@ These Explorer-friendly launchers start the native sUAS console or run a
 deterministic technical workload profile without changing study scenarios.
 They require PowerShell 7, Python 3.12+, Node.js 20+, and npm.
 
-Run `00 - Preparar MATB UAS.cmd` once, then use
-`01 - Abrir consola UAS.cmd` for the interactive mouse-enabled console. Keep
-its supervisor window open and press `Ctrl+C`, or run
+Run `01 - Abrir consola UAS.cmd` for the interactive mouse-enabled console.
+It now checks and repairs dependencies, refreshes a stale production build,
+starts the local services, and opens the guided `/start` page. Use
+`00 - Preparar MATB UAS.cmd` only when you want to prepare the station and run
+focused checks without opening the console. Keep its supervisor window open and press `Ctrl+C`, or run
 `99 - Detener MATB UAS.cmd`, to stop the exact tracked services.
 
 `02 - Diagnosticar MATB UAS.cmd` performs a read-only check of the runtimes,

@@ -59,6 +59,15 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
   const currentSnapshot = snapshot ?? initialSnapshot;
   const lease = controllerLease(currentSession.id);
   const canControl = !readOnly && Boolean(lease);
+  const nextStep = currentSession.lifecycle === "PREPARED"
+    ? (locale === "es-CO" ? `Paso siguiente: pulse INICIAR para comenzar ${currentSession.next_block_id ?? "PRÁCTICA"}.` : `Next step: press START to begin ${currentSession.next_block_id ?? "PRACTICE"}.`)
+    : currentSession.lifecycle === "RUNNING"
+      ? (locale === "es-CO" ? "Paso actual: complete el bloque y responda los instrumentos cuando aparezcan." : "Current step: complete the block and answer instruments when they appear.")
+      : currentSession.lifecycle === "PAUSED" && currentSession.protocol_phase === "READY_FOR_BLOCK"
+        ? (locale === "es-CO" ? `Paso siguiente: pulse INICIAR para continuar con ${currentSession.next_block_id ?? "el siguiente bloque"}.` : `Next step: press START to continue with ${currentSession.next_block_id ?? "the next block"}.`)
+        : currentSession.lifecycle === "PAUSED"
+          ? (locale === "es-CO" ? "Paso actual: complete el instrumento mostrado o reanude cuando esté listo." : "Current step: complete the displayed instrument or resume when ready.")
+          : (locale === "es-CO" ? "Siga la acción resaltada en la barra superior." : "Follow the highlighted action in the top bar.");
 
   useEffect(() => {
     if (cleanupTimer.current !== null) {
@@ -94,7 +103,14 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
     if (!canControl) return;
     setBusy(true); setMessage(null);
     try {
-      const updated = await transitionSession(currentSession.id, action, lease!, action === "finish" ? { disposition: "complete" } : body);
+      const updated = await transitionSession(
+        currentSession.id,
+        action,
+        lease!,
+        action === "finish"
+          ? { disposition: body.disposition === "abort" ? "abort" : "complete" }
+          : body,
+      );
       useSimulationStore.setState({ session: updated });
       setMessage(t(locale, `lifecycle.${updated.lifecycle.toLowerCase()}` as never));
       if (updated.lifecycle === "FINISHED") onFinished?.(updated);
@@ -146,7 +162,8 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
   return (
     <div className="simulation-console relative flex min-h-screen flex-col bg-background text-foreground" aria-busy={busy}>
       <div className="signal-sweep pointer-events-none absolute inset-x-0 top-0 z-20 h-px bg-white/10" aria-hidden="true" />
-      <MissionTopBar session={currentSession} locale={locale} connection={connection} canControl={canControl} busy={busy} onStart={() => void lifecycle("start", { block_id: currentSession.next_block_id ?? currentSession.active_block_id ?? "PRACTICE" })} onPause={() => void lifecycle("pause", { reason: "operator_pause" })} onResume={() => void lifecycle("resume")} onFinish={() => void lifecycle("finish")} />
+      <MissionTopBar session={currentSession} locale={locale} connection={connection} canControl={canControl} busy={busy} onStart={() => void lifecycle("start", { block_id: currentSession.next_block_id ?? currentSession.active_block_id ?? "PRACTICE" })} onPause={() => void lifecycle("pause", { reason: "operator_pause" })} onResume={() => void lifecycle("resume")} onFinish={() => void lifecycle("finish", { disposition: currentSession.lifecycle === "PREPARED" ? "abort" : "complete" })} />
+      <div role="note" className="border-b border-info/30 bg-info/5 px-4 py-2 text-sm text-info lg:px-6">{nextStep}</div>
       {(transportError || message) && <div role="status" aria-live="polite" className="flex items-center gap-2 border-b border-warning/30 bg-warning/5 px-4 py-2 font-mono text-xs text-warning"><AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />{transportError ?? message}</div>}
       {busy && <div className="sr-only" role="status">{t(locale, "mission.working")}</div>}
       {concealOperationalState && probeOverlay ? probeOverlay : !currentSnapshot?.aircraft ? (

@@ -7,9 +7,13 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.participant_ids import PARTICIPANT_ID_PATTERN
+
 
 class ParticipantCreate(BaseModel):
-    id: str
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(pattern=PARTICIPANT_ID_PATTERN)
     enrollment_date: date
     sex: str | None = None
     age_band: str | None = None
@@ -17,6 +21,8 @@ class ParticipantCreate(BaseModel):
 
 
 class ParticipantOut(BaseModel):
+    # Read legacy rows so the UI can identify and replace incompatible IDs;
+    # new rows are constrained by ParticipantCreate above.
     id: str
     enrollment_date: date
     sex: str | None = None

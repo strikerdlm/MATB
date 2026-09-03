@@ -61,12 +61,12 @@ export function MissionTopBar({ session, locale, connection, canControl, onStart
         {isRunning && <Button type="button" size="sm" variant="warning" onClick={onPause} disabled={!canControl || busy}><Pause className="mr-2 h-3.5 w-3.5" aria-hidden="true" />{t(locale, "lifecycle.pause")}</Button>}
         {isPaused && !readyForNextBlock && <Button type="button" size="sm" variant="success" onClick={onResume} disabled={!canControl || busy || protocolGateActive}><Play className="mr-2 h-3.5 w-3.5" aria-hidden="true" />{t(locale, "lifecycle.resume")}</Button>}
         {confirmFinish ? (
-          <div className="flex items-center gap-1" role="group" aria-label={t(locale, "confirm.finish")}>
+          <div className="flex items-center gap-1" role="group" aria-label={isPrepared ? (locale === "es-CO" ? "¿Cancelar esta sesión preparada?" : "Cancel this prepared session?") : t(locale, "confirm.finish")}>
             <Button type="button" size="sm" variant="destructive" onClick={() => { setConfirmFinish(false); onFinish(); }} disabled={!canControl || busy}>{t(locale, "common.confirm")}</Button>
             <Button type="button" size="sm" variant="ghost" onClick={() => setConfirmFinish(false)}>×</Button>
           </div>
         ) : (
-          <Button type="button" size="sm" variant="outline" onClick={() => setConfirmFinish(true)} disabled={!canControl || busy || ["FINISHED", "ABORTED", "INTERRUPTED"].includes(session.lifecycle)}><Flag className="mr-2 h-3.5 w-3.5" aria-hidden="true" />{t(locale, "lifecycle.finish")}</Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => setConfirmFinish(true)} disabled={!canControl || busy || ["FINISHED", "ABORTED", "INTERRUPTED"].includes(session.lifecycle)}><Flag className="mr-2 h-3.5 w-3.5" aria-hidden="true" />{isPrepared ? (locale === "es-CO" ? "Cancelar sesión" : "Cancel session") : t(locale, "lifecycle.finish")}</Button>
         )}
         {!canControl && <span className="sr-only"><ShieldAlert />{t(locale, "mission.observer_disabled")}</span>}
       </div>
