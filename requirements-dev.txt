@@ -1,5 +1,4 @@
 -r requirements.txt
 -r webui/backend/requirements.txt
+-r webui/backend/requirements-physiology.txt
 jsonschema>=4.23.0,<5.0.0
-# Required by the physiology artifact/runtime tests collected by the shared CI jobs.
-pyarrow>=18,<25
