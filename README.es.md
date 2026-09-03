@@ -214,6 +214,51 @@ registro acotado, oportunidades explícitas de SYSMon y ventana de respuesta COM
 y si su inventario WAV de comunicaciones supera la calificación de perfil temporal
 a nivel de bytes. Un directorio `includes/` por sí solo es deliberadamente insuficiente.
 
+<h3>Localización al español y atajos de la ventana de tareas</h3>
+
+El entorno OpenMATB versionado incluye ahora español colombiano (`es_CO`) como
+idioma predeterminado. La localización cubre la aplicación y el generador de
+escenarios, los mensajes de validación, las instrucciones para participantes,
+los recursos de cuestionarios y el audio COMM en español con deletreo
+radiotelefónico OACI. Confirme este ajuste en `openmatb/config.ini`:
+
+```ini
+[Openmatb]
+language=es_CO
+```
+
+Inicie la ventana de tareas localizada desde el directorio del entorno:
+
+```bash
+REPO_ROOT="$(pwd)"
+cd "$REPO_ROOT/openmatb"
+"$REPO_ROOT/.venv-openmatb/bin/python" main.py
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+Set-Location (Join-Path $RepoRoot "openmatb")
+& (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") main.py
+```
+
+Use `language=en_EN` o `language=fr_FR` para elegir otro idioma distribuido.
+Consulte la [guía completa de OpenMATB en español](openmatb/README.es.md) y la
+[terminología aeronáutica controlada](openmatb/locales/es_CO/TERMINOLOGIA.md).
+La localización no demuestra por sí sola la validación psicométrica de un
+cuestionario en una población colombiana; registre en el protocolo el
+instrumento, la administración, la puntuación y el estado de adaptación exactos.
+
+Los atajos globales de la ventana de tareas son:
+
+| Tecla | Acción |
+| --- | --- |
+| `P` | Abrir el diálogo de pausa |
+| `Escape` | Abrir el diálogo de confirmación de salida |
+
+Las demás teclas de respuesta dependen del escenario. Los identificadores de
+módulos, comandos y nombres de archivo son valores internos de OpenMATB y no se
+traducen.
+
 <h4>Configuración del control RC en Windows: Hitec Aurora 9 y RealFlight InterLink</h4>
 
 El entorno OpenMATB versionado acepta un solo dispositivo de control de juegos
@@ -631,6 +676,24 @@ Para uso nativo con un solo clic, consulte los
 preparación, consola interactiva, simulaciones técnicas PRACTICE/LOW/MEDIUM/HIGH,
 diagnóstico, acceso a resultados, verificación de replay y detención segura de
 los procesos registrados.
+
+| Acceso directo de Windows | Función |
+| --- | --- |
+| `00 - Preparar MATB UAS.cmd` | Comprobar requisitos, instalar dependencias faltantes, compilar la interfaz y ejecutar comprobaciones focalizadas |
+| `01 - Abrir consola UAS.cmd` | Iniciar los servicios locales supervisados y abrir la consola interactiva |
+| `02 - Diagnosticar MATB UAS.cmd` | Revisar, sin modificar datos, el entorno, puertos, procesos, salud y última ejecución |
+| `10 - Simular PRACTICE.cmd` | Ejecutar y verificar el perfil técnico PRACTICE completo |
+| `11 - Simular LOW.cmd` | Ejecutar y verificar el perfil técnico LOW completo |
+| `12 - Simular MEDIUM.cmd` | Ejecutar y verificar el perfil técnico MEDIUM completo |
+| `13 - Simular HIGH.cmd` | Ejecutar y verificar el perfil técnico HIGH completo |
+| `90 - Verificar ultima simulacion.cmd` | Repetir la verificación de replay y sumas de comprobación de la última ejecución técnica |
+| `91 - Abrir resultados MATB UAS.cmd` | Abrir los últimos resultados técnicos sellados y los registros disponibles del servicio |
+| `99 - Detener MATB UAS.cmd` | Detener solo los procesos verificados y registrados por el lanzador |
+
+Ejecute `00` una vez antes del primer uso, use `01` para la consola interactiva
+y mantenga abierta su ventana supervisora. Los accesos `10`–`13` generan
+simulaciones técnicas, no sesiones válidas de participantes. La guía enlazada
+contiene todos los requisitos e instrucciones de recuperación.
 
 <h3>Instalación</h3>
 

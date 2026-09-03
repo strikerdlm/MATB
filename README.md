@@ -213,6 +213,50 @@ explicit SYSMon-opportunity, and COMM-response-window capabilities and its
 pinned communications WAV inventory passes byte-level timing-profile
 qualification. An `includes/` directory alone is deliberately insufficient.
 
+<h3>Spanish localization and task-window shortcuts</h3>
+
+The tracked OpenMATB runtime now ships with Colombian Spanish (`es_CO`) as its
+default display language. The locale covers the application and scenario
+generator UI, validation messages, participant instructions, questionnaire
+assets, and Spanish COMM audio using ICAO radiotelephony spelling. Confirm this
+setting in `openmatb/config.ini`:
+
+```ini
+[Openmatb]
+language=es_CO
+```
+
+Start the localized task window from the runtime directory:
+
+```bash
+REPO_ROOT="$(pwd)"
+cd "$REPO_ROOT/openmatb"
+"$REPO_ROOT/.venv-openmatb/bin/python" main.py
+```
+
+```powershell
+$RepoRoot = (Get-Location).Path
+Set-Location (Join-Path $RepoRoot "openmatb")
+& (Join-Path $RepoRoot ".venv-openmatb\Scripts\python.exe") main.py
+```
+
+Set `language=en_EN` or `language=fr_FR` to select another distributed locale.
+See the [complete Spanish OpenMATB guide](openmatb/README.es.md) and the
+[controlled aviation terminology](openmatb/locales/es_CO/TERMINOLOGIA.md).
+Localization does not by itself establish psychometric validation for a
+questionnaire in a Colombian study population; record the exact instrument,
+administration, scoring method, and adaptation status in the study protocol.
+
+The global task-window shortcuts are:
+
+| Key | Action |
+| --- | --- |
+| `P` | Open the pause dialog |
+| `Escape` | Open the exit-confirmation dialog |
+
+All other response keys are scenario-specific. Scenario module identifiers,
+commands, and file names remain internal OpenMATB values and are not translated.
+
 <h4>Windows RC controller setup: Hitec Aurora 9 and RealFlight InterLink</h4>
 
 The tracked OpenMATB runtime accepts one Windows game-controller device when it
@@ -619,6 +663,24 @@ For native one-click use, see the
 the interactive console, PRACTICE/LOW/MEDIUM/HIGH technical runs, replay
 verification, diagnostics, results access, and identity-checked shutdown of
 tracked processes.
+
+| Windows shortcut | Purpose |
+| --- | --- |
+| `00 - Preparar MATB UAS.cmd` | Check prerequisites, install missing dependencies, build the UI, and run focused checks |
+| `01 - Abrir consola UAS.cmd` | Start the supervised local services and open the interactive console |
+| `02 - Diagnosticar MATB UAS.cmd` | Run read-only environment, port, process, health, and latest-run diagnostics |
+| `10 - Simular PRACTICE.cmd` | Run and verify the complete PRACTICE technical profile |
+| `11 - Simular LOW.cmd` | Run and verify the complete LOW technical profile |
+| `12 - Simular MEDIUM.cmd` | Run and verify the complete MEDIUM technical profile |
+| `13 - Simular HIGH.cmd` | Run and verify the complete HIGH technical profile |
+| `90 - Verificar ultima simulacion.cmd` | Re-run replay and checksum verification for the latest technical run |
+| `91 - Abrir resultados MATB UAS.cmd` | Open the latest sealed technical results and available service logs |
+| `99 - Detener MATB UAS.cmd` | Stop only the identity-checked processes tracked by the launcher |
+
+Run `00` once before first use, use `01` for the interactive console, and keep
+its supervisor window open. The `10`–`13` shortcuts create technical
+simulations, not valid participant sessions. Full requirements and recovery
+guidance are in the linked launcher guide.
 
 <h3>Install</h3>
 
