@@ -1,30 +1,30 @@
-# Scenario template
-# Durations are expressed in milliseconds
-# Timestamps are stated in the following format H:MM:SS
+# Plantilla de escenario
+# Las duraciones se expresan en milisegundos.
+# Las marcas de tiempo utilizan el formato H:MM:SS.
 
-# 1. Set tasks parameters
+# 1. Configuración de los parámetros de las tareas
 
-# 1.a. System monitoring parameters
+# 1.a. Parámetros de vigilancia de sistemas (SYSMON)
 0:00:00;sysmon;scales-1-key;F8
 
-# 1.b.i. Resources management parameters
-# Change tank B target in resman
+# 1.b.i. Parámetros de gestión de recursos (RESMAN)
+# Modificar el nivel objetivo del depósito B.
 0:00:00;resman;tank-b-target;1000
 
 
-# 1.c. Tracking parameters
-# Change tracking cursor color
+# 1.c. Parámetros de seguimiento (TRACK)
+# Modificar el color de la retícula.
 0:00:00;track;cursorcolor;#009900
 
-# 1.d. Communications parameters
-# Change the callsign format, the number of distractive callsigns, the voice gender and idiom
+# 1.d. Parámetros de comunicaciones (COMM)
+# Modificar el formato del distintivo de llamada, los distintivos distractores y la voz.
 0:00:00;communications;callsignregex;[A-Z][A-Z]\d\d
 0:00:00;communications;othercallsignnumber;5
 0:00:00;communications;voicegender;male
-0:00:00;communications;voiceidiom;french
+0:00:00;communications;voiceidiom;spanish
 
 
-# 2. Start appropriate tasks
+# 2. Inicio de las tareas
 0:00:00;resman;start
 0:00:00;track;start
 0:00:00;sysmon;start
@@ -32,22 +32,22 @@
 0:00:00;communications;start
 
 
-# 3. Set scenario events
-# Display a NASA-TLX questionnaire
+# 3. Programación de eventos del escenario
+# Mostrar el cuestionario NASA-TLX.
 
-0:00:00;genericscales;filename;nasatlx_fr.txt
+0:00:00;genericscales;filename;nasatlx_es.txt
 0:00:00;genericscales;start
 
 
-# 3.a. System monitoring events
-# Schedule some gauge failures
+# 3.a. Eventos de vigilancia de sistemas
+# Programar fallas de indicadores.
 0:00:10;sysmon;scales-1-side;-1
 0:00:10;sysmon;scales-1-failure;True
 0:00:30;sysmon;scales-4-side;1
 0:00:30;sysmon;scales-4-failure;True
 
-# 3.b. Resources management events
-# Schedule automatic solving and pump failures
+# 3.b. Eventos de gestión de recursos
+# Programar automatización y fallas de bombas.
 0:00:00;resman;automaticsolver;True
 0:00:15;resman;pump-3-state;failure
 0:00:25;resman;pump-3-state;off
@@ -55,22 +55,22 @@
 0:00:30;resman;pump-7-state;failure
 0:00:40;resman;pump-7-state;off
 
-# 3.c. Tracking events
-# Schedule automatic solving
+# 3.c. Eventos de seguimiento
+# Programar automatización.
 0:00:20;track;automaticsolver;True
 0:00:40;track;automaticsolver;False
 
 
-# 3.d. Communications events
-# /!\ Be careful to let sufficient time during two prompts to avoid sound overlaping
-# Schedule some radio prompts
+# 3.d. Eventos de comunicaciones
+# Deje tiempo suficiente entre mensajes para evitar la superposición de audio.
+# Programar mensajes de radio.
 0:00:00;communications;radioprompt;own
 0:00:25;communications;radioprompt;other
 0:00:40;communications;automaticsolver;True
 0:00:45;communications;radioprompt;own
 
 
-# 4. End tasks at 1 minute
+# 4. Finalización de las tareas al minuto
 0:01:00;resman;stop
 0:01:00;track;stop
 0:01:00;sysmon;stop

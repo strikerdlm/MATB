@@ -66,7 +66,7 @@ class AbstractWidget:
         if self.is_visible():
             return
         if self.verbose:
-            print("Show ", self.name)
+            print(_("Show %s") % self.name)
         self.show_aoi_highlight()
         self.assign_vertices_to_batch()
         if hasattr(self, "set_visibility"):
@@ -78,7 +78,7 @@ class AbstractWidget:
         if not self.is_visible():
             return
         if self.verbose:
-            print("Hide ", self.name)
+            print(_("Hide %s") % self.name)
 
         self.empty_batch()
         if hasattr(self, "set_visibility"):

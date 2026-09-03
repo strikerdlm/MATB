@@ -58,7 +58,7 @@ plugins: dict[str, Any] = {
 
 
 def main() -> None:
-    print("OpenMATB - Scenario generator")
+    print(_("OpenMATB - Scenario generator"))
     print("_____________________________")
 
     blocks: list[BlockConfig] = [
@@ -80,7 +80,7 @@ def main() -> None:
 
     lines = generate_scenario(scenario_config, plugins)
     path = write_scenario_file(lines, scenario_config)
-    print(f"\nScenario generated: {path}")
+    print("\n" + _("Scenario generated: %s") % path)
 
 
 if __name__ == "__main__":

@@ -76,7 +76,7 @@ class AbstractPlugin:
             return
 
         if self.verbose:
-            print("Show ", self.alias)
+            print(_("Show %s") % self.alias)
 
         self.visible = True
         self.update_can_receive_key()
@@ -105,7 +105,7 @@ class AbstractPlugin:
             return
 
         if self.verbose:
-            print("Hide ", self.alias)
+            print(_("Hide %s") % self.alias)
 
         self.visible = False
         self.update_can_receive_key()
@@ -126,20 +126,20 @@ class AbstractPlugin:
 
     def pause(self) -> None:
         if self.verbose:
-            print("Pause ", self.alias)
+            print(_("Pause %s") % self.alias)
         self.paused = True
         self.update_can_receive_key()
 
     def resume(self) -> None:
         if self.verbose:
-            print("Resume ", self.alias)
+            print(_("Resume %s") % self.alias)
         self.paused = False
         self.update_can_receive_key()
 
     def start(self) -> None:
         if self.verbose:
-            print("Start ", self.alias)
-            print("with keys ", self.keys)
+            print(_("Start %s") % self.alias)
+            print(_("with keys %s") % self.keys)
         self.alive = True
         self.create_widgets()
         self.log_all_parameters(self.parameters)
@@ -148,7 +148,7 @@ class AbstractPlugin:
 
     def stop(self) -> None:
         if self.verbose:
-            print("Stop ", self.alias)
+            print(_("Stop %s") % self.alias)
         self.alive = False
         self.pause()
         self.hide()
@@ -196,7 +196,7 @@ class AbstractPlugin:
             return False
 
         if self.verbose:
-            print(self.alias, "Compute next state")
+            print(_("%s | computing next state") % self.alias)
 
         self.next_refresh_time = self.scenario_time + self.parameters["taskupdatetime"] / 1000
 
@@ -215,7 +215,7 @@ class AbstractPlugin:
             return False
 
         if self.verbose:
-            print(self.alias, "Refreshing widgets")
+            print(_("%s | refreshing widgets") % self.alias)
 
         if self.get_widget("foreground") is not None:
             self.get_widget("foreground").set_visibility(False)
@@ -306,7 +306,7 @@ class AbstractPlugin:
 
     def create_widgets(self) -> None:
         if self.verbose:
-            print(self.alias, "Creating widgets")
+            print(_("%s | creating widgets") % self.alias)
         pthp: float = PLUGIN_TITLE_HEIGHT_PROPORTION
 
         self.container = Window.MainWindow.get_container(self.parameters["taskplacement"])

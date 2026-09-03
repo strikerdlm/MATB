@@ -1,3 +1,3 @@
-<h1>Présentation des tâches</h1>
+<h1>Presentación de las tareas</h1>
 
-<p>Dans la tâche de communication, il s'agit pour le participant de répondre à des instructions sonores quant aux fréquences de ses radios. Certains messages s'adressent à lui (son indicatif), mais il doit ignorer les autres messages (autre indicatif).</p>
+<p>En la tarea de comunicaciones (COMM), el participante debe responder a instrucciones sonoras para sintonizar las frecuencias de sus radios. Debe atender únicamente los mensajes dirigidos a su distintivo de llamada e ignorar los dirigidos a otros distintivos.</p>

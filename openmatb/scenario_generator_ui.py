@@ -401,9 +401,9 @@ class BlockWidgetGroup:
 
     CARD_H = 238
     PLUGIN_NAMES = ["track", "sysmon", "communications", "resman", "scheduling"]
-    PLUGIN_LABELS = {"track": "Track", "sysmon": "Sysmon",
-                     "communications": "Comms", "resman": "Resman",
-                     "scheduling": "Sched."}
+    PLUGIN_LABELS = {"track": _("Tracking"), "sysmon": _("System monitoring"),
+                     "communications": _("Communications"), "resman": _("Resources management"),
+                     "scheduling": _("Scheduling")}
 
     def __init__(self, index: int, x: int, y: int, width: int,
                  batch: pyglet.graphics.Batch, difficulty: float = 0.50,
@@ -427,19 +427,19 @@ class BlockWidgetGroup:
                                    color=COL_BLOCK_BG, batch=batch)
         self.border = shapes.Box(x, y, width, self.CARD_H,
                                  color=COL_BLOCK_BORDER, batch=batch)
-        self.title = Label(f"Block {index + 1}", x=x + 10, y=y + self.CARD_H - 22,
+        self.title = Label(_("Block %s") % (index + 1), x=x + 10, y=y + self.CARD_H - 22,
                            font_name=FONT, font_size=12, weight='bold',
                            color=COL_TEXT, batch=batch)
 
         # Top-right buttons row
         btn_right = x + width - 10
         self.remove_btn = UIButton(
-            btn_right - 90, y + self.CARD_H - 30, 90, 26, "\u2715 Remove", batch,
+            btn_right - 90, y + self.CARD_H - 30, 90, 26, _("\u2715 Remove"), batch,
             color=COL_RED_BTN, hover_color=COL_RED_HOVER,
             text_color=COL_WHITE, on_click=self._do_remove,
         )
         self.dup_btn = UIButton(
-            btn_right - 165, y + self.CARD_H - 30, 70, 26, "\u2295 Clone", batch,
+            btn_right - 165, y + self.CARD_H - 30, 70, 26, _("\u2295 Clone"), batch,
             color=COL_ACCENT, hover_color=COL_ACCENT_HOVER,
             text_color=COL_WHITE, on_click=self._do_duplicate,
         )
@@ -457,7 +457,7 @@ class BlockWidgetGroup:
         # Duration slider
         self.duration_slider = UISlider(
             x + 10, y + self.CARD_H - 72, width - 120,
-            "Duration", 30, 300, 5, 60, batch,
+            _("Duration"), 30, 300, 5, 60, batch,
             fmt="{:.0f}", suffix=" s",
         )
 
@@ -613,7 +613,7 @@ class InterBlockWidget:
 
     CARD_H = 40
 
-    TYPE_LABELS = {"instructions": "\u2709 Instructions", "genericscales": "\u2611 NASA-TLX"}
+    TYPE_LABELS = {"instructions": _("\u2709 Instructions"), "genericscales": "\u2611 NASA-TLX"}
 
     def __init__(self, position: int, event_type: str, filename: str,
                  x: int, y: int, width: int, batch: pyglet.graphics.Batch,
@@ -695,13 +695,13 @@ class InsertZone:
         self.x, self.y, self.width = x, y, width
         self.instr_btn = UIButton(
             x, y, width // 2 - 5, self.ZONE_H,
-            "+ Instructions", batch,
+            _("+ Instructions"), batch,
             color=(200, 215, 240), hover_color=(170, 195, 230),
             text_color=COL_TEXT, on_click=lambda: on_instructions(position),
         )
         self.quest_btn = UIButton(
             x + width // 2 + 5, y, width // 2 - 5, self.ZONE_H,
-            "+ Questionnaire", batch,
+            _("+ Questionnaire"), batch,
             color=(200, 215, 240), hover_color=(170, 195, 230),
             text_color=COL_TEXT, on_click=lambda: on_questionnaire(position),
         )
@@ -766,12 +766,12 @@ class UIPreviewOverlay:
         self.panel_border = shapes.Box(px, py, pw, ph, color=COL_BLOCK_BORDER, batch=batch)
 
         # Title
-        self.title = Label("Preview", x=px + 15, y=py + ph - 25,
+        self.title = Label(_("Preview"), x=px + 15, y=py + ph - 25,
                            font_name=FONT, font_size=13, weight='bold',
                            color=COL_TEXT, batch=batch)
 
         # Path label
-        self.path_label = Label(str(file_path) if file_path else "Preview",
+        self.path_label = Label(str(file_path) if file_path else _("Preview"),
                                 x=px + 15, y=py + ph - 48,
                                 font_name=FONT, font_size=9, color=COL_TEXT_LIGHT,
                                 batch=batch)
@@ -949,7 +949,7 @@ class UIFileSelector:
 
         # Select button
         self.select_btn = UIButton(px + pw - 90, py + ph - 35, 75, 26,
-                                   "Select", batch,
+                                   _("Select"), batch,
                                    color=COL_GREEN_BTN, hover_color=COL_GREEN_HOVER,
                                    on_click=self._do_select)
 
@@ -1060,35 +1060,36 @@ class UIAdvancedPanel:
 
     PLUGIN_PARAMS: dict[str, list[tuple[str, str, str, dict]]] = {
         "sysmon": [
-            ("alerttimeout", "Alert timeout (ms)", "slider",
+            ("alerttimeout", _("Alert timeout (ms)"), "slider",
              {"min_val": 1000, "max_val": 30000, "step": 500, "default": 10000,
               "fmt": "{:.0f}", "suffix": " ms"}),
-            ("allowanykey", "Allow any key", "toggle", {"default": False}),
+            ("allowanykey", _("Allow any key"), "toggle", {"default": False}),
         ],
         "communications": [
-            ("voiceidiom", "Voice language", "radio",
-             {"options": ["fr", "en"], "labels": ["French", "English"],
-              "default": "fr"}),
-            ("voicegender", "Voice gender", "radio",
-             {"options": ["female", "male"], "labels": ["Female", "Male"],
+            ("voiceidiom", _("Voice language"), "radio",
+             {"options": ["spanish", "french", "english"],
+              "labels": [_("Spanish"), _("French"), _("English")],
+              "default": "spanish"}),
+            ("voicegender", _("Voice gender"), "radio",
+             {"options": ["female", "male"], "labels": [_("Female"), _("Male")],
               "default": "female"}),
         ],
         "resman": [
-            ("toleranceradius", "Tolerance radius", "slider",
+            ("toleranceradius", _("Tolerance radius"), "slider",
              {"min_val": 50, "max_val": 500, "step": 10, "default": 250,
               "fmt": "{:.0f}", "suffix": ""}),
         ],
         "track": [
-            ("joystickforce", "Joystick force", "slider",
+            ("joystickforce", _("Joystick force"), "slider",
              {"min_val": 1, "max_val": 10, "step": 1, "default": 5,
               "fmt": "{:.0f}", "suffix": ""}),
-            ("cursorcolor", "Cursor color", "radio",
+            ("cursorcolor", _("Cursor color"), "radio",
              {"options": ["#ff0000", "#00ff00", "#0000ff", "#ffff00"],
-              "labels": ["Red", "Green", "Blue", "Yellow"],
+               "labels": [_("Red"), _("Green"), _("Blue"), _("Yellow")],
               "default": "#ff0000"}),
         ],
         "scheduling": [
-            ("minduration", "Min duration (ms)", "slider",
+            ("minduration", _("Min duration (ms)"), "slider",
              {"min_val": 500, "max_val": 10000, "step": 500, "default": 2000,
               "fmt": "{:.0f}", "suffix": " ms"}),
         ],
@@ -1115,12 +1116,12 @@ class UIAdvancedPanel:
         self.panel_border = shapes.Box(px, py, pw, ph, color=COL_BLOCK_BORDER, batch=batch)
 
         plugin_label = BlockWidgetGroup.PLUGIN_LABELS.get(plugin_name, plugin_name.capitalize())
-        self.title = Label(f"Advanced settings \u2014 {plugin_label}",
+        self.title = Label(_("Advanced settings \u2014 %s") % plugin_label,
                            x=px + 15, y=py + ph - 25,
                            font_name=FONT, font_size=13, weight='bold',
                            color=COL_TEXT, batch=batch)
 
-        self.save_btn = UIButton(px + pw - 85, py + 10, 70, 28, "Apply", batch,
+        self.save_btn = UIButton(px + pw - 85, py + 10, 70, 28, _("Apply"), batch,
                                  color=COL_GREEN_BTN, hover_color=COL_GREEN_HOVER,
                                  on_click=self._do_save)
         self.cancel_btn = UIButton(px + pw - 35, py + ph - 33, 24, 24, "\u00d7", batch,
@@ -1270,7 +1271,7 @@ class ScenarioGeneratorUI:
     def __init__(self) -> None:
         self.window = pyglet.window.Window(
             self.WIN_W, self.WIN_H,
-            caption="OpenMATB \u2014 Scenario Generator",
+            caption=_("OpenMATB \u2014 Scenario Generator"),
             resizable=False,
         )
         self.batch = pyglet.graphics.Batch()
@@ -1314,7 +1315,7 @@ class ScenarioGeneratorUI:
         # Title bar
         self.title_bg = shapes.Rectangle(0, H - 45, W, 45, color=COL_ACCENT, batch=self.batch)
         self.title_label = Label(
-            "OpenMATB \u2014 Scenario Generator",
+            _("OpenMATB \u2014 Scenario Generator"),
             x=15, y=H - 30, font_name=FONT, font_size=14,
             color=COL_WHITE, batch=self.batch,
         )
@@ -1325,21 +1326,21 @@ class ScenarioGeneratorUI:
 
         # Section label
         self.left_title = Label(
-            "GLOBAL SETTINGS", x=15, y=H - 70,
+            _("GLOBAL SETTINGS"), x=15, y=H - 70,
             font_name=FONT, font_size=11, weight='bold', color=COL_TEXT,
             batch=self.batch,
         )
 
         # Scenario name
         self.name_input = UITextInput(15, H - 130, self.LEFT_W - 30,
-                                      "Scenario name:", "three_load_levels",
+                                      _("Scenario name:"), "three_load_levels",
                                       self.batch)
         self._all_widgets.append(self.name_input)
 
         # Comm ratio slider
         self.comm_slider = UISlider(
             15, H - 200, self.LEFT_W - 80,
-            "Communications ratio:", 0, 100, 1, 50,
+            _("Communications ratio:"), 0, 100, 1, 50,
             self.batch, fmt="{:.0f}", suffix=" %",
         )
         self._all_widgets.append(self.comm_slider)
@@ -1347,7 +1348,7 @@ class ScenarioGeneratorUI:
         # Refractory duration slider
         self.refract_slider = UISlider(
             15, H - 260, self.LEFT_W - 80,
-            "Refractory duration:", 0, 5, 0.5, 1,
+            _("Refractory duration:"), 0, 5, 0.5, 1,
             self.batch, fmt="{:.1f}", suffix=" s",
         )
         self._all_widgets.append(self.refract_slider)
@@ -1355,14 +1356,14 @@ class ScenarioGeneratorUI:
         # Prompt duration slider
         self.prompt_slider = UISlider(
             15, H - 320, self.LEFT_W - 80,
-            "Audio prompt duration:", 5, 30, 1, 13,
+            _("Audio prompt duration:"), 5, 30, 1, 13,
             self.batch, fmt="{:.0f}", suffix=" s",
         )
         self._all_widgets.append(self.prompt_slider)
 
         # Right panel title
         self.right_title = Label(
-            "BLOCK CONFIGURATION", x=self.LEFT_W + 15, y=H - 70,
+            _("BLOCK CONFIGURATION"), x=self.LEFT_W + 15, y=H - 70,
             font_name=FONT, font_size=11, weight='bold', color=COL_TEXT,
             batch=self.batch,
         )
@@ -1370,19 +1371,19 @@ class ScenarioGeneratorUI:
         # Block management buttons — below the title, above the blocks area
         btn_y = H - 105
         self.add_btn = UIButton(
-            self.LEFT_W + 15, btn_y, 100, 28, "+ Add", self.batch,
+            self.LEFT_W + 15, btn_y, 100, 28, _("+ Add"), self.batch,
             color=COL_ACCENT, hover_color=COL_ACCENT_HOVER,
             on_click=lambda: self._add_block(0.50),
         )
         # Preset buttons — same row, right-aligned
         right_edge = self.WIN_W - 15
         self.load_preset_btn = UIButton(
-            right_edge - 130, btn_y, 130, 28, "\U0001f4c2 Load config", self.batch,
+            right_edge - 130, btn_y, 130, 28, _("\U0001f4c2 Load config"), self.batch,
             color=COL_ACCENT, hover_color=COL_ACCENT_HOVER,
             on_click=self._open_preset_selector,
         )
         self.save_preset_btn = UIButton(
-            right_edge - 270, btn_y, 130, 28, "\U0001f4be Save config", self.batch,
+            right_edge - 270, btn_y, 130, 28, _("\U0001f4be Save config"), self.batch,
             color=COL_ACCENT, hover_color=COL_ACCENT_HOVER,
             on_click=self._save_preset,
         )
@@ -1417,17 +1418,17 @@ class ScenarioGeneratorUI:
         # Bottom bar (full width)
         self.bottom_bg = shapes.Rectangle(0, 0, self.WIN_W, 50, color=COL_PANEL, batch=self.batch)
         self.preview_btn = UIButton(
-            15, 10, 110, 32, "PREVIEW", self.batch,
+            15, 10, 110, 32, _("PREVIEW"), self.batch,
             color=COL_ACCENT, hover_color=COL_ACCENT_HOVER,
             on_click=self._on_preview,
         )
         self.generate_btn = UIButton(
-            135, 10, 80, 32, "SAVE", self.batch,
+            135, 10, 80, 32, _("SAVE"), self.batch,
             color=COL_GREEN_BTN, hover_color=COL_GREEN_HOVER,
             on_click=self._on_generate,
         )
         self.status_label = Label(
-            "Status: Ready", x=230, y=20, font_name=FONT,
+            _("Status: Ready"), x=230, y=20, font_name=FONT,
             font_size=11, color=COL_TEXT_LIGHT, batch=self.batch,
         )
 
@@ -1559,7 +1560,7 @@ class ScenarioGeneratorUI:
                        and card_y < area_top)
             block.visible = in_view
             block.index = i
-            block.title.text = f"Block {i + 1}"
+            block.title.text = _("Block %s") % (i + 1)
 
         # Insert zone AFTER the last block
         if n_blocks < len(self._insert_zones):
@@ -1624,21 +1625,21 @@ class ScenarioGeneratorUI:
         warnings: list[str] = []
 
         if not self.name_input.value.strip():
-            errors.append("Scenario name is empty")
+            errors.append(_("Scenario name is empty"))
 
         for i, block in enumerate(self.blocks):
             cfg = block.get_block_config()
             if cfg.duration_sec <= 0:
-                errors.append(f"Block {i+1}: zero duration")
+                errors.append(_("Block %s: zero duration") % (i + 1))
             if not cfg.plugins:
-                warnings.append(f"Block {i+1}: no active plugin")
+                warnings.append(_("Block %s: no active plugin") % (i + 1))
             # Check if communications events fit in duration
             if "communications" in cfg.plugins:
                 comm_diff = cfg.plugins["communications"]
                 avg_dur = self.prompt_slider.value + self.refract_slider.value
                 est_events = int(comm_diff / (avg_dur / cfg.duration_sec)) if cfg.duration_sec > 0 else 0
                 if est_events > 0 and est_events * avg_dur > cfg.duration_sec:
-                    warnings.append(f"Block {i+1}: duration too short for comms")
+                    warnings.append(_("Block %s: duration too short for communications") % (i + 1))
 
         return errors, warnings
 
@@ -1646,13 +1647,13 @@ class ScenarioGeneratorUI:
         """Update the status bar with validation results."""
         errors, warnings = self._validate()
         if errors:
-            self.status_label.text = f"Error: {errors[0]}"
+            self.status_label.text = _("Error: %s") % errors[0]
             self.status_label.color = (200, 50, 50, 255)
         elif warnings:
-            self.status_label.text = f"Warning: {warnings[0]}"
+            self.status_label.text = _("Warning: %s") % warnings[0]
             self.status_label.color = COL_WARN
         else:
-            self.status_label.text = "Status: Ready"
+            self.status_label.text = _("Status: Ready")
             self.status_label.color = COL_TEXT_LIGHT
 
     # ── Custom file selector ─────────────────────────────────────────
@@ -1687,7 +1688,7 @@ class ScenarioGeneratorUI:
         preset_path = preset_dir / f"{config.scenario_name}.json"
         with open(str(preset_path), "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
-        self.status_label.text = f"Config saved: {preset_path.name}"
+        self.status_label.text = _("Config saved: %s") % preset_path.name
         self.status_label.color = (0, 120, 60, 255)
 
     def _open_preset_selector(self) -> None:
@@ -1696,7 +1697,7 @@ class ScenarioGeneratorUI:
         files = sorted(preset_dir.glob("*.json"))
         self._overlay = UIFileSelector(
             self.WIN_W, self.WIN_H, self._overlay_batch, files,
-            "Load a config",
+            _("Load a config"),
             on_select=self._on_preset_selected,
             on_cancel=self._close_overlay,
         )
@@ -1707,10 +1708,10 @@ class ScenarioGeneratorUI:
             with open(str(path), "r", encoding="utf-8") as f:
                 data = json.load(f)
             self._apply_preset(data)
-            self.status_label.text = f"Config loaded: {path.name}"
+            self.status_label.text = _("Config loaded: %s") % path.name
             self.status_label.color = (0, 120, 60, 255)
         except Exception as e:
-            self.status_label.text = f"Config error: {e}"
+            self.status_label.text = _("Config error: %s") % e
             self.status_label.color = (200, 50, 50, 255)
 
     def _apply_preset(self, data: dict) -> None:
@@ -1799,7 +1800,7 @@ class ScenarioGeneratorUI:
         self._pending_insert_type = "instructions"
         self._overlay = UIFileSelector(
             self.WIN_W, self.WIN_H, self._overlay_batch, files,
-            "Select an instructions file",
+            _("Select an instructions file"),
             on_select=self._on_interblock_file_selected,
             on_cancel=self._close_overlay,
         )
@@ -1812,7 +1813,7 @@ class ScenarioGeneratorUI:
         self._pending_insert_type = "genericscales"
         self._overlay = UIFileSelector(
             self.WIN_W, self.WIN_H, self._overlay_batch, files,
-            "Select a questionnaire",
+            _("Select a questionnaire"),
             on_select=self._on_interblock_file_selected,
             on_cancel=self._close_overlay,
         )
@@ -1837,11 +1838,11 @@ class ScenarioGeneratorUI:
     def _on_preview(self) -> None:
         errors, warnings = self._validate()
         if errors:
-            self.status_label.text = f"Error: {errors[0]}"
+            self.status_label.text = _("Error: %s") % errors[0]
             self.status_label.color = (200, 50, 50, 255)
             return
 
-        self.status_label.text = "Status: Generating preview..."
+        self.status_label.text = _("Status: Generating preview...")
         self.status_label.color = COL_TEXT
         self.on_draw()
         self.window.flip()
@@ -1874,22 +1875,22 @@ class ScenarioGeneratorUI:
                 self.WIN_W, self.WIN_H, self._overlay_batch,
                 preview_lines, None, self._close_overlay,
             )
-            self.status_label.text = "Status: Ready"
+            self.status_label.text = _("Status: Ready")
             self.status_label.color = COL_TEXT_LIGHT
 
         except Exception as e:
-            self.status_label.text = f"Error: {e}"
+            self.status_label.text = _("Error: %s") % e
             self.status_label.color = (200, 50, 50, 255)
 
     def _on_generate(self) -> None:
         # Validate first
         errors, warnings = self._validate()
         if errors:
-            self.status_label.text = f"Error: {errors[0]}"
+            self.status_label.text = _("Error: %s") % errors[0]
             self.status_label.color = (200, 50, 50, 255)
             return
 
-        self.status_label.text = "Status: Saving..."
+        self.status_label.text = _("Status: Saving...")
         self.status_label.color = COL_TEXT
         # Force a draw so the user sees the status update
         self.on_draw()
@@ -1923,11 +1924,11 @@ class ScenarioGeneratorUI:
             path = write_scenario_file(lines, config)
             self._preview_lines = None
             self._preview_config = None
-            self.status_label.text = f"Saved: {path.name}"
+            self.status_label.text = _("Saved: %s") % path.name
             self.status_label.color = (0, 120, 60, 255)
 
         except Exception as e:
-            self.status_label.text = f"Error: {e}"
+            self.status_label.text = _("Error: %s") % e
             self.status_label.color = (200, 50, 50, 255)
 
     # ── Event handlers ───────────────────────────────────────────────────
