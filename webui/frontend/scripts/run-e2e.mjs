@@ -35,7 +35,9 @@ async function waitForUrl(url, processes) {
   const deadline = Date.now() + 120_000;
   while (Date.now() < deadline) {
     for (const child of processes) {
-      if (child.exitCode !== null) throw new Error(`${child.spawnfile} exited before ${url} was ready`);
+      if (child.exitCode !== null || child.signalCode !== null) {
+        throw new Error(`${child.spawnfile} exited before ${url} was ready`);
+      }
     }
     try {
       const response = await fetch(url, { signal: AbortSignal.timeout(1_000) });
@@ -48,29 +50,41 @@ async function waitForUrl(url, processes) {
   throw new Error(`timed out waiting for ${url}`);
 }
 
+function waitForChildExit(child, timeoutMs) {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const finish = (exited) => {
+      clearTimeout(timer);
+      child.off("exit", onExit);
+      child.off("close", onExit);
+      resolve(exited);
+    };
+    const onExit = () => finish(true);
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    child.once("exit", onExit);
+    child.once("close", onExit);
+  });
+}
+
 async function terminate(child) {
-  if (!child || child.exitCode !== null) return;
-  const gracefulExit = once(child, "exit");
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
   child.kill();
-  await Promise.race([
-    gracefulExit,
-    new Promise((resolve) => setTimeout(resolve, 2_000)),
-  ]);
-  if (child.exitCode === null) {
+  if (!await waitForChildExit(child, 2_000)) {
     if (process.platform === "win32") {
       const killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
         stdio: "ignore",
         windowsHide: true,
       });
       await once(killer, "exit");
+      if (!await waitForChildExit(child, 5_000)) {
+        throw new Error(`could not stop child process ${child.pid}`);
+      }
       return;
     }
-    const forcedExit = once(child, "exit");
     child.kill("SIGKILL");
-    await Promise.race([
-      forcedExit,
-      new Promise((_, reject) => setTimeout(() => reject(new Error(`could not stop child process ${child.pid}`)), 5_000)),
-    ]);
+    if (!await waitForChildExit(child, 5_000)) {
+      throw new Error(`could not stop child process ${child.pid}`);
+    }
   }
 }
 
