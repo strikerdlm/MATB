@@ -6,6 +6,7 @@
     "node": ">=20.9.0"
   },
   "scripts": {
+    "postinstall": "node scripts/write-dependency-stamp.mjs",
     "dev": "next dev --port 3100",
     "build": "next build && node scripts/write-build-root.mjs",
     "start": "next start --port 3100",
