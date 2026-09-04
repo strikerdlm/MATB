@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 import os
 import threading
 import time
@@ -15,6 +16,7 @@ from app.models import BayesResult
 from app.routers.analysis import (
     _BAYES_PROCESS_OWNER,
     _bayes_job_fingerprint,
+    _next_bayes_attempt_at,
     acquire_backend_instance_lease,
     reconcile_interrupted_bayes_jobs,
     release_backend_instance_lease,
@@ -269,6 +271,22 @@ def test_database_schema_enforces_one_active_bayesian_job(engine):
         ))
         with pytest.raises(Exception):
             session.commit()
+
+
+def test_bayes_attempt_timestamp_advances_past_clock_collision(engine):
+    fixed = datetime(2026, 9, 4, 3, 33, 59, tzinfo=timezone.utc)
+    with Session(engine) as session:
+        session.add(BayesResult(
+            fingerprint="0" * 64,
+            bayes_version="test",
+            status="failed",
+            last_attempt_at=fixed,
+        ))
+        session.commit()
+
+        assert _next_bayes_attempt_at(session, observed_at=fixed) == (
+            fixed + timedelta(microseconds=1)
+        )
 
 
 def test_backend_instance_lease_rejects_a_second_live_owner(engine):

@@ -10,7 +10,7 @@ import os
 import socket
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from time import monotonic
 from typing import Any
 
@@ -268,6 +268,31 @@ def _bayes_job_fingerprint(
         separators=(",", ":"),
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _next_bayes_attempt_at(
+    session: Session, *, observed_at: datetime | None = None
+) -> datetime:
+    """Return a timestamp strictly newer than every persisted attempt."""
+    from app.models import BayesResult
+
+    candidate = observed_at or datetime.now(timezone.utc)
+    if candidate.tzinfo is None:
+        candidate = candidate.replace(tzinfo=timezone.utc)
+    latest = session.exec(
+        select(BayesResult).order_by(
+            BayesResult.last_attempt_at.desc(),  # type: ignore[arg-type]
+            BayesResult.id.desc(),  # type: ignore[arg-type]
+        )
+    ).first()
+    if latest is None:
+        return candidate
+    latest_at = latest.last_attempt_at
+    if latest_at.tzinfo is None:
+        latest_at = latest_at.replace(tzinfo=timezone.utc)
+    if candidate <= latest_at:
+        return latest_at + timedelta(microseconds=1)
+    return candidate
 
 
 def _validated_bayes_artifact(
@@ -711,7 +736,7 @@ def run_bayes_endpoint(
             existing.finished_at = None
             existing.attempt_count += 1
             existing.error_history_json = json.dumps(history, allow_nan=False)
-            existing.last_attempt_at = datetime.now(timezone.utc)
+            existing.last_attempt_at = _next_bayes_attempt_at(session)
             existing.owner_token = _current_bayes_process_owner()
             row = existing
             session.add(row)
