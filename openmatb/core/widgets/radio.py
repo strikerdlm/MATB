@@ -25,12 +25,14 @@ class Radio(AbstractWidget):
         self.label: str = label
         self.is_selected: bool = on
 
-        if VISUAL_THEME.is_cockpit:
+        if VISUAL_THEME.module_flag("communications", "show_display_bezel"):
             display = self.container.get_reduced(0.62, 0.82)
             display_vertices = self.vertice_border(display)
-            self.add_quad("display_background", G(self.m_draw), display_vertices, C["INSTRUMENT"] * 4)
-            self.add_line_loop("display_bezel", G(self.m_draw + 1), display_vertices, C["LINE"] * 4)
-            self.add_cockpit_bezel()
+            background = VISUAL_THEME.module_color("communications", "display_background")
+            border = VISUAL_THEME.module_color("communications", "display_border")
+            self.add_quad("display_background", G(self.m_draw), display_vertices, background * 4)
+            self.add_line_loop("display_bezel", G(self.m_draw + 1), display_vertices, border * 4)
+            self.add_corner_marks()
 
         # Radio label #
         self.vertex["radio_frequency"] = Label(
@@ -41,7 +43,7 @@ class Radio(AbstractWidget):
             font_name=self.font_name,
             anchor_x="center",
             anchor_y="center",
-            color=C["TEXT"],
+            color=VISUAL_THEME.palette["text"],
             batch=Window.MainWindow.batch,
             group=G(self.m_draw + 1),
         )
@@ -49,12 +51,14 @@ class Radio(AbstractWidget):
         # Arrows vertices #
         # Only a change in vertices is needed to show/hide arrows --> (0, 0, 0...) = hide
         for name, _info in self.arrows.items():
-            self.add_triangles(name, G(self.m_draw + 2), (0, 0, 0, 0, 0, 0), C["ACCENT"] * 3)
+            active = VISUAL_THEME.module_color("communications", "active")
+            self.add_triangles(name, G(self.m_draw + 2), (0, 0, 0, 0, 0, 0), active * 3)
 
         # Feedback vertices #
         # A frame slightly smaller than the radio container
         vertices: tuple[float, ...] = self.vertice_line_border(container.get_reduced(0.6, 0.9))
-        self.add_lines("feedback_lines", G(self.m_draw + 3), vertices, C["BACKGROUND"] * 8)
+        panel = VISUAL_THEME.module_color("communications", "panel")
+        self.add_lines("feedback_lines", G(self.m_draw + 3), vertices, panel * 8)
         self.show()
 
     def show(self) -> None:

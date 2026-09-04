@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import json
 
 from core.constants import COLORS as C
+from core.constants import VISUAL_THEME
 from plugins.sysmon import Sysmon
 
 
@@ -138,11 +139,11 @@ class TestDetermineLightColor:
         light = s.parameters["lights"]["1"]  # default='on', on=True
         assert s.determine_light_color(light) == C["GREEN"]
 
-    def test_light_off_returns_background(self):
-        """Light OFF returns background color."""
+    def test_light_off_returns_profile_off_color(self):
+        """Light OFF returns the profile's semantic lamp-off color."""
         s = _make_sysmon()
         light = s.parameters["lights"]["2"]  # default='off', on=False
-        assert s.determine_light_color(light) == C["BACKGROUND"]
+        assert s.determine_light_color(light) == VISUAL_THEME.module_color("system_monitoring", "lamp_off")
 
     def test_toggled_light_changes_color(self):
         """Toggling ON->OFF changes GREEN->BACKGROUND."""
@@ -152,14 +153,14 @@ class TestDetermineLightColor:
         assert s.determine_light_color(light) == C["GREEN"]
         # Toggle off
         light["on"] = False
-        assert s.determine_light_color(light) == C["BACKGROUND"]
+        assert s.determine_light_color(light) == VISUAL_THEME.module_color("system_monitoring", "lamp_off")
 
     def test_toggled_off_light_turns_on(self):
         """Toggling OFF->ON changes BACKGROUND->RED."""
         s = _make_sysmon()
         light = s.parameters["lights"]["2"]
         # Light 2 is default='off', so on=False → BACKGROUND
-        assert s.determine_light_color(light) == C["BACKGROUND"]
+        assert s.determine_light_color(light) == VISUAL_THEME.module_color("system_monitoring", "lamp_off")
         # Toggle on
         light["on"] = True
         assert s.determine_light_color(light) == C["RED"]
@@ -282,7 +283,7 @@ class TestFailureColorCycle:
 
         # During failure: light is OFF → BACKGROUND (grey)
         assert light["on"] is False
-        assert s.determine_light_color(light) == C["BACKGROUND"]
+        assert s.determine_light_color(light) == VISUAL_THEME.module_color("system_monitoring", "lamp_off")
 
         # Stop failure (successful key press)
         s.stop_failure(light, success=True)
@@ -297,7 +298,7 @@ class TestFailureColorCycle:
         light = s.parameters["lights"]["2"]  # default='off'
 
         # Normal state: light is OFF → BACKGROUND
-        assert s.determine_light_color(light) == C["BACKGROUND"]
+        assert s.determine_light_color(light) == VISUAL_THEME.module_color("system_monitoring", "lamp_off")
 
         # Trigger failure
         light["failure"] = True
@@ -312,7 +313,7 @@ class TestFailureColorCycle:
 
         # After recovery: light is OFF again → BACKGROUND
         assert light["on"] is False
-        assert s.determine_light_color(light) == C["BACKGROUND"]
+        assert s.determine_light_color(light) == VISUAL_THEME.module_color("system_monitoring", "lamp_off")
 
 
 # ──────────────────────────────────────────────

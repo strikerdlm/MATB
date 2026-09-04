@@ -66,7 +66,7 @@ export default function OpenMatbSettingsPage() {
       kicker={copy("Configuración versionada", "Versioned configuration")}
       title={copy("Presets e instrucciones OpenMATB", "OpenMATB presets and instructions")}
       description={copy("Clone una versión publicada, modifique el borrador y publíquelo cuando esté listo. Las sesiones creadas conservan una copia inmutable.", "Clone a published version, edit the draft, and publish it when ready. Created sessions retain an immutable copy.")}
-      actions={<Button asChild variant="outline"><Link href="/openmatb/setup">{copy("Volver a preparar visita", "Back to visit setup")}</Link></Button>}
+      actions={<div className="flex flex-wrap gap-2"><Button asChild><Link href="/openmatb/appearance">{copy("Editar apariencia", "Edit appearance")}</Link></Button><Button asChild variant="outline"><Link href="/openmatb/setup">{copy("Volver a preparar visita", "Back to visit setup")}</Link></Button></div>}
     />
     {error && <p role="alert" className="border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">{error}</p>}
     {notice && <p role="status" className="border border-success/40 bg-success/10 px-4 py-3 text-sm text-success">{notice}</p>}

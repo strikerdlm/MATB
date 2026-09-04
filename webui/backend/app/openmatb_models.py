@@ -41,6 +41,26 @@ class OpenMatbInstructionProtocol(SQLModel, table=True):
     published_at: datetime | None = None
 
 
+class OpenMatbVisualProfile(SQLModel, table=True):
+    """Versioned, presentation-only OpenMATB profile."""
+
+    __tablename__ = "openmatb_visual_profile"
+    __table_args__ = (UniqueConstraint("profile_id", "version"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    profile_id: str = Field(index=True)
+    version: str
+    label: str
+    status: str = "draft"
+    schema_version: str
+    payload_json: str
+    sha256: str = Field(index=True)
+    validation_json: str = "{\"errors\":[],\"warnings\":[]}"
+    warning_acknowledgements_json: str = "[]"
+    created_at: datetime = Field(default_factory=_utcnow)
+    published_at: datetime | None = None
+
+
 class OpenMatbSuiteSession(SQLModel, table=True):
     __tablename__ = "openmatb_suite_session"
 
@@ -55,7 +75,12 @@ class OpenMatbSuiteSession(SQLModel, table=True):
     instruction_version: str
     instruction_sha256: str
     locale: str = "es-419"
-    visual_theme: str = "classic"
+    # Legacy bundled-theme selector is retained for historical sessions.
+    visual_theme: str = "fac_modern"
+    visual_profile_id: str | None = None
+    visual_profile_version: str | None = None
+    visual_profile_schema_version: str | None = None
+    visual_profile_sha256: str | None = None
     execution_purpose: str = "study"
     display_index: int = 1
     lifecycle: str = "INSTRUCTIONS"

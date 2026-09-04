@@ -625,6 +625,10 @@ def _manifest_payload(
     workload_settings: Mapping[str, float | int] | None = None,
     profile_name: str | None = None,
     visual_theme: str | None = None,
+    visual_profile_id: str | None = None,
+    visual_profile_version: str | None = None,
+    visual_profile_schema_version: str | None = None,
+    visual_profile_sha256: str | None = None,
 ) -> dict[str, Any]:
     comm_n = scenario_text.count(";communications;radioprompt;")
     settings = workload_settings or {}
@@ -675,6 +679,14 @@ def _manifest_payload(
             "openmatb_sysmon_lights": list(OPENMATB_SYSMON_LIGHTS),
             "openmatb_sysmon_scales": list(OPENMATB_SYSMON_SCALES),
             **({"visual_theme": visual_theme} if visual_theme is not None else {}),
+            **({"visual_profile_id": visual_profile_id} if visual_profile_id is not None else {}),
+            **({"visual_profile_version": visual_profile_version} if visual_profile_version is not None else {}),
+            **(
+                {"visual_profile_schema_version": visual_profile_schema_version}
+                if visual_profile_schema_version is not None
+                else {}
+            ),
+            **({"visual_profile_sha256": visual_profile_sha256} if visual_profile_sha256 is not None else {}),
         },
         questionnaires={
             "isa": isa_questionnaire,

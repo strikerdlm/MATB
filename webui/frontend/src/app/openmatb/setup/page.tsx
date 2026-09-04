@@ -20,12 +20,18 @@ import {
   getOpenMatbReadiness,
   listOpenMatbInstructions,
   listOpenMatbPresets,
+  listOpenMatbVisualProfiles,
   storeOpenMatbCredentials,
 } from "@/lib/openmatb/api";
 import { openMatbErrorMessage } from "@/lib/openmatb/errors";
 import { isParticipantId } from "@/lib/participant-id";
 import type { Participant, Visit } from "@/types";
-import type { OpenMatbInstructionProtocol, OpenMatbPresetSet, OpenMatbReadiness, OpenMatbVisualTheme } from "@/types/openmatb";
+import type {
+  OpenMatbInstructionProtocol,
+  OpenMatbPresetSet,
+  OpenMatbReadiness,
+  OpenMatbVisualProfile,
+} from "@/types/openmatb";
 
 const CHECK_LABELS: Record<string, [string, string]> = {
   python: ["Python compatible", "Compatible Python"],
@@ -49,13 +55,14 @@ export default function OpenMatbSetupPage() {
   const [visits, setVisits] = useState<Visit[]>([]);
   const [presets, setPresets] = useState<OpenMatbPresetSet[]>([]);
   const [instructions, setInstructions] = useState<OpenMatbInstructionProtocol[]>([]);
+  const [visualProfiles, setVisualProfiles] = useState<OpenMatbVisualProfile[]>([]);
   const [readiness, setReadiness] = useState<OpenMatbReadiness | null>(null);
   const [participantId, setParticipantId] = useState("");
   const [visitOrdinal, setVisitOrdinal] = useState("");
   const [presetKey, setPresetKey] = useState("");
   const [instructionKey, setInstructionKey] = useState("");
+  const [visualProfileKey, setVisualProfileKey] = useState("");
   const [displayIndex, setDisplayIndex] = useState(1);
-  const [visualTheme, setVisualTheme] = useState<OpenMatbVisualTheme>("classic");
   const [acknowledged, setAcknowledged] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -68,18 +75,26 @@ export default function OpenMatbSetupPage() {
       listParticipants(),
       listOpenMatbPresets(),
       listOpenMatbInstructions(),
+      listOpenMatbVisualProfiles(),
       getOpenMatbReadiness(),
     ])
-      .then(([people, presetRows, instructionRows, ready]) => {
+      .then(([people, presetRows, instructionRows, visualProfileRows, ready]) => {
         if (!active) return;
         const publishedPresets = presetRows.filter((row) => row.status === "published");
         const publishedInstructions = instructionRows.filter((row) => row.status === "published");
+        const publishedVisualProfiles = visualProfileRows.filter((row) => row.status === "published");
         setParticipants(people);
         setPresets(publishedPresets);
         setInstructions(publishedInstructions);
+        setVisualProfiles(publishedVisualProfiles);
         setReadiness(ready);
         if (publishedPresets[0]) setPresetKey(`${publishedPresets[0].preset_id}@${publishedPresets[0].version}`);
-
+        const preferredVisualProfile = publishedVisualProfiles.find(
+          (row) => row.profile_id === "matb-fac-modern" && row.version === "1.0.0",
+        ) ?? publishedVisualProfiles[0];
+        if (preferredVisualProfile) {
+          setVisualProfileKey(`${preferredVisualProfile.profile_id}@${preferredVisualProfile.version}`);
+        }
         setDisplayIndex(ready.display_index_default);
       })
       .catch((reason: unknown) => {
@@ -123,14 +138,20 @@ export default function OpenMatbSetupPage() {
     () => instructions.find((row) => `${row.protocol_id}@${row.version}` === instructionKey),
     [instructionKey, instructions],
   );
+  const visualProfile = useMemo(
+    () => visualProfiles.find((row) => `${row.profile_id}@${row.version}` === visualProfileKey),
+    [visualProfileKey, visualProfiles],
+  );
   const participantIsValid = !participantId || isParticipantId(participantId);
   const stationReady = Boolean(readiness?.ready);
   const identityReady = Boolean(participantId && participantIsValid && visitOrdinal);
-  const configurationReady = Boolean(identityReady && preset && protocol && Number.isInteger(displayIndex));
+  const configurationReady = Boolean(
+    identityReady && preset && protocol && visualProfile && Number.isInteger(displayIndex),
+  );
   const canPrepare = Boolean(stationReady && configurationReady && acknowledged && !busy && !loading);
 
   async function prepare() {
-    if (!canPrepare || !preset || !protocol) return;
+    if (!canPrepare || !preset || !protocol || !visualProfile) return;
     const participantWindow = window.open("about:blank", "matb-fac-participant");
     setBusy(true);
     setError(null);
@@ -146,7 +167,8 @@ export default function OpenMatbSetupPage() {
         preset_version: preset.version,
         instruction_protocol_id: protocol.protocol_id,
         instruction_version: protocol.version,
-        visual_theme: visualTheme,
+        visual_profile_id: visualProfile.profile_id,
+        visual_profile_version: visualProfile.version,
         display_index: displayIndex,
       });
       storeOpenMatbCredentials(prepared);
@@ -171,7 +193,7 @@ export default function OpenMatbSetupPage() {
           "Primero se crean las instrucciones del participante; la ventana nativa se abre en el paso siguiente.",
           "Participant instructions are created first; the native window opens in the next step.",
         )}
-        actions={<Button asChild variant="outline"><Link href="/openmatb/settings">{copy("Configuración avanzada", "Advanced settings")}</Link></Button>}
+        actions={<div className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link href="/openmatb/appearance">{copy("Apariencia", "Appearance")}</Link></Button><Button asChild variant="outline"><Link href="/openmatb/settings">{copy("Configuración avanzada", "Advanced settings")}</Link></Button></div>}
         stats={[
           { label: copy("Sistema", "System"), value: readiness?.platform ?? "—" },
           { label: copy("Bloques", "Blocks"), value: purpose === "practice" ? "01" : "04" },
@@ -237,11 +259,10 @@ export default function OpenMatbSetupPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="om-theme">{copy("5. Presentación visual", "5. Visual presentation")}</Label>
-              <select id="om-theme" className="native-select w-full" value={visualTheme} onChange={(event) => setVisualTheme(event.target.value as OpenMatbVisualTheme)} disabled={busy}>
-                <option value="classic">{copy("Clásica · referencia histórica", "Classic · historical reference")}</option>
-                <option value="cockpit">{copy("Cabina moderna · condición experimental", "Modern cockpit · experimental condition")}</option>
+              <select id="om-theme" className="native-select w-full" value={visualProfileKey} onChange={(event) => setVisualProfileKey(event.target.value)} disabled={busy}>
+                {visualProfiles.map((row) => <option key={`${row.profile_id}@${row.version}`} value={`${row.profile_id}@${row.version}`}>{row.label} · v{row.version}</option>)}
               </select>
-              <p className="text-xs text-muted-foreground">{copy("El tema queda registrado con la sesión. No combine condiciones sin validar equivalencia.", "The theme is recorded with the session. Do not pool conditions without validating equivalence.")}</p>
+              <p className="text-xs text-muted-foreground">{copy("El perfil publicado y su SHA-256 quedan congelados con la sesión. No combine condiciones sin validar equivalencia.", "The published profile and its SHA-256 are frozen with the session. Do not pool conditions without validating equivalence.")}</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="om-display">{copy("6. Pantalla donde se abrirá OpenMATB", "6. Display where OpenMATB will open")}</Label>

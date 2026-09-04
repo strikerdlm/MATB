@@ -1,0 +1,41 @@
+{
+  "schema_version": "openmatb-visual-profile-v1",
+  "profile_id": "cockpit",
+  "version": "1.0.0",
+  "label": "Modern cockpit",
+  "geometry_policy": "preserve_openmatb_v1",
+  "palette": {
+    "app_background": "#0A1015", "panel_background": "#0F181F",
+    "instrument_background": "#070D12", "panel_header": "#060A0E", "panel_header_text": "#DCEBEF",
+    "control_background": "#1F2E38", "control_foreground": "#FFFFFF",
+    "text": "#DCEBEF", "muted_text": "#5D747E",
+    "border": "#6F8E99", "grid": "#1F2E38", "accent": "#5BD1E5",
+    "safe": "#53D697", "warning": "#FFB547", "critical": "#FF5B5B", "disabled": "#1F2E38"
+  },
+  "metrics": {"line_width": 2, "panel_radius": 0, "corner_mark_ratio": 0.08},
+  "modules": {
+    "tracking": {
+      "panel": "#070D12", "axis": "#6F8E99", "grid": "#1F2E38", "target": "#5BD1E5",
+      "target_fill": "#0F181F", "cursor": "#5BD1E5", "cursor_outside": "#FF5B5B",
+      "show_panel": true, "show_grid": true, "closed_target_border": true
+    },
+    "system_monitoring": {
+      "panel": "#0F181F", "lamp_1": "#53D697", "lamp_2": "#FF5B5B", "lamp_3": "#FFB547",
+      "lamp_4": "#5BD1E5", "lamp_off": "#0A1015", "lamp_border": "#6F8E99",
+      "lamp_shape": "circle", "scale": "#6F8E99", "pointer": "#5BD1E5",
+      "feedback_positive": "#53D697", "feedback_negative": "#FF5B5B"
+    },
+    "communications": {
+      "panel": "#0F181F", "display_background": "#070D12", "display_border": "#6F8E99",
+      "active": "#5BD1E5", "inactive": "#5D747E", "positive": "#53D697", "negative": "#FF5B5B",
+      "show_display_bezel": true
+    },
+    "resource_management": {
+      "panel": "#0F181F", "tank_1": "#070D12", "tank_2": "#070D12", "tank_3": "#070D12",
+      "tank_4": "#070D12", "tank_5": "#070D12", "tank_6": "#070D12", "fluid": "#53D697",
+      "pipe_on": "#53D697", "pipe_off": "#6F8E99", "pump_on": "#53D697", "pump_off": "#1F2E38",
+      "pump_failure": "#FF5B5B", "tolerance": "#6F8E99", "meter": "#5BD1E5", "show_pump_ring": true
+    },
+    "workload": {"panel": "#0F181F", "scale": "#6F8E99", "marker": "#5BD1E5"}
+  }
+}

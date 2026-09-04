@@ -225,17 +225,26 @@ setting in `openmatb/config.ini`:
 ```ini
 [Openmatb]
 language=es_CO
-visual_theme=classic
+visual_theme=fac_modern
 ```
 
-OpenMATB includes two presentation conditions: `classic` preserves the
-historical light interface and `cockpit` applies a generic dark glass-cockpit
-theme to every participant-facing task. Select the condition in the guided
-Research Mission setup or launch directly with
-`main.py --visual-theme cockpit`. The selection is frozen in controlled-session
-metadata and scenario provenance. The cockpit theme preserves task geometry,
-hit areas, timing, input mappings, and scoring, but visual equivalence must be
-established empirically before pooling it with classic-session results.
+OpenMATB includes three bundled presentation conditions: `classic` preserves
+the historical light interface, `cockpit` applies a generic dark glass-cockpit
+theme, and the default `fac_modern` applies the light MATB-FAC presentation.
+Researchers can clone, edit, validate, preview, publish, import, and export
+strict profiles at **Settings → Appearance** (`/openmatb/appearance`). Only a
+published profile can be selected for a controlled session. Its ID, semantic
+version, schema version, canonical SHA-256, and resolved JSON are frozen in the
+session artifacts and verified again before every native block launch.
+
+For a direct launch, select a bundle with `main.py --visual-theme cockpit` or
+load a strict profile using `main.py --theme-file <absolute-path>`. A visual
+profile contains rendering data only; automation, workload, task activation,
+response windows, and scoring remain under the scenario/runtime boundary. See
+the [OpenMATB visual-profile v1 contract](docs/contracts/openmatb-visual-profile-v1.md).
+The software preserves task geometry, hit areas, timing, input mappings, and
+scoring, but perceptual and workload equivalence must be established
+empirically before pooling results across appearances.
 
 Start the localized task window from the runtime directory:
 

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from pyglet.graphics import Group  # noqa: F401
 
-from core.theme import get_theme
+from core.theme import resolve_theme
 
 REPLAY_MODE: bool = len(sys.argv) > 1 and sys.argv[1] == "-r"
 REPLAY_STRIP_PROPORTION: float = 0.08
@@ -43,11 +43,17 @@ PATHS["SCENARIO_ERRORS"] = Path(".", "last_scenario_errors.log")
 CONFIG: configparser.ConfigParser = configparser.ConfigParser()
 CONFIG.read(PATHS["PLUGINS"].parent.joinpath("config.ini"))
 
-VISUAL_THEME = get_theme(
-    os.environ.get(
-        "MATB_OPENMATB_VISUAL_THEME",
-        CONFIG.get("Openmatb", "visual_theme", fallback="classic"),
-    )
+_theme_file = os.environ.get("MATB_OPENMATB_THEME_FILE")
+_environment_theme = os.environ.get("MATB_OPENMATB_VISUAL_THEME")
+if _theme_file is not None and _environment_theme is not None:
+    raise ValueError("MATB_OPENMATB_THEME_FILE and MATB_OPENMATB_VISUAL_THEME are mutually exclusive")
+VISUAL_THEME = resolve_theme(
+    theme_file=_theme_file,
+    visual_theme=(
+        _environment_theme
+        if _environment_theme is not None
+        else None if _theme_file is not None else CONFIG.get("Openmatb", "visual_theme", fallback="fac_modern")
+    ),
 )
 COLORS: dict[str, tuple[int, int, int, int]] = dict(VISUAL_THEME.colors)
 C = COLORS

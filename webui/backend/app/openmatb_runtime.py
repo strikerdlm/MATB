@@ -23,22 +23,47 @@ from sqlmodel import Session, select
 from aircraft_monitor.research.protocol import WorkloadLevel
 from app.ingestion import IngestionError, ingest_csv
 from app.models import Participant, Visit
-from app.openmatb_models import OpenMatbInstructionProtocol, OpenMatbPresetSet, OpenMatbSuiteSession
+from app.openmatb_models import (
+    OpenMatbInstructionProtocol,
+    OpenMatbPresetSet,
+    OpenMatbSuiteSession,
+    OpenMatbVisualProfile,
+)
 from app.openmatb_schemas import (
     CloneInstructionRequest,
     ClonePresetRequest,
+    CloneVisualProfileRequest,
     CreateOpenMatbSession,
+    ImportVisualProfileRequest,
     InstructionProtocolView,
     OpenMatbReadiness,
     OpenMatbSessionView,
+    OpenMatbVisualProfileView,
     PreparedOpenMatbSession,
     PresetSetView,
     ProfileSettings,
+    PublishVisualProfileRequest,
     UpdateInstructionRequest,
     UpdatePresetRequest,
+    UpdateVisualProfileRequest,
+    VisualProfileDocument,
+    VisualProfilePreviewRequest,
+    VisualProfilePreviewView,
+    VisualProfileValidation,
     WorkloadScaleRequest,
 )
 from app.study_protocol import selected_protocol
+from matb_integration.openmatb_visual_profiles import (
+    VisualProfileValidationError,
+    assess_visual_profile,
+    clone_profile_identity,
+    load_visual_profile,
+    profile_sha256,
+    validate_visual_profile,
+)
+from matb_integration.openmatb_visual_profiles import (
+    canonical_json as canonical_profile_json,
+)
 from matb_integration.scenario_builder import (
     BEDFORD_QUESTIONNAIRE,
     ISA_QUESTIONNAIRE,
@@ -119,6 +144,14 @@ ENGLISH_INSTRUCTIONS = {
     },
     "visit_instructions": {"DEFAULT": "Complete practice first. Study blocks follow the order assigned by the application."},
 }
+
+DEFAULT_VISUAL_PROFILE = ("matb-fac-modern", "1.0.0")
+LEGACY_THEME_PROFILE = {
+    "classic": ("classic", "1.0.0"),
+    "cockpit": ("cockpit", "1.0.0"),
+    "fac_modern": DEFAULT_VISUAL_PROFILE,
+}
+BUNDLED_VISUAL_PROFILE_IDENTITIES = frozenset(LEGACY_THEME_PROFILE.values())
 
 
 class OpenMatbRuntimeError(RuntimeError):
@@ -206,15 +239,28 @@ class _ProcessHandle:
     windows_job: _WindowsJob | None = None
 
 
+@dataclass
+class _PreviewState:
+    lifecycle: str = "IDLE"
+    profile_id: str | None = None
+    profile_version: str | None = None
+    profile_sha256: str | None = None
+    artifact_root: Path | None = None
+    handle: _ProcessHandle | None = None
+    last_error: str | None = None
+
+
 class OpenMatbManager:
     def __init__(self, *, engine, repo_root: Path, artifact_root: Path, python_executable: Path | None = None) -> None:
         self.engine = engine
         self.repo_root = repo_root.resolve()
         self.openmatb_root = self.repo_root / "openmatb"
         self.artifact_root = artifact_root.resolve()
+        self.preview_root = self.artifact_root.parent / "openmatb-preview"
         self.python_executable = (python_executable or Path(sys.executable)).resolve()
         self._lock = asyncio.Lock()
         self._handles: dict[str, _ProcessHandle] = {}
+        self._preview = _PreviewState()
         self._seed_defaults()
         self._seed_english_instructions()
         self._mark_interrupted()
@@ -231,6 +277,36 @@ class OpenMatbManager:
                     protocol_id="matb-fac-es-419", version="1.0.0", locale="es-419", status="published",
                     content_json=_canonical(DEFAULT_INSTRUCTIONS), sha256=_sha(DEFAULT_INSTRUCTIONS), published_at=_utcnow(),
                 ))
+            for bundled_name in ("classic", "cockpit", "fac_modern"):
+                payload = load_visual_profile(self.openmatb_root / "themes" / f"{bundled_name}.json")
+                existing = db.exec(
+                    select(OpenMatbVisualProfile).where(
+                        OpenMatbVisualProfile.profile_id == payload["profile_id"],
+                        OpenMatbVisualProfile.version == payload["version"],
+                    )
+                ).first()
+                if existing is not None:
+                    if existing.sha256 != profile_sha256(payload):
+                        raise RuntimeError(
+                            "bundled OpenMATB visual-profile identity collides with different stored content"
+                        )
+                    continue
+                assessment = assess_visual_profile(payload)
+                acknowledgements = sorted(issue["code"] for issue in assessment["warnings"])
+                db.add(
+                    OpenMatbVisualProfile(
+                        profile_id=payload["profile_id"],
+                        version=payload["version"],
+                        label=payload["label"],
+                        status="published",
+                        schema_version=payload["schema_version"],
+                        payload_json=canonical_profile_json(payload),
+                        sha256=profile_sha256(payload),
+                        validation_json=_canonical(assessment),
+                        warning_acknowledgements_json=_canonical(acknowledgements),
+                        published_at=_utcnow(),
+                    )
+                )
             db.commit()
 
     def _seed_english_instructions(self) -> None:
@@ -348,6 +424,239 @@ class OpenMatbManager:
             sha256=row.sha256, profiles={key: ProfileSettings.model_validate(value) for key, value in settings.items()},
         )
 
+    def list_visual_profiles(self) -> list[OpenMatbVisualProfileView]:
+        with Session(self.engine) as db:
+            rows = db.exec(
+                select(OpenMatbVisualProfile).order_by(
+                    OpenMatbVisualProfile.profile_id,
+                    OpenMatbVisualProfile.created_at,
+                )
+            ).all()
+            return [self._visual_profile_view(row) for row in rows]
+
+    def get_visual_profile(self, profile_id: str, version: str) -> OpenMatbVisualProfileView:
+        with Session(self.engine) as db:
+            return self._visual_profile_view(self._visual_profile_row(db, profile_id, version))
+
+    def clone_visual_profile(
+        self,
+        source_id: str,
+        source_version: str,
+        request: CloneVisualProfileRequest,
+    ) -> OpenMatbVisualProfileView:
+        with Session(self.engine) as db:
+            source = self._visual_profile_row(db, source_id, source_version)
+            duplicate = db.exec(
+                select(OpenMatbVisualProfile).where(
+                    OpenMatbVisualProfile.profile_id == request.profile_id,
+                    OpenMatbVisualProfile.version == request.version,
+                )
+            ).first()
+            if duplicate is not None:
+                raise OpenMatbRuntimeError("visual_profile_already_exists")
+            payload = clone_profile_identity(
+                self._validated_visual_profile_payload(source),
+                profile_id=request.profile_id,
+                version=request.version,
+                label=request.label,
+            )
+            assessment = assess_visual_profile(payload)
+            row = OpenMatbVisualProfile(
+                profile_id=payload["profile_id"],
+                version=payload["version"],
+                label=payload["label"],
+                status="draft",
+                schema_version=payload["schema_version"],
+                payload_json=canonical_profile_json(payload),
+                sha256=profile_sha256(payload),
+                validation_json=_canonical(assessment),
+                warning_acknowledgements_json="[]",
+            )
+            db.add(row)
+            db.commit()
+            db.refresh(row)
+            return self._visual_profile_view(row)
+
+    def update_visual_profile(
+        self,
+        profile_id: str,
+        version: str,
+        request: UpdateVisualProfileRequest,
+    ) -> OpenMatbVisualProfileView:
+        payload = validate_visual_profile(request.payload.model_dump(mode="json"))
+        if payload["profile_id"] != profile_id or payload["version"] != version:
+            raise OpenMatbRuntimeError("visual_profile_identity_mismatch")
+        assessment = assess_visual_profile(payload)
+        acknowledgements = self._validate_warning_acknowledgements(
+            assessment,
+            request.warning_acknowledgements,
+            require_all=False,
+        )
+        with Session(self.engine) as db:
+            row = self._visual_profile_row(db, profile_id, version)
+            if row.status != "draft":
+                raise OpenMatbRuntimeError("published_configuration_immutable")
+            row.label = payload["label"]
+            row.schema_version = payload["schema_version"]
+            row.payload_json = canonical_profile_json(payload)
+            row.sha256 = profile_sha256(payload)
+            row.validation_json = _canonical(assessment)
+            row.warning_acknowledgements_json = _canonical(acknowledgements)
+            db.add(row)
+            db.commit()
+            db.refresh(row)
+            return self._visual_profile_view(row)
+
+    def validate_saved_visual_profile(self, profile_id: str, version: str) -> OpenMatbVisualProfileView:
+        with Session(self.engine) as db:
+            row = self._visual_profile_row(db, profile_id, version)
+            payload = self._validated_visual_profile_payload(row)
+            row.validation_json = _canonical(assess_visual_profile(payload))
+            db.add(row)
+            db.commit()
+            db.refresh(row)
+            return self._visual_profile_view(row)
+
+    def publish_visual_profile(
+        self,
+        profile_id: str,
+        version: str,
+        request: PublishVisualProfileRequest,
+    ) -> OpenMatbVisualProfileView:
+        with Session(self.engine) as db:
+            row = self._visual_profile_row(db, profile_id, version)
+            if row.status != "draft":
+                raise OpenMatbRuntimeError("published_configuration_immutable")
+            payload = self._validated_visual_profile_payload(row)
+            assessment = assess_visual_profile(payload)
+            if assessment["errors"]:
+                raise OpenMatbRuntimeError("visual_profile_accessibility_errors")
+            acknowledgements = self._validate_warning_acknowledgements(
+                assessment,
+                request.warning_acknowledgements,
+                require_all=True,
+            )
+            row.status = "published"
+            row.validation_json = _canonical(assessment)
+            row.warning_acknowledgements_json = _canonical(acknowledgements)
+            row.published_at = _utcnow()
+            db.add(row)
+            db.commit()
+            db.refresh(row)
+            return self._visual_profile_view(row)
+
+    def import_visual_profile(self, request: ImportVisualProfileRequest) -> OpenMatbVisualProfileView:
+        payload = validate_visual_profile(request.payload.model_dump(mode="json"))
+        sha256 = profile_sha256(payload)
+        with Session(self.engine) as db:
+            existing = db.exec(
+                select(OpenMatbVisualProfile).where(
+                    OpenMatbVisualProfile.profile_id == payload["profile_id"],
+                    OpenMatbVisualProfile.version == payload["version"],
+                )
+            ).first()
+            if existing is not None:
+                if existing.sha256 != sha256:
+                    raise OpenMatbRuntimeError("visual_profile_import_collision")
+                return self._visual_profile_view(existing)
+            assessment = assess_visual_profile(payload)
+            row = OpenMatbVisualProfile(
+                profile_id=payload["profile_id"],
+                version=payload["version"],
+                label=payload["label"],
+                status="draft",
+                schema_version=payload["schema_version"],
+                payload_json=canonical_profile_json(payload),
+                sha256=sha256,
+                validation_json=_canonical(assessment),
+                warning_acknowledgements_json="[]",
+            )
+            db.add(row)
+            db.commit()
+            db.refresh(row)
+            return self._visual_profile_view(row)
+
+    def export_visual_profile(self, profile_id: str, version: str) -> VisualProfileDocument:
+        with Session(self.engine) as db:
+            row = self._visual_profile_row(db, profile_id, version)
+            return VisualProfileDocument.model_validate(self._validated_visual_profile_payload(row))
+
+    @staticmethod
+    def _validate_warning_acknowledgements(
+        assessment: dict[str, list[dict[str, Any]]],
+        requested: list[str],
+        *,
+        require_all: bool,
+    ) -> list[str]:
+        warning_codes = {issue["code"] for issue in assessment["warnings"]}
+        acknowledgements = set(requested)
+        if acknowledgements - warning_codes:
+            raise OpenMatbRuntimeError("visual_profile_warning_acknowledgement_invalid")
+        if require_all and warning_codes - acknowledgements:
+            raise OpenMatbRuntimeError("visual_profile_warning_acknowledgement_required")
+        return sorted(acknowledgements)
+
+    @staticmethod
+    def _validated_visual_profile_payload(row: OpenMatbVisualProfile) -> dict[str, Any]:
+        try:
+            payload = validate_visual_profile(json.loads(row.payload_json))
+        except (json.JSONDecodeError, VisualProfileValidationError) as exc:
+            raise OpenMatbRuntimeError("visual_profile_record_corrupt") from exc
+        if (
+            payload["profile_id"] != row.profile_id
+            or payload["version"] != row.version
+            or payload["schema_version"] != row.schema_version
+            or profile_sha256(payload) != row.sha256
+        ):
+            raise OpenMatbRuntimeError("visual_profile_record_corrupt")
+        return payload
+
+    @classmethod
+    def _visual_profile_view(cls, row: OpenMatbVisualProfile) -> OpenMatbVisualProfileView:
+        payload = cls._validated_visual_profile_payload(row)
+        assessment = assess_visual_profile(payload)
+        try:
+            acknowledgements = sorted(set(json.loads(row.warning_acknowledgements_json)))
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise OpenMatbRuntimeError("visual_profile_record_corrupt") from exc
+        warning_codes = {issue["code"] for issue in assessment["warnings"]}
+        if not set(acknowledgements) <= warning_codes:
+            raise OpenMatbRuntimeError("visual_profile_record_corrupt")
+        unacknowledged = sorted(warning_codes - set(acknowledgements))
+        validation = VisualProfileValidation(
+            valid=not assessment["errors"],
+            publishable=not assessment["errors"] and not unacknowledged,
+            errors=assessment["errors"],
+            warnings=assessment["warnings"],
+            unacknowledged_warning_codes=unacknowledged,
+        )
+        return OpenMatbVisualProfileView(
+            profile_id=row.profile_id,
+            version=row.version,
+            label=row.label,
+            status=row.status,
+            schema_version=row.schema_version,
+            sha256=row.sha256,
+            payload=VisualProfileDocument.model_validate(payload),
+            validation=validation,
+            warning_acknowledgements=acknowledgements,
+            bundled=(row.profile_id, row.version) in BUNDLED_VISUAL_PROFILE_IDENTITIES,
+            created_at=row.created_at,
+            published_at=row.published_at,
+        )
+
+    @staticmethod
+    def _visual_profile_row(db: Session, profile_id: str, version: str) -> OpenMatbVisualProfile:
+        row = db.exec(
+            select(OpenMatbVisualProfile).where(
+                OpenMatbVisualProfile.profile_id == profile_id,
+                OpenMatbVisualProfile.version == version,
+            )
+        ).first()
+        if row is None:
+            raise OpenMatbRuntimeError("visual_profile_not_found")
+        return row
+
     def list_instructions(self) -> list[InstructionProtocolView]:
         with Session(self.engine) as db:
             rows = db.exec(select(OpenMatbInstructionProtocol).order_by(OpenMatbInstructionProtocol.created_at)).all()
@@ -399,6 +708,44 @@ class OpenMatbManager:
             visit_instructions=visit_instructions,
         )
 
+    @staticmethod
+    def _legacy_theme_name(profile_id: str, version: str) -> str:
+        identity = (profile_id, version)
+        for name, candidate in LEGACY_THEME_PROFILE.items():
+            if candidate == identity:
+                return name
+        return "custom"
+
+    def _resolve_session_visual_profile(
+        self,
+        db: Session,
+        request: CreateOpenMatbSession,
+    ) -> OpenMatbVisualProfile:
+        if request.visual_profile_id is not None and request.visual_profile_version is not None:
+            profile_id, version = request.visual_profile_id, request.visual_profile_version
+        elif request.visual_theme is not None:
+            profile_id, version = LEGACY_THEME_PROFILE[request.visual_theme]
+        else:
+            profile_id, version = DEFAULT_VISUAL_PROFILE
+        row = db.exec(
+            select(OpenMatbVisualProfile).where(
+                OpenMatbVisualProfile.profile_id == profile_id,
+                OpenMatbVisualProfile.version == version,
+                OpenMatbVisualProfile.status == "published",
+            )
+        ).first()
+        if row is None:
+            raise OpenMatbRuntimeError("published_visual_profile_not_found")
+        self._validated_visual_profile_payload(row)
+        return row
+
+    @staticmethod
+    def _write_visual_profile_snapshot(run_dir: Path, profile: OpenMatbVisualProfile) -> Path:
+        payload = OpenMatbManager._validated_visual_profile_payload(profile)
+        path = run_dir / "visual-profile.json"
+        path.write_text(canonical_profile_json(payload) + "\n", encoding="utf-8", newline="\n")
+        return path
+
     async def create_session(self, request: CreateOpenMatbSession) -> PreparedOpenMatbSession:
         async with self._lock:
             with Session(self.engine) as db:
@@ -415,12 +762,15 @@ class OpenMatbManager:
                 instructions = db.exec(select(OpenMatbInstructionProtocol).where(OpenMatbInstructionProtocol.protocol_id == request.instruction_protocol_id, OpenMatbInstructionProtocol.version == request.instruction_version, OpenMatbInstructionProtocol.status == "published")).first()
                 if preset is None or instructions is None:
                     raise OpenMatbRuntimeError("published_configuration_not_found")
+                visual_profile = self._resolve_session_visual_profile(db, request)
+                visual_payload = self._validated_visual_profile_payload(visual_profile)
                 session_id = str(uuid4())
                 run_dir = self.artifact_root / session_id
                 scenario_dir = run_dir / "scenarios"
                 session_dir = run_dir / "sessions"
                 scenario_dir.mkdir(parents=True, exist_ok=False)
                 session_dir.mkdir(parents=True, exist_ok=False)
+                self._write_visual_profile_snapshot(run_dir, visual_profile)
                 settings = json.loads(preset.settings_json)
                 order = ["PRACTICE"] if request.execution_purpose == "practice" else ["PRACTICE", *(level.value.upper() for level in block_order_for_participant(request.participant_id))]
                 english = instructions.locale == "en"
@@ -445,7 +795,11 @@ class OpenMatbManager:
                         include_nasatlx=False, include_bedford=False, participant_id=request.participant_id,
                         block_num=index + 1, visit_ordinal=request.visit_ordinal, source_commit=source_commit,
                         source_dirty=source_dirty, workload_settings=profile, profile_name=block,
-                        visual_theme=request.visual_theme,
+                        visual_theme=self._legacy_theme_name(visual_profile.profile_id, visual_profile.version),
+                        visual_profile_id=visual_profile.profile_id,
+                        visual_profile_version=visual_profile.version,
+                        visual_profile_schema_version=visual_profile.schema_version,
+                        visual_profile_sha256=visual_profile.sha256,
                     )
                     paths[block] = str(path)
                 controller_lease = secrets.token_urlsafe(32)
@@ -454,7 +808,12 @@ class OpenMatbManager:
                     id=session_id, participant_id=request.participant_id, visit_id=visit.id, visit_ordinal=request.visit_ordinal,
                     preset_id=preset.preset_id, preset_version=preset.version, preset_sha256=preset.sha256,
                     instruction_protocol_id=instructions.protocol_id, instruction_version=instructions.version,
-                    instruction_sha256=instructions.sha256, visual_theme=request.visual_theme,
+                    instruction_sha256=instructions.sha256,
+                    visual_theme=self._legacy_theme_name(visual_profile.profile_id, visual_profile.version),
+                    visual_profile_id=visual_profile.profile_id,
+                    visual_profile_version=visual_profile.version,
+                    visual_profile_schema_version=visual_profile.schema_version,
+                    visual_profile_sha256=profile_sha256(visual_payload),
                     execution_purpose=request.execution_purpose, locale=instructions.locale,
                     display_index=request.display_index,
                     block_order_json=_canonical(order), scenario_paths_json=_canonical(paths),
@@ -487,7 +846,12 @@ class OpenMatbManager:
             preset_id=row.preset_id, preset_version=row.preset_version, preset_sha256=row.preset_sha256,
             instruction_protocol=instruction_view,
             visit_instruction=instruction_view.visit_instructions.get(protocol_visit.code, instruction_view.visit_instructions["DEFAULT"]),
-            visual_theme=row.visual_theme, display_index=row.display_index,
+            visual_theme=row.visual_theme,
+            visual_profile_id=row.visual_profile_id,
+            visual_profile_version=row.visual_profile_version,
+            visual_profile_schema_version=row.visual_profile_schema_version,
+            visual_profile_sha256=row.visual_profile_sha256,
+            display_index=row.display_index,
             scores=json.loads(row.scores_json), active_pid=row.active_pid, last_error=row.last_error,
             created_at=row.created_at, started_at=row.started_at, finished_at=row.finished_at,
         )
@@ -501,8 +865,43 @@ class OpenMatbManager:
             db.add(row); db.commit(); db.refresh(row)
             return self._view(db, row)
 
+    def _verified_session_visual_profile_path(self, row: OpenMatbSuiteSession) -> Path | None:
+        """Verify the frozen profile immediately before each native launch."""
+
+        if row.visual_profile_id is None:
+            return None
+        if not all(
+            (
+                row.visual_profile_version,
+                row.visual_profile_schema_version,
+                row.visual_profile_sha256,
+            )
+        ):
+            raise OpenMatbRuntimeError("openmatb_visual_profile_provenance_incomplete")
+        controlled_root = self.artifact_root.resolve()
+        run_root = Path(row.artifact_root).resolve()
+        if run_root.parent != controlled_root or run_root.name != row.id:
+            raise OpenMatbRuntimeError("openmatb_visual_profile_path_invalid")
+        profile_path = (run_root / "visual-profile.json").resolve()
+        if profile_path.parent != run_root or not profile_path.is_file():
+            raise OpenMatbRuntimeError("openmatb_visual_profile_path_invalid")
+        try:
+            payload = load_visual_profile(profile_path)
+        except VisualProfileValidationError as exc:
+            raise OpenMatbRuntimeError("openmatb_visual_profile_tampered") from exc
+        if (
+            payload["profile_id"] != row.visual_profile_id
+            or payload["version"] != row.visual_profile_version
+            or payload["schema_version"] != row.visual_profile_schema_version
+            or profile_sha256(payload) != row.visual_profile_sha256
+        ):
+            raise OpenMatbRuntimeError("openmatb_visual_profile_tampered")
+        return profile_path
+
     async def start_block(self, session_id: str, lease: str) -> OpenMatbSessionView:
         async with self._lock:
+            if self._preview.handle is not None:
+                raise OpenMatbRuntimeError("openmatb_visual_preview_active")
             with Session(self.engine) as db:
                 row = self._controller_row(db, session_id, lease)
                 if row.lifecycle not in {"READY", "BETWEEN_BLOCKS"}:
@@ -522,12 +921,16 @@ class OpenMatbManager:
                 scenario = Path(json.loads(row.scenario_paths_json)[block]).resolve()
                 if scenario.parent != Path(row.artifact_root).resolve() / "scenarios" or not scenario.is_file():
                     raise OpenMatbRuntimeError("openmatb_scenario_missing")
+                visual_profile_path = self._verified_session_visual_profile_path(row)
                 command = [
                     str(self.python_executable), str(self.openmatb_root / "main.py"), "--scenario", str(scenario),
                     "--session-dir", str(Path(row.artifact_root) / "sessions" / block), "--language", "en_EN" if row.locale == "en" else "es_CO",
-                    "--visual-theme", row.visual_theme,
-                    "--display-index", str(row.display_index), "--control-stdio",
                 ]
+                if visual_profile_path is None:
+                    command.extend(("--visual-theme", row.visual_theme))
+                else:
+                    command.extend(("--theme-file", str(visual_profile_path)))
+                command.extend(("--display-index", str(row.display_index), "--control-stdio"))
                 session_path = Path(row.artifact_root) / "sessions" / block
                 session_path.mkdir(parents=True, exist_ok=True)
                 kwargs: dict[str, Any] = {"cwd": str(self.openmatb_root), "stdin": asyncio.subprocess.PIPE, "stdout": asyncio.subprocess.PIPE, "stderr": asyncio.subprocess.PIPE}
@@ -582,6 +985,196 @@ class OpenMatbManager:
                 assert row is not None
                 row.lifecycle = "RUNNING"; db.add(row); db.commit(); db.refresh(row)
                 return self._view(db, row)
+
+    def visual_profile_preview_status(self) -> VisualProfilePreviewView:
+        return self._preview_view()
+
+    async def start_visual_profile_preview(
+        self,
+        profile_id: str,
+        version: str,
+        request: VisualProfilePreviewRequest,
+    ) -> VisualProfilePreviewView:
+        """Launch an isolated synthetic preview that cannot enter study data."""
+
+        async with self._lock:
+            if self._preview.handle is not None:
+                raise OpenMatbRuntimeError("openmatb_visual_preview_active")
+            if self._handles:
+                raise OpenMatbRuntimeError("openmatb_controlled_process_active")
+            with Session(self.engine) as db:
+                profile = self._visual_profile_row(db, profile_id, version)
+                payload = self._validated_visual_profile_payload(profile)
+            preview_id = str(uuid4())
+            preview_root = (self.preview_root / preview_id).resolve()
+            if preview_root.parent != self.preview_root.resolve():
+                raise OpenMatbRuntimeError("openmatb_visual_preview_path_invalid")
+            preview_root.mkdir(parents=True, exist_ok=False)
+            session_path = preview_root / "sessions"
+            session_path.mkdir(parents=False, exist_ok=False)
+            profile_path = preview_root / "visual-profile.json"
+            profile_path.write_text(
+                canonical_profile_json(payload) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            scenario_source = self.openmatb_root / "includes" / "scenarios" / "fac_visual_preview.txt"
+            scenario_path = preview_root / "fac_visual_preview.txt"
+            scenario_path.write_text(
+                scenario_source.read_text(encoding="utf-8"),
+                encoding="utf-8",
+                newline="\n",
+            )
+            command = [
+                str(self.python_executable),
+                str(self.openmatb_root / "main.py"),
+                "--scenario",
+                str(scenario_path),
+                "--session-dir",
+                str(session_path),
+                "--language",
+                "es_CO",
+                "--theme-file",
+                str(profile_path),
+                "--display-index",
+                str(request.display_index),
+                "--control-stdio",
+            ]
+            if request.windowed:
+                command.append("--windowed")
+            kwargs: dict[str, Any] = {
+                "cwd": str(self.openmatb_root),
+                "stdin": asyncio.subprocess.PIPE,
+                "stdout": asyncio.subprocess.PIPE,
+                "stderr": asyncio.subprocess.PIPE,
+            }
+            if os.name == "nt":
+                kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+            else:
+                kwargs["start_new_session"] = True
+            try:
+                process = await asyncio.create_subprocess_exec(*command, **kwargs)
+            except OSError as exc:
+                self._preview = _PreviewState(
+                    lifecycle="FAILED",
+                    profile_id=profile_id,
+                    profile_version=version,
+                    profile_sha256=profile_sha256(payload),
+                    artifact_root=preview_root,
+                    last_error="openmatb_launch_failed",
+                )
+                raise OpenMatbRuntimeError("openmatb_launch_failed") from exc
+            try:
+                windows_job = _WindowsJob(process.pid) if os.name == "nt" else None
+            except OSError as exc:
+                process.terminate()
+                await process.wait()
+                self._preview = _PreviewState(
+                    lifecycle="FAILED",
+                    profile_id=profile_id,
+                    profile_version=version,
+                    profile_sha256=profile_sha256(payload),
+                    artifact_root=preview_root,
+                    last_error="openmatb_job_assignment_failed",
+                )
+                raise OpenMatbRuntimeError("openmatb_job_assignment_failed") from exc
+            handle = _ProcessHandle(
+                session_id=f"preview-{preview_id}",
+                block="PREVIEW",
+                process=process,
+                windows_job=windows_job,
+            )
+            self._preview = _PreviewState(
+                lifecycle="STARTING",
+                profile_id=profile_id,
+                profile_version=version,
+                profile_sha256=profile_sha256(payload),
+                artifact_root=preview_root,
+                handle=handle,
+            )
+            handle.monitor = asyncio.create_task(self._monitor_preview(handle))
+            ready_wait = asyncio.create_task(handle.ready.wait())
+            exited_wait = asyncio.create_task(handle.exited.wait())
+            try:
+                done, _ = await asyncio.wait(
+                    {ready_wait, exited_wait},
+                    timeout=20,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if not done:
+                    await self._terminate(handle)
+                    self._preview.handle = None
+                    self._preview.lifecycle = "FAILED"
+                    self._preview.last_error = "openmatb_ready_timeout"
+                    raise OpenMatbRuntimeError("openmatb_ready_timeout")
+                if handle.exited.is_set() and not handle.ready.is_set():
+                    failure = self._launch_failure_code(handle)
+                    self._preview.handle = None
+                    self._preview.lifecycle = "FAILED"
+                    self._preview.last_error = failure
+                    raise OpenMatbRuntimeError(failure)
+            finally:
+                for waiter in (ready_wait, exited_wait):
+                    if not waiter.done():
+                        waiter.cancel()
+                await asyncio.gather(ready_wait, exited_wait, return_exceptions=True)
+            self._preview.lifecycle = "RUNNING"
+            return self._preview_view()
+
+    async def _monitor_preview(self, handle: _ProcessHandle) -> None:
+        async def stdout_reader() -> None:
+            assert handle.process.stdout is not None
+            while line := await handle.process.stdout.readline():
+                try:
+                    event = json.loads(line)
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    continue
+                if event.get("event") == "ready":
+                    handle.ready.set()
+
+        async def stderr_reader() -> None:
+            assert handle.process.stderr is not None
+            while line := await handle.process.stderr.readline():
+                handle.stderr.append(line.decode("utf-8", errors="replace").strip())
+                del handle.stderr[:-20]
+
+        try:
+            await asyncio.gather(stdout_reader(), stderr_reader(), handle.process.wait())
+        finally:
+            handle.exited.set()
+            if handle.windows_job is not None:
+                handle.windows_job.close()
+        async with self._lock:
+            if self._preview.handle is not handle:
+                return
+            self._preview.handle = None
+            if handle.ready.is_set() and handle.process.returncode == 0:
+                self._preview.lifecycle = "IDLE"
+                self._preview.last_error = None
+            else:
+                self._preview.lifecycle = "FAILED"
+                self._preview.last_error = self._launch_failure_code(handle)
+
+    async def abort_visual_profile_preview(self) -> VisualProfilePreviewView:
+        async with self._lock:
+            handle = self._preview.handle
+            if handle is not None:
+                await self._terminate(handle)
+            self._preview.handle = None
+            self._preview.lifecycle = "IDLE"
+            self._preview.last_error = None
+            return self._preview_view()
+
+    def _preview_view(self) -> VisualProfilePreviewView:
+        return VisualProfilePreviewView(
+            lifecycle=self._preview.lifecycle,
+            profile_id=self._preview.profile_id,
+            profile_version=self._preview.profile_version,
+            profile_sha256=self._preview.profile_sha256,
+            pid=(self._preview.handle.process.pid if self._preview.handle is not None else None),
+            artifact_root=(str(self._preview.artifact_root) if self._preview.artifact_root is not None else None),
+            last_error=self._preview.last_error,
+        )
 
     async def _monitor(self, handle: _ProcessHandle) -> None:
         async def stdout_reader() -> None:
@@ -811,9 +1404,11 @@ class OpenMatbManager:
 
     async def shutdown(self) -> None:
         async with self._lock:
+            if self._preview.handle is not None:
+                await self._terminate(self._preview.handle)
+                self._preview.handle = None
+                self._preview.lifecycle = "IDLE"
             for handle in list(self._handles.values()):
                 await self._terminate(handle)
                 self._set_failure(handle.session_id, "backend_shutdown")
             self._handles.clear()
-    UpdateInstructionRequest,
-    UpdatePresetRequest,

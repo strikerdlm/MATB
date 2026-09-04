@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 from importlib import import_module
-import os
 from pathlib import Path
 
 from sqlalchemy import event, inspect, text
@@ -80,14 +80,17 @@ def get_engine():
 
 def init_db(*, component_model_modules: tuple[str, ...] = ()) -> None:
     """Create tables. Import models for side-effect registration first."""
-    from app import models  # noqa: F401
-    from app import study_models  # noqa: F401
+    from app import (
+        models,  # noqa: F401
+        study_models,  # noqa: F401
+    )
 
     for module_name in component_model_modules:
         import_module(module_name)
 
     SQLModel.metadata.create_all(_engine)
     _migrate_openmatb_visual_theme_v1(_engine)
+    _migrate_openmatb_visual_profile_v1(_engine)
     _migrate_analysisresult_v2(_engine)
     _migrate_bayesresult_v3(_engine)
     _migrate_experiment_execution_v1(_engine)
@@ -156,6 +159,47 @@ def _migrate_openmatb_visual_theme_v1(engine) -> None:
         connection.execute(text("""
             INSERT OR IGNORE INTO matb_schema_migration (version, applied_at)
             VALUES ('openmatb-visual-theme-v1', CURRENT_TIMESTAMP)
+        """))
+
+
+def _migrate_openmatb_visual_profile_v1(engine) -> None:
+    """Add nullable immutable visual-profile provenance to legacy sessions.
+
+    Existing rows deliberately remain null. Their historical ``visual_theme``
+    value is preserved and no profile hash is fabricated during migration.
+    """
+
+    if engine.dialect.name != "sqlite":
+        raise RuntimeError("MATB Research Console migrations require SQLite")
+
+    with engine.begin() as connection:
+        tables = set(inspect(connection).get_table_names())
+        if "openmatb_suite_session" not in tables:
+            return
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS matb_schema_migration (
+                version VARCHAR PRIMARY KEY,
+                applied_at DATETIME NOT NULL
+            )
+        """))
+        columns = {
+            column["name"]
+            for column in inspect(connection).get_columns("openmatb_suite_session")
+        }
+        additions = {
+            "visual_profile_id": "VARCHAR",
+            "visual_profile_version": "VARCHAR",
+            "visual_profile_schema_version": "VARCHAR",
+            "visual_profile_sha256": "VARCHAR",
+        }
+        for column, sql_type in additions.items():
+            if column not in columns:
+                connection.execute(text(
+                    f"ALTER TABLE openmatb_suite_session ADD COLUMN {column} {sql_type}"
+                ))
+        connection.execute(text("""
+            INSERT OR IGNORE INTO matb_schema_migration (version, applied_at)
+            VALUES ('openmatb-visual-profile-v1', CURRENT_TIMESTAMP)
         """))
 
 

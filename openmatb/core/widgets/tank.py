@@ -32,17 +32,22 @@ class Tank(AbstractWidget):
         # Background vertex #
         x1, y1, x2, y2 = self.container.get_x1y1x2y2()
         self.border_vertices: tuple[float, ...] = self.vertice_border(self.container)
-        self.add_quad("background", G(self.m_draw + 1), self.border_vertices, C["INSTRUMENT"] * 4)
+        tank_index = ord(letter.lower()) - ord("a") + 1
+        background = VISUAL_THEME.module_color("resource_management", f"tank_{tank_index}")
+        self.add_quad("background", G(self.m_draw + 1), self.border_vertices, background * 4)
 
         if target is not None:
             vt: list[float] = self.get_tolerance_vertices(self.tolerance_radius, target, level_max)
-            self.add_quad("tolerance", G(self.m_draw + 1), vt, C["LINE"] * 4)
+            tolerance = VISUAL_THEME.module_color("resource_management", "tolerance")
+            self.add_quad("tolerance", G(self.m_draw + 1), vt, tolerance * 4)
 
         fluid_vertices: list[float] = self.get_fluid_vertices(self.level, level_max)
-        self.add_quad("fluid", G(self.m_draw + 2), fluid_vertices, C["GREEN"] * 4)
+        fluid = VISUAL_THEME.module_color("resource_management", "fluid")
+        self.add_quad("fluid", G(self.m_draw + 2), fluid_vertices, fluid * 4)
 
-        self.add_lines("borders", G(self.m_draw + 3), self.vertice_strip(self.border_vertices), C["LINE"] * 8)
-        self.add_cockpit_bezel()
+        meter = VISUAL_THEME.module_color("resource_management", "meter")
+        self.add_lines("borders", G(self.m_draw + 3), self.vertice_strip(self.border_vertices), meter * 8)
+        self.add_corner_marks()
 
         x, _y = self.container.get_center()
         self.vertex["fluid_label"] = Label(

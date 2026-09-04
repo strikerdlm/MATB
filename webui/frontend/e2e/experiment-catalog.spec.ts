@@ -68,13 +68,13 @@ test("OpenMATB language changes preserve setup choices", async ({ page, request 
   await page.locator("#om-participant").selectOption(participant);
   await page.locator("#om-visit").selectOption("2");
   await page.locator("#om-display").fill("0");
-  await page.locator("#om-theme").selectOption("cockpit");
+  await page.locator("#om-theme").selectOption("cockpit@1.0.0");
   await page.locator("#app-language").selectOption("en");
   await expect(page.locator("#om-protocol")).toHaveValue("matb-fac-en@1.0.0");
   await expect(page.locator("#om-visit")).toHaveValue("2");
   await expect(page.locator("#om-display")).toHaveValue("0");
   await page.locator("#app-language").selectOption("es-419");
-  await expect(page.locator("#om-theme")).toHaveValue("cockpit");
+  await expect(page.locator("#om-theme")).toHaveValue("cockpit@1.0.0");
   await expect(page.locator("#om-visit")).toHaveValue("2");
 });
 

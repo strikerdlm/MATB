@@ -226,18 +226,28 @@ radiotelefónico OACI. Confirme este ajuste en `openmatb/config.ini`:
 ```ini
 [Openmatb]
 language=es_CO
-visual_theme=classic
+visual_theme=fac_modern
 ```
 
-OpenMATB incluye dos condiciones de presentación: `classic` conserva la
-interfaz clara histórica y `cockpit` aplica un tema genérico de cabina de
-cristal oscura a todas las tareas visibles para el participante. La condición
-se elige en la preparación guiada de Research Mission o directamente con
-`main.py --visual-theme cockpit`. La selección queda congelada en los metadatos
-de sesión y en la procedencia de cada escenario. El tema de cabina conserva la
-geometría, las áreas activas, los tiempos, los controles y la puntuación, pero
-su equivalencia visual debe demostrarse antes de combinar resultados con la
-condición clásica.
+OpenMATB incluye tres condiciones de presentación distribuidas: `classic`
+conserva la interfaz clara histórica, `cockpit` aplica un tema genérico de
+cabina de cristal oscura y `fac_modern`, el valor predeterminado, aplica la
+presentación clara MATB-FAC. El investigador puede clonar, editar, validar,
+previsualizar, publicar, importar y exportar perfiles estrictos en
+**Configuración → Apariencia** (`/openmatb/appearance`). Solo un perfil
+publicado puede seleccionarse para una sesión controlada. Su ID, versión
+semántica, versión de esquema, SHA-256 canónico y JSON resuelto quedan
+congelados en los artefactos y se verifican antes de iniciar cada bloque nativo.
+
+Para un inicio directo, seleccione un perfil distribuido con
+`main.py --visual-theme cockpit` o cargue un perfil estricto mediante
+`main.py --theme-file <ruta-absoluta>`. El perfil contiene únicamente datos de
+presentación; la automatización, la carga, la activación de tareas, las ventanas
+de respuesta y la puntuación continúan bajo el escenario y el entorno Python.
+Consulte el [contrato de perfil visual OpenMATB v1](docs/contracts/openmatb-visual-profile-v1.md).
+El software conserva la geometría, las áreas activas, los tiempos, los controles
+y la puntuación, pero la equivalencia perceptual y de carga debe demostrarse
+antes de combinar resultados entre apariencias.
 
 Inicie la ventana de tareas localizada desde el directorio del entorno:
 

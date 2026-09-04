@@ -1,6 +1,8 @@
 # Bilingual experiments and calculation audit
 
-Date: 2026-09-04. Scope: local implementation in the MATB repository. No deployment, commit, or remote publication was performed.
+Date: 2026-09-04. Scope: implementation and local validation in the MATB repository; delivery is through the associated pull request. No deployment was performed.
+
+Delivery integration: incorporated main revision `109df94`, preserving its versioned OpenMATB appearance profiles alongside bilingual instructions and practice isolation. Post-integration validation passed 124 frontend tests, 36 focused backend tests, lint, production build/type checking, and the browser regression for language changes preserving visit, display, and appearance profile. The loading comparison and screenshots below describe the implementation before that upstream appearance-profile integration.
 
 ## Participant experience delivered
 
