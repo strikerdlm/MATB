@@ -13,12 +13,18 @@ class Light(AbstractWidget):
         super().__init__(name, container)
 
         # Compute vertices
-        self.border_vertice: tuple[float, ...] = self.vertice_border(self.container)
-        self.border_color: tuple[int, int, int, int] = C["BLACK"]
-
-        self.add_quad("background", G(self.m_draw), self.border_vertice, color * 4)
-
-        self.add_lines("border", G(self.m_draw + 1), self.vertice_strip(self.border_vertice), self.border_color * 8)
+        if VISUAL_THEME.is_cockpit:
+            radius = min(self.container.w, self.container.h) * 0.34
+            self.border_vertice = tuple(self.vertice_circle(self.container.get_center(), radius, 40))
+            self.border_color = C["LINE"]
+            self.add_polygon("background", G(self.m_draw), self.border_vertice, color * 40)
+            self.add_line_loop("border", G(self.m_draw + 1), self.border_vertice, self.border_color * 40)
+            self.add_cockpit_bezel()
+        else:
+            self.border_vertice = self.vertice_border(self.container)
+            self.border_color = C["BLACK"]
+            self.add_quad("background", G(self.m_draw), self.border_vertice, color * 4)
+            self.add_lines("border", G(self.m_draw + 1), self.vertice_strip(self.border_vertice), self.border_color * 8)
 
         self.vertex["label"] = Label(
             label.upper(),
@@ -27,7 +33,7 @@ class Light(AbstractWidget):
             y=self.container.cy,
             anchor_x="center",
             anchor_y="center",
-            color=C["BLACK"],
+            color=C["TEXT"],
             batch=None,
             group=G(self.m_draw + 1),
             font_name=self.font_name,
@@ -46,8 +52,10 @@ class Light(AbstractWidget):
     def set_color(self, color: tuple[int, int, int, int]) -> None:
         if color == self.get_color():
             return
-        self.on_batch["background"].colors[:] = color * 4
-        self.on_batch["border"].colors[:] = self.border_color * 8
+        background_points = len(self.on_batch["background"].colors) // 4
+        self.on_batch["background"].colors[:] = color * background_points
+        border_points = len(self.on_batch["border"].colors) // 4
+        self.on_batch["border"].colors[:] = self.border_color * border_points
 
         self.logger.record_state(self.name, "background", color)
         self.logger.record_state(self.name, "border", self.border_color)

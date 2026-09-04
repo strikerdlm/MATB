@@ -23,7 +23,7 @@ import {
 import { openMatbErrorMessage } from "@/lib/openmatb/errors";
 import { isParticipantId } from "@/lib/participant-id";
 import type { Participant, Visit } from "@/types";
-import type { OpenMatbInstructionProtocol, OpenMatbPresetSet, OpenMatbReadiness } from "@/types/openmatb";
+import type { OpenMatbInstructionProtocol, OpenMatbPresetSet, OpenMatbReadiness, OpenMatbVisualTheme } from "@/types/openmatb";
 
 const CHECK_LABELS: Record<string, [string, string]> = {
   python: ["Python compatible", "Compatible Python"],
@@ -50,6 +50,7 @@ export default function OpenMatbSetupPage() {
   const [presetKey, setPresetKey] = useState("");
   const [instructionKey, setInstructionKey] = useState("");
   const [displayIndex, setDisplayIndex] = useState(1);
+  const [visualTheme, setVisualTheme] = useState<OpenMatbVisualTheme>("classic");
   const [acknowledged, setAcknowledged] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -130,6 +131,7 @@ export default function OpenMatbSetupPage() {
         preset_version: preset.version,
         instruction_protocol_id: protocol.protocol_id,
         instruction_version: protocol.version,
+        visual_theme: visualTheme,
         display_index: displayIndex,
       });
       storeOpenMatbCredentials(prepared);
@@ -148,7 +150,7 @@ export default function OpenMatbSetupPage() {
     <div className="space-y-6">
       <PageHeader
         kicker={copy("Control nativo", "Native control")}
-        title={copy("Suite OpenMATB clásica", "Classic OpenMATB suite")}
+        title={copy("Suite OpenMATB", "OpenMATB suite")}
         description={copy(
           "Primero se crean las instrucciones del participante; la ventana nativa se abre en el paso siguiente.",
           "Participant instructions are created first; the native window opens in the next step.",
@@ -217,8 +219,16 @@ export default function OpenMatbSetupPage() {
                 {instructions.map((row) => <option key={`${row.protocol_id}@${row.version}`} value={`${row.protocol_id}@${row.version}`}>{row.title} · v{row.version}</option>)}
               </select>
             </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="om-display">{copy("5. Pantalla donde se abrirá OpenMATB", "5. Display where OpenMATB will open")}</Label>
+            <div className="space-y-2">
+              <Label htmlFor="om-theme">{copy("5. Presentación visual", "5. Visual presentation")}</Label>
+              <select id="om-theme" className="native-select w-full" value={visualTheme} onChange={(event) => setVisualTheme(event.target.value as OpenMatbVisualTheme)} disabled={busy}>
+                <option value="classic">{copy("Clásica · referencia histórica", "Classic · historical reference")}</option>
+                <option value="cockpit">{copy("Cabina moderna · condición experimental", "Modern cockpit · experimental condition")}</option>
+              </select>
+              <p className="text-xs text-muted-foreground">{copy("El tema queda registrado con la sesión. No combine condiciones sin validar equivalencia.", "The theme is recorded with the session. Do not pool conditions without validating equivalence.")}</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="om-display">{copy("6. Pantalla donde se abrirá OpenMATB", "6. Display where OpenMATB will open")}</Label>
               <Input id="om-display" type="number" min={0} max={15} value={displayIndex} onChange={(event) => setDisplayIndex(Number(event.target.value))} disabled={busy} />
               <p className="text-xs text-muted-foreground">{copy("Use 1 para la segunda pantalla; use 0 si sólo hay una.", "Use 1 for the second display; use 0 for a single display.")}</p>
             </div>

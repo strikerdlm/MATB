@@ -90,14 +90,14 @@ class Resman(AbstractPlugin):
         new_par: dict[str, Any] = dict(
             automaticsolver=False,
             displayautomationstate=True,
-            pumpcoloroff=C["WHITE"],
+            pumpcoloroff=C["CONTROL_OFF"],
             pumpcoloron=C["GREEN"],
             pumpcolorfailure=C["RED"],
             toleranceradius=250,
             statuslocation="bottomright",
             displaystatus=True,
-            tolerancecolor=C["BLACK"],
-            tolerancecoloroutside=C["BLACK"],
+            tolerancecolor=C["LINE"],
+            tolerancecoloroutside=C["LINE"],
             tank=dict(
                 a=dict(level=2500, max=4000, target=2500, depletable=True, lossperminute=800, _infoside="left"),
                 b=dict(level=2500, max=4000, target=2500, depletable=True, lossperminute=800, _infoside="right"),

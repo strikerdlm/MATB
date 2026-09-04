@@ -12,6 +12,7 @@ from app.db import (
     _configure_sqlite_foreign_keys,
     _migrate_analysisresult_v2,
     _migrate_bayesresult_v3,
+    _migrate_openmatb_visual_theme_v1,
     _resolve_db_path,
 )
 
@@ -30,6 +31,33 @@ def test_relative_database_path_is_anchored_to_repository() -> None:
 def test_empty_database_path_is_rejected() -> None:
     with pytest.raises(ValueError, match="must not be empty"):
         _resolve_db_path("   ")
+
+
+def test_openmatb_visual_theme_migration_defaults_legacy_sessions_to_classic(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'legacy-openmatb.sqlite3'}")
+    with engine.begin() as connection:
+        connection.execute(text("""
+            CREATE TABLE openmatb_suite_session (
+                id VARCHAR PRIMARY KEY,
+                participant_id VARCHAR NOT NULL
+            )
+        """))
+        connection.execute(text(
+            "INSERT INTO openmatb_suite_session (id, participant_id) VALUES ('s1', 'P01')"
+        ))
+
+    _migrate_openmatb_visual_theme_v1(engine)
+    _migrate_openmatb_visual_theme_v1(engine)
+
+    with engine.begin() as connection:
+        columns = {column["name"] for column in inspect(connection).get_columns("openmatb_suite_session")}
+        assert "visual_theme" in columns
+        assert connection.execute(text(
+            "SELECT visual_theme FROM openmatb_suite_session WHERE id = 's1'"
+        )).scalar_one() == "classic"
+        assert connection.execute(text(
+            "SELECT COUNT(*) FROM matb_schema_migration WHERE version = 'openmatb-visual-theme-v1'"
+        )).scalar_one() == 1
 
 
 def _legacy_bayesresult_database(path):

@@ -24,7 +24,7 @@ class Timeline(AbstractWidget):
             size: float = self.graduation_width / 2 if i % 2 != 0 else self.graduation_width
             v.extend([x2 - size, this_y, x2, this_y])
 
-        self.add_lines("lines", G(self.m_draw + 1), v, C["BLACK"] * (len(v) // 2))
+        self.add_lines("lines", G(self.m_draw + 1), v, C["LINE"] * (len(v) // 2))
 
         for i, this_y in enumerate(
             [y1 + i * ((y2 - y1) / self.max_time_minute) for i in range(self.max_time_minute + 1)]
@@ -37,7 +37,7 @@ class Timeline(AbstractWidget):
                 y=this_y,
                 anchor_x="left",
                 anchor_y="center",
-                color=C["BLACK"],
+                color=C["TEXT"],
                 group=G(1),
             )
 
@@ -49,7 +49,7 @@ class Timeline(AbstractWidget):
             y=self.container.y2 - self.unit_padding,
             anchor_x="center",
             anchor_y="center",
-            color=C["BLACK"],
+            color=C["TEXT"],
             italic=True,
             group=G(1),
         )

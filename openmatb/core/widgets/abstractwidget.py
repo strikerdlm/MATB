@@ -20,7 +20,7 @@ from pyglet.gl import (  # noqa: F401
 )
 from pyglet.text import HTMLLabel, Label
 
-from core.constants import BFLIM
+from core.constants import BFLIM, VISUAL_THEME
 from core.constants import COLORS as C
 from core.constants import FONT_SIZES as F  # noqa: F401
 from core.constants import Group as G
@@ -48,7 +48,7 @@ class AbstractWidget:
         self.visible: bool = False
         self.logger: Logger = get_logger()
         self.highlight_aoi: str = get_conf_value("Openmatb", "highlight_aoi")
-        glLineWidth(2)
+        glLineWidth(VISUAL_THEME.line_width)
 
         self.m_draw: int = 0
         self.verbose: bool = False
@@ -105,6 +105,25 @@ class AbstractWidget:
     def add_line_loop(self, name: str, group: Any, positions: tuple | list, colors: tuple | list) -> None:
         """Register a line loop (converted to GL_LINES on batch assignment)."""
         self.vertex[name] = ("line_loop", group, positions, colors)
+
+    def add_cockpit_bezel(self, name: str = "cockpit_bezel", draw_order: int | None = None) -> None:
+        """Add restrained avionics corner marks without changing widget geometry."""
+        if not VISUAL_THEME.is_cockpit or self.container is None:
+            return
+        c = self.container
+        arm = min(c.w, c.h) * VISUAL_THEME.corner_mark_ratio
+        vertices = (
+            c.x1, c.y1 - arm, c.x1, c.y1, c.x1, c.y1, c.x1 + arm, c.y1,
+            c.x2 - arm, c.y1, c.x2, c.y1, c.x2, c.y1, c.x2, c.y1 - arm,
+            c.x1, c.y2 + arm, c.x1, c.y2, c.x1, c.y2, c.x1 + arm, c.y2,
+            c.x2 - arm, c.y2, c.x2, c.y2, c.x2, c.y2, c.x2, c.y2 + arm,
+        )
+        self.add_lines(
+            name,
+            G(self.m_draw + 4 if draw_order is None else draw_order),
+            vertices,
+            C["ACCENT"] * (len(vertices) // 2),
+        )
 
     def show_aoi_highlight(self) -> None:
         """Add some AOI vertices (frame and text)"""

@@ -226,7 +226,18 @@ radiotelefónico OACI. Confirme este ajuste en `openmatb/config.ini`:
 ```ini
 [Openmatb]
 language=es_CO
+visual_theme=classic
 ```
+
+OpenMATB incluye dos condiciones de presentación: `classic` conserva la
+interfaz clara histórica y `cockpit` aplica un tema genérico de cabina de
+cristal oscura a todas las tareas visibles para el participante. La condición
+se elige en la preparación guiada de Research Mission o directamente con
+`main.py --visual-theme cockpit`. La selección queda congelada en los metadatos
+de sesión y en la procedencia de cada escenario. El tema de cabina conserva la
+geometría, las áreas activas, los tiempos, los controles y la puntuación, pero
+su equivalencia visual debe demostrarse antes de combinar resultados con la
+condición clásica.
 
 Inicie la ventana de tareas localizada desde el directorio del entorno:
 

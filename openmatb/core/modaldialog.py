@@ -58,12 +58,13 @@ class ModalDialog:
         if isinstance(msg, str):
             msg = [msg]
 
-        html: str = "<center><p><strong><font face=%s>" % "sans"
+        text_color = "#%02x%02x%02x" % C["TEXT"][:3]
+        html: str = '<center><p><strong><font face="sans" color="%s">' % text_color
         html += "%s</font></strong></p></center>" % title
         for m in msg:
-            html += "<center><p><font face=%s>" % "sans"
+            html += '<center><p><font face="sans" color="%s">' % text_color
             html += "%s</font></p></center>" % m
-        html += "<center><p><em><font face=%s>" % "sans"
+        html += '<center><p><em><font face="sans" color="%s">' % text_color
         if exit_key is not None:
             html += "[%s]" % _(exit_key.capitalize())
             html += " %s" % _("Exit")

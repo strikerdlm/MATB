@@ -30,7 +30,7 @@ class Pump(AbstractWidget):
                 "connector_1",
                 G(self.m_draw),
                 (from_cont.cx, from_cont.cy + y_offset, to_cont.cx, to_cont.cy + y_offset),
-                C["BLACK"] * 2,
+                C["LINE"] * 2,
             )
 
             # Draw the pump in the middle of the line
@@ -50,13 +50,13 @@ class Pump(AbstractWidget):
                 "connector_1",
                 G(self.m_draw),
                 (from_cont.cx, from_cont.cy, from_cont.cx, to_cont.cy + y_offset),
-                C["BLACK"] * 2,
+                C["LINE"] * 2,
             )
             self.add_lines(
                 "connector_2",
                 G(self.m_draw),
                 (to_cont.cx, to_cont.cy + y_offset, from_cont.cx, to_cont.cy + y_offset),
-                C["BLACK"] * 2,
+                C["LINE"] * 2,
             )
 
             # And stick the pump to the source tank
@@ -68,7 +68,11 @@ class Pump(AbstractWidget):
 
         self.add_triangles("triangle", G(self.m_draw + 1), self.pump_vertice, color * 3)
 
-        self.add_lines("border", G(self.m_draw + 2), self.vertice_strip(self.pump_vertice), C["BLACK"] * 6)
+        self.add_lines("border", G(self.m_draw + 2), self.vertice_strip(self.pump_vertice), C["LINE"] * 6)
+        if VISUAL_THEME.is_cockpit:
+            switch_radius = width * 0.72
+            switch_face = self.vertice_circle(self.num_location, switch_radius, 24)
+            self.add_line_loop("switch_ring", G(self.m_draw + 3), switch_face, C["ACCENT"] * 24)
 
         self.vertex["label"] = Label(
             str(pump_n),
@@ -78,7 +82,7 @@ class Pump(AbstractWidget):
             y=self.num_location[1],
             anchor_x="center",
             anchor_y="center",
-            color=C["BLACK"],
+            color=C["TEXT"],
             group=G(self.m_draw + 2),
         )
 

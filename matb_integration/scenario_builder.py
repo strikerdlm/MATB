@@ -624,6 +624,7 @@ def _manifest_payload(
     source_dirty: bool | None = None,
     workload_settings: Mapping[str, float | int] | None = None,
     profile_name: str | None = None,
+    visual_theme: str | None = None,
 ) -> dict[str, Any]:
     comm_n = scenario_text.count(";communications;radioprompt;")
     settings = workload_settings or {}
@@ -673,6 +674,7 @@ def _manifest_payload(
             "communications_own_callsign_ratio": _COMM_OWN_RATIO,
             "openmatb_sysmon_lights": list(OPENMATB_SYSMON_LIGHTS),
             "openmatb_sysmon_scales": list(OPENMATB_SYSMON_SCALES),
+            **({"visual_theme": visual_theme} if visual_theme is not None else {}),
         },
         questionnaires={
             "isa": isa_questionnaire,

@@ -61,6 +61,7 @@ def get_conf_value(section: str, key: str, val_type: Optional[type] = None) -> A
         ("Openmatb", "screen_index"): "MATB_OPENMATB_SCREEN_INDEX",
         ("Openmatb", "fullscreen"): "MATB_OPENMATB_FULLSCREEN",
         ("Openmatb", "display_session_number"): "MATB_OPENMATB_DISPLAY_SESSION_NUMBER",
+        ("Openmatb", "visual_theme"): "MATB_OPENMATB_VISUAL_THEME",
     }.get((section, key))
     value: str = os.environ.get(environment_key, CONFIG[section][key]) if environment_key else CONFIG[section][key]
 
@@ -107,6 +108,11 @@ def get_conf_value(section: str, key: str, val_type: Optional[type] = None) -> A
 
     # String value
     else:
+        if key == "visual_theme":
+            from core.theme import normalize_visual_theme
+
+            return normalize_visual_theme(value)
+
         # Font definition & check
         if key == "font_name":
             if len(value) == 0:

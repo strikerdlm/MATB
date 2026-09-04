@@ -405,6 +405,7 @@ class OpenMatbManager:
                         include_nasatlx=False, include_bedford=False, participant_id=request.participant_id,
                         block_num=index + 1, visit_ordinal=request.visit_ordinal, source_commit=source_commit,
                         source_dirty=source_dirty, workload_settings=profile, profile_name=block,
+                        visual_theme=request.visual_theme,
                     )
                     paths[block] = str(path)
                 controller_lease = secrets.token_urlsafe(32)
@@ -413,7 +414,8 @@ class OpenMatbManager:
                     id=session_id, participant_id=request.participant_id, visit_id=visit.id, visit_ordinal=request.visit_ordinal,
                     preset_id=preset.preset_id, preset_version=preset.version, preset_sha256=preset.sha256,
                     instruction_protocol_id=instructions.protocol_id, instruction_version=instructions.version,
-                    instruction_sha256=instructions.sha256, display_index=request.display_index,
+                    instruction_sha256=instructions.sha256, visual_theme=request.visual_theme,
+                    display_index=request.display_index,
                     block_order_json=_canonical(order), scenario_paths_json=_canonical(paths),
                     controller_lease_hash=_token_hash(controller_lease), participant_token_hash=_token_hash(participant_token),
                     artifact_root=str(run_dir),
@@ -443,7 +445,7 @@ class OpenMatbManager:
             preset_id=row.preset_id, preset_version=row.preset_version, preset_sha256=row.preset_sha256,
             instruction_protocol=instruction_view,
             visit_instruction=instruction_view.visit_instructions.get(protocol_visit.code, instruction_view.visit_instructions["DEFAULT"]),
-            display_index=row.display_index,
+            visual_theme=row.visual_theme, display_index=row.display_index,
             scores=json.loads(row.scores_json), active_pid=row.active_pid, last_error=row.last_error,
             created_at=row.created_at, started_at=row.started_at, finished_at=row.finished_at,
         )
@@ -473,6 +475,7 @@ class OpenMatbManager:
                 command = [
                     str(self.python_executable), str(self.openmatb_root / "main.py"), "--scenario", str(scenario),
                     "--session-dir", str(Path(row.artifact_root) / "sessions" / block), "--language", "es_CO",
+                    "--visual-theme", row.visual_theme,
                     "--display-index", str(row.display_index), "--control-stdio",
                 ]
                 session_path = Path(row.artifact_root) / "sessions" / block

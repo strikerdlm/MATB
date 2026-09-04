@@ -1,5 +1,5 @@
 import { getApiBase } from "@/lib/runtime-config";
-import type { OpenMatbInstructionProtocol, OpenMatbPresetSet, OpenMatbReadiness, OpenMatbSession, PreparedOpenMatbSession, WorkloadScaleSubmission } from "@/types/openmatb";
+import type { OpenMatbInstructionProtocol, OpenMatbPresetSet, OpenMatbReadiness, OpenMatbSession, OpenMatbVisualTheme, PreparedOpenMatbSession, WorkloadScaleSubmission } from "@/types/openmatb";
 
 export class OpenMatbApiError extends Error {
   constructor(public status: number, public code: string, message: string) {
@@ -35,7 +35,7 @@ export const getOpenMatbSession = (id: string) => call<OpenMatbSession>(`/openma
 
 export function createOpenMatbSession(body: {
   participant_id: string; visit_ordinal: number; preset_id: string; preset_version: string;
-  instruction_protocol_id: string; instruction_version: string; display_index: number;
+  instruction_protocol_id: string; instruction_version: string; visual_theme: OpenMatbVisualTheme; display_index: number;
 }) {
   return call<PreparedOpenMatbSession>("/openmatb/sessions", json(body));
 }

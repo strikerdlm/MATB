@@ -9,22 +9,10 @@ from pathlib import Path
 
 from pyglet.graphics import Group  # noqa: F401
 
+from core.theme import get_theme
+
 REPLAY_MODE: bool = len(sys.argv) > 1 and sys.argv[1] == "-r"
 REPLAY_STRIP_PROPORTION: float = 0.08
-
-COLORS: dict[str, tuple[int, int, int, int]] = dict(
-    WHITE=(255, 255, 255, 255),
-    WHITE_TRANSLUCENT=(255, 255, 255, 235),
-    BLACK=(50, 50, 50, 255),
-    GREEN=(142, 219, 176, 255),
-    RED=(241, 100, 100, 255),
-    BACKGROUND=(240, 240, 240, 255),
-    LIGHTGREY=(220, 220, 220, 255),
-    DARKGREY=(50, 50, 50, 255),
-    GREY=(200, 200, 200, 255),
-    BLUE=(153, 204, 255, 255),
-)
-C = COLORS
 
 FONT_SIZES: dict[str, int] = dict(SMALL=12, MEDIUM=16, LARGE=20, XLARGE=30)
 F = FONT_SIZES
@@ -54,3 +42,12 @@ PATHS["SCENARIO_ERRORS"] = Path(".", "last_scenario_errors.log")
 # Read the configuration file
 CONFIG: configparser.ConfigParser = configparser.ConfigParser()
 CONFIG.read(PATHS["PLUGINS"].parent.joinpath("config.ini"))
+
+VISUAL_THEME = get_theme(
+    os.environ.get(
+        "MATB_OPENMATB_VISUAL_THEME",
+        CONFIG.get("Openmatb", "visual_theme", fallback="classic"),
+    )
+)
+COLORS: dict[str, tuple[int, int, int, int]] = dict(VISUAL_THEME.colors)
+C = COLORS

@@ -35,14 +35,14 @@ class Performancescale(AbstractWidget):
         # Background vertex #
         _x1, _y1, _x2, _y2 = self.container.get_x1y1x2y2()
         self.border_vertices: tuple[float, ...] = self.vertice_border(self.container)
-        self.add_quad("background", G(self.m_draw), self.border_vertices, C["WHITE"] * 4)
+        self.add_quad("background", G(self.m_draw), self.border_vertices, C["INSTRUMENT"] * 4)
 
         # Performance vertex #
         performance_vertices: list[float] = self.get_performance_vertices(self.performance_level)
         self.add_quad("performance", G(self.m_draw + 1), performance_vertices, self.performance_color * 4)
 
         # Borders vertex #
-        self.add_lines("borders", G(self.m_draw + 2), self.vertice_strip(self.border_vertices), C["BLACK"] * 8)
+        self.add_lines("borders", G(self.m_draw + 2), self.vertice_strip(self.border_vertices), C["LINE"] * 8)
 
         # Ticks vertex #
         self.tick_width: float = self.container.w * 0.25
@@ -63,12 +63,13 @@ class Performancescale(AbstractWidget):
                 y=y,
                 anchor_x="left",
                 anchor_y="center",
-                color=C["BLACK"],
+                color=C["TEXT"],
                 group=G(self.m_draw + 2),
                 font_name=self.font_name,
             )
 
-        self.add_lines("ticks", G(self.m_draw + 2), v, C["BLACK"] * (len(v) // 2))
+        self.add_lines("ticks", G(self.m_draw + 2), v, C["LINE"] * (len(v) // 2))
+        self.add_cockpit_bezel()
 
     def _rebuild(self) -> None:
         self.hide()

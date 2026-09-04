@@ -25,6 +25,13 @@ class Radio(AbstractWidget):
         self.label: str = label
         self.is_selected: bool = on
 
+        if VISUAL_THEME.is_cockpit:
+            display = self.container.get_reduced(0.62, 0.82)
+            display_vertices = self.vertice_border(display)
+            self.add_quad("display_background", G(self.m_draw), display_vertices, C["INSTRUMENT"] * 4)
+            self.add_line_loop("display_bezel", G(self.m_draw + 1), display_vertices, C["LINE"] * 4)
+            self.add_cockpit_bezel()
+
         # Radio label #
         self.vertex["radio_frequency"] = Label(
             self.get_frequency_string(frequency),
@@ -34,7 +41,7 @@ class Radio(AbstractWidget):
             font_name=self.font_name,
             anchor_x="center",
             anchor_y="center",
-            color=C["BLACK"],
+            color=C["TEXT"],
             batch=Window.MainWindow.batch,
             group=G(self.m_draw + 1),
         )
@@ -42,7 +49,7 @@ class Radio(AbstractWidget):
         # Arrows vertices #
         # Only a change in vertices is needed to show/hide arrows --> (0, 0, 0...) = hide
         for name, _info in self.arrows.items():
-            self.add_triangles(name, G(self.m_draw + 2), (0, 0, 0, 0, 0, 0), C["BLACK"] * 3)
+            self.add_triangles(name, G(self.m_draw + 2), (0, 0, 0, 0, 0, 0), C["ACCENT"] * 3)
 
         # Feedback vertices #
         # A frame slightly smaller than the radio container

@@ -125,7 +125,7 @@ class Window(Window):
                 "f",
                 (l, b + h, l + w, b + h, l + w, b + h * (1 - container_title_h), l, b + h * (1 - container_title_h)),
             ),
-            colors=("Bn", C["BLACK"] * 4),
+            colors=("Bn", C["DARKGREY"] * 4),
         )
 
         # Middle band
@@ -148,7 +148,7 @@ class Window(Window):
                     b + h * (0.5 - container_title_h),
                 ),
             ),
-            colors=("Bn", C["BLACK"] * 4),
+            colors=("Bn", C["DARKGREY"] * 4),
         )
 
     def on_draw(self) -> None:

@@ -87,9 +87,40 @@ def init_db(*, component_model_modules: tuple[str, ...] = ()) -> None:
         import_module(module_name)
 
     SQLModel.metadata.create_all(_engine)
+    _migrate_openmatb_visual_theme_v1(_engine)
     _migrate_analysisresult_v2(_engine)
     _migrate_bayesresult_v3(_engine)
     _audit_sqlite_foreign_keys(_engine)
+
+
+def _migrate_openmatb_visual_theme_v1(engine) -> None:
+    """Add an immutable presentation condition to legacy OpenMATB sessions."""
+    if engine.dialect.name != "sqlite":
+        raise RuntimeError("MATB Research Console migrations require SQLite")
+
+    with engine.begin() as connection:
+        tables = set(inspect(connection).get_table_names())
+        if "openmatb_suite_session" not in tables:
+            return
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS matb_schema_migration (
+                version VARCHAR PRIMARY KEY,
+                applied_at DATETIME NOT NULL
+            )
+        """))
+        columns = {
+            column["name"]
+            for column in inspect(connection).get_columns("openmatb_suite_session")
+        }
+        if "visual_theme" not in columns:
+            connection.execute(text(
+                "ALTER TABLE openmatb_suite_session "
+                "ADD COLUMN visual_theme VARCHAR NOT NULL DEFAULT 'classic'"
+            ))
+        connection.execute(text("""
+            INSERT OR IGNORE INTO matb_schema_migration (version, applied_at)
+            VALUES ('openmatb-visual-theme-v1', CURRENT_TIMESTAMP)
+        """))
 
 
 def _migrate_analysisresult_v2(engine) -> None:
