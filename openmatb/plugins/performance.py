@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from core import validation
-from core.constants import COLORS as C
+from core.constants import VISUAL_THEME
 from core.widgets import Performancescale
 from plugins.abstractplugin import AbstractPlugin
 
@@ -32,8 +32,8 @@ class Performance(AbstractPlugin):
             ticknumber=5,
             criticallevel=20,
             shadowundercritical=True,
-            defaultcolor=C["GREEN"],
-            criticalcolor=C["RED"],
+            defaultcolor=VISUAL_THEME.palette["safe"],
+            criticalcolor=VISUAL_THEME.palette["critical"],
         )
         self.parameters.update(new_par)
 
@@ -59,7 +59,7 @@ class Performance(AbstractPlugin):
             level_min=self.parameters["levelmin"],
             level_max=self.parameters["levelmax"],
             tick_number=self.parameters["ticknumber"],
-            color=C["GREEN"],
+            color=VISUAL_THEME.module_color("workload", "marker"),
         )
 
     def compute_next_plugin_state(self) -> None:

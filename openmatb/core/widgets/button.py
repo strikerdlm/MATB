@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from core.constants import COLORS as C
+from core.constants import VISUAL_THEME
 from core.constants import Group as G
 from core.container import Container
 from core.widgets import AbstractWidget
@@ -25,8 +25,10 @@ class Button(AbstractWidget):
         self.active_area: Container = self.container.get_reduced(1 - self.padding, 1 - self.padding)
         button_vertice: tuple[float, ...] = self.vertice_border(self.active_area)
 
-        self.add_quad("background", G(self.m_draw + self.m_draw + 1), button_vertice, C["DARKGREY"] * 4)
-        self.add_lines("border", G(self.m_draw + self.m_draw + 3), self.vertice_strip(button_vertice), C["BLACK"] * 8)
+        background = VISUAL_THEME.palette["control_background"]
+        border = VISUAL_THEME.palette["border"]
+        self.add_quad("background", G(self.m_draw + self.m_draw + 1), button_vertice, background * 4)
+        self.add_lines("border", G(self.m_draw + self.m_draw + 3), self.vertice_strip(button_vertice), border * 8)
 
         Window.MainWindow.push_handlers(self.on_mouse_press, self.on_mouse_release)
 
@@ -58,7 +60,7 @@ class PlayPause(Button):
         cy: float = self.container.cy
         s: float = self.container.h * 0.35
         g: Any = G(self.m_draw + 8)
-        W: tuple[int, int, int, int] = C["WHITE"]
+        W: tuple[int, int, int, int] = VISUAL_THEME.palette["control_foreground"]
         HIDDEN: tuple[int, int, int, int] = (255, 255, 255, 0)
 
         # --- Play triangle (pointing right, 3 vertices) ---
@@ -89,7 +91,7 @@ class PlayPause(Button):
         self.show()
 
     def update_button_sprite(self, is_paused: bool) -> None:
-        W: tuple[int, int, int, int] = C["WHITE"]
+        W: tuple[int, int, int, int] = VISUAL_THEME.palette["control_foreground"]
         HIDDEN: tuple[int, int, int, int] = (255, 255, 255, 0)
         self.on_batch["play_tri"].colors = list(W * 3) if is_paused else list(HIDDEN * 3)
         self.on_batch["pause_bars"].colors = list(HIDDEN * 8) if is_paused else list(W * 8)
@@ -108,7 +110,7 @@ class MuteButton(Button):
         cy: float = self.container.cy
         s: float = self.container.h * 0.30
         g: Any = G(self.m_draw + 8)
-        W: tuple[int, int, int, int] = C["WHITE"]
+        W: tuple[int, int, int, int] = VISUAL_THEME.palette["control_foreground"]
         HIDDEN: tuple[int, int, int, int] = (255, 255, 255, 0)
 
         # --- Speaker body (quad) ---
@@ -159,7 +161,7 @@ class MuteButton(Button):
 
     def update_mute_state(self, is_muted: bool) -> None:
         self.is_muted = is_muted
-        W: tuple[int, int, int, int] = C["WHITE"]
+        W: tuple[int, int, int, int] = VISUAL_THEME.palette["control_foreground"]
         HIDDEN: tuple[int, int, int, int] = (255, 255, 255, 0)
 
         self.on_batch["mute_x"].colors = list(W * 4) if is_muted else list(HIDDEN * 4)

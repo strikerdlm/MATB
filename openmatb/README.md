@@ -89,8 +89,24 @@ If you don't mind not seeing all the source files, you might want to use compile
 When executed, the main file inspects the `config.ini` variables, including
 `language`, `visual_theme`, `screen_index`, `fullscreen`, and `scenario_path`.
 `visual_theme=classic` preserves the historical presentation;
-`visual_theme=cockpit` selects the generic glass-cockpit presentation. The same
-choice is available as `main.py --visual-theme cockpit`.
+`visual_theme=cockpit` selects the generic glass-cockpit presentation; and
+`visual_theme=fac_modern` selects the default light MATB-FAC presentation. The
+same choice is available as `main.py --visual-theme cockpit`.
+
+The Research Console also supplies an immutable visual profile at startup:
+
+```bash
+python main.py --theme-file /absolute/path/to/visual-profile.json
+```
+
+`--theme-file` and `--visual-theme` are mutually exclusive. A profile must
+conform to `openmatb-visual-profile-v1`; unknown fields, CSS values, behavioral
+settings, and invalid colors fail closed. The bundled files under `themes/`
+are executable examples. The profile is loaded once before the core modules
+are imported and its identity, version, schema, and SHA-256 are logged. It does
+not replace scenario control of task state, scheduling, automation, geometry,
+hit areas, input, scoring, or response timing. See the repository-level
+[visual-profile contract](../docs/contracts/openmatb-visual-profile-v1.md).
 
 (**For now, french (fr_FR) and english (en_EN) locales are available, but feel free to [develop your own translation](https://github.com/juliencegarra/OpenMATB/wiki/Internationalization), it's fast and easy.)
 

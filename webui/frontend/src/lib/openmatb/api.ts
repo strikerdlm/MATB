@@ -1,5 +1,15 @@
 import { getApiBase } from "@/lib/runtime-config";
-import type { OpenMatbInstructionProtocol, OpenMatbPresetSet, OpenMatbReadiness, OpenMatbSession, OpenMatbVisualTheme, PreparedOpenMatbSession, WorkloadScaleSubmission } from "@/types/openmatb";
+import type {
+  OpenMatbInstructionProtocol,
+  OpenMatbPresetSet,
+  OpenMatbReadiness,
+  OpenMatbSession,
+  OpenMatbVisualProfile,
+  OpenMatbVisualProfileDocument,
+  OpenMatbVisualPreview,
+  PreparedOpenMatbSession,
+  WorkloadScaleSubmission,
+} from "@/types/openmatb";
 
 export class OpenMatbApiError extends Error {
   constructor(public status: number, public code: string, message: string) {
@@ -31,11 +41,14 @@ const json = (body: object, headers: HeadersInit = {}): RequestInit => ({
 export const getOpenMatbReadiness = () => call<OpenMatbReadiness>("/openmatb/readiness");
 export const listOpenMatbPresets = () => call<OpenMatbPresetSet[]>("/openmatb/presets");
 export const listOpenMatbInstructions = () => call<OpenMatbInstructionProtocol[]>("/openmatb/instruction-protocols");
+export const listOpenMatbVisualProfiles = () => call<OpenMatbVisualProfile[]>("/openmatb/visual-profiles");
+export const getOpenMatbVisualPreview = () => call<OpenMatbVisualPreview>("/openmatb/visual-profiles/preview");
 export const getOpenMatbSession = (id: string) => call<OpenMatbSession>(`/openmatb/sessions/${encodeURIComponent(id)}`);
 
 export function createOpenMatbSession(body: {
   participant_id: string; visit_ordinal: number; preset_id: string; preset_version: string;
-  instruction_protocol_id: string; instruction_version: string; visual_theme: OpenMatbVisualTheme; display_index: number;
+  instruction_protocol_id: string; instruction_version: string; display_index: number;
+  visual_profile_id?: string; visual_profile_version?: string;
 }) {
   return call<PreparedOpenMatbSession>("/openmatb/sessions", json(body));
 }
@@ -86,4 +99,55 @@ export function updateOpenMatbInstructions(protocol: OpenMatbInstructionProtocol
 
 export function publishOpenMatbInstructions(protocol: OpenMatbInstructionProtocol) {
   return call<OpenMatbInstructionProtocol>(`/openmatb/instruction-protocols/${encodeURIComponent(protocol.protocol_id)}/${encodeURIComponent(protocol.version)}/publish`, json({}));
+}
+
+const visualProfilePath = (profile: Pick<OpenMatbVisualProfile, "profile_id" | "version">) =>
+  `/openmatb/visual-profiles/${encodeURIComponent(profile.profile_id)}/${encodeURIComponent(profile.version)}`;
+
+export function cloneOpenMatbVisualProfile(
+  source: OpenMatbVisualProfile,
+  body: { profile_id: string; version: string; label: string },
+) {
+  return call<OpenMatbVisualProfile>(`${visualProfilePath(source)}/clone`, json(body));
+}
+
+export function updateOpenMatbVisualProfile(profile: OpenMatbVisualProfile) {
+  return call<OpenMatbVisualProfile>(visualProfilePath(profile), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      payload: profile.payload,
+      warning_acknowledgements: profile.warning_acknowledgements,
+    }),
+  });
+}
+
+export function validateOpenMatbVisualProfile(profile: OpenMatbVisualProfile) {
+  return call<OpenMatbVisualProfile>(`${visualProfilePath(profile)}/validate`, json({}));
+}
+
+export function publishOpenMatbVisualProfile(profile: OpenMatbVisualProfile) {
+  return call<OpenMatbVisualProfile>(
+    `${visualProfilePath(profile)}/publish`,
+    json({ warning_acknowledgements: profile.warning_acknowledgements }),
+  );
+}
+
+export function importOpenMatbVisualProfile(payload: OpenMatbVisualProfileDocument) {
+  return call<OpenMatbVisualProfile>("/openmatb/visual-profiles/import", json({ payload }));
+}
+
+export function exportOpenMatbVisualProfile(profile: OpenMatbVisualProfile) {
+  return call<OpenMatbVisualProfileDocument>(`${visualProfilePath(profile)}/export`);
+}
+
+export function startOpenMatbVisualPreview(
+  profile: OpenMatbVisualProfile,
+  body: { display_index: number; windowed: boolean },
+) {
+  return call<OpenMatbVisualPreview>(`${visualProfilePath(profile)}/preview`, json(body));
+}
+
+export function abortOpenMatbVisualPreview() {
+  return call<OpenMatbVisualPreview>("/openmatb/visual-profiles/preview/abort", json({}));
 }

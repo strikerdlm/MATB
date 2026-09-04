@@ -14,7 +14,7 @@ class Scale(AbstractWidget):
     def __init__(self, name: str, container: Any, label: str, arrow_position: int = 5) -> None:
         super().__init__(name, container)
 
-        self.background_color: tuple[int, ...] = C["INSTRUMENT"]
+        self.background_color: tuple[int, ...] = VISUAL_THEME.module_color("system_monitoring", "panel")
         self.feedback_visible: bool = False
 
         # Compute arrow positions list
@@ -38,8 +38,9 @@ class Scale(AbstractWidget):
         )
 
         scale_vertice: tuple[float, ...] = self.vertice_border(self.container)
-        self.add_quad("background", G(self.m_draw + self.m_draw + 1), scale_vertice, C["INSTRUMENT"] * 4)
-        self.add_lines("border", G(self.m_draw + self.m_draw + 3), self.vertice_strip(scale_vertice), C["LINE"] * 8)
+        self.add_quad("background", G(self.m_draw + self.m_draw + 1), scale_vertice, self.background_color * 4)
+        scale_color = VISUAL_THEME.module_color("system_monitoring", "scale")
+        self.add_lines("border", G(self.m_draw + self.m_draw + 3), self.vertice_strip(scale_vertice), scale_color * 8)
 
         # Compute widths
         self.tick_width: float = self.container.w * 0.25
@@ -53,10 +54,12 @@ class Scale(AbstractWidget):
         # the right side of the scale
         self.feedback_height: float = 0.12 * self.container.h
 
-        self.add_lines("ticks", G(self.m_draw + 3), v, C["LINE"] * (len(v) // 2))
-        self.add_quad("feedback", G(self.m_draw + 2), (0, 0, 0, 0, 0, 0, 0, 0), C["GREEN"] * 4)
-        self.add_triangles("arrow", G(self.m_draw + 2), self.return_arrow_vertice(arrow_position), C["ACCENT"] * 3)
-        self.add_cockpit_bezel()
+        self.add_lines("ticks", G(self.m_draw + 3), v, scale_color * (len(v) // 2))
+        positive = VISUAL_THEME.module_color("system_monitoring", "feedback_positive")
+        pointer = VISUAL_THEME.module_color("system_monitoring", "pointer")
+        self.add_quad("feedback", G(self.m_draw + 2), (0, 0, 0, 0, 0, 0, 0, 0), positive * 4)
+        self.add_triangles("arrow", G(self.m_draw + 2), self.return_arrow_vertice(arrow_position), pointer * 3)
+        self.add_corner_marks()
 
     def return_arrow_vertice(self, position: int) -> tuple[float, ...]:
         xo: float = self.arrow_x_offset

@@ -9,7 +9,7 @@ from typing import Any, Callable
 from core import validation
 from core.constants import COLORS as C
 from core.constants import FONT_SIZES as F
-from core.constants import PLUGIN_TITLE_HEIGHT_PROPORTION
+from core.constants import PLUGIN_TITLE_HEIGHT_PROPORTION, VISUAL_THEME
 from core.container import Container
 from core.widgets import Frame, Pump, PumpFlow, Simpletext, Tank
 from core.window import Window
@@ -90,14 +90,14 @@ class Resman(AbstractPlugin):
         new_par: dict[str, Any] = dict(
             automaticsolver=False,
             displayautomationstate=True,
-            pumpcoloroff=C["CONTROL_OFF"],
-            pumpcoloron=C["GREEN"],
-            pumpcolorfailure=C["RED"],
+            pumpcoloroff=VISUAL_THEME.module_color("resource_management", "pump_off"),
+            pumpcoloron=VISUAL_THEME.module_color("resource_management", "pump_on"),
+            pumpcolorfailure=VISUAL_THEME.module_color("resource_management", "pump_failure"),
             toleranceradius=250,
             statuslocation="bottomright",
             displaystatus=True,
-            tolerancecolor=C["LINE"],
-            tolerancecoloroutside=C["LINE"],
+            tolerancecolor=VISUAL_THEME.module_color("resource_management", "tolerance"),
+            tolerancecoloroutside=VISUAL_THEME.palette["critical"],
             tank=dict(
                 a=dict(level=2500, max=4000, target=2500, depletable=True, lossperminute=800, _infoside="left"),
                 b=dict(level=2500, max=4000, target=2500, depletable=True, lossperminute=800, _infoside="right"),
@@ -349,6 +349,11 @@ class Resman(AbstractPlugin):
 
         for _, this_pump in pumps.items():  # 4. Refresh visual information
             this_pump["widget"].set_color(self.parameters[f"pumpcolor{this_pump['state']}"])
+            pipe_color = VISUAL_THEME.module_color(
+                "resource_management",
+                "pipe_on" if this_pump["state"] == "on" else "pipe_off",
+            )
+            this_pump["widget"].set_pipe_color(pipe_color)
 
             if this_pump["state"] == "on":
                 this_pump["statuswidget"].set_flow(str(this_pump["flow"]))

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from core.constants import COLORS as C
+from core.constants import VISUAL_THEME
 from core.constants import Group as G
 from core.container import Container
 from core.widgets import AbstractWidget
@@ -28,9 +29,15 @@ class Frame(AbstractWidget):
         super().__init__(name, container)
 
         self.border_thickness: float = border_thickness
+        radius = 0 if container.name == "fullscreen" else VISUAL_THEME.panel_radius
+        self.fill_vertices = self.vertice_rounded_rectangle(container, radius)
 
         if fill_color is not None:
-            self.add_quad("fillarea", G(draw_order), (0,) * 8, fill_color * 4)
+            if len(self.fill_vertices) == 8:
+                self.add_quad("fillarea", G(draw_order), (0,) * 8, fill_color * 4)
+            else:
+                vertex_count = len(self.fill_vertices) // 2
+                self.add_polygon("fillarea", G(draw_order), (0,) * len(self.fill_vertices), fill_color * vertex_count)
 
         self.add_quad("border", G(draw_order + 1), (0,) * 32, border_color * 16)
 
@@ -83,7 +90,7 @@ class Frame(AbstractWidget):
             self.on_batch["border"].position[:] = v
 
         if "fillarea" in self.on_batch:
-            v = self.vertice_border(self.container) if self.is_visible() else (0,) * 8
+            v = self.fill_vertices if self.is_visible() else (0,) * len(self.fill_vertices)
             self.on_batch["fillarea"].position[:] = v
 
         self.logger.record_state(self.name, "visibility", visible)

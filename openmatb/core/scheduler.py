@@ -60,6 +60,10 @@ class Scheduler:
                 scenario=str(self.scenario_path) if self.scenario_path is not None else None,
                 session_csv=str(get_logger().path),
                 visual_theme=VISUAL_THEME.name,
+                visual_profile_id=VISUAL_THEME.profile_id,
+                visual_profile_version=VISUAL_THEME.version,
+                visual_profile_schema_version=VISUAL_THEME.schema_version,
+                visual_profile_sha256=VISUAL_THEME.sha256,
             )
 
         Window.MainWindow.display_session_id()
@@ -136,6 +140,10 @@ class Scheduler:
         if self.scenario.scenario_path is not None:
             logger.log_manual_entry(self.scenario.scenario_path, key="scenario_path")
         logger.log_manual_entry(VISUAL_THEME.name, key="visual_theme")
+        logger.log_manual_entry(VISUAL_THEME.profile_id, key="visual_profile_id")
+        logger.log_manual_entry(VISUAL_THEME.version, key="visual_profile_version")
+        logger.log_manual_entry(VISUAL_THEME.schema_version, key="visual_profile_schema_version")
+        logger.log_manual_entry(VISUAL_THEME.sha256, key="visual_profile_sha256")
 
         self.events: list[Event] = self.scenario.events
         self.plugins: dict[str, Any] = self.scenario.plugins

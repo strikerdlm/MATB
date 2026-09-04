@@ -13,14 +13,12 @@ from typing import Any, Callable
 from pyglet.media import Player, SourceGroup, load
 
 from core import validation
-from core.constants import COLORS as C
 from core.constants import PATHS as P
-from core.constants import REPLAY_MODE
+from core.constants import REPLAY_MODE, VISUAL_THEME
 from core.container import Container
 from core.pseudorandom import choice, randint, uniform, xeger
 from core.widgets import Radio, Simpletext
 from plugins.abstractplugin import AbstractPlugin
-
 
 _COMM_PRESENTATION_CEILING_S = 24.0
 
@@ -87,7 +85,16 @@ class Communications(AbstractPlugin):
             automaticsolver=False,
             displayautomationstate=True,
             feedbackduration=1500,
-            feedbacks=dict(positive=dict(active=False, color=C["GREEN"]), negative=dict(active=False, color=C["RED"])),
+            feedbacks=dict(
+                positive=dict(
+                    active=False,
+                    color=VISUAL_THEME.module_color("communications", "positive"),
+                ),
+                negative=dict(
+                    active=False,
+                    color=VISUAL_THEME.module_color("communications", "negative"),
+                ),
+            ),
             keys=dict(
                 selectradioup="UP",
                 selectradiodown="DOWN",
@@ -736,7 +743,7 @@ class Communications(AbstractPlugin):
             if radio["_feedbacktimer"] is not None:
                 color: tuple[int, ...] = self.parameters["feedbacks"][radio["_feedbacktype"]]["color"]
             else:
-                color = C["BACKGROUND"]
+                color = VISUAL_THEME.module_color("communications", "panel")
             radio["widget"].set_feedback_color(color)
 
     def disable_radio_target(self, radio: dict[str, Any]) -> None:

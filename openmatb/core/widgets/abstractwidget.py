@@ -106,9 +106,9 @@ class AbstractWidget:
         """Register a line loop (converted to GL_LINES on batch assignment)."""
         self.vertex[name] = ("line_loop", group, positions, colors)
 
-    def add_cockpit_bezel(self, name: str = "cockpit_bezel", draw_order: int | None = None) -> None:
-        """Add restrained avionics corner marks without changing widget geometry."""
-        if not VISUAL_THEME.is_cockpit or self.container is None:
+    def add_corner_marks(self, name: str = "corner_marks", draw_order: int | None = None) -> None:
+        """Add profile-controlled corner marks without changing active geometry."""
+        if not VISUAL_THEME.shows_corner_marks or self.container is None:
             return
         c = self.container
         arm = min(c.w, c.h) * VISUAL_THEME.corner_mark_ratio
@@ -122,7 +122,7 @@ class AbstractWidget:
             name,
             G(self.m_draw + 4 if draw_order is None else draw_order),
             vertices,
-            C["ACCENT"] * (len(vertices) // 2),
+            VISUAL_THEME.palette["accent"] * (len(vertices) // 2),
         )
 
     def show_aoi_highlight(self) -> None:
@@ -269,6 +269,30 @@ class AbstractWidget:
             sine: float = radius * math.sin(i * 2 * math.pi / points_n) + center[1]
             v.extend([cosine, sine])
         return list(v)
+
+    def vertice_rounded_rectangle(
+        self,
+        container: Container,
+        radius: float,
+        points_per_corner: int = 5,
+    ) -> tuple[float, ...]:
+        """Return a convex rounded fill without changing the container hit area."""
+
+        r = max(0.0, min(float(radius), container.w / 2, container.h / 2))
+        if r == 0:
+            return self.vertice_border(container)
+        vertices: list[float] = []
+        corners = (
+            (container.x2 - r, container.y1 - r, 0.0),
+            (container.x1 + r, container.y1 - r, math.pi / 2),
+            (container.x1 + r, container.y2 + r, math.pi),
+            (container.x2 - r, container.y2 + r, 3 * math.pi / 2),
+        )
+        for cx, cy, start in corners:
+            for index in range(points_per_corner + 1):
+                angle = start + (math.pi / 2) * index / points_per_corner
+                vertices.extend((cx + r * math.cos(angle), cy + r * math.sin(angle)))
+        return tuple(vertices)
 
     def vertice_border(self, container: Container) -> tuple[float, float, float, float, float, float, float, float]:
         c: Container = container

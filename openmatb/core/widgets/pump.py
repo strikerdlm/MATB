@@ -30,7 +30,7 @@ class Pump(AbstractWidget):
                 "connector_1",
                 G(self.m_draw),
                 (from_cont.cx, from_cont.cy + y_offset, to_cont.cx, to_cont.cy + y_offset),
-                C["LINE"] * 2,
+                VISUAL_THEME.module_color("resource_management", "pipe_off") * 2,
             )
 
             # Draw the pump in the middle of the line
@@ -50,13 +50,13 @@ class Pump(AbstractWidget):
                 "connector_1",
                 G(self.m_draw),
                 (from_cont.cx, from_cont.cy, from_cont.cx, to_cont.cy + y_offset),
-                C["LINE"] * 2,
+                VISUAL_THEME.module_color("resource_management", "pipe_off") * 2,
             )
             self.add_lines(
                 "connector_2",
                 G(self.m_draw),
                 (to_cont.cx, to_cont.cy + y_offset, from_cont.cx, to_cont.cy + y_offset),
-                C["LINE"] * 2,
+                VISUAL_THEME.module_color("resource_management", "pipe_off") * 2,
             )
 
             # And stick the pump to the source tank
@@ -68,11 +68,13 @@ class Pump(AbstractWidget):
 
         self.add_triangles("triangle", G(self.m_draw + 1), self.pump_vertice, color * 3)
 
-        self.add_lines("border", G(self.m_draw + 2), self.vertice_strip(self.pump_vertice), C["LINE"] * 6)
-        if VISUAL_THEME.is_cockpit:
+        pipe_color = VISUAL_THEME.module_color("resource_management", "pipe_off")
+        self.add_lines("border", G(self.m_draw + 2), self.vertice_strip(self.pump_vertice), pipe_color * 6)
+        if VISUAL_THEME.module_flag("resource_management", "show_pump_ring"):
             switch_radius = width * 0.72
             switch_face = self.vertice_circle(self.num_location, switch_radius, 24)
-            self.add_line_loop("switch_ring", G(self.m_draw + 3), switch_face, C["ACCENT"] * 24)
+            ring = VISUAL_THEME.module_color("resource_management", "meter")
+            self.add_line_loop("switch_ring", G(self.m_draw + 3), switch_face, ring * 24)
 
         self.vertex["label"] = Label(
             str(pump_n),
@@ -82,7 +84,7 @@ class Pump(AbstractWidget):
             y=self.num_location[1],
             anchor_x="center",
             anchor_y="center",
-            color=C["TEXT"],
+            color=VISUAL_THEME.palette["text"],
             group=G(self.m_draw + 2),
         )
 
@@ -91,6 +93,12 @@ class Pump(AbstractWidget):
             return
         self.on_batch["triangle"].colors[:] = color * 3
         self.logger.record_state(self.name, "triangle", color)
+
+    def set_pipe_color(self, color: tuple[int, int, int, int]) -> None:
+        for name in ("connector_1", "connector_2"):
+            if name in self.on_batch and self.get_vertex_color(name) != color:
+                count = len(self.on_batch[name].position) // 2
+                self.on_batch[name].colors[:] = color * count
 
     def get_color(self) -> tuple[int, int, int, int]:
         return self.get_vertex_color("triangle")

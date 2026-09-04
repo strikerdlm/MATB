@@ -31,6 +31,58 @@ const MESSAGES: Record<string, [string, string]> = {
     "No se pudo completar la solicitud de OpenMATB.",
     "The OpenMATB request could not be completed.",
   ],
+  visual_profile_already_exists: [
+    "Ya existe un perfil visual con ese identificador y versión.",
+    "A visual profile with that identifier and version already exists.",
+  ],
+  visual_profile_identity_mismatch: [
+    "El identificador o la versión del documento no coincide con el perfil seleccionado.",
+    "The document identifier or version does not match the selected profile.",
+  ],
+  visual_profile_import_collision: [
+    "El perfil importado entra en conflicto con una versión existente.",
+    "The imported profile conflicts with an existing version.",
+  ],
+  visual_profile_accessibility_errors: [
+    "Corrija los errores esenciales de contraste antes de publicar.",
+    "Fix the essential contrast errors before publishing.",
+  ],
+  visual_profile_warning_acknowledgement_invalid: [
+    "Una advertencia reconocida ya no corresponde a la validación actual. Valide nuevamente.",
+    "An acknowledged warning no longer matches the current validation. Validate again.",
+  ],
+  visual_profile_warning_acknowledgement_required: [
+    "Reconozca todas las advertencias de discriminación visual antes de publicar.",
+    "Acknowledge every visual-discrimination warning before publishing.",
+  ],
+  visual_profile_record_corrupt: [
+    "El registro del perfil visual no supera la verificación de integridad.",
+    "The visual-profile record failed its integrity check.",
+  ],
+  visual_profile_not_found: [
+    "No se encontró el perfil visual solicitado.",
+    "The requested visual profile was not found.",
+  ],
+  published_visual_profile_not_found: [
+    "Seleccione una versión publicada del perfil visual.",
+    "Select a published visual-profile version.",
+  ],
+  published_configuration_immutable: [
+    "Las versiones publicadas son inmutables. Clone esta versión para editarla.",
+    "Published versions are immutable. Clone this version to edit it.",
+  ],
+  openmatb_visual_profile_tampered: [
+    "El perfil congelado de la sesión cambió o no coincide con su huella. Cree una sesión nueva.",
+    "The session's frozen profile changed or no longer matches its hash. Create a new session.",
+  ],
+  openmatb_visual_preview_active: [
+    "Ya hay una vista previa nativa activa. Ciérrela antes de continuar.",
+    "A native preview is already active. Close it before continuing.",
+  ],
+  openmatb_controlled_process_active: [
+    "No se puede abrir una vista previa mientras una sesión controlada está activa.",
+    "A preview cannot be opened while a controlled session is active.",
+  ],
   backend_restart: [
     "La consola se reinició durante la sesión. Cree una sesión nueva.",
     "The console restarted during the session. Create a new session.",

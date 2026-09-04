@@ -20,7 +20,13 @@ class OpenMatbComponentProvider:
     manifest = ComponentManifestV1.create(
         component_id="matb-openmatb", component_version="1.0.0-alpha.1",
         component_kind="simulation", stability="experimental", distribution="optional",
-        capabilities=("openmatb.native-control", "openmatb.presets", "openmatb.participant-instructions"),
+        capabilities=(
+            "openmatb.native-control",
+            "openmatb.presets",
+            "openmatb.participant-instructions",
+            "openmatb.visual-profiles",
+            "openmatb.visual-preview",
+        ),
         requires=("matb-console", "matb-runtime"), python_entrypoint="app.openmatb_component:provider",
         license_expression="CECILL-2.1",
     )

@@ -9,8 +9,7 @@ from math import pi, sin
 from typing import Any, Callable
 
 from core import validation
-from core.constants import COLORS as C
-from core.constants import REPLAY_MODE
+from core.constants import REPLAY_MODE, VISUAL_THEME
 from core.container import Container
 from core.widgets import Reticle
 from plugins.abstractplugin import AbstractPlugin
@@ -31,8 +30,8 @@ class Track(AbstractPlugin):
         }
 
         new_par: dict[str, Any] = dict(
-            cursorcolor=C["BLACK"],
-            cursorcoloroutside=C["RED"],
+            cursorcolor=VISUAL_THEME.module_color("tracking", "cursor"),
+            cursorcoloroutside=VISUAL_THEME.module_color("tracking", "cursor_outside"),
             automaticsolver=False,
             displayautomationstate=True,
             targetproportion=0.25,

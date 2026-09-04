@@ -17,7 +17,9 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--scenario", type=Path)
     parser.add_argument("--session-dir", type=Path)
     parser.add_argument("--language", default=None)
-    parser.add_argument("--visual-theme", choices=("classic", "cockpit"), default=None)
+    theme = parser.add_mutually_exclusive_group()
+    theme.add_argument("--visual-theme", choices=("classic", "cockpit", "fac_modern"), default=None)
+    theme.add_argument("--theme-file", type=Path, default=None)
     parser.add_argument("--display-index", type=int, default=None)
     parser.add_argument("--windowed", action="store_true")
     parser.add_argument("--control-stdio", action="store_true")
@@ -45,7 +47,14 @@ if ARGS.display_index is not None:
 if ARGS.windowed:
     os.environ["MATB_OPENMATB_FULLSCREEN"] = "False"
 if ARGS.visual_theme is not None:
+    os.environ.pop("MATB_OPENMATB_THEME_FILE", None)
     os.environ["MATB_OPENMATB_VISUAL_THEME"] = ARGS.visual_theme
+if ARGS.theme_file is not None:
+    theme_file = ARGS.theme_file.expanduser().resolve(strict=True)
+    if not theme_file.is_file():
+        raise ValueError("--theme-file must point to a regular file")
+    os.environ.pop("MATB_OPENMATB_VISUAL_THEME", None)
+    os.environ["MATB_OPENMATB_THEME_FILE"] = str(theme_file)
 if ARGS.control_stdio:
     os.environ["MATB_OPENMATB_DISPLAY_SESSION_NUMBER"] = "False"
 
