@@ -17,6 +17,28 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import create_engine
 
 
+@pytest.mark.parametrize("days", [(0, 8, 15), (0, 3, 6, 9, 12, 15)])
+def test_execution_migration_preserves_schedule_and_raw_observations(tmp_path, days):
+    from app.db import _migrate_experiment_execution_v1
+    engine = create_engine(f"sqlite:///{tmp_path / 'execution.sqlite3'}")
+    raw = '{"fast_mode":true,"simple_rt":{"trials":[]}}'
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE visit (id INTEGER PRIMARY KEY, scheduled_day INTEGER)"))
+        for index, day in enumerate(days):
+            connection.execute(text("INSERT INTO visit VALUES (:i, :day)"), {"i": index, "day": day})
+        connection.execute(text("CREATE TABLE screenresult (id INTEGER PRIMARY KEY, raw_trials_json TEXT, scores_json TEXT)"))
+        connection.execute(text("INSERT INTO screenresult VALUES (1, :raw, :score)"), {"raw": raw, "score": '{"legacy":12}'})
+        connection.execute(text("CREATE TABLE pvt_assessment (id INTEGER PRIMARY KEY, pvt_version INTEGER, protocol_valid BOOLEAN)"))
+        connection.execute(text("INSERT INTO pvt_assessment VALUES (1, 1, 1), (2, 1, 0)"))
+    _migrate_experiment_execution_v1(engine)
+    _migrate_experiment_execution_v1(engine)
+    with engine.begin() as connection:
+        assert tuple(connection.execute(text("SELECT scheduled_day FROM visit ORDER BY id")).scalars()) == days
+        assert tuple(connection.execute(text("SELECT raw_trials_json, scores_json, execution_purpose FROM screenresult")).one()) == (raw, '{"legacy":12}', "practice")
+        assert list(connection.execute(text("SELECT protocol_valid, execution_purpose FROM pvt_assessment ORDER BY id"))) == [(1, "study"), (0, "practice")]
+        assert connection.execute(text("SELECT COUNT(*) FROM matb_schema_migration WHERE version='experiment-execution-v1'")).scalar_one() == 1
+
+
 def test_relative_database_path_is_anchored_to_repository() -> None:
     resolved = _resolve_db_path("var/data con espacios/datos ñ.sqlite")
 

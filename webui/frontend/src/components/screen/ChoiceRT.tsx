@@ -59,7 +59,7 @@ export function ChoiceRT({
 
   function recordAndAdvance(trial: ChoiceTrial) {
     const idx = streamIndexRef.current;
-    if (idx >= practiceCount) scoredRef.current.push(trial);
+    if (idx >= practiceCount) scoredRef.current.push({ ...trial, stimulus_side: sideRef.current ?? undefined });
     const next = idx + 1;
     streamIndexRef.current = next;
     if (next >= totalTrials) {
@@ -139,6 +139,7 @@ export function ChoiceRT({
         rt_ms: rt,
         responded: true,
         correct: pressed === sideRef.current,
+        response_side: pressed,
       });
     }
     window.addEventListener("keydown", onKeyDown);

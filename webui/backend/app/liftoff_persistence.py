@@ -95,6 +95,7 @@ class SQLModelLiftoffPersistence:
                     LiftoffSession.participant_id == participant_id,
                     LiftoffSession.visit_id == visit_id,
                     LiftoffSession.validity == "valid",
+                    LiftoffSession.execution_purpose == "study",
                 )
                 .order_by(LiftoffSession.attempt_number)
             ).first()
@@ -122,8 +123,13 @@ class SQLModelLiftoffPersistence:
         attempts = self.list_attempts(participant_id, visit_id)
         return (attempts[-1].attempt_number + 1) if attempts else 1
 
+    def require_study_order(self, participant_id: str, visit_id: int) -> None:
+        from app.experiment_catalog import require_task_order
+        with Session(self.engine) as db:
+            require_task_order(db, participant_id, visit_id, "liftoff", require_context=True)
+
     def require_retake_allowed(self, participant_id: str, visit_id: int) -> None:
-        attempts = self.list_attempts(participant_id, visit_id)
+        attempts = [row for row in self.list_attempts(participant_id, visit_id) if row.execution_purpose == "study"]
         if attempts and attempts[-1].validity != "invalid":
             raise ValueError("liftoff_retake_not_allowed")
 

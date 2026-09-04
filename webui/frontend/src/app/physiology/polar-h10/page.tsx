@@ -4,6 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Activity, Battery, Bluetooth, Download, Play, Radio, Square, WifiOff } from "lucide-react";
 
+import { experimentErrorMessage } from "@/lib/experiment-errors";
+import { ExperimentGuide } from "@/components/experiments/ExperimentGuide";
+import { useExecutionPurpose } from "@/lib/execution-purpose";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { InstructionAudio } from "@/components/instructions/InstructionAudio";
 import { Badge } from "@/components/ui/badge";
@@ -38,9 +41,10 @@ function numberValue(value: unknown): number | null {
 }
 
 function Envelope({ points }: { points: EnvelopePoint[] }) {
-  if (!points.length) return <div className="flex h-24 items-center justify-center text-xs text-muted-foreground">Esperando ECG…</div>;
+  const { copy } = useAppLocale();
+  if (!points.length) return <div className="flex h-24 items-center justify-center text-xs text-muted-foreground">{copy("Esperando electrocardiograma (ECG)…", "Waiting for electrocardiogram (ECG)…")}</div>;
   const maximum = Math.max(1, ...points.flatMap((point) => [Math.abs(point.minimum), Math.abs(point.maximum)]));
-  return <svg viewBox={`0 0 ${points.length * 4} 100`} className="h-24 w-full" role="img" aria-label="Envolvente ECG decimada">
+  return <svg viewBox={`0 0 ${points.length * 4} 100`} className="h-24 w-full" role="img" aria-label={copy("Envolvente ECG decimada", "Downsampled ECG envelope")}>
     <line x1="0" x2={points.length * 4} y1="50" y2="50" stroke="currentColor" opacity="0.15" />
     {points.map((point, index) => <line
       key={index}
@@ -55,17 +59,19 @@ function Envelope({ points }: { points: EnvelopePoint[] }) {
 }
 
 function AccTrace({ values }: { values: number[] }) {
-  if (!values.length) return <div className="flex h-24 items-center justify-center text-xs text-muted-foreground">Esperando acelerometría…</div>;
+  const { copy } = useAppLocale();
+  if (!values.length) return <div className="flex h-24 items-center justify-center text-xs text-muted-foreground">{copy("Esperando acelerometría…", "Waiting for acceleration…")}</div>;
   const low = Math.min(...values);
   const span = Math.max(1, Math.max(...values) - low);
   const points = values.map((value, index) => `${index * 4},${94 - ((value - low) / span) * 88}`).join(" ");
-  return <svg viewBox={`0 0 ${Math.max(4, values.length * 4)} 100`} className="h-24 w-full" role="img" aria-label="Magnitud vectorial de aceleración decimada">
+  return <svg viewBox={`0 0 ${Math.max(4, values.length * 4)} 100`} className="h-24 w-full" role="img" aria-label={copy("Magnitud vectorial de aceleración decimada", "Downsampled acceleration magnitude")}>
     <polyline points={points} fill="none" stroke="currentColor" strokeWidth="2" />
   </svg>;
 }
 
 export default function PolarH10Page() {
   const { locale, copy } = useAppLocale();
+  const purpose = useExecutionPurpose();
   const [connection, setConnection] = useState<PolarConnection>({ connected: false, device_alias: null, capabilities: null });
   const [devices, setDevices] = useState<PolarDevice[]>([]);
   const [capture, setCapture] = useState<PolarCapture | null>(null);
@@ -136,7 +142,7 @@ export default function PolarH10Page() {
   async function run(action: () => Promise<void>) {
     setBusy(true); setError(null); setNotice(null);
     try { await action(); }
-    catch (reason: unknown) { setError(reason instanceof Error ? reason.message : copy("No se pudo completar la operación.", "The operation could not be completed.")); }
+    catch (reason: unknown) { setError(experimentErrorMessage(reason, copy)); }
     finally { setBusy(false); }
   }
 
@@ -159,9 +165,10 @@ export default function PolarH10Page() {
   async function prepare() {
     await run(async () => {
       const prepared = await createPolarCapture({
+        execution_purpose: purpose,
         participant_pseudonym: participant,
-        matb_session_kind: sessionKind,
-        matb_session_id: sessionId,
+        matb_session_kind: purpose === "practice" ? "generic" : sessionKind,
+        matb_session_id: purpose === "practice" ? `practice:${participant}` : sessionId || `baseline:${participant}`,
         settings: { ecg_sample_rate_hz: 130, ecg_resolution_bits: 14, acc_sample_rate_hz: accRate, acc_resolution_bits: 16, acc_range_g: accRange },
       });
       setCapture(prepared.capture);
@@ -200,6 +207,7 @@ export default function PolarH10Page() {
   const settings = capture?.resolved_settings ?? capture?.requested_settings;
 
   return <div className="space-y-6">
+    <ExperimentGuide id="physiology" />
     <PageHeader
       kicker={copy("Fisiología experimental", "Experimental physiology")}
       title="Polar H10 · ECG + ACC + HR/RR"
@@ -269,7 +277,7 @@ export default function PolarH10Page() {
             {!capture && <Button disabled={busy || !connection.connected || !sessionId || !participant} onClick={() => void prepare()}>{copy("Preparar", "Prepare")}</Button>}
             {capture?.lifecycle === "created" && <Button disabled={busy} onClick={() => void start()}><Play className="mr-2 h-4 w-4" />{copy("Iniciar línea base", "Start baseline")}</Button>}
             {capturing && <Button variant="destructive" disabled={busy} onClick={() => void stop()}><Square className="mr-2 h-4 w-4" />{copy("Detener y finalizar", "Stop and finalize")}</Button>}
-            {capture && ["finalized", "incomplete"].includes(capture.artifact_state) && <Button variant="outline" disabled={busy} onClick={() => void run(() => downloadPolarBundle(capture.capture_id, lease))}><Download className="mr-2 h-4 w-4" />{copy("Descargar paquete", "Download bundle")}</Button>}
+            {capture && capture.execution_purpose !== "practice" && ["finalized", "incomplete"].includes(capture.artifact_state) && <Button variant="outline" disabled={busy} onClick={() => void run(() => downloadPolarBundle(capture.capture_id, lease))}><Download className="mr-2 h-4 w-4" />{copy("Descargar paquete", "Download bundle")}</Button>}
             {capture?.artifact_state === "finalized" && <Button asChild><Link href="/mission/setup#briefing">{copy("Continuar a instrucciones de misión", "Continue to mission briefing")}</Link></Button>}
           </div>
           {capture && <div className="border border-white/10 p-3 font-mono text-xs text-muted-foreground"><p>{capture.capture_id}</p><p className="mt-1">{capture.lifecycle} · ECG {settings?.ecg_sample_rate_hz} Hz · ACC {settings?.acc_sample_rate_hz} Hz ±{settings?.acc_range_g}G</p></div>}
@@ -299,8 +307,8 @@ export default function PolarH10Page() {
       <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {analysis.workload_responses.map((response) => <div key={response.phase} className="metric-tile">
           <p className="page-kicker">{response.phase}</p>
-          <p className="mt-2 text-sm">ΔlnRMSSD <strong>{response.delta_ln_rmssd === null ? "—" : response.delta_ln_rmssd.toFixed(3)}</strong></p>
-          <p className="mt-1 text-sm">ΔHR <strong>{response.delta_mean_hr_bpm === null ? "—" : `${response.delta_mean_hr_bpm.toFixed(1)} bpm`}</strong></p>
+          <p className="mt-2 text-sm">Î”lnRMSSD <strong>{response.delta_ln_rmssd === null ? "—" : response.delta_ln_rmssd.toFixed(3)}</strong></p>
+          <p className="mt-1 text-sm">Î”HR <strong>{response.delta_mean_hr_bpm === null ? "—" : `${response.delta_mean_hr_bpm.toFixed(1)} bpm`}</strong></p>
           <p className="mt-2 font-mono text-[10px] text-muted-foreground">{response.valid ? copy("DESCRIPTIVO", "DESCRIPTIVE") : response.reason}</p>
         </div>)}
       </CardContent>

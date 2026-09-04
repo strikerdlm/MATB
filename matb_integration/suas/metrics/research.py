@@ -48,6 +48,7 @@ def derive_research_metrics(records: Iterable[SessionRecord]) -> ResearchMetrics
     isa: list[int] = []
     sagat_rows: list[dict[str, object]] = []
     tlx_values: list[float] = []
+    rtlx_values: list[float] = []
     tlx_subscales: dict[str, list[float]] = {}
     bedford: list[int] = []
     probe_started = 0
@@ -89,6 +90,13 @@ def derive_research_metrics(records: Iterable[SessionRecord]) -> ResearchMetrics
                 tlx_values.append(float(raw))
             subscales = payload.get("subscales")
             if isinstance(subscales, Mapping):
+                from matb_integration.suas.research.scoring import score_nasa_tlx
+                try:
+                    complete_score = score_nasa_tlx(subscales)
+                except ValueError:
+                    pass
+                else:
+                    rtlx_values.append(complete_score.raw_tlx * 100 / 60)
                 for key, value in subscales.items():
                     if (
                         isinstance(key, str)
@@ -136,6 +144,12 @@ def derive_research_metrics(records: Iterable[SessionRecord]) -> ResearchMetrics
         nasa_tlx={
             "count": len(tlx_values),
             "raw_tlx": _mean(tlx_values),
+            "legacy_sum_0_60": _mean(tlx_values),
+            "rtlx_0_100": _mean(rtlx_values),
+            "complete_count": len(rtlx_values),
+            "metric_version": "unweighted-rtlx-v2",
+            "scoring": "unweighted_mean_of_six_dimensions",
+            "missing_reason": None if rtlx_values else "six_valid_dimensions_required",
             "subscales": {key: _mean(values) for key, values in sorted(tlx_subscales.items())},
             "status": _status(len(tlx_values)),
         },

@@ -15,15 +15,9 @@ test("participant follows KSS before the bilingual fast-check PVT", async ({ pag
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/start");
   await page.locator("#app-language").selectOption("en");
-  await expect(page.getByRole("heading", { name: /welcome to your MATB-FAC mission/i })).toBeVisible();
-
-  const sequence = page.getByRole("navigation", { name: /workflow order/i }).locator("ol > li");
-  await expect(sequence).toHaveCount(9);
-  await expect(sequence.nth(0)).toContainText("Welcome & Participant ID");
-  await expect(sequence.nth(1)).toContainText("Karolinska Sleepiness Scale");
-  await expect(sequence.nth(2)).toContainText("PVT");
-  await expect(sequence.nth(8)).toContainText("Complete visit");
-
+  await expect(page.getByRole("heading", { name: /choose your experiment/i })).toBeVisible();
+  const sequence = page.getByRole("list", { name: /experiment steps/i }).locator("li");
+  await expect(sequence).toHaveCount(5);
   const accessibility = await new AxeBuilder({ page: page as never }).analyze();
   expect(accessibility.violations.filter((item) => ["serious", "critical"].includes(item.impact ?? ""))).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath("participant-start-desktop.png"), fullPage: true, animations: "disabled" });
@@ -36,10 +30,10 @@ test("participant follows KSS before the bilingual fast-check PVT", async ({ pag
   await expect(page.getByRole("heading", { name: /Karolinska Sleepiness Scale/i })).toBeVisible();
   await expect(page.getByRole("heading", { name: /PVT instructions/i })).toHaveCount(0);
   await page.getByRole("radio", { name: /neither alert nor sleepy/i }).check();
-  await page.getByRole("button", { name: /save KSS and view PVT instructions/i }).click();
+  await page.getByRole("button", { name: /confirm KSS and view PVT instructions/i }).click();
   await expect(page.getByRole("heading", { name: /PVT instructions/i })).toBeVisible();
   await page.getByRole("button", { name: /I am ready/i }).click();
-  await page.getByRole("button", { name: /start 10-minute PVT/i }).click();
+  await page.getByRole("button", { name: /start PVT practice/i }).click();
 
   for (let attempt = 0; attempt < 14; attempt += 1) {
     await page.keyboard.press("Space");
@@ -52,11 +46,10 @@ test("Spanish participant sequence remains usable on a mobile viewport", async (
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/start");
   await page.locator("#app-language").selectOption("es-419");
-  await expect(page.getByRole("heading", { name: /bienvenido a su misión MATB-FAC/i })).toBeVisible();
-  const sequence = page.getByRole("navigation", { name: /orden del flujo/i }).locator("ol > li");
-  await expect(sequence).toHaveCount(9);
-  await expect(sequence.nth(1)).toContainText("Escala de Somnolencia KSS");
-  await expect(sequence.nth(2)).toContainText("PVT · Vigilancia psicomotora");
+  await expect(page.getByRole("heading", { name: /elija su experimento/i })).toBeVisible();
+  await page.getByText("Menú de experimentos", { exact: true }).click();
+  const sequence = page.getByRole("list", { name: /pasos del experimento/i }).locator("li");
+  await expect(sequence).toHaveCount(5);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("participant-start-mobile-es.png"), fullPage: true, animations: "disabled" });
 });

@@ -1,6 +1,7 @@
 // Author: Dr Diego Malpica MD
 "use client";
 
+import { useAppLocale } from "@/lib/i18n";
 import { useMemo, useRef, useState } from "react";
 
 import { ChoiceRT } from "@/components/screen/ChoiceRT";
@@ -20,6 +21,7 @@ export function TaskRunner({ fast, onComplete }: {
   onComplete: (payload: ScreenPayload) => void;
 }) {
   const strings = useScreenStrings();
+  const { locale } = useAppLocale();
   const config = fast ? FAST_CONFIG : SCREEN_CONFIG;
   const seed = useMemo(() => Math.floor(Math.random() * 2 ** 31), []);
   const rng = useMemo(() => mulberry32(seed), [seed]);
@@ -52,6 +54,8 @@ export function TaskRunner({ fast, onComplete }: {
         <Tracking config={config} onDone={(tracking) => {
           acc.current.tracking = tracking;
           onComplete({
+            schema_version: 2,
+            locale,
             seed,
             administered_at: new Date().toISOString(),
             fast_mode: fast,

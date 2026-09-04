@@ -65,6 +65,9 @@ from matb_integration.openmatb_visual_profiles import (
     canonical_json as canonical_profile_json,
 )
 from matb_integration.scenario_builder import (
+    BEDFORD_QUESTIONNAIRE,
+    ISA_QUESTIONNAIRE,
+    NASATLX_QUESTIONNAIRE,
     BEDFORD_QUESTIONNAIRE_ES,
     ISA_QUESTIONNAIRE_ES,
     NASATLX_QUESTIONNAIRE_ES,
@@ -121,6 +124,25 @@ DEFAULT_INSTRUCTIONS = {
         "DM8": "Día 8 · primera sesión de seguimiento. Repita la práctica y los tres bloques siguiendo las mismas instrucciones de la sesión inicial.",
         "DM15": "Día 15 · segunda sesión de seguimiento. Repita la práctica y los tres bloques; complete cada escala según su experiencia en el bloque actual.",
     },
+}
+
+ENGLISH_INSTRUCTIONS = {
+    "title": "Instructions for your MATB-FAC session",
+    "steps": [
+        "Confirm your participant code and visit.",
+        "Adjust your chair and check the display, sound, mouse, keyboard or joystick.",
+        "Read the four task instructions, then practice the controls.",
+        "During each block, monitor all four tasks and respond with the indicated controls.",
+        "After each study block, answer the workload questions about that block.",
+        "Wait for saving confirmation before continuing or closing the application.",
+    ],
+    "task_instructions": {
+        "TRACK": "Tracking: keep the cursor inside the target using the configured joystick or mouse.",
+        "COMM": "Communications: listen to messages and respond only when they address your callsign.",
+        "SYSMON": "System monitoring: detect and reset lights or gauges that enter a fault state.",
+        "RESMAN": "Resource management: operate the pumps to keep fuel levels close to their targets.",
+    },
+    "visit_instructions": {"DEFAULT": "Complete practice first. Study blocks follow the order assigned by the application."},
 }
 
 DEFAULT_VISUAL_PROFILE = ("matb-fac-modern", "1.0.0")
@@ -240,6 +262,7 @@ class OpenMatbManager:
         self._handles: dict[str, _ProcessHandle] = {}
         self._preview = _PreviewState()
         self._seed_defaults()
+        self._seed_english_instructions()
         self._mark_interrupted()
 
     def _seed_defaults(self) -> None:
@@ -285,6 +308,19 @@ class OpenMatbManager:
                     )
                 )
             db.commit()
+
+    def _seed_english_instructions(self) -> None:
+        with Session(self.engine) as db:
+            existing = db.exec(select(OpenMatbInstructionProtocol).where(
+                OpenMatbInstructionProtocol.protocol_id == "matb-fac-en",
+                OpenMatbInstructionProtocol.version == "1.0.0",
+            )).first()
+            if existing is None:
+                db.add(OpenMatbInstructionProtocol(
+                    protocol_id="matb-fac-en", version="1.0.0", locale="en", status="published",
+                    content_json=_canonical(ENGLISH_INSTRUCTIONS), sha256=_sha(ENGLISH_INSTRUCTIONS), published_at=_utcnow(),
+                ))
+                db.commit()
 
     def _mark_interrupted(self) -> None:
         with Session(self.engine) as db:
@@ -736,7 +772,11 @@ class OpenMatbManager:
                 session_dir.mkdir(parents=True, exist_ok=False)
                 self._write_visual_profile_snapshot(run_dir, visual_profile)
                 settings = json.loads(preset.settings_json)
-                order = ["PRACTICE", *(level.value.upper() for level in block_order_for_participant(request.participant_id))]
+                order = ["PRACTICE"] if request.execution_purpose == "practice" else ["PRACTICE", *(level.value.upper() for level in block_order_for_participant(request.participant_id))]
+                english = instructions.locale == "en"
+                isa_file = ISA_QUESTIONNAIRE if english else ISA_QUESTIONNAIRE_ES
+                tlx_file = NASATLX_QUESTIONNAIRE if english else NASATLX_QUESTIONNAIRE_ES
+                bedford_file = BEDFORD_QUESTIONNAIRE if english else BEDFORD_QUESTIONNAIRE_ES
                 source_commit, source_dirty = detect_generator_source_provenance(self.repo_root)
                 paths: dict[str, str] = {}
                 for index, block in enumerate(order):
@@ -744,14 +784,14 @@ class OpenMatbManager:
                     profile = settings[block]
                     text = build_block_scenario(
                         level=level, block_duration_sec=int(profile["duration_seconds"]), seed=42 + request.visit_ordinal * 10 + index,
-                        isa_questionnaire=ISA_QUESTIONNAIRE_ES, include_nasatlx=False, include_bedford=False,
+                        isa_questionnaire=isa_file, include_nasatlx=False, include_bedford=False,
                         workload_settings=profile,
                     )
                     path = scenario_dir / f"{index}_{block}.txt"
                     _write_scenario_with_manifest(
                         path, text, level=level, block_duration_sec=int(profile["duration_seconds"]),
-                        seed=42 + request.visit_ordinal * 10 + index, isa_questionnaire=ISA_QUESTIONNAIRE_ES,
-                        nasatlx_questionnaire=NASATLX_QUESTIONNAIRE_ES, bedford_questionnaire=BEDFORD_QUESTIONNAIRE_ES,
+                        seed=42 + request.visit_ordinal * 10 + index, isa_questionnaire=isa_file,
+                        nasatlx_questionnaire=tlx_file, bedford_questionnaire=bedford_file,
                         include_nasatlx=False, include_bedford=False, participant_id=request.participant_id,
                         block_num=index + 1, visit_ordinal=request.visit_ordinal, source_commit=source_commit,
                         source_dirty=source_dirty, workload_settings=profile, profile_name=block,
@@ -774,6 +814,7 @@ class OpenMatbManager:
                     visual_profile_version=visual_profile.version,
                     visual_profile_schema_version=visual_profile.schema_version,
                     visual_profile_sha256=profile_sha256(visual_payload),
+                    execution_purpose=request.execution_purpose, locale=instructions.locale,
                     display_index=request.display_index,
                     block_order_json=_canonical(order), scenario_paths_json=_canonical(paths),
                     controller_lease_hash=_token_hash(controller_lease), participant_token_hash=_token_hash(participant_token),
@@ -798,6 +839,7 @@ class OpenMatbManager:
         order = json.loads(row.block_order_json)
         active = order[row.current_block_index] if row.current_block_index < len(order) and row.lifecycle in {"STARTING", "RUNNING", "PAUSED", "AWAITING_SCALE"} else None
         return OpenMatbSessionView(
+            execution_purpose=row.execution_purpose, locale=row.locale,
             id=row.id, participant_id=row.participant_id, visit_ordinal=row.visit_ordinal,
             visit_code=protocol_visit.code, scheduled_day=visit.scheduled_day if visit else protocol_visit.scheduled_day,
             lifecycle=row.lifecycle, block_order=order, current_block_index=row.current_block_index, active_block=active,
@@ -864,6 +906,14 @@ class OpenMatbManager:
                 row = self._controller_row(db, session_id, lease)
                 if row.lifecycle not in {"READY", "BETWEEN_BLOCKS"}:
                     raise OpenMatbRuntimeError("openmatb_invalid_transition")
+                if not self.readiness().ready:
+                    raise OpenMatbRuntimeError("openmatb_station_not_ready")
+                if row.execution_purpose == "study":
+                    from app.experiment_catalog import require_task_order
+                    try:
+                        require_task_order(db, row.participant_id, row.visit_id, "openmatb")
+                    except ValueError as exc:
+                        raise OpenMatbRuntimeError(str(exc)) from exc
                 order = json.loads(row.block_order_json)
                 if row.current_block_index >= len(order):
                     raise OpenMatbRuntimeError("openmatb_suite_complete")
@@ -874,7 +924,7 @@ class OpenMatbManager:
                 visual_profile_path = self._verified_session_visual_profile_path(row)
                 command = [
                     str(self.python_executable), str(self.openmatb_root / "main.py"), "--scenario", str(scenario),
-                    "--session-dir", str(Path(row.artifact_root) / "sessions" / block), "--language", "es_CO",
+                    "--session-dir", str(Path(row.artifact_root) / "sessions" / block), "--language", "en_EN" if row.locale == "en" else "es_CO",
                 ]
                 if visual_profile_path is None:
                     command.extend(("--visual-theme", row.visual_theme))
@@ -1168,7 +1218,9 @@ class OpenMatbManager:
                     row.active_session_csv = str(handle.session_csv) if handle.session_csv else None
                     if handle.block == "PRACTICE":
                         row.current_block_index += 1
-                        row.lifecycle = "BETWEEN_BLOCKS"
+                        row.lifecycle = "COMPLETE" if row.execution_purpose == "practice" else "BETWEEN_BLOCKS"
+                        if row.execution_purpose == "practice":
+                            row.finished_at = _utcnow()
                     else:
                         row.lifecycle = "AWAITING_SCALE"
                 db.add(row); db.commit()
@@ -1260,7 +1312,7 @@ class OpenMatbManager:
             scores = json.loads(row.scores_json)
             scores[block] = {
                 "instrument_version": "MATB-FAC-WORKLOAD-1.0",
-                "locale": "es-419",
+                "locale": row.locale,
                 "nasa_tlx": request.nasa_tlx,
                 "rtlx_mean_0_100": sum(request.nasa_tlx.values()) / 6,
                 "bedford": request.bedford,
@@ -1268,13 +1320,14 @@ class OpenMatbManager:
             }
             row.scores_json = _canonical(scores)
             self._persist_scale_sidecar(row, block, scores[block])
-            self._ingest_completed_block(db, row, block, request)
+            if row.execution_purpose == "study":
+                self._ingest_completed_block(db, row, block, request)
             row.current_block_index += 1
             row.lifecycle = "COMPLETE" if row.current_block_index >= len(order) else "BETWEEN_BLOCKS"
             if row.lifecycle == "COMPLETE":
                 row.finished_at = _utcnow()
                 visit = db.get(Visit, row.visit_id)
-                if visit is not None:
+                if visit is not None and row.execution_purpose == "study":
                     visit.status = "complete"; db.add(visit)
             db.add(row); db.commit(); db.refresh(row)
             return self._view(db, row)

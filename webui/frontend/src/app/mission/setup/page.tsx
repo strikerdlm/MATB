@@ -1,5 +1,6 @@
 "use client";
 
+import { ExperimentGuide } from "@/components/experiments/ExperimentGuide";
 import React, { useEffect, useState } from "react";
 import { listParticipants } from "@/lib/api";
 import { listSimulationScenarios } from "@/lib/simulation/api";
@@ -36,11 +37,11 @@ export default function MissionSetupPage() {
   }, []);
 
   return (
-    <MissionSetupForm
+    <div className="space-y-6"><ExperimentGuide id="suas" /><MissionSetupForm
       participants={participants}
       scenarios={scenarios}
       loading={loading}
       loadError={error}
-    />
+    /></div>
   );
 }

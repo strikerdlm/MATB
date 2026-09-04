@@ -104,6 +104,11 @@ def seeded_participant(engine):
         session.add(Participant(id="P01", enrollment_date=date(2026, 6, 1)))
         session.add(Visit(participant_id="P01", visit_ordinal=1, scheduled_day=0))
         session.commit()
+        from app.models import PvtAssessment
+        session.add(PvtAssessment(participant_id="P01", visit_id=1, kss_score=3,
+            administered_at="2026-06-01T12:00:00Z", duration_ms=600000, pvt_version=2,
+            protocol_valid=True, raw_trials_json="[]", metrics_json="{}"))
+        session.commit()
     return "P01"
 
 
@@ -178,6 +183,10 @@ async def liftoff_client(engine, tmp_path, monkeypatch):
         db.add(Visit(participant_id="P01", visit_ordinal=1, scheduled_day=0))
         db.add(Visit(participant_id="P01", visit_ordinal=2, scheduled_day=8))
         db.add(Visit(participant_id="P01", visit_ordinal=3, scheduled_day=15))
+        db.commit()
+        from app.study_models import StudyParticipantContext
+        db.add(StudyParticipantContext(participant_id="P01", protocol_id="astra-2026",
+            task_sequence="LIFTOFF_MATB", prior_fpv_hours=0, gaming_hours_per_week=0))
         db.commit()
     receiver = FakeLiftoffReceiver()
     manager = LiftoffManager(

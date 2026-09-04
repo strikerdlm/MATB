@@ -49,6 +49,16 @@ export async function openRunningMission(
     data: { id: participant, enrollment_date: "2026-08-01" },
   });
   expect(participantResponse.status()).toBe(201);
+  const pvt = await request.post(`${BACKEND_ORIGIN}/pvt`, { data: {
+    participant_id: participant, visit_ordinal: 1, kss_score: 3,
+    administered_at: "2026-09-04T12:00:00Z", duration_ms: 600000,
+    timing_version: 2, max_frame_gap_ms: 17, terminal_phase: "waiting",
+    trials: Array.from({ length: 272 }, (_, i) => ({ index: i, wait_ms: 2000,
+      stimulus_at_ms: 2000 + i * 2200, response_at_ms: 2200 + i * 2200, rt_ms: 200, outcome: "response" })),
+  } });
+  expect(pvt.status()).toBe(201);
+  expect((await pvt.json()).protocol_valid).toBe(true);
+
   let sessionId: string | null = null;
   let lease: string | null = null;
   try {

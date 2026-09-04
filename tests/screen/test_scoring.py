@@ -65,7 +65,7 @@ def test_tracking_rms_normalized():
                           "n_expected_samples": 100, "path_amplitude_px": 100.0})
     assert out["rms_norm"] == pytest.approx(0.3)
     assert out["valid"] is True
-    sparse = {"samples": [[0, 30, 0, 0, 0]] * 50, "n_expected_samples": 100,
+    sparse = {"samples": [[i * 16, 30, 0, 0, 0] for i in range(50)], "n_expected_samples": 100,
               "path_amplitude_px": 100.0}
     assert score_tracking(sparse)["valid"] is False  # 50% < 80% of expected
 

@@ -20,6 +20,7 @@ class PolarCaptureRecord(SQLModel, table=True):
     matb_session_id: str = Field(index=True)
     device_alias: str
     lifecycle: str = Field(index=True)
+    execution_purpose: str = "study"
     requested_settings_json: str
     resolved_settings_json: str | None = None
     stream_counters_json: str = "{}"

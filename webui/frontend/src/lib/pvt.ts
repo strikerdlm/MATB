@@ -14,6 +14,13 @@ export interface PvtTrial {
   outcome: PvtOutcome;
 }
 export interface PvtPayload {
+  locale?: "es-419" | "en";
+  execution_purpose?: "practice" | "study";
+  timing_version?: 1 | 2;
+  interruption_count?: number;
+  max_frame_gap_ms?: number;
+  terminal_phase?: "waiting" | "stimulus" | "feedback" | "complete";
+  terminal_stimulus_at_ms?: number | null;
   participant_id: string;
   visit_ordinal: number;
   kss_score: number;
@@ -22,6 +29,13 @@ export interface PvtPayload {
   fast_mode: boolean;
   trials: PvtTrial[];
   overwrite?: boolean;
+}
+
+export interface PvtRunResult {
+  durationMs: number; trials: PvtTrial[]; administeredAt: string;
+  interruptionCount: number; maxFrameGapMs: number;
+  terminalPhase: "waiting" | "stimulus" | "feedback" | "complete";
+  terminalStimulusAtMs: number | null;
 }
 
 export function randomPvtWait(random: () => number = Math.random): number {

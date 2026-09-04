@@ -29,6 +29,7 @@ def collect_liftoff_metric_rows(
     query = select(LiftoffSession, Visit).where(
         LiftoffSession.visit_id == Visit.id,
         LiftoffSession.validity == "valid",
+        LiftoffSession.execution_purpose == "study",
     ).order_by(
         LiftoffSession.participant_id,
         Visit.visit_ordinal,
@@ -72,7 +73,7 @@ def build_liftoff_completeness_grid(session: Session) -> list[dict[str, Any]]:
     participants = session.exec(select(Participant).order_by(Participant.id)).all()
     visits = session.exec(select(Visit)).all()
     attempts = session.exec(
-        select(LiftoffSession).order_by(
+        select(LiftoffSession).where(LiftoffSession.execution_purpose == "study").order_by(
             LiftoffSession.participant_id,
             LiftoffSession.visit_id,
             LiftoffSession.attempt_number,
@@ -123,7 +124,7 @@ def build_liftoff_completeness_grid(session: Session) -> list[dict[str, Any]]:
 
 def liftoff_provenance(session: Session) -> list[dict[str, Any]]:
     sessions = session.exec(
-        select(LiftoffSession).order_by(
+        select(LiftoffSession).where(LiftoffSession.execution_purpose == "study").order_by(
             LiftoffSession.participant_id,
             LiftoffSession.visit_id,
             LiftoffSession.attempt_number,

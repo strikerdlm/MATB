@@ -1,5 +1,79 @@
-import { redirect } from "next/navigation";
+"use client";
+import Link from "next/link";
+import dynamic from "next/dynamic";
+import { useEffect, useState } from "react";
+import { ExperimentGuide } from "@/components/experiments/ExperimentGuide";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { Button } from "@/components/ui/button";
+import { listParticipants, postScreen } from "@/lib/api";
+import { useAppLocale } from "@/lib/i18n";
+import { announceExperimentStage, useExecutionPurpose } from "@/lib/execution-purpose";
+import type { Participant, ScreenIngestResult } from "@/types";
+import type { ScreenPayload } from "@/lib/screen";
 
-export default function LegacyScreenRedirect() {
-  redirect("/pvt");
+const TaskRunner = dynamic(() => import("@/components/screen/TaskRunner").then((module) => module.TaskRunner), { ssr: false });
+export default function ScreenPage() {
+  const { copy } = useAppLocale();
+  const purpose = useExecutionPurpose();
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [participant, setParticipant] = useState("");
+  const [stage, setStage] = useState<"select" | "run" | "saving" | "review">("select");
+  const [payload, setPayload] = useState<ScreenPayload | null>(null);
+  const [result, setResult] = useState<ScreenIngestResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    void listParticipants().then((rows) => { if (active) setParticipants(rows); })
+      .catch(() => { if (active) setError("connection"); });
+    return () => { active = false; };
+  }, []);
+  useEffect(() => { announceExperimentStage(stage === "select" ? 1 : stage === "review" ? 4 : 3); }, [stage]);
+  async function save(raw: ScreenPayload) {
+    setPayload(raw); setStage("saving"); setError(null);
+    try { setResult(await postScreen(participant, raw, false, purpose)); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "save"); }
+    finally { setStage("review"); }
+  }
+  const fields = [
+    ["simple_rt", copy("Reacción simple", "Simple reaction"), "median_ms", "ms"],
+    ["choice_rt", copy("Elección de respuesta", "Response choice"), "median_ms", "ms"],
+    ["nback", copy("Memoria de trabajo · 2-back", "Working memory · 2-back"), "d_prime", "d′"],
+    ["tracking", copy("Seguimiento", "Tracking"), "rms_norm", copy("error normalizado", "normalized error")],
+  ];
+  return <div className="space-y-6">
+    <PageHeader kicker={copy("Evaluación cognitiva", "Cognitive assessment")} title={copy("Batería cognitiva", "Cognitive battery")} description={copy("Cuatro pruebas breves, con instrucciones y práctica antes de cada una.", "Four short tests, with instructions and practice before each one.")} />
+    {stage === "select" && <>
+      <ExperimentGuide id="screen" />
+      <div className="space-y-4 rounded-lg border border-white/15 p-5">
+        <label htmlFor="screen-participant" className="block font-semibold">{copy("Su código de participante", "Your participant code")}</label>
+        <select id="screen-participant" className="native-select w-full max-w-sm" value={participant} onChange={(event) => setParticipant(event.target.value)}>
+          <option value="">{copy("Seleccione su código", "Select your code")}</option>
+          {participants.map((row) => <option key={row.id} value={row.id}>{row.id}</option>)}
+        </select>
+        <p className="text-sm text-muted-foreground">{copy("Necesita teclado y mouse. Lea las instrucciones y responda cuando aparezca el estímulo.", "You need a keyboard and mouse. Read the instructions and respond when the stimulus appears.")}</p>
+        <Button disabled={!participant} onClick={() => setStage("run")}>{copy("Ver instrucciones y comenzar", "View instructions and begin")}</Button>
+      </div>
+    </>}
+    {error && <div role="alert" className="rounded border border-danger/40 p-4">
+      <p>{error === "connection" ? copy("No se pudieron cargar los códigos. Compruebe la conexión y vuelva a abrir esta actividad.", "Could not load participant codes. Check the connection and reopen this activity.") : copy("No se pudo guardar. Sus respuestas siguen disponibles en esta pantalla. Compruebe la conexión y vuelva a intentarlo.", "Could not save. Your responses remain available on this screen. Check the connection and try again.")}</p>
+      {payload && <Button className="mt-3" onClick={() => void save(payload)}>{copy("Reintentar guardado", "Retry saving")}</Button>}
+    </div>}
+    {stage === "run" && <TaskRunner fast={purpose === "practice"} onComplete={(raw) => void save(raw)} />}
+    {stage === "saving" && <p role="status">{copy("Guardando respuestas…", "Saving responses…")}</p>}
+    {stage === "review" && result && <section className="space-y-4">
+      <h2 className="text-2xl font-semibold">{copy("Respuestas guardadas", "Responses saved")}</h2>
+      <p>{purpose === "practice" ? copy("Práctica completada. Estos resultados no se incorporan al estudio.", "Practice completed. These results are not included in the study.") : copy("Batería completada. Revise las medidas de cada tarea.", "Battery completed. Review the measures for each task.")}</p>
+      <div className="grid gap-3 sm:grid-cols-2">{fields.map(([key, label, field, unit]) => {
+        const score = result.scores[key];
+        const value = score?.[field];
+        return <div key={key} className="rounded border border-white/15 p-5"><h3 className="font-semibold">{label}</h3>
+          <p className="mt-2 text-2xl">{typeof value === "number" ? value.toFixed(2) : "—"} <span className="text-sm">{unit}</span></p>
+          <p className="mt-2 text-sm text-muted-foreground">{score?.valid ? copy("Registro suficiente para esta medida.", "Sufficient recording for this measure.") : copy("Calidad o respuestas insuficientes para interpretar la medida.", "Insufficient quality or responses to interpret this measure.")}</p>
+          {typeof score?.accuracy === "number" && <p className="mt-2 text-sm">{copy("Precisión", "Accuracy")}: {(score.accuracy * 100).toFixed(0)}%</p>}
+        </div>;
+      })}</div>
+      <p className="text-sm text-muted-foreground">{copy("Las medidas describen su desempeño en estas tareas. No representan un diagnóstico ni una calificación global.", "These measures describe performance on these tasks. They do not represent a diagnosis or an overall grade.")}</p>
+      <Button asChild><Link href="/start">{copy("Volver a los experimentos", "Return to experiments")}</Link></Button>
+    </section>}
+  </div>;
 }

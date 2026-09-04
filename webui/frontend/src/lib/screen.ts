@@ -93,10 +93,12 @@ export function targetPosition(tSeconds: number, amplitude: number): { x: number
 
 // --- raw payload types (mirror matb_integration/screen/scoring.py inputs) ---
 export interface RtTrial { rt_ms: number | null; responded: boolean; }
-export interface ChoiceTrial extends RtTrial { correct: boolean; }
-export interface NbackTrial { is_target: boolean; responded: boolean; shown_at_ms: number | null; }
+export interface ChoiceTrial extends RtTrial { correct: boolean; stimulus_side?: "left" | "right"; response_side?: "left" | "right" | null; }
+export interface NbackTrial { is_target: boolean; responded: boolean; shown_at_ms: number | null; letter?: string; }
 
 export interface ScreenPayload {
+  schema_version?: 2;
+  locale?: "es-419" | "en";
   seed: number;
   administered_at: string;
   fast_mode: boolean;
@@ -107,5 +109,6 @@ export interface ScreenPayload {
     samples: number[][];           // [t_ms, mouse_x, mouse_y, target_x, target_y]
     n_expected_samples: number;
     path_amplitude_px: number;
+    duration_ms?: number;
   };
 }

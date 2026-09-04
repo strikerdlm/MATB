@@ -35,6 +35,19 @@ def test_short_window_returns_null_with_reason() -> None:
     assert result["rmssd_ms"] is None
 
 
+def test_rejected_rr_is_preserved_and_never_bridged() -> None:
+    rr = [1000.0] * 10 + [2500.0] + [1000.0] * 10
+    result = analyze_rr_window(rr, minimum_duration_s=0.0)
+    assert rr[10] == 2500.0
+    assert result["n_intervals"] == 21
+    assert result["n_accepted_intervals"] == 20
+    assert result["n_contiguous_pairs"] == 18
+    assert math.isclose(result["artifact_burden_percent"], 100.0 / 21.0)
+    assert result["rmssd_ms"] == 0.0
+    assert result["ln_rmssd"] is None
+    assert result["lf_hf_ratio"] is None
+
+
 def test_contact_failure_invalidates_offline_window_without_changing_raw_rr() -> None:
     rr = [1000.0, 1010.0] * 151
     support = [True] * len(rr)

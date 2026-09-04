@@ -4,6 +4,7 @@ import asyncio
 from datetime import date
 
 import httpx
+import pytest
 from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
@@ -14,7 +15,8 @@ from app.physiology_runtime import PolarCaptureManager
 from matb_integration.physiology.transport import SimulatedPolarTransport
 
 
-def test_polar_http_workflow_uses_tokens_leases_and_no_address(tmp_path) -> None:
+@pytest.mark.parametrize("purpose", ["study", "practice"])
+def test_polar_http_workflow_uses_tokens_leases_and_no_address(tmp_path, purpose) -> None:
     async def exercise() -> None:
         engine = create_engine(
             "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
@@ -45,6 +47,7 @@ def test_polar_http_workflow_uses_tokens_leases_and_no_address(tmp_path) -> None
                 )
                 assert connected.status_code == 200
                 prepared = await client.post("/physiology/polar-h10/v1/captures", json={
+                    "execution_purpose": purpose,
                     "participant_pseudonym": "P01", "matb_session_kind": "generic",
                     "matb_session_id": "api-test", "settings": {
                         "ecg_sample_rate_hz": 130, "ecg_resolution_bits": 14,
@@ -76,6 +79,13 @@ def test_polar_http_workflow_uses_tokens_leases_and_no_address(tmp_path) -> None
                     headers={"X-Polar-Controller": lease},
                 )
                 assert inventory.json()["state"] == "finalized"
+                bundle = await client.get(
+                    f"/physiology/polar-h10/v1/captures/{capture_id}/bundle",
+                    headers={"X-Polar-Controller": lease},
+                )
+                assert bundle.status_code == (409 if purpose == "practice" else 200)
+                missing = await client.get("/physiology/polar-h10/v1/captures/unknown-capture/bundle")
+                assert missing.status_code == 404
                 gate = await client.get("/physiology/polar-h10/v1/internal-recordings/status")
                 assert gate.status_code == 501
                 assert gate.json()["detail"]["code"] == "polar_internal_recording_not_qualified"

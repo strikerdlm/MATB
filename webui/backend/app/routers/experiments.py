@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
 from matb_integration.contracts import ExperimentSpecV1
@@ -13,6 +13,20 @@ from matb_integration.experiment_compiler import ExperimentCompileError, compile
 
 
 router = APIRouter(prefix="/experiments", tags=["experiments"])
+
+
+@router.get("/catalog")
+def experiment_catalog(request: Request) -> dict[str, Any]:
+    from app.experiment_catalog import EXPERIMENTS
+
+    active = {item.component_id for item in request.app.state.component_registry.manifests()}
+    return {"catalog_version": "1.0", "experiments": [
+        {**item, "supported_modes": ["practice", "study"],
+         "component_available": item["component_id"] is None or item["component_id"] in active,
+         "unavailable_reason": None if item["component_id"] is None or item["component_id"] in active
+         else "component_not_enabled"}
+        for item in EXPERIMENTS
+    ]}
 
 
 def _source_dirty_from_environment() -> bool | None:

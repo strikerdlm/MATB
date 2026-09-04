@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import math
 from typing import Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -41,6 +42,8 @@ class LiftoffConfiguration(BaseModel):
 
 class CreateLiftoffSession(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    execution_purpose: Literal["practice", "study"] = "study"
+    locale: Literal["es-419", "en"] = "es-419"
 
     participant_id: str = Field(pattern=PARTICIPANT_ID_PATTERN)
     visit_ordinal: int = Field(ge=1, le=16)
@@ -59,6 +62,8 @@ class CreateLiftoffSession(BaseModel):
 
 class LiftoffSessionView(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    execution_purpose: Literal["practice", "study"] = "study"
+    locale: Literal["es-419", "en"] = "es-419"
 
     id: str
     participant_id: str
@@ -107,7 +112,7 @@ class VisibleResultsRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_lap_times(self) -> "VisibleResultsRequest":
-        if any(value <= 0 for value in self.valid_lap_times_s):
+        if any(not math.isfinite(value) or value <= 0 for value in self.valid_lap_times_s):
             raise ValueError("valid lap times must be positive")
         return self
 

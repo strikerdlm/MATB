@@ -93,7 +93,43 @@ def init_db(*, component_model_modules: tuple[str, ...] = ()) -> None:
     _migrate_openmatb_visual_profile_v1(_engine)
     _migrate_analysisresult_v2(_engine)
     _migrate_bayesresult_v3(_engine)
+    _migrate_experiment_execution_v1(_engine)
     _audit_sqlite_foreign_keys(_engine)
+    from app.hcf_refresh import refresh_fit_hcf
+    with Session(_engine) as session:
+        refresh_fit_hcf(session)
+
+
+def _migrate_experiment_execution_v1(engine) -> None:
+    """Add purpose/evidence without rewriting historical observations or scores."""
+    columns_by_table = {
+        "screenresult": {"execution_purpose": "VARCHAR NOT NULL DEFAULT 'study'"},
+        "pvt_assessment": {"execution_purpose": "VARCHAR NOT NULL DEFAULT 'study'",
+                           "timing_evidence_json": "VARCHAR NOT NULL DEFAULT '{}'"},
+        "openmatb_suite_session": {"execution_purpose": "VARCHAR NOT NULL DEFAULT 'study'"},
+        "liftoff_session": {"execution_purpose": "VARCHAR NOT NULL DEFAULT 'study'"},
+        "polar_capture": {"execution_purpose": "VARCHAR NOT NULL DEFAULT 'study'"},
+    }
+    with engine.begin() as connection:
+        tables = set(inspect(connection).get_table_names())
+        for table, definitions in columns_by_table.items():
+            if table not in tables:
+                continue
+            columns = {item["name"] for item in inspect(connection).get_columns(table)}
+            for name, definition in definitions.items():
+                if name not in columns:
+                    connection.execute(text(f'ALTER TABLE "{table}" ADD COLUMN "{name}" {definition}'))
+        # Existing fast screens are retained but removed from the study cohort.
+        if "screenresult" in tables:
+            connection.execute(text("UPDATE screenresult SET execution_purpose='practice' "
+                                    "WHERE json_valid(raw_trials_json) AND json_extract(raw_trials_json, '$.fast_mode')=1"))
+        if "pvt_assessment" in tables:
+            connection.execute(text("UPDATE pvt_assessment SET execution_purpose='practice' "
+                                    "WHERE pvt_version=1 AND protocol_valid=0"))
+        connection.execute(text("CREATE TABLE IF NOT EXISTS matb_schema_migration (version VARCHAR PRIMARY KEY, applied_at DATETIME NOT NULL)"))
+        connection.execute(text("INSERT OR IGNORE INTO matb_schema_migration (version, applied_at) VALUES ('experiment-execution-v1', CURRENT_TIMESTAMP)"))
+
+
 
 
 def _migrate_openmatb_visual_theme_v1(engine) -> None:

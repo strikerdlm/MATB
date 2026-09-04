@@ -38,6 +38,21 @@ def _seed_visit(engine) -> None:
         db.commit()
 
 
+def test_english_practice_has_one_block_and_preserves_locale(engine, tmp_path):
+    _seed_visit(engine)
+    manager = _manager(engine, tmp_path)
+    prepared = asyncio.run(manager.create_session(CreateOpenMatbSession(
+        participant_id="P01", visit_ordinal=1, execution_purpose="practice",
+        instruction_protocol_id="matb-fac-en", instruction_version="1.0.0")))
+    assert prepared.session.locale == "en"
+    assert prepared.session.execution_purpose == "practice"
+    assert prepared.session.block_order == ["PRACTICE"]
+    assert prepared.session.instruction_protocol.locale == "en"
+    assert "practice" in prepared.session.visit_instruction.lower()
+    scenario = next((Path(manager.artifact_root) / prepared.session.id / "scenarios").glob("*.txt"))
+    assert ";genericscales;filename;isa_en.txt" in scenario.read_text(encoding="utf-8")
+
+
 def test_create_session_generates_versioned_spanish_counterbalanced_suite(engine, tmp_path):
     _seed_visit(engine)
     manager = _manager(engine, tmp_path)
@@ -114,6 +129,8 @@ def test_participant_token_is_required_for_acknowledgement(engine, tmp_path):
 def test_native_process_exit_before_ready_is_reported_immediately(engine, tmp_path, monkeypatch):
     _seed_visit(engine)
     manager = _manager(engine, tmp_path)
+    from types import SimpleNamespace
+    monkeypatch.setattr(manager, "readiness", lambda: SimpleNamespace(ready=True))
 
     class FailedProcess:
         def __init__(self) -> None:
@@ -256,6 +273,8 @@ def test_visual_profile_import_is_draft_idempotent_and_collision_safe(engine, tm
 def test_frozen_visual_profile_tampering_fails_closed_before_launch(engine, tmp_path, monkeypatch):
     _seed_visit(engine)
     manager = _manager(engine, tmp_path)
+    from types import SimpleNamespace
+    monkeypatch.setattr(manager, "readiness", lambda: SimpleNamespace(ready=True))
     prepared = asyncio.run(
         manager.create_session(CreateOpenMatbSession(participant_id="P01", visit_ordinal=1))
     )

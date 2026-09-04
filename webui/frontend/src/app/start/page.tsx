@@ -1,87 +1,83 @@
 "use client";
-
 import Link from "next/link";
-import { Activity, ArrowRight, CheckCircle2, Clock3, Headphones, MoonStar, Radar, UserRoundPlus } from "lucide-react";
-
-import { InstructionAudio } from "@/components/instructions/InstructionAudio";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Activity, ArrowRight, Brain, Clock3, Gamepad2, MonitorPlay, Radar } from "lucide-react";
+import { ReadinessNote } from "@/components/experiments/ReadinessNote";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAppLocale } from "@/lib/i18n";
+import { EXPERIMENTS, type ExperimentId, type ExecutionPurpose } from "@/lib/experiments";
+import { useConsole } from "@/lib/console-context";
 
-export default function StartPage() {
-  const { locale, copy } = useAppLocale();
-  const audioLocale = locale === "en" ? "en" : "es";
-  const steps = [
-    { title: copy("Bienvenida e identificación", "Welcome & Participant ID"), text: copy("Confirme con el investigador su código seudonimizado y la visita de hoy.", "Confirm your pseudonymous code and today’s visit with the researcher."), icon: UserRoundPlus },
-    { title: copy("Escala de Somnolencia KSS", "Karolinska Sleepiness Scale"), text: copy("Indique cómo se sintió durante los cinco minutos anteriores.", "Rate how you felt during the previous five minutes."), icon: MoonStar },
-    { title: copy("PVT", "PVT"), text: copy("Responda al contador durante 10 minutos para medir vigilancia psicomotora.", "Respond to the counter for 10 minutes to measure psychomotor vigilance."), icon: Clock3 },
-    { title: copy("Línea basal Polar H10", "Polar H10 baseline"), text: copy("Permanezca quieto mientras el investigador comprueba la señal y registra la línea basal.", "Remain still while the researcher checks the signal and records the baseline."), icon: Activity },
-    { title: copy("Instrucciones de misión", "Mission briefing"), text: copy("Aprenda el mapa, las alertas, los contactos y los controles antes de operar.", "Learn the map, alerts, contacts, and controls before operating."), icon: Headphones },
-    { title: copy("Práctica", "Practice"), text: copy("Ensaye selección, asignación de sectores, alertas y reportes sin presión de desempeño.", "Practice selection, sector assignment, alerts, and reports without performance pressure."), icon: Radar },
-    { title: copy("Bloques de misión", "Mission blocks"), text: copy("Complete los bloques BAJO, MEDIO y ALTO en el orden que muestre la aplicación.", "Complete LOW, MEDIUM, and HIGH blocks in the order shown by the application."), icon: Radar },
-    { title: copy("Preguntas de carga", "Workload questions"), text: copy("Responda ISA durante la misión y NASA-TLX/Bedford después de cada bloque cuando aparezcan.", "Answer ISA during the mission and NASA-TLX/Bedford after each block when prompted."), icon: CheckCircle2 },
-    { title: copy("Completar visita", "Complete visit"), text: copy("Espere la confirmación de guardado antes de cerrar la aplicación.", "Wait for the saved confirmation before closing the application."), icon: CheckCircle2 },
-  ];
-
-  return (
-    <div className="space-y-7">
-      <PageHeader
-        kicker={copy("Paso 1 de la visita", "Visit step 1")}
-        title={copy("Bienvenido a su misión MATB-FAC", "Welcome to your MATB-FAC mission")}
-        description={copy(
-          "La barra lateral y esta guía muestran las actividades en el orden exacto en que las realizará. No omita pasos.",
-          "The sidebar and this guide show the activities in the exact order you will perform them. Do not skip steps.",
-        )}
-        stats={[
-          { label: copy("Secuencia", "Sequence"), value: "9" },
-          { label: copy("Idioma", "Language"), value: locale === "en" ? "English" : "Español" },
-          { label: copy("Misión principal", "Primary mission"), value: "sUAS" },
-        ]}
-      />
-
-      <Card className="border-info/30 bg-info/5">
-        <CardContent className="flex flex-col items-start justify-between gap-5 pt-6 lg:flex-row lg:items-center">
-          <div className="max-w-3xl">
-            <div className="font-display text-xl font-semibold uppercase tracking-wide">{copy("Escuche antes de comenzar", "Listen before you begin")}</div>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy("El audio explica la secuencia completa. Puede pausarlo o repetirlo. Las mismas instrucciones permanecen visibles en pantalla.", "The audio explains the complete sequence. You may pause or replay it. The same instructions remain visible on screen.")}</p>
-          </div>
-          <InstructionAudio src={`/audio/instructions/journey-${audioLocale}.mp3`} label={copy("Escuchar guía de la visita", "Listen to visit guide")} unavailableLabel={copy("Audio no disponible", "Audio unavailable")} />
-        </CardContent>
-      </Card>
-
-      <section aria-labelledby="visit-sequence-heading">
-        <div className="mb-4 flex flex-col items-start gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div><p className="page-kicker">01–09</p><h2 id="visit-sequence-heading" className="mt-2 font-display text-2xl font-semibold uppercase">{copy("Su secuencia de actividades", "Your activity sequence")}</h2></div>
-          <Button asChild><Link href="/pvt#kss">{copy("Comenzar con KSS", "Begin with KSS")}<ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
-        </div>
-        <ol className="grid gap-3 lg:grid-cols-3">
-          {steps.map(({ title, text, icon: Icon }, index) => (
-            <li key={title} className={`mission-panel p-4 ${index === 0 ? "border-info/40 bg-info/5" : ""}`}>
-              <div className="flex items-start gap-3">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/15 bg-black/35 font-mono text-xs text-info">{String(index + 1).padStart(2, "0")}</span>
-                <div><Icon className="mb-2 h-4 w-4 text-info" /><h3 className="font-semibold">{title}</h3><p className="mt-1 text-sm leading-5 text-muted-foreground">{text}</p></div>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>{copy("Confirmación de identidad", "Identity confirmation")}</CardTitle>
-          <CardDescription>{copy("Use solamente códigos como P01. Nunca escriba nombres, documentos de identidad ni correos.", "Use codes such as P01 only. Never enter names, identity documents, or email addresses.")}</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-3">
-          <Button asChild variant="outline"><Link href="/participants"><UserRoundPlus className="mr-2 h-4 w-4" />{copy("Investigador: administrar códigos", "Researcher: manage codes")}</Link></Button>
-          <Button asChild><Link href="/pvt#kss">{copy("Mi código está confirmado", "My code is confirmed")}<ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
-        </CardContent>
-      </Card>
-
-      <details className="rounded border border-white/10 bg-black/20 p-4 text-sm text-muted-foreground">
-        <summary className="cursor-pointer font-semibold text-foreground">{copy("Alternativas administradas por el investigador", "Researcher-managed alternatives")}</summary>
-        <p className="mt-3 leading-6">{copy("OpenMATB clásico y Liftoff se conservan como herramientas alternativas del protocolo. La misión sUAS integrada es el flujo principal mostrado al participante.", "Classic OpenMATB and Liftoff remain protocol alternatives managed by the researcher. The integrated sUAS mission is the primary participant flow shown here.")}</p>
-      </details>
+const icons = { openmatb: MonitorPlay, suas: Radar, liftoff: Gamepad2, screen: Brain, pvt: Clock3, physiology: Activity };
+export default function StartPage() { return <Suspense><Catalog /></Suspense>; }
+function Catalog() {
+  const search = useSearchParams();
+  const { copy } = useAppLocale();
+  const { catalog, status, refresh } = useConsole();
+  const [selected, setSelected] = useState<ExperimentId | null>(null);
+  const [purpose, setPurpose] = useState<ExecutionPurpose>("practice");
+  useEffect(() => {
+    const candidate = search.get("experiment");
+    setSelected(EXPERIMENTS.some((item) => item.id === candidate) ? candidate as ExperimentId : null);
+  }, [search]);
+  const info = EXPERIMENTS.find((item) => item.id === selected);
+  const entry = catalog.find((item) => item.id === selected);
+  const available = status === "online" && entry?.component_available;
+  function choose(id: ExperimentId) {
+    setSelected(id);
+    window.history.replaceState(null, "", "/start?experiment=" + id);
+    requestAnimationFrame(() => document.getElementById("experiment-details")?.focus());
+  }
+  const destination = selected === "suas" && purpose === "practice" ? "/mission/test" : info?.route;
+  return <div className="space-y-7">
+    <PageHeader kicker={copy("Comenzar aquí", "Start here")} title={copy("Elija su experimento", "Choose your experiment")}
+      description={copy("Explore una actividad, conozca sus pasos y elija práctica o una sesión de su estudio.", "Explore an activity, learn its steps, and choose practice or a session in your study.")} />
+    {status !== "online" && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded border border-warning/30 p-4 text-sm">
+      <span>{status === "checking" ? copy("Comprobando los experimentos disponibles…", "Checking available experiments…") : copy("No se pudo conectar con la consola. Inicie el servicio local y vuelva a comprobar.", "Could not connect to the console. Start the local service and check again.")}</span>
+      {status === "offline" && <Button variant="outline" onClick={refresh}>{copy("Volver a comprobar", "Check again")}</Button>}
+    </div>}
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label={copy("Experimentos", "Experiments")}>
+      {EXPERIMENTS.map((item) => {
+        const Icon = icons[item.id];
+        const active = item.id === selected;
+        const installed = catalog.find((row) => row.id === item.id)?.component_available;
+        return <button key={item.id} type="button" aria-pressed={active} onClick={() => choose(item.id)}
+          className={"min-h-44 rounded-lg border p-5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info " + (active ? "border-info bg-info/10" : "border-white/15 bg-black/25 hover:border-white/40")}>
+          <Icon className="mb-3 h-6 w-6 text-info" aria-hidden="true" />
+          <span className="block text-base font-semibold">{copy(...item.title)}</span>
+          <span className="mt-2 block text-sm leading-6 text-muted-foreground">{copy(...item.summary)}</span>
+          {status === "online" && !installed && <span className="mt-3 block text-xs text-warning">{copy("Requiere habilitar el componente", "Component must be enabled")}</span>}
+        </button>;
+      })}
     </div>
-  );
+    {info && <section id="experiment-details" tabIndex={-1} aria-labelledby="experiment-title" className="rounded-lg border border-info/30 bg-card p-5 outline-none sm:p-7">
+      <h2 id="experiment-title" className="font-display text-2xl font-semibold">{copy(...info.title)}</h2>
+      <dl className="mt-5 grid gap-5 md:grid-cols-2">
+        {([
+          [copy("Qué mide", "What it measures"), info.summary],
+          [copy("Qué hará", "What you will do"), info.actions],
+          [copy("Duración", "Duration"), info.duration],
+          [copy("Equipo necesario", "Equipment needed"), info.equipment],
+          [copy("Cómo leer el resultado", "Reading your result"), info.results],
+        ] as const).map(([label, value]) => <div key={label}><dt className="font-semibold">{label}</dt><dd className="mt-1 text-sm leading-6 text-muted-foreground">{copy(...value)}</dd></div>)}
+      </dl>
+      {entry && <ReadinessNote entry={entry} />}
+      <fieldset className="mt-6 border-t border-white/10 pt-5">
+        <legend className="px-1 font-semibold">{copy("Cómo desea participar", "How you want to participate")}</legend>
+        <div className="mt-2 grid gap-3 sm:grid-cols-2">
+          {(["practice", "study"] as const).map((mode) => <label key={mode} className={"flex cursor-pointer items-start gap-3 rounded border p-4 " + (purpose === mode ? "border-info bg-info/5" : "border-white/15")}>
+            <input type="radio" name="execution-purpose" value={mode} checked={purpose === mode} onChange={() => setPurpose(mode)} className="mt-1 accent-cyan-400" />
+            <span><strong>{mode === "practice" ? copy("Practicar", "Practice") : copy("Participar en mi estudio", "Join my study")}</strong><span className="mt-1 block text-sm text-muted-foreground">{mode === "practice" ? copy("Familiarícese con los controles. Los resultados se guardan aparte del estudio.", "Learn the controls. Results are saved separately from the study.") : copy("Use su código y visita asignados. Se conserva la secuencia del protocolo.", "Use your assigned code and visit. The protocol sequence is preserved.")}</span></span>
+          </label>)}
+        </div>
+      </fieldset>
+      <div className="mt-5 flex flex-wrap items-center gap-4">
+        {available && destination ? <Button asChild><Link href={destination + "?purpose=" + purpose}>{copy("Preparar experimento", "Prepare experiment")}<ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+          : <p className="text-sm text-warning">{status !== "online" ? copy("Conecte la consola para preparar esta actividad.", "Connect the console to prepare this activity.") : copy("Este componente no está habilitado. Solicite al investigador que lo active y revise el equipo indicado arriba.", "This component is not enabled. Ask the researcher to enable it and check the equipment listed above.")}</p>}
+        <span className="text-sm text-muted-foreground">{copy("Antes de iniciar se verifican los requisitos del experimento.", "Experiment requirements are checked before starting.")}</span>
+      </div>
+    </section>}
+  </div>;
 }

@@ -11,13 +11,12 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlmodel import Session, select
 
 from app.db import get_session
-from app.models import Participant, PvtAssessment, Visit
+from app.models import ArchivedAssessment, Participant, PracticeResult, PvtAssessment, Visit
 
 router = APIRouter(prefix="/pvt", tags=["pvt"])
 
-PVT_VERSION = 1
+PVT_VERSION = 2
 PVT_DURATION_MS = 600_000
-PVT_MIN_PROTOCOL_DURATION_MS = 590_000
 PVT_RESPONSE_TIMEOUT_MS = 30_000
 
 
@@ -36,6 +35,11 @@ class PvtTrialIn(BaseModel):
         if self.outcome == "false_start":
             if self.response_at_ms is None or (self.rt_ms is not None and self.rt_ms >= 100):
                 raise ValueError("false_start requires a response before 100 ms")
+            if self.stimulus_at_ms is None:
+                if self.rt_ms is not None:
+                    raise ValueError("a response before stimulus onset cannot have rt_ms")
+            elif self.rt_ms is None or abs(self.response_at_ms - self.stimulus_at_ms - self.rt_ms) > 5:
+                raise ValueError("false-start timing does not match stimulus and response")
             return self
         if self.stimulus_at_ms is None:
             raise ValueError("stimulus_at_ms is required after stimulus onset")
@@ -64,17 +68,68 @@ class PvtAssessmentIn(BaseModel):
     administered_at: str = Field(min_length=1)
     duration_ms: int = Field(ge=1)
     fast_mode: bool = False
-    trials: list[PvtTrialIn] = Field(min_length=1)
+    trials: list[PvtTrialIn] = Field(min_length=0, max_length=10000)
     overwrite: bool = False
+    execution_purpose: Literal["practice", "study"] = "study"
+    locale: Literal["es-419", "en"] = "es-419"
+    timing_version: Literal[1, 2] = 1
+    interruption_count: int = Field(default=0, ge=0)
+    max_frame_gap_ms: float = Field(default=0, ge=0, allow_inf_nan=False)
+    terminal_phase: Literal["waiting", "stimulus", "feedback", "complete"] | None = None
+    terminal_stimulus_at_ms: float | None = Field(default=None, ge=0, allow_inf_nan=False)
 
     @model_validator(mode="after")
     def validate_protocol_duration(self) -> "PvtAssessmentIn":
-        if not self.fast_mode and self.duration_ms < PVT_MIN_PROTOCOL_DURATION_MS:
-            raise ValueError("the protocol PVT must run for 10 minutes")
         indices = [trial.index for trial in self.trials]
         if indices != list(range(len(indices))):
             raise ValueError("trial indices must be contiguous from zero")
+        previous_end = 0.0
+        for trial in self.trials:
+            start = trial.stimulus_at_ms if trial.stimulus_at_ms is not None else trial.response_at_ms
+            end = trial.response_at_ms if trial.response_at_ms is not None else (trial.stimulus_at_ms or 0) + PVT_RESPONSE_TIMEOUT_MS
+            if start is None or start < previous_end or end < start or end > self.duration_ms:
+                raise ValueError("trial timeline must be ordered and inside the session duration")
+            previous_end = end
+        if self.timing_version == 2:
+            if self.terminal_phase is None:
+                raise ValueError("version 2 requires terminal phase evidence")
+            if self.terminal_phase == "stimulus":
+                if self.terminal_stimulus_at_ms is None or not previous_end <= self.terminal_stimulus_at_ms <= self.duration_ms:
+                    raise ValueError("terminal stimulus must follow recorded trials within the session")
+            elif self.terminal_stimulus_at_ms is not None:
+                raise ValueError("terminal stimulus is only valid for an unfinished stimulus")
         return self
+
+    def validity_reasons(self) -> list[str]:
+        reasons = []
+        if not self.trials:
+            reasons.append("no_completed_trials")
+        if self.fast_mode or self.execution_purpose == "practice":
+            reasons.append("practice")
+        if self.timing_version < 2:
+            reasons.append("legacy_timing_evidence_missing")
+        if self.duration_ms < PVT_DURATION_MS:
+            reasons.append("duration_below_10_minutes")
+        if self.interruption_count or self.max_frame_gap_ms > 250:
+            reasons.append("interrupted_or_delayed_presentation")
+        previous_end = 0.0
+        for trial in self.trials:
+            start = trial.stimulus_at_ms if trial.stimulus_at_ms is not None else trial.response_at_ms or 0
+            if self.timing_version == 2:
+                if trial.stimulus_at_ms is not None and abs(start - previous_end - trial.wait_ms) > 250:
+                    reasons.append("wait_timing_mismatch")
+                if trial.stimulus_at_ms is None and start - previous_end > trial.wait_ms + 250:
+                    reasons.append("false_start_after_expected_onset")
+            if start - previous_end > 11250:
+                reasons.append("unexplained_timeline_gap")
+            previous_end = trial.response_at_ms if trial.response_at_ms is not None else (trial.stimulus_at_ms or 0) + PVT_RESPONSE_TIMEOUT_MS
+        if self.terminal_phase == "stimulus" and self.terminal_stimulus_at_ms is not None:
+            if self.terminal_stimulus_at_ms - previous_end > 10250 or self.duration_ms - self.terminal_stimulus_at_ms > 30250:
+                reasons.append("terminal_timing_mismatch")
+        terminal_limit = 40500 if self.terminal_phase == "stimulus" else 11250
+        if self.duration_ms - previous_end > terminal_limit:
+            reasons.append("incomplete_timeline")
+        return list(dict.fromkeys(reasons))
 
 
 def _metrics(trials: list[PvtTrialIn], *, duration_ms: int) -> dict[str, int | float | None]:
@@ -120,22 +175,45 @@ def _view(row: PvtAssessment) -> dict[str, object]:
         "kss_score": row.kss_score,
         "administered_at": row.administered_at,
         "duration_ms": row.duration_ms,
-        "protocol_valid": row.protocol_valid,
+        "protocol_valid": row.protocol_valid and row.pvt_version >= PVT_VERSION,
+        "historical_protocol_valid": row.protocol_valid if row.pvt_version < PVT_VERSION else None,
         "pvt_version": row.pvt_version,
         "metrics": json.loads(row.metrics_json),
+        "execution_purpose": row.execution_purpose,
+        "timing_evidence": json.loads(row.timing_evidence_json),
     }
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 def ingest_pvt(body: PvtAssessmentIn, session: Session = Depends(get_session)) -> dict[str, object]:
     visit = _visit(session, body.participant_id, body.visit_ordinal)
+    metrics = _metrics(body.trials, duration_ms=body.duration_ms)
+    timing = {"locale": body.locale, "timing_version": body.timing_version, "interruption_count": body.interruption_count,
+              "max_frame_gap_ms": body.max_frame_gap_ms, "terminal_phase": body.terminal_phase,
+              "terminal_stimulus_at_ms": body.terminal_stimulus_at_ms,
+              "validity_reasons": body.validity_reasons()}
+    if body.execution_purpose == "practice" or body.fast_mode:
+        result = {"participant_id": body.participant_id, "visit_id": visit.id,
+                  "kss_score": body.kss_score, "administered_at": body.administered_at,
+                  "duration_ms": body.duration_ms, "protocol_valid": False,
+                  "pvt_version": PVT_VERSION, "metrics": metrics,
+                  "execution_purpose": "practice", "timing_evidence": timing}
+        practice = PracticeResult(experiment_id="pvt", participant_id=body.participant_id,
+                                  payload_json=body.model_dump_json(), result_json=json.dumps(result, allow_nan=False))
+        session.add(practice)
+        session.commit()
+        session.refresh(practice)
+        return {"id": practice.id, **result}
     existing = session.exec(
         select(PvtAssessment).where(PvtAssessment.visit_id == visit.id)
     ).first()
+    if existing is not None and existing.administered_at == body.administered_at and existing.kss_score == body.kss_score and existing.duration_ms == body.duration_ms and json.loads(existing.raw_trials_json) == [trial.model_dump() for trial in body.trials] and json.loads(existing.timing_evidence_json) == timing:
+        return _view(existing)
     if existing is not None and not body.overwrite:
         raise HTTPException(status.HTTP_409_CONFLICT, "PVT already recorded for this visit")
-    metrics = _metrics(body.trials, duration_ms=body.duration_ms)
     if existing is not None:
+        session.add(ArchivedAssessment(experiment_id="pvt", participant_id=existing.participant_id,
+                      original_id=existing.id, snapshot_json=existing.model_dump_json()))
         session.delete(existing)
         session.flush()
     row = PvtAssessment(
@@ -144,10 +222,12 @@ def ingest_pvt(body: PvtAssessmentIn, session: Session = Depends(get_session)) -
         kss_score=body.kss_score,
         administered_at=body.administered_at,
         duration_ms=body.duration_ms,
-        protocol_valid=not body.fast_mode and body.duration_ms >= PVT_MIN_PROTOCOL_DURATION_MS,
+        protocol_valid=not body.validity_reasons(),
         pvt_version=PVT_VERSION,
         raw_trials_json=json.dumps([trial.model_dump() for trial in body.trials]),
         metrics_json=json.dumps(metrics),
+        execution_purpose="study",
+        timing_evidence_json=json.dumps(timing, allow_nan=False),
     )
     session.add(row)
     session.commit()
@@ -160,7 +240,7 @@ def list_pvt(
     participant_id: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
-    statement = select(PvtAssessment)
+    statement = select(PvtAssessment).where(PvtAssessment.execution_purpose == "study")
     if participant_id is not None:
         statement = statement.where(PvtAssessment.participant_id == participant_id)
     rows = session.exec(statement.order_by(PvtAssessment.participant_id, PvtAssessment.visit_id)).all()

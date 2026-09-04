@@ -4,14 +4,15 @@ from __future__ import annotations
 
 def _payload(simple=300.0):
     return {
+        "schema_version": 2,
         "seed": 12345,
         "administered_at": "2026-06-04T10:00:00+00:00",
         "simple_rt": {"trials": [{"rt_ms": simple, "responded": True}] * 30},
-        "choice_rt": {"trials": [{"rt_ms": 420.0, "responded": True, "correct": True}] * 30},
-        "nback": {"trials": [{"is_target": i % 3 == 0, "responded": i % 3 == 0, "gap": False}
-                              for i in range(60)]},
-        "tracking": {"samples": [[i * 16, 10, 0, 0, 0] for i in range(200)],
-                     "n_expected_samples": 200, "path_amplitude_px": 120.0},
+        "choice_rt": {"trials": [{"rt_ms": 420.0, "responded": True, "correct": True, "stimulus_side": "left", "response_side": "left"}] * 30},
+        "nback": {"trials": [{"letter": "AB"[i % 2], "is_target": i >= 2, "responded": i >= 2, "shown_at_ms": i * 2500}
+                              for i in range(60)], "soa_ms": 2500},
+        "tracking": {"samples": [[i * 150, 10, 0, 0, 0] for i in range(601)],
+                     "duration_ms": 90000, "n_expected_samples": 5400, "path_amplitude_px": 120.0},
     }
 
 
@@ -26,7 +27,7 @@ def test_screen_post_scores_and_stores(client):
     body = r.json()
     assert body["scores"]["simple_rt"]["median_ms"] == 300.0
     assert body["scores"]["nback"]["valid"] is True
-    assert body["screen_version"] == 1
+    assert body["screen_version"] == 2
 
 
 def test_screen_unknown_participant_404(client):
@@ -39,7 +40,8 @@ def test_screen_duplicate_guard_and_overwrite(client):
     assert client.post("/screen", json={"participant_id": "P01",
                                         "payload": _payload()}).status_code == 201
     r = client.post("/screen", json={"participant_id": "P01", "payload": _payload()})
-    assert r.status_code == 409
+    assert r.status_code == 201
+    assert client.post("/screen", json={"participant_id": "P01", "payload": _payload(simple=270)}).status_code == 409
     r = client.post("/screen", json={"participant_id": "P01",
                                      "payload": _payload(simple=280.0),
                                      "overwrite": True})
