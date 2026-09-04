@@ -6,6 +6,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 TEMP_ROOT="$(mktemp -d)"
+export PYTHONPATH="$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 launcher_pid=""
 cleanup() {
   if [[ "$launcher_pid" =~ ^[0-9]+$ ]]; then
@@ -35,7 +36,11 @@ fi
 
 PYTHON_BIN="${MATB_PYTHON:-python3}"
 "$PYTHON_BIN" -m matb_integration.suas.cli validate "$REPO_ROOT/scenarios/suas/reference_area_search.yaml" >/dev/null
-"$PYTHON_BIN" -m pytest "$REPO_ROOT/tests/suas/test_scenario_schema.py" -q
+(
+  cd "$REPO_ROOT"
+  PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 "$PYTHON_BIN" -m pytest \
+    tests/suas/test_scenario_schema.py -q -p no:cacheprovider
+)
 
 "$PYTHON_BIN" -m matb_integration.suas.cli record \
   "$REPO_ROOT/scenarios/suas/reference_area_search.yaml" \
@@ -47,17 +52,26 @@ if [[ -d "$REPO_ROOT/webui/frontend/node_modules" ]]; then
   (cd "$REPO_ROOT/webui/frontend" && NEXT_PUBLIC_API_URL=http://127.0.0.1:9 API_URL=http://127.0.0.1:9 npm run build >/dev/null)
 fi
 
+launcher_python=""
 launcher_venv=""
-if [[ -n "${MATB_VENV:-}" && -x "${MATB_VENV}/bin/python" ]]; then
+if [[ -n "${MATB_PYTHON:-}" ]] && command -v "$MATB_PYTHON" >/dev/null 2>&1; then
+  launcher_python="$MATB_PYTHON"
+elif [[ -n "${MATB_VENV:-}" && -x "${MATB_VENV}/bin/python" ]]; then
   launcher_venv="$MATB_VENV"
 elif [[ -x "$REPO_ROOT/.venv/bin/python" ]]; then
   launcher_venv="$REPO_ROOT/.venv"
 fi
-if [[ -n "$launcher_venv" && -x "$REPO_ROOT/webui/frontend/node_modules/.bin/next" ]]; then
+if [[ ( -n "$launcher_python" || -n "$launcher_venv" ) && -x "$REPO_ROOT/webui/frontend/node_modules/.bin/next" ]]; then
   launcher_data="$TEMP_ROOT/launcher-data"
-  MATB_VENV="$launcher_venv" bash "$REPO_ROOT/scripts/run_suas.sh" \
-    --backend-port 18080 --frontend-port 13180 --data-dir "$launcher_data" \
-    >"$TEMP_ROOT/launcher.log" 2>&1 &
+  if [[ -n "$launcher_python" ]]; then
+    MATB_PYTHON="$launcher_python" MATB_DATA_ROOT="$launcher_data" \
+      bash "$REPO_ROOT/scripts/run_suas.sh" --backend-port 18080 --frontend-port 13180 \
+      >"$TEMP_ROOT/launcher.log" 2>&1 &
+  else
+    MATB_VENV="$launcher_venv" MATB_DATA_ROOT="$launcher_data" \
+      bash "$REPO_ROOT/scripts/run_suas.sh" --backend-port 18080 --frontend-port 13180 \
+      >"$TEMP_ROOT/launcher.log" 2>&1 &
+  fi
   launcher_pid=$!
   ready=0
   for _ in {1..60}; do

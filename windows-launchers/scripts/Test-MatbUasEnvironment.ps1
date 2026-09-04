@@ -1,5 +1,9 @@
 [CmdletBinding()]
-param()
+param(
+    [string]$DataRoot = "",
+    [ValidateRange(1, 65535)][int]$BackendPort = 8000,
+    [ValidateRange(1, 65535)][int]$FrontendPort = 3100
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -8,7 +12,7 @@ $ErrorActionPreference = "Stop"
 $env:PYTHONUTF8 = "1"
 $env:PYTHONDONTWRITEBYTECODE = "1"
 $repoRoot = Get-MatbUasRepoRoot
-$dataRoot = Get-MatbUasDataRoot -RepoRoot $repoRoot
+$dataRoot = Get-MatbUasDataRoot -RepoRoot $repoRoot -DataRoot $DataRoot
 $statePath = Join-Path $dataRoot "service\service-state.json"
 $logRoot = Join-Path $dataRoot "service\logs"
 $issues = [System.Collections.Generic.List[string]]::new()
@@ -66,10 +70,17 @@ try {
 $frontendRoot = Join-Path $repoRoot "webui\frontend"
 $nextCli = Join-Path $frontendRoot "node_modules\next\dist\bin\next"
 $buildId = Join-Path $frontendRoot ".next\BUILD_ID"
-if ((Test-Path -LiteralPath $nextCli -PathType Leaf) -and (Test-Path -LiteralPath $buildId -PathType Leaf)) {
+$buildRootStamp = Join-Path $frontendRoot ".next\.matb-build-root"
+$buildMatchesLocation = $false
+if (Test-Path -LiteralPath $buildRootStamp -PathType Leaf) {
+    $stampedRoot = (Get-Content -LiteralPath $buildRootStamp -Raw).Trim()
+    $buildMatchesLocation = $stampedRoot.Equals($frontendRoot, [System.StringComparison]::OrdinalIgnoreCase)
+}
+if ((Test-Path -LiteralPath $nextCli -PathType Leaf) -and
+    (Test-Path -LiteralPath $buildId -PathType Leaf) -and $buildMatchesLocation) {
     Write-DiagnosticLine -Label "Frontend" -Value "dependencies and production build available" -Kind ok
 } else {
-    Add-DiagnosticIssue -Message "The frontend is not prepared; run shortcut 00."
+    Add-DiagnosticIssue -Message "The frontend is missing, stale, or was built at another repository location; run shortcut 00."
 }
 
 $scenarioPath = Join-Path $repoRoot "scenarios\suas\reference_area_search.yaml"
@@ -120,16 +131,16 @@ if ($state) {
         Add-DiagnosticIssue -Message ("The service state is incomplete or invalid: {0}" -f $_.Exception.Message)
     }
 } else {
-    $backendPortOpen = Test-MatbUasTcpPort -HostName "127.0.0.1" -Port 8000
-    $frontendPortOpen = Test-MatbUasTcpPort -HostName "127.0.0.1" -Port 3100
+    $backendPortOpen = Test-MatbUasTcpPort -HostName "127.0.0.1" -Port $BackendPort
+    $frontendPortOpen = Test-MatbUasTcpPort -HostName "127.0.0.1" -Port $FrontendPort
     if ($backendPortOpen -or $frontendPortOpen) {
-        Add-DiagnosticIssue -Message ("No tracked console exists, but reserved ports are occupied (8000={0}, 3100={1})." -f $backendPortOpen, $frontendPortOpen)
+        Add-DiagnosticIssue -Message ("No tracked console exists, but reserved ports are occupied ({0}={1}, {2}={3})." -f $BackendPort, $backendPortOpen, $FrontendPort, $frontendPortOpen)
     } else {
-        Write-DiagnosticLine -Label "Console" -Value "stopped; ports 8000 and 3100 are available" -Kind ok
+        Write-DiagnosticLine -Label "Console" -Value ("stopped; ports {0} and {1} are available" -f $BackendPort, $FrontendPort) -Kind ok
     }
 }
 
-$latestRun = Get-MatbUasLatestSealedRun -RepoRoot $repoRoot
+$latestRun = Get-MatbUasLatestSealedRun -RepoRoot $repoRoot -DataRoot $dataRoot
 if ($latestRun) {
     $recordedStatus = "sealed"
     $replayPath = Join-Path $latestRun.FullName "replay-verification.json"

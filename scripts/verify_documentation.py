@@ -95,6 +95,7 @@ def find_broken_links(root: Path, markdown_files: list[Path]) -> list[str]:
     errors: list[str] = []
     root = root.resolve()
     for source in markdown_files:
+        source_label = source.relative_to(root).as_posix()
         for destination, line in markdown_links(source):
             parsed = urlsplit(destination)
             if parsed.scheme in {"http", "https", "mailto", "data"}:
@@ -103,13 +104,13 @@ def find_broken_links(root: Path, markdown_files: list[Path]) -> list[str]:
             target = source if not relative else source.parent / relative
             resolved = target.resolve()
             if root != resolved and root not in resolved.parents:
-                errors.append(f"{source.relative_to(root)}:{line}: link escapes repository: {destination}")
+                errors.append(f"{source_label}:{line}: link escapes repository: {destination}")
                 continue
             if not resolved.exists():
-                errors.append(f"{source.relative_to(root)}:{line}: missing link target: {destination}")
+                errors.append(f"{source_label}:{line}: missing link target: {destination}")
                 continue
             if parsed.fragment and resolved.is_file() and parsed.fragment not in markdown_anchors(resolved):
-                errors.append(f"{source.relative_to(root)}:{line}: missing anchor #{parsed.fragment}")
+                errors.append(f"{source_label}:{line}: missing anchor #{parsed.fragment}")
     return errors
 
 

@@ -16,6 +16,10 @@ help_text="$(bash "$repo_root/scripts/run_suas.sh" --help)"
 [[ "$help_text" == *"--frontend-port"* ]]
 [[ "$help_text" == *"127.0.0.1"* ]]
 
+portable_data="$test_tmp/MATB data ñ"
+environment_help="$(MATB_DATA_ROOT="$portable_data" bash "$repo_root/scripts/run_suas.sh" --help)"
+[[ "$environment_help" == *"default: $portable_data"* ]]
+
 error_file="$test_tmp/error.txt"
 if bash "$repo_root/scripts/run_suas.sh" --backend-port not-a-port 2>"$error_file"; then
   echo "invalid port unexpectedly succeeded" >&2

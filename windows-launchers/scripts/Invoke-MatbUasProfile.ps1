@@ -7,7 +7,9 @@ param(
     [string]$Scenario = "reference_area_search",
 
     [ValidateRange(0, 10000000)]
-    [int]$Ticks = 0
+    [int]$Ticks = 0,
+
+    [string]$DataRoot = ""
 )
 
 Set-StrictMode -Version Latest
@@ -36,7 +38,7 @@ if ($Ticks -eq 0) {
     $Ticks = [int]($ticksText | Select-Object -Last 1)
 }
 
-$dataRoot = Get-MatbUasDataRoot -RepoRoot $repoRoot
+$dataRoot = Get-MatbUasDataRoot -RepoRoot $repoRoot -DataRoot $DataRoot
 $runsRoot = Join-Path $dataRoot "runs"
 New-MatbUasDirectory -Path $runsRoot
 $timestamp = [DateTime]::Now.ToString("yyyyMMdd-HHmmssfff")

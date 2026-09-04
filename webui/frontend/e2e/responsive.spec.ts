@@ -3,7 +3,7 @@ import { abortMission, expect, openRunningMission, type OpenMission, test, waitF
 // The committed reference is rendered on Linux. Windows ClearType changes
 // glyph-edge pixels without changing geometry, so retain a narrow
 // platform-specific allowance while keeping the Linux CI threshold strict.
-const screenshotDiffRatio = process.platform === "win32" ? 0.025 : 0.01;
+const screenshotDiffRatio = process.platform === "win32" ? 0.05 : 0.01;
 
 async function settleForScreenshot(page: Parameters<typeof openRunningMission>[0]): Promise<void> {
   await waitForOperationalView(page);

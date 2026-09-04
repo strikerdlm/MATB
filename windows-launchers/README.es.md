@@ -20,9 +20,13 @@ Python y Node, dependencias, compilación, escenario, puertos, procesos
 registrados, salud HTTP y la última ejecución sellada. Una consola detenida con
 los puertos libres se considera un estado normal.
 
-La consola se enlaza únicamente a loopback. Los datos, registros y estados de
-proceso se guardan bajo `exports/windows-suas/service/`, una ruta ignorada por
-Git. No use identidades personales; la consola acepta participantes
+La consola se enlaza únicamente a loopback. De forma predeterminada, los datos,
+registros y estados de proceso se guardan bajo `exports/windows-suas/service/`,
+una ruta ignorada por Git. Defina `MATB_DATA_ROOT` con un directorio externo
+absoluto, o pase `-DataRoot` a un script interno de PowerShell, para reubicar
+todos los datos modificables. El parámetro explícito tiene precedencia; las rutas
+relativas se anclan al repositorio y se rechazan las raíces del repositorio, la
+unidad y el perfil de usuario. No use identidades personales; la consola acepta participantes
 seudonimizados como `P01`.
 
 ## Simulaciones por perfil
@@ -45,7 +49,7 @@ más reciente sin modificarlo.
 
 `91 - Abrir resultados MATB UAS.cmd` abre en el Explorador la ejecución técnica
 sellada más reciente y, si existe, la carpeta de logs del servicio. Solo abre
-rutas bajo `exports/windows-suas/`; use el acceso `90` para recalcular la
+rutas bajo la raíz de datos configurada; use el acceso `90` para recalcular la
 verificación criptográfica y el replay.
 
 ## Escenarios adicionales
@@ -67,7 +71,9 @@ calibración humana.
 
 - El lanzador no cambia la política de ejecución de PowerShell.
 - Los accesos de simulación funcionan aunque el Explorador de archivos los
-  inicie desde un directorio distinto al repositorio.
+  inicie desde un directorio distinto al repositorio, y admiten rutas del
+  repositorio y de datos con espacios o Unicode. `MATB_PYTHON` puede ser una
+  ruta o un nombre de comando; `MATB_VENV` usa el ejecutable propio de Windows.
 - La consola detecta el commit Git y el estado del árbol antes de iniciar el
   backend. En un clon limpio, el diseñador registra procedencia `complete`. La
   advertencia provisional permanece deliberadamente si el árbol tiene cambios,

@@ -1,12 +1,12 @@
 [CmdletBinding()]
-param()
+param([string]$DataRoot = "")
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "Common-MatbUas.ps1")
 
 $repoRoot = Get-MatbUasRepoRoot
-$dataRoot = Get-MatbUasDataRoot -RepoRoot $repoRoot
+$dataRoot = Get-MatbUasDataRoot -RepoRoot $repoRoot -DataRoot $DataRoot
 $statePath = Join-Path $dataRoot "service\service-state.json"
 $state = Read-MatbUasState -StatePath $statePath
 if (-not $state) {

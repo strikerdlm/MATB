@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
@@ -10,7 +12,24 @@ from app.db import (
     _configure_sqlite_foreign_keys,
     _migrate_analysisresult_v2,
     _migrate_bayesresult_v3,
+    _resolve_db_path,
 )
+
+
+def test_relative_database_path_is_anchored_to_repository() -> None:
+    resolved = _resolve_db_path("var/data con espacios/datos ñ.sqlite")
+
+    assert resolved == (
+        Path(__file__).resolve().parents[3]
+        / "var"
+        / "data con espacios"
+        / "datos ñ.sqlite"
+    ).resolve()
+
+
+def test_empty_database_path_is_rejected() -> None:
+    with pytest.raises(ValueError, match="must not be empty"):
+        _resolve_db_path("   ")
 
 
 def _legacy_bayesresult_database(path):

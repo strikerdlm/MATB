@@ -26,12 +26,49 @@ function Test-MatbUasPythonVersion {
     }
 }
 
+function Resolve-MatbUasExecutable {
+    param(
+        [Parameter(Mandatory)][string]$Candidate,
+        [Parameter(Mandatory)][string]$RepoRoot
+    )
+
+    $selected = $Candidate.Trim()
+    if (-not $selected) {
+        return $null
+    }
+    $looksLikePath = [System.IO.Path]::IsPathRooted($selected) -or
+        $selected.Contains([System.IO.Path]::DirectorySeparatorChar) -or
+        $selected.Contains([System.IO.Path]::AltDirectorySeparatorChar) -or
+        $selected.StartsWith(".")
+    if ($looksLikePath) {
+        $path = if ([System.IO.Path]::IsPathRooted($selected)) {
+            $selected
+        } else {
+            Join-Path $RepoRoot $selected
+        }
+        return [System.IO.Path]::GetFullPath($path)
+    }
+    $command = Get-Command $selected -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($command) {
+        return [System.IO.Path]::GetFullPath($command.Source)
+    }
+    return $null
+}
+
 function Get-MatbUasPython {
     param([Parameter(Mandatory)][string]$RepoRoot)
 
     $candidates = [System.Collections.Generic.List[string]]::new()
     if ($env:MATB_PYTHON) {
         $candidates.Add($env:MATB_PYTHON)
+    }
+    if ($env:MATB_VENV) {
+        $venvRoot = if ([System.IO.Path]::IsPathRooted($env:MATB_VENV)) {
+            $env:MATB_VENV
+        } else {
+            Join-Path $RepoRoot $env:MATB_VENV
+        }
+        $candidates.Add((Join-Path $venvRoot "Scripts\python.exe"))
     }
     $candidates.Add((Join-Path $RepoRoot ".venv-suas\Scripts\python.exe"))
     $candidates.Add((Join-Path $RepoRoot ".venv-console\Scripts\python.exe"))
@@ -45,7 +82,10 @@ function Get-MatbUasPython {
         if (-not $candidate) {
             continue
         }
-        $fullPath = [System.IO.Path]::GetFullPath($candidate)
+        $fullPath = Resolve-MatbUasExecutable -Candidate $candidate -RepoRoot $RepoRoot
+        if (-not $fullPath) {
+            continue
+        }
         if ($seen.ContainsKey($fullPath)) {
             continue
         }
@@ -74,8 +114,36 @@ function Get-MatbUasNode {
 }
 
 function Get-MatbUasDataRoot {
-    param([Parameter(Mandatory)][string]$RepoRoot)
-    return [System.IO.Path]::GetFullPath((Join-Path $RepoRoot "exports\windows-suas"))
+    param(
+        [Parameter(Mandatory)][string]$RepoRoot,
+        [string]$DataRoot = ""
+    )
+
+    $selected = if ($DataRoot.Trim()) {
+        $DataRoot.Trim()
+    } elseif ($env:MATB_DATA_ROOT -and $env:MATB_DATA_ROOT.Trim()) {
+        $env:MATB_DATA_ROOT.Trim()
+    } else {
+        Join-Path $RepoRoot "exports\windows-suas"
+    }
+    $resolved = if ([System.IO.Path]::IsPathRooted($selected)) {
+        [System.IO.Path]::GetFullPath($selected)
+    } else {
+        [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $selected))
+    }
+    $unsafeRoots = [System.Collections.Generic.List[string]]::new()
+    $unsafeRoots.Add([System.IO.Path]::GetPathRoot($resolved))
+    $unsafeRoots.Add([System.IO.Path]::GetFullPath($RepoRoot))
+    if ($env:USERPROFILE) {
+        $unsafeRoots.Add([System.IO.Path]::GetFullPath($env:USERPROFILE))
+    }
+    $resolvedComparable = $resolved.TrimEnd('\', '/')
+    foreach ($unsafeRoot in $unsafeRoots) {
+        if ($resolvedComparable.Equals($unsafeRoot.TrimEnd('\', '/'), [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing unsafe MATB data root: $resolved"
+        }
+    }
+    return $resolved
 }
 
 function Get-MatbUasSourceProvenance {
@@ -113,9 +181,12 @@ function Get-MatbUasSourceProvenance {
 }
 
 function Get-MatbUasLatestSealedRun {
-    param([Parameter(Mandatory)][string]$RepoRoot)
+    param(
+        [Parameter(Mandatory)][string]$RepoRoot,
+        [string]$DataRoot = ""
+    )
 
-    $runsRoot = Join-Path (Get-MatbUasDataRoot -RepoRoot $RepoRoot) "runs"
+    $runsRoot = Join-Path (Get-MatbUasDataRoot -RepoRoot $RepoRoot -DataRoot $DataRoot) "runs"
     if (-not (Test-Path -LiteralPath $runsRoot -PathType Container)) {
         return $null
     }
