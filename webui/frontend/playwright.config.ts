@@ -36,7 +36,7 @@ const isolatedEnv = {
  */
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: "**/*.spec.ts",
+  testMatch: process.env.PW_TEST_MATCH ?? "**/*.spec.ts",
   fullyParallel: false,
   workers: 1,
   timeout: 180_000,

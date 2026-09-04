@@ -69,7 +69,7 @@ function snapshot(stateVersion: number, x_mm = 0, y_mm = 0, blockId = "PRACTICE"
     },
     contacts: {},
     alerts: {},
-    coverage: { sectors: {} },
+    coverage: { grid_cell_mm: 1_000_000, origin: { x_mm: 0, y_mm: 0 }, sectors: {} },
   };
 }
 

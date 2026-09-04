@@ -1,4 +1,4 @@
-"""Baseline neurocognitive screen: raw-trial ingestion + cohort HCF summary.
+"""Legacy four-task screen: raw-trial ingestion + cohort HCF summary.
 
 Scoring and the HCF mapping live in matb_integration.screen (single-sourced);
 this router stores raw + scores and triggers the fit-HCF refresh (Task 4)."""

@@ -120,6 +120,8 @@ export interface CoverageSectorSnapshot {
 }
 
 export interface CoverageSnapshot {
+  grid_cell_mm: number;
+  origin: PointMM;
   sectors: Record<string, CoverageSectorSnapshot>;
 }
 

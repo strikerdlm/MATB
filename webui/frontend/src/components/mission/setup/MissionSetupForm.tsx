@@ -16,6 +16,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { GuidedSteps, type GuidedStepState } from "@/components/layout/GuidedSteps";
+import { InstructionAudio } from "@/components/instructions/InstructionAudio";
 import { isParticipantId } from "@/lib/participant-id";
 
 const EMPTY_VISITS: Visit[] = [];
@@ -201,6 +202,22 @@ export function MissionSetupForm({
             { title: copy("Continuar", "Continue"), description: copy("Cree la sesión y vaya al panel de misión.", "Create the session and continue to the mission console."), state: state(false, canSubmit) },
           ]}
         />
+
+        <Card id="briefing" className="scroll-mt-6 border-info/30 bg-info/5">
+          <CardHeader>
+            <CardTitle className="font-display text-xl uppercase tracking-wide">{copy("Instrucciones antes de la misión", "Instructions before the mission")}</CardTitle>
+            <CardDescription>{copy("El participante debe escuchar o leer esta guía completa antes de iniciar PRÁCTICA.", "The participant must listen to or read this complete guide before starting PRACTICE.")}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <InstructionAudio src={`/audio/instructions/mission-${locale === "es-CO" ? "es" : "en"}.mp3`} label={copy("Escuchar instrucciones de misión", "Listen to mission instructions")} unavailableLabel={copy("Audio no disponible", "Audio unavailable")} />
+            <div className="grid gap-3 md:grid-cols-2">
+              <div id="practice" className="scroll-mt-6 rounded border border-white/10 bg-black/20 p-4"><div className="page-kicker text-info">06 · {copy("Práctica", "Practice")}</div><p className="mt-2 text-sm text-muted-foreground">{copy("Seleccione aeronaves y contactos; pruebe los comandos inferiores; confirme alertas. Los errores de práctica sirven para aprender la interfaz.", "Select aircraft and contacts; try the bottom commands; acknowledge alerts. Practice errors are used to learn the interface.")}</p></div>
+              <div id="blocks" className="scroll-mt-6 rounded border border-white/10 bg-black/20 p-4"><div className="page-kicker text-info">07 · {copy("Bloques", "Blocks")}</div><p className="mt-2 text-sm text-muted-foreground">{copy("Después de PRÁCTICA, siga el bloque que aparece en la barra superior. No cambie de pantalla ni cierre la ventana.", "After PRACTICE, follow the block shown in the top bar. Do not switch screens or close the window.")}</p></div>
+              <div id="workload" className="scroll-mt-6 rounded border border-white/10 bg-black/20 p-4"><div className="page-kicker text-info">08 · {copy("Preguntas", "Questions")}</div><p className="mt-2 text-sm text-muted-foreground">{copy("Cuando aparezca una pregunta, la misión se detendrá. Responda con su percepción actual; no hay respuestas correctas en las escalas de carga.", "When a question appears, the mission will pause. Answer from your current perception; workload scales have no correct answers.")}</p></div>
+              <div id="complete" className="scroll-mt-6 rounded border border-white/10 bg-black/20 p-4"><div className="page-kicker text-info">09 · {copy("Finalizar", "Finish")}</div><p className="mt-2 text-sm text-muted-foreground">{copy("Al terminar, espere la confirmación de guardado y avise al investigador antes de abandonar el puesto.", "At the end, wait for the saved confirmation and tell the researcher before leaving the station.")}</p></div>
+            </div>
+          </CardContent>
+        </Card>
 
         {loadError && (
           <div role="alert" className="border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">

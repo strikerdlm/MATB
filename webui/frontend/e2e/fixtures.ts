@@ -223,7 +223,8 @@ async function assignActiveFleet(page: Page): Promise<void> {
         await resolveVisibleProbe(page);
         continue;
       }
-      const assign = page.getByRole("button", { name: /assign sector/i });
+      const sectorIndex = aircraftId === "UAS-02" ? 1 : 0;
+      const assign = page.getByRole("button", { name: /assign sector/i }).nth(sectorIndex);
       await expect(assign).toBeEnabled();
       try {
         await assign.click({ timeout: 5_000 });

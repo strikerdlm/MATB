@@ -1,4 +1,4 @@
-// Pure, seeded, timing-independent logic for the neurocognitive screen.
+// Pure, seeded, timing-independent logic for the legacy four-task screen.
 // All participant-visible STRINGS live in components/screen/strings_es.ts;
 // all SCORING lives in matb_integration/screen (Python). This module only
 // generates reproducible trial sequences and assembles the raw payload.

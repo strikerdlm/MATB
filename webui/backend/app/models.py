@@ -79,6 +79,32 @@ class ScreenResult(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
 
 
+class PvtAssessment(SQLModel, table=True):
+    """Visit-linked Karolinska rating and psychomotor vigilance test.
+
+    Legacy ``ScreenResult`` rows remain untouched because they represent a
+    different four-task battery and must never be reinterpreted as PVT data.
+    """
+
+    __tablename__ = "pvt_assessment"
+    __table_args__ = (
+        UniqueConstraint("visit_id"),
+        Index("ix_pvt_assessment_participant_visit", "participant_id", "visit_id"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    participant_id: str = Field(foreign_key="participant.id", index=True)
+    visit_id: int = Field(foreign_key="visit.id", index=True)
+    kss_score: int = Field(ge=1, le=9)
+    administered_at: str
+    duration_ms: int = Field(ge=1)
+    protocol_valid: bool = True
+    pvt_version: int = 1
+    raw_trials_json: str
+    metrics_json: str
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
 class AnalysisResult(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("fingerprint", "engine_version"),)
     id: int | None = Field(default=None, primary_key=True)
