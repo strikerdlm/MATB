@@ -58,6 +58,7 @@ def test_root_guide_has_no_historical_pr_status() -> None:
     assert not re.search(r"\bPR\s*#\d+|pull request\s*#\d+", text, re.IGNORECASE)
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX wrapper execution is verified on Linux")
 def test_openmatb_bash_wrapper_uses_selected_python(tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parents[2]
     invocation_log = tmp_path / "openmatb-python.log"
@@ -100,6 +101,7 @@ def test_suas_powershell_walkthrough_clears_lease_bearing_headers() -> None:
     assert last_header_use < clear_headers < clear_lease
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX wrapper execution is verified on Linux")
 def test_suas_cli_wrapper_uses_matb_venv_python(tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parents[2]
     invocation_log = tmp_path / "suas-python.log"

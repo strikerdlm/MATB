@@ -22,13 +22,20 @@ technical simulations, not valid participant sessions. Research sessions must
 still start with `PRACTICE` and follow the participant's counterbalanced order.
 
 The service binds only to loopback and stores its database, artifacts, logs,
-and process state under the Git-ignored `exports/windows-suas/service/` root.
+and process state under the Git-ignored `exports/windows-suas/service/` root by
+default. Set `MATB_DATA_ROOT` to an absolute external directory, or pass
+`-DataRoot` to an internal PowerShell script, to relocate all mutable data.
+The explicit parameter takes precedence over the environment variable. Relative
+values are anchored to the repository, not the caller's current directory.
+Repository, drive, and user-profile roots are rejected as unsafe data roots.
 The stop launcher validates the recorded PID, exact executable, and start
 time; when Windows permits that inspection, it also validates the command
 line. It does not stop unrelated Python or Node processes.
 
 Profile shortcuts are independent of the directory from which Explorer starts
-them. The console also detects the Git commit and worktree state before it
+them and support repository and data paths containing spaces or Unicode. Python
+may be selected with either `MATB_PYTHON` (path or command name) or a
+platform-native `MATB_VENV`. The console also detects the Git commit and worktree state before it
 starts the backend. Experiment Designer provenance is `complete` only for a
 verified clean clone; a modified tree, unavailable Git check, or ZIP without
 Git metadata correctly remains provisional. After updating the launchers, stop
@@ -37,5 +44,5 @@ new backend process receives the provenance values.
 
 `91 - Abrir resultados MATB UAS.cmd` opens the latest sealed technical run and
 the service log directory in Explorer when present. It only opens paths below
-`exports/windows-suas/`; shortcut `90` remains the full replay and checksum
+the configured data root; shortcut `90` remains the full replay and checksum
 verification action.

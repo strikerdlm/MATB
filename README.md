@@ -1203,7 +1203,8 @@ authentication, privacy, and threat controls beyond this development launcher.
 | Variable | Scope | Meaning |
 | --- | --- | --- |
 | `MATB_PYTHON` | Example wrappers | Exact Python executable selected for OpenMATB or sUAS CLI tours |
-| `MATB_VENV` | POSIX install/launcher | Repository-local Python environment path |
+| `MATB_VENV` | Cross-platform launchers | Python environment root (`bin/python` on POSIX, `Scripts/python.exe` on Windows) |
+| `MATB_DATA_ROOT` | sUAS launchers | Relocatable root for mutable databases, logs, process state, and sealed runs |
 | `MATB_DB_PATH` | Research/sUAS backend | Dedicated SQLite path |
 | `MATB_SIMULATION_OUTPUT_DIR` | sUAS | Owner-only sealed artifact root |
 | `MATB_SIMULATION_SCENARIO_DIR` | sUAS | Validated YAML scenario directory |

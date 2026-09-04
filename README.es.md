@@ -1215,7 +1215,8 @@ autenticación, privacidad y amenazas que exceden este lanzador de desarrollo.
 | Variable | Alcance | Significado |
 | --- | --- | --- |
 | `MATB_PYTHON` | Envoltorios de ejemplos | Ejecutable Python exacto seleccionado para recorridos de CLI OpenMATB o sUAS |
-| `MATB_VENV` | Instalación/lanzador POSIX | Ruta del entorno Python local del repositorio |
+| `MATB_VENV` | Lanzadores multiplataforma | Raíz del entorno Python (`bin/python` en POSIX, `Scripts/python.exe` en Windows) |
+| `MATB_DATA_ROOT` | Lanzadores sUAS | Raíz reubicable para bases de datos, registros, estado de procesos y ejecuciones selladas |
 | `MATB_DB_PATH` | Backend de investigación/sUAS | Ruta SQLite dedicada |
 | `MATB_SIMULATION_OUTPUT_DIR` | sUAS | Raíz de artefactos sellados exclusiva del propietario |
 | `MATB_SIMULATION_SCENARIO_DIR` | sUAS | Directorio de escenarios YAML validados |

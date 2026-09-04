@@ -3,7 +3,8 @@ param(
     [ValidateRange(1, 65535)][int]$BackendPort = 8000,
     [ValidateRange(1, 65535)][int]$FrontendPort = 3100,
     [switch]$NoBrowser,
-    [switch]$NoWait
+    [switch]$NoWait,
+    [string]$DataRoot = ""
 )
 
 Set-StrictMode -Version Latest
@@ -17,7 +18,7 @@ if ($BackendPort -eq $FrontendPort) {
 $repoRoot = Get-MatbUasRepoRoot
 $frontendUrl = "http://127.0.0.1:$FrontendPort/start"
 $backendHealth = "http://127.0.0.1:$BackendPort/health"
-$dataRoot = Get-MatbUasDataRoot -RepoRoot $repoRoot
+$dataRoot = Get-MatbUasDataRoot -RepoRoot $repoRoot -DataRoot $DataRoot
 $serviceRoot = Join-Path $dataRoot "service"
 $statePath = Join-Path $serviceRoot "service-state.json"
 
@@ -53,7 +54,7 @@ if ($runningState) {
     Remove-MatbUasStateFile -StatePath $statePath -DataRoot $dataRoot
 }
 
-& (Join-Path $PSScriptRoot "Initialize-MatbUas.ps1") -SkipTests
+& (Join-Path $PSScriptRoot "Initialize-MatbUas.ps1") -SkipTests -DataRoot $dataRoot
 
 $pythonPath = Get-MatbUasPython -RepoRoot $repoRoot
 $nodePath = Get-MatbUasNode
@@ -165,6 +166,7 @@ try {
         state_version = 1
         status = "starting"
         repo_root = $repoRoot
+        data_root = $dataRoot
         supervisor_pid = $PID
         started_at_utc = [DateTime]::UtcNow.ToString("o")
         backend_pid = $backendProcess.Id

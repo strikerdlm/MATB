@@ -10,15 +10,25 @@ from pathlib import Path
 from sqlalchemy import event, inspect, text
 from sqlmodel import Session, SQLModel, create_engine
 
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 _DEFAULT_DB_PATH = Path(__file__).resolve().parents[1] / "matb_webui.db"
+
+
+def _resolve_db_path(configured_path: str | None) -> Path:
+    """Resolve configured database paths independently of the caller's cwd."""
+
+    if configured_path is None:
+        return _DEFAULT_DB_PATH
+    if not configured_path.strip():
+        raise ValueError("MATB_DB_PATH must not be empty")
+    candidate = Path(configured_path).expanduser()
+    if not candidate.is_absolute():
+        candidate = _REPOSITORY_ROOT / candidate
+    return candidate.resolve()
+
+
 _configured_db_path = os.getenv("MATB_DB_PATH")
-if _configured_db_path is not None and not _configured_db_path.strip():
-    raise ValueError("MATB_DB_PATH must not be empty")
-_DB_PATH = (
-    Path(_configured_db_path).expanduser().resolve()
-    if _configured_db_path
-    else _DEFAULT_DB_PATH
-)
+_DB_PATH = _resolve_db_path(_configured_db_path)
 _engine = create_engine(f"sqlite:///{_DB_PATH}", connect_args={"check_same_thread": False})
 
 

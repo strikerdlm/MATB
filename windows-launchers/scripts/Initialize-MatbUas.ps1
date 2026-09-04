@@ -2,7 +2,8 @@
 param(
     [switch]$SkipInstall,
     [switch]$SkipBuild,
-    [switch]$SkipTests
+    [switch]$SkipTests,
+    [string]$DataRoot = ""
 )
 
 Set-StrictMode -Version Latest
@@ -14,6 +15,7 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
 }
 
 $repoRoot = Get-MatbUasRepoRoot
+$resolvedDataRoot = Get-MatbUasDataRoot -RepoRoot $repoRoot -DataRoot $DataRoot
 $localPython = Join-Path $repoRoot ".venv-suas\Scripts\python.exe"
 
 try {
@@ -37,6 +39,7 @@ try {
 $env:PYTHONUTF8 = "1"
 $env:PYTHONDONTWRITEBYTECODE = "1"
 Write-Host "Python: $pythonPath"
+Write-Host "Data:   $resolvedDataRoot"
 
 & $pythonPath -c "import fastapi, pydantic, pyglet, pylsl, rstr, sqlmodel, uvicorn, yaml" 2>$null
 $pythonDependenciesReady = ($LASTEXITCODE -eq 0)
@@ -86,8 +89,18 @@ if (-not $frontendDependenciesReady) {
 }
 
 $buildId = Join-Path $frontendRoot ".next\BUILD_ID"
+$buildRootStamp = Join-Path $frontendRoot ".next\.matb-build-root"
 if (-not $SkipBuild) {
-    $needsBuild = -not (Test-Path -LiteralPath $buildId -PathType Leaf)
+    $needsBuild = (
+        -not (Test-Path -LiteralPath $buildId -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $buildRootStamp -PathType Leaf)
+    )
+    if (-not $needsBuild) {
+        $stampedRoot = (Get-Content -LiteralPath $buildRootStamp -Raw).Trim()
+        if (-not $stampedRoot.Equals($frontendRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+            $needsBuild = $true
+        }
+    }
     if (-not $needsBuild) {
         $buildTime = (Get-Item -LiteralPath $buildId).LastWriteTimeUtc
         $sourceRoots = @(
@@ -118,6 +131,7 @@ if (-not $SkipBuild) {
             if ($LASTEXITCODE -ne 0) {
                 throw "MATB frontend build failed."
             }
+            $frontendRoot | Set-Content -LiteralPath $buildRootStamp -Encoding utf8 -NoNewline
         } finally {
             Pop-Location
         }

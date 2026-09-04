@@ -54,6 +54,11 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/google/chrome/chrome \
 npm run test:e2e
 ```
 
+The browser suite starts the production frontend, so run `npm run build` after
+source changes before invoking it. `MATB_VENV` is resolved as
+`bin/python` on Linux and `Scripts/python.exe` on Windows; `MATB_PYTHON` may
+instead name a Python command or an absolute executable path.
+
 The suite covers the complete four-block protocol and replay/debrief path,
 axe serious/critical checks, keyboard operation, reduced motion, observer
 read-only behavior, controller disconnect/reconnect, and 1280×720 and

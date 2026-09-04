@@ -1,15 +1,18 @@
 [CmdletBinding()]
-param([switch]$ListOnly)
+param(
+    [switch]$ListOnly,
+    [string]$DataRoot = ""
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "Common-MatbUas.ps1")
 
 $repoRoot = Get-MatbUasRepoRoot
-$dataRoot = Get-MatbUasDataRoot -RepoRoot $repoRoot
+$dataRoot = Get-MatbUasDataRoot -RepoRoot $repoRoot -DataRoot $DataRoot
 $logRoot = Join-Path $dataRoot "service\logs"
 $targets = [System.Collections.Generic.List[string]]::new()
-$latestRun = Get-MatbUasLatestSealedRun -RepoRoot $repoRoot
+$latestRun = Get-MatbUasLatestSealedRun -RepoRoot $repoRoot -DataRoot $dataRoot
 if ($latestRun) {
     $targets.Add($latestRun.FullName)
 }

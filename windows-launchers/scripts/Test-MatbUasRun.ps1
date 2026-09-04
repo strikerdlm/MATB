@@ -1,5 +1,8 @@
 [CmdletBinding()]
-param([string]$RunDirectory)
+param(
+    [string]$RunDirectory,
+    [string]$DataRoot = ""
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -7,11 +10,11 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Get-MatbUasRepoRoot
 $pythonPath = Get-MatbUasPython -RepoRoot $repoRoot
-$dataRoot = Get-MatbUasDataRoot -RepoRoot $repoRoot
+$dataRoot = Get-MatbUasDataRoot -RepoRoot $repoRoot -DataRoot $DataRoot
 $runsRoot = Join-Path $dataRoot "runs"
 
 if (-not $RunDirectory) {
-    $latestRun = Get-MatbUasLatestSealedRun -RepoRoot $repoRoot
+    $latestRun = Get-MatbUasLatestSealedRun -RepoRoot $repoRoot -DataRoot $dataRoot
     if (-not $latestRun) {
         throw "No sealed Windows sUAS runs were found. Incomplete runs were ignored."
     }

@@ -10,7 +10,7 @@ import os
 import socket
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from time import monotonic
 from typing import Any
 
@@ -53,19 +53,51 @@ def _current_bayes_process_owner() -> str:
 def _pid_is_alive(pid: int) -> bool:
     if pid <= 0:
         return False
+    if os.name == "nt":
+        return _windows_pid_is_alive(pid)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
         return False
     except PermissionError:
         return True
-    except OSError as exc:
-        # Windows reports a missing process as ERROR_INVALID_PARAMETER rather
-        # than ProcessLookupError for os.kill(pid, 0).
-        if getattr(exc, "winerror", None) == 87:
-            return False
-        raise
     return True
+
+
+def _windows_pid_is_alive(pid: int) -> bool:
+    """Probe a Windows PID without sending CTRL_C_EVENT via os.kill(pid, 0)."""
+    import ctypes
+    from ctypes import wintypes
+
+    process_query_limited_information = 0x1000
+    still_active = 259
+    error_access_denied = 5
+    error_invalid_parameter = 87
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+    kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+
+    handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
+    if not handle:
+        error = ctypes.get_last_error()
+        if error == error_invalid_parameter:
+            return False
+        if error == error_access_denied:
+            return True
+        raise ctypes.WinError(error)
+
+    try:
+        exit_code = wintypes.DWORD()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return exit_code.value == still_active
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 def acquire_backend_instance_lease(
@@ -236,6 +268,31 @@ def _bayes_job_fingerprint(
         separators=(",", ":"),
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _next_bayes_attempt_at(
+    session: Session, *, observed_at: datetime | None = None
+) -> datetime:
+    """Return a timestamp strictly newer than every persisted attempt."""
+    from app.models import BayesResult
+
+    candidate = observed_at or datetime.now(timezone.utc)
+    if candidate.tzinfo is None:
+        candidate = candidate.replace(tzinfo=timezone.utc)
+    latest = session.exec(
+        select(BayesResult).order_by(
+            BayesResult.last_attempt_at.desc(),  # type: ignore[arg-type]
+            BayesResult.id.desc(),  # type: ignore[arg-type]
+        )
+    ).first()
+    if latest is None:
+        return candidate
+    latest_at = latest.last_attempt_at
+    if latest_at.tzinfo is None:
+        latest_at = latest_at.replace(tzinfo=timezone.utc)
+    if candidate <= latest_at:
+        return latest_at + timedelta(microseconds=1)
+    return candidate
 
 
 def _validated_bayes_artifact(
@@ -679,7 +736,7 @@ def run_bayes_endpoint(
             existing.finished_at = None
             existing.attempt_count += 1
             existing.error_history_json = json.dumps(history, allow_nan=False)
-            existing.last_attempt_at = datetime.now(timezone.utc)
+            existing.last_attempt_at = _next_bayes_attempt_at(session)
             existing.owner_token = _current_bayes_process_owner()
             row = existing
             session.add(row)

@@ -12,7 +12,7 @@ backend_port=8000
 frontend_port=3100
 backend_bind=127.0.0.1
 frontend_bind=127.0.0.1
-data_dir="$REPO_ROOT/var/suas"
+data_dir="${MATB_DATA_ROOT:-$REPO_ROOT/var/suas}"
 
 usage() {
   cat <<EOF
@@ -71,9 +71,13 @@ else
 fi
 
 VENV="${MATB_VENV:-$REPO_ROOT/.venv}"
-python_bin="$VENV/bin/python"
+python_bin="${MATB_PYTHON:-$VENV/bin/python}"
 next_bin="$REPO_ROOT/webui/frontend/node_modules/.bin/next"
-[[ -x "$python_bin" ]] || { echo "missing Python venv: $python_bin (run install_suas.sh)" >&2; exit 1; }
+if [[ "$python_bin" == */* ]]; then
+  [[ -x "$python_bin" ]] || { echo "MATB Python executable not found: $python_bin" >&2; exit 1; }
+else
+  command -v "$python_bin" >/dev/null 2>&1 || { echo "MATB Python command not found: $python_bin" >&2; exit 1; }
+fi
 [[ -x "$next_bin" ]] || { echo "missing built frontend: $next_bin (run install_suas.sh)" >&2; exit 1; }
 [[ -d "$REPO_ROOT/scenarios/suas" ]] || { echo "missing native scenarios directory" >&2; exit 1; }
 if port_in_use "$backend_bind" "$backend_port"; then echo "backend port is already in use" >&2; exit 1; fi
@@ -120,6 +124,7 @@ export MATB_ALLOWED_HOSTS
 export MATB_SIMULATION_SCENARIO_DIR="$REPO_ROOT/scenarios/suas"
 export MATB_BACKEND_PORT="$backend_port"
 export MATB_API_TOKEN
+export PYTHONPATH="$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 
 pushd "$REPO_ROOT/webui/backend" >/dev/null
 setsid "$python_bin" -m uvicorn app.main:app --host "$backend_bind" --port "$backend_port" >"$data_dir/logs/backend.log" 2>&1 &

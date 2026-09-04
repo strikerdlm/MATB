@@ -2,23 +2,21 @@ import { defineConfig, devices } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
+import { backendCommand, frontendCommand } from "./scripts/e2e-runtime.mjs";
+
 const frontendRoot = __dirname;
 const repoRoot = path.resolve(frontendRoot, "../..");
 const backendRoot = path.join(repoRoot, "webui", "backend");
+const reuseExistingServer = process.env.PW_REUSE_SERVER === "1";
 const runRoot = path.join(repoRoot, ".matb-core-e2e", String(process.pid));
-fs.mkdirSync(runRoot, { recursive: true });
+if (!reuseExistingServer) fs.mkdirSync(runRoot, { recursive: true });
 
-const pythonFromEnv = process.env.MATB_PYTHON
-  ?? (process.env.MATB_VENV ? path.join(process.env.MATB_VENV, "bin", "python") : undefined);
-const pythonExecutable = pythonFromEnv && fs.existsSync(pythonFromEnv) ? pythonFromEnv : "python3";
 const chromiumExecutable = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
   ?? (fs.existsSync("/opt/google/chrome/chrome") ? "/opt/google/chrome/chrome" : undefined);
-const reuseExistingServer = process.env.PW_REUSE_SERVER === "1";
-
 const isolatedEnv = {
   ...process.env,
   MATB_COMPONENTS: "core",
-  MATB_DB_PATH: path.join(runRoot, "matb-core-e2e.db"),
+  MATB_DB_PATH: process.env.MATB_DB_PATH ?? path.join(runRoot, "matb-core-e2e.db"),
 };
 
 export default defineConfig({
@@ -46,7 +44,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: `${pythonExecutable} -m uvicorn app.main:app --host 127.0.0.1 --port 8000`,
+      command: backendCommand(),
       cwd: backendRoot,
       url: "http://127.0.0.1:8000/health",
       timeout: 120_000,
@@ -54,7 +52,7 @@ export default defineConfig({
       env: isolatedEnv,
     },
     {
-      command: "npm run dev",
+      command: frontendCommand(frontendRoot),
       cwd: frontendRoot,
       url: "http://127.0.0.1:3100/experiments",
       timeout: 120_000,
