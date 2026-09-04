@@ -12,6 +12,7 @@ const DOT_PX = 16;
 type Stage = "instructions" | "practice" | "interstitial" | "scored" | "finished";
 
 export interface TrackingResult {
+  duration_ms: number;
   samples: number[][];
   n_expected_samples: number;
   path_amplitude_px: number;
@@ -109,6 +110,7 @@ export function Tracking({
         samples: samplesRef.current,
         n_expected_samples: scoredSeconds * 60,
         path_amplitude_px: amplitudeRef.current,
+        duration_ms: scoredSeconds * 1000,
       });
     } else {
       stageRef.current = "interstitial";

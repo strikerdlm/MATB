@@ -9,7 +9,7 @@ from uuid import uuid4
 import pytest
 from sqlmodel import Session
 
-from app.models import Participant, Visit
+from app.models import Participant, PvtAssessment, Visit
 from app.simulation_persistence import InMemorySimulationPersistence, SQLModelSimulationPersistence
 from app.simulation_runtime import SimulationManager
 from app.simulation_schemas import CommandRequest, CreateSimulationSession, CreateTechnicalSimulationSession
@@ -20,6 +20,10 @@ async def _running(manager: SimulationManager, engine) -> tuple[object, str]:
     with Session(engine) as db:
         db.add(Participant(id="P01", enrollment_date=date(2026, 6, 1)))
         db.add(Visit(participant_id="P01", visit_ordinal=1, scheduled_day=0))
+        db.commit()
+        db.add(PvtAssessment(participant_id="P01", visit_id=1, kss_score=3,
+            administered_at="2026-06-01T12:00:00Z", duration_ms=600000, pvt_version=2,
+            protocol_valid=True, raw_trials_json="[]", metrics_json="{}"))
         db.commit()
         prepared = await manager.prepare(
             CreateSimulationSession(

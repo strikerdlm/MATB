@@ -43,7 +43,8 @@ def test_pvt_stores_kss_and_standard_metrics_per_visit(client):
     assert response.status_code == 201, response.text
     body = response.json()
     assert body["kss_score"] == 6
-    assert body["protocol_valid"] is True
+    assert body["protocol_valid"] is False  # Legacy two-trial evidence cannot validate ten minutes.
+    assert "legacy_timing_evidence_missing" in body["timing_evidence"]["validity_reasons"]
     assert body["metrics"]["median_rt_ms"] == 447.5
     assert body["metrics"]["lapses"] == 1
 
@@ -55,7 +56,8 @@ def test_pvt_stores_kss_and_standard_metrics_per_visit(client):
 def test_pvt_is_unique_per_visit_and_supports_explicit_overwrite(client):
     _enroll(client)
     assert client.post("/pvt", json=_payload()).status_code == 201
-    assert client.post("/pvt", json=_payload()).status_code == 409
+    assert client.post("/pvt", json=_payload()).status_code == 201
+    assert client.post("/pvt", json=_payload(kss_score=4)).status_code == 409
     replacement = _payload(kss_score=2, overwrite=True)
     response = client.post("/pvt", json=replacement)
     assert response.status_code == 201
@@ -65,7 +67,8 @@ def test_pvt_is_unique_per_visit_and_supports_explicit_overwrite(client):
 def test_pvt_rejects_short_production_run_and_bad_timing(client):
     _enroll(client)
     short = client.post("/pvt", json=_payload(duration_ms=20_000))
-    assert short.status_code == 422
+    assert short.status_code == 201
+    assert short.json()["protocol_valid"] is False
     bad_trial = _trial(0)
     bad_trial["wait_ms"] = 1_999
     malformed = client.post("/pvt", json=_payload(trials=[bad_trial]))

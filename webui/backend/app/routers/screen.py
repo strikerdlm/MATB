@@ -6,13 +6,13 @@ this router stores raw + scores and triggers the fit-HCF refresh (Task 4)."""
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlmodel import Session, select
 
 from app.db import get_session
-from app.models import Participant, ScreenResult
+from app.models import ArchivedAssessment, Participant, PracticeResult, ScreenResult
 
 router = APIRouter(tags=["screen"])
 
@@ -36,35 +36,57 @@ def ingest_screen(
     participant_id: str = Body(...),
     payload: dict[str, Any] = Body(...),
     overwrite: bool = Body(False),
+    execution_purpose: Literal["practice", "study"] = Body("study"),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
     from matb_integration.screen.hcf_mapping import SCREEN_VERSION
 
     if session.get(Participant, participant_id) is None:
         raise HTTPException(status_code=404, detail=f"unknown participant {participant_id}")
+    scores = _score_payload(payload)
+    version = SCREEN_VERSION if payload.get("schema_version") == 2 else 1
+    if execution_purpose == "study" and not payload.get("fast_mode"):
+        if version != SCREEN_VERSION:
+            raise HTTPException(422, detail="Study collection requires version 2 timing and stimulus evidence.")
+        if (len(payload["simple_rt"]["trials"]) != 30 or len(payload["choice_rt"]["trials"]) != 30
+                or len(payload["nback"]["trials"]) != 60 or payload["nback"].get("soa_ms") != 2500
+                or payload["tracking"].get("duration_ms") != 90000):
+            raise HTTPException(422, detail="Study collection must use the assigned full four-task protocol.")
+    if execution_purpose == "practice" or payload.get("fast_mode") is True:
+        result = {"participant_id": participant_id, "screen_version": SCREEN_VERSION,
+                  "scores": scores, "execution_purpose": "practice"}
+        session.add(PracticeResult(experiment_id="screen", participant_id=participant_id,
+                                  payload_json=json.dumps(payload, allow_nan=False),
+                                  result_json=json.dumps(result, allow_nan=False)))
+        session.commit()
+        return result
     existing = session.exec(
         select(ScreenResult).where(ScreenResult.participant_id == participant_id)
     ).first()
+    if existing is not None and json.loads(existing.raw_trials_json) == payload:
+        return {"participant_id": participant_id, "screen_version": existing.screen_version,
+                "scores": json.loads(existing.scores_json), "execution_purpose": "study"}
     if existing is not None and not overwrite:
         raise HTTPException(status_code=409,
                             detail=f"screen already recorded for {participant_id}")
-    scores = _score_payload(payload)
     if existing is not None:
+        session.add(ArchivedAssessment(experiment_id="screen", participant_id=existing.participant_id,
+                      original_id=existing.id, snapshot_json=existing.model_dump_json()))
         session.delete(existing)
         session.flush()
     row = ScreenResult(
         participant_id=participant_id,
         administered_at=str(payload.get("administered_at") or ""),
         screen_version=SCREEN_VERSION,
-        raw_trials_json=json.dumps(payload),
-        scores_json=json.dumps(scores),
+        raw_trials_json=json.dumps(payload, allow_nan=False),
+        scores_json=json.dumps(scores, allow_nan=False),
     )
     session.add(row)
     session.commit()
     from app.hcf_refresh import refresh_fit_hcf
     refresh_fit_hcf(session)
     return {"participant_id": participant_id, "screen_version": SCREEN_VERSION,
-            "scores": scores}
+            "scores": scores, "execution_purpose": "study"}
 
 
 @router.get("/screen")
@@ -72,7 +94,7 @@ def screen_summary(session: Session = Depends(get_session)) -> dict[str, Any]:
     from matb_integration.screen.hcf_mapping import (MIN_COHORT, SCREEN_VERSION,
                                                      compute_cohort_hcf)
 
-    rows = session.exec(select(ScreenResult)).all()
+    rows = session.exec(select(ScreenResult).where(ScreenResult.execution_purpose == "study", ScreenResult.screen_version == SCREEN_VERSION)).all()
     scores_by_pid = {r.participant_id: json.loads(r.scores_json) for r in rows}
     store = compute_cohort_hcf(scores_by_pid)
     screens = []

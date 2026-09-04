@@ -42,6 +42,8 @@ export interface OpenMatbReadiness {
 }
 
 export interface OpenMatbSession {
+  execution_purpose: "practice" | "study";
+  locale: "es-419" | "en";
   id: string;
   participant_id: string;
   visit_ordinal: number;

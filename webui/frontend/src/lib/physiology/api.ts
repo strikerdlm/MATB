@@ -50,6 +50,7 @@ export const getPolarConnection = () => call<PolarConnection>("/connection");
 export const disconnectPolar = () => call<PolarConnection>("/connection", { method: "DELETE" });
 
 export function createPolarCapture(body: {
+  execution_purpose?: "practice" | "study";
   participant_pseudonym: string;
   matb_session_kind: PolarCapture["matb_session_kind"];
   matb_session_id: string;

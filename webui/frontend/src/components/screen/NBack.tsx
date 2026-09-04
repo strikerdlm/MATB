@@ -92,6 +92,7 @@ export function NBack({
     if (isScored) {
       trialsRef.current.push({
         is_target: isTarget,
+        letter: seqRef.current.letters[idx],
         responded: respondedRef.current,
         shown_at_ms: shownAtRef.current,
       });

@@ -58,7 +58,7 @@ def _resequence(records: Sequence[SessionRecord]) -> tuple[SessionRecord, ...]:
     return tuple(replace(record, sequence=index) for index, record in enumerate(records, start=1))
 
 
-def _metric_summary(records: Sequence[SessionRecord], manifest: Mapping[str, object]) -> dict[str, object]:
+def block_metric_summary(records: Sequence[SessionRecord], manifest: Mapping[str, object]) -> dict[str, object]:
     grouped: dict[str, list[SessionRecord]] = defaultdict(list)
     for record in records:
         grouped[record.block_id].append(record)
@@ -160,7 +160,8 @@ def private_questionnaire_artifact(records: Iterable[SessionRecord]) -> dict[str
     """Build the private questionnaire artifact without altering source records."""
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
+        "calculation_version": "suas-debrief-v2",
         "visibility": "server_private",
         "records": [
             {
@@ -187,7 +188,7 @@ def build_public_debrief(
     """Return ``(public_debrief, private_questionnaires)`` for a sealed run."""
 
     effective = tuple(effective_records(records))
-    metric_summary = _metric_summary(effective, manifest)
+    metric_summary = block_metric_summary(effective, manifest)
     research = derive_research_metrics(effective).to_dict()
     metrics = {**metric_summary, **research}
     frames = _checkpoint_frames(Path(run_dir))
@@ -216,6 +217,7 @@ def build_public_debrief(
         unique_frames.append(frame)
     replay_public = _public(replay)
     public = {
+        "calculation_version": "suas-debrief-v2",
         "status": "sealed" if str(replay.status) == "match" else "partial_unverified",
         "validity": validity,
         "session_mode": manifest.get("session_mode", "research"),

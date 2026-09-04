@@ -35,7 +35,7 @@ test("Liftoff setup keeps lease private and completes the phase workflow", async
   });
   await request.put("http://127.0.0.1:8000/participants/P01/study-context", {
     data: {
-      task_sequence: "MATB_LIFTOFF",
+      task_sequence: "LIFTOFF_MATB",
       prior_fpv_hours: 10,
       gaming_hours_per_week: 2,
     },
@@ -73,6 +73,8 @@ test("Liftoff setup keeps lease private and completes the phase workflow", async
     mimeType: "image/png",
     buffer: Buffer.from("89504e470d0a1a0a73796e746865746963", "hex"),
   });
+  await page.getByLabel(/sleepiness.*1.*9/i).fill("3");
+  for (const label of ["Mental demand", "Physical demand", "Temporal demand", "Performance", "Effort", "Frustration"]) await page.getByLabel(label, { exact: true }).fill("25");
   await page.getByRole("button", { name: /Seal session/i }).click();
   await expect(page.getByText("Sealed evidence", { exact: false })).toBeVisible();
   expect((await new AxeBuilder({ page: page as never }).analyze()).violations).toEqual([]);

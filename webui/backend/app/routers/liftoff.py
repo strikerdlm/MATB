@@ -69,6 +69,7 @@ def _translate(exc: LiftoffRuntimeError) -> HTTPException:
     }:
         return _error(status.HTTP_404_NOT_FOUND, code)
     if code in {
+        "study_context_required", "assigned_matb_first",
         "liftoff_telemetry_not_ready",
         "liftoff_active_session",
         "liftoff_retake_not_allowed",
@@ -327,6 +328,8 @@ def bundle(
     session_id: str,
     manager: LiftoffManager = Depends(get_liftoff_manager),
 ) -> Response:
+    if _managed(lambda: manager.session_view(session_id)).execution_purpose == "practice":
+        raise HTTPException(409, detail={"code": "practice_not_research_export"})
     root, artifact_rows = _managed(lambda: manager.bundle_files(session_id))
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:

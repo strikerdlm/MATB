@@ -13,7 +13,7 @@ def _utcnow() -> datetime:
 
 
 class Participant(SQLModel, table=True):
-    id: str = Field(primary_key=True)               # "P01"… pseudonymized, no PII
+    id: str = Field(primary_key=True)               # "P01"â€¦ pseudonymized, no PII
     enrollment_date: date
     sex: str | None = None
     age_band: str | None = None
@@ -77,6 +77,7 @@ class ScreenResult(SQLModel, table=True):
     raw_trials_json: str                            # full raw payload (re-derivable)
     scores_json: str                                # score_screen() output
     created_at: datetime = Field(default_factory=_utcnow)
+    execution_purpose: str = "study"
 
 
 class PvtAssessment(SQLModel, table=True):
@@ -102,6 +103,20 @@ class PvtAssessment(SQLModel, table=True):
     pvt_version: int = 1
     raw_trials_json: str
     metrics_json: str
+    created_at: datetime = Field(default_factory=_utcnow)
+    execution_purpose: str = "study"
+    timing_evidence_json: str = "{}"
+
+
+class PracticeResult(SQLModel, table=True):
+    """Practice observations never share study uniqueness or analysis tables."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    experiment_id: str = Field(index=True)
+    participant_id: str | None = Field(default=None, foreign_key="participant.id")
+    execution_purpose: str = "practice"
+    payload_json: str
+    result_json: str
     created_at: datetime = Field(default_factory=_utcnow)
 
 
@@ -136,3 +151,14 @@ class BayesResult(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
     last_attempt_at: datetime = Field(default_factory=_utcnow, index=True)
     finished_at: datetime | None = None
+
+
+class ArchivedAssessment(SQLModel, table=True):
+    """Immutable observations retained when an explicitly requested retake replaces a result."""
+    __tablename__ = "archived_assessment"
+    id: int | None = Field(default=None, primary_key=True)
+    experiment_id: str = Field(index=True)
+    participant_id: str = Field(index=True)
+    original_id: int
+    snapshot_json: str
+    reason: str = "explicit_overwrite"

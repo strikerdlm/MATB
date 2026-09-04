@@ -78,6 +78,7 @@ class SessionView(BaseModel):
     active_block_id: str | None = None
     validity: str = "valid"
     session_mode: SessionMode = "research"
+    execution_purpose: Literal["practice", "study"] = "study"
     record_class: RecordClass = "research"
     selected_block_id: WorkloadProfile | None = None
     block_order: list[str] = Field(default_factory=list)

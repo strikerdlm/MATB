@@ -99,6 +99,8 @@ def build_session_manifest(
     configuration = request.configuration.model_dump(mode="json")
     return {
         "schema_version": "liftoff-session-manifest-v1",
+        "execution_purpose": request.execution_purpose,
+        "locale": request.locale,
         "session_id": session_id,
         "participant_id": request.participant_id,
         "visit_ordinal": visit.ordinal,
@@ -161,7 +163,9 @@ class LiftoffManager:
             raise LiftoffRuntimeError("liftoff_active_session")
         try:
             visit = self.persistence.require_visit(request.participant_id, request.visit_ordinal)
-            self.persistence.require_retake_allowed(request.participant_id, visit.id)
+            if request.execution_purpose == "study":
+                self.persistence.require_retake_allowed(request.participant_id, visit.id)
+                self.persistence.require_study_order(request.participant_id, visit.id)
         except KeyError as exc:
             raise LiftoffRuntimeError(str(exc.args[0])) from exc
         except ValueError as exc:
@@ -190,6 +194,7 @@ class LiftoffManager:
         recorder = LiftoffSessionRecorder.prepare(run_dir, manifest=manifest)
         recorder.mark("recording_started", source="system")
         row = LiftoffSession(
+            execution_purpose=request.execution_purpose,
             id=session_id,
             participant_id=request.participant_id,
             visit_id=visit.id,
@@ -229,6 +234,8 @@ class LiftoffManager:
             manifest = {}
         visit_ordinal = int(manifest.get("visit_ordinal", 0))
         return LiftoffSessionView(
+            execution_purpose=row.execution_purpose,
+            locale=manifest.get("locale", "es-419"),
             id=row.id,
             participant_id=row.participant_id,
             visit_id=row.visit_id,

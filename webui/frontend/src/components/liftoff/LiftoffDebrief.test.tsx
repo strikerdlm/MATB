@@ -31,10 +31,15 @@ describe("LiftoffDebrief", () => {
     await user.type(screen.getByLabelText(/valid lap times/i), "61.2, 63.0");
     const file = new File(["png"], "result.png", { type: "image/png" });
     await user.upload(screen.getByLabelText(/result screenshot/i), file);
+    expect(screen.getByRole("button", { name: /seal session/i })).toBeDisabled();
+    await user.type(screen.getByLabelText(/sleepiness.*1.*9/i), "3");
+    for (const label of ["Mental demand", "Physical demand", "Temporal demand", "Performance", "Effort", "Frustration"]) {
+      await user.type(screen.getByLabelText(label, { exact: true }), "25");
+    }
     await user.click(screen.getByRole("button", { name: /seal session/i }));
 
     await waitFor(() => expect(mockSeal).toHaveBeenCalledWith("session-1", "secret"));
     expect(mockResults).toHaveBeenCalled();
-    expect(mockQuestionnaires).toHaveBeenCalled();
+    expect(mockQuestionnaires).toHaveBeenCalledWith("session-1", "secret", expect.objectContaining({ kss: 3, mental_demand: 25, frustration: 25 }));
   });
 });

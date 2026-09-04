@@ -1,5 +1,6 @@
 "use client";
 
+import { ExperimentGuide } from "@/components/experiments/ExperimentGuide";
 import { useEffect, useState } from "react";
 
 import { TechnicalTestForm } from "@/components/mission/setup/TechnicalTestForm";
@@ -24,5 +25,5 @@ export default function TechnicalTestPage() {
     return () => { mounted = false; };
   }, [tr]);
 
-  return <TechnicalTestForm scenarios={scenarios} loading={loading} loadError={error} />;
+  return <div className="space-y-6"><ExperimentGuide id="suas" /><TechnicalTestForm scenarios={scenarios} loading={loading} loadError={error} /></div>;
 }

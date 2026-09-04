@@ -1,3 +1,4 @@
+import { sharedRead } from "@/lib/shared-request";
 import type {
   AnalysisArtifact,
   BayesJob,
@@ -40,9 +41,11 @@ export class IngestError extends ApiError {
 }
 
 export async function getCapabilities(): Promise<ConsoleCapabilities> {
-  const res = await request("/capabilities", { method: "GET" });
-  if (!res.ok) throw new ApiError(res.status, await detail(res));
-  return res.json();
+  return sharedRead("getCapabilities", async () => {
+    const res = await request("/capabilities", { method: "GET" });
+    if (!res.ok) throw new ApiError(res.status, await detail(res));
+    return res.json();
+  });
 }
 
 export async function compileExperiment(spec: ExperimentSpec): Promise<CompiledExperiment> {
@@ -101,9 +104,11 @@ export async function createParticipant(body: ParticipantCreate): Promise<Partic
 }
 
 export async function getStudyProtocol(): Promise<StudyProtocol> {
-  const res = await request("/study/protocol", { method: "GET" });
-  if (!res.ok) throw new ApiError(res.status, await detail(res));
-  return res.json();
+  return sharedRead("getStudyProtocol", async () => {
+    const res = await request("/study/protocol", { method: "GET" });
+    if (!res.ok) throw new ApiError(res.status, await detail(res));
+    return res.json();
+  });
 }
 
 export async function getStudyContext(participantId: string): Promise<StudyParticipantContext | null> {
@@ -210,11 +215,12 @@ export async function getBayesStatus(jobId?: number): Promise<BayesJob | null> {
 export async function postScreen(
   participantId: string, payload: import("@/lib/screen").ScreenPayload,
   overwrite = false,
+  executionPurpose: "practice" | "study" = "study",
 ): Promise<ScreenIngestResult> {
   const res = await request("/screen", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ participant_id: participantId, payload, overwrite }),
+    body: JSON.stringify({ participant_id: participantId, payload, overwrite, execution_purpose: executionPurpose }),
   });
   if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();

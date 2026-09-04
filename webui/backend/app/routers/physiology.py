@@ -131,6 +131,7 @@ def create_capture(body: CreateCaptureRequest, runtime: PolarCaptureManager = De
         session_kind=body.matb_session_kind,
         session_id=body.matb_session_id,
         settings=body.settings.model_dump(),
+        execution_purpose=body.execution_purpose,
     ))
     return PreparedCapture(capture=capture, controller_lease=lease)
 
@@ -194,6 +195,8 @@ def bundle(
     controller: str | None = Header(default=None, alias=_CONTROLLER),
     runtime: PolarCaptureManager = Depends(manager),
 ):
+    if _managed_sync(lambda: runtime.capture_view(capture_id)).execution_purpose == "practice":
+        raise HTTPException(409, detail={"code": "practice_not_research_export"})
     path = _managed_sync(lambda: runtime.bundle(capture_id, _lease(controller)))
     return FileResponse(path, filename=path.name, media_type="application/zip")
 

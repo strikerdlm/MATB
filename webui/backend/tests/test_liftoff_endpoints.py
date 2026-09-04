@@ -144,6 +144,22 @@ async def test_create_session_returns_one_time_lease(liftoff_client):
 
 
 @pytest.mark.anyio
+async def test_practice_export_is_denied_and_missing_export_is_not_found(liftoff_client):
+    client, manager = liftoff_client
+    manager.receiver.inject_valid_packets(20)
+    response = await client.post("/liftoff/sessions", json={
+        **create_payload(), "execution_purpose": "practice",
+    })
+    assert response.status_code == 201, response.text
+    session_id = response.json()["id"]
+    denied = await client.get(f"/liftoff/sessions/{session_id}/bundle")
+    assert denied.status_code == 409
+    assert denied.json()["detail"]["code"] == "practice_not_research_export"
+    missing = await client.get("/liftoff/sessions/unknown-session/bundle")
+    assert missing.status_code == 404
+
+
+@pytest.mark.anyio
 async def test_task_cannot_start_before_baseline_finishes(liftoff_client):
     client, _manager = liftoff_client
     session, lease = await prepared_session(liftoff_client)

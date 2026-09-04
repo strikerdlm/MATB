@@ -1,0 +1,42 @@
+{
+  "before": {
+    "initial_script_requests": 10,
+    "javascript_bytes": 635651,
+    "javascript_gzip_bytes": 197181,
+    "scripts": [
+      "static/chunks/14l8c496jbipl.js",
+      "static/chunks/08p4-h7h1ea6c.js",
+      "static/chunks/3xk7ia0reze-a.js",
+      "static/chunks/turbopack-0lcmnp687rcuv.js",
+      "static/chunks/1z-7-b72yet3b.js",
+      "static/chunks/1l7vdxt1t189t.js",
+      "static/chunks/36bclqsna4gl6.js",
+      "static/chunks/36nslvy6chvco.js",
+      "static/chunks/0cz1d0mv5g_q7.js",
+      "static/chunks/0na-m51tjvp9g.js"
+    ]
+  },
+  "after": {
+    "initial_script_requests": 9,
+    "javascript_bytes": 631870,
+    "javascript_gzip_bytes": 196883,
+    "scripts": [
+      "static/chunks/11jq0c2_zavac.js",
+      "static/chunks/3byuobrkyz9bj.js",
+      "static/chunks/353whv65zkg2q.js",
+      "static/chunks/turbopack-0zcryl1mfv8jl.js",
+      "static/chunks/0_jg8h05dqgo3.js",
+      "static/chunks/3ekt8jbmlf9jm.js",
+      "static/chunks/3i42vb0j7pdzf.js",
+      "static/chunks/0cz1d0mv5g_q7.js",
+      "static/chunks/3mc6dra1m0098.js"
+    ],
+    "heavy_module_markers": {
+      "echarts": false,
+      "TaskRunner": false,
+      "PvtRunner": false,
+      "leaflet": false,
+      "maplibre": false
+    }
+  }
+}

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Download, Play } from "lucide-react";
 
@@ -110,7 +111,7 @@ export default function AnalysisPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6"><Link href="/analysis/liftoff" className="inline-block text-sm underline">{copy("Ver análisis separado de Liftoff", "View separate Liftoff analysis")}</Link>
       <PageHeader
         kicker={copy("Motor de análisis", "Analysis engine")}
         title={copy("Análisis estadístico", "Statistical Analysis")}

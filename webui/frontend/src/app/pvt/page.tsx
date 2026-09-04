@@ -5,6 +5,9 @@ import Link from "next/link";
 import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, MoonStar } from "lucide-react";
 
 import { InstructionAudio } from "@/components/instructions/InstructionAudio";
+import { ExperimentGuide } from "@/components/experiments/ExperimentGuide";
+import { announceExperimentStage, useExecutionPurpose } from "@/lib/execution-purpose";
+import { useConsole } from "@/lib/console-context";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PvtRunner } from "@/components/pvt/PvtRunner";
 import { Button } from "@/components/ui/button";
@@ -12,7 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { getPvtSummary, listParticipants, listVisits, postPvt } from "@/lib/api";
 import { useAppLocale } from "@/lib/i18n";
-import { PVT_PROTOCOL_DURATION_MS, type PvtTrial } from "@/lib/pvt";
+import { PVT_PROTOCOL_DURATION_MS, type PvtRunResult } from "@/lib/pvt";
 import type { Participant, PvtAssessment, PvtSummary, Visit } from "@/types";
 
 const KSS_EN = [
@@ -39,10 +42,12 @@ const KSS_ES = [
   "Muy somnoliento, gran esfuerzo para mantenerse despierto, luchando contra el sueño",
 ] as const;
 
-type Stage = "select" | "kss" | "instructions" | "pvt" | "saving" | "complete";
+type Stage = "select" | "kss" | "instructions" | "pvt" | "saving" | "save_error" | "complete";
 
 export default function PvtPage() {
   const { locale, copy } = useAppLocale();
+  const purpose = useExecutionPurpose();
+  const { catalog } = useConsole();
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [visits, setVisits] = useState<Visit[]>([]);
   const [summary, setSummary] = useState<PvtSummary | null>(null);
@@ -52,6 +57,7 @@ export default function PvtPage() {
   const [stage, setStage] = useState<Stage>("select");
   const [result, setResult] = useState<PvtAssessment | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingRun, setPendingRun] = useState<PvtRunResult | null>(null);
   const [fastMode, setFastMode] = useState(false);
 
   useEffect(() => {
@@ -73,19 +79,22 @@ export default function PvtPage() {
   }, [stage]);
 
   useEffect(() => {
+    let active = true;
     setVisitOrdinal("");
     setVisits([]);
     if (!participantId) return;
     listVisits(participantId)
       .then((rows) => {
+        if (!active) return;
         setVisits(rows);
         const completedVisitIds = new Set(
-          summary?.assessments.filter((row) => row.participant_id === participantId).map((row) => row.visit_id) ?? [],
+          summary?.assessments.filter((row) => row.participant_id === participantId && row.protocol_valid && row.pvt_version >= 2).map((row) => row.visit_id) ?? [],
         );
         const next = rows.find((visit) => !completedVisitIds.has(visit.id)) ?? rows[0];
         if (next) setVisitOrdinal(String(next.visit_ordinal));
       })
       .catch((reason) => setError(reason instanceof Error ? reason.message : String(reason)));
+    return () => { active = false; };
   }, [participantId, summary]);
 
   const visit = useMemo(
@@ -93,10 +102,11 @@ export default function PvtPage() {
     [visitOrdinal, visits],
   );
   const alreadyRecorded = Boolean(
-    visit && summary?.assessments.some((row) => row.visit_id === visit.id),
+    purpose === "study" && visit && summary?.assessments.some((row) => row.visit_id === visit.id && row.protocol_valid && row.pvt_version >= 2),
   );
+  useEffect(() => { announceExperimentStage(stage === "select" ? 1 : stage === "instructions" || stage === "kss" ? 2 : stage === "complete" ? 4 : 3); }, [stage]);
   const kssLabels = locale === "en" ? KSS_EN : KSS_ES;
-  const durationMs = fastMode ? 12_000 : PVT_PROTOCOL_DURATION_MS;
+  const durationMs = fastMode ? 12_000 : purpose === "practice" ? 60_000 : PVT_PROTOCOL_DURATION_MS;
   const audioLocale = locale === "en" ? "en" : "es";
 
   function beginKss() {
@@ -106,41 +116,51 @@ export default function PvtPage() {
     setStage("kss");
   }
 
-  async function completePvt({ trials, durationMs: completedDuration }: { trials: PvtTrial[]; durationMs: number }) {
+  async function completePvt(run: PvtRunResult) {
     if (kssScore === null) return;
+    setPendingRun(run);
+    setError(null);
     setStage("saving");
     try {
       const saved = await postPvt({
         participant_id: participantId,
         visit_ordinal: Number(visitOrdinal),
         kss_score: kssScore,
-        administered_at: new Date().toISOString(),
-        duration_ms: completedDuration,
+        administered_at: run.administeredAt,
+        duration_ms: run.durationMs,
+        execution_purpose: purpose,
+        locale,
+        timing_version: 2,
+        interruption_count: run.interruptionCount,
+        max_frame_gap_ms: run.maxFrameGapMs,
+        terminal_phase: run.terminalPhase,
+        terminal_stimulus_at_ms: run.terminalStimulusAtMs,
+        overwrite: purpose === "study" && Boolean(visit && summary?.assessments.some((row) => row.visit_id === visit.id && (!row.protocol_valid || row.pvt_version < 2))),
         fast_mode: fastMode,
-        trials,
+        trials: run.trials,
       });
       setResult(saved);
-      setSummary(await getPvtSummary());
       setStage("complete");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
-      setStage("instructions");
+      setStage("save_error");
     }
   }
 
   return (
     <div className="space-y-6">
+      {stage === "select" && <ExperimentGuide id="pvt" />}
       <PageHeader
-        kicker={copy("Paso 2 y 3 de la visita", "Visit steps 2 and 3")}
+        kicker={copy("Somnolencia y atención", "Sleepiness and attention")}
         title={copy("KSS + Test de Vigilancia Psicomotora (PVT)", "KSS + Psychomotor Vigilance Test (PVT)")}
-        description={copy(
+        description={purpose === "practice" ? copy("Indique su somnolencia y practique la respuesta al contador.", "Rate your sleepiness and practice responding to the counter.") : copy(
           "Primero indique su somnolencia actual con la escala de Karolinska. Después complete la PVT estándar de 10 minutos.",
           "First rate your current sleepiness on the Karolinska scale. Then complete the standard 10-minute PVT.",
         )}
         stats={[
           { label: copy("Orden", "Order"), value: "KSS → PVT" },
-          { label: copy("Duración PVT", "PVT duration"), value: "10 min" },
-          { label: copy("Visitas", "Visits"), value: "T0 · DM8 · DM15" },
+          { label: copy("Duración PVT", "PVT duration"), value: String(durationMs / 60000) + " min" },
+          { label: copy("Modo", "Mode"), value: purpose === "practice" ? copy("Práctica", "Practice") : copy("Estudio", "Study") },
         ]}
       />
 
@@ -152,6 +172,7 @@ export default function PvtPage() {
       )}
       {error && <div role="alert" className="rounded border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">{error}</div>}
 
+      {stage === "save_error" && pendingRun && <div className="space-y-3 rounded border border-warning/40 p-4"><p>{copy("Sus respuestas siguen disponibles. Compruebe la conexión y reintente el guardado.", "Your responses remain available. Check the connection and retry saving.")}</p><Button onClick={() => void completePvt(pendingRun)}>{copy("Reintentar guardado", "Retry saving")}</Button></div>}
       {stage === "select" && (
         <Card>
           <CardHeader>
@@ -210,7 +231,7 @@ export default function PvtPage() {
               })}
             </fieldset>
             <Button type="button" onClick={() => setStage("instructions")} disabled={kssScore === null}>
-              {copy("Guardar KSS y ver instrucciones PVT", "Save KSS and view PVT instructions")}<ArrowRight className="ml-2 h-4 w-4" />
+              {copy("Confirmar KSS y ver instrucciones PVT", "Confirm KSS and view PVT instructions")}<ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </CardContent>
         </Card>
@@ -232,7 +253,7 @@ export default function PvtPage() {
               <li className="metric-tile"><strong>4.</strong> {copy("No se anticipe. Si responde antes, verá “Demasiado pronto”. Continúe hasta que termine el tiempo.", "Do not anticipate. If you respond early, you will see “Too soon.” Continue until time ends.")}</li>
             </ol>
             <div className="rounded border border-white/10 bg-black/25 p-4 text-sm text-muted-foreground">
-              {copy("Duración: 10 minutos. Intervalo variable: 2 a 10 segundos. Responda siempre con la misma mano y mantenga la atención en el centro.", "Duration: 10 minutes. Variable interval: 2 to 10 seconds. Always respond with the same hand and keep your attention centered.")}
+              {copy("Intervalo variable: 2 a 10 segundos. Responda siempre con la misma mano y mantenga la atención en el centro.", "Variable interval: 2 to 10 seconds. Always respond with the same hand and keep your attention centered.")}
             </div>
             <Button type="button" size="lg" onClick={() => setStage("pvt")}>{copy("Estoy listo", "I am ready")}<ArrowRight className="ml-2 h-4 w-4" /></Button>
           </CardContent>
@@ -246,14 +267,18 @@ export default function PvtPage() {
           <CardHeader>
             <CheckCircle2 className="mb-3 h-10 w-10 text-success" />
             <CardTitle>{copy("KSS y PVT completadas", "KSS and PVT complete")}</CardTitle>
-            <CardDescription>{copy("Avise al investigador. El siguiente paso es la línea basal con Polar H10.", "Tell the researcher. The next step is the Polar H10 baseline.")}</CardDescription>
+            <CardDescription>{copy("Sus respuestas están guardadas. Revise el estado de calidad antes de continuar.", "Your responses are saved. Review the quality status before continuing.")}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-4">
             <div className="metric-tile"><div className="page-kicker">KSS</div><div className="mt-1 text-2xl">{result.kss_score}</div></div>
             <div className="metric-tile"><div className="page-kicker">{copy("Mediana", "Median")}</div><div className="mt-1 text-2xl">{result.metrics.median_rt_ms?.toFixed(0) ?? "—"} ms</div></div>
             <div className="metric-tile"><div className="page-kicker">{copy("Lapsos", "Lapses")}</div><div className="mt-1 text-2xl">{result.metrics.lapses}</div></div>
             <div className="metric-tile"><div className="page-kicker">{copy("Anticipaciones", "False starts")}</div><div className="mt-1 text-2xl">{result.metrics.false_starts}</div></div>
-            <div className="sm:col-span-4"><Button asChild><Link href={`/physiology/polar-h10?participant=${encodeURIComponent(result.participant_id)}&visit=${encodeURIComponent(visitOrdinal)}`}>{copy("Continuar a línea basal Polar H10", "Continue to Polar H10 baseline")}<ArrowRight className="ml-2 h-4 w-4" /></Link></Button></div>
+            <div className="sm:col-span-4 space-y-3">
+              <p role="status" className={result.protocol_valid ? "text-success" : "text-warning"}>{result.protocol_valid ? copy("Registro válido para continuar el estudio.", "Valid recording to continue the study.") : purpose === "practice" ? copy("Práctica guardada por separado.", "Practice saved separately.") : copy("Registro no válido para el protocolo: revise interrupciones, duración y continuidad. Puede repetir la prueba.", "Recording not valid for the protocol: review interruptions, duration, and continuity. You may repeat the test.")}</p>
+              <div className="flex flex-wrap gap-3"><Button asChild><Link href="/start">{copy("Volver a los experimentos", "Return to experiments")}</Link></Button>
+              {result.protocol_valid && catalog.some((item) => item.id === "suas" && item.component_available) && <Button asChild variant="outline"><Link href="/mission/setup?purpose=study">{copy("Continuar a la misión sUAS", "Continue to the sUAS mission")}</Link></Button>}</div>
+            </div>
           </CardContent>
         </Card>
       )}

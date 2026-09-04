@@ -30,11 +30,12 @@ from matb_integration.suas.domain.serialization import canonical_data, canonical
 from matb_integration.suas.engine.runtime import (
     CHECKPOINT_INTERVAL_MS, ENGINE_VERSION, SNAPSHOT_INTERVAL_MS, TICK_MS, SimulationEngine,
 )
-from matb_integration.suas.metrics.debrief import build_public_debrief
+from matb_integration.suas.metrics.debrief import build_public_debrief, block_metric_summary
+from matb_integration.suas.metrics.research import derive_research_metrics
 from matb_integration.suas.recording.records import RecordKind, RecordingError, SessionRecord
 from matb_integration.suas.recording.recorder import SessionRecorder
 from matb_integration.suas.recording.checkpoints import load_checkpoint
-from matb_integration.suas.recording.replay import ReplayVerifier, event_chain_hash
+from matb_integration.suas.recording.replay import ReplayVerifier, event_chain_hash, effective_records
 from matb_integration.suas.scenarios.loader import load_scenario
 from matb_integration.suas.scenarios.manifest import build_session_manifest, build_technical_session_manifest
 from matb_integration.suas.scenarios.profiles import block_order_for_participant
@@ -178,6 +179,8 @@ class SimulationManager:
             )).one_or_none()
             if visit is None:
                 raise SimulationNotFound("visit not found")
+            from app.experiment_catalog import require_study_pvt
+            require_study_pvt(db, int(visit.id))
             scenario_root = self.scenario_root.resolve()
             scenario_path = self.scenario_root / f"{request.scenario_id}.yaml"
             resolved_scenario = scenario_path.resolve()
@@ -304,6 +307,7 @@ class SimulationManager:
                 "scenario_id": loaded.definition.scenario_id,
                 "session_mode": "interactive_technical",
                 "record_class": "technical_only",
+                "execution_purpose": "practice",
                 "selected_block_id": request.block_id,
             }, 0, 0)
             db.add(TechnicalSimulationSession(
@@ -449,11 +453,16 @@ class SimulationManager:
                         replay=replay,
                     )
                     self.persistence.replace_artifacts(handle.session_id, artifacts)
-                    for block_id in sorted({record.block_id for record in records}):
+                    effective = tuple(effective_records(records))
+                    for block_id in sorted({record.block_id for record in effective}):
+                        block_records = tuple(record for record in effective if record.block_id == block_id)
+                        block_metrics = {**block_metric_summary(block_records, handle.manifest),
+                                         **derive_research_metrics(block_records).to_dict(),
+                                         "calculation_version": "suas-debrief-v2"}
                         self.persistence.update_block(
                             handle.session_id,
                             block_id,
-                            metrics_json=canonical_json(metrics_mapping),
+                            metrics_json=canonical_json(block_metrics),
                         )
             self.persistence.update_session(session_id, lifecycle=handle.lifecycle, finished_at=_utcnow(), active_block_id=handle.active_block_id)
             if handle.active_block_id:
@@ -1303,6 +1312,7 @@ class SimulationManager:
             locale=handle.locale, lifecycle=handle.lifecycle, active_block_id=handle.active_block_id,
             block_order=list(protocol_order), state_version=self._version(handle),
             simulation_time_ms=self._time(handle), validity=effective_validity,
+            execution_purpose="practice" if handle.record_class == "technical_only" else "study",
             session_mode=handle.session_mode,
             record_class=handle.record_class,
             selected_block_id=handle.selected_block_id,

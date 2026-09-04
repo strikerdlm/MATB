@@ -7,24 +7,24 @@
           "title": "Relative Path",
           "type": "string"
         },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
         "row_count": {
           "minimum": 0,
           "title": "Row Count",
           "type": "integer"
         },
-        "schema_id": {
-          "title": "Schema Id",
-          "type": "string"
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
         },
         "sha256": {
           "pattern": "^[0-9a-f]{64}$",
           "title": "Sha256",
           "type": "string"
-        },
-        "size_bytes": {
-          "minimum": 0,
-          "title": "Size Bytes",
-          "type": "integer"
         }
       },
       "required": [
@@ -41,52 +41,45 @@
   "additionalProperties": false,
   "description": "Integrity and provenance record finalized after all writers close.",
   "properties": {
-    "algorithm_versions": {
-      "additionalProperties": {
-        "type": "string"
-      },
-      "title": "Algorithm Versions",
-      "type": "object"
-    },
-    "artifacts": {
-      "items": {
-        "$ref": "#/$defs/PolarArtifactEntryV1"
-      },
-      "title": "Artifacts",
-      "type": "array"
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
     },
     "capture_id": {
       "title": "Capture Id",
       "type": "string"
     },
-    "clock_model": {
-      "additionalProperties": true,
-      "title": "Clock Model",
-      "type": "object"
-    },
-    "ended_at_utc": {
-      "format": "date-time",
-      "title": "Ended At Utc",
+    "execution_purpose": {
+      "default": "study",
+      "enum": [
+        "practice",
+        "study"
+      ],
+      "title": "Execution Purpose",
       "type": "string"
     },
-    "incomplete_reasons": {
-      "default": [],
-      "items": {
-        "type": "string"
-      },
-      "title": "Incomplete Reasons",
-      "type": "array"
-    },
-    "matb_session_id": {
-      "title": "Matb Session Id",
+    "participant_pseudonym": {
+      "title": "Participant Pseudonym",
       "type": "string"
     },
     "matb_session_kind": {
       "title": "Matb Session Kind",
       "type": "string"
     },
-    "participant_pseudonym": {
-      "title": "Participant Pseudonym",
+    "matb_session_id": {
+      "title": "Matb Session Id",
+      "type": "string"
+    },
+    "started_at_utc": {
+      "format": "date-time",
+      "title": "Started At Utc",
+      "type": "string"
+    },
+    "ended_at_utc": {
+      "format": "date-time",
+      "title": "Ended At Utc",
       "type": "string"
     },
     "requested_settings": {
@@ -99,16 +92,10 @@
       "title": "Resolved Settings",
       "type": "object"
     },
-    "schema_version": {
-      "const": "1.0",
-      "default": "1.0",
-      "title": "Schema Version",
-      "type": "string"
-    },
-    "started_at_utc": {
-      "format": "date-time",
-      "title": "Started At Utc",
-      "type": "string"
+    "clock_model": {
+      "additionalProperties": true,
+      "title": "Clock Model",
+      "type": "object"
     },
     "stream_counters": {
       "additionalProperties": {
@@ -116,6 +103,28 @@
       },
       "title": "Stream Counters",
       "type": "object"
+    },
+    "algorithm_versions": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Algorithm Versions",
+      "type": "object"
+    },
+    "incomplete_reasons": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Incomplete Reasons",
+      "type": "array"
+    },
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/PolarArtifactEntryV1"
+      },
+      "title": "Artifacts",
+      "type": "array"
     }
   },
   "required": [

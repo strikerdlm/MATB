@@ -8,6 +8,7 @@ import {
   classifyPvtResponse,
   randomPvtWait,
   type PvtTrial,
+  type PvtRunResult,
 } from "@/lib/pvt";
 import { useAppLocale } from "@/lib/i18n";
 
@@ -18,11 +19,11 @@ export function PvtRunner({
   onComplete,
 }: {
   durationMs?: number;
-  onComplete: (result: { durationMs: number; trials: PvtTrial[] }) => void;
+  onComplete: (result: PvtRunResult) => void;
 }) {
   const { copy } = useAppLocale();
   const [phase, setPhase] = useState<Phase>("ready");
-  const [displayMs, setDisplayMs] = useState(0);
+  const displayRef = useRef<HTMLSpanElement>(null);
   const [feedback, setFeedback] = useState("");
   const [remainingMs, setRemainingMs] = useState(durationMs);
   const phaseRef = useRef<Phase>("ready");
@@ -32,6 +33,10 @@ export function PvtRunner({
   const trialsRef = useRef<PvtTrial[]>([]);
   const timerRef = useRef<number | null>(null);
   const completeRef = useRef(false);
+  const startedAtRef = useRef("");
+  const interruptionRef = useRef(0);
+  const maxFrameGapRef = useRef(0);
+  const lastFrameRef = useRef(0);
   const scheduleRef = useRef<(feedbackMs?: number) => void>(() => undefined);
 
   const setCurrentPhase = useCallback((value: Phase) => {
@@ -45,16 +50,19 @@ export function PvtRunner({
     if (completeRef.current) return;
     completeRef.current = true;
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    const terminalPhase = phaseRef.current === "ready" ? "complete" : phaseRef.current;
+    const terminalStimulusAtMs = terminalPhase === "stimulus" ? stimulusRef.current : null;
     setCurrentPhase("complete");
-    onComplete({ durationMs, trials: [...trialsRef.current] });
-  }, [durationMs, onComplete, setCurrentPhase]);
+    onComplete({ durationMs: Math.ceil(elapsed()), trials: [...trialsRef.current],
+      administeredAt: startedAtRef.current, interruptionCount: interruptionRef.current,
+      maxFrameGapMs: maxFrameGapRef.current, terminalPhase, terminalStimulusAtMs });
+  }, [elapsed, onComplete, setCurrentPhase]);
 
   const scheduleStimulus = useCallback((feedbackMs = 0) => {
     if (completeRef.current) return;
     const waitMs = randomPvtWait();
     waitRef.current = waitMs;
     stimulusRef.current = null;
-    setDisplayMs(0);
     const arm = () => {
       if (completeRef.current) return;
       setFeedback("");
@@ -118,6 +126,10 @@ export function PvtRunner({
 
   function start() {
     startRef.current = performance.now();
+    startedAtRef.current = new Date().toISOString();
+    interruptionRef.current = document.hidden ? 1 : 0;
+    maxFrameGapRef.current = 0;
+    lastFrameRef.current = startRef.current;
     trialsRef.current = [];
     completeRef.current = false;
     scheduleStimulus();
@@ -125,16 +137,32 @@ export function PvtRunner({
 
   useEffect(() => {
     if (phase === "ready" || phase === "complete") return;
-    const interval = window.setInterval(() => {
+    let frame = 0;
+    const tick = () => {
+      const now = performance.now();
+      maxFrameGapRef.current = Math.max(maxFrameGapRef.current, now - lastFrameRef.current);
+      lastFrameRef.current = now;
       const elapsedMs = elapsed();
-      setRemainingMs(Math.max(0, durationMs - elapsedMs));
-      if (phaseRef.current === "stimulus" && stimulusRef.current !== null) {
-        setDisplayMs(Math.max(0, elapsedMs - stimulusRef.current));
+      setRemainingMs(Math.ceil(Math.max(0, durationMs - elapsedMs) / 1000) * 1000);
+      if (phaseRef.current === "stimulus" && stimulusRef.current !== null && displayRef.current) {
+        displayRef.current.textContent = String(Math.round(Math.max(0, elapsedMs - stimulusRef.current)));
       }
       if (elapsedMs >= durationMs) finish();
-    }, 16);
-    return () => window.clearInterval(interval);
+      else frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
   }, [durationMs, elapsed, finish, phase]);
+
+  useEffect(() => {
+    const interrupted = () => {
+      if (phaseRef.current !== "ready" && phaseRef.current !== "complete") interruptionRef.current += 1;
+    };
+    const visibility = () => { if (document.hidden) interrupted(); };
+    window.addEventListener("blur", interrupted);
+    document.addEventListener("visibilitychange", visibility);
+    return () => { window.removeEventListener("blur", interrupted); document.removeEventListener("visibilitychange", visibility); };
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -153,13 +181,14 @@ export function PvtRunner({
   if (phase === "ready") {
     return (
       <button type="button" onClick={start} className="mx-auto min-h-14 rounded bg-white px-8 py-4 font-display text-lg font-semibold uppercase tracking-wide text-black focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-info">
-        {copy("Iniciar PVT de 10 minutos", "Start 10-minute PVT")}
+        {durationMs === PVT_PROTOCOL_DURATION_MS ? copy("Iniciar PVT de 10 minutos", "Start 10-minute PVT") : copy("Iniciar práctica PVT", "Start PVT practice")}
       </button>
     );
   }
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col items-center gap-6">
+      <button type="button" onClick={() => { interruptionRef.current += 1; finish(); }} className="text-sm underline">{copy("Detener y guardar registro incompleto", "Stop and save incomplete recording")}</button>
       <div className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground" aria-live="polite">
         {copy("Tiempo restante", "Time remaining")} {Math.ceil(remainingMs / 1000)} s
       </div>
@@ -171,7 +200,7 @@ export function PvtRunner({
         className="grid min-h-[360px] w-full touch-manipulation place-items-center rounded-xl border border-white/15 bg-black shadow-[inset_0_0_80px_rgb(255_255_255/0.035)] outline-none focus-visible:ring-4 focus-visible:ring-info"
       >
         {phase === "stimulus" ? (
-          <span className="font-mono text-7xl font-bold tabular-nums text-white sm:text-8xl">{Math.round(displayMs)}</span>
+          <span ref={displayRef} className="font-mono text-7xl font-bold tabular-nums text-white sm:text-8xl">0</span>
         ) : phase === "feedback" ? (
           <span className="font-mono text-3xl font-semibold text-info">{feedback}</span>
         ) : phase === "complete" ? (

@@ -34,6 +34,7 @@ export const listOpenMatbInstructions = () => call<OpenMatbInstructionProtocol[]
 export const getOpenMatbSession = (id: string) => call<OpenMatbSession>(`/openmatb/sessions/${encodeURIComponent(id)}`);
 
 export function createOpenMatbSession(body: {
+  execution_purpose?: "practice" | "study";
   participant_id: string; visit_ordinal: number; preset_id: string; preset_version: string;
   instruction_protocol_id: string; instruction_version: string; visual_theme: OpenMatbVisualTheme; display_index: number;
 }) {

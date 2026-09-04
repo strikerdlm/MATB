@@ -202,6 +202,11 @@ def ingest_csv(
                 manifest_content.decode("utf-8"),
                 parse_constant=_reject_nonfinite_json,
             )
+            parameters = manifest_payload.get("parameters", {})
+            if (manifest_payload.get("execution_purpose") == "practice" or
+                parameters.get("execution_purpose") == "practice" or
+                parameters.get("suite_profile_name") == "PRACTICE"):
+                raise IngestionError("Practice observations cannot be imported as study blocks.")
             expected_payload = manifest_payload.get("expected", {})
             target_value = expected_payload.get("sysmon_target_opportunities")
             nontarget_value = expected_payload.get("sysmon_nontarget_opportunities")

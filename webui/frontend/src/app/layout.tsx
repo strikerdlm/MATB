@@ -1,7 +1,9 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import "./globals.css";
 import { RouteShell } from "@/components/layout/RouteShell";
 import { AppLocaleProvider } from "@/lib/i18n";
+import { ConsoleProvider } from "@/lib/console-context";
 
 export const metadata: Metadata = {
   title: "MATB-FAC",
@@ -13,7 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es-419" className="dark">
       <body className="font-sans antialiased">
         <AppLocaleProvider>
-          <RouteShell>{children}</RouteShell>
+          <ConsoleProvider><RouteShell><Suspense>{children}</Suspense></RouteShell></ConsoleProvider>
         </AppLocaleProvider>
       </body>
     </html>

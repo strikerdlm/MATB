@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Check, ChevronRight, Loader2, Radio, ShieldCheck } from "lucide-react";
@@ -91,6 +91,8 @@ export function MissionSetupForm({
       && !loading && !visitsLoading && !submitting,
   );
 
+  const localeRef = useRef(locale);
+  localeRef.current = locale;
   useEffect(() => {
     if (scenarios.length === 1) setScenarioId((current) => current || scenarios[0].scenario_id);
   }, [scenarios]);
@@ -127,7 +129,7 @@ export function MissionSetupForm({
         }
       })
       .catch((reason: unknown) => {
-        if (mounted) setVisitsError(reason instanceof Error ? reason.message : t(locale, "setup.load_error"));
+        if (mounted) setVisitsError(reason instanceof Error ? reason.message : t(localeRef.current, "setup.load_error"));
       })
       .finally(() => {
         if (mounted) setVisitsLoading(false);
@@ -135,7 +137,7 @@ export function MissionSetupForm({
     return () => {
       mounted = false;
     };
-  }, [initialVisits, locale, participantId, visitsLoader]);
+  }, [initialVisits, participantId, visitsLoader]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -170,7 +172,7 @@ export function MissionSetupForm({
 
   return (
     <main className="min-h-screen bg-background px-4 py-8 text-foreground sm:px-6 lg:px-10">
-      <div className="mx-auto max-w-6xl space-y-7">
+      <div className="mx-auto max-w-6xl space-y-7"><p className="text-sm text-muted-foreground">{locale === "en" ? "Before this study mission, complete KSS and a valid 10-minute PVT for the same visit." : "Antes de esta misión de estudio, complete KSS y una PVT válida de 10 minutos para la misma visita."} <Link href="/pvt?purpose=study" className="underline">KSS + PVT</Link></p>
         <header className="flex flex-col justify-between gap-5 border-b border-white/10 pb-6 md:flex-row md:items-end">
           <div>
             <div className="mb-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.24em] text-muted-foreground">

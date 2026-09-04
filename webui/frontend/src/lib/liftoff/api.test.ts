@@ -34,6 +34,7 @@ const request: CreateLiftoffSession = {
 };
 
 const prepared: PreparedLiftoffSession = {
+  execution_purpose: "study",
   id: "session-1",
   participant_id: "P01",
   visit_id: 2,

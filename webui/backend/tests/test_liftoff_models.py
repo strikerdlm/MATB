@@ -49,6 +49,16 @@ def test_analysis_attempt_is_first_valid(engine, seeded_participant):
     assert persistence.analysis_attempt("P01", visit_id=1).id == "good"
 
 
+def test_valid_practice_never_becomes_the_analysis_attempt(engine, seeded_participant):
+    persistence = SQLModelLiftoffPersistence(engine)
+    persistence.insert_session(liftoff_row(id="practice", attempt_number=1,
+        validity="valid", execution_purpose="practice", status="FINISHED"))
+    assert persistence.analysis_attempt("P01", visit_id=1) is None
+    persistence.insert_session(liftoff_row(id="study", attempt_number=2,
+        validity="valid", execution_purpose="study", status="FINISHED"))
+    assert persistence.analysis_attempt("P01", visit_id=1).id == "study"
+
+
 def test_orphaned_active_session_is_interrupted(engine, seeded_participant):
     persistence = SQLModelLiftoffPersistence(engine)
     persistence.insert_session(liftoff_row(status="TASK"))

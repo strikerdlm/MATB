@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, CheckCircle2, Loader2, MonitorUp, Play } from "lucide-react";
 
+import { ExperimentGuide } from "@/components/experiments/ExperimentGuide";
+import { useExecutionPurpose } from "@/lib/execution-purpose";
 import { GuidedSteps, type GuidedStepState } from "@/components/layout/GuidedSteps";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -39,7 +41,10 @@ function stepState(complete: boolean, current: boolean): GuidedStepState {
 
 export default function OpenMatbSetupPage() {
   const router = useRouter();
-  const { copy } = useAppLocale();
+  const { copy, locale } = useAppLocale();
+  const purpose = useExecutionPurpose();
+  const copyRef = useRef(copy);
+  copyRef.current = copy;
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [visits, setVisits] = useState<Visit[]>([]);
   const [presets, setPresets] = useState<OpenMatbPresetSet[]>([]);
@@ -74,15 +79,15 @@ export default function OpenMatbSetupPage() {
         setInstructions(publishedInstructions);
         setReadiness(ready);
         if (publishedPresets[0]) setPresetKey(`${publishedPresets[0].preset_id}@${publishedPresets[0].version}`);
-        if (publishedInstructions[0]) setInstructionKey(`${publishedInstructions[0].protocol_id}@${publishedInstructions[0].version}`);
+
         setDisplayIndex(ready.display_index_default);
       })
       .catch((reason: unknown) => {
-        if (active) setError(openMatbErrorMessage(reason, copy, ["No se pudo preparar OpenMATB.", "OpenMATB setup could not be loaded."]));
+        if (active) setError(openMatbErrorMessage(reason, copyRef.current, ["No se pudo preparar OpenMATB.", "OpenMATB setup could not be loaded."]));
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [copy]);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -99,10 +104,16 @@ export default function OpenMatbSetupPage() {
         setVisitOrdinal(rows[0] ? String(rows[0].visit_ordinal) : "");
       })
       .catch((reason: unknown) => {
-        if (active) setError(openMatbErrorMessage(reason, copy, ["No se pudieron cargar las visitas.", "Visits could not be loaded."]));
+        if (active) setError(openMatbErrorMessage(reason, copyRef.current, ["No se pudieron cargar las visitas.", "Visits could not be loaded."]));
       });
     return () => { active = false; };
-  }, [copy, participantId]);
+  }, [participantId]);
+
+  useEffect(() => {
+    const matching = instructions.filter((row) => row.locale === locale);
+    setInstructionKey((current) => matching.some((row) => `${row.protocol_id}@${row.version}` === current)
+      ? current : matching[0] ? `${matching[0].protocol_id}@${matching[0].version}` : "");
+  }, [instructions, locale]);
 
   const preset = useMemo(
     () => presets.find((row) => `${row.preset_id}@${row.version}` === presetKey),
@@ -124,7 +135,11 @@ export default function OpenMatbSetupPage() {
     setBusy(true);
     setError(null);
     try {
+      const ready = await getOpenMatbReadiness();
+      setReadiness(ready);
+      if (!ready.ready) throw new Error(copy("Revise los requisitos de la estación e intente de nuevo.", "Check station requirements and try again."));
       const prepared = await createOpenMatbSession({
+        execution_purpose: purpose,
         participant_id: participantId,
         visit_ordinal: Number(visitOrdinal),
         preset_id: preset.preset_id,
@@ -140,7 +155,7 @@ export default function OpenMatbSetupPage() {
       router.push(`/openmatb/session?session=${encodeURIComponent(prepared.session.id)}`);
     } catch (reason: unknown) {
       participantWindow?.close();
-      setError(openMatbErrorMessage(reason, copy, ["No se pudo crear la sesión.", "The session could not be created."]));
+      setError(openMatbErrorMessage(reason, copyRef.current, ["No se pudo crear la sesión.", "The session could not be created."]));
     } finally {
       setBusy(false);
     }
@@ -148,6 +163,7 @@ export default function OpenMatbSetupPage() {
 
   return (
     <div className="space-y-6">
+      <ExperimentGuide id="openmatb" />
       <PageHeader
         kicker={copy("Control nativo", "Native control")}
         title={copy("Suite OpenMATB", "OpenMATB suite")}
@@ -158,7 +174,7 @@ export default function OpenMatbSetupPage() {
         actions={<Button asChild variant="outline"><Link href="/openmatb/settings">{copy("Configuración avanzada", "Advanced settings")}</Link></Button>}
         stats={[
           { label: copy("Sistema", "System"), value: readiness?.platform ?? "—" },
-          { label: copy("Bloques", "Blocks"), value: "04" },
+          { label: copy("Bloques", "Blocks"), value: purpose === "practice" ? "01" : "04" },
           { label: copy("Estación", "Station"), value: stationReady ? copy("Lista", "Ready") : copy("Revisar", "Check") },
         ]}
       />
@@ -216,7 +232,7 @@ export default function OpenMatbSetupPage() {
             <div className="space-y-2">
               <Label htmlFor="om-protocol">{copy("4. Instrucciones", "4. Instructions")}</Label>
               <select id="om-protocol" className="native-select w-full" value={instructionKey} onChange={(event) => setInstructionKey(event.target.value)} disabled={busy}>
-                {instructions.map((row) => <option key={`${row.protocol_id}@${row.version}`} value={`${row.protocol_id}@${row.version}`}>{row.title} · v{row.version}</option>)}
+                {instructions.filter((row) => row.locale === locale).map((row) => <option key={`${row.protocol_id}@${row.version}`} value={`${row.protocol_id}@${row.version}`}>{row.title} · v{row.version}</option>)}
               </select>
             </div>
             <div className="space-y-2">

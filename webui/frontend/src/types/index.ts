@@ -430,6 +430,8 @@ export interface PvtMetrics {
 }
 
 export interface PvtAssessment {
+  execution_purpose?: "practice" | "study";
+  timing_evidence?: { validity_reasons: string[] };
   id: number;
   participant_id: string;
   visit_id: number;

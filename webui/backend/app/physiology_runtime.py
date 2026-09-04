@@ -222,6 +222,7 @@ class PolarCaptureManager:
         session_kind: str,
         session_id: str,
         settings: dict[str, int],
+        execution_purpose: str = "study",
     ) -> tuple[PolarCaptureV1, str]:
         if self._device is None or self._capabilities is None:
             raise PolarRuntimeError("polar_device_not_connected")
@@ -232,6 +233,18 @@ class PolarCaptureManager:
         with Session(self.engine) as db:
             if db.get(Participant, participant_id) is None:
                 raise PolarRuntimeError("participant_not_found")
+            if execution_purpose not in {"practice", "study"}:
+                raise PolarRuntimeError("invalid_execution_purpose")
+            if session_kind != "generic":
+                from sqlalchemy import text
+                # Fixed allowlist, never interpolate a caller-controlled table name.
+                table = {"openmatb": "openmatb_suite_session", "liftoff": "liftoff_session", "suas": "simulation_session"}.get(session_kind)
+                if table is None:
+                    raise PolarRuntimeError("invalid_session_kind")
+                purpose_column = "'study'" if session_kind == "suas" else "execution_purpose"
+                linked = db.connection().execute(text(f"SELECT participant_id, {purpose_column} FROM {table} WHERE id = :id"), {"id": session_id}).first()
+                if linked is None or linked[0] != participant_id or linked[1] != execution_purpose:
+                    raise PolarRuntimeError("polar_session_identity_or_purpose_mismatch")
             row = PolarCaptureRecord(
                 id=capture_id,
                 participant_id=participant_id,
@@ -239,6 +252,7 @@ class PolarCaptureManager:
                 matb_session_id=session_id,
                 device_alias=self._device.alias,
                 lifecycle="created",
+                execution_purpose=execution_purpose,
                 requested_settings_json=json.dumps(settings, sort_keys=True),
                 controller_lease_hash=_token_hash(lease),
             )
@@ -270,6 +284,7 @@ class PolarCaptureManager:
     @staticmethod
     def _view(row: PolarCaptureRecord) -> PolarCaptureV1:
         return PolarCaptureV1(
+            execution_purpose=row.execution_purpose,
             capture_id=row.id,
             participant_pseudonym=row.participant_id,
             matb_session_kind=row.matb_session_kind,
@@ -646,6 +661,7 @@ class PolarCaptureManager:
         row = self._row(capture_id)
         started = row.started_at or ended
         manifest_seed = PolarArtifactManifestV1(
+            execution_purpose=row.execution_purpose,
             capture_id=capture_id,
             participant_pseudonym=row.participant_id,
             matb_session_kind=row.matb_session_kind,

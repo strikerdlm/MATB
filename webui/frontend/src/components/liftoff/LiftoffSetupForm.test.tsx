@@ -13,7 +13,7 @@ const { mockPush, mockCreate, mockReadiness, mockGetContext } = vi.hoisted(() =>
   mockGetContext: vi.fn(),
 }));
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mockPush }) }));
+vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(), useRouter: () => ({ push: mockPush }) }));
 vi.mock("@/lib/liftoff/api", async () => {
   const actual = await vi.importActual<typeof import("@/lib/liftoff/api")>("@/lib/liftoff/api");
   return { ...actual, createLiftoffSession: mockCreate, getLiftoffReadiness: mockReadiness };

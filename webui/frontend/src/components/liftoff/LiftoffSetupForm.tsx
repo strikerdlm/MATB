@@ -1,14 +1,17 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Radio, ShieldAlert } from "lucide-react";
 
+import { experimentErrorMessage } from "@/lib/experiment-errors";
+import { useExecutionPurpose } from "@/lib/execution-purpose";
+import { ExperimentGuide } from "@/components/experiments/ExperimentGuide";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createStudyContext, getStudyContext } from "@/lib/api";
+import { getStudyContext } from "@/lib/api";
 import { createLiftoffSession, getLiftoffReadiness } from "@/lib/liftoff/api";
 import type { Participant, StudyParticipantContext, StudyProtocol } from "@/types";
 import { useAppLocale } from "@/lib/i18n";
@@ -20,7 +23,10 @@ export function LiftoffSetupForm({
   participants: Participant[];
   protocol: StudyProtocol;
 }) {
-  const { copy } = useAppLocale();
+  const { copy, locale } = useAppLocale();
+  const purpose = useExecutionPurpose();
+  const copyRef = useRef(copy);
+  copyRef.current = copy;
   const router = useRouter();
   const [participantId, setParticipantId] = useState("");
   const [visitOrdinal, setVisitOrdinal] = useState("");
@@ -31,17 +37,14 @@ export function LiftoffSetupForm({
   const [readiness, setReadiness] = useState<{ ready: boolean; valid_packets: number } | null>(null);
   const [context, setContext] = useState<StudyParticipantContext | null>(null);
   const [contextLoading, setContextLoading] = useState(false);
-  const [taskSequence, setTaskSequence] = useState<"MATB_LIFTOFF" | "LIFTOFF_MATB">("MATB_LIFTOFF");
-  const [priorFpvHours, setPriorFpvHours] = useState("0");
-  const [gamingHours, setGamingHours] = useState("0");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     void getLiftoffReadiness()
       .then(setReadiness)
-      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : copy("No se pudo consultar la preparación de la telemetría.", "Telemetry readiness could not be read.")));
-  }, [copy]);
+      .catch((reason: unknown) => setError(experimentErrorMessage(reason, copyRef.current)));
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -50,10 +53,10 @@ export function LiftoffSetupForm({
     setContextLoading(true);
     void getStudyContext(participantId)
       .then((value) => { if (active) setContext(value); })
-      .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : copy("No se pudo consultar el contexto del estudio.", "Study context could not be read.")); })
+      .catch((reason: unknown) => { if (active) setError(experimentErrorMessage(reason, copyRef.current)); })
       .finally(() => { if (active) setContextLoading(false); });
     return () => { active = false; };
-  }, [copy, participantId]);
+  }, [participantId]);
 
   async function prepare(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -61,15 +64,13 @@ export function LiftoffSetupForm({
     setBusy(true);
     setError(null);
     try {
-      if (!context) {
-        const created = await createStudyContext(participantId, {
-          task_sequence: taskSequence,
-          prior_fpv_hours: Number(priorFpvHours),
-          gaming_hours_per_week: Number(gamingHours),
-        });
-        setContext(created);
-      }
+      const ready = await getLiftoffReadiness();
+      setReadiness(ready);
+      if (!ready.ready) throw new Error(copy("No se reciben datos de Liftoff. Abra el simulador y vuelva a comprobar.", "No Liftoff data is arriving. Open the simulator and check again."));
+      if (purpose === "study" && !context) throw new Error(copy("Solicite al investigador que asigne su protocolo antes de iniciar.", "Ask the researcher to assign your protocol before starting."));
       const session = await createLiftoffSession({
+        execution_purpose: purpose,
+        locale,
         participant_id: participantId,
         visit_ordinal: Number(visitOrdinal),
         configuration: {
@@ -95,13 +96,15 @@ export function LiftoffSetupForm({
       sessionStorage.setItem(`matb.liftoff.${session.id}.lease`, session.controller_lease);
       router.push(`/liftoff/session?session=${encodeURIComponent(session.id)}`);
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : copy("Falló la preparación de la sesión.", "Session preparation failed."));
+      setError(experimentErrorMessage(reason, copyRef.current));
     } finally {
       setBusy(false);
     }
   }
 
   return (
+    <>
+    <ExperimentGuide id="liftoff" />
     <form onSubmit={prepare} className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
       <Card>
         <CardHeader>
@@ -132,19 +135,7 @@ export function LiftoffSetupForm({
             <Label htmlFor="controller-firmware">{copy("Firmware del controlador", "Controller firmware")}</Label>
             <Input id="controller-firmware" value={controllerFirmware} onChange={(event) => setControllerFirmware(event.target.value)} />
           </div>
-          {!context && participantId && !contextLoading ? (
-            <div className="grid gap-4 border border-white/10 bg-white/[0.02] p-4 sm:col-span-2 sm:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="task-sequence">{copy("Secuencia de tareas", "Task sequence")}</Label>
-                <select id="task-sequence" className="native-select w-full" value={taskSequence} onChange={(event) => setTaskSequence(event.target.value as typeof taskSequence)}>
-                  <option value="MATB_LIFTOFF">MATB → Liftoff</option>
-                  <option value="LIFTOFF_MATB">Liftoff → MATB</option>
-                </select>
-              </div>
-              <div className="space-y-2"><Label htmlFor="fpv-hours">{copy("Horas FPV previas", "Prior FPV hours")}</Label><Input id="fpv-hours" type="number" min="0" value={priorFpvHours} onChange={(event) => setPriorFpvHours(event.target.value)} /></div>
-              <div className="space-y-2"><Label htmlFor="gaming-hours">{copy("Horas de videojuegos/semana", "Gaming hours/week")}</Label><Input id="gaming-hours" type="number" min="0" value={gamingHours} onChange={(event) => setGamingHours(event.target.value)} /></div>
-            </div>
-          ) : null}
+          {purpose === "study" && !context && participantId && !contextLoading && <p role="status" className="text-sm text-warning sm:col-span-2">{copy("Falta su protocolo asignado. El investigador debe registrar el contexto del estudio en Participantes.", "Your assigned protocol is missing. The researcher must register the study context in Participants.")}</p>}
           <label className="flex items-center gap-3 border border-white/10 p-3 text-sm sm:col-span-2">
             <input type="checkbox" checked={polarConfirmed} onChange={(event) => setPolarConfirmed(event.target.checked)} />
             {copy("La grabación del Polar H10 está activa", "Polar H10 recording is running")}
@@ -168,6 +159,6 @@ export function LiftoffSetupForm({
           <ShieldAlert className="h-5 w-5 shrink-0" /> {copy("Exclusivamente instrumento de investigación. No produce decisiones de aptitud ni preparación operacional.", "Research instrument only. No readiness or fitness decision is produced.")}
         </div>
       </aside>
-    </form>
+    </form></>
   );
 }

@@ -3,6 +3,8 @@ import { OpenMatbApiError } from "@/lib/openmatb/api";
 type Copy = (spanish: string, english: string) => string;
 
 const MESSAGES: Record<string, [string, string]> = {
+  openmatb_station_not_ready: ["La estación dejó de estar lista. Revise pantalla y dependencias en Preparar.", "The station is no longer ready. Review display and dependencies in Prepare."],
+  assigned_liftoff_first: ["Su protocolo requiere completar Liftoff antes de OpenMATB en esta visita.", "Your protocol requires Liftoff before OpenMATB for this visit."],
   openmatb_active_session: [
     "Ya existe una sesión OpenMATB activa. Termine o aborte esa sesión antes de crear otra.",
     "An OpenMATB session is already active. Finish or abort it before creating another.",

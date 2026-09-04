@@ -16,7 +16,7 @@ from typing import Any
 
 from matb_integration.suhir.hcf import HCFEstimate
 
-SCREEN_VERSION = 1
+SCREEN_VERSION = 2
 K = 0.05
 CLAMP = (0.85, 1.15)
 MIN_COHORT = 3
