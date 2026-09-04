@@ -32,16 +32,17 @@ class Tank(AbstractWidget):
         # Background vertex #
         x1, y1, x2, y2 = self.container.get_x1y1x2y2()
         self.border_vertices: tuple[float, ...] = self.vertice_border(self.container)
-        self.add_quad("background", G(self.m_draw + 1), self.border_vertices, C["WHITE"] * 4)
+        self.add_quad("background", G(self.m_draw + 1), self.border_vertices, C["INSTRUMENT"] * 4)
 
         if target is not None:
             vt: list[float] = self.get_tolerance_vertices(self.tolerance_radius, target, level_max)
-            self.add_quad("tolerance", G(self.m_draw + 1), vt, C["BLACK"] * 4)
+            self.add_quad("tolerance", G(self.m_draw + 1), vt, C["LINE"] * 4)
 
         fluid_vertices: list[float] = self.get_fluid_vertices(self.level, level_max)
         self.add_quad("fluid", G(self.m_draw + 2), fluid_vertices, C["GREEN"] * 4)
 
-        self.add_lines("borders", G(self.m_draw + 3), self.vertice_strip(self.border_vertices), C["BLACK"] * 8)
+        self.add_lines("borders", G(self.m_draw + 3), self.vertice_strip(self.border_vertices), C["LINE"] * 8)
+        self.add_cockpit_bezel()
 
         x, _y = self.container.get_center()
         self.vertex["fluid_label"] = Label(
@@ -52,7 +53,7 @@ class Tank(AbstractWidget):
             y=y2 - 15,
             anchor_x="center",
             anchor_y="center",
-            color=C["BLACK"],
+            color=C["TEXT"],
             group=G(1),
         )
 
@@ -65,7 +66,7 @@ class Tank(AbstractWidget):
             y=y1 - 10,
             anchor_x="center",
             anchor_y="center",
-            color=C["BLACK"],
+            color=C["TEXT"],
             group=G(1),
         )
 

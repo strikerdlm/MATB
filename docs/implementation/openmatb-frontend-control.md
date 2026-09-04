@@ -2,9 +2,9 @@
 
 ## Alcance
 
-La consola web local controla la suite clásica de OpenMATB sin sustituir su ventana Pyglet. El investigador prepara la visita, abre la pantalla del participante y controla inicio, pausa, reanudación, repetición de práctica y aborto. El participante lee las instrucciones y responde las escalas; no recibe la credencial de control.
+La consola web local controla OpenMATB sin sustituir su ventana Pyglet. El investigador prepara la visita, selecciona la condición visual `classic` o `cockpit`, abre la pantalla del participante y controla inicio, pausa, reanudación, repetición de práctica y aborto. El participante lee las instrucciones y responde las escalas; no recibe la credencial de control.
 
-La secuencia es `PRACTICE` seguida de `LOW`, `MEDIUM` y `HIGH` en uno de los seis órdenes de contrabalanceo. Antes de cada bloque se requiere una acción explícita del investigador. Una sesión ya creada conserva los SHA-256 del preset y de las instrucciones publicados.
+La secuencia es `PRACTICE` seguida de `LOW`, `MEDIUM` y `HIGH` en uno de los seis órdenes de contrabalanceo. Antes de cada bloque se requiere una acción explícita del investigador. Una sesión ya creada conserva los SHA-256 del preset y de las instrucciones publicados, además del tema visual congelado. `cockpit` conserva geometría, áreas activas, tiempos, controles y puntuación, pero debe tratarse como condición experimental hasta demostrar equivalencia con `classic`.
 
 ## Preparación de la estación
 
@@ -12,7 +12,7 @@ La secuencia es `PRACTICE` seguida de `LOW`, `MEDIUM` y `HIGH` en uno de los sei
 2. Defina `MATB_OPENMATB_PYTHON` con el ejecutable Python que contiene Pyglet cuando el backend use otro entorno.
 3. En Linux, inicie la sesión desde un escritorio con `DISPLAY` o `WAYLAND_DISPLAY` disponible. En Windows, la consola asigna el proceso nativo a un Job Object para cerrar también sus procesos descendientes al abortar o apagar el backend.
 4. Inicie backend y frontend con los lanzadores del repositorio.
-5. Abra **OpenMATB → Suite clásica**, seleccione participante, visita, preset, instrucciones y pantalla, y confirme la comprobación física de audio y controles.
+5. Abra **OpenMATB → Suite OpenMATB**, seleccione participante, visita, preset, instrucciones, condición visual y pantalla, y confirme la comprobación física de audio y controles.
 6. Pulse **Preparar y abrir pantalla del participante**. El token del participante se transfiere una sola vez mediante el fragmento local de la URL y luego se elimina de la barra de direcciones.
 7. El participante confirma las instrucciones. El investigador inicia cada bloque con un clic desde su panel.
 

@@ -225,7 +225,17 @@ setting in `openmatb/config.ini`:
 ```ini
 [Openmatb]
 language=es_CO
+visual_theme=classic
 ```
+
+OpenMATB includes two presentation conditions: `classic` preserves the
+historical light interface and `cockpit` applies a generic dark glass-cockpit
+theme to every participant-facing task. Select the condition in the guided
+Research Mission setup or launch directly with
+`main.py --visual-theme cockpit`. The selection is frozen in controlled-session
+metadata and scenario provenance. The cockpit theme preserves task geometry,
+hit areas, timing, input mappings, and scoring, but visual equivalence must be
+established empirically before pooling it with classic-session results.
 
 Start the localized task window from the runtime directory:
 

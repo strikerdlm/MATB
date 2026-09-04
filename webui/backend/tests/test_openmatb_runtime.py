@@ -36,6 +36,7 @@ def test_create_session_generates_versioned_spanish_counterbalanced_suite(engine
     prepared = asyncio.run(manager.create_session(CreateOpenMatbSession(participant_id="P01", visit_ordinal=1)))
 
     assert prepared.session.lifecycle == "INSTRUCTIONS"
+    assert prepared.session.visual_theme == "classic"
     assert prepared.session.block_order[0] == "PRACTICE"
     assert set(prepared.session.block_order[1:]) == {"LOW", "MEDIUM", "HIGH"}
     run_root = Path(manager.artifact_root) / prepared.session.id
@@ -49,6 +50,21 @@ def test_create_session_generates_versioned_spanish_counterbalanced_suite(engine
         assert manifest["parameters"]["suite_profile_name"] == expected_profile
         assert manifest["parameters"]["difficulty"] >= 0
     assert prepared.controller_lease not in (run_root / "scenarios" / "0_PRACTICE.txt").read_text(encoding="utf-8")
+
+
+def test_cockpit_theme_is_frozen_in_session_and_scenario_provenance(engine, tmp_path):
+    _seed_visit(engine)
+    manager = _manager(engine, tmp_path)
+
+    prepared = asyncio.run(manager.create_session(CreateOpenMatbSession(
+        participant_id="P01", visit_ordinal=1, visual_theme="cockpit",
+    )))
+
+    assert prepared.session.visual_theme == "cockpit"
+    run_root = Path(manager.artifact_root) / prepared.session.id
+    for manifest_path in sorted((run_root / "scenarios").glob("*.manifest.json")):
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        assert manifest["parameters"]["visual_theme"] == "cockpit"
 
 
 def test_published_preset_is_immutable_and_clone_is_editable(engine, tmp_path):
@@ -101,7 +117,10 @@ def test_native_process_exit_before_ready_is_reported_immediately(engine, tmp_pa
         def kill(self) -> None:
             self.returncode = 1
 
-    async def create_failed_process(*_args, **_kwargs):
+    captured_command = []
+
+    async def create_failed_process(*args, **_kwargs):
+        captured_command.extend(args)
         return FailedProcess()
 
     monkeypatch.setattr("app.openmatb_runtime.asyncio.create_subprocess_exec", create_failed_process)
@@ -120,3 +139,4 @@ def test_native_process_exit_before_ready_is_reported_immediately(engine, tmp_pa
     failed = manager.session_view(session_id)
     assert failed.lifecycle == "FAILED"
     assert failed.last_error == "openmatb_dependency_missing"
+    assert captured_command[captured_command.index("--visual-theme") + 1] == "classic"

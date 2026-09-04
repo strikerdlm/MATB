@@ -86,11 +86,18 @@ La configuración distribuida usa español colombiano:
 ```ini
 [Openmatb]
 language=es_CO
+visual_theme=classic
 ```
 
 También están disponibles `en_EN` y `fr_FR`. El locale `es_CO` incluye la
 interfaz principal, el generador de escenarios, mensajes de validación,
 instrucciones, cuestionarios y dos voces sintéticas para COMM.
+
+`visual_theme` admite `classic` y `cockpit`. El segundo aplica una presentación
+vectorial de cabina de cristal sin cambiar la geometría, controles, tiempos ni
+puntuación de las tareas. También puede seleccionarse con
+`main.py --visual-theme cockpit`. Registre y analice el tema como condición de
+presentación; no combine ambas condiciones sin validar antes su equivalencia.
 
 Las letras de los distintivos de llamada se reproducen mediante el alfabeto de
 deletreo radiotelefónico OACI. Las cifras se expresan en español y el separador

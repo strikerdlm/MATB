@@ -17,6 +17,7 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--scenario", type=Path)
     parser.add_argument("--session-dir", type=Path)
     parser.add_argument("--language", default=None)
+    parser.add_argument("--visual-theme", choices=("classic", "cockpit"), default=None)
     parser.add_argument("--display-index", type=int, default=None)
     parser.add_argument("--windowed", action="store_true")
     parser.add_argument("--control-stdio", action="store_true")
@@ -43,6 +44,8 @@ if ARGS.display_index is not None:
     os.environ["MATB_OPENMATB_SCREEN_INDEX"] = str(ARGS.display_index)
 if ARGS.windowed:
     os.environ["MATB_OPENMATB_FULLSCREEN"] = "False"
+if ARGS.visual_theme is not None:
+    os.environ["MATB_OPENMATB_VISUAL_THEME"] = ARGS.visual_theme
 if ARGS.control_stdio:
     os.environ["MATB_OPENMATB_DISPLAY_SESSION_NUMBER"] = "False"
 

@@ -4,10 +4,10 @@
 
 from __future__ import annotations
 
-from collections import deque
-from math import isfinite
 import os
 import sys
+from collections import deque
+from math import isfinite
 from pathlib import Path
 from time import perf_counter_ns
 from typing import Any
@@ -15,8 +15,8 @@ from typing import Any
 from pyglet.app import EventLoop
 
 from core.clock import Clock
+from core.constants import REPLAY_MODE, SYSTEM_PSEUDO_PLUGIN, VISUAL_THEME
 from core.controlbridge import StdioControlBridge
-from core.constants import REPLAY_MODE, SYSTEM_PSEUDO_PLUGIN
 from core.error import get_errors
 from core.event import Event
 from core.experimentclock import ExperimentClock
@@ -59,6 +59,7 @@ class Scheduler:
                 "ready",
                 scenario=str(self.scenario_path) if self.scenario_path is not None else None,
                 session_csv=str(get_logger().path),
+                visual_theme=VISUAL_THEME.name,
             )
 
         Window.MainWindow.display_session_id()
@@ -134,6 +135,7 @@ class Scheduler:
         logger.log_manual_entry(self.runtime_version, key="version")
         if self.scenario.scenario_path is not None:
             logger.log_manual_entry(self.scenario.scenario_path, key="scenario_path")
+        logger.log_manual_entry(VISUAL_THEME.name, key="visual_theme")
 
         self.events: list[Event] = self.scenario.events
         self.plugins: dict[str, Any] = self.scenario.plugins

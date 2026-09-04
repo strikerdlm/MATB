@@ -55,6 +55,7 @@ class OpenMatbSuiteSession(SQLModel, table=True):
     instruction_version: str
     instruction_sha256: str
     locale: str = "es-419"
+    visual_theme: str = "classic"
     display_index: int = 1
     lifecycle: str = "INSTRUCTIONS"
     current_block_index: int = 0

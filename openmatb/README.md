@@ -86,7 +86,11 @@ If you don't mind not seeing all the source files, you might want to use compile
 
 *More detailed instructions are available in the Tutorials (wiki) section below.*
 
-When executed, the main file basically inspects the `config.ini` variables, that are `language`**, `screen_index`, `fullscreen`, `scenario_path` and `clock_speed`. The most important is the `scenario_path` variable because it defines what scenario textfile should be used for the sequencing and the setting of the protocol. 
+When executed, the main file inspects the `config.ini` variables, including
+`language`, `visual_theme`, `screen_index`, `fullscreen`, and `scenario_path`.
+`visual_theme=classic` preserves the historical presentation;
+`visual_theme=cockpit` selects the generic glass-cockpit presentation. The same
+choice is available as `main.py --visual-theme cockpit`.
 
 (**For now, french (fr_FR) and english (en_EN) locales are available, but feel free to [develop your own translation](https://github.com/juliencegarra/OpenMATB/wiki/Internationalization), it's fast and easy.)
 

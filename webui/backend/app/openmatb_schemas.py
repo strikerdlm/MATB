@@ -1,4 +1,4 @@
-"""Strict API contracts for the MATB-FAC classic OpenMATB controller."""
+"""Strict API contracts for the MATB-FAC OpenMATB controller."""
 
 from __future__ import annotations
 
@@ -133,6 +133,7 @@ class CreateOpenMatbSession(BaseModel):
     preset_version: str = "1.0.0"
     instruction_protocol_id: str = "matb-fac-es-419"
     instruction_version: str = "1.0.0"
+    visual_theme: Literal["classic", "cockpit"] = "classic"
     display_index: int = Field(default=1, ge=0, le=15)
 
 
@@ -159,6 +160,7 @@ class OpenMatbSessionView(BaseModel):
     preset_sha256: str
     instruction_protocol: InstructionProtocolView
     visit_instruction: str
+    visual_theme: Literal["classic", "cockpit"]
     display_index: int
     scores: dict[str, dict[str, object]]
     active_pid: int | None

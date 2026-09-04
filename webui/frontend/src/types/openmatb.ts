@@ -1,4 +1,5 @@
 export type OpenMatbProfile = "PRACTICE" | "LOW" | "MEDIUM" | "HIGH";
+export type OpenMatbVisualTheme = "classic" | "cockpit";
 export type OpenMatbLifecycle = "INSTRUCTIONS" | "READY" | "STARTING" | "RUNNING" | "PAUSED" | "AWAITING_SCALE" | "BETWEEN_BLOCKS" | "COMPLETE" | "ABORTED" | "FAILED" | "INTERRUPTED";
 
 export interface OpenMatbProfileSettings {
@@ -55,6 +56,7 @@ export interface OpenMatbSession {
   preset_sha256: string;
   instruction_protocol: OpenMatbInstructionProtocol;
   visit_instruction: string;
+  visual_theme: OpenMatbVisualTheme;
   display_index: number;
   scores: Record<string, Record<string, unknown>>;
   active_pid: number | null;

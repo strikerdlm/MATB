@@ -23,7 +23,7 @@ class Schedule(AbstractWidget):
             y=self.container.y2 - 15,
             anchor_x="center",
             anchor_y="top",
-            color=C["BLACK"],
+            color=C["TEXT"],
             group=G(1),
         )
 
