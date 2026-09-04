@@ -24,7 +24,7 @@ const snapshot = {
   aircraft: { "UAS-01": { aircraft_id: "UAS-01", label: "UAS-01", position: { x_mm: 3_000_000, y_mm: 3_000_000 }, heading_mdeg: 0, energy_units: 900, predicted_home_reserve_units: 100, mode: "SEARCH", link: "NOMINAL", sensor: "NOMINAL", assigned_sector_id: "alpha", route: [], mission_progress_ppm: 100 } },
   contacts: { "C-01": { contact_id: "C-01", evidence: "DETECTED", workflow: "DETECTED", classification: null, priority: null, report_ids: [], position: { x_mm: 8_000_000, y_mm: 5_000_000 } } },
   alerts: {},
-  coverage: { sectors: { alpha: { covered_cells: [], covered_count: 0, eligible_count: 10, covered_cell_count: 0, eligible_cell_count: 10, coverage_ppm: 0 } } },
+  coverage: { grid_cell_mm: 1_000_000, origin: { x_mm: 0, y_mm: 0 }, sectors: { alpha: { covered_cells: [[3, 2]], covered_count: 1, eligible_count: 10, covered_cell_count: 1, eligible_cell_count: 10, coverage_ppm: 100_000 } } },
 } as unknown as WorldSnapshot;
 
 describe("MissionMap", () => {
@@ -49,5 +49,13 @@ describe("MissionMap", () => {
     expect(screen.getByTestId("map-root")).toHaveAttribute("data-zoom", "1.25");
     await user.click(screen.getByRole("button", { name: /reset view/i }));
     expect(screen.getByTestId("map-root")).toHaveAttribute("data-zoom", "1");
+  });
+
+  it("projects covered cells into their real mission position", () => {
+    const { container } = render(<MissionMap snapshot={snapshot} locale="en" />);
+    const cell = container.querySelector('[data-coverage-sector="alpha"] rect');
+    expect(cell).not.toBeNull();
+    expect(Number(cell?.getAttribute("x"))).toBeGreaterThan(250);
+    expect(Number(cell?.getAttribute("y"))).toBeGreaterThan(400);
   });
 });

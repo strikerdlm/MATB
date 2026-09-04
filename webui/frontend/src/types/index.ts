@@ -380,7 +380,7 @@ export interface BayesJob {
   artifact?: BayesArtifact;
 }
 
-// --- neurocognitive screen (matb_integration/screen) ---
+// --- legacy four-task screen (matb_integration/screen) ---
 
 export interface SubtestScore {
   valid: boolean;
@@ -414,6 +414,50 @@ export interface ScreenIngestResult {
   participant_id: string;
   screen_version: number;
   scores: Record<string, SubtestScore>;
+}
+
+// --- Karolinska Sleepiness Scale + psychomotor vigilance test ---
+
+export interface PvtMetrics {
+  duration_ms: number;
+  total_trials: number;
+  valid_responses: number;
+  median_rt_ms: number | null;
+  mean_reciprocal_rt_per_s: number | null;
+  lapses: number;
+  false_starts: number;
+  timeouts: number;
+}
+
+export interface PvtAssessment {
+  id: number;
+  participant_id: string;
+  visit_id: number;
+  kss_score: number;
+  administered_at: string;
+  duration_ms: number;
+  protocol_valid: boolean;
+  pvt_version: number;
+  metrics: PvtMetrics;
+}
+
+export interface PvtSummary {
+  pvt_version: number;
+  protocol_duration_ms: number;
+  assessments: PvtAssessment[];
+}
+
+export interface ParticipantJourneyStep {
+  id: "welcome" | "kss" | "pvt" | "polar" | "briefing" | "practice" | "blocks" | "workload" | "complete";
+  complete: boolean;
+  status: "complete" | "current" | "upcoming";
+}
+
+export interface ParticipantJourney {
+  participant_id: string;
+  visit_id: number;
+  visit_ordinal: number;
+  steps: ParticipantJourneyStep[];
 }
 
 // --- P0 reproducibility export ---

@@ -65,7 +65,12 @@ class CoverageGrid:
                 "eligible_cell_count": eligible_count,
                 "coverage_ppm": covered_count * 1_000_000 // eligible_count if eligible_count else 0,
             }
-        return {"sectors": sectors}
+        minimum_x, minimum_y, _, _ = self._scenario.terrain.bounds
+        return {
+            "grid_cell_mm": self._scenario.grid_cell_mm,
+            "origin": {"x_mm": minimum_x, "y_mm": minimum_y},
+            "sectors": sectors,
+        }
 
     def _terrain_cells(self) -> tuple[tuple[int, int], ...]:
         minimum_x, minimum_y, maximum_x, maximum_y = self._scenario.terrain.bounds

@@ -275,6 +275,11 @@ def test_coverage_uses_integer_cells_and_ppm(loaded_scenario, reference_world) -
     snapshot = grid.public_snapshot(reference_world)
 
     assert updated
+    assert snapshot["grid_cell_mm"] == scenario.grid_cell_mm
+    assert snapshot["origin"] == {
+        "x_mm": scenario.terrain.bounds[0],
+        "y_mm": scenario.terrain.bounds[1],
+    }
     assert isinstance(updated[0], tuple)
     sector = snapshot["sectors"]["sector_alpha"]
     assert sector["coverage_ppm"] == (

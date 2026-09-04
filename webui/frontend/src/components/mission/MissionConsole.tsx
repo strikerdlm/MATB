@@ -8,12 +8,17 @@ import { ContactQueue } from "@/components/mission/ContactQueue";
 import { CommandBar } from "@/components/mission/CommandBar";
 import { FleetPanel } from "@/components/mission/FleetPanel";
 import { MissionTopBar } from "@/components/mission/MissionTopBar";
+import { MissionInstructionPanel } from "@/components/mission/MissionInstructionPanel";
+import { MissionJourneyRail } from "@/components/mission/MissionJourneyRail";
 import { ProbeOverlay } from "@/components/mission/probes/ProbeOverlay";
 import type { PostBlockScaleValues } from "@/components/mission/probes/PostBlockScales";
 import { t } from "@/lib/simulation/i18n";
+import { interpolateSnapshot } from "@/lib/simulation/interpolation";
 import { getSimulationSession, getSimulationState, transitionSession } from "@/lib/simulation/api";
+import { getParticipantJourney } from "@/lib/api";
 import { useSimulationStore } from "@/lib/simulation/store";
 import type { AircraftSnapshot, CommandKind, ContactSnapshot, JsonValue, Locale, ProtocolCommandKind, SessionView, WorldSnapshot } from "@/types/simulation";
+import type { ParticipantJourneyStep } from "@/types";
 
 export interface MissionConsoleProps {
   initialSession: SessionView;
@@ -38,8 +43,11 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [detailView, setDetailView] = useState<"alerts" | "contacts">("alerts");
+  const [waypointMode, setWaypointMode] = useState(false);
+  const [journeySteps, setJourneySteps] = useState<ParticipantJourneyStep[] | null>(null);
   const session = useSimulationStore((state) => state.session);
   const snapshot = useSimulationStore((state) => state.snapshot);
+  const previousSnapshot = useSimulationStore((state) => state.previousSnapshot);
   const connection = useSimulationStore((state) => state.connection);
   const locale = useSimulationStore((state) => state.locale) as Locale;
   const selectedAircraftId = useSimulationStore((state) => state.selectedAircraftId);
@@ -57,6 +65,7 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
   const submitCommand = useSimulationStore((state) => state.submitCommand);
   const currentSession = session ?? initialSession;
   const currentSnapshot = snapshot ?? initialSnapshot;
+  const [displaySnapshot, setDisplaySnapshot] = useState<WorldSnapshot | null>(currentSnapshot);
   const lease = controllerLease(currentSession.id);
   const canControl = !readOnly && Boolean(lease);
   const nextStep = currentSession.lifecycle === "PREPARED"
@@ -68,6 +77,39 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
         : currentSession.lifecycle === "PAUSED"
           ? (locale === "es-CO" ? "Paso actual: complete el instrumento mostrado o reanude cuando esté listo." : "Current step: complete the displayed instrument or resume when ready.")
           : (locale === "es-CO" ? "Siga la acción resaltada en la barra superior." : "Follow the highlighted action in the top bar.");
+
+  useEffect(() => {
+    if (!currentSnapshot) {
+      setDisplaySnapshot(null);
+      return;
+    }
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!previousSnapshot || previousSnapshot.block_id !== currentSnapshot.block_id || reducedMotion) {
+      setDisplaySnapshot(currentSnapshot);
+      return;
+    }
+    const started = performance.now();
+    const duration = 320;
+    let frame = 0;
+    const draw = (now: number) => {
+      const fraction = Math.min(1, Math.max(0, (now - started) / duration));
+      const simulationTime = previousSnapshot.simulation_time_ms
+        + (currentSnapshot.simulation_time_ms - previousSnapshot.simulation_time_ms) * fraction;
+      setDisplaySnapshot(interpolateSnapshot(previousSnapshot, currentSnapshot, simulationTime));
+      if (fraction < 1) frame = window.requestAnimationFrame(draw);
+    };
+    frame = window.requestAnimationFrame(draw);
+    return () => window.cancelAnimationFrame(frame);
+  }, [currentSnapshot, previousSnapshot]);
+
+  useEffect(() => {
+    if (!currentSession.participant_id || !currentSession.visit_ordinal) return;
+    let active = true;
+    void getParticipantJourney(currentSession.participant_id, currentSession.visit_ordinal)
+      .then((journey) => { if (active) setJourneySteps(journey.steps); })
+      .catch(() => { if (active) setJourneySteps(null); });
+    return () => { active = false; };
+  }, [currentSession.active_block_id, currentSession.lifecycle, currentSession.participant_id, currentSession.protocol_phase, currentSession.visit_ordinal]);
 
   useEffect(() => {
     if (cleanupTimer.current !== null) {
@@ -168,9 +210,22 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
       {busy && <div className="sr-only" role="status">{t(locale, "mission.working")}</div>}
       {concealOperationalState && probeOverlay ? probeOverlay : !currentSnapshot?.aircraft ? (
         <main className="grid flex-1 place-items-center p-8"><div className="mission-panel max-w-lg p-8 text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-info" aria-hidden="true" /><h1 className="mt-4 font-display text-2xl uppercase">{t(locale, "mission.telemetry_standing_by")}</h1><p className="mt-2 text-sm text-muted-foreground">{t(locale, "mission.start_for_telemetry")}</p></div></main>
-      ) : <main className="grid min-h-0 flex-1 gap-3 p-3 lg:grid-cols-[16rem_minmax(0,1fr)_20rem] lg:p-4" aria-label={t(locale, "mission.operations")}><FleetPanel snapshot={currentSnapshot} locale={locale} selectedAircraftId={selectedAircraftId} onSelect={selectAircraft} /><MissionMap snapshot={currentSnapshot} locale={locale} selectedAircraftId={selectedAircraftId} selectedContactId={selectedContactId} onSelectAircraft={selectAircraft} onSelectContact={selectContact} /><aside className="mission-panel flex min-h-0 flex-col" aria-label={t(locale, "mission.detail_panel")} data-testid="mission-detail-panel" tabIndex={-1}><div className="grid grid-cols-2 border-b border-white/10" role="tablist" aria-label={t(locale, "mission.detail_views")}><button type="button" role="tab" id="mission-alerts-tab" aria-selected={detailView === "alerts"} aria-controls="mission-detail-panel-content" tabIndex={detailView === "alerts" ? 0 : -1} onClick={() => setDetailView("alerts")} className={`border-b-2 px-3 py-3 font-mono text-[10px] uppercase tracking-wider ${detailView === "alerts" ? "border-white" : "border-transparent text-muted-foreground"}`}>{t(locale, "mission.alerts")}</button><button type="button" role="tab" id="mission-contacts-tab" aria-selected={detailView === "contacts"} aria-controls="mission-detail-panel-content" tabIndex={detailView === "contacts" ? 0 : -1} onClick={() => setDetailView("contacts")} className={`border-b-2 px-3 py-3 font-mono text-[10px] uppercase tracking-wider ${detailView === "contacts" ? "border-white" : "border-transparent text-muted-foreground"}`}>{t(locale, "mission.contacts")}</button></div><div className="min-h-0 flex-1" id="mission-detail-panel-content" role="tabpanel" tabIndex={0} aria-labelledby={detailView === "alerts" ? "mission-alerts-tab" : "mission-contacts-tab"}>{detailView === "alerts" ? <AlertQueue alerts={alerts} locale={locale} readOnly={!canControl} onAcknowledge={(alert) => acknowledgeAlert(alert.alert_id)} /> : <ContactQueue contacts={contacts} locale={locale} readOnly={!canControl} onAction={(kind, contact) => void issueCommand(kind, { contact_id: contact.contact_id, ...(kind === "CLASSIFY_CONTACT" ? { classification: "uncertain" } : kind === "SET_CONTACT_PRIORITY" ? { priority: "MEDIUM" } : kind === "REPORT_CONTACT" ? { note_code: "GENERAL" } : {}) })} />}</div></aside></main>}
+      ) : <main className="grid min-h-0 flex-1 gap-3 p-3 xl:grid-cols-[14rem_minmax(32rem,1fr)_21rem] xl:p-4" aria-label={t(locale, "mission.operations")}>
+        <div className="grid min-h-0 gap-3 md:grid-cols-2 xl:grid-cols-1 xl:grid-rows-[auto_minmax(15rem,1fr)]">
+          <MissionJourneyRail session={currentSession} locale={locale} steps={journeySteps} />
+          <FleetPanel snapshot={displaySnapshot} locale={locale} selectedAircraftId={selectedAircraftId} onSelect={selectAircraft} />
+        </div>
+        <MissionMap snapshot={displaySnapshot ?? currentSnapshot} locale={locale} selectedAircraftId={selectedAircraftId} selectedContactId={selectedContactId} onSelectAircraft={(aircraftId) => { setWaypointMode(false); selectAircraft(aircraftId); }} onSelectContact={(contactId) => { setWaypointMode(false); selectContact(contactId); }} waypointAircraftId={waypointMode ? selectedAircraftId : null} onSetWaypoint={(aircraftId, waypoint) => { setWaypointMode(false); void issueCommand("SET_WAYPOINT", { aircraft_id: aircraftId, waypoint }); }} />
+        <aside className="flex min-h-0 flex-col gap-3" aria-label={t(locale, "mission.detail_panel")} data-testid="mission-detail-panel" tabIndex={-1}>
+          <MissionInstructionPanel session={currentSession} locale={locale} selectedAircraft={selectedAircraft} selectedContact={selectedContact} />
+          <section className="mission-panel flex min-h-[15rem] flex-1 flex-col">
+            <div className="grid grid-cols-2 border-b border-white/10" role="tablist" aria-label={t(locale, "mission.detail_views")}><button type="button" role="tab" id="mission-alerts-tab" aria-selected={detailView === "alerts"} aria-controls="mission-detail-panel-content" tabIndex={detailView === "alerts" ? 0 : -1} onClick={() => setDetailView("alerts")} className={`border-b-2 px-3 py-3 font-mono text-[10px] uppercase tracking-wider ${detailView === "alerts" ? "border-white" : "border-transparent text-muted-foreground"}`}>{t(locale, "mission.alerts")}</button><button type="button" role="tab" id="mission-contacts-tab" aria-selected={detailView === "contacts"} aria-controls="mission-detail-panel-content" tabIndex={detailView === "contacts" ? 0 : -1} onClick={() => setDetailView("contacts")} className={`border-b-2 px-3 py-3 font-mono text-[10px] uppercase tracking-wider ${detailView === "contacts" ? "border-white" : "border-transparent text-muted-foreground"}`}>{t(locale, "mission.contacts")}</button></div>
+            <div className="min-h-0 flex-1" id="mission-detail-panel-content" role="tabpanel" tabIndex={0} aria-labelledby={detailView === "alerts" ? "mission-alerts-tab" : "mission-contacts-tab"}>{detailView === "alerts" ? <AlertQueue alerts={alerts} locale={locale} readOnly={!canControl} onAcknowledge={(alert) => acknowledgeAlert(alert.alert_id)} /> : <ContactQueue contacts={contacts} locale={locale} selectedContactId={selectedContactId} readOnly={!canControl} onSelect={selectContact} onInspect={(contact) => void issueCommand("INSPECT_CONTACT", { contact_id: contact.contact_id })} />}</div>
+          </section>
+        </aside>
+      </main>}
       {activeProbe && !concealOperationalState && probeOverlay}
-      <CommandBar snapshot={currentSnapshot} selectedAircraft={selectedAircraft} selectedContact={selectedContact} locale={locale} readOnly={!canControl} pending={pendingCommandIds.length > 0} onCommand={(kind, payload) => { void issueCommand(kind, payload); }} />
+      <CommandBar snapshot={currentSnapshot} selectedAircraft={selectedAircraft} selectedContact={selectedContact} locale={locale} readOnly={!canControl} pending={pendingCommandIds.length > 0} waypointMode={waypointMode} onWaypointMode={() => setWaypointMode((value) => !value)} onCommand={(kind, payload) => { setWaypointMode(false); void issueCommand(kind, payload); }} />
     </div>
   );
 }

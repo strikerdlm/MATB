@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { Activity, Battery, Bluetooth, Download, Play, Radio, Square, WifiOff } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/PageHeader";
+import { InstructionAudio } from "@/components/instructions/InstructionAudio";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -63,13 +65,13 @@ function AccTrace({ values }: { values: number[] }) {
 }
 
 export default function PolarH10Page() {
-  const { copy } = useAppLocale();
+  const { locale, copy } = useAppLocale();
   const [connection, setConnection] = useState<PolarConnection>({ connected: false, device_alias: null, capabilities: null });
   const [devices, setDevices] = useState<PolarDevice[]>([]);
   const [capture, setCapture] = useState<PolarCapture | null>(null);
   const [lease, setLease] = useState("");
   const [participant, setParticipant] = useState("P01");
-  const [sessionKind, setSessionKind] = useState<PolarCapture["matb_session_kind"]>("openmatb");
+  const [sessionKind, setSessionKind] = useState<PolarCapture["matb_session_kind"]>("generic");
   const [sessionId, setSessionId] = useState("");
   const [accRate, setAccRate] = useState<AccRate>(50);
   const [accRange, setAccRange] = useState<AccRange>(2);
@@ -89,6 +91,14 @@ export default function PolarH10Page() {
 
   useEffect(() => {
     void getPolarConnection().then(setConnection).catch(() => undefined);
+    const query = new URLSearchParams(window.location.search);
+    const selectedParticipant = query.get("participant");
+    const selectedVisit = query.get("visit");
+    if (selectedParticipant && /^P\d{2,6}$/.test(selectedParticipant) && selectedVisit && /^\d+$/.test(selectedVisit)) {
+      setParticipant(selectedParticipant);
+      setSessionKind("generic");
+      setSessionId(`baseline:${selectedParticipant}:V${selectedVisit}`);
+    }
   }, []);
 
   const report = useCallback((event: PolarEvent) => {
@@ -207,6 +217,19 @@ export default function PolarH10Page() {
     {error && <p role="alert" className="border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">{error}</p>}
     {notice && <p role="status" className="border border-success/40 bg-success/10 px-4 py-3 text-sm text-success">{notice}</p>}
 
+    <Card className="border-info/30 bg-info/5">
+      <CardHeader><CardTitle className="font-display text-xl uppercase tracking-wide">{copy("Instrucciones para el participante", "Participant instructions")}</CardTitle><CardDescription>{copy("Esta línea basal ocurre después de KSS y PVT, antes de las instrucciones de misión.", "This baseline occurs after KSS and PVT, before the mission briefing.")}</CardDescription></CardHeader>
+      <CardContent className="space-y-4">
+        <InstructionAudio src={`/audio/instructions/polar-${locale === "en" ? "en" : "es"}.mp3`} label={copy("Escuchar instrucciones Polar H10", "Listen to Polar H10 instructions")} unavailableLabel={copy("Audio no disponible", "Audio unavailable")} />
+        <ol className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+          <li className="metric-tile"><strong className="text-info">1.</strong> {copy("Permita que el investigador coloque y compruebe el sensor.", "Allow the researcher to fit and check the sensor.")}</li>
+          <li className="metric-tile"><strong className="text-info">2.</strong> {copy("Siéntese con espalda apoyada, pies en el suelo y manos quietas.", "Sit with back supported, feet on the floor, and hands still.")}</li>
+          <li className="metric-tile"><strong className="text-info">3.</strong> {copy("Respire normalmente y evite hablar durante cinco minutos.", "Breathe normally and avoid speaking for five minutes.")}</li>
+          <li className="metric-tile"><strong className="text-info">4.</strong> {copy("Avise si siente incomodidad. Espere la confirmación antes de moverse.", "Report discomfort. Wait for confirmation before moving.")}</li>
+        </ol>
+      </CardContent>
+    </Card>
+
     <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
       <Card>
         <CardHeader>
@@ -247,6 +270,7 @@ export default function PolarH10Page() {
             {capture?.lifecycle === "created" && <Button disabled={busy} onClick={() => void start()}><Play className="mr-2 h-4 w-4" />{copy("Iniciar línea base", "Start baseline")}</Button>}
             {capturing && <Button variant="destructive" disabled={busy} onClick={() => void stop()}><Square className="mr-2 h-4 w-4" />{copy("Detener y finalizar", "Stop and finalize")}</Button>}
             {capture && ["finalized", "incomplete"].includes(capture.artifact_state) && <Button variant="outline" disabled={busy} onClick={() => void run(() => downloadPolarBundle(capture.capture_id, lease))}><Download className="mr-2 h-4 w-4" />{copy("Descargar paquete", "Download bundle")}</Button>}
+            {capture?.artifact_state === "finalized" && <Button asChild><Link href="/mission/setup#briefing">{copy("Continuar a instrucciones de misión", "Continue to mission briefing")}</Link></Button>}
           </div>
           {capture && <div className="border border-white/10 p-3 font-mono text-xs text-muted-foreground"><p>{capture.capture_id}</p><p className="mt-1">{capture.lifecycle} · ECG {settings?.ecg_sample_rate_hz} Hz · ACC {settings?.acc_sample_rate_hz} Hz ±{settings?.acc_range_g}G</p></div>}
         </CardContent>

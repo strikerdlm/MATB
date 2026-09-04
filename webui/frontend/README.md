@@ -92,7 +92,7 @@ read-only behavior, controller disconnect/reconnect, and 1280×720 and
   The Research Bundle button exports a ZIP from `POST /exports/research-bundle`
   containing backend research context, caveats, scenario-manifest provenance, and
   the current publication-grade ECharts option JSON for the Q1-Q4 figures.
-- **Screen** (`/screen`) — baseline neurocognitive screen (Phase 10 #20). Picker
+- **PVT** (`/pvt`; legacy `/screen` redirects here) — 10-minute Psychomotor Vigilance Test, preceded by the Karolinska Sleepiness Scale. Picker
   lists unscreened participants; selecting one launches a fullscreen 4-subtest
   battery in es-CO Spanish (~10–12 min): Simple RT, Choice RT (2-choice arrows),
   2-back letters (d′ via Hautus helper), pursuit tracking (90 s sum-of-sines).

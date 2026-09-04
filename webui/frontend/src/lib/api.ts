@@ -11,6 +11,9 @@ import type {
   MetricRow,
   Participant,
   ParticipantCreate,
+  ParticipantJourney,
+  PvtAssessment,
+  PvtSummary,
   ResearchContext,
   ScreenIngestResult,
   ScreenSummary,
@@ -219,6 +222,39 @@ export async function postScreen(
 
 export async function getScreenSummary(): Promise<ScreenSummary> {
   const res = await request("/screen", { method: "GET" });
+  if (!res.ok) throw new ApiError(res.status, await detail(res));
+  return res.json();
+}
+
+export async function postPvt(
+  payload: import("@/lib/pvt").PvtPayload,
+): Promise<PvtAssessment> {
+  const res = await request("/pvt", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new ApiError(res.status, await detail(res));
+  return res.json();
+}
+
+export async function getPvtSummary(participantId?: string): Promise<PvtSummary> {
+  const query = participantId
+    ? `?${new URLSearchParams({ participant_id: participantId })}`
+    : "";
+  const res = await request(`/pvt${query}`, { method: "GET" });
+  if (!res.ok) throw new ApiError(res.status, await detail(res));
+  return res.json();
+}
+
+export async function getParticipantJourney(
+  participantId: string,
+  visitOrdinal: number,
+): Promise<ParticipantJourney> {
+  const res = await request(
+    `/journey/${encodeURIComponent(participantId)}/${encodeURIComponent(String(visitOrdinal))}`,
+    { method: "GET" },
+  );
   if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();
 }
