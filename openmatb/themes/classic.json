@@ -1,0 +1,54 @@
+{
+  "schema_version": "openmatb-visual-profile-v1",
+  "profile_id": "classic",
+  "version": "1.0.0",
+  "label": "Classic reference",
+  "geometry_policy": "preserve_openmatb_v1",
+  "palette": {
+    "app_background": "#F0F0F0",
+    "panel_background": "#F0F0F0",
+    "instrument_background": "#FFFFFF",
+    "panel_header": "#323232",
+    "panel_header_text": "#FFFFFF",
+    "control_background": "#323232",
+    "control_foreground": "#FFFFFF",
+    "text": "#323232",
+    "muted_text": "#C8C8C8",
+    "border": "#323232",
+    "grid": "#C8C8C8",
+    "accent": "#323232",
+    "safe": "#8EDBB0",
+    "warning": "#E29F38",
+    "critical": "#F16464",
+    "disabled": "#FFFFFF"
+  },
+  "metrics": {"line_width": 2, "panel_radius": 0, "corner_mark_ratio": 0},
+  "modules": {
+    "tracking": {
+      "panel": "#F0F0F0", "axis": "#323232", "grid": "#C8C8C8",
+      "target": "#323232", "target_fill": "#FFFFFF", "cursor": "#323232",
+      "cursor_outside": "#F16464", "show_panel": false, "show_grid": false,
+      "closed_target_border": false
+    },
+    "system_monitoring": {
+      "panel": "#F0F0F0", "lamp_1": "#8EDBB0", "lamp_2": "#F16464",
+      "lamp_3": "#E29F38", "lamp_4": "#99CCFF", "lamp_off": "#F0F0F0",
+      "lamp_border": "#323232", "lamp_shape": "rectangle", "scale": "#323232",
+      "pointer": "#323232", "feedback_positive": "#8EDBB0", "feedback_negative": "#F16464"
+    },
+    "communications": {
+      "panel": "#F0F0F0", "display_background": "#FFFFFF", "display_border": "#323232",
+      "active": "#99CCFF", "inactive": "#C8C8C8", "positive": "#8EDBB0",
+      "negative": "#F16464", "show_display_bezel": false
+    },
+    "resource_management": {
+      "panel": "#F0F0F0", "tank_1": "#FFFFFF", "tank_2": "#FFFFFF",
+      "tank_3": "#FFFFFF", "tank_4": "#FFFFFF", "tank_5": "#FFFFFF",
+      "tank_6": "#FFFFFF", "fluid": "#8EDBB0", "pipe_on": "#8EDBB0",
+      "pipe_off": "#323232", "pump_on": "#8EDBB0", "pump_off": "#FFFFFF",
+      "pump_failure": "#F16464", "tolerance": "#323232", "meter": "#323232",
+      "show_pump_ring": false
+    },
+    "workload": {"panel": "#F0F0F0", "scale": "#C8C8C8", "marker": "#99CCFF"}
+  }
+}

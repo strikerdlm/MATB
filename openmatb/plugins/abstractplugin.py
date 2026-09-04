@@ -10,8 +10,7 @@ from typing import Any
 
 from pyglet.window import key as winkey
 
-from core.constants import BFLIM, PLUGIN_TITLE_HEIGHT_PROPORTION, REPLAY_MODE
-from core.constants import COLORS as C
+from core.constants import BFLIM, PLUGIN_TITLE_HEIGHT_PROPORTION, REPLAY_MODE, VISUAL_THEME
 from core.constants import FONT_SIZES as F
 from core.container import Container
 from core.logger import get_logger
@@ -49,7 +48,14 @@ class AbstractPlugin:
             title=self.label,
             taskplacement=taskplacement,
             taskupdatetime=taskupdatetime,
-            taskfeedback=dict(overdue=dict(active=False, color=C["RED"], delayms=2000, blinkdurationms=1000)),
+            taskfeedback=dict(
+                overdue=dict(
+                    active=False,
+                    color=VISUAL_THEME.palette["critical"],
+                    delayms=2000,
+                    blinkdurationms=1000,
+                )
+            ),
         )
 
         # Private parameters
@@ -312,23 +318,35 @@ class AbstractPlugin:
         self.container = Window.MainWindow.get_container(self.parameters["taskplacement"])
         self.title_container: Container = self.container.reduce_and_translate(height=pthp, y=1)
         self.task_container: Container = self.container.reduce_and_translate(height=1 - pthp, y=0)
+        theme_module = {
+            "track": "tracking",
+            "sysmon": "system_monitoring",
+            "communications": "communications",
+            "resman": "resource_management",
+            "performance": "workload",
+        }.get(self.alias)
+        panel_color = (
+            VISUAL_THEME.module_color(theme_module, "panel")
+            if theme_module is not None
+            else VISUAL_THEME.palette["app_background"]
+        )
 
         # A fullscreen plugin must have its proper background to override the MATB black middle band
         if self.parameters["taskplacement"] == "fullscreen":
-            self.add_widget("background", Frame, self.container, fill_color=C["BACKGROUND"], draw_order=self.m_draw)
+            self.add_widget("background", Frame, self.container, fill_color=panel_color, draw_order=self.m_draw)
 
         # Other plugins which are not invisible must have a foreground so they can hide
         # Also : add overdue feedback widget to visible plugins
         elif self.parameters["taskplacement"] != "invisible":
             self.add_widget(
-                "foreground", Frame, self.task_container, fill_color=C["BACKGROUND"], draw_order=self.m_draw + 10
+                "foreground", Frame, self.task_container, fill_color=panel_color, draw_order=self.m_draw + 10
             )
             self.parameters["taskfeedback"]["overdue"]["widget"] = self.add_widget(
                 "overdue",
                 Frame,
                 container=self.task_container,
                 border_thickness=0.025,
-                border_color=C["RED"],
+                border_color=VISUAL_THEME.palette["critical"],
                 fill_color=None,
             )
 
@@ -338,7 +356,7 @@ class AbstractPlugin:
                 Simpletext,
                 container=self.title_container,
                 text=self.parameters["title"].upper(),
-                color=C["WHITE"],
+                color=VISUAL_THEME.palette["panel_header_text"],
                 font_size=F["MEDIUM"],
             )
 

@@ -69,7 +69,7 @@ class Performancescale(AbstractWidget):
             )
 
         self.add_lines("ticks", G(self.m_draw + 2), v, C["LINE"] * (len(v) // 2))
-        self.add_cockpit_bezel()
+        self.add_corner_marks()
 
     def _rebuild(self) -> None:
         self.hide()

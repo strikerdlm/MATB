@@ -8,7 +8,7 @@ import json
 from typing import Any, Callable
 
 from core import validation
-from core.constants import COLORS as C
+from core.constants import VISUAL_THEME
 from core.container import Container
 from core.pseudorandom import choice, sample
 from core.widgets import Light, Scale
@@ -72,11 +72,40 @@ class Sysmon(AbstractPlugin):
             displayautomationstate=True,
             allowanykey=False,
             feedbackduration=1500,
-            feedbacks=dict(positive=dict(active=True, color=C["GREEN"]), negative=dict(active=True, color=C["RED"])),
+            feedbacks=dict(
+                positive=dict(
+                    active=True,
+                    color=VISUAL_THEME.module_color("system_monitoring", "feedback_positive"),
+                ),
+                negative=dict(
+                    active=True,
+                    color=VISUAL_THEME.module_color("system_monitoring", "feedback_negative"),
+                ),
+            ),
             lights=dict(
                 [
-                    ("1", dict(name="F5", failure=False, default="on", oncolor=C["GREEN"], key="F5", on=True)),
-                    ("2", dict(name="F6", failure=False, default="off", oncolor=C["RED"], key="F6", on=False)),
+                    (
+                        "1",
+                        dict(
+                            name="F5",
+                            failure=False,
+                            default="on",
+                            oncolor=VISUAL_THEME.module_color("system_monitoring", "lamp_1"),
+                            key="F5",
+                            on=True,
+                        ),
+                    ),
+                    (
+                        "2",
+                        dict(
+                            name="F6",
+                            failure=False,
+                            default="off",
+                            oncolor=VISUAL_THEME.module_color("system_monitoring", "lamp_2"),
+                            key="F6",
+                            on=False,
+                        ),
+                    ),
                 ]
             ),
             scales=dict(
@@ -273,7 +302,11 @@ class Sysmon(AbstractPlugin):
             gauge["widget"].set_label(gauge["name"])
 
     def determine_light_color(self, light: dict[str, Any]) -> tuple[int, ...]:
-        color: tuple[int, ...] = light["oncolor"] if light["on"] else C["BACKGROUND"]
+        color: tuple[int, ...] = (
+            light["oncolor"]
+            if light["on"]
+            else VISUAL_THEME.module_color("system_monitoring", "lamp_off")
+        )
         return color
 
     def _dispatch_context(self) -> dict[str, Any]:

@@ -3,18 +3,18 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from sqlalchemy import inspect, text
-from sqlalchemy.exc import IntegrityError
-from sqlmodel import create_engine
-
 from app.db import (
     _audit_sqlite_foreign_keys,
     _configure_sqlite_foreign_keys,
     _migrate_analysisresult_v2,
     _migrate_bayesresult_v3,
+    _migrate_openmatb_visual_profile_v1,
     _migrate_openmatb_visual_theme_v1,
     _resolve_db_path,
 )
+from sqlalchemy import inspect, text
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import create_engine
 
 
 def test_relative_database_path_is_anchored_to_repository() -> None:
@@ -57,6 +57,41 @@ def test_openmatb_visual_theme_migration_defaults_legacy_sessions_to_classic(tmp
         )).scalar_one() == "classic"
         assert connection.execute(text(
             "SELECT COUNT(*) FROM matb_schema_migration WHERE version = 'openmatb-visual-theme-v1'"
+        )).scalar_one() == 1
+
+
+def test_openmatb_visual_profile_migration_is_nullable_and_idempotent(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'legacy-openmatb-profile.sqlite3'}")
+    with engine.begin() as connection:
+        connection.execute(text("""
+            CREATE TABLE openmatb_suite_session (
+                id VARCHAR PRIMARY KEY,
+                participant_id VARCHAR NOT NULL,
+                visual_theme VARCHAR NOT NULL DEFAULT 'classic'
+            )
+        """))
+        connection.execute(text(
+            "INSERT INTO openmatb_suite_session (id, participant_id) VALUES ('s1', 'P01')"
+        ))
+
+    _migrate_openmatb_visual_profile_v1(engine)
+    _migrate_openmatb_visual_profile_v1(engine)
+
+    with engine.begin() as connection:
+        row = connection.execute(text("""
+            SELECT visual_theme, visual_profile_id, visual_profile_version,
+                   visual_profile_schema_version, visual_profile_sha256
+            FROM openmatb_suite_session WHERE id = 's1'
+        """)).mappings().one()
+        assert dict(row) == {
+            "visual_theme": "classic",
+            "visual_profile_id": None,
+            "visual_profile_version": None,
+            "visual_profile_schema_version": None,
+            "visual_profile_sha256": None,
+        }
+        assert connection.execute(text(
+            "SELECT COUNT(*) FROM matb_schema_migration WHERE version = 'openmatb-visual-profile-v1'"
         )).scalar_one() == 1
 
 

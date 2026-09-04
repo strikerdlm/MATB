@@ -3,18 +3,227 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.participant_ids import PARTICIPANT_ID_PATTERN
-
 
 Lifecycle = Literal[
     "INSTRUCTIONS", "READY", "STARTING", "RUNNING", "PAUSED",
     "AWAITING_SCALE", "BETWEEN_BLOCKS", "COMPLETE", "ABORTED", "FAILED", "INTERRUPTED",
 ]
 Profile = Literal["PRACTICE", "LOW", "MEDIUM", "HIGH"]
+HexColor = Annotated[str, Field(pattern=r"^#[0-9A-Fa-f]{6}$")]
+
+
+class VisualProfilePalette(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    app_background: HexColor
+    panel_background: HexColor
+    instrument_background: HexColor
+    panel_header: HexColor
+    panel_header_text: HexColor
+    control_background: HexColor
+    control_foreground: HexColor
+    text: HexColor
+    muted_text: HexColor
+    border: HexColor
+    grid: HexColor
+    accent: HexColor
+    safe: HexColor
+    warning: HexColor
+    critical: HexColor
+    disabled: HexColor
+
+
+class VisualProfileMetrics(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    line_width: float = Field(ge=1, le=6)
+    panel_radius: float = Field(ge=0, le=24)
+    corner_mark_ratio: float = Field(ge=0, le=0.2)
+
+
+class TrackingAppearance(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    panel: HexColor
+    axis: HexColor
+    grid: HexColor
+    target: HexColor
+    target_fill: HexColor
+    cursor: HexColor
+    cursor_outside: HexColor
+    show_panel: bool
+    show_grid: bool
+    closed_target_border: bool
+
+
+class SystemMonitoringAppearance(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    panel: HexColor
+    lamp_1: HexColor
+    lamp_2: HexColor
+    lamp_3: HexColor
+    lamp_4: HexColor
+    lamp_off: HexColor
+    lamp_border: HexColor
+    lamp_shape: Literal["rectangle", "circle"]
+    scale: HexColor
+    pointer: HexColor
+    feedback_positive: HexColor
+    feedback_negative: HexColor
+
+
+class CommunicationsAppearance(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    panel: HexColor
+    display_background: HexColor
+    display_border: HexColor
+    active: HexColor
+    inactive: HexColor
+    positive: HexColor
+    negative: HexColor
+    show_display_bezel: bool
+
+
+class ResourceManagementAppearance(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    panel: HexColor
+    tank_1: HexColor
+    tank_2: HexColor
+    tank_3: HexColor
+    tank_4: HexColor
+    tank_5: HexColor
+    tank_6: HexColor
+    fluid: HexColor
+    pipe_on: HexColor
+    pipe_off: HexColor
+    pump_on: HexColor
+    pump_off: HexColor
+    pump_failure: HexColor
+    tolerance: HexColor
+    meter: HexColor
+    show_pump_ring: bool
+
+
+class WorkloadAppearance(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    panel: HexColor
+    scale: HexColor
+    marker: HexColor
+
+
+class VisualProfileModules(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tracking: TrackingAppearance
+    system_monitoring: SystemMonitoringAppearance
+    communications: CommunicationsAppearance
+    resource_management: ResourceManagementAppearance
+    workload: WorkloadAppearance
+
+
+class VisualProfileDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["openmatb-visual-profile-v1"]
+    profile_id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{2,63}$")
+    version: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
+    label: str = Field(min_length=3, max_length=100)
+    geometry_policy: Literal["preserve_openmatb_v1"]
+    palette: VisualProfilePalette
+    metrics: VisualProfileMetrics
+    modules: VisualProfileModules
+
+
+class VisualProfileIssue(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    message: str
+    paths: list[str]
+    ratio: float
+    minimum: float
+
+
+class VisualProfileValidation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    valid: bool
+    publishable: bool
+    errors: list[VisualProfileIssue]
+    warnings: list[VisualProfileIssue]
+    unacknowledged_warning_codes: list[str]
+
+
+class OpenMatbVisualProfileView(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profile_id: str
+    version: str
+    label: str
+    status: Literal["draft", "published"]
+    schema_version: Literal["openmatb-visual-profile-v1"]
+    sha256: str
+    payload: VisualProfileDocument
+    validation: VisualProfileValidation
+    warning_acknowledgements: list[str]
+    bundled: bool
+    created_at: datetime
+    published_at: datetime | None
+
+
+class CloneVisualProfileRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profile_id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{2,63}$")
+    version: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
+    label: str = Field(min_length=3, max_length=100)
+
+
+class UpdateVisualProfileRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    payload: VisualProfileDocument
+    warning_acknowledgements: list[str] = Field(default_factory=list, max_length=32)
+
+
+class PublishVisualProfileRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    warning_acknowledgements: list[str] = Field(default_factory=list, max_length=32)
+
+
+class ImportVisualProfileRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    payload: VisualProfileDocument
+
+
+class VisualProfilePreviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    display_index: int = Field(default=1, ge=0, le=15)
+    windowed: bool = True
+
+
+class VisualProfilePreviewView(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    lifecycle: Literal["IDLE", "STARTING", "RUNNING", "FAILED"]
+    profile_id: str | None = None
+    profile_version: str | None = None
+    profile_sha256: str | None = None
+    pid: int | None = None
+    artifact_root: str | None = None
+    last_error: str | None = None
 
 
 class ProfileSettings(BaseModel):
@@ -133,8 +342,20 @@ class CreateOpenMatbSession(BaseModel):
     preset_version: str = "1.0.0"
     instruction_protocol_id: str = "matb-fac-es-419"
     instruction_version: str = "1.0.0"
-    visual_theme: Literal["classic", "cockpit"] = "classic"
+    visual_theme: Literal["classic", "cockpit", "fac_modern"] | None = None
+    visual_profile_id: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9-]{2,63}$")
+    visual_profile_version: str | None = Field(default=None, pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
     display_index: int = Field(default=1, ge=0, le=15)
+
+    @model_validator(mode="after")
+    def visual_selection_is_unambiguous(self):
+        has_profile_id = self.visual_profile_id is not None
+        has_profile_version = self.visual_profile_version is not None
+        if has_profile_id != has_profile_version:
+            raise ValueError("visual_profile_id and visual_profile_version must be provided together")
+        if self.visual_theme is not None and has_profile_id:
+            raise ValueError("visual_theme and visual profile selection are mutually exclusive")
+        return self
 
 
 class PreparedOpenMatbSession(BaseModel):
@@ -160,7 +381,11 @@ class OpenMatbSessionView(BaseModel):
     preset_sha256: str
     instruction_protocol: InstructionProtocolView
     visit_instruction: str
-    visual_theme: Literal["classic", "cockpit"]
+    visual_theme: str
+    visual_profile_id: str | None
+    visual_profile_version: str | None
+    visual_profile_schema_version: str | None
+    visual_profile_sha256: str | None
     display_index: int
     scores: dict[str, dict[str, object]]
     active_pid: int | None

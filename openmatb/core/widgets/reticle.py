@@ -35,17 +35,20 @@ class Reticle(AbstractWidget):
         # First, set one axis and one corner
         cx, cy = self.container.get_center()
         _x1, _y1, x2, y2 = self.container.get_x1y1x2y2()
-        if VISUAL_THEME.is_cockpit:
+        if VISUAL_THEME.module_flag("tracking", "show_panel"):
             panel_vertices = self.vertice_border(self.container)
-            self.add_quad("display_background", G(self.m_draw), panel_vertices, C["INSTRUMENT"] * 4)
+            panel_color = VISUAL_THEME.module_color("tracking", "panel")
+            self.add_quad("display_background", G(self.m_draw), panel_vertices, panel_color * 4)
+        if VISUAL_THEME.module_flag("tracking", "show_grid"):
             grid: list[float] = []
             for fraction in (0.25, 0.75):
                 gx = self.container.x1 + self.container.w * fraction
                 gy = self.container.y2 + self.container.h * fraction
                 grid.extend((gx, self.container.y1, gx, self.container.y2))
                 grid.extend((self.container.x1, gy, self.container.x2, gy))
-            self.add_lines("hud_grid", G(self.m_draw + 1), grid, C["BEZEL"] * (len(grid) // 2))
-            self.add_cockpit_bezel(draw_order=self.m_draw + 3)
+            grid_color = VISUAL_THEME.module_color("tracking", "grid")
+            self.add_lines("hud_grid", G(self.m_draw + 1), grid, grid_color * (len(grid) // 2))
+        self.add_corner_marks(draw_order=self.m_draw + 3)
         v1: list[float] = [cx, cy, x2, cy, x2, y2, x2 - self.corner_width, y2, x2, y2, x2, y2 + self.corner_width]
         # On this axis, define five graduations
         gw: float = self.graduation_width
@@ -65,20 +68,23 @@ class Reticle(AbstractWidget):
         v4: list[float] = self.rotate_vertice_list([cx, cy], v1, math.pi + math.pi / 2)
         v: list[float] = v1 + v2 + v3 + v4
 
-        self.add_lines("axis", G(self.m_draw + 1), v, C["LINE"] * (len(v) // 2))
+        axis_color = VISUAL_THEME.module_color("tracking", "axis")
+        self.add_lines("axis", G(self.m_draw + 1), v, axis_color * (len(v) // 2))
 
         # Target area
         self.target_proportion: float = target_proportion
         self.target_radius: float = self.container.w / 2 * self.target_proportion
         v = self.vertice_circle([self.container.cx, self.container.cy], self.target_radius, 50)
 
-        target_fill = C["PANEL"] if VISUAL_THEME.is_cockpit else C["WHITE"]
+        target_fill = VISUAL_THEME.module_color("tracking", "target_fill")
         self.add_polygon("target_area", G(self.m_draw), v, target_fill * (len(v) // 2))
 
-        if VISUAL_THEME.is_cockpit:
-            self.add_line_loop("target_border", G(self.m_draw + 1), v, C["ACCENT"] * (len(v) // 2))
+        self.closed_target_border = VISUAL_THEME.module_flag("tracking", "closed_target_border")
+        target_color = VISUAL_THEME.module_color("tracking", "target")
+        if self.closed_target_border:
+            self.add_line_loop("target_border", G(self.m_draw + 1), v, target_color * (len(v) // 2))
         else:
-            self.add_lines("target_border", G(self.m_draw + 1), v, C["ACCENT"] * (len(v) // 2))
+            self.add_lines("target_border", G(self.m_draw + 1), v, target_color * (len(v) // 2))
 
         # Cursor definition
         v = self.get_cursor_vertice()
@@ -91,7 +97,7 @@ class Reticle(AbstractWidget):
         self.target_radius = self.container.w / 2 * proportion
         v: list[float] = self.vertice_circle([self.container.cx, self.container.cy], self.target_radius, 50)
         self.on_batch["target_area"].position[:] = v
-        if VISUAL_THEME.is_cockpit:
+        if self.closed_target_border:
             line_positions, _ = line_loop_to_lines(v)
             self.on_batch["target_border"].position[:] = line_positions
         else:

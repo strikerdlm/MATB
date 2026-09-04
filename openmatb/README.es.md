@@ -86,18 +86,37 @@ La configuración distribuida usa español colombiano:
 ```ini
 [Openmatb]
 language=es_CO
-visual_theme=classic
+visual_theme=fac_modern
 ```
 
 También están disponibles `en_EN` y `fr_FR`. El locale `es_CO` incluye la
 interfaz principal, el generador de escenarios, mensajes de validación,
 instrucciones, cuestionarios y dos voces sintéticas para COMM.
 
-`visual_theme` admite `classic` y `cockpit`. El segundo aplica una presentación
-vectorial de cabina de cristal sin cambiar la geometría, controles, tiempos ni
-puntuación de las tareas. También puede seleccionarse con
-`main.py --visual-theme cockpit`. Registre y analice el tema como condición de
-presentación; no combine ambas condiciones sin validar antes su equivalencia.
+`visual_theme` admite `classic`, `cockpit` y `fac_modern`. El primero conserva
+la presentación histórica, el segundo aplica una presentación vectorial de
+cabina de cristal y `fac_modern` es la presentación clara MATB-FAC
+predeterminada. Puede elegir un perfil distribuido con
+`main.py --visual-theme cockpit`.
+
+La Consola de Investigación también puede proporcionar un perfil visual
+inmutable al inicio:
+
+```powershell
+python main.py --theme-file C:\ruta\absoluta\visual-profile.json
+```
+
+`--theme-file` y `--visual-theme` son mutuamente excluyentes. El archivo debe
+cumplir `openmatb-visual-profile-v1`; los campos desconocidos, valores CSS,
+ajustes conductuales y colores inválidos se rechazan. Los archivos distribuidos
+en `themes/` son ejemplos ejecutables. El perfil se carga una sola vez antes de
+importar el núcleo y se registran su identidad, versión, esquema y SHA-256. No
+sustituye el control del escenario sobre estado, programación, automatización,
+geometría, áreas activas, entradas, puntuación ni tiempos de respuesta. Consulte
+el [contrato de perfil visual](../docs/contracts/openmatb-visual-profile-v1.md).
+
+Registre y analice cada apariencia como una condición de presentación; no
+combine condiciones sin validar antes su equivalencia perceptual y de carga.
 
 Las letras de los distintivos de llamada se reproducen mediante el alfabeto de
 deletreo radiotelefónico OACI. Las cifras se expresan en español y el separador

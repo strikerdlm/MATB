@@ -191,7 +191,17 @@ function Content() {
         </Card>
         <Card>
           <CardHeader><CardTitle className="font-display text-xl uppercase tracking-wide">{copy("Procedencia", "Provenance")}</CardTitle></CardHeader>
-          <CardContent className="space-y-3 text-sm"><div><div className="font-mono text-[10px] uppercase text-muted-foreground">Preset</div><div>{session.preset_id} · v{session.preset_version}</div></div><div><div className="font-mono text-[10px] uppercase text-muted-foreground">SHA-256</div><div className="break-all font-mono text-[10px]">{session.preset_sha256}</div></div><div><div className="font-mono text-[10px] uppercase text-muted-foreground">{copy("Tema visual", "Visual theme")}</div><div>{session.visual_theme === "cockpit" ? copy("Cabina moderna · experimental", "Modern cockpit · experimental") : copy("Clásico · referencia", "Classic · reference")}</div></div><div><div className="font-mono text-[10px] uppercase text-muted-foreground">{copy("Pantalla", "Display")}</div><div>{session.display_index}</div></div></CardContent>
+          <CardContent className="space-y-3 text-sm">
+            <div><div className="font-mono text-[10px] uppercase text-muted-foreground">Preset</div><div>{session.preset_id} · v{session.preset_version}</div></div>
+            <div><div className="font-mono text-[10px] uppercase text-muted-foreground">Preset SHA-256</div><div className="break-all font-mono text-[10px]">{session.preset_sha256}</div></div>
+            <div>
+              <div className="font-mono text-[10px] uppercase text-muted-foreground">{copy("Perfil visual", "Visual profile")}</div>
+              <div>{session.visual_profile_id ? `${session.visual_profile_id} · v${session.visual_profile_version}` : `${session.visual_theme} · legacy`}</div>
+            </div>
+            {session.visual_profile_schema_version && <div><div className="font-mono text-[10px] uppercase text-muted-foreground">{copy("Esquema visual", "Visual schema")}</div><div className="font-mono text-[10px]">{session.visual_profile_schema_version}</div></div>}
+            {session.visual_profile_sha256 && <div><div className="font-mono text-[10px] uppercase text-muted-foreground">Visual SHA-256</div><div className="break-all font-mono text-[10px]">{session.visual_profile_sha256}</div></div>}
+            <div><div className="font-mono text-[10px] uppercase text-muted-foreground">{copy("Pantalla", "Display")}</div><div>{session.display_index}</div></div>
+          </CardContent>
         </Card>
       </div>
     </div>

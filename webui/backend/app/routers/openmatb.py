@@ -1,23 +1,31 @@
-"""Local API for the frontend-supervised classic OpenMATB suite."""
+"""Local API for the frontend-supervised native OpenMATB suite."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 
 from app.openmatb_runtime import OpenMatbManager, OpenMatbRuntimeError
 from app.openmatb_schemas import (
     AbortRequest,
     CloneInstructionRequest,
     ClonePresetRequest,
+    CloneVisualProfileRequest,
     CreateOpenMatbSession,
     EmptyRequest,
+    ImportVisualProfileRequest,
     InstructionProtocolView,
     OpenMatbReadiness,
     OpenMatbSessionView,
+    OpenMatbVisualProfileView,
     PreparedOpenMatbSession,
     PresetSetView,
+    PublishVisualProfileRequest,
     UpdateInstructionRequest,
     UpdatePresetRequest,
+    UpdateVisualProfileRequest,
+    VisualProfilePreviewRequest,
+    VisualProfilePreviewView,
     WorkloadScaleRequest,
 )
 
@@ -124,6 +132,103 @@ def update_instructions(protocol_id: str, version: str, body: UpdateInstructionR
 def publish_instructions(protocol_id: str, version: str, body: EmptyRequest, runtime: OpenMatbManager = Depends(manager)):
     del body
     return _managed(lambda: runtime.publish_instructions(protocol_id, version))
+
+
+@router.get("/visual-profiles", response_model=list[OpenMatbVisualProfileView])
+def visual_profiles(runtime: OpenMatbManager = Depends(manager)):
+    return _managed(runtime.list_visual_profiles)
+
+
+@router.post("/visual-profiles/import", response_model=OpenMatbVisualProfileView, status_code=201)
+def import_visual_profile(body: ImportVisualProfileRequest, runtime: OpenMatbManager = Depends(manager)):
+    return _managed(lambda: runtime.import_visual_profile(body))
+
+
+@router.get("/visual-profiles/preview", response_model=VisualProfilePreviewView)
+def visual_profile_preview(runtime: OpenMatbManager = Depends(manager)):
+    return runtime.visual_profile_preview_status()
+
+
+@router.post("/visual-profiles/preview/abort", response_model=VisualProfilePreviewView)
+async def abort_visual_profile_preview(body: EmptyRequest, runtime: OpenMatbManager = Depends(manager)):
+    del body
+    return await _managed_async(runtime.abort_visual_profile_preview)
+
+
+@router.get("/visual-profiles/{profile_id}/{version}", response_model=OpenMatbVisualProfileView)
+def visual_profile(profile_id: str, version: str, runtime: OpenMatbManager = Depends(manager)):
+    return _managed(lambda: runtime.get_visual_profile(profile_id, version))
+
+
+@router.post(
+    "/visual-profiles/{source_id}/{source_version}/clone",
+    response_model=OpenMatbVisualProfileView,
+    status_code=201,
+)
+def clone_visual_profile(
+    source_id: str,
+    source_version: str,
+    body: CloneVisualProfileRequest,
+    runtime: OpenMatbManager = Depends(manager),
+):
+    return _managed(lambda: runtime.clone_visual_profile(source_id, source_version, body))
+
+
+@router.put("/visual-profiles/{profile_id}/{version}", response_model=OpenMatbVisualProfileView)
+def update_visual_profile(
+    profile_id: str,
+    version: str,
+    body: UpdateVisualProfileRequest,
+    runtime: OpenMatbManager = Depends(manager),
+):
+    return _managed(lambda: runtime.update_visual_profile(profile_id, version, body))
+
+
+@router.post("/visual-profiles/{profile_id}/{version}/validate", response_model=OpenMatbVisualProfileView)
+def validate_visual_profile(
+    profile_id: str,
+    version: str,
+    body: EmptyRequest,
+    runtime: OpenMatbManager = Depends(manager),
+):
+    del body
+    return _managed(lambda: runtime.validate_saved_visual_profile(profile_id, version))
+
+
+@router.post("/visual-profiles/{profile_id}/{version}/publish", response_model=OpenMatbVisualProfileView)
+def publish_visual_profile(
+    profile_id: str,
+    version: str,
+    body: PublishVisualProfileRequest,
+    runtime: OpenMatbManager = Depends(manager),
+):
+    return _managed(lambda: runtime.publish_visual_profile(profile_id, version, body))
+
+
+@router.get("/visual-profiles/{profile_id}/{version}/export")
+def export_visual_profile(
+    profile_id: str,
+    version: str,
+    runtime: OpenMatbManager = Depends(manager),
+):
+    document = _managed(lambda: runtime.export_visual_profile(profile_id, version))
+    return JSONResponse(
+        content=document.model_dump(mode="json"),
+        headers={"Content-Disposition": 'attachment; filename="openmatb-visual-profile.json"'},
+    )
+
+
+@router.post(
+    "/visual-profiles/{profile_id}/{version}/preview",
+    response_model=VisualProfilePreviewView,
+)
+async def start_visual_profile_preview(
+    profile_id: str,
+    version: str,
+    body: VisualProfilePreviewRequest,
+    runtime: OpenMatbManager = Depends(manager),
+):
+    return await _managed_async(lambda: runtime.start_visual_profile_preview(profile_id, version, body))
 
 
 @router.post("/sessions", response_model=PreparedOpenMatbSession, status_code=201)
