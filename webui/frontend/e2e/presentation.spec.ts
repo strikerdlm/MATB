@@ -240,7 +240,8 @@ test("corrupt offline imagery cannot satisfy readiness", async ({
   }
 });
 
-test("3D SAGAT concealment and sealed public replay", async ({
+for (const version of [1, 2] as const)
+test(`3D SAGAT concealment and sealed public replay v${version}`, async ({
   page,
   request,
 }, testInfo) => {
@@ -260,7 +261,8 @@ test("3D SAGAT concealment and sealed public replay", async ({
       block_id: "LOW",
       locale: "en",
       presentation: {
-        version: 1,
+        version,
+        controls: { smooth_camera: version === 2, contact_cycling: version === 2, adjustable_layers: version === 2 },
         blocks: { LOW: "3d" },
         scene_id: scene.id,
         scene_sha256: scene.sha256,

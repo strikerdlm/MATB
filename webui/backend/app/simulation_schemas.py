@@ -56,9 +56,17 @@ class TrafficConfig(BaseModel):
         return self
 
 
+class PresentationControls(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    smooth_camera: bool = False
+    contact_cycling: bool = False
+    adjustable_layers: bool = False
+
+
 class PresentationConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    version: Literal[1] = 1
+    version: Literal[1, 2] = 1
+    controls: PresentationControls = Field(default_factory=PresentationControls)
     layers: list[Literal["roads", "rivers", "settlements", "boundaries", "airports"]] = Field(default_factory=lambda: ["roads", "rivers", "settlements", "boundaries", "airports"])
     traffic: TrafficConfig = Field(default_factory=TrafficConfig)
     blocks: dict[WorkloadProfile, Literal["2d", "3d"]] = Field(default_factory=dict)
@@ -77,11 +85,87 @@ class PresentationConfig(BaseModel):
         return self
 
 
+class PresentationEntity(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    category: Literal["aircraft", "contact", "observed"]
+    id: str = Field(min_length=1, max_length=80)
+
+
+class PresentationPose(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    camera_position: tuple[float, float, float]
+    camera_quaternion: tuple[float, float, float, float]
+    fov: float = Field(default=55, gt=0, lt=180)
+    aspect: float = Field(default=1, gt=0, le=100)
+    controls_target: tuple[float, float, float] | None = None
+
+    @model_validator(mode="after")
+    def normalized_quaternion(self):
+        if abs(sum(v * v for v in self.camera_quaternion) - 1) > 0.001:
+            raise ValueError("camera quaternion must be normalized")
+        return self
+
+
+class OperationalLayers(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    routes: bool = True
+    coverage: bool = True
+    contacts: bool = True
+    sensors: bool = True
+    labels: bool = True
+
+
+class PresentationPan(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    x: float
+    y: float
+
+
+class PresentationMapView(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    zoom: float = Field(ge=0.75, le=6)
+    pan: PresentationPan
+
+
+class PresentationViewport(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    width: int = Field(gt=0, le=32768)
+    height: int = Field(gt=0, le=32768)
+    dpr: float = Field(gt=0, le=16)
+
+
+class ResolvedPresentation(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    version: Literal[2]
+    condition: Literal["2d", "3d"]
+    camera: Literal["overview", "follow", "drone"]
+    focus: PresentationEntity | None
+    aircraft_id: str | None = Field(max_length=64)
+    contact_id: str | None = Field(max_length=64)
+    observed_id: str | None = Field(max_length=80)
+    navigation_category: Literal["aircraft", "contact", "observed"] = "aircraft"
+    operational_layers: OperationalLayers
+    geographic_layers: list[Literal["roads", "rivers", "settlements", "boundaries", "airports"]] = Field(max_length=5)
+    pose: PresentationPose | None
+    map_view: PresentationMapView
+    viewport: PresentationViewport | None
+    visibility: Literal["visible", "hidden", "concealed", "unavailable"]
+    transition_ms: Literal[0, 600]
+    visual_profile: Literal["standard-v1"]
+    model_version: Literal["schematic-drone-v1-scale12"]
+    scene_sha256: str | None = Field(pattern=r"^[a-f0-9]{64}$")
+    capture_sha256: str | None = Field(pattern=r"^[a-f0-9]{64}$")
+
+
 class PresentationEvent(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     event_id: UUID
     block_id: WorkloadProfile
-    kind: Literal["ready", "camera", "render", "failure", "fallback"]
+    version: Literal[1, 2] = 1
+    kind: Literal["ready", "camera", "render", "failure", "fallback", "selection", "navigate", "navigation_filter", "layers", "geography", "resolved", "transition_start", "transition_end", "transition_cancel", "visibility", "resize", "map_view"]
+    sequence: int | None = Field(default=None, ge=0)
+    client_time_ms: float | None = Field(default=None, ge=0)
+    resolved: ResolvedPresentation | None = None
     state_version: int = Field(default=0, ge=0)
     simulation_time_ms: int = Field(default=0, ge=0)
     camera: Literal["overview", "follow", "drone"] = "overview"
@@ -92,6 +176,14 @@ class PresentationEvent(BaseModel):
     camera_position: tuple[float, float, float] | None = None
     camera_quaternion: tuple[float, float, float, float] | None = None
     receipt_to_render_ms: float | None = Field(default=None, ge=0, le=3600000)
+
+    @model_validator(mode="after")
+    def versioned_exposure(self):
+        if self.version == 2 and (self.resolved is None or self.sequence is None or self.client_time_ms is None):
+            raise ValueError("v2 requires resolved exposure and ordering metadata")
+        if self.version == 1 and (self.resolved is not None or self.kind not in {"ready", "camera", "render", "failure", "fallback"}):
+            raise ValueError("v1 presentation semantics cannot be extended")
+        return self
 
 
 class CreateSimulationSession(BaseModel):

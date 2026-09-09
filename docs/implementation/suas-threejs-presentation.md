@@ -116,3 +116,7 @@ imagery is a separate licensed data pipeline.
 Run the presentation tests with the existing MATB Python environment and the
 frontend's Vitest/Playwright tooling. See `suas-threejs-verification.md` for the
 measured results and outstanding physical-station validation.
+
+## Presentation v2
+
+See [Presentation v2 and camera/contact management](suas-presentation-v2.md) for resolved exposure records, version compatibility, opt-in interaction controls, and replay qualification.

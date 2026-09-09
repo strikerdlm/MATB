@@ -1,4 +1,5 @@
 "use client";
+import { DEFAULT_CONTROLS, type ResolvedPresentation, type PresentationAction } from "@/lib/simulation/presentation/state";
 import React, { useEffect, useRef, useState } from "react";
 import type { MissionMapProps } from "../map/MissionMap";
 import type {
@@ -14,6 +15,8 @@ import {
 
 export interface ThreeMissionViewProps extends MissionMapProps {
   config: PresentationConfig;
+  viewState?: ResolvedPresentation;
+  onViewAction?: (action: PresentationAction, kind?: string) => void;
   frozen: boolean;
   onEvent?: (
     kind: "ready" | "camera" | "render" | "failure",
@@ -34,15 +37,17 @@ export default function ThreeMissionView(props: ThreeMissionViewProps) {
   const [error, setError] = useState<string | null>(null),
     [ready, setReady] = useState(false),
     [camera, setCamera] = useState<CameraMode>(props.config.camera);
-  const [layers, setLayers] = useState({
+  const [localLayers, setLayers] = useState({
     routes: true,
     coverage: true,
     contacts: true,
   });
-  const lastLog = useRef(0),
+  const layers = props.viewState?.operational_layers ?? localLayers;
+  const allowed = props.config.version === 2 ? props.config.controls ?? DEFAULT_CONTROLS : { ...DEFAULT_CONTROLS, adjustable_layers: true };
+  const lastLog = useRef(-Infinity),
     revision = useRef(0);
   const es = props.locale === "es-CO";
-  const activeCamera = props.replayCamera ?? camera;
+  const activeCamera = props.replayCamera ?? props.viewState?.camera ?? camera;
   const selected = props.selectedAircraftId
     ? props.snapshot.aircraft[props.selectedAircraftId]
     : Object.values(props.snapshot.aircraft)[0];
@@ -55,26 +60,36 @@ export default function ThreeMissionView(props: ThreeMissionViewProps) {
     cameraMode: activeCamera,
     frozen: props.frozen,
     layers,
-    geographicLayers: props.config.layers ?? [
+    geographicLayers: props.viewState?.geographic_layers ?? props.config.layers ?? [
       "roads",
       "rivers",
       "settlements",
       "boundaries",
       "airports",
     ],
+    transitionMs: props.viewState?.transition_ms ?? 0,
+    focus: props.viewState?.focus,
+    onCameraEvent: (kind, pose, mode) => props.onViewAction?.({ type: "resolved", patch: { pose, camera: mode } }, kind),
+    onTargetLost: () => props.onViewAction?.({ type: "resolved", patch: { camera: "overview", focus: null, observed_id: null } }, "selection"),
+    onViewport: viewport => props.onViewAction?.({ type: "resolved", patch: { viewport } }, "resize"),
     onFailure: () => {},
   });
   options.current = {
     ...props,
     cameraMode: activeCamera,
     layers,
-    geographicLayers: props.config.layers ?? [
+    geographicLayers: props.viewState?.geographic_layers ?? props.config.layers ?? [
       "roads",
       "rivers",
       "settlements",
       "boundaries",
       "airports",
     ],
+    transitionMs: props.viewState?.transition_ms ?? 0,
+    focus: props.viewState?.focus,
+    onCameraEvent: (kind, pose, mode) => props.onViewAction?.({ type: "resolved", patch: { pose, camera: mode } }, kind),
+    onTargetLost: () => props.onViewAction?.({ type: "resolved", patch: { camera: "overview", focus: null, observed_id: null } }, "selection"),
+    onViewport: viewport => props.onViewAction?.({ type: "resolved", patch: { viewport } }, "resize"),
     onFailure: () => {
       setError(
         es
@@ -107,7 +122,7 @@ export default function ThreeMissionView(props: ThreeMissionViewProps) {
         const scene = await createMissionScene(
           host.current,
           assets,
-          options.current,
+          { ...options.current, initialPose: current.current.viewState?.pose ?? undefined },
         );
         if (!active) {
           scene.dispose();
@@ -157,6 +172,8 @@ export default function ThreeMissionView(props: ThreeMissionViewProps) {
     props.replayPose,
     activeCamera,
     layers,
+    props.viewState?.focus,
+    props.viewState?.geographic_layers,
   ]);
   return (
     <section
@@ -174,13 +191,14 @@ export default function ThreeMissionView(props: ThreeMissionViewProps) {
             onChange={(event) => {
               const value = event.target.value as CameraMode;
               setCamera(value);
+              props.onViewAction?.({ type: "camera", camera: value });
               props.onEvent?.("camera", value);
             }}
             className="bg-background p-2"
           >
             <option value="overview">{es ? "General" : "Overview"}</option>
-            <option value="follow">{es ? "Seguimiento" : "Follow"}</option>
-            <option value="drone">
+            <option value="follow" disabled={props.viewState?.focus?.category === "contact"}>{es ? "Seguimiento" : "Follow"}</option>
+            <option value="drone" disabled={!!props.viewState?.focus && props.viewState.focus.category !== "aircraft"}>
               {es ? "Cámara del dron" : "Drone camera"}
             </option>
           </select>
@@ -190,6 +208,7 @@ export default function ThreeMissionView(props: ThreeMissionViewProps) {
           disabled={!ready || props.frozen}
           onClick={() => {
             setCamera("overview");
+            props.onViewAction?.({ type: "camera", camera: "overview" });
             controller.current?.reset();
             props.onEvent?.("camera", "overview");
           }}
@@ -201,13 +220,11 @@ export default function ThreeMissionView(props: ThreeMissionViewProps) {
             <input
               type="checkbox"
               checked={layers[name]}
-              disabled={props.frozen}
-              onChange={() =>
-                setLayers((previous) => ({
-                  ...previous,
-                  [name]: !previous[name],
-                }))
-              }
+              disabled={props.frozen || !allowed.adjustable_layers}
+              onChange={() => {
+                if (props.viewState) props.onViewAction?.({ type: "layers", layers: { ...props.viewState.operational_layers, [name]: !layers[name] } });
+                else setLayers(previous => ({ ...previous, [name]: !previous[name] }));
+              }}
             />
             {es
               ? {
@@ -242,7 +259,9 @@ export default function ThreeMissionView(props: ThreeMissionViewProps) {
         ref={host}
         className="relative min-h-[520px] flex-1 overflow-hidden"
         style={{
-          height: 520,
+          height: props.replayPose?.aspect ? "auto" : 520,
+          minHeight: props.replayPose?.aspect ? 0 : undefined,
+          aspectRatio: props.replayPose?.aspect,
           visibility: error || feedUnavailable ? "hidden" : "visible",
         }}
         data-testid="mission-three-view"

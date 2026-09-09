@@ -11,7 +11,7 @@ export interface ReplayFrame {
 }
 export function framesFrom(debrief: DebriefView): ReplayFrame[] {
   if (!Array.isArray(debrief.frames)) return [];
-  return debrief.frames.filter((raw): raw is Record<string, JsonValue> =>
+  const authoritative = debrief.frames.filter((raw): raw is Record<string, JsonValue> =>
     Boolean(
       raw &&
         typeof raw === "object" &&
@@ -20,6 +20,18 @@ export function framesFrom(debrief: DebriefView): ReplayFrame[] {
         typeof raw.state_version === "number",
     ),
   ) as ReplayFrame[];
+  const exposures = Array.isArray(debrief.presentation_events) ? debrief.presentation_events : [];
+  const frames = [...authoritative];
+  for (const event of exposures) {
+    if (!event || typeof event !== "object" || Array.isArray(event) || event.version !== 2 ||
+        typeof event.simulation_time_ms !== "number" || typeof event.sequence !== "number") continue;
+    const base = authoritative.filter(frame => frame.block_id === event.block_id && frame.simulation_time_ms <= (event.simulation_time_ms as number))
+      .sort((a, b) => a.simulation_time_ms - b.simulation_time_ms).at(-1);
+    if (base) frames.push({ ...base, simulation_time_ms: event.simulation_time_ms,
+      presentation_sequence: event.sequence, presentation_client_time_ms: event.client_time_ms });
+  }
+  return frames.sort((a, b) => a.simulation_time_ms - b.simulation_time_ms ||
+    Number(a.presentation_sequence ?? -1) - Number(b.presentation_sequence ?? -1));
 }
 export function ReplayTimeline({
   debrief,
@@ -60,7 +72,10 @@ export function ReplayTimeline({
       () => setIndex((i) => Math.min(max, i + 1)),
       Math.max(
         1,
-        frames[index + 1].simulation_time_ms - frame.simulation_time_ms,
+        frames[index + 1].simulation_time_ms === frame.simulation_time_ms &&
+          typeof frame.presentation_client_time_ms === "number" && typeof frames[index + 1].presentation_client_time_ms === "number"
+          ? Math.min(60000, Number(frames[index + 1].presentation_client_time_ms) - frame.presentation_client_time_ms)
+          : frames[index + 1].simulation_time_ms - frame.simulation_time_ms,
       ),
     );
     return () => window.clearTimeout(timer);

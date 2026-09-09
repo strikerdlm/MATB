@@ -15,6 +15,7 @@ import type { PostBlockScaleValues } from "@/components/mission/probes/PostBlock
 import { t } from "@/lib/simulation/i18n";
 import { interpolateSnapshot } from "@/lib/simulation/interpolation";
 import { getSimulationSession, getSimulationState, transitionSession } from "@/lib/simulation/api";
+import { flushPresentation } from "@/lib/simulation/presentation/queue";
 import { getParticipantJourney } from "@/lib/api";
 import { useSimulationStore } from "@/lib/simulation/store";
 import { reconcileProbeRefresh, sameProbe } from "@/lib/simulation/probe-refresh";
@@ -146,6 +147,10 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
     if (!canControl) return;
     setBusy(true); setMessage(null);
     try {
+      if (action === "finish" && body.disposition !== "abort") {
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+        await flushPresentation(currentSession.id);
+      }
       const updated = await transitionSession(
         currentSession.id,
         action,
@@ -219,7 +224,7 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
           <MissionJourneyRail session={currentSession} locale={locale} steps={journeySteps} />
           <FleetPanel snapshot={displaySnapshot} locale={locale} selectedAircraftId={selectedAircraftId} onSelect={selectAircraft} />
         </div>
-        <MissionPresentation session={currentSession} lease={canControl ? lease : null} readOnly={!canControl} frozen={concealOperationalState || currentSession.lifecycle === "PAUSED" && currentSession.protocol_phase !== "READY_FOR_BLOCK" || currentSession.lifecycle === "RUNNING" && connection !== "live"} snapshot={displaySnapshot ?? currentSnapshot} locale={locale} selectedAircraftId={selectedAircraftId} selectedContactId={selectedContactId} onSelectAircraft={(aircraftId) => { setWaypointMode(false); selectAircraft(aircraftId); }} onSelectContact={(contactId) => { setWaypointMode(false); selectContact(contactId); }} waypointAircraftId={waypointMode ? selectedAircraftId : null} onSetWaypoint={(aircraftId, waypoint) => { setWaypointMode(false); void issueCommand("SET_WAYPOINT", { aircraft_id: aircraftId, waypoint }); }} />
+        <MissionPresentation session={currentSession} lease={canControl ? lease : null} readOnly={!canControl} frozen={busy || concealOperationalState || currentSession.lifecycle === "PAUSED" && currentSession.protocol_phase !== "READY_FOR_BLOCK" || currentSession.lifecycle === "RUNNING" && connection !== "live"} snapshot={displaySnapshot ?? currentSnapshot} locale={locale} selectedAircraftId={selectedAircraftId} selectedContactId={selectedContactId} onSelectAircraft={(aircraftId) => { setWaypointMode(false); selectAircraft(aircraftId); }} onSelectContact={(contactId) => { setWaypointMode(false); selectContact(contactId); }} waypointAircraftId={waypointMode ? selectedAircraftId : null} onSetWaypoint={(aircraftId, waypoint) => { setWaypointMode(false); void issueCommand("SET_WAYPOINT", { aircraft_id: aircraftId, waypoint }); }} />
         <aside className="flex min-h-0 flex-col gap-3" aria-label={t(locale, "mission.detail_panel")} data-testid="mission-detail-panel" tabIndex={-1}>
           <MissionInstructionPanel session={currentSession} locale={locale} selectedAircraft={selectedAircraft} selectedContact={selectedContact} />
           <section className="mission-panel flex min-h-[15rem] flex-1 flex-col">
