@@ -10,5 +10,7 @@ export function InterpolatedMissionMap(props: MissionMapProps) {
   useEffect(() => animateSnapshot(props.previousSnapshot, props.snapshot,
     enabled && !window.matchMedia("(prefers-reduced-motion: reduce)").matches, setFrame),
     [props.previousSnapshot, props.snapshot, enabled]);
-  return <MissionMap {...props} snapshot={enabled && frame.block_id === props.snapshot.block_id ? frame : props.snapshot} />;
+  const snapshot = enabled && frame.block_id === props.snapshot.block_id ? frame : props.snapshot;
+  const trafficElapsedMs = props.traffic ? Math.max(0, snapshot.simulation_time_ms - props.traffic.simulation_time_ms) : props.trafficElapsedMs;
+  return <MissionMap {...props} snapshot={snapshot} trafficElapsedMs={trafficElapsedMs} />;
 }

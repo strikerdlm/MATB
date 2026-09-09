@@ -329,7 +329,7 @@ export async function createMissionScene(
     controls.enabled = !options.frozen && !options.replayPose;
     rebuild();
     geography.update(options.geographicLayers ?? []);
-    observed.update(options.traffic, options.trafficElapsedMs ?? 0, options.selectedTrafficId);
+    observed.update(options.traffic, observedElapsed(options.snapshot), options.selectedTrafficId);
     if (options.replayPose) { stopMotion(); motion.cancel("replay"); applyPose(options.replayPose); render(); return; }
     if (options.frozen) { stopMotion(); render(); return; }
     if (changed) {
@@ -472,12 +472,16 @@ export async function createMissionScene(
   renderer.domElement.addEventListener("webglcontextlost", lost);
   update(initial);
   submission.flush(); // Readiness requires one completed CPU submission.
+  function observedElapsed(snapshot: SceneOptions["snapshot"]) {
+    return options.traffic ? Math.max(0, snapshot.simulation_time_ms - options.traffic.simulation_time_ms) : options.trafficElapsedMs ?? 0;
+  }
   return {
     update,
     updateInterpolatedSnapshot: (snapshot: SceneOptions["snapshot"]) => {
       if (disposed || options.frozen || options.replayPose || snapshot.block_id !== options.snapshot.block_id || snapshot.state_version !== options.snapshot.state_version) return;
       options = { ...options, snapshot };
       operational.transforms(snapshot, hiddenAircraft());
+      observed.update(options.traffic, observedElapsed(snapshot), options.selectedTrafficId);
       if (motion.owner !== "transition") { follow(); render(); }
     },
     reset: () => {
