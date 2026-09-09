@@ -23,6 +23,7 @@ export function SidebarNav() {
     ["/", copy("Seguimiento", "Tracker")], ["/participants", copy("Participantes", "Participants")],
     ["/experiments", copy("Diseñador de experimentos", "Experiment designer")], ["/openmatb/settings", copy("Configuración OpenMATB", "OpenMATB settings")],
     ["/upload", copy("Cargar datos", "Upload data")], ["/visualization", copy("Visualización", "Visualization")], ["/analysis", copy("Análisis", "Analysis")],
+    ["/evidence", copy("Evidencia científica", "Scientific evidence")],
   ];
   return <nav aria-label={copy("Navegación de experimentos", "Experiment navigation")} className="p-4">
     <Link href="/start" className="block rounded border border-info/30 px-3 py-3 text-sm font-semibold text-info" aria-current={path === "/start" ? "page" : undefined}>{copy("Todos los experimentos", "All experiments")}</Link>
