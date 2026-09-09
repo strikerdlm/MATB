@@ -118,6 +118,29 @@ is checksummed. These reports must not be relabeled as clean release benchmarks.
 Final source verification is recorded separately in `verification.json` in the
 measurement directory.
 
+Final application source: `34d8910878967ed4b6879b848e6203204ded1e1c`.
+The subsequent report commit changes documentation/artifacts only.
+
+| Executed check | Windows | Linux |
+| --- | --- | --- |
+| Contracts / public-core boundary | 585 passed, 9 skipped | 585 passed, 9 skipped |
+| Backend | 281 passed, 1 skipped | 281 passed, 1 skipped |
+| Frontend unit suite | 152 passed | 152 passed |
+| Final production browser | 8 passed, synthetic observed-traffic fixture | 1 passed, evidence workflow |
+| Lint / TypeScript / production build | Passed | Passed |
+
+Windows additionally passed 184 engine/evidence/recovery tests with one skip.
+The final Linux revision passed 18 focused presentation/evidence UI tests. Broader
+Python/backend checks ran on the same application source at `5962054`; only two
+presentation files changed afterward. The frontend unit suite and final focused
+checks cover those updates; final build/browser checks use the revision above.
+Windows broad suites used the precommit working tree; Linux used a fresh Git
+checkout and npm installation in the disposable Debian environment. Detailed
+source contexts, JUnit results, compiler/browser logs and the caught intermediate
+TypeScript failure are retained in `verification.json` and
+`software-verification.zip`. The initial native-capture checks remain documented
+with the separate consolidation verification.
+
 Hosted Actions remains blocked by the account billing/spending restriction,
 independent of application assertions. No scientific release gate was weakened.
 Full synchronized Replay Studio, hardware/physical onset qualification, human
