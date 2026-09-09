@@ -473,7 +473,7 @@ export async function createMissionScene(
   update(initial);
   submission.flush(); // Readiness requires one completed CPU submission.
   function observedElapsed(snapshot: SceneOptions["snapshot"]) {
-    return options.traffic ? Math.max(0, snapshot.simulation_time_ms - options.traffic.simulation_time_ms) : options.trafficElapsedMs ?? 0;
+    return options.traffic ? Math.max(0, snapshot.simulation_time_ms - (options.traffic.simulation_time_ms ?? snapshot.simulation_time_ms)) : options.trafficElapsedMs ?? 0;
   }
   return {
     update,
