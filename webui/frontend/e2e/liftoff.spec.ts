@@ -53,6 +53,7 @@ test("Liftoff setup keeps lease private and completes the phase workflow", async
   const currentUrl = page.url();
   expect(currentUrl).not.toContain("secret");
   expect(await page.evaluate(() => Object.keys(sessionStorage).some((key) => key.startsWith("matb.liftoff.") && key.endsWith(".lease")))).toBe(true);
+  await expect(page.getByRole("button", { name: /Start baseline/i })).toBeVisible();
   expect((await new AxeBuilder({ page: page as never }).analyze()).violations).toEqual([]);
 
   page.on("dialog", (dialog) => void dialog.accept());

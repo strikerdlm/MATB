@@ -191,7 +191,8 @@ def build_public_debrief(
     metric_summary = block_metric_summary(effective, manifest)
     research = derive_research_metrics(effective).to_dict()
     metrics = {**metric_summary, **research}
-    frames = _checkpoint_frames(Path(run_dir))
+    from matb_integration.suas.recording.replay import ReplayVerifier
+    frames = ReplayVerifier().public_frames(Path(run_dir)) or _checkpoint_frames(Path(run_dir))
     for raw in live_frames:
         if not isinstance(raw, Mapping):
             continue
@@ -209,7 +210,8 @@ def build_public_debrief(
         })
     seen: set[tuple[object, object, object]] = set()
     unique_frames: list[dict[str, object]] = []
-    for frame in sorted(frames, key=lambda item: (str(item.get("block_id")), int(item.get("simulation_time_ms") or 0), int(item.get("state_version") or 0))):
+    order = ([manifest["selected_block_id"]] if manifest.get("selected_block_id") else ["PRACTICE", *manifest.get("block_order", [])])
+    for frame in sorted(frames, key=lambda item: (order.index(item.get("block_id")) if item.get("block_id") in order else len(order), int(item.get("simulation_time_ms") or 0), int(item.get("state_version") or 0))):
         key = (frame.get("block_id"), frame.get("simulation_time_ms"), frame.get("state_version"))
         if key in seen:
             continue
@@ -232,6 +234,9 @@ def build_public_debrief(
         "replay": replay_public,
         "metrics": metrics,
         "frames": unique_frames,
+        "presentation": manifest.get("presentation"),
+        "traffic_frames": [json.loads(line) for line in (Path(run_dir) / "traffic.jsonl").read_text().splitlines()] if (Path(run_dir) / "traffic.jsonl").exists() else [],
+        "presentation_events": [json.loads(line) for line in (Path(run_dir) / "presentation.jsonl").read_text().splitlines()] if (Path(run_dir) / "presentation.jsonl").exists() else [],
         "timeline": _timeline(effective),
         "privacy": {
             "correct_answers_excluded": True,

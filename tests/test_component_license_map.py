@@ -19,6 +19,8 @@ def test_component_license_map_is_deterministic_and_resolves_openmatb() -> None:
         "matb_integration/physiology/analysis.py",
         "matb_integration/physiology/broadcast.py",
         "openmatb/",
+        "webui/frontend/public/geography/",
+        "webui/frontend/public/scenes/",
     ]
 
     for component in components:
@@ -39,6 +41,13 @@ def test_component_license_map_is_deterministic_and_resolves_openmatb() -> None:
         key=lambda component: len(component["path_prefix"]),
     )
     assert polar["license_expression"] == "LicenseRef-Polar-SDK"
+
+    for prefix in ("webui/frontend/public/geography/", "webui/frontend/public/scenes/"):
+        data = max(
+            (component for component in components if prefix.startswith(component["path_prefix"])),
+            key=lambda component: len(component["path_prefix"]),
+        )
+        assert data["license_expression"] == "LicenseRef-Geographic-Data"
 
 
 def test_public_release_keeps_component_license_evidence() -> None:

@@ -62,6 +62,7 @@ from app.simulation_schemas import (
     FinishRequest,
     LifecycleRequest,
     PreparedSession,
+    PresentationEvent,
     RecoverRequest,
     RecoveryView,
     ScenarioSummary,
@@ -351,6 +352,7 @@ def _session_view_from_row(row: SessionMetadataRow, db: Session) -> SessionView:
     visit = db.get(Visit, visit_id) if visit_id is not None else None
     return SessionView(
         id=row.id,
+        presentation=manifest.get("presentation"),
         participant_id=participant_id,
         visit_id=visit_id,
         visit_ordinal=visit.visit_ordinal if visit is not None else None,
@@ -686,7 +688,7 @@ async def get_public_bundle(
             context={"codes": list(checksum_codes)},
         )
     allowed = (
-        "debrief.json", "metrics.json", "replay-verification.json", "partial-run.json", "checksums.sha256",
+        "debrief.json", "metrics.json", "replay-verification.json", "partial-run.json", "checksums.sha256", "presentation.jsonl", "traffic.jsonl",
     )
     manifest = {
         "bundle_version": "suas-public-bundle-v1",
@@ -808,6 +810,10 @@ async def simulation_stream(websocket: WebSocket, session_id: str) -> None:
                 {receive_task, queue_task, closed_task},
                 return_when=asyncio.FIRST_COMPLETED,
             )
+            # A disconnect and queued frame can arrive in the same loop turn.
+            # Do not send that frame after the transport has already closed.
+            if receive_task in done and receive_task.result().get("type") == "websocket.disconnect":
+                break
             if closed_task in done:
                 if websocket.client_state.value != "DISCONNECTED":
                     await websocket.close(code=subscription.closed_code or 4408)
@@ -851,3 +857,20 @@ async def simulation_stream(websocket: WebSocket, session_id: str) -> None:
 
 
 __all__ = ["get_simulation_manager", "router", "simulation_stream"]
+
+
+@router.get("/scenes")
+async def list_presentation_scenes():
+    from matb_integration.suas.presentation.packages import catalog
+    return catalog()
+
+
+@router.post("/sessions/{session_id}/presentation", status_code=204)
+async def record_presentation(
+    session_id: str,
+    event: PresentationEvent,
+    manager: SimulationManager = Depends(get_simulation_manager),
+    lease: str | None = Header(default=None, alias=_LEASE_HEADER),
+):
+    await _managed(manager.presentation_event(session_id, _lease_or_error(lease), event))
+    return Response(status_code=204)

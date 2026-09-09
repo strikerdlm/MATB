@@ -24,7 +24,7 @@ SUAS_PROFILE = ArtifactProfile(
         "debrief.json",
         "replay-verification.json",
     ),
-    additional_globs=("checkpoints/*.json.gz",),
+    additional_globs=("checkpoints/*.json.gz", "presentation.jsonl", "traffic.jsonl", "traffic-source.json"),
 )
 CHECKSUM_FILENAME = SUAS_PROFILE.checksum_name
 _SUAS_KINDS = {
@@ -35,6 +35,9 @@ _SUAS_KINDS = {
     "metrics.json": "metrics",
     "debrief.json": "debrief",
     "replay-verification.json": "replay_verification",
+    "presentation.jsonl": "presentation",
+    "traffic.jsonl": "traffic",
+    "traffic-source.json": "traffic_source",
 }
 
 

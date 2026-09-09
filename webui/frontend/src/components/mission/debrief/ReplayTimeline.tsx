@@ -1,44 +1,138 @@
 "use client";
-
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type { DebriefView, Locale, JsonValue } from "@/types/simulation";
 import { t } from "@/lib/simulation/i18n";
-
 export interface ReplayFrame {
+  block_id?: string;
   simulation_time_ms: number;
   state_version: number;
   snapshot?: Record<string, JsonValue>;
   [key: string]: JsonValue | undefined;
 }
-
-function framesFrom(debrief: DebriefView): ReplayFrame[] {
-  const raw = debrief.frames;
-  if (!Array.isArray(raw)) return [];
-  const frames: ReplayFrame[] = [];
-  for (const item of raw) {
-    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
-    const candidate = item as Record<string, JsonValue>;
-    if (typeof candidate.simulation_time_ms !== "number" || typeof candidate.state_version !== "number") continue;
-    frames.push(item as unknown as ReplayFrame);
-  }
-  return frames.sort((left, right) => left.simulation_time_ms - right.simulation_time_ms);
+export function framesFrom(debrief: DebriefView): ReplayFrame[] {
+  if (!Array.isArray(debrief.frames)) return [];
+  return debrief.frames.filter((raw): raw is Record<string, JsonValue> =>
+    Boolean(
+      raw &&
+        typeof raw === "object" &&
+        !Array.isArray(raw) &&
+        typeof raw.simulation_time_ms === "number" &&
+        typeof raw.state_version === "number",
+    ),
+  ) as ReplayFrame[];
 }
-
-interface ReplayTimelineProps { debrief: DebriefView; locale: Locale; onFrame?: (frame: ReplayFrame | null) => void; }
-export function ReplayTimeline({ debrief, locale, onFrame }: ReplayTimelineProps) {
-  const frames = useMemo(() => framesFrom(debrief), [debrief]);
-  const [index, setIndex] = useState(0);
-  const frame = frames[index] ?? null;
-  const select = (value: number) => { const next = Math.max(0, Math.min(frames.length - 1, value)); setIndex(next); onFrame?.(frames[next] ?? null); };
-  const elapsed = Math.max(0, Math.round((frame?.simulation_time_ms ?? 0) / 1000));
-  const max = Math.max(0, frames.length - 1);
-  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Home") { event.preventDefault(); select(0); }
-    if (event.key === "End") { event.preventDefault(); select(max); }
-    if (event.key === "ArrowRight") { event.preventDefault(); select(index + 1); }
-    if (event.key === "ArrowLeft") { event.preventDefault(); select(index - 1); }
+export function ReplayTimeline({
+  debrief,
+  locale,
+  onFrame,
+}: {
+  debrief: DebriefView;
+  locale: Locale;
+  onFrame?: (frame: ReplayFrame | null) => void;
+}) {
+  const all = useMemo(() => framesFrom(debrief), [debrief]);
+  const blocks = useMemo(
+    () => Array.from(new Set(all.map((frame) => frame.block_id ?? "LEGACY"))),
+    [all],
+  );
+  const [block, setBlock] = useState(blocks[0] ?? "LEGACY"),
+    [index, setIndex] = useState(0),
+    [playing, setPlaying] = useState(false);
+  const frames = useMemo(
+    () =>
+      all
+        .filter((frame) => (frame.block_id ?? "LEGACY") === block)
+        .sort((a, b) => a.simulation_time_ms - b.simulation_time_ms),
+    [all, block],
+  );
+  const max = Math.max(0, frames.length - 1),
+    frame = frames[index] ?? null;
+  useEffect(() => {
+    onFrame?.(frame);
+  }, [frame, onFrame]);
+  useEffect(() => {
+    if (!playing || !frame) return;
+    if (index >= max) {
+      setPlaying(false);
+      return;
+    }
+    const timer = window.setTimeout(
+      () => setIndex((i) => Math.min(max, i + 1)),
+      Math.max(
+        1,
+        frames[index + 1].simulation_time_ms - frame.simulation_time_ms,
+      ),
+    );
+    return () => window.clearTimeout(timer);
+  }, [playing, index, max, frame, frames]);
+  const select = (value: number) => {
+    setPlaying(false);
+    setIndex(Math.max(0, Math.min(max, value)));
   };
-  return <section aria-labelledby="replay-heading" className="mission-panel p-4"><div className="flex items-center justify-between gap-3"><div><div className="page-kicker">{t(locale, "debrief.replay")}</div><h2 id="replay-heading" className="font-display text-lg uppercase tracking-wide">{t(locale, "debrief.timeline")}</h2></div><span data-testid="replay-time" className="font-mono text-sm text-info">{`${Math.floor(elapsed / 60).toString().padStart(2, "0")}:${(elapsed % 60).toString().padStart(2, "0")}`}</span></div><div role="slider" tabIndex={frames.length ? 0 : -1} aria-label={t(locale, "debrief.replay_time")} aria-valuemin={0} aria-valuemax={max} aria-valuenow={frames.length ? index : 0} onKeyDown={onKeyDown} onClick={() => select(index)} className="relative mt-4 h-3 w-full cursor-pointer rounded-full bg-white/10 outline-none focus-visible:ring-2 focus-visible:ring-white"><span className="absolute inset-y-0 left-0 rounded-full bg-info" style={{ width: `${max ? (index / max) * 100 : 0}%` }} /></div><div className="mt-2 flex justify-between font-mono text-[10px] uppercase text-muted-foreground"><span>{t(locale, "common.start")}</span><span>{frame ? `${t(locale, "common.state")} ${frame.state_version}` : t(locale, "debrief.no_frames")}</span><span>{t(locale, "common.end")}</span></div></section>;
+  const seconds = Math.floor((frame?.simulation_time_ms ?? 0) / 1000);
+  return (
+    <section className="mission-panel p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2>{t(locale, "debrief.replay")}</h2>
+        <label>
+          {locale === "es-CO" ? "Bloque" : "Block"}{" "}
+          <select
+            className="bg-background"
+            value={block}
+            onChange={(e) => {
+              setPlaying(false);
+              setBlock(e.target.value);
+              setIndex(0);
+            }}
+          >
+            {blocks.map((id) => (
+              <option key={id}>{id}</option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          disabled={!frames.length}
+          onClick={() => {
+            if (index === max) setIndex(0);
+            setPlaying((v) => !v);
+          }}
+        >
+          {playing
+            ? locale === "es-CO"
+              ? "Pausar"
+              : "Pause"
+            : locale === "es-CO"
+              ? "Reproducir"
+              : "Play"}
+        </button>
+        <span data-testid="replay-time">{`${Math.floor(seconds / 60)
+          .toString()
+          .padStart(
+            2,
+            "0",
+          )}:${(seconds % 60).toString().padStart(2, "0")}`}</span>
+      </div>
+      <input
+        type="range"
+        className="mt-4 w-full"
+        aria-label={t(locale, "debrief.replay_time")}
+        min={0}
+        max={max}
+        value={index}
+        disabled={!frames.length}
+        onChange={(e) => select(Number(e.target.value))}
+        onKeyDown={(e) => {
+          if (e.key === "End") {
+            e.preventDefault();
+            select(max);
+          }
+          if (e.key === "Home") {
+            e.preventDefault();
+            select(0);
+          }
+        }}
+      />
+    </section>
+  );
 }
-
-export { framesFrom };

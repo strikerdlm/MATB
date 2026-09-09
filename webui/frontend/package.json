@@ -16,7 +16,9 @@
     "test:e2e": "node scripts/run-e2e.mjs playwright.config.ts",
     "test:e2e:appearance": "node scripts/run-e2e.mjs playwright.appearance.config.ts",
     "test:e2e:core": "node scripts/run-e2e.mjs playwright.core.config.ts",
-    "test:e2e:update": "playwright test --config=playwright.core.config.ts --update-snapshots"
+    "test:e2e:update": "playwright test --config=playwright.core.config.ts --update-snapshots",
+    "prebuild": "node scripts/copy-maplibre-worker.mjs",
+    "predev": "node scripts/copy-maplibre-worker.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.0.5",
@@ -33,11 +35,14 @@
     "echarts-for-react": "^3.0.6",
     "framer-motion": "^11.0.0",
     "lucide-react": "^0.330.0",
+    "maplibre-gl": "6.8.0",
     "next": "^16.3.3",
+    "proj4": "2.22.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "tailwind-merge": "^2.2.0",
     "tailwindcss-animate": "^1.0.7",
+    "three": "0.186.0",
     "zustand": "^4.5.0"
   },
   "devDependencies": {
@@ -49,6 +54,7 @@
     "@types/node": "^20.11.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
+    "@types/three": "0.185.4",
     "autoprefixer": "^10.4.17",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.3.3",

@@ -70,6 +70,15 @@ all 3 levels are ingested.
 
 ### Native offline sUAS research console
 
+The optional sUAS component also provides `/geography/catalog`, `/geography/traffic`,
+`/geography/preparations`, `/geography/recordings`, and verified scene assets.
+Preparation jobs support progress/cancellation; capture promotion requires a
+finished technical session and its controller lease. Provider credentials remain
+server-side. Research sessions reject live traffic and pin capture checksums.
+These routes are absent in `MATB_COMPONENTS=core`.
+See the [Colombia guide](../../docs/implementation/colombia-geography-traffic.md)
+for endpoints, configuration, source attribution and offline preparation.
+
 The native simulator is a Linux/headless-safe, non-kinetic research instrument.
 It uses one process-local controller lease and a local SQLite/artifact root; no
 Internet, real-world map, vehicle, weapon, or external telemetry service is

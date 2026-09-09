@@ -220,3 +220,23 @@ def test_effective_records_rejects_overlapping_recovery_ranges() -> None:
     ]
     with pytest.raises(ValueError, match="invalid_recovery_range"):
         effective_records(records)
+
+
+def test_public_frames_follow_manifest_order_and_keep_contacts_redacted(recorded_full_run):
+    frames = ReplayVerifier().public_frames(recorded_full_run)
+    assert [frame["block_id"] for frame in frames] == ["PRACTICE", "PRACTICE", "LOW", "LOW", "MEDIUM", "MEDIUM", "HIGH", "HIGH"]
+    for frame in frames:
+        assert frame["state_sha256"] == frame["snapshot"]["state_sha256"]
+        for contact in frame["snapshot"]["contacts"].values():
+            assert "truth" not in contact
+            if contact["evidence"] == "NONE":
+                assert "position" not in contact
+
+
+def test_public_frames_include_intermediate_ticks_and_refuse_tampering(recorded_low_run):
+    frames = ReplayVerifier().public_frames(recorded_low_run)
+    assert frames[0]["simulation_time_ms"] == 0
+    assert frames[-1]["simulation_time_ms"] == 10000
+    assert len(frames) > 3
+    rewrite_record(recorded_low_run / "events.jsonl", kind="command", applied_tick=7)
+    assert ReplayVerifier().public_frames(recorded_low_run) == []

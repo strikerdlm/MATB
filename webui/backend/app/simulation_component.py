@@ -50,7 +50,7 @@ class SimulationComponentProvider:
         license_expression="MIT",
     )
     model_modules = ("app.simulation_models",)
-    router_modules = ("app.routers.simulation",)
+    router_modules = ("app.routers.simulation", "app.routers.geography")
 
     async def startup(self, app: FastAPI) -> None:
         persistence = SQLModelSimulationPersistence(get_engine())
@@ -64,9 +64,13 @@ class SimulationComponentProvider:
         app.state.simulation_manager = manager
 
     async def shutdown(self, app: FastAPI) -> None:
+        from app.routers.geography import stop_jobs
         manager = getattr(app.state, "simulation_manager", None)
-        if manager is not None:
-            await manager.shutdown()
+        try:
+            if manager is not None:
+                await manager.shutdown()
+        finally:
+            await stop_jobs()
 
 
 provider = SimulationComponentProvider()

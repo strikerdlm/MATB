@@ -147,6 +147,17 @@ jobs:
           MATB_SOURCE_COMMIT: ${{ github.sha }}
           MATB_SOURCE_DIRTY: "false"
         run: npm run test:e2e:core
+      - name: Colombia geography and sUAS browser verification
+        working-directory: MATB relocation ñ/webui/frontend
+        env:
+          MATB_PYTHON: python
+          MATB_COMPONENTS: auto
+          MATB_SOURCE_COMMIT: ${{ github.sha }}
+          MATB_SOURCE_DIRTY: "false"
+          MATB_E2E_TRAFFIC_FIXTURE: "1"
+          MATB_E2E_REGION_CHECK: "1"
+          PW_TEST_MATCH: "**/{geography,geography-assets,presentation}.spec.ts"
+        run: npm run test:e2e
       - name: Verify POSIX launchers from unrelated directory
         if: runner.os == 'Linux'
         working-directory: ${{ runner.temp }}

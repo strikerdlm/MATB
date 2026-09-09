@@ -1,3 +1,4 @@
+import type { PresentationConfig } from "@/lib/simulation/presentation/contracts";
 /** Public, redacted transport contracts for the native sUAS simulator. */
 
 export type JsonPrimitive = string | number | boolean | null;
@@ -45,7 +46,7 @@ export type CommandKind =
   | "SET_CONTACT_PRIORITY"
   | "REPORT_CONTACT";
 export type ProtocolCommandKind = "SUBMIT_ISA" | "SUBMIT_SAGAT" | "SUBMIT_POST_BLOCK_SCALE";
-export type StreamKind =
+export type StreamKind = "traffic"
   | "snapshot"
   | "domain_event"
   | "alert"
@@ -74,6 +75,7 @@ export interface AircraftSnapshot {
   label: string;
   position: PointMM;
   heading_mdeg: number;
+  altitude_mm?: number;
   energy_units: number;
   predicted_home_reserve_units: number;
   mode: AircraftMode;
@@ -157,6 +159,7 @@ export interface WorldSnapshot {
 }
 
 export interface SessionView {
+  presentation?: PresentationConfig | null;
   id: string;
   participant_id: string | null;
   visit_id: number | null;
@@ -184,6 +187,7 @@ export interface SessionView {
 }
 
 export interface CreateSimulationSession {
+  presentation?: PresentationConfig;
   participant_id: string;
   visit_ordinal: number;
   scenario_id: string;
@@ -191,6 +195,7 @@ export interface CreateSimulationSession {
 }
 
 export interface CreateTechnicalSimulationSession {
+  presentation?: PresentationConfig;
   scenario_id: string;
   block_id: Profile;
   locale: Locale;

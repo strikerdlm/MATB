@@ -42,6 +42,7 @@ export interface SimulationStreamOptions {
 }
 
 const STREAM_KINDS: ReadonlySet<string> = new Set<StreamKind>([
+  "traffic",
   "snapshot",
   "domain_event",
   "alert",

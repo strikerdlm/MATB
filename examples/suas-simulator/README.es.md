@@ -2,8 +2,12 @@
 
 [English](README.md)
 
-Este simulador es determinista, no cinético y solo para investigación. No se
-conecta con aeronaves, mapas reales, telemetría, armas ni servicios externos.
+Este simulador es determinista, no cinético y solo para investigación. Este
+recorrido usa entradas sintéticas y funciona sin conexión tras la instalación.
+La presentación opcional de Colombia incorpora geografía real y tráfico
+observado de solo lectura; no controla aeronaves reales. Consulte la
+[guía de geografía y tráfico](../../docs/implementation/colombia-geography-traffic.md)
+para las seis escenas locales, el explorador nacional y las capturas para investigación.
 La API nativa valida identidades sUAS como `P` seguido de dígitos, por eso usa
 el `P01` sintético; el recorrido de consola de investigación usa `SYNTH-P01`.
 Consulte la [guía del backend](../../webui/backend/README.md) y la

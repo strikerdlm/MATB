@@ -21,3 +21,6 @@ statsmodels>=0.14.6,<0.15.0
 # distutils shim; 68.1.2 is the tested compatible shim for this project.
 setuptools==68.1.2
 pymc>=6
+
+# Local geographic projection for observed traffic
+pyproj==3.8.0

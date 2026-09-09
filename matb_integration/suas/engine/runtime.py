@@ -268,6 +268,7 @@ class SimulationEngine:
                 "label": self._scenario.aircraft[aircraft_id].label,
                 "position": _point(item.position),
                 "heading_mdeg": item.heading_mdeg,
+                "altitude_mm": self._scenario.aircraft[aircraft_id].altitude_mm,
                 "energy_units": item.energy_units,
                 "predicted_home_reserve_units": item.predicted_home_reserve_units,
                 "mode": item.mode.value,

@@ -1,0 +1,19 @@
+{
+  "block": "HIGH",
+  "aircraft": 8,
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "browser": "151.0.7922.34",
+  "calls": 87,
+  "triangles": 40428,
+  "memory": {
+    "geometries": 87,
+    "textures": 2
+  },
+  "renderCount": 73,
+  "device": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "dpr": 1,
+  "cpuRenderP95Ms": 7.100000023841858
+}

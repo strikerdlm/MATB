@@ -1,0 +1,9 @@
+# Optional dependencies for scripts/package_suas_scene.py (Python 3.12).
+# Keep separate from the MATB experiment runtime.
+numpy==2.5.3
+rasterio==1.5.1
+pyproj==3.8.0
+Pillow==12.3.0
+requests==2.34.2
+
+mapbox-vector-tile==2.2.0

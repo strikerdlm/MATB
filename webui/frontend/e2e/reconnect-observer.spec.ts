@@ -15,7 +15,7 @@ test("observer mode is read-only and controller disconnect pauses the session", 
     await expect(observer.getByRole("button", { name: /finish session/i })).toBeDisabled();
     await expect(observer.locator('[data-testid="map-root"]')).toBeVisible({ timeout: 20_000 });
 
-    await page.close();
+    await test.step("Disconnect the original controller", () => page.close(), { timeout: 15_000 });
     await expect.poll(async () => {
       const response = await request.get(`${BACKEND_ORIGIN}/simulation/sessions/${encodeURIComponent(mission!.sessionId)}`);
       const body = await response.json() as { lifecycle?: string };
@@ -26,11 +26,14 @@ test("observer mode is read-only and controller disconnect pauses the session", 
     // A lease is intentionally scoped to sessionStorage, so a fresh page
     // needs the saved controller credential explicitly (the same handoff a
     // recovery shell would perform).  It must never be copied into the URL.
-    replacement = await page.context().newPage();
+    replacement = await test.step("Open the replacement controller", () => page.context().newPage(), { timeout: 15_000 });
     await replacement.addInitScript(({ sessionId, lease }) => {
       sessionStorage.setItem(`matb.simulation.${sessionId}.lease`, lease);
     }, { sessionId: mission.sessionId, lease: mission.lease });
-    await replacement.goto(`/mission?session=${encodeURIComponent(mission.sessionId)}`);
+    await test.step("Load the replacement mission", () => replacement!.goto(
+      `/mission?session=${encodeURIComponent(mission!.sessionId)}`,
+      { waitUntil: "domcontentloaded", timeout: 15_000 },
+    ));
     await expect(replacement.locator("header")).toContainText(/live|paused/i);
     const resume = replacement.getByRole("button", { name: /resume/i });
     if (await resume.isVisible().catch(() => false)) {
@@ -43,8 +46,10 @@ test("observer mode is read-only and controller disconnect pauses the session", 
       await expect(replacement.getByRole("dialog")).toBeVisible();
     }
   } finally {
+    // Release the backend session before browser teardown, even after a page
+    // operation times out, so following tests can create their own mission.
+    if (mission) await abortMission(request, mission);
     await replacement?.close().catch(() => undefined);
     await observerContext.close().catch(() => undefined);
-    if (mission) await abortMission(request, mission);
   }
 });

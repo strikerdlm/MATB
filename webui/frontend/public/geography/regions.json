@@ -1,0 +1,44 @@
+[
+  {
+    "id": "villavicencio",
+    "region": "Meta",
+    "title": "Villavicencio",
+    "lat": 4.15,
+    "lon": -73.65
+  },
+  {
+    "id": "popayan",
+    "region": "Cauca",
+    "title": "Popayán",
+    "lat": 2.4448,
+    "lon": -76.6147
+  },
+  {
+    "id": "cucuta",
+    "region": "Norte de Santander",
+    "title": "Cúcuta",
+    "lat": 7.8939,
+    "lon": -72.5078
+  },
+  {
+    "id": "rionegro",
+    "region": "Antioquia",
+    "title": "Rionegro",
+    "lat": 6.1533,
+    "lon": -75.3742
+  },
+  {
+    "id": "minca",
+    "region": "Sierra Nevada de Santa Marta",
+    "title": "Minca",
+    "lat": 11.143,
+    "lon": -74.116
+  },
+  {
+    "id": "cocuy-guican",
+    "region": "Sierra Nevada del Cocuy",
+    "title": "El Cocuy–Güicán",
+    "lat": 6.422,
+    "lon": -72.428
+  }
+]

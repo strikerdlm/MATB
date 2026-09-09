@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -33,6 +34,7 @@ PAIR_DIRS = ("openmatb-research", "research-console", "sms-platform", "legacy-mo
 MARKDOWN_EXCLUDED_DIRS = frozenset({
     ".git", ".worktrees", ".superpowers", "node_modules", "dist", "build", ".next",
     "coverage", ".pytest_cache", "__pycache__", ".venv", "venv", "site-packages", "vendor",
+    ".tmp", ".venv-geography", ".matb-managed-e2e", "test-results", "playwright-report",
 })
 LINK_RE = re.compile(r"(?<!!)\[[^]]*]\(([^)]+)\)")
 ANCHOR_RE = re.compile(r'<a\s+id=["\']([^"\']+)["\']\s*></a>', re.IGNORECASE)
@@ -114,12 +116,16 @@ def find_broken_links(root: Path, markdown_files: list[Path]) -> list[str]:
     return errors
 
 
+def _repository_files(root: Path, excluded: frozenset[str] = MARKDOWN_EXCLUDED_DIRS):
+    """Prune generated trees before traversal, including local scene tooling."""
+    for directory, children, files in os.walk(root):
+        children[:] = [child for child in children if child not in excluded]
+        for name in files:
+            yield Path(directory) / name
+
+
 def repository_markdown_files(root: Path) -> list[Path]:
-    root = root.resolve()
-    return sorted(
-        path for path in root.rglob("*.md")
-        if not (set(path.relative_to(root).parts) & MARKDOWN_EXCLUDED_DIRS)
-    )
+    return sorted(path for path in _repository_files(root.resolve()) if path.suffix == ".md")
 
 
 def _current_user_files(root: Path, *, markdown_only: bool = False) -> list[Path]:
@@ -188,7 +194,7 @@ def validate_environment_variables(root: Path) -> list[str]:
 
     supported: set[str] = set()
     ignored_parts = MARKDOWN_EXCLUDED_DIRS | frozenset({"docs", "tests"})
-    for path in root.rglob("*"):
+    for path in _repository_files(root, ignored_parts):
         if not path.is_file() or path.suffix.lower() == ".md":
             continue
         if set(path.relative_to(root).parts) & ignored_parts:

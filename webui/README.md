@@ -14,7 +14,13 @@ The design system mirrors the HRV "Mission Control" console for visual consisten
 The same `webui` tree also serves the native synthetic sUAS command-and-control
 simulator. It is Linux/headless-first and can run without X11, Docker, a GPU,
 or a Windows host. The simulator is research-only and non-kinetic: it has no
-real aircraft, weapon, map, or telemetry integration.
+real-aircraft control or weapon integration. The optional `/colombia` explorer
+adds national geographic layers and read-only observed traffic. Six local
+scenes provide Three.js mission views; prepared assets and captured traffic
+work offline. Live observations are available in exploration and technical
+sessions, while research uses checksum-pinned recordings. See the
+[geography guide](../docs/implementation/colombia-geography-traffic.md) and
+[verification report](../docs/implementation/colombia-geography-verification.md).
 
 From the repository root, the supported offline install and launcher are:
 

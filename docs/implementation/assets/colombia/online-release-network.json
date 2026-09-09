@@ -1,0 +1,402 @@
+[
+  {
+    "url": "https://tiles.openfreemap.org/styles/liberty",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/planet",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/sprites/ofm_f384/ofm.json",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/sprites/ofm_f384/ofm.png",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/natural_earth/ne2sr/5/10/16.png",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/natural_earth/ne2sr/5/11/15.png",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/natural_earth/ne2sr/5/7/14.png",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/natural_earth/ne2sr/5/7/16.png",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/natural_earth/ne2sr/5/8/14.png",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/natural_earth/ne2sr/5/9/15.png",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/natural_earth/ne2sr/5/7/15.png",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/natural_earth/ne2sr/5/11/16.png",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/natural_earth/ne2sr/5/11/14.png",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/planet/20260906_080001_pt/4/4/7.pbf",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/planet/20260906_080001_pt/4/5/7.pbf",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/natural_earth/ne2sr/5/9/16.png",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/natural_earth/ne2sr/5/8/15.png",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/natural_earth/ne2sr/5/10/15.png",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/natural_earth/ne2sr/5/8/16.png",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/natural_earth/ne2sr/5/9/14.png",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/planet/20260906_080001_pt/4/5/8.pbf",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/natural_earth/ne2sr/5/10/14.png",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/planet/20260906_080001_pt/4/4/8.pbf",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/planet/20260906_080001_pt/4/3/7.pbf",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/planet/20260906_080001_pt/4/3/8.pbf",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/fonts/Noto%20Sans%20Regular/0-255.pbf",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/fonts/Noto%20Sans%20Bold/0-255.pbf",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/fonts/Noto%20Sans%20Italic/0-255.pbf",
+    "status": 200
+  },
+  {
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/2026-09-07/GoogleMapsCompatible_Level9/5/16/7.jpg",
+    "status": 200
+  },
+  {
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/2026-09-07/GoogleMapsCompatible_Level9/5/15/10.jpg",
+    "status": 200
+  },
+  {
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/2026-09-07/GoogleMapsCompatible_Level9/5/15/8.jpg",
+    "status": 200
+  },
+  {
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/2026-09-07/GoogleMapsCompatible_Level9/5/16/10.jpg",
+    "status": 200
+  },
+  {
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/2026-09-07/GoogleMapsCompatible_Level9/5/15/7.jpg",
+    "status": 200
+  },
+  {
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/2026-09-07/GoogleMapsCompatible_Level9/5/16/8.jpg",
+    "status": 200
+  },
+  {
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/2026-09-07/GoogleMapsCompatible_Level9/5/14/8.jpg",
+    "status": 200
+  },
+  {
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/2026-09-07/GoogleMapsCompatible_Level9/5/14/7.jpg",
+    "status": 200
+  },
+  {
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/2026-09-07/GoogleMapsCompatible_Level9/5/16/9.jpg",
+    "status": 200
+  },
+  {
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/2026-09-07/GoogleMapsCompatible_Level9/5/15/11.jpg",
+    "status": 200
+  },
+  {
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/2026-09-07/GoogleMapsCompatible_Level9/5/14/10.jpg",
+    "status": 200
+  },
+  {
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/2026-09-07/GoogleMapsCompatible_Level9/5/15/9.jpg",
+    "status": 200
+  },
+  {
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/2026-09-07/GoogleMapsCompatible_Level9/5/16/11.jpg",
+    "status": 200
+  },
+  {
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/2026-09-07/GoogleMapsCompatible_Level9/5/14/11.jpg",
+    "status": 200
+  },
+  {
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/2026-09-07/GoogleMapsCompatible_Level9/5/14/9.jpg",
+    "status": 200
+  },
+  {
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/2026-09-07/GoogleMapsCompatible_Level9/5/14/9.jpg",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/5/10/16.png",
+    "status": 200
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/5/7/15.png",
+    "status": 200
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/5/8/14.png",
+    "status": 200
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/5/11/15.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/5/11/16.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/5/11/14.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/5/9/15.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/5/9/16.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/5/8/15.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/5/10/15.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/5/9/14.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/5/8/16.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/5/10/16.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/5/8/14.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/5/10/14.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/5/7/15.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/5/7/16.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/5/7/14.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/9/148/247.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/9/149/247.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/9/148/246.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/9/149/246.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/9/148/248.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/9/147/247.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/9/149/248.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/9/147/246.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/10/297/494.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/10/298/494.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/10/297/493.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/10/297/495.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/10/296/494.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/10/298/493.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/10/298/495.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/10/296/493.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/11/595/988.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/11/595/989.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/11/594/988.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/11/594/989.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/11/596/988.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/11/596/989.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/11/595/987.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/11/594/987.png",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://tiles.openfreemap.org/planet/20260906_080001_pt/10/297/494.pbf",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://tiles.openfreemap.org/planet/20260906_080001_pt/10/298/494.pbf",
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "url": "https://tiles.openfreemap.org/planet/20260906_080001_pt/11/595/988.pbf",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/planet/20260906_080001_pt/11/594/988.pbf",
+    "status": 200
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/12/1190/1978.png",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/planet/20260906_080001_pt/11/596/988.pbf",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/planet/20260906_080001_pt/11/596/989.pbf",
+    "status": 200
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/12/1190/1977.png",
+    "status": 200
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/12/1189/1978.png",
+    "status": 200
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/12/1189/1977.png",
+    "status": 200
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/12/1191/1977.png",
+    "status": 200
+  },
+  {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/12/1191/1978.png",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/planet/20260906_080001_pt/11/595/989.pbf",
+    "status": 200
+  },
+  {
+    "url": "https://tiles.openfreemap.org/planet/20260906_080001_pt/11/594/989.pbf",
+    "status": 200
+  }
+]

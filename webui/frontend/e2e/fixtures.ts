@@ -36,19 +36,8 @@ function participantFor(testInfo: TestInfo, offset: number): string {
   return `P${String(number).padStart(2, "0")}`;
 }
 
-/** Prepare and start one synthetic mission through the rendered setup UI. */
-export async function openRunningMission(
-  page: Page,
-  request: APIRequestContext,
-  testInfo: TestInfo,
-  scenario = "e2e_area_search",
-  participantOffset = 0,
-): Promise<OpenMission> {
-  const participant = participantFor(testInfo, participantOffset);
-  const participantResponse = await request.post(`${BACKEND_ORIGIN}/participants`, {
-    data: { id: participant, enrollment_date: "2026-08-01" },
-  });
-  expect(participantResponse.status()).toBe(201);
+/** Save explicit synthetic prerequisite evidence for mission browser acceptance. */
+export async function seedStudyPvt(request: APIRequestContext, participant: string): Promise<void> {
   const pvt = await request.post(`${BACKEND_ORIGIN}/pvt`, { data: {
     participant_id: participant, visit_ordinal: 1, kss_score: 3,
     administered_at: "2026-09-04T12:00:00Z", duration_ms: 600000,
@@ -58,6 +47,30 @@ export async function openRunningMission(
   } });
   expect(pvt.status()).toBe(201);
   expect((await pvt.json()).protocol_valid).toBe(true);
+}
+
+/** Prepare and start one synthetic mission through the rendered setup UI. */
+export async function openRunningMission(
+  page: Page,
+  request: APIRequestContext,
+  testInfo: TestInfo,
+  scenario = "e2e_area_search",
+  participantOffset = 0,
+): Promise<OpenMission> {
+  let participant = participantFor(testInfo, participantOffset);
+  let participantResponse = await request.post(`${BACKEND_ORIGIN}/participants`, {
+    data: { id: participant, enrollment_date: "2026-08-01" },
+  });
+  // Different files may share a worker and an offset in a full-suite run.
+  // Reserve the next free Latin-square-compatible code on a collision.
+  for (let attempt = 0; participantResponse.status() === 409 && attempt < 100; attempt += 1) {
+    participant = `P${Number(participant.slice(1)) + 6}`;
+    participantResponse = await request.post(`${BACKEND_ORIGIN}/participants`, {
+      data: { id: participant, enrollment_date: "2026-08-01" },
+    });
+  }
+  expect(participantResponse.status()).toBe(201);
+  await seedStudyPvt(request, participant);
 
   let sessionId: string | null = null;
   let lease: string | null = null;
@@ -113,6 +126,7 @@ async function submitSagat(page: Page): Promise<void> {
   // collected.  These assertions guard against accidentally scoring from
   // the live map or fleet panel.
   await expect(page.locator('[data-testid="map-root"]')).toHaveCount(0);
+  await expect(page.getByTestId("mission-three-view")).toHaveCount(0);
   await expect(page.getByRole("listitem")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: /alerts/i })).toHaveCount(0);
   const answer = dialog.locator('input[name="sagat-answer"]').first();

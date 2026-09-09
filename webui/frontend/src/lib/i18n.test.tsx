@@ -7,7 +7,13 @@ import { AppLocaleProvider, useAppLocale } from "@/lib/i18n";
 
 function Harness() {
   const { locale, setLocale, tr } = useAppLocale();
-  return <><span>{locale}</span><span>{tr("nav.participants")}</span><button onClick={() => setLocale("en")}>English</button></>;
+  return (
+    <>
+      <span>{locale}</span>
+      <span>{tr("nav.participants")}</span>
+      <button onClick={() => setLocale("en")}>English</button>
+    </>
+  );
 }
 
 describe("AppLocaleProvider", () => {
@@ -15,11 +21,15 @@ describe("AppLocaleProvider", () => {
 
   it("defaults to Latin American Spanish and persists an English selection", async () => {
     const user = userEvent.setup();
-    render(<AppLocaleProvider><Harness /></AppLocaleProvider>);
+    render(
+      <AppLocaleProvider>
+        <Harness />
+      </AppLocaleProvider>,
+    );
     expect(screen.getByText("es-419")).toBeInTheDocument();
     expect(screen.getByText("Participantes")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "English" }));
-    expect(screen.getByText("en")).toBeInTheDocument();
+    expect(await screen.findByText("en")).toBeInTheDocument();
     expect(screen.getByText("Participants")).toBeInTheDocument();
     expect(localStorage.getItem("matb-fac.locale")).toBe("en");
   });
