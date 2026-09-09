@@ -934,6 +934,14 @@ class OpenMatbManager:
                 session_path = Path(row.artifact_root) / "sessions" / block
                 session_path.mkdir(parents=True, exist_ok=True)
                 kwargs: dict[str, Any] = {"cwd": str(self.openmatb_root), "stdin": asyncio.subprocess.PIPE, "stdout": asyncio.subprocess.PIPE, "stderr": asyncio.subprocess.PIPE}
+                visit = db.get(Visit, row.visit_id) if row.visit_id is not None else None
+                kwargs["env"] = {**os.environ, "MATB_EVIDENCE_IDENTITY": json.dumps({
+                    "parent_session_id": row.id,
+                    "participant_id": row.participant_id,
+                    "visit_ordinal": visit.visit_ordinal if visit is not None else None,
+                    "condition": block,
+                    "execution_purpose": "practice" if block == "PRACTICE" else row.execution_purpose,
+                })}
                 if os.name == "nt":
                     kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
                 else:

@@ -1,0 +1,131 @@
+{
+  "additionalProperties": false,
+  "description": "Lossless native row projection plus directly recorded task context.\n\nValues stay in native units. Decoded opportunity objects are validated and\nidentified separately; they are not extracted from a compatibility CSV.",
+  "properties": {
+    "payload_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Payload Version",
+      "type": "string"
+    },
+    "block_instance_id": {
+      "title": "Block Instance Id",
+      "type": "string"
+    },
+    "record_type": {
+      "title": "Record Type",
+      "type": "string"
+    },
+    "module": {
+      "title": "Module",
+      "type": "string"
+    },
+    "address": {
+      "title": "Address",
+      "type": "string"
+    },
+    "value": {
+      "title": "Value"
+    },
+    "native_opportunity_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Native Opportunity Id"
+    },
+    "opportunity": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Opportunity"
+    },
+    "automation_active": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Automation Active"
+    },
+    "sample_interval_ms": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sample Interval Ms"
+    },
+    "runtime_event_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Runtime Event Id"
+    },
+    "completion": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Completion"
+    },
+    "compatibility_row": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Compatibility Row"
+    }
+  },
+  "required": [
+    "block_instance_id",
+    "record_type",
+    "module",
+    "address",
+    "value"
+  ],
+  "title": "RuntimePayloadV1",
+  "type": "object"
+}

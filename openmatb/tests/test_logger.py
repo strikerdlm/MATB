@@ -37,6 +37,55 @@ def _make_logger(**overrides):
     return lg
 
 
+def test_native_logger_emits_paired_scientific_capture_without_changing_csv_slots(tmp_path):
+    from matb_integration.contracts import ScientificEventV3, TimingObservationV1
+    path = tmp_path / "native.csv"
+    path.write_text("", encoding="utf-8")
+    lg = _make_logger(path=path, events_path=tmp_path / "native.events.jsonl", events_file=io.StringIO(),
+                      _scientific_session_uuid=UUID("12345678-1234-5678-1234-567812345678"))
+    lg.configure_scientific_context(scenario_sha256="a" * 64, profile_id="test-profile",
+        source_commit="b" * 40, source_dirty=False, component_version="test",
+        scenario_manifest_evidence={"status": "verified", "scenario_manifest_sha256": "c" * 64})
+    lg.configure_evidence_tasks(["track"])
+    lg.scenario_time = 1.123456789
+    lg.log_performance("track", "center_deviation", 1.234567891, automation_active=False, sample_interval_ms=15)
+    lg.finalize_evidence("completed")
+    manifest = json.loads(path.with_suffix(".capture.manifest.json").read_text())
+    assert manifest["completion"] == "completed"
+    assert manifest["tasks"] == ["track"]
+    records = [ScientificEventV3.from_record(json.loads(line)) for line in path.with_suffix(".scientific.events.jsonl").read_text().splitlines()]
+    sample = next(event for event in records if event.event_type == "track.sample")
+    assert sample.scenario_time_ns == 1_123_456_789
+    assert sample.payload["value"] == 1.234567891
+    assert sample.payload["automation_active"] is False
+    legacy_sample = lg.writer.writerow.call_args_list[-1].args[0]
+    assert legacy_sample["scenario_time"] == 1.123457
+    assert legacy_sample["value"] == 1.234568
+    observations = [TimingObservationV1.from_record(json.loads(line)) for line in path.with_suffix(".timing.observations.jsonl").read_text().splitlines()]
+    assert {o.event_id for o in observations} == {e.event_id for e in records}
+    assert all(o.evidence_source == "software" and o.rig_id is None for o in observations)
+
+
+def test_scientific_timing_sink_failure_stops_native_recording(tmp_path):
+    path = tmp_path / "native.csv"
+    path.write_text("", encoding="utf-8")
+    lg = _make_logger(path=path, events_path=tmp_path / "native.events.jsonl", events_file=io.StringIO(),
+                      _scientific_session_uuid=UUID("12345678-1234-5678-1234-567812345678"))
+    lg.configure_scientific_context(scenario_sha256="a" * 64, profile_id="test-profile",
+        source_commit="b" * 40, source_dirty=False, component_version="test",
+        scenario_manifest_evidence={"status": "verified", "scenario_manifest_sha256": "c" * 64})
+    handle = lg._evidence_writer.handles["timing"]
+    handle.close()
+    with pytest.raises(AuthoritativeLogFailure):
+        lg.log_performance("track", "center_deviation", 5)
+    with pytest.raises(AuthoritativeLogFailure):
+        lg.log_performance("track", "center_deviation", 6)
+    manifest = json.loads(path.with_suffix(".capture.manifest.json").read_text())
+    assert manifest["completion"] == "failed"
+    assert manifest["failure_reason"]
+    lg.finalize_evidence()
+
+
 # ── round_row ────────────────────────────────────
 
 

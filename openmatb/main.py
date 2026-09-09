@@ -39,6 +39,13 @@ REPOSITORY_ROOT = OPENMATB_ROOT.parent
 # root explicitly on Windows and Linux instead of relying on the caller's cwd.
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
+from matb_integration.scenario_builder import detect_generator_source_provenance
+_runtime_commit, _runtime_dirty = detect_generator_source_provenance(REPOSITORY_ROOT)
+os.environ["MATB_SOURCE_COMMIT"] = _runtime_commit
+if _runtime_dirty is None:
+    os.environ.pop("MATB_SOURCE_DIRTY", None)
+else:
+    os.environ["MATB_SOURCE_DIRTY"] = "true" if _runtime_dirty else "false"
 os.chdir(OPENMATB_ROOT)
 if ARGS.session_dir is not None:
     os.environ["MATB_OPENMATB_SESSION_DIR"] = str(ARGS.session_dir.resolve())

@@ -1,0 +1,203 @@
+{
+  "$defs": {
+    "ArtifactV1": {
+      "additionalProperties": false,
+      "properties": {
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        },
+        "records": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Records"
+        }
+      },
+      "required": [
+        "sha256",
+        "size_bytes"
+      ],
+      "title": "ArtifactV1",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "capture_id": {
+      "title": "Capture Id",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "block_instance_id": {
+      "title": "Block Instance Id",
+      "type": "string"
+    },
+    "parent_session_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Parent Session Id"
+    },
+    "participant_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Participant Id"
+    },
+    "visit_ordinal": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Visit Ordinal"
+    },
+    "condition": {
+      "default": "UNSPECIFIED",
+      "title": "Condition",
+      "type": "string"
+    },
+    "execution_purpose": {
+      "default": "exploration",
+      "enum": [
+        "study",
+        "practice",
+        "exploration"
+      ],
+      "title": "Execution Purpose",
+      "type": "string"
+    },
+    "scenario_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Scenario Sha256",
+      "type": "string"
+    },
+    "profile_id": {
+      "title": "Profile Id",
+      "type": "string"
+    },
+    "component_version": {
+      "title": "Component Version",
+      "type": "string"
+    },
+    "source_commit": {
+      "title": "Source Commit",
+      "type": "string"
+    },
+    "source_dirty": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Source Dirty"
+    },
+    "scenario_manifest_status": {
+      "title": "Scenario Manifest Status",
+      "type": "string"
+    },
+    "tasks": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Tasks",
+      "type": "array"
+    },
+    "completion": {
+      "enum": [
+        "recording",
+        "completed",
+        "interrupted",
+        "failed"
+      ],
+      "title": "Completion",
+      "type": "string"
+    },
+    "failure_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Failure Reason"
+    },
+    "artifacts": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ArtifactV1"
+      },
+      "title": "Artifacts",
+      "type": "object"
+    },
+    "clocks": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Clocks",
+      "type": "object"
+    }
+  },
+  "required": [
+    "capture_id",
+    "session_id",
+    "block_instance_id",
+    "scenario_sha256",
+    "profile_id",
+    "component_version",
+    "source_commit",
+    "source_dirty",
+    "scenario_manifest_status",
+    "tasks",
+    "completion",
+    "artifacts",
+    "clocks"
+  ],
+  "title": "CaptureManifestV1",
+  "type": "object"
+}
