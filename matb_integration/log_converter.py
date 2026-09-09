@@ -1319,6 +1319,28 @@ def _comm_metrics(
     }
 
 
+def calculate_task_metrics(
+    rows: list[dict[str, str]], *, duration: float | None = None,
+    alerttimeout_sec: float = SYSMON_ALERTTIMEOUT_SEC,
+    sysmon_n_indicators: int = SYSMON_N_INDICATORS,
+    expected_sysmon_target_opportunities: int | None = None,
+    expected_sysmon_nontarget_opportunities: int | None = None,
+    expected_comm_opportunities: int | None = None,
+) -> dict[str, Any]:
+    """Shared native-unit calculations, independent of CSV/file ingestion.
+
+    Callers own evidence reconciliation and eligibility; these calculations do
+    not establish source authority or physical timing qualification.
+    """
+    return {
+        "sysmon": _sysmon_metrics(rows, alerttimeout_sec, sysmon_n_indicators, duration,
+                                  expected_sysmon_target_opportunities, expected_sysmon_nontarget_opportunities),
+        "track": _track_metrics(rows), "resman": _resman_metrics(rows),
+        "isa": _isa_metrics(rows), "nasatlx": _nasatlx_metrics(rows),
+        "bedford": _bedford_metric(rows), "comm": _comm_metrics(rows, expected_comm_opportunities),
+    }
+
+
 def convert_session(
     csv_path: Path,
     participant_id: str = "unknown",
@@ -1387,20 +1409,12 @@ def convert_session(
         "n_rows": len(rows),
         "scenario_time_min_s": t_min,
         "scenario_time_max_s": t_max,
-        "sysmon": _sysmon_metrics(
-            rows,
-            alerttimeout_sec,
-            sysmon_n_indicators,
-            duration,
-            expected_sysmon_target_opportunities,
-            expected_sysmon_nontarget_opportunities,
+        **calculate_task_metrics(
+            rows, duration=duration, alerttimeout_sec=alerttimeout_sec, sysmon_n_indicators=sysmon_n_indicators,
+            expected_sysmon_target_opportunities=expected_sysmon_target_opportunities,
+            expected_sysmon_nontarget_opportunities=expected_sysmon_nontarget_opportunities,
+            expected_comm_opportunities=expected_comm_opportunities,
         ),
-        "track": _track_metrics(rows),
-        "resman": _resman_metrics(rows),
-        "isa": _isa_metrics(rows),
-        "nasatlx": _nasatlx_metrics(rows),
-        "bedford": _bedford_metric(rows),
-        "comm": _comm_metrics(rows, expected_comm_opportunities),
     }
 
     # Bind a plan only by explicit path or exact session identity. A broad glob and
