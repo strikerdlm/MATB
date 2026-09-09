@@ -124,3 +124,6 @@ the clean-machine Linux release gate, GPU/display timing qualification, human
 calibration, or physiological synchronization. GitHub Actions had a confirmed
 account billing/spending restriction before this work; changing workflow code
 cannot remove that restriction. Report remote CI separately from local results.
+
+See the [dated local verification report](../reports/classic-evidence-verification-2026-09-09.md)
+for observed test results, the browser evidence and remaining release gates.
