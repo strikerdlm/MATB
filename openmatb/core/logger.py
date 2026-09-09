@@ -456,10 +456,53 @@ class Logger:
             "scenario_compiler_id": identity.get("scenario_compiler_id"),
             "scenario_compiler_version": identity.get("scenario_compiler_version"),
         }
+        if not REPLAY_MODE and getattr(self, "path", None) is not None:
+            from matb_integration.evidence.writer import EvidenceWriter
+            if getattr(self, "_evidence_writer", None) is not None:
+                raise ValueError("scientific context is already bound")
+            self._evidence_writer = EvidenceWriter(
+                self.path, self.scientific_session_id, self._scientific_context,
+                json.loads(os.environ.get("MATB_EVIDENCE_IDENTITY", "{}")),
+            )
+            self._evidence_writer.lifecycle("started", self.scenario_time, perf_counter_ns())
         # Bind the legacy CSV session to the exact runtime scenario. This row is
         # required before a separately uploaded manifest can confer confirmatory
         # eligibility; filenames alone are not cryptographic provenance.
         self.log_manual_entry(scenario_sha256, key="scenario_sha256")
+
+    def configure_evidence_tasks(self, tasks: list[str]) -> None:
+        writer = getattr(self, "_evidence_writer", None)
+        if writer is not None:
+            writer.set_tasks(tasks)
+
+    def record_task_lifecycle(self, module: str, phase: str) -> None:
+        writer = getattr(self, "_evidence_writer", None)
+        if writer is None:
+            return
+        try:
+            writer.record({"type": "task_lifecycle", "module": module, "address": "self",
+                           "value": phase, "scenario_time": self.scenario_time},
+                          {"recorded_monotonic_ns": perf_counter_ns()})
+        except Exception as exc:
+            self._authoritative_sink_failure = {"status": "failed_fail_stop", "error_type": type(exc).__name__}
+            raise AuthoritativeLogFailure("scientific task lifecycle write failed") from exc
+
+    def finalize_evidence(self, completion: str = "interrupted") -> None:
+        writer = getattr(self, "_evidence_writer", None)
+        if writer is None or writer.sealed:
+            return
+        if not writer.failed:
+            writer.lifecycle("completed" if completion == "completed" else "interrupted",
+                             self.scenario_time, perf_counter_ns(), completion)
+        if self.file is not None and not self.file.closed:
+            self.file.flush()
+        if getattr(self, "events_file", None) is not None and not self.events_file.closed:
+            self.events_file.flush()
+        artifacts = {"legacy_csv": self.path, "runtime_envelope": self.events_path}
+        archive = getattr(self, "scenario_manifest_archive_path", None)
+        if archive is not None:
+            artifacts["scenario_manifest"] = archive
+        writer.seal(completion="completed" if completion == "completed" else "interrupted", artifacts=artifacts)
 
     def archive_scenario_manifest(self, bound: BoundScenarioManifest) -> None:
         """Persist the exact manifest snapshot and its verification evidence."""
@@ -481,6 +524,12 @@ class Logger:
                 Path(archive_path).write_bytes(bound.content)
                 if self._file_integrity(Path(archive_path))["sha256"] != observed:
                     raise OSError("archived scenario manifest failed post-write verification")
+            writer = getattr(self, "_evidence_writer", None)
+            if writer is not None:
+                manifest = json.loads(bound.content)
+                if writer.manifest.condition == "UNSPECIFIED":
+                    writer.manifest.condition = str((manifest.get("parameters") or {}).get(
+                        "suite_profile_name", manifest.get("workload_level", "UNSPECIFIED")))
         self.log_manual_entry(
             json.dumps(evidence, sort_keys=True, separators=(",", ":"), allow_nan=False),
             key="scenario_manifest_evidence",
@@ -530,9 +579,10 @@ class Logger:
         slot: list[Any] = [perf_counter(), self.scenario_time, "parameter", plugin, address, value]
         self.write_single_slot(slot)
 
-    def log_performance(self, module: str, metric: str, value: Any) -> None:
+    def log_performance(self, module: str, metric: str, value: Any, *,
+                        automation_active: bool | None = None, sample_interval_ms: int | float | None = None) -> None:
         slot: list[Any] = [perf_counter(), self.scenario_time, "performance", module, metric, value]
-        self.write_single_slot(slot)
+        self.write_single_slot(slot, metadata={"automation_active": automation_active, "sample_interval_ms": sample_interval_ms})
 
     def record_a_pseudorandom_value(self, module: str, seed: int, output: Any) -> None:
         slot: list[Any] = [perf_counter(), self.scenario_time, "seed_value", module, "", seed]
@@ -602,6 +652,7 @@ class Logger:
 
     def close(self) -> None:
         sinks_closed = self.close_async_sinks()
+        self.finalize_evidence()
         self.write_timing_qc()
         if self.file is not None and not self.file.closed:
             self.file.flush()
@@ -662,6 +713,15 @@ class Logger:
                         # JSONL is the scientific source of truth. Commit it
                         # before attempting the compatibility CSV sink.
                         event_payload = self.write_jsonl_row(row_dict, metadata)
+                        evidence_writer = getattr(self, "_evidence_writer", None)
+                        if evidence_writer is not None:
+                            # Use the unrounded native row, never reconstituted CSV time.
+                            evidence_metadata = {**metadata, "recorded_monotonic_ns": event_payload["recorded_monotonic_ns"]}
+                            evidence_metadata["compatibility_row"] = {
+                                key: "" if row_dict[key] is None else str(row_dict[key])
+                                for key in ("scenario_time", "type", "module", "address", "value")}
+                            evidence_writer.record(this_row._asdict(), evidence_metadata,
+                                                   runtime_event_id=event_payload["event_id"])
                     except Exception as exc:  # noqa: BLE001 - enter explicit fail-stop state
                         self.queue.pop(0)
                         if metadata_queue:

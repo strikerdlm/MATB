@@ -135,18 +135,21 @@ class AbstractPlugin:
             print(_("Pause %s") % self.alias)
         self.paused = True
         self.update_can_receive_key()
+        self.logger.record_task_lifecycle(self.alias, "paused")
 
     def resume(self) -> None:
         if self.verbose:
             print(_("Resume %s") % self.alias)
         self.paused = False
         self.update_can_receive_key()
+        self.logger.record_task_lifecycle(self.alias, "resumed")
 
     def start(self) -> None:
         if self.verbose:
             print(_("Start %s") % self.alias)
             print(_("with keys %s") % self.keys)
         self.alive = True
+        self.logger.record_task_lifecycle(self.alias, "started")
         self.create_widgets()
         self.log_all_parameters(self.parameters)
         self.show()
@@ -156,6 +159,7 @@ class AbstractPlugin:
         if self.verbose:
             print(_("Stop %s") % self.alias)
         self.alive = False
+        self.logger.record_task_lifecycle(self.alias, "stopped")
         self.pause()
         self.hide()
 
@@ -409,7 +413,9 @@ class AbstractPlugin:
         if name not in self.performance:
             self.performance[name] = list()
         self.performance[name].append(value)
-        self.logger.log_performance(self.alias, name, value)
+        self.logger.log_performance(self.alias, name, value,
+            automation_active=self.parameters.get("automaticsolver"),
+            sample_interval_ms=self.parameters.get("taskupdatetime"))
 
     def keep_value_between(self, value: float, down: float, up: float) -> float:
         return max(min(value, up), down)

@@ -147,6 +147,7 @@ class Scheduler:
 
         self.events: list[Event] = self.scenario.events
         self.plugins: dict[str, Any] = self.scenario.plugins
+        logger.configure_evidence_tasks(list(self.plugins))
 
         # Attribute window to plugins in use, and push their handles to window
         for p in self.plugins:
@@ -601,6 +602,7 @@ class Scheduler:
 
     def exit(self, *, completion: str = "completed") -> None:
         get_logger().log_manual_entry("end")
+        get_logger().finalize_evidence(completion)
         if self.control_bridge is not None:
             self.control_bridge.emit(
                 "finished",
