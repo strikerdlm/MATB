@@ -24,11 +24,11 @@ for role, content in bundle.items():
     await page.locator(`#evidence-${role}`).setInputFiles(path.join(root, `${role}.upload`));
   }
   await page.getByRole("button", { name: /Importar evidencia|Import evidence/ }).click();
-  await expect(page.getByRole("button", { name: "track_rmse_deviation", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "track_rmse_deviation", exact: true }).click();
+  await expect(page.locator("button[data-metric=track_rmse_deviation]")).toBeVisible();
+  await page.locator("button[data-metric=track_rmse_deviation]").click();
   await page.getByRole("button", { name: /track.sample · center_deviation/ }).first().click();
   await expect(page.getByText(/software_receipt · software · python.perf_counter/)).toBeVisible();
-  await page.getByRole("button", { name: "comm_d_prime", exact: true }).click();
+  await page.locator("button[data-metric=comm_d_prime]").click();
   await expect(page.getByText("physical_audio_onset_not_qualified", { exact: true })).toBeVisible();
   await expect(page.getByRole("checkbox", { name: /comm_d_prime/ })).toBeDisabled();
   const downloadPromise = page.waitForEvent("download");
@@ -43,5 +43,14 @@ for role, content in bundle.items():
   await page.screenshot({ path: info.outputPath("metric-evidence.png"), fullPage: true });
   await page.goto("/evidence");
   await page.getByRole("button", { name: /P01 · REFERENCE/ }).click();
-  await expect(page.getByRole("button", { name: "track_rmse_deviation", exact: true })).toBeVisible();
+  await expect(page.locator("button[data-metric=track_rmse_deviation]")).toBeVisible();
+  await page.locator("button[data-metric=sysmon_hit_rate]").click();
+  await page.getByRole("button", { name: /sysmon.opportunity.closed/ }).first().click();
+  await expect(page.getByRole("region", { name: /Revisión de evento|Event review/ })).toBeVisible();
+  await expect(page.getByText(/exposición visual original no está disponible|Original visual exposure is unavailable/)).toBeVisible();
+  await page.screenshot({ path: info.outputPath("event-workspace-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole("tab", { name: /Evidencia|Evidence/ })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath("event-workspace-mobile.png"), fullPage: true });
 });

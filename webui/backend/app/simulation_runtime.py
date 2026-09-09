@@ -471,6 +471,8 @@ class SimulationManager:
             raise ValueError("contact navigation is not enabled")
         if not controls.get("smooth_camera") and state.transition_ms:
             raise ValueError("camera assistance is not enabled")
+        if (state.interpolation_policy is not None and state.interpolation_policy != config.get("interpolation_policy", "linear-320-v1")) or (config.get("interpolation_policy") == "none-v1" and state.interpolation_ms != 0):
+            raise ValueError("interpolation policy differs from the pinned condition")
         if handle.session_mode == "research" and state.condition != config.get("blocks", {}).get(event.block_id, "2d"):
             raise InvalidTransition("research condition is locked")
         if not controls.get("adjustable_layers"):

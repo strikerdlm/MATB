@@ -1,0 +1,29 @@
+{
+  "block": "MEDIUM",
+  "aircraft": 4,
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "browser": "151.0.7922.34",
+  "calls": 55,
+  "triangles": 39420,
+  "memory": {
+    "geometries": 55,
+    "textures": 2
+  },
+  "renderCount": 84,
+  "objectLifecycle": {
+    "aircraftCreated": 4,
+    "aircraftDisposed": 0,
+    "contactsCreated": 0,
+    "contactsDisposed": 0,
+    "boundaryRebuilds": 1,
+    "coverageRebuilds": 1
+  },
+  "gpuCompletionMs": null,
+  "physicalDisplayOnsetMs": null,
+  "device": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "dpr": 1,
+  "cpuRenderP95Ms": 3.8000000044703484
+}

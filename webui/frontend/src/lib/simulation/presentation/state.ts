@@ -20,6 +20,8 @@ export interface ResolvedPresentation {
   viewport: { width: number; height: number; dpr: number } | null;
   visibility: "visible" | "hidden" | "concealed" | "unavailable";
   transition_ms: number;
+  interpolation_policy?: "linear-320-v1" | "none-v1" | null;
+  interpolation_ms?: 0 | 320 | null;
   visual_profile: "standard-v1";
   model_version: "schematic-drone-v1-scale12";
   scene_sha256: string | null;
@@ -40,6 +42,8 @@ export function initialPresentation(config: PresentationConfig | null | undefine
     geographic_layers: [...(config?.layers ?? GEOGRAPHY_LAYERS)], pose: null,
     map_view: { zoom: 1, pan: { x: 0, y: 0 } }, viewport: null, visibility: "visible",
     transition_ms: config?.version === 2 && config.controls?.smooth_camera && !reducedMotion ? 600 : 0,
+    interpolation_policy: config?.interpolation_policy ?? "linear-320-v1",
+    interpolation_ms: reducedMotion || config?.interpolation_policy === "none-v1" ? 0 : 320,
     visual_profile: "standard-v1", model_version: "schematic-drone-v1-scale12",
     scene_sha256: config?.scene_sha256 ?? null, capture_sha256: config?.traffic?.recording_sha256 ?? null,
   };

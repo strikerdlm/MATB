@@ -6,7 +6,8 @@ import { displayedTraffic } from "@/lib/geography/coordinates";
 import React, { useRef, useState, useEffect } from "react";
 import { TrafficPanel } from "./TrafficPanel";
 import dynamic from "next/dynamic";
-import { MissionMap, type MissionMapProps } from "../map/MissionMap";
+import type { MissionMapProps } from "../map/MissionMap";
+import { InterpolatedMissionMap } from "./InterpolatedMissionMap";
 import type { SessionView, WorldSnapshot, Profile } from "@/types/simulation";
 import type {
   CameraMode,
@@ -123,6 +124,13 @@ function MissionPresentationBlock({
   const selectedTrafficId = resolved.observed_id;
   const setSelectedTrafficId = (id: string) => selectEntity({ category: "observed", id });
   const viewRef = useRef(view); viewRef.current = view;
+  useEffect(() => {
+    if (replay) return;
+    const interpolation_ms = !map.interpolate || frozen || config?.interpolation_policy === "none-v1"
+      || window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 320;
+    if (viewRef.current.latest.current.interpolation_ms !== interpolation_ms)
+      viewRef.current.dispatch({ type: "resolved", patch: { interpolation_ms } }, "resolved");
+  }, [map.interpolate, frozen, config?.interpolation_policy, replay]);
   useEffect(() => {
     if (replay || frozen) return;
     const view = viewRef.current, focus = view.latest.current.focus;
@@ -252,7 +260,7 @@ function MissionPresentationBlock({
           onEvent={emit}
         />
       ) : (
-        <MissionMap
+        <InterpolatedMissionMap
           {...map}
           {...trafficProps}
           selectedAircraftId={replayState ? replayState.aircraft_id : map.selectedAircraftId}

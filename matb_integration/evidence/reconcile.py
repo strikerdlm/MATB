@@ -87,7 +87,15 @@ def native_row(event: ScientificEventV3) -> dict[str, str]:
             "address": str(payload["address"]), "value": str(value)}
 
 
-def reconcile(artifacts: dict[str, bytes]) -> dict[str, Any]:
+def reconcile(artifacts: dict[str, bytes], *, execution: dict | None = None,
+              derivation_version: str = DERIVATION_VERSION) -> dict[str, Any]:
+    if derivation_version not in {"classic-evidence-1.0", DERIVATION_VERSION}:
+        raise ValueError("unsupported derivation version")
+    if derivation_version != "classic-evidence-1.0":
+        from .provenance import collect_analysis_execution, validate_execution
+        execution = validate_execution(execution if execution is not None else collect_analysis_execution())
+    elif execution is not None:
+        raise ValueError("legacy derivations cannot declare new execution provenance")
     capture, scenario, events, observations = parse_capture(artifacts)
     issues: list[dict] = []
 
@@ -373,9 +381,12 @@ def reconcile(artifacts: dict[str, bytes]) -> dict[str, Any]:
             "physical_timing_qualification": "not_qualified", "human_calibration": "not_qualified"})
     fingerprint_data = {"capture_sha256": hashlib.sha256(artifacts["capture_manifest"]).hexdigest(),
         "source_hashes": {k: hashlib.sha256(v).hexdigest() for k, v in sorted(artifacts.items())},
-        "derivation_version": DERIVATION_VERSION, "metrics_spec": METRICS_SPEC,
+        "derivation_version": derivation_version, "metrics_spec": METRICS_SPEC,
         "eligibility": [(m["metric"], m["confirmatory_eligible"], m["exclusion_reasons"]) for m in metrics]}
-    return {"derivation_version": DERIVATION_VERSION, "metrics_schema_version": METRICS_SCHEMA_VERSION,
+    if execution is not None:
+        fingerprint_data["analysis_execution"] = execution
+    return {"derivation_version": derivation_version, "metrics_schema_version": METRICS_SCHEMA_VERSION,
+        **({"analysis_execution": execution} if execution is not None else {}),
         "fingerprint": hashlib.sha256(canonical_bytes(fingerprint_data)).hexdigest(),
         "status": "failed" if issues else "succeeded", "issues": issues, "metrics": metrics,
         "source_hashes": fingerprint_data["source_hashes"],

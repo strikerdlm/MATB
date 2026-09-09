@@ -85,3 +85,37 @@ class EvidenceAnalysisInput(SQLModel, table=True):
     id: str = Field(primary_key=True)
     input_json: str
     created_at: datetime = Field(default_factory=now)
+
+
+class EvidenceQualification(SQLModel, table=True):
+    __tablename__ = "evidence_qualification"
+    id: str = Field(primary_key=True)
+    record_json: str
+    created_at: datetime = Field(default_factory=now)
+
+
+class EvidenceQualificationArtifact(SQLModel, table=True):
+    __tablename__ = "evidence_qualification_artifact"
+    __table_args__ = (UniqueConstraint("qualification_id", "name"),)
+    id: int | None = Field(default=None, primary_key=True)
+    qualification_id: str = Field(foreign_key="evidence_qualification.id", index=True)
+    name: str
+    content: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
+
+
+class EvidenceQualificationLink(SQLModel, table=True):
+    __tablename__ = "evidence_qualification_link"
+    id: str = Field(primary_key=True)
+    capture_id: str = Field(foreign_key="evidence_capture.id", index=True)
+    qualification_id: str = Field(foreign_key="evidence_qualification.id", index=True)
+    binding_json: str
+    created_at: datetime = Field(default_factory=now)
+
+
+class EvidenceQualificationRevocation(SQLModel, table=True):
+    __tablename__ = "evidence_qualification_revocation"
+    id: str = Field(primary_key=True)
+    qualification_id: str = Field(foreign_key="evidence_qualification.id", index=True)
+    reviewer: str
+    reason: str
+    created_at: datetime = Field(default_factory=now)

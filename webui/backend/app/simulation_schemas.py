@@ -66,6 +66,7 @@ class PresentationControls(BaseModel):
 class PresentationConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     version: Literal[1, 2] = 1
+    interpolation_policy: Literal["linear-320-v1", "none-v1"] = "linear-320-v1"
     controls: PresentationControls = Field(default_factory=PresentationControls)
     layers: list[Literal["roads", "rivers", "settlements", "boundaries", "airports"]] = Field(default_factory=lambda: ["roads", "rivers", "settlements", "boundaries", "airports"])
     traffic: TrafficConfig = Field(default_factory=TrafficConfig)
@@ -151,6 +152,8 @@ class ResolvedPresentation(BaseModel):
     viewport: PresentationViewport | None
     visibility: Literal["visible", "hidden", "concealed", "unavailable"]
     transition_ms: Literal[0, 600]
+    interpolation_policy: Literal["linear-320-v1", "none-v1"] | None = None
+    interpolation_ms: Literal[0, 320] | None = None
     visual_profile: Literal["standard-v1"]
     model_version: Literal["schematic-drone-v1-scale12"]
     scene_sha256: str | None = Field(pattern=r"^[a-f0-9]{64}$")

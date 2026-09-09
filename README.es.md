@@ -1379,6 +1379,7 @@ las [limitaciones conocidas](SMS/docs/release/known-limitations.md) y la
 
 - [Ejemplos y selector de flujos](examples/README.es.md)
 - [Descripción general de la Consola de Investigación](webui/README.md), [API del backend](webui/backend/README.md) y [pantallas del frontend](webui/frontend/README.md)
+- [Evidencia científica clásica](docs/implementation/classic-evidence-pipeline.md), [revisión de eventos y cualificación](docs/implementation/evidence-review-qualification-performance.md) y [mediciones de rendimiento](docs/reports/evidence-performance-2026-09-09.md)
 - [Guía DEPDF de Suhir](matb_integration/suhir/README.md)
 - [Revisión de evidencia de investigación](docs/research/military-aviation-platform/research_evidence_review.md) y [validación de escalas](docs/research/scales/sagat_validation.md)
 - [Diseño de sUAS sintético](docs/superpowers/specs/2026-08-01-suas-c2-research-simulator-design.md) y [verificación](docs/implementation/suas-c2-v1-verification.md)

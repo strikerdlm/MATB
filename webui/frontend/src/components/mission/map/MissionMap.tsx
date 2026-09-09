@@ -29,6 +29,8 @@ export interface MissionMapProps {
   selectedTrafficId?: string | null;
   onSelectTraffic?: (id: string) => void;
   snapshot: WorldSnapshot;
+  previousSnapshot?: WorldSnapshot | null;
+  interpolate?: boolean;
   locale: Locale;
   selectedAircraftId?: string | null;
   selectedContactId?: string | null;

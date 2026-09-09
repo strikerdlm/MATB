@@ -33,6 +33,7 @@
     "pytest.ini",
     "release/core-manifest.json",
     "requirements-dev.txt",
+    "requirements-evidence.lock",
     "requirements.txt",
     "scenarios/military_aviation",
     "setup.sh",
@@ -42,6 +43,7 @@
     "webui"
   ],
   "exclude": [
+    "webui/frontend/scripts/benchmark-operational-scene.mjs",
     "docs/implementation/colombia-geography-traffic.md",
     "docs/implementation/colombia-geography-verification.md",
     "docs/implementation/suas-threejs-presentation.md",

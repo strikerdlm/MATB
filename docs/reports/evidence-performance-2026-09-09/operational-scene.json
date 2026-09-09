@@ -1,0 +1,139 @@
+{
+  "schema_version": "1.0",
+  "synthetic_only": true,
+  "baseline_source_commit": "dcb3df934e86c3d834aa6a0409ec5fd5feb2f7e3",
+  "cases": [
+    {
+      "baseline": {
+        "mode": "legacy-rebuild",
+        "aircraftCount": 12,
+        "contactCount": 40,
+        "frames": 120,
+        "warmup": 10,
+        "cpu_update_ms": {
+          "n": 120,
+          "p50": 5.618799999999965,
+          "p95": 9.595600000000104,
+          "p99": 13.481499999999869,
+          "max": 18.16859999999997
+        },
+        "aircraftCreated": 1560,
+        "finalAircraftPosition": [
+          0.129,
+          120,
+          0
+        ]
+      },
+      "keyed": {
+        "mode": "keyed",
+        "aircraftCount": 12,
+        "contactCount": 40,
+        "frames": 120,
+        "warmup": 10,
+        "cpu_update_ms": {
+          "n": 120,
+          "p50": 0.06080000000019936,
+          "p95": 0.1335999999998876,
+          "p99": 0.18239999999991596,
+          "max": 0.2460999999998421
+        },
+        "aircraftCreated": 12,
+        "finalAircraftPosition": [
+          0.129,
+          120,
+          0
+        ]
+      }
+    },
+    {
+      "baseline": {
+        "mode": "legacy-rebuild",
+        "aircraftCount": 40,
+        "contactCount": 400,
+        "frames": 120,
+        "warmup": 10,
+        "cpu_update_ms": {
+          "n": 120,
+          "p50": 27.773799999999937,
+          "p95": 34.11630000000014,
+          "p99": 34.9371000000001,
+          "max": 35.585000000000036
+        },
+        "aircraftCreated": 5200,
+        "finalAircraftPosition": [
+          0.129,
+          120,
+          0
+        ]
+      },
+      "keyed": {
+        "mode": "keyed",
+        "aircraftCount": 40,
+        "contactCount": 400,
+        "frames": 120,
+        "warmup": 10,
+        "cpu_update_ms": {
+          "n": 120,
+          "p50": 0.39950000000044383,
+          "p95": 0.5412999999998647,
+          "p99": 0.6723000000001775,
+          "max": 4.167399999999361
+        },
+        "aircraftCreated": 40,
+        "finalAircraftPosition": [
+          0.129,
+          120,
+          0
+        ]
+      }
+    },
+    {
+      "baseline": {
+        "mode": "legacy-rebuild",
+        "aircraftCount": 80,
+        "contactCount": 1000,
+        "frames": 120,
+        "warmup": 10,
+        "cpu_update_ms": {
+          "n": 120,
+          "p50": 69.28540000000066,
+          "p95": 90.10100000000057,
+          "p99": 102.76699999999983,
+          "max": 113.66710000000057
+        },
+        "aircraftCreated": 10400,
+        "finalAircraftPosition": [
+          0.129,
+          120,
+          0
+        ]
+      },
+      "keyed": {
+        "mode": "keyed",
+        "aircraftCount": 80,
+        "contactCount": 1000,
+        "frames": 120,
+        "warmup": 10,
+        "cpu_update_ms": {
+          "n": 120,
+          "p50": 0.5203000000001339,
+          "p95": 0.9580000000005384,
+          "p99": 1.5547000000005937,
+          "max": 3.5491000000001804
+        },
+        "aircraftCreated": 80,
+        "finalAircraftPosition": [
+          0.129,
+          120,
+          0
+        ]
+      }
+    }
+  ],
+  "gpu_completion_ms": null,
+  "physical_display_onset_ms": null,
+  "scope": "CPU dynamic object updates with identical schematic models; excludes renderer, label layout, terrain, transport and physical display",
+  "node": "v22.23.2",
+  "source_commit": "bbd99ded819039a97d44e455aa7a29f4702eb3f0",
+  "implementation_sha256": "7fc9c77cd67d0186a9a57e1c0e14b571b439e0221de31474b0c16d35448e4d56"
+}

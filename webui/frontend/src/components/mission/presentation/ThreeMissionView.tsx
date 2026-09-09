@@ -1,5 +1,6 @@
 "use client";
 import { DEFAULT_CONTROLS, type ResolvedPresentation, type PresentationAction } from "@/lib/simulation/presentation/state";
+import { animateSnapshot } from "@/lib/simulation/presentation/interpolation-controller";
 import React, { useEffect, useRef, useState } from "react";
 import type { MissionMapProps } from "../map/MissionMap";
 import type {
@@ -37,6 +38,7 @@ export default function ThreeMissionView(props: ThreeMissionViewProps) {
   const [error, setError] = useState<string | null>(null),
     [ready, setReady] = useState(false),
     [camera, setCamera] = useState<CameraMode>(props.config.camera);
+  const visualSnapshot = useRef(props.snapshot);
   const [localLayers, setLayers] = useState({
     routes: true,
     coverage: true,
@@ -153,7 +155,7 @@ export default function ThreeMissionView(props: ThreeMissionViewProps) {
   useEffect(() => {
     revision.current = performance.now();
     try {
-      controller.current?.update(options.current);
+      controller.current?.update({ ...options.current, snapshot: visualSnapshot.current.state_version === props.snapshot.state_version && visualSnapshot.current.block_id === props.snapshot.block_id ? visualSnapshot.current : props.snapshot });
     } catch (reason) {
       setError(String(reason));
       setReady(false);
@@ -175,6 +177,22 @@ export default function ThreeMissionView(props: ThreeMissionViewProps) {
     props.viewState?.focus,
     props.viewState?.geographic_layers,
   ]);
+  useEffect(() => {
+    if (!ready) return;
+    const enabled = Boolean(props.interpolate && !props.frozen && !props.replayPose && props.viewState?.interpolation_ms !== 0
+      && props.config.interpolation_policy !== "none-v1" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    let first = true;
+    return animateSnapshot(props.previousSnapshot, props.snapshot, enabled, snapshot => {
+      visualSnapshot.current = snapshot;
+      try {
+        if (first) { controller.current?.update({ ...options.current, snapshot }); first = false; }
+        else controller.current?.updateInterpolatedSnapshot(snapshot);
+      } catch (reason) {
+        setError(String(reason)); setReady(false); current.current.onEvent?.("failure", options.current.cameraMode);
+      }
+    });
+  }, [ready, props.snapshot, props.previousSnapshot, props.interpolate, props.frozen, props.replayPose,
+    props.config.interpolation_policy, props.viewState?.interpolation_ms]);
   return (
     <section
       className="mission-panel flex min-w-0 flex-col"

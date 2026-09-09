@@ -1,0 +1,95 @@
+{
+  "schema_version": "1.0",
+  "synthetic_only": true,
+  "verified_application_commit": "34d8910878967ed4b6879b848e6203204ded1e1c",
+  "consolidated_main_commit": "dcb3df934e86c3d834aa6a0409ec5fd5feb2f7e3",
+  "qualification": {
+    "hosted_ci": "blocked_by_account_billing_or_spending",
+    "physical_timing": "not_qualified",
+    "human_calibration": "not_qualified",
+    "independent_laboratory_replication": "not_performed"
+  },
+  "windows": {
+    "contracts": {
+      "tests": 594,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "passed": 585
+    },
+    "backend": {
+      "tests": 282,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1,
+      "passed": 281
+    },
+    "engine_and_evidence": {
+      "tests": 185,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1,
+      "passed": 184
+    },
+    "frontend": {
+      "passed": 152,
+      "suite_files": 47,
+      "build": "passed",
+      "lint": "passed"
+    },
+    "final_browser": {
+      "passed": 8,
+      "source_commit": "34d8910878967ed4b6879b848e6203204ded1e1c",
+      "renderer": "ANGLE/Vulkan/SwiftShader",
+      "physical_onset_verified": false
+    }
+  },
+  "linux": {
+    "contracts": {
+      "tests": 594,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "passed": 585
+    },
+    "backend": {
+      "tests": 282,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1,
+      "passed": 281
+    },
+    "frontend": {
+      "passed": 152,
+      "suite_files": 47,
+      "source_commit": "492e5837f0daee2812fbcabc2be3786b73672540"
+    },
+    "final_focused_tests": {
+      "passed": 18,
+      "source_commit": "34d8910878967ed4b6879b848e6203204ded1e1c"
+    },
+    "final_steps": [
+      {
+        "name": "lint",
+        "exit_code": 0,
+        "elapsed_seconds": 38.178
+      },
+      {
+        "name": "typecheck",
+        "exit_code": 0,
+        "elapsed_seconds": 5.661
+      },
+      {
+        "name": "build",
+        "exit_code": 0,
+        "elapsed_seconds": 31.898
+      },
+      {
+        "name": "browser",
+        "exit_code": 0,
+        "elapsed_seconds": 30.739
+      }
+    ]
+  },
+  "precision_note": "Windows used fresh dependency environments on the existing OS. Linux used a disposable Debian container on the same physical host. The Python/backend source at 5962054 is identical at the verified application commit; the intervening changes affect two presentation files only. Windows broad suites exercised the precommit working tree; final Windows browser and Linux build/browser checks exercised the verified application source. No GPU or physical-onset timing is inferred."
+}

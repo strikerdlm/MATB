@@ -92,7 +92,9 @@ may remain visible with their reasons. Valid source reconciliation does not
 establish physical onset or human validity. COMM remains non-confirmatory
 without physical audio-onset qualification. Dirty/missing source provenance and
 practice/exploration purpose remain explicit exclusions. Hardware qualification
-and human calibration are displayed separately as `not_qualified`.
+and human calibration remain separate from source-contract eligibility. New
+capture-level qualification links retain reviewed reports and invalidations;
+unlinked captures display `not_qualified`.
 
 ## Reproduce an export
 
@@ -125,5 +127,11 @@ calibration, or physiological synchronization. GitHub Actions had a confirmed
 account billing/spending restriction before this work; changing workflow code
 cannot remove that restriction. Report remote CI separately from local results.
 
-See the [dated local verification report](../reports/classic-evidence-verification-2026-09-09.md)
+The complete pathway was subsequently consolidated into `main` and checked in
+isolated Windows and Linux environments; see the
+[integration verification](../reports/evidence-integration-verification-2026-09-09.md).
+Analysis provenance, qualification links, event review and capacity measurements
+are described in the [follow-up implementation](evidence-review-qualification-performance.md).
+
+See the [original dated local verification report](../reports/classic-evidence-verification-2026-09-09.md)
 for observed test results, the browser evidence and remaining release gates.

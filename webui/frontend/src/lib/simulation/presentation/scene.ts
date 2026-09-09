@@ -1,3 +1,5 @@
+import { operationalObjects } from "./operational-objects";
+import { renderScheduler } from "./render-scheduler";
 import { CameraController } from "./camera-controller";
 import type { Entity } from "./state";
 import {
@@ -19,7 +21,7 @@ import {
 } from "./contracts";
 
 /** Meshes are schematic, generated in metres; no imported aircraft models. */
-function drone(): THREE.Group {
+export function drone(): THREE.Group {
   const root = new THREE.Group();
   const body = new THREE.Mesh(
     new THREE.BoxGeometry(2, 0.6, 3),
@@ -45,7 +47,7 @@ function drone(): THREE.Group {
   root.scale.setScalar(12); // Explicit display enlargement, not physical aircraft dimensions.
   return root;
 }
-function disposeTree(root: THREE.Object3D) {
+export function disposeTree(root: THREE.Object3D) {
   const geometries = new Set<THREE.BufferGeometry>(),
     materials = new Set<THREE.Material>();
   root.traverse((object) => {
@@ -178,11 +180,10 @@ export async function createMissionScene(
     dynamic = new THREE.Group();
   scene.add(staticLayer, dynamic);
   let options = initial,
-    disposed = false,
-    revision = "",
-    animation = 0;
+    disposed = false;
   const labels = new Map<string, HTMLButtonElement>();
   const renderTimes: number[] = [];
+  const submission = renderScheduler(submitFrame);
   let renderCount = 0;
   const gl = renderer.getContext(),
     debug = gl.getExtension("WEBGL_debug_renderer_info");
@@ -204,118 +205,11 @@ export async function createMissionScene(
     applyPose(initial.initialPose);
     options.onCameraEvent?.("camera", pose(), initial.cameraMode);
   }
-  function polyline(
-    points: { x_mm: number; y_mm: number }[],
-    color: number,
-    parent: THREE.Group,
-    closed = false,
-  ) {
-    const coords = points.map(
-      (p) => new THREE.Vector3(...missionToWorld(p, elevationAt(grid, p) + 12)),
-    );
-    if (closed && coords.length) coords.push(coords[0]);
-    if (coords.length < 2) return;
-    parent.add(
-      new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints(coords),
-        new THREE.LineBasicMaterial({ color, depthTest: false }),
-      ),
-    );
-  }
-  function rebuild() {
-    const objectKey = JSON.stringify([
-      options.snapshot.block_id,
-      Object.keys(options.snapshot.aircraft),
-      options.snapshot.contacts,
-    ]);
-    const rebuildObjects = dynamic.userData.key !== objectKey;
-    if (rebuildObjects) {
-      disposeTree(dynamic);
-      dynamic.clear();
-      dynamic.userData.key = objectKey;
-    }
-    const state = options.snapshot;
-    for (const aircraft of Object.values(state.aircraft)) {
-      const mesh = dynamic.getObjectByName(aircraft.aircraft_id) ?? drone();
-      mesh.name = aircraft.aircraft_id;
-      mesh.userData = { aircraftId: aircraft.aircraft_id };
-      mesh.position.set(
-        ...missionToWorld(
-          aircraft.position,
-          elevationAt(grid, aircraft.position) +
-            (aircraft.altitude_mm ?? 120000) / 1000,
-        ),
-      );
-      mesh.rotation.y = headingRadians(aircraft.heading_mdeg);
-      mesh.visible =
-        options.cameraMode !== "drone" ||
-        aircraft.aircraft_id !==
-          (options.selectedAircraftId ?? Object.keys(state.aircraft)[0]);
-      dynamic.add(mesh);
-    }
-    if (rebuildObjects)
-      for (const contact of Object.values(state.contacts)) {
-        if (!contact.position || contact.evidence === "NONE") continue;
-        const marker = new THREE.Mesh(
-          new THREE.OctahedronGeometry(35),
-          new THREE.MeshBasicMaterial({ color: 0xffd166, depthTest: false }),
-        );
-        marker.userData = { contactId: contact.contact_id };
-        marker.position.set(
-          ...missionToWorld(
-            contact.position,
-            elevationAt(grid, contact.position) + 45,
-          ),
-        );
-        dynamic.add(marker);
-      }
-    for (const item of dynamic.children)
-      if (item.userData.contactId)
-        item.visible = options.layers?.contacts !== false;
-    const key = JSON.stringify([
-      state.scenario_sha256,
-      state.block_id,
-      state.coverage,
-      options.layers,
-      Object.values(state.aircraft).map((a) => a.route),
-    ]);
-    if (key !== revision) {
-      revision = key;
-      disposeTree(staticLayer);
-      staticLayer.clear();
-      if (options.layers?.routes !== false)
-        for (const aircraft of Object.values(state.aircraft))
-          polyline(aircraft.route, 0x71e2ed, staticLayer);
-      for (const points of Object.values(state.sectors))
-        polyline(points, 0x55ddbb, staticLayer, true);
-      for (const points of Object.values(state.restricted_zones))
-        polyline(points, 0xff6688, staticLayer, true);
-      if (options.layers?.coverage !== false) {
-        const points: THREE.Vector3[] = [];
-        for (const sector of Object.values(state.coverage.sectors))
-          for (const [x, y] of sector.covered_cells) {
-            const p = {
-              x_mm:
-                state.coverage.origin.x_mm +
-                (x + 0.5) * state.coverage.grid_cell_mm,
-              y_mm:
-                state.coverage.origin.y_mm +
-                (y + 0.5) * state.coverage.grid_cell_mm,
-            };
-            points.push(
-              new THREE.Vector3(...missionToWorld(p, elevationAt(grid, p) + 8)),
-            );
-          }
-        if (points.length) {
-          const dots = new THREE.Points(
-            new THREE.BufferGeometry().setFromPoints(points),
-            new THREE.PointsMaterial({ color: 0x55ffaa, size: 20 }),
-          );
-          staticLayer.add(dots);
-        }
-      }
-    }
-  }
+  const operational = operationalObjects(dynamic, staticLayer,
+    (point, height) => missionToWorld(point, elevationAt(grid, point) + height), drone, disposeTree);
+  const hiddenAircraft = () => options.cameraMode === "drone"
+    ? options.selectedAircraftId ?? Object.keys(options.snapshot.aircraft)[0] : null;
+  function rebuild() { operational.update(options.snapshot, options.layers, hiddenAircraft()); }
   function updateLabels() {
     const ids = new Set<string>();
     Object.values(options.snapshot.aircraft).forEach((aircraft, index) => {
@@ -358,7 +252,8 @@ export async function createMissionScene(
         labels.delete(id);
       }
   }
-  function render() {
+  function render() { submission.request(); }
+  function submitFrame() {
     if (disposed) return;
     const started = performance.now();
     renderer.render(scene, camera);
@@ -434,7 +329,7 @@ export async function createMissionScene(
     controls.enabled = !options.frozen && !options.replayPose;
     rebuild();
     geography.update(options.geographicLayers ?? []);
-    observed.update(options.traffic, options.trafficElapsedMs ?? 0, options.selectedTrafficId);
+    observed.update(options.traffic, observedElapsed(options.snapshot), options.selectedTrafficId);
     if (options.replayPose) { stopMotion(); motion.cancel("replay"); applyPose(options.replayPose); render(); return; }
     if (options.frozen) { stopMotion(); render(); return; }
     if (changed) {
@@ -488,7 +383,11 @@ export async function createMissionScene(
     );
     const hit = raycaster
       .intersectObjects([...dynamic.children, ...observed.root.children], true)
-      .find((h) => h.object instanceof THREE.Mesh);
+      .find((h) => {
+        if (!(h.object instanceof THREE.Mesh)) return false;
+        for (let object: THREE.Object3D | null = h.object; object; object = object.parent) if (!object.visible) return false;
+        return true;
+      });
     if (hit) {
       let obj: THREE.Object3D | null = hit.object;
       while (
@@ -572,9 +471,19 @@ export async function createMissionScene(
   renderer.domElement.addEventListener("keydown", key);
   renderer.domElement.addEventListener("webglcontextlost", lost);
   update(initial);
-  animation = requestAnimationFrame(render);
+  submission.flush(); // Readiness requires one completed CPU submission.
+  function observedElapsed(snapshot: SceneOptions["snapshot"]) {
+    return options.traffic ? Math.max(0, snapshot.simulation_time_ms - (options.traffic.simulation_time_ms ?? snapshot.simulation_time_ms)) : options.trafficElapsedMs ?? 0;
+  }
   return {
     update,
+    updateInterpolatedSnapshot: (snapshot: SceneOptions["snapshot"]) => {
+      if (disposed || options.frozen || options.replayPose || snapshot.block_id !== options.snapshot.block_id || snapshot.state_version !== options.snapshot.state_version) return;
+      options = { ...options, snapshot };
+      operational.transforms(snapshot, hiddenAircraft());
+      observed.update(options.traffic, observedElapsed(snapshot), options.selectedTrafficId);
+      if (motion.owner !== "transition") { follow(); render(); }
+    },
     reset: () => {
       stopMotion();
       reset();
@@ -586,6 +495,9 @@ export async function createMissionScene(
       triangles: renderer.info.render.triangles,
       memory: { ...renderer.info.memory },
       renderCount,
+      objectLifecycle: operational.metrics(),
+      gpuCompletionMs: null,
+      physicalDisplayOnsetMs: null,
       device,
       dpr: renderer.getPixelRatio(),
       cpuRenderP95Ms:
@@ -596,7 +508,7 @@ export async function createMissionScene(
     dispose: () => {
       stopMotion();
       disposed = true;
-      cancelAnimationFrame(animation);
+      submission.dispose();
       resize.disconnect();
       controls.removeEventListener("change", render);
       controls.removeEventListener("end", manualEnd);

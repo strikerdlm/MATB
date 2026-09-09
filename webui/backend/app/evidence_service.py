@@ -5,15 +5,16 @@ import hashlib
 import io
 import threading
 import zipfile
+from itertools import batched
 from uuid import uuid4
 
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 
 from app.models import Participant, Visit
 from app.evidence_models import (EvidenceCapture, EvidenceArtifact, EvidenceRun, EvidenceRecord,
     EvidenceMetric, EvidenceMetricSource, EvidenceAnalysisInput)
-from matb_integration.evidence.contracts import canonical_bytes, strict_json, DERIVATION_VERSION
+from matb_integration.evidence.contracts import canonical_bytes, strict_json, DERIVATION_VERSION, CaptureManifestV1, MAX_STREAM_BYTES
 from matb_integration.evidence.reconcile import parse_capture, reconcile
 
 _DERIVATION_LOCK = threading.Lock()
@@ -34,15 +35,25 @@ def capture_or_error(db: Session, capture_id: str) -> EvidenceCapture:
 
 def ingest_evidence(db: Session, artifacts: dict[str, bytes]) -> tuple[str, bool]:
     try:
-        manifest, _scenario, events, timing = parse_capture(artifacts)
+        manifest = CaptureManifestV1.model_validate(strict_json(artifacts["capture_manifest"]))
     except (ValueError, KeyError, TypeError) as exc:
         raise EvidenceError(f"invalid_evidence: {exc}", 422) from exc
     fingerprint = hashlib.sha256(canonical_bytes({k: hashlib.sha256(v).hexdigest() for k, v in artifacts.items()})).hexdigest()
     existing = db.get(EvidenceCapture, manifest.capture_id)
     if existing:
         if existing.artifact_fingerprint != fingerprint:
+            try:
+                parse_capture(artifacts)
+            except (ValueError, KeyError, TypeError) as exc:
+                raise EvidenceError(f"invalid_evidence: {exc}", 422) from exc
             raise EvidenceError("capture_identity_conflict")
         return existing.id, False
+    # Identical immutable bytes were already validated. A new identity still
+    # requires full schema, count and integrity validation before any storage.
+    try:
+        manifest, _scenario, events, timing = parse_capture(artifacts)
+    except (ValueError, KeyError, TypeError) as exc:
+        raise EvidenceError(f"invalid_evidence: {exc}", 422) from exc
     visit = None
     if manifest.participant_id:
         if db.get(Participant, manifest.participant_id) is None:
@@ -107,7 +118,9 @@ def run_derivation(db: Session, capture_id: str, pending_run_id: str | None = No
                 db.add(metric_row)
                 db.flush()
                 for stream, key in (("events", "source_event_ids"), ("timing", "source_observation_ids")):
-                    db.add_all([EvidenceMetricSource(metric_id=metric_row.id, stream=stream, record_id=rid) for rid in dict.fromkeys(metric[key])])
+                    for batch in batched(dict.fromkeys(metric[key]), 500):
+                        db.add_all([EvidenceMetricSource(metric_id=metric_row.id, stream=stream, record_id=rid) for rid in batch])
+                        db.flush()
             run.status = result["status"]
             run.fingerprint = result["fingerprint"]
             run.result_json = canonical_bytes({k: v for k, v in result.items() if k != "metrics"}).decode()
@@ -135,11 +148,16 @@ def recover_evidence_runs(engine) -> None:
 
 
 def capture_summary(db: Session, capture_id: str) -> dict:
+    from app.evidence_qualification import linked
     capture = capture_or_error(db, capture_id)
     runs = list(db.exec(select(EvidenceRun).where(EvidenceRun.capture_id == capture_id).order_by(EvidenceRun.created_at.desc(), EvidenceRun.id.desc())))
     latest = runs[0] if runs else None
     metrics = list(db.exec(select(EvidenceMetric).where(EvidenceMetric.run_id == latest.id))) if latest else []
+    status = "processing_failed" if latest and not latest.result_json and latest.status == "failed" else (
+        "pending" if latest is None or latest.status == "pending" else (
+            "partially_excluded" if any(m.status == "failed" or (m.status != "not_applicable" and not m.eligible) for m in metrics) else "reconciled"))
     return {**capture.model_dump(), "manifest": strict_json(capture.manifest_json),
+        "capture_status": status, "qualification": linked(db, capture_id),
         "runs": [{"id": r.id, "status": r.status, "reason": r.reason, "version": r.version} for r in runs],
         "reconciliation": strict_json(latest.result_json) if latest and latest.result_json else None,
         "metrics": [{"id": m.id, **strict_json(m.details_json)} for m in metrics]}
@@ -152,25 +170,60 @@ def metric_or_error(db: Session, capture_id: str, metric_id: str) -> EvidenceMet
     return metric
 
 
-def export_bundle(db: Session, capture_id: str) -> bytes:
+def write_bundle(db: Session, capture_id: str, output) -> None:
+    """Write seekable ZIP output in bounded chunks, retaining exact source bytes."""
     summary = capture_summary(db, capture_id)
-    files = {f"sources/{role}.{'jsonl' if role in {'events', 'timing', 'runtime_envelope'} else 'csv' if role == 'legacy_csv' else 'json'}": content
-             for role, content in source_artifacts(db, capture_id).items()}
     report = dict(summary)
-    report.pop("created_at", None)
-    report.pop("manifest_json", None)
+    report.pop("created_at", None); report.pop("manifest_json", None)
     for metric in report["metrics"]:
         metric["sources"] = [{"stream": s.stream, "record_id": s.record_id} for s in db.exec(
             select(EvidenceMetricSource).where(EvidenceMetricSource.metric_id == metric["id"]).order_by(EvidenceMetricSource.id))]
-    files["report.json"] = canonical_bytes(report)
-    files["README.txt"] = b"Classic MATB evidence bundle. Original sources are preserved byte-for-byte.\nRecompute: python -m matb_integration.evidence <bundle.zip>\nSoftware observations do not establish physical onset or human validity.\n"
-    files["checksums.json"] = canonical_bytes({name: hashlib.sha256(content).hexdigest() for name, content in files.items()})
-    output = io.BytesIO()
+    checksums = {}
+    from app.evidence_models import EvidenceQualificationArtifact
+    # Query metadata first. SQLite's incremental BLOB reader retrieves chunks;
+    # no source-artifact dictionary or complete ZIP is held by the HTTP route.
+    members = []
+    for aid, role, digest, size in db.exec(select(EvidenceArtifact.id, EvidenceArtifact.role,
+            EvidenceArtifact.sha256, func.length(EvidenceArtifact.content)).where(EvidenceArtifact.capture_id == capture_id)):
+        suffix = 'jsonl' if role in {'events', 'timing', 'runtime_envelope'} else 'csv' if role == 'legacy_csv' else 'json'
+        members.append((f"sources/{role}.{suffix}", EvidenceArtifact, aid, size, digest))
+    seen = set()
+    for item in summary["qualification"]["items"]:
+        record = item["record"]
+        if record["id"] in seen: continue
+        seen.add(record["id"])
+        for aid, name, size in db.exec(select(EvidenceQualificationArtifact.id, EvidenceQualificationArtifact.name,
+                func.length(EvidenceQualificationArtifact.content)).where(EvidenceQualificationArtifact.qualification_id == record["id"])):
+            members.append((f"qualification/{record['id']}/{name}", EvidenceQualificationArtifact, aid, size, record["evidence"][name]["sha256"]))
+    def info(name):
+        entry = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+        entry.compress_type = zipfile.ZIP_DEFLATED
+        return entry
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for name, content in sorted(files.items()):
-            info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
-            info.compress_type = zipfile.ZIP_DEFLATED
-            archive.writestr(info, content)
+        for name, model, aid, size, expected in sorted(members, key=lambda m: m[0]):
+            digest = hashlib.sha256()
+            connection = db.connection().connection.driver_connection
+            with connection.blobopen(model.__tablename__, "content", aid, readonly=True) as source, archive.open(info(name), "w") as sink:
+                while chunk := source.read(1024 * 1024):
+                    digest.update(chunk); sink.write(chunk)
+            if digest.hexdigest() != expected:
+                raise EvidenceError("stored_artifact_integrity_mismatch")
+            checksums[name] = expected
+        for name, content in {
+            "report.json": canonical_bytes(report),
+            "README.txt": b"Classic MATB evidence bundle. Original sources are preserved byte-for-byte.\nRecompute: python -m matb_integration.evidence <bundle.zip>\nSoftware observations do not establish physical onset or human validity.\n",
+        }.items():
+            if len(content) > MAX_STREAM_BYTES:
+                raise EvidenceError("export_report_capacity_exceeded", 413)
+            archive.writestr(info(name), content)
+            checksums[name] = hashlib.sha256(content).hexdigest()
+        archive.writestr(info("checksums.json"), canonical_bytes(checksums))
+
+
+def export_bundle(db: Session, capture_id: str) -> bytes:
+    """Compatibility helper for in-process callers; HTTP uses write_bundle."""
+    output = io.BytesIO()
+    write_bundle(db, capture_id, output)
     return output.getvalue()
 
 
@@ -198,7 +251,8 @@ def freeze_analysis_input(db: Session, metric_ids: list[str]) -> dict:
             "metrics_schema_version": "2.0", "scientific_source_status": "authoritative_event_stream_reconciled",
             "metric": metric.key, "metric_version": metric.version, "value": metric.value,
             "confirmatory_eligible": True, "reconciliation_fingerprint": run.fingerprint,
-            "manifest_sha256": capture.manifest_sha256, "derivation_version": run.version})
+            "manifest_sha256": capture.manifest_sha256, "derivation_version": run.version,
+            "analysis_execution": strict_json(run.result_json).get("analysis_execution") if run.result_json else None})
     payload = {"schema_version": "1.0", "rows": rows, "automatic_model": None}
     fid = hashlib.sha256(canonical_bytes(payload)).hexdigest()
     if db.get(EvidenceAnalysisInput, fid) is None:

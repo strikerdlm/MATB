@@ -1,8 +1,5 @@
 import type { AircraftSnapshot, PointMM, WorldSnapshot } from "@/types/simulation";
 
-function cloneSnapshot(snapshot: WorldSnapshot): WorldSnapshot {
-  return JSON.parse(JSON.stringify(snapshot)) as WorldSnapshot;
-}
 function lerp(start: number, end: number, fraction: number): number {
   return start + (end - start) * fraction;
 }
@@ -19,7 +16,9 @@ export function interpolateSnapshot(
   after: WorldSnapshot,
   simulationTimeMs: number,
 ): WorldSnapshot {
-  const rendered = cloneSnapshot(after);
+  // Unchanged public state is shared read-only. Copy only the aircraft records
+  // whose presentation transforms can change; coverage can be very large.
+  const rendered = { ...after, aircraft: { ...after.aircraft } };
   const duration = after.simulation_time_ms - before.simulation_time_ms;
   if (duration <= 0 || !Number.isFinite(simulationTimeMs)) return rendered;
   const fraction = Math.min(

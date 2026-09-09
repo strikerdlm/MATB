@@ -1362,6 +1362,7 @@ For advanced detail, use the [research evidence review](docs/research/military-a
 
 - [Examples and workflow chooser](examples/README.md)
 - [Research Console overview](webui/README.md), [backend API](webui/backend/README.md), and [frontend screens](webui/frontend/README.md)
+- [Classic scientific evidence pipeline](docs/implementation/classic-evidence-pipeline.md), [event review and qualification links](docs/implementation/evidence-review-qualification-performance.md), and [measured performance](docs/reports/evidence-performance-2026-09-09.md)
 - [Suhir DEPDF guide](matb_integration/suhir/README.md)
 - [Research evidence review](docs/research/military-aviation-platform/research_evidence_review.md) and [scale validation](docs/research/scales/sagat_validation.md)
 - [Synthetic sUAS design](docs/superpowers/specs/2026-08-01-suas-c2-research-simulator-design.md) and [verification](docs/implementation/suas-c2-v1-verification.md)

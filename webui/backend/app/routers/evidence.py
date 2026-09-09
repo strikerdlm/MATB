@@ -1,17 +1,23 @@
 """Research-only scientific captures; never part of participant snapshots."""
 from typing import Literal
+import tempfile
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select, func
 from starlette.concurrency import run_in_threadpool
+from starlette.responses import StreamingResponse
+from starlette.background import BackgroundTask
 
 from app.db import get_session
 from app.evidence_models import EvidenceCapture, EvidenceRecord, EvidenceMetricSource, EvidenceAnalysisInput
 from app.evidence_service import (EvidenceError, ingest_evidence, capture_summary, capture_or_error,
-    metric_or_error, run_derivation, export_bundle, freeze_analysis_input)
+    metric_or_error, run_derivation, write_bundle, freeze_analysis_input)
 from app.routers.ingest import _read_bounded
 from matb_integration.evidence.contracts import MAX_STREAM_BYTES, strict_json
+from matb_integration.evidence.qualification import QualificationSubmissionV1, QualificationBindingV1
+from app import evidence_qualification
+from app.evidence_review import event_context
 
 router = APIRouter(tags=["evidence"])
 
@@ -94,9 +100,22 @@ def metric(capture_id: str, metric_id: str, db: Session = Depends(get_session)):
 
 @router.get("/evidence/captures/{capture_id}/export")
 def export(capture_id: str, db: Session = Depends(get_session)):
-    content = checked(export_bundle, db, capture_id)
-    return Response(content, media_type="application/zip", headers={
-        "Content-Disposition": f'attachment; filename="evidence-{capture_id}.zip"'})
+    content = tempfile.TemporaryFile(mode="w+b")
+    try:
+        checked(write_bundle, db, capture_id, content)
+        size = content.tell()
+        content.seek(0)
+    except BaseException:
+        content.close()
+        raise
+    def chunks():
+        try:
+            while chunk := content.read(1024 * 1024):
+                yield chunk
+        finally:
+            content.close()
+    return StreamingResponse(chunks(), media_type="application/zip", background=BackgroundTask(content.close), headers={
+        "Content-Length": str(size), "Content-Disposition": f'attachment; filename="evidence-{capture_id}.zip"'})
 
 
 class AnalysisSelection(BaseModel):
@@ -114,3 +133,38 @@ def read_analysis_input(input_id: str, db: Session = Depends(get_session)):
     if row is None:
         raise HTTPException(404, "analysis_input_not_found")
     return {"id": row.id, **strict_json(row.input_json)}
+
+
+@router.post("/evidence/qualifications")
+def register_qualification(submission: QualificationSubmissionV1, db: Session = Depends(get_session)):
+    return checked(evidence_qualification.register, db, submission)
+
+
+@router.get("/evidence/qualifications/{record_id}")
+def read_qualification(record_id: str, db: Session = Depends(get_session)):
+    return checked(evidence_qualification.read, db, record_id)
+
+
+class QualificationRevocation(BaseModel):
+    reviewer: str = Field(min_length=1, max_length=200)
+    reason: str = Field(min_length=1, max_length=4000)
+
+
+@router.post("/evidence/qualifications/{record_id}/revoke")
+def revoke_qualification(record_id: str, revocation: QualificationRevocation, db: Session = Depends(get_session)):
+    return checked(evidence_qualification.revoke, db, record_id, revocation.reviewer, revocation.reason)
+
+
+@router.post("/evidence/captures/{capture_id}/qualifications")
+def link_qualification(capture_id: str, binding: QualificationBindingV1, db: Session = Depends(get_session)):
+    return checked(evidence_qualification.link, db, capture_id, binding)
+
+
+@router.get("/evidence/captures/{capture_id}/qualifications")
+def capture_qualifications(capture_id: str, db: Session = Depends(get_session)):
+    return checked(evidence_qualification.linked, db, capture_id)
+
+
+@router.get("/evidence/captures/{capture_id}/events/{event_id}/context")
+def review_event(capture_id: str, event_id: str, db: Session = Depends(get_session)):
+    return checked(event_context, db, capture_id, event_id)
