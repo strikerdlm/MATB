@@ -7,8 +7,9 @@ import type { EvidenceCapture } from "@/lib/evidence";
 vi.mock("@/lib/i18n", () => ({ useAppLocale: () => ({ copy: (_es: string, en: string) => en }) }));
 vi.mock("@/lib/evidence", async importOriginal => ({
   ...await importOriginal<typeof import("@/lib/evidence")>(),
-  evidenceRequest: vi.fn(async (url: string) => url.includes("stream=timing")
-    ? { total: 1, items: [{ event_id: "event-42", observation_id: "obs-42", kind: "software_receipt", clock_id: "python.perf_counter", value: 123, unit: "ns", evidence_source: "software" }] }
+  evidenceRequest: vi.fn(async (url: string) => url.includes("/context")
+    ? { task: "track", events: [{ record: { event_id: "event-42", event_type: "track.sample" }, raw_json: '{"event_id":"event-42"}', scenario_time_ns_text: "1000000000" }], task_fields: [], truncated: {},
+        timing: [{ record: { event_id: "event-42", observation_id: "obs-42", kind: "software_receipt", clock_id: "python.perf_counter", unit: "ns", evidence_source: "software" }, value_text: "123" }] }
     : { total: 1, items: [{ event_id: "event-42", sequence: 42, scenario_time_ns: 1000000000, event_type: "track.sample", payload: { address: "center_deviation", value: 3 } }] }),
 }));
 
@@ -22,7 +23,7 @@ describe("evidence inspection", () => {
     } as unknown as EvidenceCapture;
     render(<EvidenceInspector capture={capture} />);
     expect(screen.getByRole("checkbox", { name: "Include track_rmse_deviation" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "track_rmse_deviation" }));
+    fireEvent.click(screen.getByRole("button", { name: /Tracking error/ }));
     expect(screen.getByText("sample_gap")).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: /track.sample/ }));
     expect(await screen.findByText(/software_receipt · software · python.perf_counter/)).toBeInTheDocument();

@@ -5,3 +5,6 @@ scenarios/military_aviation/*.json text eol=lf
 # Geographic package checksums cover exact bytes on every platform.
 webui/frontend/public/scenes/** -text
 webui/frontend/public/geography/** -text
+
+# Retained measurement hashes cover the exact artifact bytes.
+docs/reports/evidence-performance-2026-09-09/*.json -text

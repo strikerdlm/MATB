@@ -10,9 +10,15 @@ export interface EvidenceMetric {
 export interface EvidenceCapture {
   id: string; participant_id: string | null; condition: string; execution_purpose: string; completion: string;
   block_instance_id: string; manifest_sha256: string;
+  capture_status?: string;
+  qualification?: { physical_timing: string; human_calibration: string;
+    protocol_eligibility: { status: string; reason: string };
+    items: { id: string; status: string; result: string; record: { id: string; kind: string; reviewer: string; context_sha256: string } }[] };
   manifest: { source_commit: string; scenario_sha256: string; profile_id: string; clocks: Record<string, string> };
   metrics: EvidenceMetric[]; runs: { id: string; status: string; reason: string | null; version: string }[];
-  reconciliation: { fingerprint: string; issues: { code: string; task: string | null; event_ids: string[]; detail: string }[] } | null;
+  reconciliation: { fingerprint: string; analysis_execution?: { source_commit: string | null; source_dirty: boolean | null;
+    dependency_lock_sha256: string | null; implementation_sha256: string; analysis_configuration: Record<string, unknown>; environment: Record<string, string> };
+    issues: { code: string; task: string | null; event_ids: string[]; detail: string }[] } | null;
 }
 export interface EvidenceRecord {
   raw_json?: string; value_text?: string;

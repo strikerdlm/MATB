@@ -12,6 +12,7 @@ export interface CameraPose {
 export type CameraMode = "overview" | "follow" | "drone";
 export interface PresentationConfig {
   version: 1 | 2;
+  interpolation_policy?: "linear-320-v1" | "none-v1";
   controls?: { smooth_camera: boolean; contact_cycling: boolean; adjustable_layers: boolean };
   layers?: GeographyLayer[];
   traffic?: TrafficConfig;

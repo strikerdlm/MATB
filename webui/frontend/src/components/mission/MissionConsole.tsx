@@ -13,7 +13,6 @@ import { MissionJourneyRail } from "@/components/mission/MissionJourneyRail";
 import { ProbeOverlay } from "@/components/mission/probes/ProbeOverlay";
 import type { PostBlockScaleValues } from "@/components/mission/probes/PostBlockScales";
 import { t } from "@/lib/simulation/i18n";
-import { interpolateSnapshot } from "@/lib/simulation/interpolation";
 import { getSimulationSession, getSimulationState, transitionSession } from "@/lib/simulation/api";
 import { flushPresentation } from "@/lib/simulation/presentation/queue";
 import { getParticipantJourney } from "@/lib/api";
@@ -67,7 +66,6 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
   const submitCommand = useSimulationStore((state) => state.submitCommand);
   const currentSession = session ?? initialSession;
   const currentSnapshot = snapshot ?? initialSnapshot;
-  const [displaySnapshot, setDisplaySnapshot] = useState<WorldSnapshot | null>(currentSnapshot);
   const lease = controllerLease(currentSession.id);
   const canControl = !readOnly && Boolean(lease);
   const nextStep = currentSession.lifecycle === "PREPARED"
@@ -80,29 +78,6 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
           ? (locale === "es-CO" ? "Paso actual: complete el instrumento mostrado o reanude cuando esté listo." : "Current step: complete the displayed instrument or resume when ready.")
           : (locale === "es-CO" ? "Siga la acción resaltada en la barra superior." : "Follow the highlighted action in the top bar.");
 
-  useEffect(() => {
-    if (!currentSnapshot) {
-      setDisplaySnapshot(null);
-      return;
-    }
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (!previousSnapshot || previousSnapshot.block_id !== currentSnapshot.block_id || reducedMotion || currentSession.lifecycle !== "RUNNING" || connection !== "live" || concealOperationalState) {
-      setDisplaySnapshot(currentSnapshot);
-      return;
-    }
-    const started = performance.now();
-    const duration = 320;
-    let frame = 0;
-    const draw = (now: number) => {
-      const fraction = Math.min(1, Math.max(0, (now - started) / duration));
-      const simulationTime = previousSnapshot.simulation_time_ms
-        + (currentSnapshot.simulation_time_ms - previousSnapshot.simulation_time_ms) * fraction;
-      setDisplaySnapshot(interpolateSnapshot(previousSnapshot, currentSnapshot, simulationTime));
-      if (fraction < 1) frame = window.requestAnimationFrame(draw);
-    };
-    frame = window.requestAnimationFrame(draw);
-    return () => window.cancelAnimationFrame(frame);
-  }, [currentSnapshot, previousSnapshot, currentSession.lifecycle, connection, concealOperationalState]);
 
   useEffect(() => {
     if (!currentSession.participant_id || !currentSession.visit_ordinal) return;
@@ -222,9 +197,9 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
       ) : <main className="grid min-h-0 flex-1 gap-3 p-3 xl:grid-cols-[14rem_minmax(32rem,1fr)_21rem] xl:p-4" aria-label={t(locale, "mission.operations")}>
         <div className="grid min-h-0 gap-3 md:grid-cols-2 xl:grid-cols-1 xl:grid-rows-[auto_minmax(15rem,1fr)]">
           <MissionJourneyRail session={currentSession} locale={locale} steps={journeySteps} />
-          <FleetPanel snapshot={displaySnapshot} locale={locale} selectedAircraftId={selectedAircraftId} onSelect={selectAircraft} />
+          <FleetPanel snapshot={currentSnapshot} locale={locale} selectedAircraftId={selectedAircraftId} onSelect={selectAircraft} />
         </div>
-        <MissionPresentation session={currentSession} lease={canControl ? lease : null} readOnly={!canControl} frozen={busy || concealOperationalState || currentSession.lifecycle === "PAUSED" && currentSession.protocol_phase !== "READY_FOR_BLOCK" || currentSession.lifecycle === "RUNNING" && connection !== "live"} snapshot={displaySnapshot ?? currentSnapshot} locale={locale} selectedAircraftId={selectedAircraftId} selectedContactId={selectedContactId} onSelectAircraft={(aircraftId) => { setWaypointMode(false); selectAircraft(aircraftId); }} onSelectContact={(contactId) => { setWaypointMode(false); selectContact(contactId); }} waypointAircraftId={waypointMode ? selectedAircraftId : null} onSetWaypoint={(aircraftId, waypoint) => { setWaypointMode(false); void issueCommand("SET_WAYPOINT", { aircraft_id: aircraftId, waypoint }); }} />
+        <MissionPresentation session={currentSession} lease={canControl ? lease : null} readOnly={!canControl} frozen={busy || concealOperationalState || currentSession.lifecycle === "PAUSED" && currentSession.protocol_phase !== "READY_FOR_BLOCK" || currentSession.lifecycle === "RUNNING" && connection !== "live"} snapshot={currentSnapshot} previousSnapshot={previousSnapshot} interpolate={currentSession.lifecycle === "RUNNING" && connection === "live" && !concealOperationalState} locale={locale} selectedAircraftId={selectedAircraftId} selectedContactId={selectedContactId} onSelectAircraft={(aircraftId) => { setWaypointMode(false); selectAircraft(aircraftId); }} onSelectContact={(contactId) => { setWaypointMode(false); selectContact(contactId); }} waypointAircraftId={waypointMode ? selectedAircraftId : null} onSetWaypoint={(aircraftId, waypoint) => { setWaypointMode(false); void issueCommand("SET_WAYPOINT", { aircraft_id: aircraftId, waypoint }); }} />
         <aside className="flex min-h-0 flex-col gap-3" aria-label={t(locale, "mission.detail_panel")} data-testid="mission-detail-panel" tabIndex={-1}>
           <MissionInstructionPanel session={currentSession} locale={locale} selectedAircraft={selectedAircraft} selectedContact={selectedContact} />
           <section className="mission-panel flex min-h-[15rem] flex-1 flex-col">
