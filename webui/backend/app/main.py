@@ -125,6 +125,8 @@ async def lifespan(app: FastAPI):
     try:
         ensure_study_binding(engine, selected_protocol())
         reconcile_interrupted_bayes_jobs(engine)
+        from app.evidence_service import recover_evidence_runs
+        recover_evidence_runs(engine)
         try:
             async with AsyncExitStack() as cleanup:
                 for provider in _COMPONENT_PROVIDERS:
@@ -193,6 +195,7 @@ _CORE_ROUTER_MODULES = (
     "app.routers.exports",
     "app.routers.fits",
     "app.routers.ingest",
+    "app.routers.evidence",
     "app.routers.journey",
     "app.routers.metrics",
     "app.routers.participants",

@@ -57,6 +57,15 @@ class ScientificRequestBodyLimitMiddleware:
             limit = MAX_INGEST_BODY_BYTES
             too_large_code = "ingest_request_too_large"
             noun = "ingest multipart request"
+        elif route == ("POST", "/ingest/evidence"):
+            from matb_integration.evidence.contracts import MAX_STREAM_BYTES
+            limit = 2 * MAX_STREAM_BYTES + MAX_SESSION_CSV_BYTES + 2 * MAX_SESSION_MANIFEST_BYTES + MAX_INGEST_MULTIPART_OVERHEAD_BYTES
+            too_large_code = "evidence_request_too_large"
+            noun = "evidence multipart request"
+        elif route == ("POST", "/evidence/analysis-inputs"):
+            limit = 128 * 1024
+            too_large_code = "evidence_selection_too_large"
+            noun = "evidence analysis selection"
         elif route == ("POST", "/exports/research-bundle"):
             limit = MAX_RESEARCH_BUNDLE_BODY_BYTES
             too_large_code = "research_bundle_request_too_large"

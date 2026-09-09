@@ -83,6 +83,7 @@ def init_db(*, component_model_modules: tuple[str, ...] = ()) -> None:
     from app import (
         models,  # noqa: F401
         study_models,  # noqa: F401
+        evidence_models,  # noqa: F401
     )
 
     for module_name in component_model_modules:

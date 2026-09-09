@@ -9,6 +9,7 @@ from fastapi import FastAPI
 import app.main as main_module
 import app.components as components_module
 import app.routers.analysis as analysis_module
+import app.evidence_service as evidence_module
 
 
 class Provider:
@@ -38,6 +39,7 @@ def _disable_database_startup(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(main_module, "get_engine", lambda: object())
     monkeypatch.setattr(main_module, "selected_protocol", lambda: SimpleNamespace())
     monkeypatch.setattr(main_module, "ensure_study_binding", lambda *_args: None)
+    monkeypatch.setattr(evidence_module, "recover_evidence_runs", lambda _engine: 0)
     monkeypatch.setattr(
         analysis_module, "reconcile_interrupted_bayes_jobs", lambda _engine: 0
     )
