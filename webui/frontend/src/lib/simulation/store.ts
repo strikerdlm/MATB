@@ -1,3 +1,4 @@
+import type { TrafficFrame } from "@/lib/geography/types";
 import { create } from "zustand";
 import { getApiBase } from "@/lib/runtime-config";
 import {
@@ -30,6 +31,7 @@ const LEASE_KEY_PREFIX = "matb.simulation.";
 const LEASE_KEY_SUFFIX = ".lease";
 
 export interface SimulationStoreState {
+  traffic: TrafficFrame | null;
   session: SessionView | null;
   snapshot: WorldSnapshot | null;
   previousSnapshot: WorldSnapshot | null;
@@ -221,6 +223,7 @@ function initialState(): Omit<SimulationStoreState, keyof {
 }> {
   return {
     session: null,
+    traffic: null,
     snapshot: null,
     previousSnapshot: null,
     lastSequence: 0,
@@ -333,6 +336,7 @@ export function createSimulationStore() {
         set({ lastSequence: envelope.sequence });
       }
 
+      if(envelope.kind === "traffic") set({traffic: envelope.payload as unknown as TrafficFrame});
       const lifecycle = envelope.kind === "lifecycle" ? lifecycleFromPayload(envelope.payload) : null;
       if (lifecycle && get().session) {
         const session = { ...get().session!, lifecycle, state_version: Math.max(get().session!.state_version, envelope.state_version), simulation_time_ms: Math.max(get().session!.simulation_time_ms, envelope.simulation_time_ms) };

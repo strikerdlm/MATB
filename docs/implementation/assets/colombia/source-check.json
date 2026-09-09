@@ -1,0 +1,67 @@
+{
+  "verified_at": "2026-09-09T01:52:46.416426+00:00",
+  "provider": "adsb.lol",
+  "radius_nm": 50,
+  "areas": [
+    {
+      "region": "Meta",
+      "location": "Villavicencio",
+      "status": "live",
+      "observations": 2,
+      "geometric_altitude_available": 2
+    },
+    {
+      "region": "Cauca",
+      "location": "Popayán",
+      "status": "empty",
+      "observations": 0,
+      "geometric_altitude_available": 0
+    },
+    {
+      "region": "Norte de Santander",
+      "location": "Cúcuta",
+      "status": "empty",
+      "observations": 0,
+      "geometric_altitude_available": 0
+    },
+    {
+      "region": "Antioquia",
+      "location": "Rionegro",
+      "status": "live",
+      "observations": 4,
+      "geometric_altitude_available": 4
+    },
+    {
+      "region": "Sierra Nevada de Santa Marta",
+      "location": "Minca",
+      "status": "empty",
+      "observations": 0,
+      "geometric_altitude_available": 0
+    },
+    {
+      "region": "Sierra Nevada del Cocuy",
+      "location": "El Cocuy–Güicán",
+      "status": "empty",
+      "observations": 0,
+      "geometric_altitude_available": 0
+    }
+  ],
+  "imagery": {
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/2026-09-07/GoogleMapsCompatible_Level9/9/249/151.jpg",
+    "status": 200,
+    "content_type": "image/jpeg",
+    "bytes": 11905
+  },
+  "style": {
+    "url": "https://tiles.openfreemap.org/styles/liberty",
+    "status": 200,
+    "content_type": "application/json",
+    "bytes": 43079
+  },
+  "relief": {
+    "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/9/151/249.png",
+    "status": 200,
+    "content_type": "image/png",
+    "bytes": 90133
+  }
+}

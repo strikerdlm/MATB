@@ -4,6 +4,17 @@ All notable changes to the MATB military aviation research platform.
 
 ## [Unreleased] — 2026-08-02
 
+### Colombia geography and observed traffic — 2026-09-09
+
+- Add a national explorer with geographic layers and live aircraft observations,
+  plus six immutable local terrain/imagery scenes for Three.js/TypeScript missions.
+- Add local-area preparation, coordinate/geoid conversion, controlled traffic
+  capture, checksum-pinned research exposure, and synchronized public replay.
+- Preserve synthetic engine scoring, information hiding and questionnaire pauses;
+  fix delayed answer responses clearing a newly streamed question.
+- Document startup, data sources, region scope, offline use and software verification
+  in the bilingual READMEs and the Colombia implementation guides.
+
 ### Native Polar H10 physiology — Release A candidate — 2026-09-03
 
 #### Added

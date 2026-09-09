@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class StreamKind(StrEnum):
+    TRAFFIC = "traffic"
     SNAPSHOT = "snapshot"
     DOMAIN_EVENT = "domain_event"
     ALERT = "alert"

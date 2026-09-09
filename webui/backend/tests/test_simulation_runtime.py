@@ -207,3 +207,143 @@ async def test_repeated_pause_reconnect_and_checkpoint_recovery_cycles(manager, 
 
     await manager.finish(prepared.id, prepared.controller_lease, "abort")
     await manager.shutdown()
+
+@pytest.mark.anyio
+async def test_presentation_readiness_failure_and_authoritative_state(manager, runtime_db):
+    from app.simulation_schemas import PresentationConfig, PresentationEvent
+    from app.simulation_runtime import InvalidTransition
+    from matb_integration.suas.presentation.packages import catalog
+    from matb_integration.suas.engine.runtime import SimulationEngine
+    scene = catalog()[0]
+    config = PresentationConfig(blocks={"PRACTICE": "3d"}, scene_id=scene["id"], scene_sha256=scene["sha256"])
+    with Session(runtime_db) as db:
+        prepared = await manager.prepare(request().model_copy(update={"presentation": config}), db)
+    assert prepared.presentation == config
+    with pytest.raises(InvalidTransition, match="presentation_not_ready"):
+        await manager.start(prepared.id, "PRACTICE", prepared.controller_lease)
+    ready = PresentationEvent(event_id=uuid4(), block_id="PRACTICE", kind="ready", scene_sha256=scene["sha256"])
+    with pytest.raises(InvalidLease):
+        await manager.presentation_event(prepared.id, "observer", ready)
+    await manager.presentation_event(prepared.id, prepared.controller_lease, ready)
+    await manager.presentation_event(prepared.id, prepared.controller_lease, ready)
+    assert len((manager.active.recorder.run_dir / "presentation.jsonl").read_text().splitlines()) == 1
+    await manager.start(prepared.id, "PRACTICE", prepared.controller_lease)
+    baseline = SimulationEngine(manager.active.scenario.definition, "PRACTICE")
+    await manager.tick_once()
+    baseline.step()
+    assert manager.active.engine.state_hash == baseline.state_hash
+    assert (await manager.state(prepared.id))["aircraft"]["UAS-01"]["altitude_mm"] > 0
+    failure = PresentationEvent(event_id=uuid4(), block_id="PRACTICE", kind="failure")
+    await manager.presentation_event(prepared.id, prepared.controller_lease, failure)
+    assert manager.active.lifecycle == "PAUSED"
+    assert manager.active.validity == "valid_with_deviation"
+    with pytest.raises(InvalidTransition, match="presentation_not_ready"):
+        await manager.resume(prepared.id, prepared.controller_lease)
+    with pytest.raises(InvalidTransition, match="locked"):
+        await manager.presentation_event(prepared.id, prepared.controller_lease, PresentationEvent(event_id=uuid4(), block_id="PRACTICE", kind="fallback"))
+    await manager.presentation_event(prepared.id, prepared.controller_lease, ready.model_copy(update={"event_id": uuid4()}))
+    await manager.resume(prepared.id, prepared.controller_lease)
+    assert manager.active.engine.state_hash == baseline.state_hash
+    await manager.finish(prepared.id, prepared.controller_lease, "abort")
+    assert "presentation.jsonl" in (manager.active.recorder.run_dir / "checksums.sha256").read_text()
+    with pytest.raises(InvalidTransition, match="sealed"):
+        await manager.presentation_event(prepared.id, prepared.controller_lease, failure)
+    await manager.shutdown()
+
+
+def test_presentation_config_requires_pinned_scene():
+    from app.simulation_schemas import PresentationConfig
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        PresentationConfig(blocks={"LOW": "3d"})
+
+
+def test_scene_corruption_rejected(tmp_path, monkeypatch):
+    import shutil
+    from matb_integration.suas.presentation import packages
+    source = packages.package_root() / "villavicencio-v1"
+    shutil.copytree(source, tmp_path / source.name)
+    monkeypatch.setattr(packages, "package_root", lambda: tmp_path)
+    assert len(packages.catalog()) == 1
+    (tmp_path / source.name / "elevation.json").write_text("{}")
+    with pytest.raises(ValueError, match="checksum"):
+        packages.read_package(source.name)
+    assert packages.catalog() == []
+
+@pytest.mark.anyio
+async def test_traffic_research_rejects_live_and_recording_requires_duration(manager, runtime_db, monkeypatch):
+    from app.simulation_schemas import PresentationConfig, TrafficConfig
+    from matb_integration.suas.presentation.packages import catalog
+    import app.traffic_service as service
+    scene=catalog()[0]
+    config=PresentationConfig(scene_id=scene['id'],scene_sha256=scene['sha256'],traffic=TrafficConfig(mode='live'))
+    with Session(runtime_db) as db:
+        with pytest.raises(ValueError,match='recorded traffic'):
+            await manager.prepare(request().model_copy(update={'presentation':config}),db)
+    config.traffic=TrafficConfig(mode='recorded',recording_id='short',recording_sha256='a'*64)
+    monkeypatch.setattr(service,'load_recording',lambda *args:{'scene_id':scene['id'],'scene_sha256':scene['sha256'],'duration_ms':10,'provider':'adsb.lol'})
+    with Session(runtime_db) as db:
+        with pytest.raises(ValueError,match='shorter'):
+            await manager.prepare(request().model_copy(update={'presentation':config}),db)
+
+@pytest.mark.anyio
+async def test_live_traffic_is_separate_paused_concealed_and_sealed(manager,runtime_db,monkeypatch):
+    from app.simulation_schemas import CreateTechnicalSimulationSession,PresentationConfig,TrafficConfig
+    from matb_integration.suas.presentation.packages import catalog
+    from matb_integration.suas.recording.artifacts import verify_checksum_file
+    import app.traffic_service as service
+    scene=catalog()[0]
+    async def snapshot(*args):
+        return {'version':1,'provider':'adsb.lol','status':'live','sampled_at':1000,'tracks':[{'id':'a12345','callsign':'TEST','lat':scene['origin']['lat'],'lon':scene['origin']['lon'],'observed_at':1000,'received_at':1000,'geometric_altitude_m':6000,'barometric_altitude_m':5800,'speed_mps':80,'track_deg':90,'vertical_rate_mps':0,'on_ground':False,'age_s':0,'stale':False,'source':'adsb.lol'}]}
+    monkeypatch.setattr(service.traffic_service,'snapshot',snapshot)
+    config=PresentationConfig(scene_id=scene['id'],scene_sha256=scene['sha256'],traffic=TrafficConfig(mode='live'))
+    with Session(runtime_db) as db:
+        prepared=await manager.prepare_technical(CreateTechnicalSimulationSession(scenario_id='reference_area_search',block_id='LOW',locale='en',presentation=config),db)
+    await manager.start(prepared.id,'LOW',prepared.controller_lease)
+    before=manager.active.engine.state_hash
+    await manager.traffic_once()
+    assert manager.active.engine.state_hash==before
+    file=manager.active.recorder.run_dir/'traffic.jsonl'
+    first=file.read_bytes()
+    assert manager.active.traffic_frame['tracks'][0]['position']=={'x_mm':6000000,'y_mm':4000000}
+    await manager.pause(prepared.id,prepared.controller_lease)
+    await manager.traffic_once();assert file.read_bytes()==first
+    await manager.resume(prepared.id,prepared.controller_lease)
+    await manager.traffic_once();assert manager.active.traffic_frame['discontinuity']
+    # Protocol pauses cancel acquisition immediately, even before its next poll.
+    async with manager._lock:
+        await manager._pause_for_protocol_locked(manager.active, 'sagat_freeze')
+        assert manager.active.traffic_discontinuity
+        await manager._resume_after_protocol_locked(manager.active)
+    await manager.traffic_once()
+    assert manager.active.traffic_frame['discontinuity']
+    # The protocol's public concealment property is authoritative for traffic too.
+    from unittest.mock import patch,PropertyMock
+    with patch.object(type(manager.active.protocol),'conceal_operational_state',new_callable=PropertyMock,return_value=True):
+        previous=file.read_bytes();await manager.traffic_once();assert file.read_bytes()==previous
+    await manager.finish(prepared.id,prepared.controller_lease,'abort')
+    assert verify_checksum_file(manager.active.recorder.run_dir)==()
+    assert 'traffic.jsonl' in (manager.active.recorder.run_dir/'checksums.sha256').read_text()
+    await manager.traffic_once();assert manager.active.lifecycle=='ABORTED'
+
+@pytest.mark.anyio
+async def test_recorded_traffic_uses_simulation_time_and_embedded_source(manager,runtime_db,tmp_path,monkeypatch):
+    import json,hashlib
+    import app.traffic_service as service
+    from app.simulation_schemas import CreateTechnicalSimulationSession,PresentationConfig,TrafficConfig
+    from matb_integration.suas.presentation.packages import catalog
+    scene=catalog()[0]
+    base={'provider':'adsb.lol','status':'live','sampled_at':1000,'tracks':[{'id':'a12345','callsign':'TEST','lat':scene['origin']['lat'],'lon':scene['origin']['lon'],'observed_at':1000,'received_at':1000,'geometric_altitude_m':6000,'barometric_altitude_m':None,'speed_mps':80,'track_deg':90,'vertical_rate_mps':0,'on_ground':False,'age_s':0,'stale':False,'source':'adsb.lol'}]}
+    source=tmp_path/'capture.json';raw=json.dumps({'version':1,'id':'test','title':'Test','scene_id':scene['id'],'scene_sha256':scene['sha256'],'duration_ms':600000,'provider':'adsb.lol','frames':[{**base,'simulation_time_ms':0},{**base,'simulation_time_ms':200,'tracks':[]}]}).encode();source.write_bytes(raw)
+    monkeypatch.setattr(service,'recording_path',lambda identifier:source)
+    config=PresentationConfig(scene_id=scene['id'],scene_sha256=scene['sha256'],traffic=TrafficConfig(mode='recorded',recording_id='test',recording_sha256=hashlib.sha256(raw).hexdigest()))
+    with Session(runtime_db) as db:prepared=await manager.prepare_technical(CreateTechnicalSimulationSession(scenario_id='reference_area_search',block_id='LOW',locale='en',presentation=config),db)
+    source.unlink() # The active run owns its verified immutable source.
+    await manager.start(prepared.id,'LOW',prepared.controller_lease);await manager.traffic_once()
+    assert len(manager.active.traffic_frame['tracks'])==1
+    await manager.tick_once();await manager.traffic_once()
+    assert manager.active.traffic_frame['tracks'][0]['age_s']==pytest.approx(.1)
+    await manager.tick_once();await manager.traffic_once()
+    assert manager.active.traffic_frame['tracks']==[]
+    await manager.finish(prepared.id,prepared.controller_lease,'abort')
+    assert 'traffic-source.json' in (manager.active.recorder.run_dir/'checksums.sha256').read_text()

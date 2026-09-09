@@ -30,6 +30,20 @@
       "license_expression": "CECILL-2.1",
       "license_file": "openmatb/LICENSE",
       "scope_note": "Embedded and modified OpenMATB runtime; preserve upstream copyright, license, and modification provenance."
+    },
+    {
+      "component_id": "colombia-geographic-reference-data",
+      "path_prefix": "webui/frontend/public/geography/",
+      "license_expression": "LicenseRef-Geographic-Data",
+      "license_file": "LICENSES/GEOGRAPHY-DATA.md",
+      "scope_note": "Source-specific terms for geographic datasets; repository MIT licensing does not replace those terms."
+    },
+    {
+      "component_id": "colombia-offline-scene-data",
+      "path_prefix": "webui/frontend/public/scenes/",
+      "license_expression": "LicenseRef-Geographic-Data",
+      "license_file": "LICENSES/GEOGRAPHY-DATA.md",
+      "scope_note": "Source-specific imagery, elevation and vector terms are retained through scene manifests and this notice."
     }
   ],
   "dependency_policy": "Python, JavaScript, browser, and system dependencies retain their upstream licenses and must be inventoried in the release SBOM."

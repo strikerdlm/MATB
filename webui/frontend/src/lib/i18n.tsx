@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, startTransition, useContext, useEffect, useMemo, useState } from "react";
 import type { Locale as SimulationLocale } from "@/types/simulation";
 
 export type AppLocale = "es-419" | "en";
@@ -131,7 +131,7 @@ export function AppLocaleProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored === "en" || stored === "es-419") setLocaleState(stored);
+    if (stored === "en" || stored === "es-419") startTransition(() => setLocaleState(stored));
   }, []);
 
   useEffect(() => {
@@ -142,7 +142,8 @@ export function AppLocaleProvider({ children }: { children: React.ReactNode }) {
     locale,
     simulationLocale: locale === "en" ? "en" : "es-CO",
     setLocale: (next) => {
-      setLocaleState(next);
+      // Let streamed page boundaries hydrate before replacing their language.
+      startTransition(() => setLocaleState(next));
       window.localStorage.setItem(STORAGE_KEY, next);
     },
     tr: (key) => (locale === "en" ? EN[key] : ES_419[key]),

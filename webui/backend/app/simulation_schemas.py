@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Literal, TypeAlias
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from typing_extensions import TypeAliasType
 
 from app.participant_ids import PARTICIPANT_ID_PATTERN
@@ -43,10 +43,62 @@ JsonValue = TypeAliasType(
 )
 
 
+class TrafficConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mode: Literal["off", "live", "recorded"] = "off"
+    provider: Literal["adsb.lol", "opensky"] = "adsb.lol"
+    recording_id: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
+    recording_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    @model_validator(mode="after")
+    def require_recording(self):
+        if self.mode == "recorded" and (not self.recording_id or not self.recording_sha256):
+            raise ValueError("recorded traffic requires an immutable recording")
+        return self
+
+
+class PresentationConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    version: Literal[1] = 1
+    layers: list[Literal["roads", "rivers", "settlements", "boundaries", "airports"]] = Field(default_factory=lambda: ["roads", "rivers", "settlements", "boundaries", "airports"])
+    traffic: TrafficConfig = Field(default_factory=TrafficConfig)
+    blocks: dict[WorkloadProfile, Literal["2d", "3d"]] = Field(default_factory=dict)
+    scene_id: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
+    scene_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    camera: Literal["overview", "follow", "drone"] = "overview"
+
+    @model_validator(mode="after")
+    def require_scene(self):
+        if self.traffic.mode != "off" and not self.scene_id:
+            raise ValueError("traffic requires a georeferenced scene")
+        if "3d" in self.blocks.values() and (not self.scene_id or not self.scene_sha256):
+            raise ValueError("3D requires an immutable scene package")
+        if bool(self.scene_id) != bool(self.scene_sha256):
+            raise ValueError("scene id and checksum must be supplied together")
+        return self
+
+
+class PresentationEvent(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    event_id: UUID
+    block_id: WorkloadProfile
+    kind: Literal["ready", "camera", "render", "failure", "fallback"]
+    state_version: int = Field(default=0, ge=0)
+    simulation_time_ms: int = Field(default=0, ge=0)
+    camera: Literal["overview", "follow", "drone"] = "overview"
+    traffic_frame_id: str | None = Field(default=None, max_length=80)
+    layers: list[str] | None = Field(default=None, max_length=16)
+    aircraft_id: str | None = Field(default=None, max_length=64)
+    scene_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    camera_position: tuple[float, float, float] | None = None
+    camera_quaternion: tuple[float, float, float, float] | None = None
+    receipt_to_render_ms: float | None = Field(default=None, ge=0, le=3600000)
+
+
 class CreateSimulationSession(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     participant_id: str = Field(pattern=PARTICIPANT_ID_PATTERN)
+    presentation: PresentationConfig | None = None
     visit_ordinal: int = Field(ge=1, le=16)
     scenario_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
     locale: Locale
@@ -59,6 +111,7 @@ class CreateTechnicalSimulationSession(BaseModel):
 
     scenario_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
     block_id: WorkloadProfile
+    presentation: PresentationConfig | None = None
     locale: Locale
 
 
@@ -68,6 +121,7 @@ class SessionView(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str
+    presentation: PresentationConfig | None = None
     participant_id: str | None = Field(default=None, pattern=PARTICIPANT_ID_PATTERN)
     visit_id: int | None = Field(default=None, ge=1)
     visit_ordinal: int | None = Field(default=None, ge=1, le=16)

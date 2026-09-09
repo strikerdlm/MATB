@@ -19,6 +19,7 @@ export function SidebarNav() {
   const stage = reportedStage?.path === path ? reportedStage.stage : path === "/start" ? 0 : path.includes("debrief") ? 4 : path.includes("session") ? 3 : 1;
   const steps = [copy("Elegir", "Choose"), copy("Preparar", "Prepare"), copy("Instrucciones", "Instructions"), copy("Realizar actividad", "Run activity"), copy("Resultados", "Results")];
   const researcher = [
+    ["/colombia", copy("Colombia · mapas y tráfico", "Colombia · maps and traffic")],
     ["/", copy("Seguimiento", "Tracker")], ["/participants", copy("Participantes", "Participants")],
     ["/experiments", copy("Diseñador de experimentos", "Experiment designer")], ["/openmatb/settings", copy("Configuración OpenMATB", "OpenMATB settings")],
     ["/upload", copy("Cargar datos", "Upload data")], ["/visualization", copy("Visualización", "Visualization")], ["/analysis", copy("Análisis", "Analysis")],

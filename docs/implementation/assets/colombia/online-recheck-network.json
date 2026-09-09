@@ -1,0 +1,9 @@
+[
+  {
+    "url": "https://tiles.openfreemap.org/styles/liberty",
+    "failure": "net::ERR_NAME_NOT_RESOLVED"
+  },
+  {
+    "console": "Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+  }
+]

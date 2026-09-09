@@ -1,0 +1,226 @@
+# Reference-scale fixture for 2/4/8-aircraft geographic presentation checks.
+schema_version: 1
+scenario_id: presentation_area_search
+title:
+  en: Reference area search
+  es-CO: Búsqueda de área de referencia
+author: MATB research team
+description:
+  en: Fictional deterministic area search for pilot testing
+  es-CO: Búsqueda ficticia determinista para pruebas piloto
+seed: 20260801
+terrain:
+  polygon_id: mission_area
+  label:
+    en: Mission area
+    es-CO: Área de misión
+  vertices:
+    - {x_m: 0, y_m: 0}
+    - {x_m: 12000, y_m: 0}
+    - {x_m: 12000, y_m: 8000}
+    - {x_m: 0, y_m: 8000}
+home_base: {x_m: 600, y_m: 4000}
+initial_view:
+  center: {x_m: 6000, y_m: 4000}
+  width_m: 12000
+  height_m: 8000
+grid_cell_m: 100
+advisory_separation_m: 500
+critical_separation_m: 250
+sectors:
+  - polygon_id: sector_alpha
+    label: {en: Sector Alpha, es-CO: Sector Alfa}
+    vertices:
+      - {x_m: 1800, y_m: 1000}
+      - {x_m: 5200, y_m: 1000}
+      - {x_m: 5200, y_m: 3400}
+      - {x_m: 1800, y_m: 3400}
+  - polygon_id: sector_bravo
+    label: {en: Sector Bravo, es-CO: Sector Bravo}
+    vertices:
+      - {x_m: 6800, y_m: 1000}
+      - {x_m: 10200, y_m: 1000}
+      - {x_m: 10200, y_m: 3400}
+      - {x_m: 6800, y_m: 3400}
+  - polygon_id: sector_charlie
+    label: {en: Sector Charlie, es-CO: Sector Charlie}
+    vertices:
+      - {x_m: 1800, y_m: 4600}
+      - {x_m: 5200, y_m: 4600}
+      - {x_m: 5200, y_m: 7000}
+      - {x_m: 1800, y_m: 7000}
+  - polygon_id: sector_delta
+    label: {en: Sector Delta, es-CO: Sector Delta}
+    vertices:
+      - {x_m: 6800, y_m: 4600}
+      - {x_m: 10200, y_m: 4600}
+      - {x_m: 10200, y_m: 7000}
+      - {x_m: 6800, y_m: 7000}
+restricted_zones:
+  - polygon_id: restricted_northwest
+    label: {en: Northwest restricted area, es-CO: Área restringida noroeste}
+    vertices:
+      - {x_m: 400, y_m: 6800}
+      - {x_m: 1400, y_m: 6800}
+      - {x_m: 1400, y_m: 7600}
+      - {x_m: 400, y_m: 7600}
+  - polygon_id: restricted_southeast
+    label: {en: Southeast restricted area, es-CO: Área restringida sureste}
+    vertices:
+      - {x_m: 10600, y_m: 300}
+      - {x_m: 11600, y_m: 300}
+      - {x_m: 11600, y_m: 1200}
+      - {x_m: 10600, y_m: 1200}
+aircraft:
+  - aircraft_id: UAS-01
+    label: UAS 01
+    home: {x_m: 600, y_m: 4000}
+    speed_mps: 20
+    return_speed_mps: 30
+    altitude_m: 120
+    initial_link: NOMINAL
+    initial_sensor: NOMINAL
+    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 40, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
+    sensor: {radius_m: 300, scan_interval_s: 5, detection_probability: 0.85, scans_to_inspectable: 2}
+  - aircraft_id: UAS-02
+    label: UAS 02
+    home: {x_m: 600, y_m: 4000}
+    speed_mps: 20
+    return_speed_mps: 30
+    altitude_m: 120
+    initial_link: NOMINAL
+    initial_sensor: NOMINAL
+    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 40, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
+    sensor: {radius_m: 300, scan_interval_s: 5, detection_probability: 0.85, scans_to_inspectable: 2}
+  - aircraft_id: UAS-03
+    label: UAS 03
+    home: {x_m: 600, y_m: 4000}
+    speed_mps: 20
+    return_speed_mps: 30
+    altitude_m: 120
+    initial_link: NOMINAL
+    initial_sensor: NOMINAL
+    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 40, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
+    sensor: {radius_m: 300, scan_interval_s: 5, detection_probability: 0.85, scans_to_inspectable: 2}
+  - aircraft_id: UAS-04
+    label: UAS 04
+    home: {x_m: 600, y_m: 4000}
+    speed_mps: 20
+    return_speed_mps: 30
+    altitude_m: 120
+    initial_link: NOMINAL
+    initial_sensor: NOMINAL
+    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 40, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
+    sensor: {radius_m: 300, scan_interval_s: 5, detection_probability: 0.85, scans_to_inspectable: 2}
+  - aircraft_id: UAS-05
+    label: UAS 05
+    home: {x_m: 600, y_m: 4000}
+    speed_mps: 20
+    return_speed_mps: 30
+    altitude_m: 120
+    initial_link: NOMINAL
+    initial_sensor: NOMINAL
+    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 40, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
+    sensor: {radius_m: 300, scan_interval_s: 5, detection_probability: 0.85, scans_to_inspectable: 2}
+  - aircraft_id: UAS-06
+    label: UAS 06
+    home: {x_m: 600, y_m: 4000}
+    speed_mps: 20
+    return_speed_mps: 30
+    altitude_m: 120
+    initial_link: NOMINAL
+    initial_sensor: NOMINAL
+    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 40, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
+    sensor: {radius_m: 300, scan_interval_s: 5, detection_probability: 0.85, scans_to_inspectable: 2}
+  - aircraft_id: UAS-07
+    label: UAS 07
+    home: {x_m: 600, y_m: 4000}
+    speed_mps: 20
+    return_speed_mps: 30
+    altitude_m: 120
+    initial_link: NOMINAL
+    initial_sensor: NOMINAL
+    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 40, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
+    sensor: {radius_m: 300, scan_interval_s: 5, detection_probability: 0.85, scans_to_inspectable: 2}
+  - aircraft_id: UAS-08
+    label: UAS 08
+    home: {x_m: 600, y_m: 4000}
+    speed_mps: 20
+    return_speed_mps: 30
+    altitude_m: 120
+    initial_link: NOMINAL
+    initial_sensor: NOMINAL
+    energy: {capacity_units: 100000, initial_units: 100000, idle_units_per_s: 2, transit_units_per_s: 40, search_units_per_s: 25, sensor_units_per_scan: 5, reserve_margin: 0.15}
+    sensor: {radius_m: 300, scan_interval_s: 5, detection_probability: 0.85, scans_to_inspectable: 2}
+contacts:
+  - {contact_id: C-01, position: {x_m: 2500, y_m: 1800}, truth: routine, truth_priority: LOW, required_report: false}
+  - {contact_id: C-02, position: {x_m: 4100, y_m: 2700}, truth: priority, truth_priority: HIGH, required_report: true}
+  - {contact_id: C-03, position: {x_m: 7300, y_m: 1600}, truth: uncertain, truth_priority: MEDIUM, required_report: true}
+  - {contact_id: C-04, position: {x_m: 8900, y_m: 2900}, truth: routine, truth_priority: LOW, required_report: false}
+  - {contact_id: C-05, position: {x_m: 2700, y_m: 5200}, truth: priority, truth_priority: HIGH, required_report: true}
+  - {contact_id: C-06, position: {x_m: 4400, y_m: 6400}, truth: uncertain, truth_priority: MEDIUM, required_report: true}
+  - {contact_id: C-07, position: {x_m: 7200, y_m: 5300}, truth: routine, truth_priority: LOW, required_report: false}
+  - {contact_id: C-08, position: {x_m: 9400, y_m: 6500}, truth: priority, truth_priority: HIGH, required_report: true}
+  - {contact_id: C-09, position: {x_m: 3400, y_m: 2100}, truth: uncertain, truth_priority: MEDIUM, required_report: true}
+  - {contact_id: C-10, position: {x_m: 8100, y_m: 2200}, truth: routine, truth_priority: LOW, required_report: false}
+  - {contact_id: C-11, position: {x_m: 3300, y_m: 5900}, truth: priority, truth_priority: HIGH, required_report: true}
+  - {contact_id: C-12, position: {x_m: 8500, y_m: 5900}, truth: uncertain, truth_priority: MEDIUM, required_report: true}
+blocks:
+  - block_id: PRACTICE
+    duration_s: 300
+    aircraft_ids: [UAS-01, UAS-02]
+    contact_ids: [C-01, C-02]
+    required_action_window_s: 30
+    isa_interval_s: 150
+    sagat: {window_start_s: 180, window_end_s: 195, probe_bank: suas, probe_ids: [suas_l1_lowest_battery, suas_l2_mission_state, suas_l3_next_sector]}
+    post_block_questionnaires: [NASA_TLX, BEDFORD]
+  - block_id: LOW
+    duration_s: 600
+    aircraft_ids: [UAS-01, UAS-02]
+    contact_ids: [C-01, C-02, C-03]
+    required_action_window_s: 30
+    isa_interval_s: 180
+    sagat: {window_start_s: 360, window_end_s: 375, probe_bank: suas, probe_ids: [suas_l1_unreported, suas_l2_largest_gap, suas_l3_conflict_risk]}
+    post_block_questionnaires: [NASA_TLX, BEDFORD]
+  - block_id: MEDIUM
+    duration_s: 600
+    aircraft_ids: [UAS-01, UAS-02, UAS-03, UAS-04]
+    contact_ids: [C-01, C-02, C-03, C-04, C-05, C-06]
+    required_action_window_s: 20
+    isa_interval_s: 120
+    sagat: {window_start_s: 360, window_end_s: 375, probe_bank: suas, probe_ids: [suas_l1_lost_links, suas_l2_attention, suas_l3_reserve_first]}
+    post_block_questionnaires: [NASA_TLX, BEDFORD]
+  - block_id: HIGH
+    duration_s: 600
+    aircraft_ids: [UAS-01, UAS-02, UAS-03, UAS-04, UAS-05, UAS-06, UAS-07, UAS-08]
+    contact_ids: [C-01, C-02, C-03, C-04, C-05, C-06, C-07, C-08, C-09, C-10, C-11, C-12]
+    required_action_window_s: 12
+    isa_interval_s: 90
+    sagat: {window_start_s: 360, window_end_s: 375, probe_bank: suas, probe_ids: [suas_l1_lost_links, suas_l2_largest_gap, suas_l3_conflict_risk]}
+    post_block_questionnaires: [NASA_TLX, BEDFORD]
+link_events:
+  - {event_id: medium_uas03_lost, block_id: MEDIUM, at_s: 220, aircraft_id: UAS-03, state: LOST}
+  - {event_id: medium_uas03_recovered, block_id: MEDIUM, at_s: 280, aircraft_id: UAS-03, state: NOMINAL}
+  - {event_id: high_uas05_lost, block_id: HIGH, at_s: 180, aircraft_id: UAS-05, state: LOST}
+  - {event_id: high_uas05_recovered, block_id: HIGH, at_s: 240, aircraft_id: UAS-05, state: NOMINAL}
+  - {event_id: high_uas07_lost, block_id: HIGH, at_s: 330, aircraft_id: UAS-07, state: LOST}
+  - {event_id: high_uas07_recovered, block_id: HIGH, at_s: 390, aircraft_id: UAS-07, state: NOMINAL}
+conflict_events:
+  - {event_id: low_conflict_01, block_id: LOW, at_s: 300, aircraft_a: UAS-01, aircraft_b: UAS-02, convergence_point: {x_m: 6000, y_m: 4000}, convergence_in_s: 30}
+  - {event_id: medium_conflict_01, block_id: MEDIUM, at_s: 210, aircraft_a: UAS-01, aircraft_b: UAS-02, convergence_point: {x_m: 6000, y_m: 2500}, convergence_in_s: 30}
+  - {event_id: medium_conflict_02, block_id: MEDIUM, at_s: 420, aircraft_a: UAS-03, aircraft_b: UAS-04, convergence_point: {x_m: 6000, y_m: 5500}, convergence_in_s: 30}
+  - {event_id: high_conflict_01, block_id: HIGH, at_s: 150, aircraft_a: UAS-01, aircraft_b: UAS-02, convergence_point: {x_m: 6000, y_m: 2000}, convergence_in_s: 30}
+  - {event_id: high_conflict_02, block_id: HIGH, at_s: 270, aircraft_a: UAS-03, aircraft_b: UAS-04, convergence_point: {x_m: 6000, y_m: 3500}, convergence_in_s: 30}
+  - {event_id: high_conflict_03, block_id: HIGH, at_s: 420, aircraft_a: UAS-05, aircraft_b: UAS-06, convergence_point: {x_m: 6000, y_m: 5600}, convergence_in_s: 30}
+report_note_codes:
+  observed: {en: Observed, es-CO: Observado}
+  needs_review: {en: Needs review, es-CO: Requiere revisión}
+  completed: {en: Completed, es-CO: Completado}
+metric_thresholds:
+  coverage_target_percent: 75
+  contact_effectiveness_target: 0.8
+  asset_preservation_target: 0.9
+  timeliness_target: 0.8
+termination:
+  finish_at_duration: true
+  abort_when_all_aircraft_failed: true

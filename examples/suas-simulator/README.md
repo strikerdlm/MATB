@@ -2,8 +2,11 @@
 
 [Español](README.es.md)
 
-This is a deterministic, non-kinetic research simulator. It has no real
-aircraft, maps, telemetry, weapons, or external service connection. The native
+This is a deterministic, non-kinetic research simulator. This walkthrough uses
+synthetic inputs and works offline after installation. The optional Colombia
+presentation adds real geography and read-only observed traffic; it cannot
+control real aircraft. See the [geography and traffic guide](../../docs/implementation/colombia-geography-traffic.md)
+for the six local scenes, online explorer and captured-traffic research workflow. The native
 API validates pseudonymous sUAS identities as `P` plus digits, so this tour
 uses synthetic `P01`; the separate research-console tour uses `SYNTH-P01`.
 See the [backend guide](../../webui/backend/README.md) and

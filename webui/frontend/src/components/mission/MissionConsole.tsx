@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Loader2 } from "lucide-react";
-import { MissionMap } from "@/components/mission/map/MissionMap";
+import { MissionPresentation, preflightSnapshot } from "./presentation/MissionPresentation";
 import { AlertQueue } from "@/components/mission/AlertQueue";
 import { ContactQueue } from "@/components/mission/ContactQueue";
 import { CommandBar } from "@/components/mission/CommandBar";
@@ -17,6 +17,7 @@ import { interpolateSnapshot } from "@/lib/simulation/interpolation";
 import { getSimulationSession, getSimulationState, transitionSession } from "@/lib/simulation/api";
 import { getParticipantJourney } from "@/lib/api";
 import { useSimulationStore } from "@/lib/simulation/store";
+import { reconcileProbeRefresh, sameProbe } from "@/lib/simulation/probe-refresh";
 import type { AircraftSnapshot, CommandKind, ContactSnapshot, JsonValue, Locale, ProtocolCommandKind, SessionView, WorldSnapshot } from "@/types/simulation";
 import type { ParticipantJourneyStep } from "@/types";
 
@@ -84,7 +85,7 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
       return;
     }
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (!previousSnapshot || previousSnapshot.block_id !== currentSnapshot.block_id || reducedMotion) {
+    if (!previousSnapshot || previousSnapshot.block_id !== currentSnapshot.block_id || reducedMotion || currentSession.lifecycle !== "RUNNING" || connection !== "live" || concealOperationalState) {
       setDisplaySnapshot(currentSnapshot);
       return;
     }
@@ -100,7 +101,7 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
     };
     frame = window.requestAnimationFrame(draw);
     return () => window.cancelAnimationFrame(frame);
-  }, [currentSnapshot, previousSnapshot]);
+  }, [currentSnapshot, previousSnapshot, currentSession.lifecycle, connection, concealOperationalState]);
 
   useEffect(() => {
     if (!currentSession.participant_id || !currentSession.visit_ordinal) return;
@@ -178,6 +179,7 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
   function acknowledgeAlert(alertId: string) { void issueCommand("ACKNOWLEDGE_ALERT", { alert_id: alertId }); }
 
   const probeSubmit = async (kind: ProtocolCommandKind, payload: Record<string, unknown>) => {
+    const answeredProbe = activeProbe;
     if (kind === "SUBMIT_POST_BLOCK_SCALE") {
       const values = payload as { nasa_tlx?: Record<string, number>; bedford?: number | null };
       const tlxOk = await issueCommand(kind, { scale_id: "NASA_TLX", answers: values.nasa_tlx ?? {} });
@@ -193,9 +195,11 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
     // block button appears immediately after the final post-block scale.
     try {
       const refreshed = await getSimulationSession(currentSession.id);
-      useSimulationStore.setState({ session: refreshed, activeProbe: null, concealOperationalState: false });
+      useSimulationStore.setState((state) => reconcileProbeRefresh(state.activeProbe, answeredProbe, refreshed));
     } catch {
-      useSimulationStore.setState({ activeProbe: null, concealOperationalState: false });
+      useSimulationStore.setState((state) => sameProbe(state.activeProbe, answeredProbe)
+        ? { activeProbe: null, concealOperationalState: false }
+        : {});
     }
   };
 
@@ -208,14 +212,14 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
       <div role="note" className="border-b border-info/30 bg-info/5 px-4 py-2 text-sm text-info lg:px-6">{nextStep}</div>
       {(transportError || message) && <div role="status" aria-live="polite" className="flex items-center gap-2 border-b border-warning/30 bg-warning/5 px-4 py-2 font-mono text-xs text-warning"><AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />{transportError ?? message}</div>}
       {busy && <div className="sr-only" role="status">{t(locale, "mission.working")}</div>}
-      {concealOperationalState && probeOverlay ? probeOverlay : !currentSnapshot?.aircraft ? (
-        <main className="grid flex-1 place-items-center p-8"><div className="mission-panel max-w-lg p-8 text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-info" aria-hidden="true" /><h1 className="mt-4 font-display text-2xl uppercase">{t(locale, "mission.telemetry_standing_by")}</h1><p className="mt-2 text-sm text-muted-foreground">{t(locale, "mission.start_for_telemetry")}</p></div></main>
+      {concealOperationalState ? probeOverlay : !currentSnapshot?.aircraft ? (
+        <main className="grid flex-1 place-items-center p-8">{currentSession.presentation?.blocks[(currentSession.next_block_id ?? "PRACTICE") as "PRACTICE" | "LOW" | "MEDIUM" | "HIGH"] === "3d" ? <MissionPresentation session={currentSession} lease={canControl ? lease : null} readOnly snapshot={preflightSnapshot(currentSession.next_block_id ?? "PRACTICE")} locale={locale}/> : <div className="mission-panel max-w-lg p-8 text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-info" aria-hidden="true" /><h1 className="mt-4 font-display text-2xl uppercase">{t(locale, "mission.telemetry_standing_by")}</h1><p className="mt-2 text-sm text-muted-foreground">{t(locale, "mission.start_for_telemetry")}</p></div>}</main>
       ) : <main className="grid min-h-0 flex-1 gap-3 p-3 xl:grid-cols-[14rem_minmax(32rem,1fr)_21rem] xl:p-4" aria-label={t(locale, "mission.operations")}>
         <div className="grid min-h-0 gap-3 md:grid-cols-2 xl:grid-cols-1 xl:grid-rows-[auto_minmax(15rem,1fr)]">
           <MissionJourneyRail session={currentSession} locale={locale} steps={journeySteps} />
           <FleetPanel snapshot={displaySnapshot} locale={locale} selectedAircraftId={selectedAircraftId} onSelect={selectAircraft} />
         </div>
-        <MissionMap snapshot={displaySnapshot ?? currentSnapshot} locale={locale} selectedAircraftId={selectedAircraftId} selectedContactId={selectedContactId} onSelectAircraft={(aircraftId) => { setWaypointMode(false); selectAircraft(aircraftId); }} onSelectContact={(contactId) => { setWaypointMode(false); selectContact(contactId); }} waypointAircraftId={waypointMode ? selectedAircraftId : null} onSetWaypoint={(aircraftId, waypoint) => { setWaypointMode(false); void issueCommand("SET_WAYPOINT", { aircraft_id: aircraftId, waypoint }); }} />
+        <MissionPresentation session={currentSession} lease={canControl ? lease : null} readOnly={!canControl} frozen={concealOperationalState || currentSession.lifecycle === "PAUSED" && currentSession.protocol_phase !== "READY_FOR_BLOCK" || currentSession.lifecycle === "RUNNING" && connection !== "live"} snapshot={displaySnapshot ?? currentSnapshot} locale={locale} selectedAircraftId={selectedAircraftId} selectedContactId={selectedContactId} onSelectAircraft={(aircraftId) => { setWaypointMode(false); selectAircraft(aircraftId); }} onSelectContact={(contactId) => { setWaypointMode(false); selectContact(contactId); }} waypointAircraftId={waypointMode ? selectedAircraftId : null} onSetWaypoint={(aircraftId, waypoint) => { setWaypointMode(false); void issueCommand("SET_WAYPOINT", { aircraft_id: aircraftId, waypoint }); }} />
         <aside className="flex min-h-0 flex-col gap-3" aria-label={t(locale, "mission.detail_panel")} data-testid="mission-detail-panel" tabIndex={-1}>
           <MissionInstructionPanel session={currentSession} locale={locale} selectedAircraft={selectedAircraft} selectedContact={selectedContact} />
           <section className="mission-panel flex min-h-[15rem] flex-1 flex-col">
@@ -225,7 +229,7 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
         </aside>
       </main>}
       {activeProbe && !concealOperationalState && probeOverlay}
-      <CommandBar snapshot={currentSnapshot} selectedAircraft={selectedAircraft} selectedContact={selectedContact} locale={locale} readOnly={!canControl} pending={pendingCommandIds.length > 0} waypointMode={waypointMode} onWaypointMode={() => setWaypointMode((value) => !value)} onCommand={(kind, payload) => { setWaypointMode(false); void issueCommand(kind, payload); }} />
+      {!concealOperationalState && <CommandBar snapshot={currentSnapshot} selectedAircraft={selectedAircraft} selectedContact={selectedContact} locale={locale} readOnly={!canControl} pending={pendingCommandIds.length > 0} waypointMode={waypointMode} onWaypointMode={() => setWaypointMode((value) => !value)} onCommand={(kind, payload) => { setWaypointMode(false); void issueCommand(kind, payload); }} />}
     </div>
   );
 }

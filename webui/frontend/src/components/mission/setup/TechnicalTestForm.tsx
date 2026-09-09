@@ -1,4 +1,6 @@
 "use client";
+import { PresentationSetup } from "../presentation/PresentationSetup";
+import type { PresentationConfig } from "@/lib/simulation/presentation/contracts";
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -38,6 +40,7 @@ export interface TechnicalTestFormProps {
 
 export function TechnicalTestForm({ scenarios, loading = false, loadError = null }: TechnicalTestFormProps) {
   const router = useRouter();
+  const [presentation,setPresentation] = useState<PresentationConfig>();
   const { simulationLocale, tr } = useAppLocale();
   const [scenarioId, setScenarioId] = useState("");
   const [profile, setProfile] = useState<Profile>("LOW");
@@ -69,12 +72,13 @@ export function TechnicalTestForm({ scenarios, loading = false, loadError = null
     try {
       const prepared = await createTechnicalSimulationSession({
         scenario_id: scenarioId,
+        ...(presentation ? {presentation}:{}),
         block_id: profile,
         locale: simulationLocale,
       });
       await storePreparedSessionLease(prepared);
       try {
-        await transitionSession(prepared.id, "start", prepared.controller_lease, { block_id: profile });
+        if (presentation?.blocks[profile] !== "3d") await transitionSession(prepared.id, "start", prepared.controller_lease, { block_id: profile });
       } catch {
         // The prepared session and its controller lease are still valid. Open
         // the console so the operator can retry Start without creating a
@@ -101,7 +105,7 @@ export function TechnicalTestForm({ scenarios, loading = false, loadError = null
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6"><PresentationSetup allowLive locale={simulationLocale} value={presentation} onChange={setPresentation} profiles={[profile]}/>
       <header className="mission-panel flex flex-col gap-4 px-5 py-5 sm:px-6 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <p className="page-kicker">{tr("technical.kicker")}</p>

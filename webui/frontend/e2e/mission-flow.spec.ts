@@ -1,4 +1,4 @@
-import { abortMission, completeBlock, expect, selectSetup, test, type OpenMission } from "./fixtures";
+import { abortMission, completeBlock, expect, seedStudyPvt, selectSetup, test, type OpenMission } from "./fixtures";
 
 test("researcher completes the full native sUAS protocol", async ({ page, request }, testInfo) => {
   // Keep the participant in the first Latin-square row (LOW/MEDIUM/HIGH)
@@ -9,6 +9,7 @@ test("researcher completes the full native sUAS protocol", async ({ page, reques
     data: { id: participant, enrollment_date: "2026-08-01" },
   });
   expect(participantResponse.status()).toBe(201);
+  await seedStudyPvt(request, participant);
   let mission: OpenMission | null = null;
   try {
     await page.goto("/mission/setup");
@@ -32,7 +33,22 @@ test("researcher completes the full native sUAS protocol", async ({ page, reques
     // Protocol completion leaves the controller paused so the researcher can
     // inspect the final state; finish is an explicit UI lifecycle action.
     await page.getByRole("button", { name: /finish session/i }).click();
+    // Sealing verifies and derives artifacts for all four blocks. Wait for
+    // that bounded operation explicitly before testing route navigation.
+    const sealed = page.waitForResponse(
+      (response) => response.url().endsWith(`/simulation/sessions/${sessionId}/finish`)
+        && response.request().method() === "POST",
+      { timeout: 60_000 },
+    );
+    const sealStarted = Date.now();
     await page.getByRole("group", { name: /finish this session/i }).getByRole("button", { name: /confirm/i }).click();
+    const sealedResponse = await sealed;
+    expect(sealedResponse.status()).toBe(200);
+    expect((await sealedResponse.json()).lifecycle).toBe("FINISHED");
+    await testInfo.attach("four-block-seal-duration", {
+      body: JSON.stringify({ elapsed_ms: Date.now() - sealStarted }),
+      contentType: "application/json",
+    });
 
     await expect(page).toHaveURL(/\/mission\/debrief\?session=sim-/);
     await expect(page.getByText(/deterministic replay verified/i)).toBeVisible();

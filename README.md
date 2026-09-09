@@ -52,8 +52,11 @@ plus an optional scenario manifest; derived Console metrics are labeled
 `legacy_csv_derived_not_reconciled_to_authoritative_event_stream` and remain
 confirmatory-ineligible until paired v3 JSONL reconciliation is implemented.
 Its sUAS surface is a synthetic, non-kinetic,
-supervisory simulator. It has no real aircraft, weapon, targeting, autonomous
-dispatch, real-world map, external telemetry, or command-and-control (C2) path.
+supervisory simulator. Optional Colombia maps and read-only aircraft observations
+provide geographic context; live traffic is limited to exploration and technical
+sessions, while research uses pinned captures. MATB controls the synthetic
+scenario, clock, commands and scoring. It has no real-aircraft command channel,
+weapon, targeting or autonomous dispatch capability.
 
 The `SMS/` workspace evaluates controlled evidence, read-only telemetry, safety
 gates, organizational SMS records, and institutional-review artifacts. A
@@ -815,6 +818,25 @@ Missing frontend build or venv errors mean `install_suas.sh` was not completed.
 WSL2 users should keep the clone and data in a WSL filesystem for predictable
 permissions and verify Windows-to-WSL loopback forwarding. See the
 [sUAS walkthrough](examples/suas-simulator/README.md).
+
+### Colombia geography and observed traffic
+
+Open **`http://localhost:3100/colombia`** after starting the Research Console.
+The national explorer offers imagery, relief, roads, rivers, settlements,
+boundaries, airports and live aircraft observations. Six installed local scenes
+cover Villavicencio, Popayán (Cauca), Cúcuta (Norte de Santander), Rionegro
+(Antioquia), Minca (Sierra Nevada de Santa Marta), and El Cocuy–Güicán.
+
+Each local scene covers a 12 × 8 km mission with a 2 km margin. Choose
+**Technical test** on its card to use the Three.js/TypeScript overview, follow
+and drone cameras. The national map and live traffic require internet; prepared
+scenes and captured traffic support offline missions. Traffic coverage is
+partial and provider outages are displayed explicitly. Research sessions accept
+recorded traffic with pinned checksums, preserving deterministic scoring.
+
+[Setup, optional map preparation and capture workflow](docs/implementation/colombia-geography-traffic.md)
+· [Verification and screenshots](docs/implementation/colombia-geography-verification.md).
+Scene datasets retain their source terms; see [third-party notices](THIRD_PARTY_NOTICES.md).
 
 <a id="quick-start-sms"></a>
 ## 8. FAC ISR SMS quick start

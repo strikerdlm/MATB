@@ -14,7 +14,7 @@ headless mode.
 
 ```bash
 cd webui/frontend
-npm install
+npm ci
 ```
 
 ## Run (dev — backend must be running on :8000)
@@ -66,6 +66,11 @@ read-only behavior, controller disconnect/reconnect, and 1280×720 and
 
 ## Screens
 
+- **Colombia** (`/colombia`) — national geographic layers, live observed aircraft,
+  six installed local scenes, and preparation of additional offline areas.
+  Mission scenes use Three.js/TypeScript; the national explorer uses MapLibre.
+  [Setup and capture/replay guide](../../docs/implementation/colombia-geography-traffic.md).
+
 - **Tracker** (`/`) — the participant × active-visit × 3 completeness grid; click a filled cell for that
   block's metrics (SYSMON d′, hit-rate, RT; COMM d′; NASA-TLX; Bedford; ISA) plus
   the visit's DEPDF fit (G₀/P₀/τ₀) once all three levels are ingested.
@@ -101,6 +106,30 @@ read-only behavior, controller disconnect/reconnect, and 1280×720 and
   explicitly "exploratory" F/F₀ column. Append `?fast=1` for a reduced-trial
   dev/e2e run that exercises the same scoring logic. All participant-facing text
   is in `src/components/screen/strings_es.ts`.
+
+## Geography verification and assets
+
+`npm ci` installs the pinned Three.js, MapLibre and projection dependencies.
+`predev` and `prebuild` copy MapLibre's ESM worker, shared module and license to
+`public/maplibre/`; this generated directory is not committed. The six pinned
+offline scenes and geographic reference catalog are committed with checksums
+and source attribution. See [geographic data terms](../../LICENSES/GEOGRAPHY-DATA.md).
+
+After `npm run build`, run the regional and traffic acceptance suite from this
+directory (PowerShell shown):
+
+```powershell
+$env:MATB_E2E_TRAFFIC_FIXTURE='1'
+$env:MATB_E2E_REGION_CHECK='1'
+$env:PW_TEST_MATCH='**/{geography,geography-assets,presentation}.spec.ts'
+npm run test:e2e
+```
+
+Set `MATB_PYTHON` to the MATB interpreter if needed. The explicit traffic fixture
+is isolated from production. Set `MATB_E2E_ONLINE_CHECK=1` to additionally verify
+public tile services; ordinary acceptance tests use local assets and controlled
+traffic responses. Release verification is recorded in the
+[Colombia report](../../docs/implementation/colombia-geography-verification.md).
 
 ## Design system
 

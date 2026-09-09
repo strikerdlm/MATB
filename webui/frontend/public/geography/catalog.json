@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "acquired_at": "2026-09-09T01:07:48.000489+00:00",
+  "sources": [
+    {
+      "url": "https://davidmegginson.github.io/ourairports-data/airports.csv",
+      "sha256": "ca72a3404144b9478f51ff145910f2533c18b02a2c77c4a59e8f2274674a26c0"
+    },
+    {
+      "url": "https://cdn.proj.org/us_nga_egm96_15.tif",
+      "sha256": "db493027562c9b004d7220fa881f5603adada4e1c5029b933fa7de4547b0e78d"
+    }
+  ],
+  "attribution": "Airports: OurAirports (public domain). Geoid: NGA EGM96, distributed by PROJ.",
+  "files": {
+    "airports.json": "8d99543435a7380846a297fc06ff59d39610dcfd8f33ff9f42126ddc67a98ba4",
+    "geoid.json": "5be429b5badbc94096615379f154fbed9e9f49bee94d3a828a7871232308072a"
+  }
+}

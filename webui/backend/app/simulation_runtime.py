@@ -57,6 +57,8 @@ from .simulation_schemas import (
     PreparedSession, RecoveryView, SessionView,
 )
 from .websocket.simulation import SimulationHub, StreamEnvelope, StreamKind
+from .simulation_schemas import PresentationEvent
+from matb_integration.suas.presentation.packages import read_package
 
 
 class SimulationError(RuntimeError):
@@ -102,6 +104,9 @@ class RuntimeHandle:
     scenario: Any
     manifest: dict[str, object]
     recorder: SessionRecorder
+    presentation_fallbacks: set[str] = field(default_factory=set, init=False)
+    presentation_ready: set[str] = field(default_factory=set, init=False)
+    presentation_ids: set[str] = field(default_factory=set, init=False)
     lease_hash: str
     lifecycle: str = "PREPARED"
     active_block_id: str | None = None
@@ -110,6 +115,11 @@ class RuntimeHandle:
     block_events: list[object] = field(default_factory=list)
     queue: deque[_QueuedCommand] = field(default_factory=deque)
     tick_task: asyncio.Task[Any] | None = None
+    traffic_task: asyncio.Task[Any] | None = None
+    traffic_frame: dict | None = None
+    traffic_discontinuity: bool = True
+    traffic_recording: dict | None = None
+    traffic_scene: dict | None = None
     snapshot_task: asyncio.Task[Any] | None = None
     finish_disposition: str | None = None
     transport_sequence: int = 0
@@ -205,9 +215,13 @@ class SimulationManager:
             # Bind the immutable manifest to the durable session identity before
             # it is written into the append-only run directory.
             manifest["session_id"] = session_id
+            self._bind_presentation(manifest, request, loaded)
             lease = secrets.token_urlsafe(32)
             run_dir = self.artifact_root / session_id
             recorder = SessionRecorder(run_dir, manifest, loaded.normalized_yaml)
+            if request.presentation and request.presentation.traffic.mode == "recorded":
+                from .traffic_service import recording_path
+                (run_dir / "traffic-source.json").write_bytes(recording_path(request.presentation.traffic.recording_id).read_bytes())
             handle = RuntimeHandle(
                 session_id=session_id, participant_id=request.participant_id, visit_id=int(visit.id),
                 locale=request.locale, scenario=loaded, manifest=manifest, recorder=recorder,
@@ -276,9 +290,13 @@ class SimulationManager:
                 engine_version=ENGINE_VERSION,
             )
             manifest["session_id"] = session_id
+            self._bind_presentation(manifest, request, loaded)
             lease = secrets.token_urlsafe(32)
             run_dir = self.artifact_root / "technical" / session_id
             recorder = SessionRecorder(run_dir, manifest, loaded.normalized_yaml)
+            if request.presentation and request.presentation.traffic.mode == "recorded":
+                from .traffic_service import recording_path
+                (run_dir / "traffic-source.json").write_bytes(recording_path(request.presentation.traffic.recording_id).read_bytes())
             handle = RuntimeHandle(
                 session_id=session_id,
                 participant_id=None,
@@ -339,6 +357,83 @@ class SimulationManager:
             )
             return self._prepared_view(handle, lease)
 
+    @staticmethod
+    def _bind_presentation(manifest, request, loaded):
+        config = request.presentation
+        if config is None:
+            return
+        if config.scene_id:
+            read_package(config.scene_id, config.scene_sha256)
+            if loaded.definition.terrain.bounds != (0, 0, 12000000, 8000000):
+                raise ValueError("scene package requires the 12 by 8 km reference footprint")
+        if config.traffic.mode == "live" and not isinstance(request, CreateTechnicalSimulationSession):
+            raise ValueError("research sessions require recorded traffic")
+        if config.traffic.mode == "recorded":
+            from .traffic_service import load_recording
+            recording = load_recording(config.traffic.recording_id, config.traffic.recording_sha256)
+            if recording["scene_id"] != config.scene_id or recording["scene_sha256"] != config.scene_sha256:
+                raise ValueError("traffic recording belongs to a different scene")
+            if recording["provider"] != config.traffic.provider:
+                raise ValueError("traffic recording belongs to a different provider")
+            blocks = [request.block_id] if isinstance(request, CreateTechnicalSimulationSession) else list(loaded.definition.blocks)
+            if any(recording["duration_ms"] < loaded.definition.blocks[b].duration_ms for b in blocks):
+                raise ValueError("traffic recording is shorter than the mission block")
+        manifest["presentation"] = config.model_dump(mode="json")
+
+    @staticmethod
+    def _require_presentation_ready(handle, block_id):
+        config = handle.manifest.get("presentation") or {}
+        if handle.session_mode == "interactive_technical" and block_id in handle.presentation_fallbacks:
+            return
+        if config.get("blocks", {}).get(block_id) == "3d":
+            read_package(config["scene_id"], config["scene_sha256"])
+            if block_id not in handle.presentation_ready:
+                raise InvalidTransition("presentation_not_ready")
+
+    async def presentation_event(self, session_id: str, lease: str, event: PresentationEvent):
+        async with self._lock:
+            handle = self._require(session_id, lease)
+            if handle.lifecycle not in {"PREPARED", "RUNNING", "PAUSED"}:
+                raise InvalidTransition("presentation log is sealed")
+            if event.block_id not in handle.scenario.definition.blocks:
+                raise ValueError("unknown presentation block")
+            event_id = str(event.event_id)
+            if event_id in handle.presentation_ids:
+                return
+            if len(handle.presentation_ids) >= 20000:
+                raise ValueError("presentation event limit reached")
+            config = handle.manifest.get("presentation") or {}
+            if event.kind == "ready":
+                if not config.get("scene_id") or event.scene_sha256 != config.get("scene_sha256"):
+                    raise ValueError("presentation scene mismatch")
+                read_package(config["scene_id"], config["scene_sha256"])
+            if event.kind == "fallback" and handle.session_mode != "interactive_technical":
+                raise InvalidTransition("research condition is locked")
+            payload = event.model_dump(mode="json")
+            payload["server_simulation_time_ms"] = self._time(handle)
+            payload["server_state_version"] = self._version(handle)
+            payload["wall_time_utc"] = self._wall_clock()
+            with (handle.recorder.run_dir / "presentation.jsonl").open("a", encoding="utf-8") as stream:
+                stream.write(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
+            handle.presentation_ids.add(event_id)
+            if event.kind == "ready":
+                handle.presentation_fallbacks.discard(event.block_id)
+                handle.presentation_ready.add(event.block_id)
+            elif event.kind == "fallback":
+                handle.presentation_fallbacks.add(event.block_id)
+            elif event.kind == "failure":
+                handle.presentation_ready.discard(event.block_id)
+                if handle.session_mode == "research":
+                    existing_validity = self._view(handle).validity
+                    handle.validity = "valid_with_deviation" if existing_validity == "valid" else existing_validity
+                    self.persistence.update_session(session_id, validity=handle.validity)
+                    self._append(handle, RecordKind.PROTOCOL_DEVIATION, {"code": "presentation_failure"}, self._time(handle), self._version(handle))
+                    if handle.lifecycle == "RUNNING":
+                        handle.lifecycle = "PAUSED"
+                        self.persistence.update_session(session_id, lifecycle="PAUSED")
+                        self._append(handle, RecordKind.LIFECYCLE, {"event": "session_paused", "reason": "presentation_failure"}, self._time(handle), self._version(handle))
+                        await self._publish_latest_record(handle, kind=StreamKind.LIFECYCLE)
+
     async def start(self, session_id: str, block_id: str, lease: str) -> SessionView:
         async with self._lock:
             handle = self._require(session_id, lease)
@@ -353,6 +448,7 @@ class SimulationManager:
             )
             if block_id != expected:
                 raise InvalidTransition("block_order_violation")
+            self._require_presentation_ready(handle, block_id)
             if handle.protocol is not None:
                 try:
                     handle.protocol.start_block(block_id)
@@ -392,7 +488,9 @@ class SimulationManager:
                 return self._view(handle)
             if handle.lifecycle != "PAUSED":
                 raise InvalidTransition(f"cannot resume from {handle.lifecycle}")
+            self._require_presentation_ready(handle, handle.active_block_id)
             handle.lifecycle = "RUNNING"
+            handle.traffic_discontinuity = True
             self.persistence.update_session(session_id, lifecycle="RUNNING")
             self._append(handle, RecordKind.LIFECYCLE, {"event": "session_resumed"}, self._time(handle), self._version(handle))
             await self._publish_latest_record(handle, kind=StreamKind.LIFECYCLE)
@@ -667,6 +765,7 @@ class SimulationManager:
                 await self._resume_after_protocol_locked(handle)
 
     async def _pause_for_protocol_locked(self, handle: RuntimeHandle, reason: str) -> None:
+        handle.traffic_discontinuity = True
         if handle.lifecycle == "PAUSED":
             return
         handle.lifecycle = "PAUSED"
@@ -935,6 +1034,9 @@ class SimulationManager:
                 monotonic_clock=lambda: asyncio.get_running_loop().time(),
             ),
         )
+        presentation_path = recorder.run_dir / "presentation.jsonl"
+        if presentation_path.exists():
+            handle.presentation_ids = {str(json.loads(line)["event_id"]) for line in presentation_path.read_text(encoding="utf-8").splitlines()}
         previous_sequence = recorder._last_sequence
         record_sequence = wrapper["record_sequence"]
         if not isinstance(record_sequence, int) or record_sequence > previous_sequence:
@@ -1090,6 +1192,62 @@ class SimulationManager:
             await self.tick_once()
             remaining = max(0.0, (TICK_MS / 1000) - (asyncio.get_running_loop().time() - started))
             await self._sleep(remaining * self._wall_time_scale)
+
+    async def traffic_once(self):
+        from .traffic_service import traffic_service
+        from matb_integration.suas.presentation.geography import projected_track
+        async with self._lock:
+            handle = self._handle
+            if not handle or handle.lifecycle != "RUNNING" or not handle.engine:
+                return
+            if handle.protocol and handle.protocol.conceal_operational_state:
+                handle.traffic_discontinuity = True
+                return
+            config = handle.manifest.get("presentation") or {}
+            traffic = config.get("traffic") or {}
+            if traffic.get("mode", "off") == "off": return
+            if handle.traffic_scene is None:
+                handle.traffic_scene = read_package(config["scene_id"], config["scene_sha256"])
+            scene = handle.traffic_scene
+            block_id = handle.active_block_id
+            sampled_time = self._time(handle)
+            if traffic["mode"] == "recorded":
+                if handle.traffic_recording is None:
+                    raw=(handle.recorder.run_dir / "traffic-source.json").read_bytes()
+                    if hashlib.sha256(raw).hexdigest()!=traffic["recording_sha256"]: raise ValueError("traffic source checksum mismatch")
+                    handle.traffic_recording = json.loads(raw)
+                available = [f for f in handle.traffic_recording["frames"] if f["simulation_time_ms"] <= sampled_time]
+                frame = dict(available[-1]) if available else {"tracks": [], "status": "unavailable", "provider": traffic["provider"], "sampled_at": 0}
+                frame["source_simulation_time_ms"] = frame.get("simulation_time_ms", 0)
+                age_delta = max(0, sampled_time - frame["source_simulation_time_ms"]) / 1000
+                frame["tracks"] = [{**track, "age_s": track["age_s"] + age_delta, "stale": track["age_s"] + age_delta > 15} for track in frame["tracks"] if track["age_s"] + age_delta <= 60]
+                frame["sampled_at"] = frame.get("sampled_at", 0) + age_delta
+            else: frame = None
+        # Network I/O never holds the simulation lock or delays engine ticks.
+        if frame is None:
+            frame = await traffic_service.snapshot(scene["origin"]["lat"], scene["origin"]["lon"], 50, traffic["provider"])
+        async with self._lock:
+            if self._handle is not handle or handle.lifecycle != "RUNNING" or handle.active_block_id != block_id or (handle.protocol and handle.protocol.conceal_operational_state): return
+            frame = {**frame, "block_id": block_id, "simulation_time_ms": self._time(handle), "state_version": self._version(handle), "mode": traffic["mode"], "origin": scene["origin"], "discontinuity": handle.traffic_discontinuity,
+                     "frame_id": f"{block_id}-{handle.transport_sequence+1}", "tracks": [dict(t) if traffic["mode"] == "recorded" and "position" in t and "orthometric_altitude_m" in t else projected_track(t, scene["origin"]) for t in frame["tracks"]]}
+            handle.traffic_discontinuity = False
+            with (handle.recorder.run_dir / "traffic.jsonl").open("a", encoding="utf-8") as stream:
+                stream.write(json.dumps(frame, sort_keys=True, separators=(",", ":"), allow_nan=False) + "\n")
+            handle.traffic_frame = frame
+            await self.hub.publish(handle.session_id, self._new_envelope(handle, StreamKind.TRAFFIC, frame, self._time(handle), self._version(handle)))
+
+    async def _traffic_loop(self):
+        while not self._shutdown:
+            handle=self._handle
+            if not handle or handle.lifecycle != "RUNNING": return
+            try:
+                await self.traffic_once()
+            except (OSError, ValueError, KeyError) as error:
+                async with self._lock:
+                    if self._handle is handle and handle.lifecycle == "RUNNING":
+                        await self._interrupt(handle, "traffic_recording_failure", {"reason": type(error).__name__})
+                return
+            await self._sleep(self._wall_time_scale)
 
     async def _snapshot_loop(self) -> None:
         while True:
@@ -1273,14 +1431,17 @@ class SimulationManager:
             return
         if handle.tick_task is None or handle.tick_task.done():
             handle.tick_task = asyncio.create_task(self._tick_loop())
+        if (handle.manifest.get("presentation", {}).get("traffic", {}).get("mode", "off") != "off") and (handle.traffic_task is None or handle.traffic_task.done()):
+            handle.traffic_task = asyncio.create_task(self._traffic_loop())
         if handle.snapshot_task is None or handle.snapshot_task.done():
             handle.snapshot_task = asyncio.create_task(self._snapshot_loop())
 
     @staticmethod
     def _cancel_tasks(handle: RuntimeHandle) -> None:
-        for task in (handle.tick_task, handle.snapshot_task, handle.probe_timeout_task):
+        for task in (handle.tick_task, handle.snapshot_task, handle.probe_timeout_task, handle.traffic_task):
             if task is not None and not task.done() and task is not asyncio.current_task():
                 task.cancel()
+        handle.traffic_task = None
         handle.tick_task = None
         handle.snapshot_task = None
         handle.probe_timeout_task = None
@@ -1308,6 +1469,7 @@ class SimulationManager:
         )
         return SessionView(
             id=handle.session_id, participant_id=handle.participant_id, visit_id=handle.visit_id,
+            presentation=handle.manifest.get("presentation"),
             scenario_id=handle.scenario.definition.scenario_id, scenario_sha256=handle.scenario.sha256,
             locale=handle.locale, lifecycle=handle.lifecycle, active_block_id=handle.active_block_id,
             block_order=list(protocol_order), state_version=self._version(handle),

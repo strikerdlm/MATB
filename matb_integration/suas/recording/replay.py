@@ -225,6 +225,31 @@ class ReplayVerifier:
         except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as error:
             return self._result(ReplayStatus.INVALID_RECORD, records_read, ticks, "malformed_record")
 
+    def public_frames(self, run_dir: Path) -> list[dict]:
+        """Regenerate redacted display frames only for verified effective branches."""
+        from matb_integration.suas.engine.runtime import SNAPSHOT_INTERVAL_MS
+        if self.verify(run_dir).status is not ReplayStatus.MATCH:
+            return []
+        manifest = self._load_manifest(run_dir)
+        scenario = load_scenario_text((run_dir / "scenario.yaml").read_text(encoding="utf-8"))
+        records = effective_records(self._load_records(run_dir / "events.jsonl"))
+        blocks = self._blocks(list(records), tuple(scenario.definition.blocks), self._manifest_block_order(manifest))
+        frames = []
+        for block_id, block_records, finish in blocks:
+            commands, _ = self._block_records(block_records)
+            engine = SimulationEngine(scenario.definition, block_id)
+            def capture():
+                snapshot = engine.snapshot()
+                frames.append({"block_id": block_id, "simulation_time_ms": snapshot["simulation_time_ms"],
+                               "state_version": snapshot["state_version"], "state_sha256": engine.state_hash,
+                               "snapshot": snapshot})
+            capture()
+            for tick in range(1, finish.simulation_time_ms // TICK_MS + 1):
+                engine.step(commands.get(tick, ()))
+                if tick * TICK_MS % SNAPSHOT_INTERVAL_MS == 0 or tick * TICK_MS == finish.simulation_time_ms:
+                    capture()
+        return frames
+
     @staticmethod
     def _result(status: ReplayStatus, records: int, ticks: int, difference: str) -> ReplayResult:
         return ReplayResult(status, None, None, None, None, records, ticks, (difference,))

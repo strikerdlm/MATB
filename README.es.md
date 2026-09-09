@@ -54,8 +54,12 @@ almacenamiento local de artefactos. Su ruta actual de carga OpenMATB acepta CSV 
 manifiesto opcional; las métricas derivadas quedan etiquetadas como
 `legacy_csv_derived_not_reconciled_to_authoritative_event_stream` y no son elegibles para análisis
 confirmatorio hasta implementar la reconciliación con JSONL v3. Su superficie sUAS es un simulador sintético, no cinético y de
-supervisión. No contiene aeronaves reales, armas, selección de blancos, despacho autónomo, mapas del
-mundo real, telemetría externa ni rutas de mando y control (C2).
+supervisión. Los mapas opcionales de Colombia y las observaciones de aeronaves
+de solo lectura aportan contexto geográfico. El tráfico en vivo está disponible
+en exploración y pruebas técnicas; las sesiones de investigación utilizan
+capturas con sumas de comprobación. MATB controla el escenario sintético, el
+reloj, los comandos y la puntuación. No ofrece control de aeronaves reales,
+armas, selección de blancos ni despacho autónomo.
 
 El espacio de trabajo `SMS/` evalúa evidencia controlada, telemetría de solo lectura, compuertas de
 seguridad operacional, registros organizacionales del SMS y artefactos de revisión institucional. Que un
@@ -241,7 +245,7 @@ congelados en los artefactos y se verifican antes de iniciar cada bloque nativo.
 
 Para un inicio directo, seleccione un perfil distribuido con
 `main.py --visual-theme cockpit` o cargue un perfil estricto mediante
-`main.py --theme-file <ruta-absoluta>`. El perfil contiene únicamente datos de
+`main.py --theme-file <absolute-path>`. El perfil contiene únicamente datos de
 presentación; la automatización, la carga, la activación de tareas, las ventanas
 de respuesta y la puntuación continúan bajo el escenario y el entorno Python.
 Consulte el [contrato de perfil visual OpenMATB v1](docs/contracts/openmatb-visual-profile-v1.md).
@@ -830,6 +834,28 @@ compilación ausente del frontend o de venv indican que `install_suas.sh` no se 
 de WSL2 deben mantener el clon y los datos en un sistema de archivos WSL para obtener permisos
 predecibles y comprobar el reenvío loopback de Windows a WSL. Consulte el
 [recorrido de sUAS](examples/suas-simulator/README.es.md).
+
+### Geografía de Colombia y tráfico observado
+
+Abra **`http://localhost:3100/colombia`** después de iniciar la Consola de
+Investigación. El explorador nacional ofrece imágenes, relieve, vías, ríos,
+poblaciones, límites administrativos, aeródromos y observaciones de tráfico
+aéreo en vivo. Hay seis escenas locales instaladas: Villavicencio, Popayán
+(Cauca), Cúcuta (Norte de Santander), Rionegro (Antioquia), Minca (Sierra Nevada
+de Santa Marta) y El Cocuy–Güicán.
+
+Cada escena comprende una misión de 12 × 8 km con un margen de 2 km. Seleccione
+**Prueba técnica** en su tarjeta para usar las cámaras de vista general,
+seguimiento y dron, desarrolladas en Three.js y TypeScript. El mapa nacional y
+el tráfico en vivo requieren internet; las escenas preparadas y las capturas
+de tráfico permiten misiones sin conexión. La cobertura del tráfico es parcial
+y la interfaz informa las interrupciones de la fuente. La investigación usa
+tráfico grabado con sumas de comprobación, conservando la puntuación determinista.
+
+[Instalación, preparación de mapas y capturas](docs/implementation/colombia-geography-traffic.md)
+· [Verificación e imágenes](docs/implementation/colombia-geography-verification.md).
+Los datos geográficos conservan sus condiciones de origen; consulte los
+[avisos de terceros](THIRD_PARTY_NOTICES.md).
 
 <a id="quick-start-sms"></a>
 ## 8. Inicio rápido del SMS FAC ISR

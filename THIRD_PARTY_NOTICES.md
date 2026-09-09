@@ -12,6 +12,32 @@
 
 ## Python and JavaScript dependencies
 
+The optional Colombia presentation uses Three.js, MapLibre GL JS, proj4 and
+pyproj. The frontend build copies MapLibre's installed worker/shared modules
+and its license to a generated directory; generated dependency files are not
+committed. God's Eye View informed the traffic-layer design; MATB uses its own
+adapters and does not vendor that application's source.
+
+### Geographic datasets
+
+`webui/frontend/public/scenes/` contains derived Sentinel-2 imagery, Mapzen/Tilezen
+terrain and geographic overlays. `webui/frontend/public/geography/` contains
+OurAirports reference data, region metadata and an EGM96 separation grid.
+Dataset-specific terms apply to source and derived data; the repository's MIT
+license does not replace them. Per-asset hashes, source URLs and acquisition
+metadata are retained in the scene manifests and reference catalog.
+
+- Copernicus Sentinel: https://dataspace.copernicus.eu/terms-and-conditions
+- Terrain contributors: https://github.com/tilezen/joerd/blob/master/docs/attribution.md
+- OpenStreetMap/OpenFreeMap overlays: https://www.openstreetmap.org/copyright
+- OurAirports reference data: https://ourairports.com/data/
+- EGM96 source grid: https://cdn.proj.org/us_nga_egm96_15.tif
+- Online imagery: https://nasa-gibs.github.io/gibs-api-docs/
+- Observed traffic: https://www.adsb.lol/privacy-license/ and https://openskynetwork.github.io/opensky-api/rest.html
+
+Live traffic captures are local runtime artifacts and are not committed.
+Preserve the applicable source attribution when distributing scene data or captures.
+
 Runtime and development dependencies retain their respective upstream licenses.
 The public-release workflow must generate a dependency inventory/SBOM from the
 locked release environment and must not treat this notice as a substitute for

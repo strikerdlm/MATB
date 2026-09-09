@@ -1,4 +1,6 @@
 "use client";
+import { PresentationSetup } from "../presentation/PresentationSetup";
+import type { PresentationConfig } from "@/lib/simulation/presentation/contracts";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -70,6 +72,7 @@ export function MissionSetupForm({
   visitsLoader = listVisits,
 }: MissionSetupFormProps) {
   const router = useRouter();
+  const [presentation,setPresentation] = useState<PresentationConfig>();
   const { simulationLocale: locale, copy } = useAppLocale();
   const [participantId, setParticipantId] = useState("");
   const [visitOrdinal, setVisitOrdinal] = useState("");
@@ -152,6 +155,7 @@ export function MissionSetupForm({
         participant_id: participantId,
         visit_ordinal: Number(visitOrdinal),
         scenario_id: scenarioId,
+        ...(presentation ? {presentation}:{}),
         locale,
       });
       // Confirm old sessions before deleting their leases, and never put the
@@ -173,6 +177,7 @@ export function MissionSetupForm({
   return (
     <main className="min-h-screen bg-background px-4 py-8 text-foreground sm:px-6 lg:px-10">
       <div className="mx-auto max-w-6xl space-y-7"><p className="text-sm text-muted-foreground">{locale === "en" ? "Before this study mission, complete KSS and a valid 10-minute PVT for the same visit." : "Antes de esta misión de estudio, complete KSS y una PVT válida de 10 minutos para la misma visita."} <Link href="/pvt?purpose=study" className="underline">KSS + PVT</Link></p>
+        <PresentationSetup locale={locale} value={presentation} onChange={setPresentation}/>
         <header className="flex flex-col justify-between gap-5 border-b border-white/10 pb-6 md:flex-row md:items-end">
           <div>
             <div className="mb-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.24em] text-muted-foreground">

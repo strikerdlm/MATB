@@ -13,3 +13,10 @@ webui/frontend/playwright-report/
 
 # Local test artifacts
 .test-tmp/
+
+# Local geography environments, preparation jobs and captures
+/.venv-geography/
+/.matb-managed-e2e/
+/outputs/geography/
+webui/frontend/public/scenes/.pending/
+webui/frontend/public/maplibre/

@@ -26,6 +26,10 @@ def test_public_core_selection_excludes_sensitive_product_trees() -> None:
     assert "openmatb/LICENSE" in names
     assert not any(name.startswith("SMS/") for name in names)
     assert not any(name.startswith("matb_integration/suas/") for name in names)
+    assert "webui/backend/app/routers/geography.py" not in names
+    assert "webui/backend/app/traffic_service.py" not in names
+    assert not any(name.startswith("webui/frontend/src/lib/geography/") for name in names)
+    assert not any(name.startswith("webui/frontend/public/scenes/") for name in names)
     assert not any(name.startswith("matb_integration/liftoff/") for name in names)
     assert not any(name.startswith("openmatb/sessions/") for name in names)
     assert not any("/test-results/" in name for name in names)

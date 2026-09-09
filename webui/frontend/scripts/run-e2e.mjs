@@ -104,6 +104,7 @@ const serviceEnvironment = {
   MATB_SIMULATION_SCENARIO_DIR: path.join(repoRoot, "tests", "suas", "fixtures"),
   MATB_SIMULATION_TEST_MODE: "1",
   MATB_SIMULATION_WALL_TIME_SCALE: process.env.MATB_SIMULATION_WALL_TIME_SCALE ?? "0.5",
+  MATB_GEOGRAPHY_DIR: path.join(runRoot, "geography"),
   MATB_BACKEND_PORT: "8000",
   NEXT_TELEMETRY_DISABLED: "1",
 };
@@ -117,7 +118,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 try {
   const backend = spawn(
     resolvePythonExecutable(),
-    ["-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000"],
+    ["-m", "uvicorn", process.env.MATB_E2E_TRAFFIC_FIXTURE === "1" ? "tests.traffic_e2e_app:app" : "app.main:app", "--host", "127.0.0.1", "--port", "8000"],
     { cwd: backendRoot, env: serviceEnvironment, stdio: "inherit", windowsHide: true },
   );
   children.push(backend);
@@ -137,7 +138,7 @@ try {
 
   const playwright = spawn(
     process.execPath,
-    [playwrightCli, "test", `--config=${selectedConfig}`],
+    [playwrightCli, "test", `--config=${selectedConfig}`, ...process.argv.slice(3)],
     {
       cwd: frontendRoot,
       env: { ...serviceEnvironment, PW_REUSE_SERVER: "1" },
