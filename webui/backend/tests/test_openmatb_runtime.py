@@ -331,7 +331,12 @@ def test_draft_visual_preview_is_isolated_and_abortable(engine, tmp_path, monkey
 
     async def create_ready_process(*args, **_kwargs):
         captured_command.extend(args)
-        return ReadyProcess()
+        process = ReadyProcess()
+        # POSIX termination addresses the child's process group. Keep that
+        # signal inside the fake process, just like terminate() on Windows.
+        if hasattr(os, "killpg"):
+            monkeypatch.setattr("app.openmatb_runtime.os.killpg", lambda *_: process.terminate())
+        return process
 
     monkeypatch.setattr("app.openmatb_runtime.asyncio.create_subprocess_exec", create_ready_process)
     monkeypatch.setattr("app.openmatb_runtime._WindowsJob", lambda _pid: None)
