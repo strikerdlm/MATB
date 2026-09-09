@@ -52,12 +52,15 @@ windows explicitly; the runtime still refuses to infer them from elapsed time.
 Observed d-prime is available only when unique lifecycle outcomes, actor identity,
 automation state, planned counts, and the session-bound manifest reconcile.
 
-The Research Console currently ingests legacy CSV plus an optional manifest, not
-the authoritative runtime JSONL. Converter records therefore carry
+The legacy Research Console pathway ingests CSV plus an optional manifest.
+Converter records therefore carry
 `scientific_source_status:
 legacy_csv_derived_not_reconciled_to_authoritative_event_stream`, and Console
-long-format metrics remain confirmatory-ineligible until paired event-stream
-ingestion and event-ID reconciliation are implemented.
+long-format metrics remain confirmatory-ineligible. The additive
+[classic evidence pathway](../implementation/classic-evidence-pipeline.md)
+ingests newly emitted ScientificEventV3/TimingObservationV1 captures, reconciles
+their source IDs and exposes metric-level eligibility separately. It does not
+relabel old runtime envelopes or upgrade historical CSV derivatives.
 
 ## Analysis migration
 
