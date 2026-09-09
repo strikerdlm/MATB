@@ -193,5 +193,5 @@ export async function listPresentationScenes(): Promise<import("./presentation/c
   return simulationRequest("/simulation/scenes");
 }
 export async function sendPresentationEvent(id: string, lease: string, event: Record<string, unknown>): Promise<void> {
-  return simulationRequest(`/simulation/sessions/${encodeURIComponent(id)}/presentation`, jsonInit("POST", event, lease));
+  return simulationRequest(`/simulation/sessions/${encodeURIComponent(id)}/presentation`, { ...jsonInit("POST", event, lease), signal: AbortSignal.timeout(5000) });
 }

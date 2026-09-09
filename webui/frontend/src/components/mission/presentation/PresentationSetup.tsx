@@ -37,7 +37,7 @@ export function PresentationSetup({
           if (selected) {
             sessionStorage.removeItem("matb.geography.scene");
             changeRef.current({
-              version: 1,
+              version: 2,
               scene_id: selected.id,
               scene_sha256: selected.sha256!,
               camera: "overview",
@@ -80,7 +80,7 @@ export function PresentationSetup({
             onChange(
               scene
                 ? {
-                    version: 1,
+                    version: 2,
                     scene_id: scene.id,
                     scene_sha256: scene.sha256!,
                     camera: "overview",
@@ -98,6 +98,12 @@ export function PresentationSetup({
           ))}
         </select>
       </label>
+      {value?.version === 2 && <div className="flex flex-wrap gap-3">
+        {(["smooth_camera", "contact_cycling", "adjustable_layers"] as const).map(name => <label key={name}>
+          <input type="checkbox" checked={value.controls?.[name] ?? false} onChange={event => onChange({ ...value, controls: { smooth_camera: false, contact_cycling: false, adjustable_layers: false, ...value.controls, [name]: event.target.checked } })} />
+          {es ? { smooth_camera: "Transiciones de cámara", contact_cycling: "Navegación de contactos", adjustable_layers: "Capas ajustables" }[name] : { smooth_camera: "Camera transitions", contact_cycling: "Contact navigation", adjustable_layers: "Adjustable layers" }[name]}
+        </label>)}
+      </div>}
       {value && (
         <div className="flex flex-wrap gap-3">
           {profiles.map((profile) => (

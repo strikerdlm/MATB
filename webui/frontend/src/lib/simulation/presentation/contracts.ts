@@ -5,10 +5,14 @@ import type { PointMM, TerrainBounds } from "@/types/simulation";
 export interface CameraPose {
   camera_position: [number, number, number];
   camera_quaternion: [number, number, number, number];
+  fov?: number;
+  aspect?: number;
+  controls_target?: [number, number, number];
 }
 export type CameraMode = "overview" | "follow" | "drone";
 export interface PresentationConfig {
-  version: 1;
+  version: 1 | 2;
+  controls?: { smooth_camera: boolean; contact_cycling: boolean; adjustable_layers: boolean };
   layers?: GeographyLayer[];
   traffic?: TrafficConfig;
   blocks: Partial<Record<"PRACTICE" | "LOW" | "MEDIUM" | "HIGH", "2d" | "3d">>;

@@ -107,6 +107,8 @@ class RuntimeHandle:
     presentation_fallbacks: set[str] = field(default_factory=set, init=False)
     presentation_ready: set[str] = field(default_factory=set, init=False)
     presentation_ids: set[str] = field(default_factory=set, init=False)
+    presentation_states: dict[str, dict] = field(default_factory=dict, init=False)
+    presentation_sequence: int = field(default=-1, init=False)
     lease_hash: str
     lifecycle: str = "PREPARED"
     active_block_id: str | None = None
@@ -400,9 +402,14 @@ class SimulationManager:
             event_id = str(event.event_id)
             if event_id in handle.presentation_ids:
                 return
-            if len(handle.presentation_ids) >= 20000:
+            if len(handle.presentation_ids) >= 20000 and (event.kind != "failure" or len(handle.presentation_ids) > 20000):
+                await self._presentation_failed(handle, event.block_id)
                 raise ValueError("presentation event limit reached")
             config = handle.manifest.get("presentation") or {}
+            if config.get("version") == 2 and event.version != 2:
+                raise ValueError("v2 sessions require v2 exposure records")
+            if event.version == 2:
+                self._validate_exposure(handle, config, event)
             if event.kind == "ready":
                 if not config.get("scene_id") or event.scene_sha256 != config.get("scene_sha256"):
                     raise ValueError("presentation scene mismatch")
@@ -413,26 +420,87 @@ class SimulationManager:
             payload["server_simulation_time_ms"] = self._time(handle)
             payload["server_state_version"] = self._version(handle)
             payload["wall_time_utc"] = self._wall_clock()
-            with (handle.recorder.run_dir / "presentation.jsonl").open("a", encoding="utf-8") as stream:
-                stream.write(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
+            try:
+                with (handle.recorder.run_dir / "presentation.jsonl").open("a", encoding="utf-8") as stream:
+                    stream.write(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
+            except OSError:
+                await self._presentation_failed(handle, event.block_id)
+                raise
             handle.presentation_ids.add(event_id)
+            if event.version == 2:
+                handle.presentation_sequence = event.sequence
+                handle.presentation_states[event.block_id] = event.resolved.model_dump(mode="json")
             if event.kind == "ready":
                 handle.presentation_fallbacks.discard(event.block_id)
                 handle.presentation_ready.add(event.block_id)
             elif event.kind == "fallback":
                 handle.presentation_fallbacks.add(event.block_id)
             elif event.kind == "failure":
-                handle.presentation_ready.discard(event.block_id)
-                if handle.session_mode == "research":
-                    existing_validity = self._view(handle).validity
-                    handle.validity = "valid_with_deviation" if existing_validity == "valid" else existing_validity
-                    self.persistence.update_session(session_id, validity=handle.validity)
-                    self._append(handle, RecordKind.PROTOCOL_DEVIATION, {"code": "presentation_failure"}, self._time(handle), self._version(handle))
-                    if handle.lifecycle == "RUNNING":
-                        handle.lifecycle = "PAUSED"
-                        self.persistence.update_session(session_id, lifecycle="PAUSED")
-                        self._append(handle, RecordKind.LIFECYCLE, {"event": "session_paused", "reason": "presentation_failure"}, self._time(handle), self._version(handle))
-                        await self._publish_latest_record(handle, kind=StreamKind.LIFECYCLE)
+                await self._presentation_failed(handle, event.block_id)
+
+    async def _presentation_failed(self, handle, block_id):
+        handle.presentation_ready.discard(block_id)
+        if handle.active_block_id:
+            handle.presentation_ready.discard(handle.active_block_id)
+        if handle.session_mode != "research":
+            return
+        was_running = handle.lifecycle == "RUNNING"
+        if was_running:
+            handle.lifecycle = "PAUSED"
+        existing_validity = self._view(handle).validity
+        handle.validity = "valid_with_deviation" if existing_validity == "valid" else existing_validity
+        self.persistence.update_session(handle.session_id, validity=handle.validity, lifecycle=handle.lifecycle)
+        # Stop the task before attempting further writes: a full disk must not leave it running.
+        self._append(handle, RecordKind.PROTOCOL_DEVIATION, {"code": "presentation_failure"}, self._time(handle), self._version(handle))
+        if was_running:
+            self._append(handle, RecordKind.LIFECYCLE, {"event": "session_paused", "reason": "presentation_failure"}, self._time(handle), self._version(handle))
+            await self._publish_latest_record(handle, kind=StreamKind.LIFECYCLE)
+
+    def _validate_exposure(self, handle, config, event):
+        state = event.resolved
+        if config.get("version") != 2:
+            raise ValueError("v2 exposure requires v2 configuration")
+        if event.sequence <= handle.presentation_sequence:
+            raise ValueError("presentation sequence must increase")
+        if state.scene_sha256 != config.get("scene_sha256") or state.capture_sha256 != config.get("traffic", {}).get("recording_sha256"):
+            raise ValueError("presentation asset mismatch")
+        if event.kind == "failure":
+            return  # A failure report must remain possible after capacity or validation failure.
+        controls = config.get("controls", {})
+        if event.kind in {"navigate", "navigation_filter"} and not controls.get("contact_cycling"):
+            raise ValueError("contact navigation is not enabled")
+        if not controls.get("smooth_camera") and state.transition_ms:
+            raise ValueError("camera assistance is not enabled")
+        if handle.session_mode == "research" and state.condition != config.get("blocks", {}).get(event.block_id, "2d"):
+            raise InvalidTransition("research condition is locked")
+        if not controls.get("adjustable_layers"):
+            if not all(state.operational_layers.model_dump().values()) or state.geographic_layers != config.get("layers", []):
+                raise ValueError("display layers are locked")
+        if not set(state.geographic_layers).issubset(config.get("layers", [])):
+            raise ValueError("layer is outside the pinned condition")
+        if state.camera == "drone" and state.focus and state.focus.category != "aircraft":
+            raise ValueError("drone camera requires a simulated aircraft")
+        if state.camera == "follow" and state.focus and state.focus.category == "contact":
+            raise ValueError("task contacts support inspection only")
+        previous = handle.presentation_states.get(event.block_id, {})
+        snapshot = handle.engine.snapshot() if handle.engine else {}
+        # Validate newly selected entities against public engine state. Existing selections
+        # may outlive a snapshot while a delayed exposure record is in flight.
+        for field, category in (("aircraft_id", "aircraft"), ("contact_id", "contacts"), ("observed_id", "observed")):
+            identifier = getattr(state, field)
+            if not identifier or identifier == previous.get(field):
+                continue
+            if category == "observed":
+                eligible = {t["id"] for t in (handle.traffic_frame or {}).get("tracks", []) if t.get("age_s", 0) <= 60}
+            else:
+                entries = snapshot.get(category, {})
+                eligible = {key for key, value in entries.items() if category == "aircraft" or (value.get("position") and value.get("evidence") != "NONE")}
+            if identifier not in eligible:
+                raise ValueError("entity is not in the permitted snapshot")
+        if state.focus:
+            field = {"aircraft": "aircraft_id", "contact": "contact_id", "observed": "observed_id"}[state.focus.category]
+            if state.focus.id != getattr(state, field):
+                raise ValueError("camera focus must reference its categorized selection")
 
     async def start(self, session_id: str, block_id: str, lease: str) -> SessionView:
         async with self._lock:
@@ -1036,7 +1104,12 @@ class SimulationManager:
         )
         presentation_path = recorder.run_dir / "presentation.jsonl"
         if presentation_path.exists():
-            handle.presentation_ids = {str(json.loads(line)["event_id"]) for line in presentation_path.read_text(encoding="utf-8").splitlines()}
+            for line in presentation_path.read_text(encoding="utf-8").splitlines():
+                exposure = json.loads(line)
+                handle.presentation_ids.add(str(exposure["event_id"]))
+                if exposure.get("version") == 2:
+                    handle.presentation_sequence = max(handle.presentation_sequence, exposure["sequence"])
+                    handle.presentation_states[exposure["block_id"]] = exposure["resolved"]
         previous_sequence = recorder._last_sequence
         record_sequence = wrapper["record_sequence"]
         if not isinstance(record_sequence, int) or record_sequence > previous_sequence:

@@ -347,3 +347,75 @@ async def test_recorded_traffic_uses_simulation_time_and_embedded_source(manager
     assert manager.active.traffic_frame['tracks']==[]
     await manager.finish(prepared.id,prepared.controller_lease,'abort')
     assert 'traffic-source.json' in (manager.active.recorder.run_dir/'checksums.sha256').read_text()
+
+
+def v2_exposure(scene, sequence=1, **patch):
+    from app.simulation_schemas import PresentationEvent
+    state = dict(version=2, condition="3d", camera="overview", focus=None,
+                 aircraft_id=None, contact_id=None, observed_id=None,
+                 operational_layers=dict(routes=True, coverage=True, contacts=True, sensors=True, labels=True),
+                 geographic_layers=["roads", "rivers", "settlements", "boundaries", "airports"],
+                 pose=None, map_view=dict(zoom=1, pan=dict(x=0, y=0)), viewport=None,
+                 visibility="visible", transition_ms=0, visual_profile="standard-v1",
+                 model_version="schematic-drone-v1-scale12", scene_sha256=scene["sha256"], capture_sha256=None)
+    state.update(patch)
+    return PresentationEvent(version=2, event_id=uuid4(), block_id="PRACTICE", kind="resolved",
+                             sequence=sequence, client_time_ms=sequence * 100, scene_sha256=scene["sha256"], resolved=state)
+
+
+@pytest.mark.anyio
+async def test_v2_exposure_permissions_ordering_and_engine_equivalence(manager, runtime_db):
+    from app.simulation_schemas import PresentationConfig
+    from matb_integration.suas.presentation.packages import catalog
+    from matb_integration.suas.engine.runtime import SimulationEngine
+    scene = catalog()[0]
+    config = PresentationConfig(version=2, blocks={"PRACTICE": "3d"}, scene_id=scene["id"], scene_sha256=scene["sha256"])
+    with Session(runtime_db) as db:
+        prepared = await manager.prepare(request().model_copy(update={"presentation": config}), db)
+    lease = prepared.controller_lease
+    ready = v2_exposure(scene).model_copy(update={"kind": "ready"})
+    await manager.presentation_event(prepared.id, lease, ready)
+    await manager.presentation_event(prepared.id, lease, ready)  # idempotent retry
+    await manager.start(prepared.id, "PRACTICE", lease)
+    baseline = SimulationEngine(manager.active.scenario.definition, "PRACTICE")
+    await manager.tick_once()
+    baseline.step()
+    good = v2_exposure(scene, 2, aircraft_id="UAS-01", focus=dict(category="aircraft", id="UAS-01"))
+    await manager.presentation_event(prepared.id, lease, good)
+    assert manager.active.engine.state_hash == baseline.state_hash
+    with pytest.raises(ValueError, match="sequence"):
+        await manager.presentation_event(prepared.id, lease, v2_exposure(scene, 2))
+    with pytest.raises(ValueError, match="locked"):
+        await manager.presentation_event(prepared.id, lease, v2_exposure(scene, 3, operational_layers=dict(routes=False)))
+    with pytest.raises(ValueError, match="assistance"):
+        await manager.presentation_event(prepared.id, lease, v2_exposure(scene, 3, transition_ms=600))
+    with pytest.raises(ValueError, match="permitted"):
+        await manager.presentation_event(prepared.id, lease, v2_exposure(scene, 3, observed_id="UAS-01"))
+    with pytest.raises(ValueError, match="asset"):
+        await manager.presentation_event(prepared.id, lease, v2_exposure(scene, 3, scene_sha256="0" * 64))
+    with pytest.raises(ValueError, match="navigation"):
+        await manager.presentation_event(prepared.id, lease, v2_exposure(scene, 3).model_copy(update={"kind": "navigate"}))
+    from app.simulation_schemas import PresentationEvent
+    with pytest.raises(ValueError, match="v2 sessions"):
+        await manager.presentation_event(prepared.id, lease, PresentationEvent(event_id=uuid4(), block_id="PRACTICE", kind="camera"))
+    manager.active.presentation_ids.update(str(i) for i in range(20000))
+    with pytest.raises(ValueError, match="limit"):
+        await manager.presentation_event(prepared.id, lease, v2_exposure(scene, 3))
+    assert manager.active.lifecycle == "PAUSED"
+    assert "PRACTICE" not in manager.active.presentation_ready
+    assert manager.active.engine.state_hash == baseline.state_hash
+    await manager.shutdown()
+
+
+def test_v2_strict_contract_and_legacy_reader():
+    from app.simulation_schemas import PresentationEvent
+    from pydantic import ValidationError
+    assert PresentationEvent(event_id=uuid4(), block_id="LOW", kind="camera").version == 1
+    with pytest.raises(ValidationError):
+        PresentationEvent(event_id=uuid4(), block_id="LOW", kind="layers")
+    with pytest.raises(ValidationError):
+        PresentationEvent(version=2, event_id=uuid4(), block_id="LOW", kind="camera")
+    with pytest.raises(ValidationError):
+        v2_exposure(dict(sha256="0" * 64), pose=dict(camera_position=[float("nan"), 0, 0], camera_quaternion=[0, 0, 0, 1]))
+    with pytest.raises(ValidationError):
+        v2_exposure(dict(sha256="0" * 64), pose=dict(camera_position=[0, 0, 0], camera_quaternion=[0, 0, 0, 2]))

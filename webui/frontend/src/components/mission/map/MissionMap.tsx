@@ -2,7 +2,8 @@
 
 import { displayedTraffic, toLocal } from "@/lib/geography/coordinates";
 import type { TrafficFrame } from "@/lib/geography/types";
-import React, { useCallback, useMemo, useState } from "react";
+import type { ResolvedPresentation, PresentationAction } from "@/lib/simulation/presentation/state";
+import React, { useEffect, useRef, useMemo, useState } from "react";
 import type {
   ContactSnapshot,
   Locale,
@@ -19,6 +20,10 @@ const MIN_ZOOM = 0.75;
 const MAX_ZOOM = 6;
 
 export interface MissionMapProps {
+  viewState?: ResolvedPresentation;
+  onViewAction?: (action: PresentationAction, kind?: string) => void;
+  viewLocked?: boolean;
+  layersLocked?: boolean;
   traffic?: TrafficFrame | null;
   trafficElapsedMs?: number;
   selectedTrafficId?: string | null;
@@ -47,6 +52,7 @@ function statusLabel(locale: Locale, contact: ContactSnapshot) {
 }
 
 export function MissionMap({
+  viewState, onViewAction, viewLocked = false, layersLocked = false,
   traffic,
   trafficElapsedMs = 0,
   selectedTrafficId,
@@ -61,42 +67,36 @@ export function MissionMap({
   waypointAircraftId = null,
   onSetWaypoint,
 }: MissionMapProps) {
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [layers, setLayers] = useState<MapLayerState>({
-    routes: true,
-    sensors: true,
-    coverage: true,
-    contacts: true,
-    labels: true,
-  });
-  const projection = useMemo(
-    () => createProjection(snapshot.terrain.bounds, VIEWPORT),
-    [snapshot.terrain.bounds],
-  );
-
-  const reset = useCallback(() => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
+  const surface = useRef<SVGSVGElement>(null);
+  const actionRef = useRef(onViewAction); actionRef.current = onViewAction;
+  useEffect(() => {
+    if (!surface.current) return;
+    const observer = new ResizeObserver(() => {
+      const rect = surface.current?.getBoundingClientRect();
+      if (rect && rect.width > 0 && rect.height > 0) actionRef.current?.({ type: "resolved", patch: { viewport: { width: Math.round(rect.width), height: Math.round(rect.height), dpr: window.devicePixelRatio } } }, "resize");
+    });
+    observer.observe(surface.current);
+    return () => observer.disconnect();
   }, []);
-  const zoomBy = useCallback(
-    (amount: number) =>
-      setZoom((value) =>
-        clamp(Number((value + amount).toFixed(2)), MIN_ZOOM, MAX_ZOOM),
-      ),
-    [],
-  );
-  const toggleLayer = useCallback(
-    (layer: keyof MapLayerState) =>
-      setLayers((current) => ({ ...current, [layer]: !current[layer] })),
-    [],
-  );
-  const panBy = useCallback((dx: number, dy: number) => {
-    setPan((value) => ({
-      x: clamp(value.x + dx, -500, 500),
-      y: clamp(value.y + dy, -500, 500),
-    }));
-  }, []);
+  const [localView, setLocalView] = useState({ zoom: 1, pan: { x: 0, y: 0 } });
+  const [localLayers, setLocalLayers] = useState<MapLayerState>({ routes: true, sensors: true, coverage: true, contacts: true, labels: true });
+  const { zoom, pan } = viewState?.map_view ?? localView;
+  const layers = viewState?.operational_layers ?? localLayers;
+  const projection = useMemo(() => createProjection(snapshot.terrain.bounds, VIEWPORT), [snapshot.terrain.bounds]);
+  const changeView = (next: typeof localView) => {
+    if (viewLocked) return;
+    if (viewState) onViewAction?.({ type: "resolved", patch: { map_view: next } }, "map_view");
+    else setLocalView(next);
+  };
+  const reset = () => changeView({ zoom: 1, pan: { x: 0, y: 0 } });
+  const zoomBy = (amount: number) => changeView({ pan, zoom: clamp(Number((zoom + amount).toFixed(2)), MIN_ZOOM, MAX_ZOOM) });
+  const toggleLayer = (layer: keyof MapLayerState) => {
+    if (viewLocked || layersLocked) return;
+    const next = { ...layers, [layer]: !layers[layer] };
+    if (viewState) onViewAction?.({ type: "layers", layers: next });
+    else setLocalLayers(next);
+  };
+  const panBy = (dx: number, dy: number) => changeView({ zoom, pan: { x: clamp(pan.x + dx, -500, 500), y: clamp(pan.y + dy, -500, 500) } });
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
     if (event.key === "+" || event.key === "=") {
@@ -205,6 +205,8 @@ export function MissionMap({
     >
       <MapToolbar
         locale={locale}
+        disabled={viewLocked}
+        layersDisabled={layersLocked}
         layers={layers}
         onToggleLayer={toggleLayer}
         onZoomIn={() => zoomBy(0.25)}
@@ -222,6 +224,7 @@ export function MissionMap({
         s
       </div>
       <svg
+        ref={surface}
         role="group"
         aria-label={t(locale, "map.title")}
         data-testid="map-root"

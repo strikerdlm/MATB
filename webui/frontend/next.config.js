@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  distDir: process.env.MATB_NEXT_DIST_DIR || ".next",
   reactStrictMode: true,
   allowedDevOrigins: ["127.0.0.1"],
   experimental: { optimizePackageImports: ["lucide-react", "echarts-for-react"] },

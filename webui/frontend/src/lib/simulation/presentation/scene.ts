@@ -1,3 +1,5 @@
+import { CameraController } from "./camera-controller";
+import type { Entity } from "./state";
 import {
   geographicLayers,
   observedTrafficLayer,
@@ -69,10 +71,16 @@ export interface SceneOptions extends MissionMapProps {
   onSelectTraffic?: (id: string) => void;
   geographicLayers?: GeographyLayer[];
   cameraMode: CameraMode;
+  transitionMs?: number;
+  focus?: Entity | null;
+  onCameraEvent?: (kind: string, pose: CameraPose, mode: CameraMode) => void;
+  onTargetLost?: () => void;
+  onViewport?: (viewport: { width: number; height: number; dpr: number }) => void;
   frozen: boolean;
   onFailure: () => void;
   onRender?: (elapsed: number, pose: CameraPose) => void;
   replayPose?: CameraPose;
+  initialPose?: CameraPose;
   layers?: { routes: boolean; coverage: boolean; contacts: boolean };
 }
 export async function createMissionScene(
@@ -97,6 +105,10 @@ export async function createMissionScene(
   scene.add(sun);
   const camera = new THREE.PerspectiveCamera(55, 1, 1, 70000);
   const controls = new OrbitControls(camera, renderer.domElement);
+  const motion = new CameraController();
+  let motionFrame = 0;
+  const pose = (): CameraPose => ({ camera_position: camera.position.toArray(), camera_quaternion: camera.quaternion.toArray(), fov: camera.fov, aspect: camera.aspect, controls_target: controls.target.toArray() });
+  const applyPose = (value: CameraPose) => { camera.position.fromArray(value.camera_position); camera.quaternion.fromArray(value.camera_quaternion); camera.fov = value.fov ?? 55; if (value.controls_target) controls.target.fromArray(value.controls_target); camera.updateProjectionMatrix(); };
   controls.enableDamping = false;
   controls.maxPolarAngle = Math.PI * 0.48;
   controls.minDistance = 100;
@@ -188,6 +200,10 @@ export async function createMissionScene(
     controls.update();
   }
   reset();
+  if (initial.initialPose && initial.cameraMode === "overview") {
+    applyPose(initial.initialPose);
+    options.onCameraEvent?.("camera", pose(), initial.cameraMode);
+  }
   function polyline(
     points: { x_mm: number; y_mm: number }[],
     color: number,
@@ -353,14 +369,25 @@ export async function createMissionScene(
     options.onRender?.(performance.now() - started, {
       camera_position: camera.position.toArray(),
       camera_quaternion: camera.quaternion.toArray(),
+      fov: camera.fov, aspect: camera.aspect,
+      controls_target: controls.target.toArray(),
     });
   }
   function follow() {
     if (options.cameraMode === "overview") return;
-    const aircraft = options.selectedAircraftId
-      ? options.snapshot.aircraft[options.selectedAircraftId]
+    if (options.focus?.category === "observed") {
+      const marker = observed.root.children.find(child => child.userData.trafficId === options.focus?.id);
+      if (!marker) { options = { ...options, cameraMode: "overview", focus: null }; motion.cancel(); options.onTargetLost?.(); return; }
+      camera.position.copy(marker.position).add(new THREE.Vector3(0, 350, 500));
+      camera.lookAt(marker.position);
+      return;
+    }
+    if (options.focus?.category === "contact") return;
+    const id = options.focus?.id ?? options.selectedAircraftId;
+    const aircraft = id
+      ? options.snapshot.aircraft[id]
       : Object.values(options.snapshot.aircraft)[0];
-    if (!aircraft) return;
+    if (!aircraft) { if (id) { options = { ...options, cameraMode: "overview", focus: null }; motion.cancel(); options.onTargetLost?.(); } return; }
     const target = new THREE.Vector3(
       ...missionToWorld(
         aircraft.position,
@@ -389,28 +416,59 @@ export async function createMissionScene(
       camera.lookAt(target);
     }
   }
+  function stopMotion(kind = "transition_cancel") {
+    cancelAnimationFrame(motionFrame);
+    if (motion.cancel()) options.onCameraEvent?.(kind, pose(), options.cameraMode);
+  }
+  function animateMotion(now: number) {
+    if (disposed || options.frozen || options.replayPose) { stopMotion(); return; }
+    const value = motion.sample(now);
+    if (value) { applyPose(value); render(); }
+    if (motion.owner === "transition") motionFrame = requestAnimationFrame(animateMotion);
+    else options.onCameraEvent?.("transition_end", pose(), options.cameraMode);
+  }
   function update(next: SceneOptions) {
-    const changed = options.cameraMode !== next.cameraMode;
+    const changed = options.cameraMode !== next.cameraMode || (next.cameraMode !== "overview" && JSON.stringify(options.focus) !== JSON.stringify(next.focus));
+    const from = pose();
     options = next;
-    controls.enabled = options.cameraMode === "overview" && !options.frozen;
-    if (changed && options.cameraMode === "overview") reset();
+    controls.enabled = !options.frozen && !options.replayPose;
     rebuild();
     geography.update(options.geographicLayers ?? []);
-    observed.update(
-      options.traffic,
-      options.trafficElapsedMs ?? 0,
-      options.selectedTrafficId,
-    );
-    follow();
-    if (options.replayPose) {
-      camera.position.fromArray(options.replayPose.camera_position);
-      camera.quaternion.fromArray(options.replayPose.camera_quaternion);
-    }
+    observed.update(options.traffic, options.trafficElapsedMs ?? 0, options.selectedTrafficId);
+    if (options.replayPose) { stopMotion(); motion.cancel("replay"); applyPose(options.replayPose); render(); return; }
+    if (options.frozen) { stopMotion(); render(); return; }
+    if (changed) {
+      stopMotion();
+      if (options.cameraMode === "overview") reset(); else follow();
+      const to = pose();
+      motion.begin(from, to, performance.now(), options.transitionMs ?? 0, options.cameraMode === "overview" ? "manual" : options.cameraMode);
+      if (motion.owner === "transition") {
+        applyPose(from);
+        options.onCameraEvent?.("transition_start", from, options.cameraMode);
+        motionFrame = requestAnimationFrame(animateMotion);
+      } else options.onCameraEvent?.("transition_end", to, options.cameraMode);
+    } else if (motion.owner !== "transition") follow();
     render();
   }
+  const manual = () => {
+    if (options.frozen || options.replayPose) return;
+    const automated = options.cameraMode !== "overview" || motion.owner === "transition";
+    stopMotion();
+    options = { ...options, cameraMode: "overview" };
+    motion.cancel("manual");
+    if (automated) {
+      const distance = Math.max(100, camera.position.distanceTo(controls.target));
+      controls.target.copy(camera.position).add(new THREE.Vector3(0, 0, -distance).applyQuaternion(camera.quaternion));
+      options.onCameraEvent?.("transition_cancel", pose(), "overview");
+    }
+  };
+  const manualEnd = () => {
+    if (!options.frozen && !options.replayPose) options.onCameraEvent?.("camera", pose(), options.cameraMode);
+  };
   const raycaster = new THREE.Raycaster();
   let down: [number, number] | null = null;
   const pointerDown = (e: PointerEvent) => {
+    manual();
     down = [e.clientX, e.clientY];
   };
   const click = (e: MouseEvent) => {
@@ -464,7 +522,9 @@ export async function createMissionScene(
     if (point) options.onSetWaypoint?.(options.waypointAircraftId, point);
   };
   const key = (event: KeyboardEvent) => {
-    if (options.frozen || options.cameraMode !== "overview") return;
+    if (options.frozen || options.replayPose) return;
+    if (!["0", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "+", "=", "-"].includes(event.key)) return;
+    manual();
     if (event.key === "0") reset();
     else if (
       ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)
@@ -486,21 +546,27 @@ export async function createMissionScene(
     event.preventDefault();
     controls.update();
     render();
+    manualEnd();
   };
   const lost = (event: Event) => {
     event.preventDefault();
+    stopMotion();
     options.onFailure();
   };
   const resize = new ResizeObserver(() => {
     const width = Math.max(1, host.clientWidth),
       height = Math.max(1, host.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.setSize(width, height);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
+    options.onViewport?.({ width, height, dpr: renderer.getPixelRatio() });
     render();
   });
   resize.observe(host);
   controls.addEventListener("change", render);
+  controls.addEventListener("end", manualEnd);
+  renderer.domElement.addEventListener("wheel", manual, { capture: true });
   renderer.domElement.addEventListener("pointerdown", pointerDown);
   renderer.domElement.addEventListener("click", click);
   renderer.domElement.addEventListener("keydown", key);
@@ -510,8 +576,10 @@ export async function createMissionScene(
   return {
     update,
     reset: () => {
+      stopMotion();
       reset();
       render();
+      manualEnd();
     },
     metrics: () => ({
       calls: renderer.info.render.calls,
@@ -526,10 +594,13 @@ export async function createMissionScene(
         ] ?? 0,
     }),
     dispose: () => {
+      stopMotion();
       disposed = true;
       cancelAnimationFrame(animation);
       resize.disconnect();
       controls.removeEventListener("change", render);
+      controls.removeEventListener("end", manualEnd);
+      renderer.domElement.removeEventListener("wheel", manual, { capture: true });
       controls.dispose();
       renderer.domElement.removeEventListener("pointerdown", pointerDown);
       renderer.domElement.removeEventListener("click", click);

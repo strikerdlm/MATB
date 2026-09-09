@@ -15,6 +15,8 @@ export interface MapLayerState {
 }
 
 interface MapToolbarProps {
+  disabled?: boolean;
+  layersDisabled?: boolean;
   locale: Locale;
   layers: MapLayerState;
   onToggleLayer: (layer: keyof MapLayerState) => void;
@@ -23,7 +25,7 @@ interface MapToolbarProps {
   onReset: () => void;
 }
 
-export function MapToolbar({ locale, layers, onToggleLayer, onZoomIn, onZoomOut, onReset }: MapToolbarProps) {
+export function MapToolbar({ disabled, layersDisabled, locale, layers, onToggleLayer, onZoomIn, onZoomOut, onReset }: MapToolbarProps) {
   const layerLabels: Array<[keyof MapLayerState, string]> = [
     ["routes", t(locale, "map.routes")],
     ["sensors", t(locale, "map.sensors")],
@@ -37,6 +39,7 @@ export function MapToolbar({ locale, layers, onToggleLayer, onZoomIn, onZoomOut,
       {layerLabels.map(([layer, label]) => (
         <button
           key={layer}
+          disabled={disabled || layersDisabled}
           type="button"
           aria-pressed={layers[layer]}
           onClick={() => onToggleLayer(layer)}
@@ -46,13 +49,13 @@ export function MapToolbar({ locale, layers, onToggleLayer, onZoomIn, onZoomOut,
         </button>
       ))}
       <span className="mx-1 h-4 w-px bg-white/15" aria-hidden="true" />
-      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label={t(locale, "map.zoom_out")} onClick={onZoomOut}>
+      <Button disabled={disabled} type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label={t(locale, "map.zoom_out")} onClick={onZoomOut}>
         <Minus className="h-3.5 w-3.5" aria-hidden="true" />
       </Button>
-      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label={t(locale, "map.zoom_in")} onClick={onZoomIn}>
+      <Button disabled={disabled} type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label={t(locale, "map.zoom_in")} onClick={onZoomIn}>
         <Plus className="h-3.5 w-3.5" aria-hidden="true" />
       </Button>
-      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label={t(locale, "map.reset_view")} onClick={onReset}>
+      <Button disabled={disabled} type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label={t(locale, "map.reset_view")} onClick={onReset}>
         <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
       </Button>
     </div>
