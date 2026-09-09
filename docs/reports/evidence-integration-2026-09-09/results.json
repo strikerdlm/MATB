@@ -1,0 +1,152 @@
+{
+  "windows": {
+    "source_commit": "953facf08ca30581e7a529e31533fd2eda16dadf",
+    "platform": "Windows-11-10.0.26220-SP0",
+    "python": "3.12.13 | packaged by conda-forge | (main, Mar  5 2026, 16:36:12) [MSC v.1944 64 bit (AMD64)]",
+    "steps": [
+      {
+        "name": "contracts",
+        "exit_code": 0,
+        "elapsed_seconds": 157.735,
+        "tests": 591,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 9
+      },
+      {
+        "name": "native",
+        "exit_code": 0,
+        "elapsed_seconds": 8.422,
+        "tests": 848,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "backend",
+        "exit_code": 0,
+        "elapsed_seconds": 149.435,
+        "tests": 278,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 1
+      }
+    ],
+    "frontend_steps": [
+      {
+        "name": "npm-install",
+        "exit_code": 0,
+        "elapsed_seconds": 61.439
+      },
+      {
+        "name": "frontend",
+        "exit_code": 0,
+        "elapsed_seconds": 117.977
+      },
+      {
+        "name": "lint",
+        "exit_code": 0,
+        "elapsed_seconds": 106.823
+      },
+      {
+        "name": "typecheck",
+        "exit_code": 0,
+        "elapsed_seconds": 36.252
+      },
+      {
+        "name": "build",
+        "exit_code": 0,
+        "elapsed_seconds": 102.525
+      },
+      {
+        "name": "browser-install",
+        "exit_code": 0,
+        "elapsed_seconds": 6.481
+      },
+      {
+        "name": "browser",
+        "exit_code": 0,
+        "elapsed_seconds": 38.143
+      }
+    ],
+    "frontend_code_revision": "27ba2572b25c56335ece6a6ec34541695a40625d"
+  },
+  "linux": {
+    "source_commit": "953facf08ca30581e7a529e31533fd2eda16dadf",
+    "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.36",
+    "python": "3.12.14 (main, Sep  1 2026, 00:10:15) [GCC 12.2.0]",
+    "steps": [
+      {
+        "name": "contracts",
+        "exit_code": 0,
+        "elapsed_seconds": 94.509,
+        "tests": 591,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 9
+      },
+      {
+        "name": "native",
+        "exit_code": 0,
+        "elapsed_seconds": 4.875,
+        "tests": 848,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "backend",
+        "exit_code": 0,
+        "elapsed_seconds": 100.671,
+        "tests": 278,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 1
+      }
+    ],
+    "frontend_steps": [
+      {
+        "name": "npm-install",
+        "exit_code": 0,
+        "elapsed_seconds": 50.831
+      },
+      {
+        "name": "frontend",
+        "exit_code": 0,
+        "elapsed_seconds": 39.068
+      },
+      {
+        "name": "lint",
+        "exit_code": 0,
+        "elapsed_seconds": 52.869
+      },
+      {
+        "name": "typecheck",
+        "exit_code": 0,
+        "elapsed_seconds": 12.347
+      },
+      {
+        "name": "build",
+        "exit_code": 0,
+        "elapsed_seconds": 43.362
+      },
+      {
+        "name": "browser-install",
+        "exit_code": 0,
+        "elapsed_seconds": 77.874
+      },
+      {
+        "name": "browser",
+        "exit_code": 0,
+        "elapsed_seconds": 120.579
+      }
+    ],
+    "frontend_code_revision": "953facf08ca30581e7a529e31533fd2eda16dadf"
+  },
+  "hosted_actions": {
+    "run_id": 34389458176,
+    "steps_executed": 0,
+    "reason": "The job was not started because recent account payments have failed or your spending limit needs to be increased."
+  },
+  "claim_boundary": "Isolated software verification on one host, not a clean Windows OS installation or an independent laboratory replication. No physical timing or human qualification."
+}
