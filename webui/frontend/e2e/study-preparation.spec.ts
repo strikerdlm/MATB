@@ -641,6 +641,7 @@ for (const phase of ["acknowledgement", "ready"] as const)
       const en = locale === "en";
       native.current = { ...native.current, lifecycle: "PREFLIGHT_HELD" };
       const assignment = "native-stop-fixture";
+      native.current = { ...native.current, study_assignment_id: assignment };
       const preparation = {
         id: "native-stop-preparation",
         occasion_key: "task",
@@ -667,7 +668,22 @@ for (const phase of ["acknowledgement", "ready"] as const)
           },
         },
         occasions: { task: "task-occasion" },
-        attempts: { task: [] },
+        attempts: {
+          task: [
+            {
+              id: "native-stop-attempt",
+              occasion_id: "task-occasion",
+              acquisition_state: "created",
+              sources: [
+                {
+                  source_table: "openmatb_suite_session",
+                  source_id: SUITE,
+                  role: "primary",
+                },
+              ],
+            },
+          ],
+        },
       };
       await page.route(`**/study/assignments/${assignment}`, (route) =>
         route.fulfill({ json: detail }),
@@ -793,5 +809,176 @@ for (const phase of ["acknowledgement", "ready"] as const)
         }),
       ).toBeDisabled();
       await expect(stoppedMessage).toHaveCount(0);
+    });
+  }
+
+for (const reload of [false, true])
+  for (const locale of ["en", "es-419"] as const) {
+    test(`native stop recovers failed presentation persistence ${reload ? "after reload" : "without reload"} in ${locale}`, async ({
+      page,
+    }) => {
+      const { fixture, SUITE } = await import("./openmatb-fixtures");
+      const native = await fixture(page, locale);
+      const en = locale === "en";
+      const assignment = "partial-native-assignment";
+      const preparation = {
+        id: "partial-native-preparation",
+        occasion_key: "task",
+        instrument: "openmatb",
+        next_action: "resolve_mapping",
+        presentation: { locale, instrument: "openmatb", items: [] },
+        events: [] as { stage: string; passed: boolean; session_id?: string }[],
+        practice_attempt_ids: [],
+      };
+      const attempt = {
+        id: "partial-native-attempt",
+        occasion_id: "native-occasion",
+        acquisition_state: "created",
+        sources: [] as {
+          source_table: string;
+          source_id: string;
+          role: string;
+        }[],
+      };
+      const detail = {
+        assignment: {
+          id: assignment,
+          participant_id: "P01",
+          visit_id: 1,
+          version_id: "frozen-native",
+        },
+        version: {
+          study: {
+            title: "Software partial native handshake",
+            occasions: [
+              {
+                key: "task",
+                instrument: "openmatb",
+                locale,
+                order: 1,
+                visit_ordinal: 1,
+                config: {
+                  preset: { id: "preset", version: "1" },
+                  instructions: { id: "instructions", version: "1" },
+                  visual: { id: "visual", version: "1" },
+                },
+              },
+            ],
+          },
+        },
+        occasions: { task: attempt.occasion_id },
+        attempts: { task: [attempt] },
+      };
+      await page.route(`**/study/assignments/${assignment}`, (route) =>
+        route.fulfill({ json: detail }),
+      );
+      await page.route(
+        `**/study/assignments/${assignment}/preparation`,
+        (route) =>
+          route.fulfill({
+            json: {
+              preparations: [preparation],
+              requirements: {
+                task: [
+                  {
+                    occasion_key: "task",
+                    state: "required",
+                    preparation_id: preparation.id,
+                  },
+                ],
+              },
+            },
+          }),
+      );
+      const calls: string[] = [];
+      await page.route(`**/openmatb/sessions/${SUITE}/preflight`, (route) => {
+        calls.push("preflight-held");
+        native.current = {
+          ...native.current,
+          lifecycle: "PREFLIGHT_HELD",
+          study_assignment_id: assignment,
+        };
+        attempt.sources.push({
+          source_table: "openmatb_suite_session",
+          source_id: SUITE,
+          role: "primary",
+        });
+        return route.fulfill({ json: native.current });
+      });
+      await page.route(
+        `**/study/preparation/${preparation.id}/native-presentation`,
+        (route) => {
+          calls.push("presentation-write-failed");
+          return route.fulfill({
+            status: 503,
+            json: { detail: "Presentation evidence unavailable" },
+          });
+        },
+      );
+      await page.route(`**/openmatb/sessions/${SUITE}/abort`, (route) => {
+        calls.push("native-aborted");
+        native.current = { ...native.current, lifecycle: "ABORTED" };
+        return route.fulfill({ json: native.current });
+      });
+      await page.route(
+        `**/study/preparation/${preparation.id}/stop`,
+        (route) => {
+          calls.push("stop-written");
+          preparation.next_action = "stopped";
+          preparation.events.push({ stage: "stopped", passed: false });
+          return route.fulfill({ json: preparation });
+        },
+      );
+      await page.goto(`/study/participant?assignment=${assignment}`);
+      await page
+        .getByRole("button", {
+          name: en ? "Prepare · task" : "Preparar · task",
+          exact: true,
+        })
+        .click();
+      await page
+        .getByRole("button", {
+          name: en
+            ? "Resolve native preparation"
+            : "Resolver preparación nativa",
+          exact: true,
+        })
+        .click();
+      await expect(
+        page
+          .getByRole("alert")
+          .filter({ hasText: "Presentation evidence unavailable" }),
+      ).toBeVisible();
+      expect(native.current.lifecycle).toBe("PREFLIGHT_HELD");
+      expect(preparation.events).toEqual([]);
+      expect(attempt.sources).toEqual([
+        {
+          source_table: "openmatb_suite_session",
+          source_id: SUITE,
+          role: "primary",
+        },
+      ]);
+      if (reload) await page.reload();
+      const stop = page.getByRole("button", {
+        name: en ? "Stop preparation" : "Detener preparación",
+        exact: true,
+      });
+      await expect(stop).toBeEnabled();
+      await stop.click();
+      await expect(
+        page.getByText(
+          en
+            ? /Preparation stopped. Prior records/
+            : /Preparación detenida. Los registros/,
+        ),
+      ).toBeVisible();
+      expect(calls).toEqual([
+        "preflight-held",
+        "presentation-write-failed",
+        "native-aborted",
+        "stop-written",
+      ]);
+      expect(native.current.lifecycle).toBe("ABORTED");
+      expect(preparation.events).toEqual([{ stage: "stopped", passed: false }]);
     });
   }

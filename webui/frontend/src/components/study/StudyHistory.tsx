@@ -270,9 +270,10 @@ function PurposeReview({
     eligible.map((item) => String(item.purpose_provenance_id)),
   );
   useEffect(() => {
-    scope.current.active = true;
+    const currentScope = scope.current;
+    currentScope.active = true;
     return () => {
-      scope.current.active = false;
+      currentScope.active = false;
     };
   }, []);
   const selected = scope.current.ids.has(identity);

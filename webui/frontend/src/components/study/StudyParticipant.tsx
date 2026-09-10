@@ -34,6 +34,7 @@ interface Preparation {
     stage: string;
     passed: boolean | null;
     attempt_id?: string;
+    native_attempt_id?: string;
     session_id?: string;
   }[];
 }
@@ -112,6 +113,9 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
   const [stopSelection, setStopSelection] = useState("");
   const mounted = useRef(true);
   const refreshEpoch = useRef(0);
+  const nativeRequests = useRef(
+    new Map<string, { attemptId: string; sessionId: string }>(),
+  );
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -201,6 +205,119 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
       ready: copy("Listo", "Ready"),
       stopped: copy("Preparación detenida", "Preparation stopped"),
     })[stage] ?? stage;
+  async function stopNativePreparation(target: Preparation, latest: Readiness) {
+    if (
+      occasions.find((o) => o.key === target.occasion_key)?.instrument ===
+      "openmatb"
+    ) {
+      const unresolved = () =>
+        new Error(
+          copy(
+            "No se pudo confirmar el proceso nativo exacto. El investigador debe resolver su propiedad antes de detener la preparación.",
+            "The exact native process could not be confirmed. The researcher must resolve ownership before stopping preparation.",
+          ),
+        );
+      const fresh = await assignmentDetail(id);
+      const occasionId = fresh.occasions[target.occasion_key];
+      if (
+        fresh.assignment.id !== id ||
+        fresh.assignment.participant_id !== detail.assignment.participant_id ||
+        !occasionId ||
+        occasionId !== detail.occasions[target.occasion_key]
+      )
+        throw unresolved();
+      const associations = new Map<string, string>();
+      for (const attempt of fresh.attempts[target.occasion_key] ?? []) {
+        if (
+          attempt.occasion_id !== occasionId ||
+          attempt.acquisition_state === "started"
+        )
+          throw unresolved();
+        for (const source of attempt.sources) {
+          if (source.source_table !== "openmatb_suite_session") continue;
+          if (
+            associations.has(source.source_id) &&
+            associations.get(source.source_id) !== attempt.id
+          )
+            throw unresolved();
+          associations.set(source.source_id, attempt.id);
+        }
+      }
+      const requested = nativeRequests.current.get(target.id);
+      const presented = target.events
+        .toReversed()
+        .find((event) => event.session_id);
+      if (
+        requested &&
+        associations.get(requested.sessionId) !== requested.attemptId
+      )
+        throw unresolved();
+      if (
+        presented?.session_id &&
+        (!associations.has(presented.session_id) ||
+          (presented.native_attempt_id &&
+            associations.get(presented.session_id) !==
+              presented.native_attempt_id))
+      )
+        throw unresolved();
+      if (
+        requested &&
+        presented?.session_id &&
+        requested.sessionId !== presented.session_id
+      )
+        throw unresolved();
+      const retainedId = requested?.sessionId ?? presented?.session_id;
+      const sessions = await Promise.all(
+        [...associations.keys()].map(async (sessionId) => {
+          const session = await getOpenMatbSession(sessionId);
+          if (
+            session.id !== sessionId ||
+            session.participant_id !== fresh.assignment.participant_id ||
+            session.study_assignment_id !== id
+          )
+            throw unresolved();
+          return session;
+        }),
+      );
+      const active = sessions.filter(
+        (session) => !["COMPLETE", "ABORTED"].includes(session.lifecycle),
+      );
+      if (
+        active.length > 1 ||
+        (retainedId && active.some((session) => session.id !== retainedId))
+      )
+        throw unresolved();
+      if (
+        !retainedId &&
+        active.length &&
+        latest.preparations.filter(
+          (item) =>
+            item.occasion_key === target.occasion_key &&
+            item.next_action !== "stopped",
+        ).length !== 1
+      )
+        throw unresolved();
+      const native = active[0];
+      if (native) {
+        const lease = readOpenMatbController(native.id);
+        if (!lease)
+          throw new Error(
+            copy(
+              "El investigador debe detener el proceso nativo.",
+              "The researcher must stop the native process.",
+            ),
+          );
+        const aborted = await abortOpenMatbSession(native.id, lease);
+        if (aborted.id !== native.id || aborted.lifecycle !== "ABORTED")
+          throw new Error(
+            copy(
+              "La detención nativa no está confirmada.",
+              "Native stop is not confirmed.",
+            ),
+          );
+      }
+    }
+  }
   function launch(attempt: Attempt, instrument: string) {
     router.push(
       `${routes[instrument]}?purpose=${attempt.execution_purpose}&attempt=${encodeURIComponent(attempt.id)}&participant=${encodeURIComponent(detail.assignment.participant_id)}&visit=${detail.assignment.visit_id}`,
@@ -241,33 +358,7 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
                     "Select an exact active preparation.",
                   ),
                 );
-              const native = target.events
-                .toReversed()
-                .find((e) => e.session_id);
-              if (native?.session_id) {
-                const lease = readOpenMatbController(native.session_id);
-                if (!lease)
-                  throw new Error(
-                    copy(
-                      "El investigador debe detener el proceso nativo.",
-                      "The researcher must stop the native process.",
-                    ),
-                  );
-                const active = await getOpenMatbSession(native.session_id);
-                if (!["COMPLETE", "ABORTED"].includes(active.lifecycle)) {
-                  const aborted = await abortOpenMatbSession(
-                    native.session_id,
-                    lease,
-                  );
-                  if (aborted.lifecycle !== "ABORTED")
-                    throw new Error(
-                      copy(
-                        "La detención nativa no está confirmada.",
-                        "Native stop is not confirmed.",
-                      ),
-                    );
-                }
-              }
+              await stopNativePreparation(target, latest);
               const saved = await studyCall<Preparation>(
                 `/preparation/${target.id}/stop`,
                 {},
@@ -462,16 +553,9 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
                         display_index: 0,
                       });
                       storeOpenMatbCredentials(prepared);
-                      setRun({
-                        ...run,
-                        events: [
-                          ...run.events,
-                          {
-                            stage: "native_preflight_requested",
-                            passed: null,
-                            session_id: prepared.session.id,
-                          },
-                        ],
+                      nativeRequests.current.set(run.id, {
+                        attemptId: attempt.id,
+                        sessionId: prepared.session.id,
                       });
                       await controllerAction(
                         prepared.session.id,
@@ -497,24 +581,20 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
                 variant="outline"
                 onClick={() =>
                   void act(async () => {
-                    const native = run.events
-                      .toReversed()
-                      .find((e) => e.session_id);
-                    if (native?.session_id) {
-                      const lease = readOpenMatbController(native.session_id);
-                      if (!lease)
-                        throw new Error(
-                          copy(
-                            "El investigador debe cerrar el proceso nativo antes de repetir.",
-                            "The researcher must close the native process before repeating.",
-                          ),
-                        );
-                      const active = await getOpenMatbSession(
-                        native.session_id,
+                    const latest = await studyCall<Readiness>(
+                      `/assignments/${id}/preparation`,
+                    );
+                    const target = latest.preparations.find(
+                      (item) => item.id === run.id,
+                    );
+                    if (!target)
+                      throw new Error(
+                        copy(
+                          "No se encontró la preparación exacta.",
+                          "The exact preparation was not found.",
+                        ),
                       );
-                      if (!["COMPLETE", "ABORTED"].includes(active.lifecycle))
-                        await abortOpenMatbSession(native.session_id, lease);
-                    }
+                    await stopNativePreparation(target, latest);
                     setRun(
                       await studyCall<Preparation>(
                         `/assignments/${id}/preparation/${run.occasion_key}`,
