@@ -41,10 +41,12 @@ def ingest_screen(
     execution_purpose: Literal["practice", "study"] = Body(...),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
+    from app.study_admission import resolve_assignment
     from matb_integration.screen.hcf_mapping import SCREEN_VERSION
 
     if session.get(Participant, participant_id) is None:
         raise HTTPException(status_code=404, detail=f"unknown participant {participant_id}")
+    resolve_assignment(session, attempt_id=attempt_id, instrument='screen', participant_id=participant_id, purpose=execution_purpose, require_started=True)
     if "fast_mode" in payload and not isinstance(payload["fast_mode"], bool):
         raise HTTPException(422, "fast_mode must be a boolean")
     if execution_purpose == "study" and payload.get("fast_mode") is True:

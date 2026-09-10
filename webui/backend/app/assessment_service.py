@@ -40,6 +40,12 @@ def create_attempt(db, occasion_id, body, *, repeat_of=None, reason=None):
         raise HTTPException(404, 'assessment occasion not found')
     if occasion.visit_id is None or occasion.phase is None:
         raise HTTPException(422, 'Create a new assigned occasion before acquiring; historical context remains unknown')
+    context = None
+    if body.execution_purpose == 'study':
+        from .study_admission import for_occasion
+        from .study_registry import lock_registry
+        lock_registry(db)
+        context = for_occasion(db, occasion_id)
     rows = db.exec(select(AssessmentAttempt).where(AssessmentAttempt.occasion_id == occasion_id)).all()
     if rows and not repeat_of:
         raise HTTPException(409, {'code': 'explicit_repeat_required', 'attempt_ids': [r.id for r in rows]})
@@ -49,12 +55,22 @@ def create_attempt(db, occasion_id, body, *, repeat_of=None, reason=None):
         prior = get_attempt(db, repeat_of)
         if prior.occasion_id != occasion_id or prior.acquisition_state not in {'finished', 'interrupted', 'unknown'}:
             raise HTTPException(409, 'finish or interrupt the prior attempt before repeating')
+    if context and repeat_of:
+        policy = context['repeat_policy']
+        cause = prior.interruption_category if prior.acquisition_state == 'interrupted' else 'intentional_repeat'
+        if len(rows) >= policy['max_attempts'] or (cause or 'unknown') not in policy['permitted_causes']:
+            raise HTTPException(409, dict(code='study_repeat_not_permitted', message='The frozen repeat cause or attempt limit does not permit this repeat.'))
     target_id = body.target_attempt_id
     if occasion.instrument == 'questionnaire' and not target_id:
         raise HTTPException(422, 'questionnaire requires exact target_attempt_id')
     if target_id:
         target = get_attempt(db, target_id)
         target_occasion = db.get(AssessmentOccasion, target.occasion_id)
+        if context:
+            from .study_registry_models import StudyAssignment
+            assignment = db.get(StudyAssignment, context['assignment_id'])
+            if target.occasion_id != json.loads(assignment.occasions_json).get(context['target_key']):
+                raise HTTPException(422, 'Questionnaire target differs from the exact frozen assigned task.')
         if (occasion.instrument != 'questionnaire' or target_occasion.instrument == 'questionnaire'
                 or (target_occasion.participant_id, target_occasion.visit_id) != (occasion.participant_id, occasion.visit_id)):
             raise HTTPException(422, 'questionnaire target must be a task attempt in the same participant visit')
@@ -65,7 +81,15 @@ def create_attempt(db, occasion_id, body, *, repeat_of=None, reason=None):
 
 
 def transition(db, identity, state, category=None):
+    if state == 'started':
+        from .study_registry import lock_registry
+        lock_registry(db)
     row = get_attempt(db, identity)
+    if state == 'started' and row.execution_purpose == 'study':
+        from .study_admission import resolve_assignment, require_prerequisites
+        occasion = db.get(AssessmentOccasion, row.occasion_id)
+        context = resolve_assignment(db, attempt_id=identity, instrument=occasion.instrument, participant_id=occasion.participant_id, visit_id=occasion.visit_id, purpose='study')
+        require_prerequisites(db, identity, context)
     if row.acquisition_state == state and (state != 'interrupted' or row.interruption_category == category):
         return row
     allowed = {'started': {'created'}, 'finished': {'started'}, 'interrupted': {'created', 'started'}}
@@ -89,7 +113,12 @@ def source_links(db, identity):
 def attempt_view(db, row):
     db.refresh(row)
     from .assessment_adapters import receipt_facets
-    return {**row.model_dump(mode='json'), 'sources': [x.model_dump() for x in source_links(db, row.id)],
+    context = None
+    if row.execution_purpose == 'study':
+        from .study_admission import for_occasion
+        try: context = for_occasion(db, row.occasion_id)
+        except HTTPException: pass
+    return {**row.model_dump(mode='json'), 'assignment_context': context, 'sources': [x.model_dump() for x in source_links(db, row.id)],
         'receipt': receipt_facets(db, row)}
 
 
@@ -117,6 +146,12 @@ def prepare_result(db, identity, *, instrument, participant_id, visit_id, purpos
     if (occasion.instrument != instrument or occasion.participant_id != participant_id
             or (visit_id is not None and occasion.visit_id != visit_id) or row.execution_purpose != purpose):
         raise HTTPException(422, 'attempt does not match acquisition context or declared purpose')
+    from .study_admission import resolve_assignment
+    context = resolve_assignment(db, attempt_id=identity, instrument=instrument, participant_id=participant_id, visit_id=visit_id, purpose=purpose, require_started=True)
+    if context:
+        submitted = payload.get('payload', payload)
+        if submitted.get('locale') != context['locale'] or submitted.get('fast_mode', False):
+            raise HTTPException(422, 'Payload language/configuration differs from the frozen assignment.')
     digest = payload_hash(payload)
     if row.final_payload_sha256:
         if row.final_payload_sha256 != digest:

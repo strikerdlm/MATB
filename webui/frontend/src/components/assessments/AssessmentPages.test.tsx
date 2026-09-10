@@ -8,7 +8,7 @@ import * as api from '@/lib/api';
 import * as assessments from '@/lib/assessments';
 const controls = vi.hoisted(() => ({purpose: 'study' as 'study' | 'practice', select: null as null | ((a: Attempt | null) => void)}));
 vi.mock('@/lib/execution-purpose', () => ({useExecutionPurpose: () => controls.purpose}));
-vi.mock('@/lib/i18n', () => ({useAppLocale: () => ({locale: 'en', copy: (_es: string, en: string) => en})}));
+vi.mock('@/lib/i18n', () => ({FixedLocaleProvider: ({children}: {children: React.ReactNode}) => <>{children}</>, useAppLocale: () => ({locale: 'en', copy: (_es: string, en: string) => en})}));
 vi.mock('@/lib/console-context', () => ({useConsole: () => ({catalog: []})}));
 vi.mock('@/lib/experiment-flow', () => ({useReportExperimentFlow: () => {}, flowStageForPvt: () => '', flowStageForScreen: () => ''}));
 vi.mock('@/components/experiments/ExperimentGuide', () => ({ExperimentGuide: () => null, ExecutionPurposeBadge: () => null}));
@@ -51,7 +51,7 @@ it.each(['pvt', 'screen'] as const)('%s ignores a stale start response and locks
   // A late external/context update must also invalidate admission, even though
   // ordinary user changes are prevented by the disabled selection controls.
   fireEvent.change(participant, {target: {value: 'P02'}});
-  await act(async () => {resolveStart({id: 'attempt-A', acquisition_state: 'started'} as Attempt);});
+  await act(async () => {resolveStart({id: 'attempt-A', acquisition_state: 'started', assignment_context: {participant_id:'P01',visit_id:7,locale:'en'}} as Attempt);});
   expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', {name: 'Complete screen'})).not.toBeInTheDocument();
   expect(participant).toHaveValue('P02');
@@ -60,7 +60,7 @@ it.each(['pvt', 'screen'] as const)('%s ignores a stale start response and locks
 });
 
 it.each(['pvt', 'screen'] as const)('%s saves and retries with the admitted immutable context', async kind => {
-  vi.mocked(assessments.startAttempt).mockResolvedValue({id: 'attempt-A', acquisition_state: 'started'} as Attempt);
+  vi.mocked(assessments.startAttempt).mockResolvedValue({id: 'attempt-A', acquisition_state: 'started', assignment_context: {participant_id:'P01',visit_id:7,locale:'en'}} as Attempt);
   vi.mocked(api.postPvt).mockRejectedValueOnce(new Error('offline')).mockResolvedValue({id: 42, kss_score: 3, protocol_valid: false, metrics: {median_rt_ms: null, lapses: 0, false_starts: 0}} as never);
   vi.mocked(api.postScreen).mockRejectedValueOnce(new Error('offline')).mockResolvedValue({participant_id: 'P01', screen_version: 2, scores: {}});
   const view = render(kind === 'pvt' ? <PvtPage /> : <ScreenPage />);

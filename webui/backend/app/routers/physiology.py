@@ -132,6 +132,7 @@ def create_capture(body: CreateCaptureRequest, runtime: PolarCaptureManager = De
         session_id=body.matb_session_id,
         settings=body.settings.model_dump(),
         execution_purpose=body.execution_purpose,
+        attempt_id=body.attempt_id,
     ))
     return PreparedCapture(capture=capture, controller_lease=lease)
 

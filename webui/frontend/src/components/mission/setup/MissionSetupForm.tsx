@@ -7,6 +7,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Check, ChevronRight, Loader2, Radio, ShieldCheck } from "lucide-react";
 import { listVisits } from "@/lib/api";
+import {useAssignedAttempt} from '@/lib/assigned-attempt';
+import {useAssessmentAdmission} from '@/lib/assessment-admission';
 import { createSimulationSession, SimulationApiError } from "@/lib/simulation/api";
 import { storePreparedSessionLease } from "@/lib/simulation/lease";
 import { STRINGS, t, type TranslationKey } from "@/lib/simulation/i18n";
@@ -75,7 +77,10 @@ export function MissionSetupForm({
 }: MissionSetupFormProps) {
   const router = useRouter();
   const [presentation,setPresentation] = useState<PresentationConfig>();
-  const { simulationLocale: locale, copy } = useAppLocale();
+  const preferred=useAppLocale();
+  const assigned=useAssignedAttempt();
+  const locale=assigned.context ? (assigned.context.locale==='en'?'en':'es-CO') : preferred.simulationLocale;
+  const copy=preferred.copy;
   const [participantId, setParticipantId] = useState("");
   const [visitOrdinal, setVisitOrdinal] = useState("");
   const [scenarioId, setScenarioId] = useState("");
@@ -144,6 +149,8 @@ export function MissionSetupForm({
     };
   }, [initialVisits, participantId, visitsLoader]);
 
+  const admission=useAssessmentAdmission(assigned.attempt&&assigned.context?{attemptId:assigned.attempt.id,participantId,visitId:assigned.context.visit_id,purpose:'study',locale:assigned.context.locale}:null);
+  useEffect(()=>{let active=true;const bound=assigned.context;if(bound){setParticipantId(bound.participant_id);setScenarioId((bound.config.scenario as {id:string}).id);setPresentation((bound.config.presentation??undefined) as PresentationConfig|undefined);void visitsLoader(bound.participant_id).then(rows=>{if(active)setVisitOrdinal(String(rows.find(v=>v.id===bound.visit_id)?.visit_ordinal??''));});}return()=>{active=false;};},[assigned.context,visitsLoader]);
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSubmit) {
@@ -153,7 +160,9 @@ export function MissionSetupForm({
     setSubmitError(null);
     setSubmitting(true);
     try {
-      const prepared: PreparedSession = await createSimulationSession({
+      const admitted=await admission.admit();
+      if(!admitted)throw new Error('Select an assigned assessment at /study/assignments');
+      const prepared: PreparedSession = await createSimulationSession({ attempt_id:admitted.attemptId,
         execution_purpose: "study",
         participant_id: participantId,
         visit_ordinal: Number(visitOrdinal),
@@ -179,9 +188,9 @@ export function MissionSetupForm({
 
   return (
     <main className="min-h-screen bg-background px-4 py-8 text-foreground sm:px-6 lg:px-10">
-      <div className="mx-auto max-w-6xl space-y-7"><p className="text-sm text-muted-foreground">{locale === "en" ? "Before this study mission, complete KSS and a valid 10-minute PVT for the same visit." : "Antes de esta misión de estudio, complete KSS y una PVT válida de 10 minutos para la misma visita."} <Link href="/pvt?purpose=study" className="underline">KSS + PVT</Link></p>
+      <div className="mx-auto max-w-6xl space-y-7"><p className="text-sm text-muted-foreground">{locale === "en" ? "Before this study mission, complete KSS and a valid 10-minute PVT for the same visit." : "Antes de esta misión de estudio, complete KSS y una PVT válida de 10 minutos para la misma visita."} <Link href="/study/assignments" className="underline">{copy("Seleccionar evaluación asignada","Select assigned assessment")}</Link></p>
         {!preparationEnabled && <p role="status" className="border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">{copy("Elija sesión de estudio arriba para preparar una misión. Para familiarización, use la prueba técnica desde el catálogo.", "Choose study session above to prepare a mission. For familiarization, use the technical test from the catalog.")}</p>}
-        <PresentationSetup locale={locale} value={presentation} onChange={setPresentation}/>
+        <fieldset disabled={Boolean(assigned.context)}><PresentationSetup locale={locale} value={presentation} onChange={setPresentation}/></fieldset>
         <header className="flex flex-col justify-between gap-5 border-b border-white/10 pb-6 md:flex-row md:items-end">
           <div>
             <div className="mb-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
@@ -256,7 +265,7 @@ export function MissionSetupForm({
                     aria-label={labels["setup.participant"]}
                     value={participantId}
                     onChange={(event) => setParticipantId(event.target.value)}
-                    disabled={loading || submitting}
+                    disabled={Boolean(assigned.context) || loading || submitting}
                     className="h-10 w-full rounded-[3px] border border-input bg-black/40 px-3 text-sm outline-none transition focus:border-white/60 focus:ring-2 focus:ring-white/15 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <option value="">—</option>
@@ -281,7 +290,7 @@ export function MissionSetupForm({
                     aria-label={labels["setup.visit"]}
                     value={visitOrdinal}
                     onChange={(event) => setVisitOrdinal(event.target.value)}
-                    disabled={!participantId || visitsLoading || submitting}
+                    disabled={Boolean(assigned.context) || !participantId || visitsLoading || submitting}
                     className="h-10 w-full rounded-[3px] border border-input bg-black/40 px-3 text-sm outline-none transition focus:border-white/60 focus:ring-2 focus:ring-white/15 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <option value="">{visitsLoading ? "…" : "—"}</option>
@@ -304,7 +313,7 @@ export function MissionSetupForm({
                     aria-label={labels["setup.scenario"]}
                     value={scenarioId}
                     onChange={(event) => setScenarioId(event.target.value)}
-                    disabled={loading || submitting}
+                    disabled={Boolean(assigned.context) || loading || submitting}
                     className="h-10 w-full rounded-[3px] border border-input bg-black/40 px-3 text-sm outline-none transition focus:border-white/60 focus:ring-2 focus:ring-white/15 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <option value="">—</option>

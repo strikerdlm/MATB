@@ -335,6 +335,7 @@ class OpenMatbReadiness(BaseModel):
 
 
 class CreateOpenMatbSession(BaseModel):
+    attempt_id: str | None = None
     model_config = ConfigDict(extra="forbid")
     execution_purpose: Literal["practice", "study"]
     participant_id: str = Field(pattern=PARTICIPANT_ID_PATTERN)

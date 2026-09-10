@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, MoonStar } from "lucide-react";
 
@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { getPvtSummary, listParticipants, listVisits, postPvt } from "@/lib/api";
-import { useAppLocale } from "@/lib/i18n";
+import { FixedLocaleProvider, useAppLocale } from "@/lib/i18n";
 import { PVT_PROTOCOL_DURATION_MS, type PvtRunResult } from "@/lib/pvt";
 import type { Participant, PvtAssessment, PvtSummary, Visit } from "@/types";
 
@@ -49,7 +49,7 @@ const KSS_ES = [
 type Stage = "select" | "kss" | "instructions" | "pvt" | "saving" | "save_error" | "complete";
 
 export default function PvtPage() {
-  const { locale, copy } = useAppLocale();
+  const preferred = useAppLocale();
   const purpose = useExecutionPurpose();
   const { catalog } = useConsole();
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -64,9 +64,12 @@ export default function PvtPage() {
   const [pendingRun, setPendingRun] = useState<PvtRunResult | null>(null);
   const [fastMode, setFastMode] = useState(false);
   const [selectedAttempt, setSelectedAttempt] = useState<Attempt | null>(null);
+  const locale = selectedAttempt?.assignment_context?.locale ?? preferred.locale;
+  const copy = useCallback((es: string, en: string) => locale === 'en' ? en : es, [locale]);
   const [pvtStarted, setPvtStarted] = useState(false);
 
   useEffect(() => {
+    setParticipantId(new URLSearchParams(window.location.search).get('participant') ?? '');
     setFastMode(new URLSearchParams(window.location.search).get("fast") === "1");
     Promise.all([listParticipants(), getPvtSummary()])
       .then(([participantRows, pvtRows]) => {
@@ -79,7 +82,7 @@ export default function PvtPage() {
   useEffect(() => {
     const nextHash = stage === "kss" || stage === "select" ? "#kss" : "#pvt";
     if (window.location.hash !== nextHash) {
-      window.history.replaceState(null, "", nextHash);
+      window.history.replaceState(null, "", window.location.pathname + window.location.search + nextHash);
       window.dispatchEvent(new HashChangeEvent("hashchange"));
     }
   }, [stage]);
@@ -93,7 +96,8 @@ export default function PvtPage() {
       .then((rows) => {
         if (!active) return;
         setVisits(rows);
-        const next = rows[0];
+        const requestedVisit = Number(new URLSearchParams(window.location.search).get('visit'));
+        const next = rows.find(row => row.id === requestedVisit) ?? rows[0];
         if (next) setVisitOrdinal(String(next.visit_ordinal));
       })
       .catch((reason) => setError(reason instanceof Error ? reason.message : String(reason)));
@@ -105,7 +109,7 @@ export default function PvtPage() {
     [visitOrdinal, visits],
   );
   const admission = useAssessmentAdmission(selectedAttempt && purpose && participantId && visit
-    ? {attemptId: selectedAttempt.id, participantId, visitId: visit.id, visitOrdinal: visit.visit_ordinal, purpose, locale, fastMode}
+    ? {attemptId: selectedAttempt.id, participantId, visitId: visit.id, visitOrdinal: visit.visit_ordinal, purpose, locale, fastMode: purpose === 'study' ? false : fastMode}
     : null);
   useReportExperimentFlow("pvt", flowStageForPvt(stage, pvtStarted));
   const kssLabels = locale === "en" ? KSS_EN : KSS_ES;
@@ -267,7 +271,7 @@ export default function PvtPage() {
         </Card>
       )}
 
-      {stage === "pvt" && <PvtRunner durationMs={durationMs} onStart={() => setPvtStarted(true)} onComplete={(value) => void completePvt(value)} />}
+      {stage === "pvt" && <FixedLocaleProvider locale={locale}><PvtRunner durationMs={durationMs} onStart={() => setPvtStarted(true)} onComplete={(value) => void completePvt(value)} /></FixedLocaleProvider>}
       {stage === "saving" && <div role="status" className="grid min-h-[50vh] place-items-center text-center"><div><Clock3 className="mx-auto mb-4 h-10 w-10 animate-pulse text-info" /><p>{copy("Guardando la PVT…", "Saving PVT…")}</p></div></div>}
       {stage === "complete" && result && (
         <Card className="border-success/40 bg-success/5">
@@ -284,7 +288,7 @@ export default function PvtPage() {
             <div className="sm:col-span-4 space-y-3">
               <p role="status" className={result.protocol_valid ? "text-success" : "text-warning"}>{result.protocol_valid ? copy("Registro válido para continuar el estudio.", "Valid recording to continue the study.") : purpose === "practice" ? copy("Práctica guardada por separado.", "Practice saved separately.") : copy("Registro no válido para el protocolo: revise interrupciones, duración y continuidad. Puede repetir la prueba.", "Recording not valid for the protocol: review interruptions, duration, and continuity. You may repeat the test.")}</p>
               <div className="flex flex-wrap gap-3"><Button asChild><Link href={`/start?purpose=${purpose}`}>{copy("Volver a los experimentos", "Return to experiments")}</Link></Button>
-              {result.protocol_valid && catalog.some((item) => item.id === "suas" && item.component_available) && <Button asChild variant="outline"><Link href="/mission/setup?purpose=study">{copy("Continuar a la misión sUAS", "Continue to the sUAS mission")}</Link></Button>}</div>
+              {result.protocol_valid && catalog.some((item) => item.id === "suas" && item.component_available) && <Button asChild variant="outline"><Link href="/study/assignments">{copy("Continuar a la misión sUAS", "Continue to the sUAS mission")}</Link></Button>}</div>
             </div>
           </CardContent>
         </Card>

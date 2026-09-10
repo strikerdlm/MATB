@@ -22,6 +22,11 @@ export function useAssessmentAdmission<T extends {attemptId: string}>(context: T
       const response = await startAttempt(snapshot.attemptId);
       if (!active.current || current.current.key !== key) return null;
       if (response.id !== snapshot.attemptId) throw new Error('Admission returned a different attempt identity');
+      const requested = snapshot as Readonly<T> & {purpose?: string; locale?: string; participantId?: string; visitId?: number};
+      if (requested.purpose === 'study') {
+        const bound = response.assignment_context;
+        if (!bound || bound.participant_id !== requested.participantId || bound.visit_id !== requested.visitId || (requested.locale && bound.locale !== requested.locale)) throw new Error('Study admission context differs from the selected frozen assignment');
+      }
       setAdmitted(snapshot);
       return snapshot;
     } finally {

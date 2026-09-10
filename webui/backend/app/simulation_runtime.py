@@ -42,7 +42,7 @@ from matb_integration.suas.scenarios.loader import load_scenario
 from app.console_profile import current_console_profile
 
 from matb_integration.suas.scenarios.manifest import build_session_manifest, build_technical_session_manifest
-from matb_integration.suas.scenarios.profiles import block_order_for_participant
+from matb_integration.suas.scenarios.profiles import block_order_for_participant, WorkloadProfile
 from matb_integration.suas.research.protocol import (
     ActiveProbe, ProtocolController, ProtocolError, ProtocolPhase,
 )
@@ -114,6 +114,7 @@ class RuntimeHandle:
     presentation_states: dict[str, dict] = field(default_factory=dict, init=False)
     presentation_sequence: int = field(default=-1, init=False)
     lease_hash: str
+    admission_engine: Any = None
     lifecycle: str = "PREPARED"
     active_block_id: str | None = None
     engine: SimulationEngine | None = None
@@ -196,8 +197,17 @@ class SimulationManager:
             )).one_or_none()
             if visit is None:
                 raise SimulationNotFound("visit not found")
+            from app.study_admission import resolve_assignment
+            assigned = resolve_assignment(db, attempt_id=request.attempt_id, instrument='suas', participant_id=request.participant_id,
+                visit_id=visit.id, purpose=request.execution_purpose, require_started=True)
+            from app.study_registry_models import StudyAttemptSelection
+            from app.assessment_models import AssessmentAttempt, AssessmentOccasion
+            selection = db.get(StudyAttemptSelection, request.attempt_id)
+            selected = json.loads(selection.selections_json) if selection else {}
+            pvt_ids = [identity for identity in selected.values() if db.get(AssessmentOccasion, db.get(AssessmentAttempt, identity).occasion_id).instrument == 'pvt']
+            if len(pvt_ids) != 1: raise SimulationConflict('Select the exact assigned PVT prerequisite.')
             from app.experiment_catalog import require_study_pvt
-            require_study_pvt(db, int(visit.id))
+            require_study_pvt(db, int(visit.id), attempt_id=pvt_ids[0])
             scenario_root = self.scenario_root.resolve()
             scenario_path = self.scenario_root / f"{request.scenario_id}.yaml"
             resolved_scenario = scenario_path.resolve()
@@ -208,7 +218,12 @@ class SimulationManager:
             ):
                 raise SimulationNotFound("scenario not found")
             loaded = load_scenario(resolved_scenario)
-            order = block_order_for_participant(request.participant_id)
+            from app.study_bindings import binding_issues
+            from app.study_registry_schemas import OccasionSpec
+            frozen_config = assigned['config']
+            if binding_issues(db, OccasionSpec.model_validate({key: assigned[key] for key in OccasionSpec.model_fields})) or frozen_config['scenario'] != {'id': request.scenario_id, 'sha256': loaded.sha256} or frozen_config['presentation'] != (request.presentation.model_dump(mode='json') if request.presentation else None) or assigned['locale'] != ('en' if request.locale == 'en' else 'es-419'):
+                raise SimulationConflict('study_configuration_mismatch')
+            order = tuple(WorkloadProfile(value) for value in assigned['condition_by_arm'][assigned['arm']].split('_'))
             manifest = build_session_manifest(
                 loaded,
                 participant_id=request.participant_id,
@@ -232,12 +247,13 @@ class SimulationManager:
                 (run_dir / "traffic-source.json").write_bytes(recording_path(request.presentation.traffic.recording_id).read_bytes())
             handle = RuntimeHandle(
                 session_id=session_id, participant_id=request.participant_id, visit_id=int(visit.id),
-                locale=request.locale, scenario=loaded, manifest=manifest, recorder=recorder,
+                locale=request.locale, scenario=loaded, manifest=manifest, recorder=recorder, admission_engine=db.get_bind(),
                 lease_hash=self._hash_lease(lease),
                 protocol=ProtocolController(
                     loaded.definition,
                     participant_id=request.participant_id,
                     locale=Locale(request.locale),
+                    block_order=(WorkloadProfile.PRACTICE, *order),
                     monotonic_clock=lambda: asyncio.get_running_loop().time(),
                 ),
             )
@@ -257,7 +273,7 @@ class SimulationManager:
                 validity="valid",
                 artifact_root=str(run_dir),
             )
-            declare_acquisition(db, acquisition_row, purpose=request.execution_purpose)
+            declare_acquisition(db, acquisition_row, purpose=request.execution_purpose, attempt_id=getattr(request, "attempt_id", None))
             handle.purpose_provenance_id = acquisition_row.purpose_provenance_id
             db.flush()
             for index, block_id in enumerate(("PRACTICE", *(item.value for item in order)), start=0):
@@ -355,7 +371,7 @@ class SimulationManager:
                 record_class="technical_only",
                 artifact_root=str(run_dir),
             )
-            declare_acquisition(db, acquisition_row, purpose=request.execution_purpose)
+            declare_acquisition(db, acquisition_row, purpose=request.execution_purpose, attempt_id=getattr(request, "attempt_id", None))
             handle.purpose_provenance_id = acquisition_row.purpose_provenance_id
             db.flush()
             block_row = TechnicalSimulationBlock(
@@ -380,26 +396,8 @@ class SimulationManager:
 
     @staticmethod
     def _bind_presentation(manifest, request, loaded):
-        config = request.presentation
-        if config is None:
-            return
-        if config.scene_id:
-            read_package(config.scene_id, config.scene_sha256)
-            if loaded.definition.terrain.bounds != (0, 0, 12000000, 8000000):
-                raise ValueError("scene package requires the 12 by 8 km reference footprint")
-        if config.traffic.mode == "live" and not isinstance(request, CreateTechnicalSimulationSession):
-            raise ValueError("research sessions require recorded traffic")
-        if config.traffic.mode == "recorded":
-            from .traffic_service import load_recording
-            recording = load_recording(config.traffic.recording_id, config.traffic.recording_sha256)
-            if recording["scene_id"] != config.scene_id or recording["scene_sha256"] != config.scene_sha256:
-                raise ValueError("traffic recording belongs to a different scene")
-            if recording["provider"] != config.traffic.provider:
-                raise ValueError("traffic recording belongs to a different provider")
-            blocks = [request.block_id] if isinstance(request, CreateTechnicalSimulationSession) else list(loaded.definition.blocks)
-            if any(recording["duration_ms"] < loaded.definition.blocks[b].duration_ms for b in blocks):
-                raise ValueError("traffic recording is shorter than the mission block")
-        manifest["presentation"] = config.model_dump(mode="json")
+        from .simulation_presentation_bindings import bind_presentation
+        bind_presentation(manifest, request.presentation, loaded, technical_block=request.block_id if isinstance(request, CreateTechnicalSimulationSession) else None)
 
     @staticmethod
     def _require_presentation_ready(handle, block_id):
@@ -526,6 +524,10 @@ class SimulationManager:
     async def start(self, session_id: str, block_id: str, lease: str) -> SessionView:
         async with self._lock:
             handle = self._require(session_id, lease)
+            if handle.participant_id:
+                with Session(handle.admission_engine or self.persistence.engine) as db:
+                    from app.study_admission import guard_source
+                    guard_source(db, db.get(SimulationSession, session_id))
             if handle.lifecycle == "RUNNING" and handle.active_block_id == block_id:
                 return self._view(handle)
             if handle.lifecycle not in {"PREPARED", "PAUSED"}:
@@ -573,6 +575,10 @@ class SimulationManager:
     async def resume(self, session_id: str, lease: str) -> SessionView:
         async with self._lock:
             handle = self._require(session_id, lease)
+            if handle.participant_id:
+                with Session(handle.admission_engine or self.persistence.engine) as db:
+                    from app.study_admission import guard_source
+                    guard_source(db, db.get(SimulationSession, session_id))
             if handle.lifecycle == "RUNNING":
                 return self._view(handle)
             if handle.lifecycle != "PAUSED":

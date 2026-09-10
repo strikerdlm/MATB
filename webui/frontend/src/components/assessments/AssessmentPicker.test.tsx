@@ -38,10 +38,10 @@ it('does not select an old context after an in-flight occasion creation', async 
   vi.stubGlobal('fetch', vi.fn(async (url: string, options?: RequestInit) => {
     if (url.includes('/occasions?')) return new Response('[]');
     if (url.endsWith('/occasions') && options?.method === 'POST') return new Promise<Response>(resolve => {resolveCreate = resolve;});
-    if (url.endsWith('/attempts')) return new Response(JSON.stringify({id: 'stale-attempt', occasion_id: 'old-occasion', ordinal: 1, execution_purpose: 'study', acquisition_state: 'created'}));
+    if (url.endsWith('/attempts')) return new Response(JSON.stringify({id: 'stale-attempt', occasion_id: 'old-occasion', ordinal: 1, execution_purpose: 'practice', acquisition_state: 'created'}));
     throw new Error(url);
   }));
-  function Harness({visit}: {visit: number}) {const [selected, setSelected] = useState<Attempt | null>(null); return <><AssessmentPicker participantId="P01" visitId={visit} instrument="pvt" purpose="study" onSelect={setSelected} /><output>{selected?.id ?? 'none selected'}</output></>;}
+  function Harness({visit}: {visit: number}) {const [selected, setSelected] = useState<Attempt | null>(null); return <><AssessmentPicker participantId="P01" visitId={visit} instrument="pvt" purpose="practice" onSelect={setSelected} /><output>{selected?.id ?? 'none selected'}</output></>;}
   const view = render(<Harness visit={7} />);
   fireEvent.change(screen.getByLabelText('Phase'), {target: {value: 'post'}});
   fireEvent.click(screen.getByRole('button', {name: 'Prepare occasion'}));
@@ -69,4 +69,16 @@ it.each(['withdrawal', 'operator_stop', 'hardware_failure', 'software_failure', 
   fireEvent.change(screen.getByLabelText('Interruption cause'), {target: {value: category}});
   fireEvent.click(button);
   await waitFor(() => expect(interrupted).toBe(category));
+});
+
+it('retains the assigned URL attempt when its visit arrives after the attempt response',async()=>{
+ const selected=vi.fn();
+ const assigned={id:'assigned-url',occasion_id:'assigned-occasion',ordinal:1,execution_purpose:'study',acquisition_state:'created',assignment_context:{participant_id:'P01',visit_id:7,instrument:'pvt',locale:'en'}};
+ window.history.replaceState(null,'','/?attempt=assigned-url');
+ vi.stubGlobal('fetch',vi.fn(async(url:string)=>new Response(JSON.stringify(url.includes('/attempts/assigned-url')?assigned:[]))));
+ const view=render(<AssessmentPicker participantId="P01" visitId={null} instrument="pvt" purpose="study" onSelect={selected}/>);
+ await waitFor(()=>expect(fetch).toHaveBeenCalled());
+ view.rerender(<AssessmentPicker participantId="P01" visitId={7} instrument="pvt" purpose="study" onSelect={selected}/>);
+ await waitFor(()=>expect(selected).toHaveBeenLastCalledWith(assigned));
+ window.history.replaceState(null,'','/');
 });

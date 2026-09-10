@@ -10,7 +10,7 @@ import { WorkloadQuestionnaire } from "@/components/openmatb/WorkloadQuestionnai
 import { Button } from "@/components/ui/button";
 import { useReportExperimentFlow } from "@/lib/experiment-flow";
 import { withExecutionPurpose } from "@/lib/execution-purpose";
-import { useAppLocale } from "@/lib/i18n";
+import { FixedLocaleProvider, useAppLocale } from "@/lib/i18n";
 import {
   acknowledgeOpenMatbInstructions,
   getOpenMatbSession,
@@ -24,7 +24,8 @@ import type { OpenMatbSession, WorkloadScaleSubmission } from "@/types/openmatb"
 
 function ParticipantContent() {
   const params = useSearchParams();
-  const { copy, setLocale } = useAppLocale();
+  const preferred = useAppLocale();
+  const initialCopy = preferred.copy;
   const id = params.get("session");
   const [token, setToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -42,32 +43,32 @@ function ParticipantContent() {
         window.history.replaceState(null, "", window.location.pathname + window.location.search);
       }
     } catch {
-      setActionError(copy(
+      setActionError(initialCopy(
         "Esta pestaña no pudo conservar la credencial del participante. Pida al investigador que vuelva a abrir esta pantalla.",
         "This tab could not retain the participant credential. Ask the researcher to reopen this display.",
       ));
     }
-  }, [copy, id]);
+  }, [initialCopy, id]);
 
   const pollSession = useCallback(() => {
-    if (!id) return Promise.reject(new Error(copy("Falta el identificador de la sesión.", "Session identifier is missing.")));
+    if (!id) return Promise.reject(new Error(initialCopy("Falta el identificador de la sesión.", "Session identifier is missing.")));
     return getOpenMatbSession(id);
-  }, [copy, id]);
+  }, [initialCopy, id]);
 
   const { value: polledSession, pollingError, acceptActionValue } = useSerializedPolling({
     enabled: Boolean(id),
     poll: pollSession,
     intervalMs: 1_000,
     resetKey: id,
-    errorMessage: (reason) => openMatbErrorMessage(reason, copy, ["No se pudo consultar la sesión.", "Session could not be loaded."]),
+    errorMessage: (reason) => openMatbErrorMessage(reason, initialCopy, ["No se pudo consultar la sesión.", "Session could not be loaded."]),
   });
   const session = polledSession?.id === id ? polledSession : null;
 
+  const locale = session?.locale ?? preferred.locale;
+  const copy = useCallback((es: string, en: string) => locale === 'en' ? en : es, [locale]);
+
   useReportExperimentFlow("openmatb", openMatbStage(session?.lifecycle), session?.execution_purpose);
 
-  useEffect(() => {
-    if (session?.locale) setLocale(session.locale);
-  }, [session?.locale, setLocale]);
 
   async function acknowledge() {
     if (!id || !token) return;
@@ -175,14 +176,14 @@ function ParticipantContent() {
         <p className="text-muted-foreground">{copy("Los bloques de práctica no recopilan calificaciones de carga de trabajo. Espere mientras avanza la sesión.", "Practice blocks do not collect workload ratings. Wait while the session advances.")}</p>
       </section>}
 
-      {session.lifecycle === "AWAITING_SCALE" && session.active_block && session.active_block !== "PRACTICE" && <WorkloadQuestionnaire
+      {session.lifecycle === "AWAITING_SCALE" && session.active_block && session.active_block !== "PRACTICE" && <FixedLocaleProvider locale={locale}><WorkloadQuestionnaire
         sessionId={session.id}
         blockInstanceId={session.active_block_instance_id}
         profile={session.active_block}
         tokenAvailable={Boolean(token)}
         onSubmit={submit}
         onAccepted={acceptWorkload}
-      />}
+      /></FixedLocaleProvider>}
 
       {session.lifecycle === "AWAITING_SCALE" && !session.active_block && <p role="alert" className="border border-warning/40 bg-warning/10 p-4 text-sm text-warning">
         {copy("No se puede identificar el bloque activo. Actualice esta página y avise al investigador si el mensaje continúa.", "The active block cannot be identified. Refresh this page and tell the researcher if the message remains.")}

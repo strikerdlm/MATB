@@ -1,6 +1,8 @@
 import { expect, test as base } from "@playwright/test";
 import type { APIRequestContext, Page, TestInfo } from "@playwright/test";
 
+import {approveStudyFixture,baseOccasion,post} from './study-fixtures';
+
 export const test = base;
 export { expect };
 
@@ -49,6 +51,12 @@ export async function selectSetup(
 ): Promise<void> {
   await expect(page.locator("#mission-participant")).toBeVisible();
   await page.locator("#app-language").selectOption(locale === "es-CO" ? "es-419" : "en");
+  if(await page.locator('#mission-participant').isDisabled()){
+    await expect(page.locator('#mission-participant')).toHaveValue(participant);
+    await expect(page.locator('#mission-visit')).toHaveValue('1');
+    await expect(page.locator('#mission-scenario')).toHaveValue(scenario);
+    return;
+  }
   await page.locator("#mission-participant").selectOption(participant);
   await expect(page.locator("#mission-visit")).toBeEnabled();
   await page.locator("#mission-visit").selectOption("1");
@@ -64,9 +72,14 @@ function participantFor(testInfo: TestInfo, offset: number): string {
 }
 
 /** Save explicit synthetic prerequisite evidence for mission browser acceptance. */
-export async function seedStudyPvt(request: APIRequestContext, participant: string): Promise<void> {
+export async function seedStudyPvt(request: APIRequestContext, participant: string, scenario='e2e_area_search'): Promise<string> {
+  const original=await baseOccasion(request);
+  const options=await (await request.get(BACKEND_ORIGIN+'/study/bindings')).json();
+  const assignment=await approveStudyFixture(request,participant,[{...original,key:'pvt'}, {...original,key:'mission',instrument:'suas',phase:'mission',order:2,prerequisite_keys:['pvt'],condition_by_arm:{A:'LOW_MEDIUM_HIGH'},config:{binding_id:'suas-protocol-v1',scenario:options.suas.find((s:{id:string})=>s.id===scenario),presentation:null,input_mapping:'suas-default',scoring:'suas-current',practice_included:true}}]);
+  const prior=await post(request,`/assessments/occasions/${assignment.occasions.pvt}/attempts`,{execution_purpose:'study'});
+  await post(request,`/assessments/attempts/${prior.id}/start`);
   const pvt = await request.post(`${BACKEND_ORIGIN}/pvt`, { data: {
-    execution_purpose: "study", participant_id: participant, visit_ordinal: 1, kss_score: 3,
+    execution_purpose: "study", attempt_id:prior.id,locale:"en", participant_id: participant, visit_ordinal: 1, kss_score: 3,
     administered_at: "2026-09-04T12:00:00Z", duration_ms: 600000,
     timing_version: 2, max_frame_gap_ms: 17, terminal_phase: "waiting",
     trials: Array.from({ length: 272 }, (_, i) => ({ index: i, wait_ms: 2000,
@@ -74,6 +87,9 @@ export async function seedStudyPvt(request: APIRequestContext, participant: stri
   } });
   expect(pvt.status()).toBe(201);
   expect((await pvt.json()).protocol_valid).toBe(true);
+  const task=await post(request,`/assessments/occasions/${assignment.occasions.mission}/attempts`,{execution_purpose:'study'});
+  await post(request,`/study/attempts/${task.id}/prerequisites`,{selections:{pvt:prior.id}});
+  return task.id;
 }
 
 /** Prepare and start one synthetic mission through the rendered setup UI. */
@@ -97,12 +113,12 @@ export async function openRunningMission(
     });
   }
   expect(participantResponse.status()).toBe(201);
-  await seedStudyPvt(request, participant);
+  const assignedAttempt=await seedStudyPvt(request, participant,scenario);
 
   let sessionId: string | null = null;
   let lease: string | null = null;
   try {
-    await page.goto("/mission/setup?purpose=study");
+    await page.goto(`/mission/setup?purpose=study&attempt=${assignedAttempt}`);
     await selectSetup(page, participant, scenario, "en");
     await page.getByRole("checkbox", { name: /research instrument/i }).check();
     await page.getByRole("button", { name: /prepare session/i }).click();

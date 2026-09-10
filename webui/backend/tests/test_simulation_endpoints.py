@@ -13,14 +13,12 @@ from app.simulation_models import SimulationSession, TechnicalSimulationSession
 
 
 async def _prepare(client, *, scenario_id: str = "reference_area_search"):
+    from tests.study_fixtures import mission_request
+    manager=client._transport.app.state.simulation_manager
+    request=mission_request(manager.persistence.engine,participant_id='P01',visit_ordinal=1,scenario_id='reference_area_search',locale='es-CO')
     return await client.post(
         "/simulation/sessions",
-        json={"execution_purpose": "study",
-            "participant_id": "P01",
-            "visit_ordinal": 1,
-            "scenario_id": scenario_id,
-            "locale": "en",
-        },
+        json={**request.model_dump(mode='json'),'scenario_id':scenario_id},
     )
 
 

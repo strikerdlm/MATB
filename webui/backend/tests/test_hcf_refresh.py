@@ -2,6 +2,8 @@
 must pick up the screen HCF; /fits curves switch to Eq. 5.1."""
 from __future__ import annotations
 
+from tests.study_fixtures import study_post
+
 from sqlmodel import Session, select
 
 from app.models import DepdfFit
@@ -30,11 +32,20 @@ def test_existing_fits_refresh_when_cohort_gate_crossed(client, engine,
     with Session(engine) as s:
         fit = s.exec(select(DepdfFit)).one()
         assert fit.hcf_source == "F0_default" and fit.hcf_value == 1.0
-    # screens for P01..P03 crosses the >=3 gate; P01 is fastest -> F > 1
+    # Historical legacy refresh remains exploratory; new assigned acquisition does
+    # not mutate old fits. Task5 will execute frozen HCF plans independently.
+    import json
+    from app.models import ScreenResult
+    from app.hcf_refresh import refresh_fit_hcf
+    from matb_integration.screen.scoring import score_screen
     for pid, simple in (("P01", 260.0), ("P02", 320.0), ("P03", 380.0)):
         _enroll(client, pid)
-        client.post("/screen", json={"execution_purpose": "study", "participant_id": pid,
-                                     "payload": _payload(simple=simple)})
+        payload = _payload(simple=simple)
+        with Session(engine) as db:
+            db.add(ScreenResult(participant_id=pid, administered_at=payload['administered_at'], screen_version=2,
+                raw_trials_json=json.dumps(payload), scores_json=json.dumps(score_screen(payload))))
+            db.commit()
+            refresh_fit_hcf(db)
     with Session(engine) as s:
         fit = s.exec(select(DepdfFit)).one()
         assert fit.hcf_source == "screen" and fit.hcf_value > 1.0
@@ -43,8 +54,9 @@ def test_existing_fits_refresh_when_cohort_gate_crossed(client, engine,
 def test_new_fit_uses_screen_hcf(client, engine, sample_csv_bytes):
     for pid, simple in (("P01", 260.0), ("P02", 320.0), ("P03", 380.0)):
         _enroll(client, pid)
-        client.post("/screen", json={"execution_purpose": "study", "participant_id": pid,
+        response = study_post(client, "/screen", json={"execution_purpose": "study", "participant_id": pid,
                                      "payload": _payload(simple=simple)})
+        assert response.status_code == 201, response.text
     _fill_visit(client, sample_csv_bytes, "P03")
     with Session(engine) as s:
         fit = s.exec(select(DepdfFit)).one()
@@ -54,8 +66,9 @@ def test_new_fit_uses_screen_hcf(client, engine, sample_csv_bytes):
 def test_fits_endpoint_curve_uses_f(client, sample_csv_bytes):
     for pid, simple in (("P01", 260.0), ("P02", 320.0), ("P03", 380.0)):
         _enroll(client, pid)
-        client.post("/screen", json={"execution_purpose": "study", "participant_id": pid,
+        response = study_post(client, "/screen", json={"execution_purpose": "study", "participant_id": pid,
                                      "payload": _payload(simple=simple)})
+        assert response.status_code == 201, response.text
     _fill_visit(client, sample_csv_bytes, "P01")
     fit = client.get("/fits").json()[0]
     assert fit["hcf_source"] == "screen"

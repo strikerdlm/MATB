@@ -25,6 +25,7 @@ export interface LiftoffConfiguration {
 }
 
 export interface CreateLiftoffSession {
+  attempt_id?: string;
   locale?: "es-419" | "en";
   execution_purpose: "practice" | "study";
   participant_id: string;

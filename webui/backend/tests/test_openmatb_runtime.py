@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 from app.models import Participant, Visit
+from tests.study_fixtures import native_request
 from app.openmatb_runtime import OpenMatbManager, OpenMatbRuntimeError
 from app.openmatb_schemas import (
     ClonePresetRequest,
@@ -58,11 +59,11 @@ def test_english_practice_has_one_block_and_preserves_locale(engine, tmp_path):
     assert ";genericscales;filename;isa_en.txt" in scenario.read_text(encoding="utf-8")
 
 
-def test_create_session_generates_versioned_spanish_counterbalanced_suite(engine, tmp_path):
+def test_create_session_generates_versioned_spanish_assigned_condition(engine, tmp_path):
     _seed_visit(engine)
     manager = _manager(engine, tmp_path)
 
-    prepared = asyncio.run(manager.create_session(CreateOpenMatbSession(execution_purpose="study", participant_id="P01", visit_ordinal=1)))
+    prepared = asyncio.run(manager.create_session(native_request(engine, execution_purpose="study", participant_id="P01", visit_ordinal=1)))
 
     assert prepared.session.lifecycle == "INSTRUCTIONS"
     assert prepared.session.visual_theme == "fac_modern"
@@ -70,13 +71,12 @@ def test_create_session_generates_versioned_spanish_counterbalanced_suite(engine
     assert prepared.session.visual_profile_version == "1.0.0"
     assert prepared.session.visual_profile_schema_version == "openmatb-visual-profile-v1"
     assert prepared.session.visual_profile_sha256
-    assert prepared.session.block_order[0] == "PRACTICE"
-    assert set(prepared.session.block_order[1:]) == {"LOW", "MEDIUM", "HIGH"}
+    assert prepared.session.block_order == ["HIGH"]
     run_root = Path(manager.artifact_root) / prepared.session.id
     frozen_profile = json.loads((run_root / "visual-profile.json").read_text(encoding="utf-8"))
     assert frozen_profile["profile_id"] == "matb-fac-modern"
     scenarios = sorted((run_root / "scenarios").glob("*.txt"))
-    assert len(scenarios) == 4
+    assert len(scenarios) == 1
     for scenario in scenarios:
         assert ";genericscales;filename;isa_es.txt" in scenario.read_text(encoding="utf-8")
         manifest = json.loads(Path(f"{scenario}.manifest.json").read_text(encoding="utf-8"))
@@ -84,14 +84,14 @@ def test_create_session_generates_versioned_spanish_counterbalanced_suite(engine
         expected_profile = scenario.stem.split("_", 1)[1]
         assert manifest["parameters"]["suite_profile_name"] == expected_profile
         assert manifest["parameters"]["difficulty"] >= 0
-    assert prepared.controller_lease not in (run_root / "scenarios" / "0_PRACTICE.txt").read_text(encoding="utf-8")
+    assert prepared.controller_lease not in (run_root / "scenarios" / "0_HIGH.txt").read_text(encoding="utf-8")
 
 
 def test_cockpit_theme_is_frozen_in_session_and_scenario_provenance(engine, tmp_path):
     _seed_visit(engine)
     manager = _manager(engine, tmp_path)
 
-    prepared = asyncio.run(manager.create_session(CreateOpenMatbSession(execution_purpose="study",
+    prepared = asyncio.run(manager.create_session(native_request(engine, execution_purpose="study",
         participant_id="P01", visit_ordinal=1, visual_theme="cockpit",
     )))
 
@@ -123,7 +123,7 @@ def test_published_preset_is_immutable_and_clone_is_editable(engine, tmp_path):
 def test_participant_token_is_required_for_acknowledgement(engine, tmp_path):
     _seed_visit(engine)
     manager = _manager(engine, tmp_path)
-    prepared = asyncio.run(manager.create_session(CreateOpenMatbSession(execution_purpose="study", participant_id="P01", visit_ordinal=1)))
+    prepared = asyncio.run(manager.create_session(native_request(engine, execution_purpose="study", participant_id="P01", visit_ordinal=1)))
 
     with pytest.raises(OpenMatbRuntimeError, match="openmatb_invalid_participant_token"):
         manager.acknowledge_instructions(prepared.session.id, "wrong-token")
@@ -168,7 +168,7 @@ def test_native_process_exit_before_ready_is_reported_immediately(engine, tmp_pa
 
     async def run() -> str:
         prepared = await manager.create_session(
-            CreateOpenMatbSession(execution_purpose="study", participant_id="P01", visit_ordinal=1),
+            native_request(engine, execution_purpose="study", participant_id="P01", visit_ordinal=1),
         )
         manager.acknowledge_instructions(prepared.session.id, prepared.participant_token)
         with pytest.raises(OpenMatbRuntimeError, match="openmatb_dependency_missing"):
@@ -281,7 +281,7 @@ def test_frozen_visual_profile_tampering_fails_closed_before_launch(engine, tmp_
     from types import SimpleNamespace
     monkeypatch.setattr(manager, "readiness", lambda: SimpleNamespace(ready=True))
     prepared = asyncio.run(
-        manager.create_session(CreateOpenMatbSession(execution_purpose="study", participant_id="P01", visit_ordinal=1))
+        manager.create_session(native_request(engine, execution_purpose="study", participant_id="P01", visit_ordinal=1))
     )
     manager.acknowledge_instructions(prepared.session.id, prepared.participant_token)
     profile_path = Path(manager.artifact_root) / prepared.session.id / "visual-profile.json"

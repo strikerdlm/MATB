@@ -125,6 +125,8 @@ class PolarCaptureManager:
                 row.artifact_state = "incomplete"
                 row.incomplete_reasons_json = json.dumps(sorted(reasons))
                 row.ended_at = _utcnow()
+                from app.study_admission import sync_runtime_attempt
+                sync_runtime_attempt(db, row, state='interrupted')
                 db.add(row)
             db.commit()
 
@@ -225,6 +227,7 @@ class PolarCaptureManager:
         session_id: str,
         settings: dict[str, int],
         execution_purpose: str = "study",
+        attempt_id: str | None = None,
     ) -> tuple[PolarCaptureV1, str]:
         if self._device is None or self._capabilities is None:
             raise PolarRuntimeError("polar_device_not_connected")
@@ -237,6 +240,24 @@ class PolarCaptureManager:
                 raise PolarRuntimeError("participant_not_found")
             if execution_purpose not in {"practice", "study"}:
                 raise PolarRuntimeError("invalid_execution_purpose")
+            from app.study_admission import resolve_assignment
+            context = resolve_assignment(db, attempt_id=attempt_id, instrument='physiology', participant_id=participant_id,
+                purpose=execution_purpose, require_started=True,
+                config=dict(binding_id='polar-h10-pmd-v1', input_mapping='rr-ecg-acc', settings=settings, scoring='raw-streams'))
+            if context:
+                self._validate_settings(settings)
+                if context['accompanying_key']:
+                    from app.assessment_adapters import source_attempt
+                    from app.study_registry_models import StudyAssignment
+                    assigned = db.get(StudyAssignment, context['assignment_id'])
+                    table = {'openmatb': 'openmatb_suite_session', 'liftoff': 'liftoff_session', 'suas': 'simulation_session'}.get(session_kind)
+                    if not table: raise PolarRuntimeError('polar_assigned_accompaniment_required')
+                    linked_attempt = source_attempt(db, table, session_id)
+                    resolve_assignment(db, attempt_id=linked_attempt.id, instrument=session_kind, participant_id=participant_id, visit_id=context['visit_id'], purpose='study', require_started=True)
+                    if linked_attempt.occasion_id != json.loads(assigned.occasions_json)[context['accompanying_key']]:
+                        raise PolarRuntimeError('polar_assigned_accompaniment_mismatch')
+                elif session_kind != 'generic' or session_id != context['occasion_id']:
+                    raise PolarRuntimeError('polar_assigned_baseline_context_required')
             if session_kind != "generic":
                 from sqlalchemy import text
                 # Fixed allowlist, never interpolate a caller-controlled table name.
@@ -258,7 +279,7 @@ class PolarCaptureManager:
                 requested_settings_json=json.dumps(settings, sort_keys=True),
                 controller_lease_hash=_token_hash(lease),
             )
-            declare_acquisition(db, row, purpose=execution_purpose)
+            declare_acquisition(db, row, purpose=execution_purpose, attempt_id=attempt_id)
             db.commit()
             db.refresh(row)
             return self._view(row), lease
@@ -330,6 +351,9 @@ class PolarCaptureManager:
             if self._device is None:
                 raise PolarRuntimeError("polar_device_not_connected")
             row = self._row(capture_id, lease=lease)
+            with Session(self.engine) as db:
+                from app.study_admission import guard_source
+                guard_source(db, row)
             if row.lifecycle != "created":
                 raise PolarRuntimeError("polar_capture_not_startable")
             if row.matb_session_kind == "openmatb":
@@ -719,6 +743,11 @@ class PolarCaptureManager:
                 raise PolarRuntimeError("polar_capture_not_found")
             for key, value in values.items():
                 setattr(row, key, value)
+            from app.study_admission import sync_runtime_attempt
+            lifecycle = values.get('lifecycle')
+            if lifecycle in {'starting', 'capturing'}: sync_runtime_attempt(db, row, state='started')
+            elif lifecycle == 'complete': sync_runtime_attempt(db, row, state='finished')
+            elif lifecycle in {'interrupted', 'failed'}: sync_runtime_attempt(db, row, state='interrupted')
             db.add(row)
             db.commit()
 

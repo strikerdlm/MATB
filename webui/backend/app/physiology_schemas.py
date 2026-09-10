@@ -50,6 +50,7 @@ class CaptureSettings(StrictBody):
 
 
 class CreateCaptureRequest(StrictBody):
+    attempt_id: str | None = None
     execution_purpose: Literal["practice", "study"]
     participant_pseudonym: str = Field(pattern=r"^P[0-9]{2,6}$")
     matb_session_kind: Literal["openmatb", "liftoff", "suas", "generic"]

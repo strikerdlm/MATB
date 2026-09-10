@@ -5,6 +5,8 @@ import json
 
 import pytest
 
+from tests.study_fixtures import liftoff_payload
+
 from app.hrv_task_client import HrvTaskTemporaryError
 from tests.test_liftoff_endpoints import (
     FakeHrvClient,
@@ -20,7 +22,7 @@ from tests.test_liftoff_endpoints import (
 async def test_create_requires_telemetry_readiness(liftoff_client):
     client, _manager = liftoff_client
 
-    response = await client.post("/liftoff/sessions", json=create_payload())
+    response = await client.post("/liftoff/sessions", json=liftoff_payload(_manager, create_payload()))
 
     assert response.status_code == 409
     assert response.json()["detail"]["code"] == "liftoff_telemetry_not_ready"

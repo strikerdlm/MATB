@@ -97,6 +97,8 @@ class SQLModelSimulationPersistence:
             for row in rows:
                 row.lifecycle = "INTERRUPTED"
                 row.validity = "invalid"
+                from app.study_admission import sync_runtime_attempt
+                sync_runtime_attempt(db, row, state='interrupted')
                 row.interrupted_at = datetime.now().astimezone()
                 db.add(row)
                 changed += 1
@@ -125,6 +127,11 @@ class SQLModelSimulationPersistence:
                 raise KeyError(session_id)
             for key, value in fields.items():
                 setattr(row, key, value)
+            from app.study_admission import sync_runtime_attempt
+            lifecycle = fields.get('lifecycle')
+            if lifecycle == 'RUNNING': sync_runtime_attempt(db, row, state='started')
+            elif lifecycle == 'FINISHED': sync_runtime_attempt(db, row, state='finished')
+            elif lifecycle in {'ABORTED','INTERRUPTED'}: sync_runtime_attempt(db, row, state='interrupted')
             db.add(row)
             db.commit()
 

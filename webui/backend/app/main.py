@@ -204,6 +204,7 @@ _CORE_ROUTER_MODULES = (
     "app.routers.purpose",
     "app.routers.screen",
     "app.routers.study",
+    "app.routers.study_registry",
     "app.routers.tracker",
 )
 

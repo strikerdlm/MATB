@@ -7,6 +7,7 @@ import pyarrow.parquet as pq
 from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
+from tests.study_fixtures import h10_arguments
 from app.models import Participant
 from app.physiology_models import PolarCaptureRecord  # noqa: F401
 from app.physiology_runtime import PolarCaptureManager
@@ -45,11 +46,11 @@ def test_simulated_simultaneous_capture_finalizes_loss_visible_artifacts(tmp_pat
         token, _candidate = (await manager.scan(0.25))[0]
         capabilities = await manager.connect(token)
         assert capabilities.acc_sample_rates_hz == (25, 50, 100, 200)
-        capture, lease = manager.create_capture(
+        capture, lease = manager.create_capture(**h10_arguments(manager.engine,
             participant_id="P01", session_kind="generic", session_id="test-session",
             settings={"ecg_sample_rate_hz": 130, "ecg_resolution_bits": 14,
                       "acc_sample_rate_hz": 50, "acc_resolution_bits": 16, "acc_range_g": 2},
-        )
+        ))
         await manager.start_capture(capture.capture_id, lease)
         transport.emit_hr(bytes.fromhex("16 3c 00 04"))
         transport.emit_ecg(10_000_000_000, (-100, 0, 100))
@@ -100,11 +101,11 @@ def test_queue_pressure_and_disconnect_are_never_silent(tmp_path) -> None:
         await manager.startup()
         token, _candidate = (await manager.scan(0.25))[0]
         await manager.connect(token)
-        capture, lease = manager.create_capture(
+        capture, lease = manager.create_capture(**h10_arguments(manager.engine,
             participant_id="P01", session_kind="generic", session_id="pressure",
             settings={"ecg_sample_rate_hz": 130, "ecg_resolution_bits": 14,
                       "acc_sample_rate_hz": 50, "acc_resolution_bits": 16, "acc_range_g": 2},
-        )
+        ))
         await manager.start_capture(capture.capture_id, lease)
         for index in range(40):
             transport.emit_ecg(10_000_000_000 + index * 10_000_000, (index,))
@@ -128,11 +129,11 @@ def test_sensor_timestamp_discontinuity_emits_gap_event(tmp_path) -> None:
         await manager.startup()
         token, _candidate = (await manager.scan(0.25))[0]
         await manager.connect(token)
-        capture, lease = manager.create_capture(
+        capture, lease = manager.create_capture(**h10_arguments(manager.engine,
             participant_id="P01", session_kind="generic", session_id="timestamp-gap",
             settings={"ecg_sample_rate_hz": 130, "ecg_resolution_bits": 14,
                       "acc_sample_rate_hz": 50, "acc_resolution_bits": 16, "acc_range_g": 2},
-        )
+        ))
         await manager.start_capture(capture.capture_id, lease)
         transport.emit_ecg(10_000_000_000, (1, 2))
         transport.emit_ecg(11_000_000_000, (3, 4))

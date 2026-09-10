@@ -1,6 +1,7 @@
 "use client";
+import Link from "next/link";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Radio, ShieldAlert } from "lucide-react";
 
@@ -12,6 +13,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getStudyContext } from "@/lib/api";
+import {useAssignedAttempt} from '@/lib/assigned-attempt';
+import {useAssessmentAdmission} from '@/lib/assessment-admission';
+import type {LiftoffConfiguration} from '@/types/liftoff';
+import {listVisits} from '@/lib/api';
 import { createLiftoffSession, getLiftoffReadiness } from "@/lib/liftoff/api";
 import type { Participant, StudyParticipantContext, StudyProtocol } from "@/types";
 import { useAppLocale } from "@/lib/i18n";
@@ -24,7 +29,10 @@ export function LiftoffSetupForm({
   participants: Participant[];
   protocol: StudyProtocol;
 }) {
-  const { copy, locale } = useAppLocale();
+  const preferred = useAppLocale();
+  const assigned = useAssignedAttempt();
+  const locale = assigned.context?.locale ?? preferred.locale;
+  const copy = useCallback((es:string,en:string)=>locale==='en'?en:es,[locale]);
   const purpose = useExecutionPurpose();
   useReportExperimentFlow("liftoff", "prepare");
   const copyRef = useRef(copy);
@@ -60,6 +68,8 @@ export function LiftoffSetupForm({
     return () => { active = false; };
   }, [participantId]);
 
+  const admission=useAssessmentAdmission(assigned.attempt&&assigned.context?{attemptId:assigned.attempt.id,participantId,visitId:assigned.context.visit_id,purpose:'study',locale}:null);
+  useEffect(()=>{let active=true;const bound=assigned.context;if(bound){setParticipantId(bound.participant_id);const config=bound.config.configuration as LiftoffConfiguration;setBuild(config.liftoff_build);setControllerFirmware(config.controller_firmware);void listVisits(bound.participant_id).then(rows=>{if(active)setVisitOrdinal(String(rows.find(v=>v.id===bound.visit_id)?.visit_ordinal??''));});}return()=>{active=false;};},[assigned.context]);
   async function prepare(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!purpose || !participantId || !visitOrdinal || !readiness?.ready) return;
@@ -70,12 +80,14 @@ export function LiftoffSetupForm({
       setReadiness(ready);
       if (!ready.ready) throw new Error(copy("No se reciben datos de Liftoff. Abra el simulador y vuelva a comprobar.", "No Liftoff data is arriving. Open the simulator and check again."));
       if (purpose === "study" && !context) throw new Error(copy("Solicite al investigador que asigne su protocolo antes de iniciar.", "Ask the researcher to assign your protocol before starting."));
-      const session = await createLiftoffSession({
+      const admitted=purpose==='study'?await admission.admit():null;
+      if(purpose==='study'&&!admitted)throw new Error('Select an assigned assessment at /study/assignments');
+      const session = await createLiftoffSession({ attempt_id:admitted?.attemptId,
         execution_purpose: purpose,
         locale,
         participant_id: participantId,
         visit_ordinal: Number(visitOrdinal),
-        configuration: {
+        configuration: assigned.context ? assigned.context.config.configuration as LiftoffConfiguration : {
           liftoff_build: build,
           track_id: "astra-neutral-time-trial-v1",
           drone_id: "astra-standard-quad-v1",
@@ -107,6 +119,7 @@ export function LiftoffSetupForm({
   return (
     <>
     <ExperimentGuide id="liftoff" />
+    {purpose==='study'&&<Link className="underline" href="/study/assignments">{copy("Seleccionar evaluación asignada","Select assigned assessment")}</Link>}
     <form onSubmit={prepare} className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
       <Card>
         <CardHeader>
@@ -117,25 +130,25 @@ export function LiftoffSetupForm({
         <CardContent className="grid gap-5 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="liftoff-participant">{copy("Participante", "Participant")}</Label>
-            <select id="liftoff-participant" aria-label={copy("Participante", "Participant")} className="native-select w-full" value={participantId} onChange={(event) => setParticipantId(event.target.value)}>
+            <select id="liftoff-participant" aria-label={copy("Participante", "Participant")} className="native-select w-full" value={participantId} disabled={busy||!!assigned.context} onChange={(event) => setParticipantId(event.target.value)}>
               <option value="">{copy("Seleccionar…", "Select…")}</option>
               {participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.id}</option>)}
             </select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="liftoff-visit">{copy("Visita", "Visit")}</Label>
-            <select id="liftoff-visit" aria-label={copy("Visita", "Visit")} className="native-select w-full" value={visitOrdinal} onChange={(event) => setVisitOrdinal(event.target.value)}>
+            <select id="liftoff-visit" aria-label={copy("Visita", "Visit")} className="native-select w-full" value={visitOrdinal} disabled={busy||!!assigned.context} onChange={(event) => setVisitOrdinal(event.target.value)}>
               <option value="">{copy("Seleccionar…", "Select…")}</option>
               {protocol.visits.map((visit) => <option key={visit.ordinal} value={visit.ordinal}>{visit.code} · {copy("día", "day")} {visit.scheduled_day}</option>)}
             </select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="liftoff-build">{copy("Versión de Liftoff", "Liftoff build")}</Label>
-            <Input id="liftoff-build" value={build} onChange={(event) => setBuild(event.target.value)} />
+            <Input id="liftoff-build" value={build} disabled={busy||!!assigned.context} onChange={(event) => setBuild(event.target.value)} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="controller-firmware">{copy("Firmware del controlador", "Controller firmware")}</Label>
-            <Input id="controller-firmware" value={controllerFirmware} onChange={(event) => setControllerFirmware(event.target.value)} />
+            <Input id="controller-firmware" value={controllerFirmware} disabled={busy||!!assigned.context} onChange={(event) => setControllerFirmware(event.target.value)} />
           </div>
           {purpose === "study" && !context && participantId && !contextLoading && <p role="status" className="text-sm text-warning sm:col-span-2">{copy("Falta su protocolo asignado. El investigador debe registrar el contexto del estudio en Participantes.", "Your assigned protocol is missing. The researcher must register the study context in Participants.")}</p>}
           <label className="flex items-center gap-3 border border-white/10 p-3 text-sm sm:col-span-2">

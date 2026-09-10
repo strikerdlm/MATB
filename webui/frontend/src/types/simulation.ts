@@ -195,6 +195,7 @@ export interface SessionView {
 }
 
 export interface CreateSimulationSession {
+  attempt_id?: string;
   execution_purpose: "study";
   presentation?: PresentationConfig;
   participant_id: string;

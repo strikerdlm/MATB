@@ -83,6 +83,7 @@ def init_db(*, component_model_modules: tuple[str, ...] = ()) -> None:
     from app import (
         models,  # noqa: F401
         study_models,  # noqa: F401
+        study_registry_models,  # noqa: F401
         purpose_models,
         assessment_models,
         evidence_models,  # noqa: F401
@@ -92,6 +93,8 @@ def init_db(*, component_model_modules: tuple[str, ...] = ()) -> None:
         import_module(module_name)
 
     SQLModel.metadata.create_all(_engine)
+    from app.study_registry import install_registry_guards
+    install_registry_guards(_engine)
     _migrate_openmatb_visual_theme_v1(_engine)
     _migrate_openmatb_visual_profile_v1(_engine)
     _migrate_analysisresult_v2(_engine)

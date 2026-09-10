@@ -1,16 +1,14 @@
+
+from tests.study_fixtures import study_post
 """Repeated acquisition identity, lifecycle and immutable finalization."""
 from tests.test_pvt_endpoint import _enroll, _payload
 from tests.test_screen_endpoint import _payload as screen_payload
 
 
 def occasion(client, instrument='pvt', **changes):
-    visit_id = client.get('/participants/P01/visits').json()[0]['id']
-    body = dict(participant_id='P01', visit_id=visit_id, instrument=instrument,
-                phase='baseline', order=1, condition='rest', origin='local')
-    body.update(changes)
-    response = client.post('/assessments/occasions', json=body)
-    assert response.status_code == 201, response.text
-    return response.json()
+    from tests.study_fixtures import assigned_occasion
+    return assigned_occasion(client, instrument, **changes)
+
 
 
 def attempt(client, occ, **changes):
@@ -30,14 +28,14 @@ def test_three_occasions_preserve_independent_raw_and_purpose(client):
         a = attempt(client, occasion(client, order=i + 1))
         identity = a['purpose_provenance_id']
         assert client.get(f'/purpose-provenance/{identity}').json()['current']['classification'] == 'explicit'
-        r = client.post('/pvt', json=_payload(attempt_id=a['id'], kss_score=i + 1))
+        r = study_post(client, '/pvt', json=_payload(attempt_id=a['id'], kss_score=i + 1))
         assert r.status_code == 201, r.text
         assert r.json()['purpose_provenance_id'] == identity
         ids.append(a['id'])
     for i, aid in enumerate(ids):
         raw = client.get(f'/assessments/attempts/{aid}/raw').json()
         assert raw['record']['kss_score'] == i + 1
-    assert len(client.get('/assessments/occasions?participant_id=P01').json()) == 3
+    assert sum(bool(client.get(f"/assessments/occasions/{row['id']}/attempts").json()) for row in client.get('/assessments/occasions?participant_id=P01').json()) == 3
 
 
 def test_interruption_repeat_and_finalization_conflict(client):
@@ -51,10 +49,10 @@ def test_interruption_repeat_and_finalization_conflict(client):
     assert b['repeat_of'] == a['id'] and b['ordinal'] == 2
     client.post(f"/assessments/attempts/{b['id']}/start")
     payload = _payload(attempt_id=b['id'])
-    first = client.post('/pvt', json=payload)
+    first = study_post(client, '/pvt', json=payload)
     assert first.status_code == 201, first.text
-    assert client.post('/pvt', json=payload).json()['id'] == first.json()['id']
-    assert client.post('/pvt', json={**payload, 'kss_score': 2, 'overwrite': True}).status_code == 409
+    assert study_post(client, '/pvt', json=payload).json()['id'] == first.json()['id']
+    assert study_post(client, '/pvt', json={**payload, 'kss_score': 2, 'overwrite': True}).status_code == 409
     assert client.get(f"/assessments/attempts/{a['id']}").json()['acquisition_state'] == 'interrupted'
 
 
@@ -62,7 +60,7 @@ def test_repeated_screen_is_one_battery_and_legacy_cohort_refuses_ambiguity(clie
     _enroll(client)
     for i in range(2):
         a = attempt(client, occasion(client, 'screen', order=i + 1))
-        r = client.post('/screen', json={'participant_id': 'P01', 'execution_purpose': 'study', 'attempt_id': a['id'], 'payload': screen_payload(300 + i)})
+        r = study_post(client, '/screen', json={'participant_id': 'P01', 'execution_purpose': 'study', 'attempt_id': a['id'], 'payload': screen_payload(300 + i)})
         assert r.status_code == 201, r.text
         assert client.get(f"/assessments/attempts/{a['id']}/raw").json()['record']['raw_trials_json']
     assert client.get('/screen').status_code == 409
@@ -72,8 +70,9 @@ def test_questionnaire_requires_exact_target_and_matching_context(client):
     _enroll(client)
     target = attempt(client, occasion(client))
     q = occasion(client, 'questionnaire')
-    assert client.post(f"/assessments/occasions/{q['id']}/attempts", json={'execution_purpose': 'study'}).status_code == 422
-    rating = attempt(client, q, target_attempt_id=target['id'])
+    assert client.post(f"/assessments/occasions/{q['id']}/attempts", json={'execution_purpose': 'practice'}).status_code == 422
+    # Generic target validation is a practice lifecycle contract; assigned native ratings are tested separately.
+    rating = attempt(client, q, execution_purpose='practice', target_attempt_id=target['id'])
     assert rating['target_attempt_id'] == target['id']
     assert client.post('/assessments/occasions', json={'participant_id': 'P01', 'instrument': 'screen', 'phase': 'baseline', 'order': 1, 'origin': 'local'}).status_code == 422
 
@@ -125,7 +124,7 @@ def test_migration_preserves_ids_raw_archives_rerun_and_rollback(tmp_path):
 
 def test_new_legacy_adapter_has_stable_source_link_and_raw(client):
     _enroll(client)
-    result = client.post('/pvt', json=_payload()).json()
+    result = study_post(client, '/pvt', json=_payload()).json()
     link = client.get(f"/assessments/sources/pvt_assessment/{result['id']}")
     assert link.status_code == 200, link.text
     assert link.json()['purpose_provenance_id'] == result['purpose_provenance_id']
@@ -136,7 +135,7 @@ def test_journey_rejects_ambiguous_pvt_instead_of_first(client):
     _enroll(client)
     for i in range(2):
         a = attempt(client, occasion(client, order=i + 1))
-        client.post('/pvt', json=_payload(attempt_id=a['id']))
+        study_post(client, '/pvt', json=_payload(attempt_id=a['id']))
     # All raw attempts count toward selection ambiguity, even invalid repeats.
     assert client.get('/journey/P01/1?experiment=pvt').status_code == 409
 
@@ -155,7 +154,7 @@ def test_refresh_ambiguous_repeat_does_not_modify_fit_or_fail_startup(client, en
         archive_count = len(db.exec(select(ArchivedAssessment)).all())
     for i in range(2):
         a = attempt(client, occasion(client, 'screen', order=i + 1))
-        assert client.post('/screen', json={'participant_id': 'P01', 'execution_purpose': 'study', 'attempt_id': a['id'], 'payload': screen_payload(300 + i)}).status_code == 201
+        assert study_post(client, '/screen', json={'participant_id': 'P01', 'execution_purpose': 'study', 'attempt_id': a['id'], 'payload': screen_payload(300 + i)}).status_code == 201
     with Session(engine) as db:
         assert refresh_fit_hcf(db) == 0
         assert db.get(DepdfFit, before['id']).model_dump() == before
@@ -164,7 +163,7 @@ def test_refresh_ambiguous_repeat_does_not_modify_fit_or_fail_startup(client, en
 
 def test_known_practice_classification_excluded_from_legacy_screen_cohort(client):
     _enroll(client)
-    row = client.post('/screen', json={'participant_id': 'P01', 'execution_purpose': 'study', 'payload': screen_payload()}).json()
+    row = study_post(client, '/screen', json={'participant_id': 'P01', 'execution_purpose': 'study', 'payload': screen_payload()}).json()
     assert client.post(f"/purpose-provenance/{row['purpose_provenance_id']}/classifications", json={'purpose': 'practice', 'reviewer': 'Researcher', 'reason': 'practice confirmed'}).status_code == 201
     assert client.get('/screen').json()['screens'] == []
 
@@ -175,7 +174,7 @@ def test_raw_save_can_follow_explicit_acquisition_finish(client):
     finished = client.post(f"/assessments/attempts/{a['id']}/finish")
     assert finished.status_code == 200
     assert finished.json()['receipt']['raw_saving'] == 'unknown'
-    assert client.post('/pvt', json=_payload(attempt_id=a['id'])).status_code == 201
+    assert study_post(client, '/pvt', json=_payload(attempt_id=a['id'])).status_code == 201
 
 
 def test_questionnaire_cannot_target_another_visit(client):
@@ -183,7 +182,7 @@ def test_questionnaire_cannot_target_another_visit(client):
     target = attempt(client, occasion(client))
     second_visit = client.get('/participants/P01/visits').json()[1]['id']
     q = occasion(client, 'questionnaire', visit_id=second_visit)
-    assert client.post(f"/assessments/occasions/{q['id']}/attempts", json={'execution_purpose': 'study', 'target_attempt_id': target['id']}).status_code == 422
+    assert client.post(f"/assessments/occasions/{q['id']}/attempts", json={'execution_purpose': 'practice', 'target_attempt_id': target['id']}).status_code == 422
 
 
 def test_historical_occasion_review_appends_without_inventing_original_visit(client, engine):

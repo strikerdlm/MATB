@@ -1,3 +1,5 @@
+
+from tests.study_fixtures import study_post
 """Task2 review regressions: truthful causes, scoped journeys and rating receipts."""
 from datetime import datetime, timedelta, timezone
 import pytest
@@ -21,7 +23,7 @@ def test_interruption_category_is_preserved_without_inferred_cause(client, categ
 
 def save_screen(client, visit_id=None):
     a = attempt(client, occasion(client, 'screen', **({'visit_id': visit_id} if visit_id else {})))
-    assert client.post('/screen', json={'participant_id': 'P01', 'execution_purpose': 'study', 'attempt_id': a['id'], 'payload': screen_payload()}).status_code == 201
+    assert study_post(client, '/screen', json={'participant_id': 'P01', 'execution_purpose': 'study', 'attempt_id': a['id'], 'payload': screen_payload()}).status_code == 201
     return a
 
 
@@ -37,7 +39,7 @@ def test_screen_journey_ignores_unrelated_pvt_and_h10_repeats(client, engine):
     _enroll(client)
     for _ in range(2):
         a = attempt(client, occasion(client))
-        assert client.post('/pvt', json=_payload(attempt_id=a['id'])).status_code == 201
+        assert study_post(client, '/pvt', json=_payload(attempt_id=a['id'])).status_code == 201
     repeated_h10(engine)
     screen = save_screen(client)
     response = client.get(f"/journey/P01/1?experiment=screen&attempt_id={screen['id']}")
@@ -48,7 +50,7 @@ def test_screen_journey_ignores_unrelated_pvt_and_h10_repeats(client, engine):
 def test_pvt_journey_ignores_unrelated_h10_repeats(client, engine):
     _enroll(client)
     a = attempt(client, occasion(client))
-    client.post('/pvt', json=_payload(attempt_id=a['id']))
+    study_post(client, '/pvt', json=_payload(attempt_id=a['id']))
     repeated_h10(engine)
     assert client.get(f"/journey/P01/1?experiment=pvt&attempt_id={a['id']}").status_code == 200
 
@@ -64,9 +66,16 @@ def test_screen_journey_rejects_other_visit_and_limits_implicit_rows(client):
     assert client.get(f"/journey/P01/2?experiment=screen&attempt_id={screen['id']}").status_code == 200
 
 
-def test_unknown_visit_screen_uses_labeled_compatibility_path(client):
+def test_unknown_visit_screen_uses_labeled_compatibility_path(client, engine):
     _enroll(client)
-    row = client.post('/screen', json={'participant_id': 'P01', 'execution_purpose': 'study', 'payload': screen_payload()}).json()
+    # Historical read-only fixture: new acquisition cannot manufacture an unknown visit.
+    import json
+    from app.models import ScreenResult
+    from app.purpose_service import declare_acquisition
+    with Session(engine) as db:
+        source = ScreenResult(participant_id='P01', administered_at='2026-01-01', screen_version=1, raw_trials_json=json.dumps(screen_payload()), scores_json='{}')
+        declare_acquisition(db, source, purpose='study'); db.commit(); db.refresh(source)
+        row = {'attempt_id': source.attempt_id}
     selected = client.get(f"/journey/P01/1?experiment=screen&attempt_id={row['attempt_id']}")
     assert selected.status_code == 404
     legacy = client.get('/journey/P01/1?experiment=screen&legacy_screen=true')

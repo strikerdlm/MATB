@@ -190,6 +190,7 @@ class PresentationEvent(BaseModel):
 
 
 class CreateSimulationSession(BaseModel):
+    attempt_id: str | None = None
     execution_purpose: Literal["study"]
     model_config = ConfigDict(extra="forbid")
 

@@ -110,9 +110,8 @@ function parseDraft(raw: string, sessionId: string, blockInstanceId: string): Wo
   return candidate as WorkloadDraft;
 }
 
-function confirmsSavedBlock(session: OpenMatbSession, profile: OpenMatbProfile, blockInstanceId: string): boolean {
-  const score = session.scores[profile];
-  return Boolean(score && score.block_instance_id === blockInstanceId);
+function confirmsSavedBlock(session: OpenMatbSession, _profile: OpenMatbProfile, blockInstanceId: string): boolean {
+  return Object.values(session.scores).some(score => score.block_instance_id === blockInstanceId);
 }
 
 export function WorkloadQuestionnaire({

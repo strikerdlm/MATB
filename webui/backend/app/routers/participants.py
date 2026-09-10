@@ -27,7 +27,12 @@ def create_participant(body: ParticipantCreate, session: Session = Depends(get_s
         raise HTTPException(status.HTTP_409_CONFLICT, f"participant {body.id} exists")
     participant = Participant(**body.model_dump())
     session.add(participant)
-    for definition in protocol_visits():
+    from app.study_registry import active_version, get_version
+    from app.study_protocol import VisitDefinition
+    import json
+    version_id = active_version(session)
+    definitions = [VisitDefinition(**v) for v in json.loads(get_version(session, version_id).study_json)['visits']] if version_id else protocol_visits()
+    for definition in definitions:
         session.add(
             Visit(
                 participant_id=body.id,

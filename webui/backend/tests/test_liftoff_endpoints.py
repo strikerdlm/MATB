@@ -6,6 +6,7 @@ import json
 import zipfile
 
 import pytest
+from tests.study_fixtures import liftoff_payload
 
 
 def create_payload(*, polar_recording_confirmed: bool = True) -> dict[str, object]:
@@ -38,7 +39,7 @@ def create_payload(*, polar_recording_confirmed: bool = True) -> dict[str, objec
 async def prepared_session(liftoff_client):
     client, manager = liftoff_client
     manager.receiver.inject_valid_packets(20)
-    response = await client.post("/liftoff/sessions", json=create_payload())
+    response = await client.post("/liftoff/sessions", json=liftoff_payload(manager, create_payload()))
     assert response.status_code == 201, response.text
     return response.json(), response.json()["controller_lease"]
 
@@ -132,7 +133,7 @@ async def test_create_session_returns_one_time_lease(liftoff_client):
     client, manager = liftoff_client
     manager.receiver.inject_valid_packets(20)
 
-    response = await client.post("/liftoff/sessions", json=create_payload())
+    response = await client.post("/liftoff/sessions", json=liftoff_payload(manager, create_payload()))
 
     assert response.status_code == 201
     body = response.json()

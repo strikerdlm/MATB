@@ -41,6 +41,6 @@ describe("experiment catalog purpose selection", () => {
 
     await user.click(screen.getByRole("radio", { name: /Participar en mi estudio/ }));
     expect(screen.getByRole("link", { name: "Preparar experimento" }))
-      .toHaveAttribute("href", "/screen?purpose=study");
+      .toHaveAttribute("href", "/study/assignments?purpose=study");
   });
 });

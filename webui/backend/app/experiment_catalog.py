@@ -46,6 +46,22 @@ def require_task_order(session: Session, participant_id: str, visit_id: int, fam
     from app.study_models import StudyParticipantContext
     from app.models import Block
     from sqlalchemy import inspect
+    if source_session_id:
+        # An explicit frozen predecessor is independent of old participant task_sequence.
+        from app.assessment_readers import exclude_known_nonstudy
+        if family == 'liftoff':
+            from app.openmatb_models import OpenMatbSuiteSession
+            row = session.get(OpenMatbSuiteSession, source_session_id)
+            complete = row is not None and row.lifecycle == 'COMPLETE'
+            error = 'assigned_matb_first'
+        else:
+            from app.liftoff_models import LiftoffSession
+            row = session.get(LiftoffSession, source_session_id)
+            complete = row is not None and row.status == 'FINISHED' and row.validity == 'valid'
+            error = 'assigned_liftoff_first'
+        if not complete or row.participant_id != participant_id or row.visit_id != visit_id or row.execution_purpose != 'study' or not exclude_known_nonstudy(session, [row]):
+            raise ValueError(error)
+        return
     context = session.get(StudyParticipantContext, participant_id)
     if context is None:
         if require_context:
@@ -54,12 +70,14 @@ def require_task_order(session: Session, participant_id: str, visit_id: int, fam
     if context.task_sequence == "MATB_LIFTOFF" and family == "liftoff":
         # Imported classical MATB blocks or a finished native study suite satisfy the assignment.
         blocks = session.exec(select(Block).where(Block.visit_id == visit_id)).all()
-        if {row.workload_level for row in blocks} >= {"LOW", "MEDIUM", "HIGH"}:
+        if not source_session_id and {row.workload_level for row in blocks} >= {"LOW", "MEDIUM", "HIGH"}:
             return
         if "openmatb_suite_session" in inspect(session.connection()).get_table_names():
             from app.openmatb_models import OpenMatbSuiteSession
             rows = session.exec(select(OpenMatbSuiteSession).where(OpenMatbSuiteSession.visit_id == visit_id,
                   OpenMatbSuiteSession.execution_purpose == "study", OpenMatbSuiteSession.lifecycle == "COMPLETE")).all()
+            from app.assessment_readers import exclude_known_nonstudy
+            rows = exclude_known_nonstudy(session, rows)
             if source_session_id:
                 rows = [row for row in rows if row.id == source_session_id]
             if len(rows) > 1:
@@ -74,6 +92,8 @@ def require_task_order(session: Session, participant_id: str, visit_id: int, fam
             rows = session.exec(select(LiftoffSession).where(LiftoffSession.visit_id == visit_id,
                   LiftoffSession.execution_purpose == "study", LiftoffSession.status == "FINISHED",
                   LiftoffSession.validity == "valid")).all()
+            from app.assessment_readers import exclude_known_nonstudy
+            rows = exclude_known_nonstudy(session, rows)
             if source_session_id:
                 rows = [row for row in rows if row.id == source_session_id]
             if len(rows) > 1:

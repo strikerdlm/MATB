@@ -55,6 +55,17 @@ def attach_source(db, table, source, *, historical=True):
         if parent:
             participant, visit = parent.get('participant_id'), parent.get('visit_id')
             purpose = 'practice' if source.get('profile', source.get('block_id')) == 'PRACTICE' else parent.get('execution_purpose', 'study')
+    if parent and table == 'simulation_block' and purpose == 'study':
+        parent_link = db.exec(select(AssessmentSourceLink).where(AssessmentSourceLink.source_table == 'simulation_session', AssessmentSourceLink.source_id == source['session_id'])).first()
+        if parent_link:
+            from .study_admission import for_occasion
+            from fastapi import HTTPException
+            assigned_attempt = db.get(AssessmentAttempt, parent_link.attempt_id)
+            try: for_occasion(db, assigned_attempt.occasion_id)
+            except HTTPException: pass
+            else:
+                db.add(AssessmentSourceLink(attempt_id=assigned_attempt.id, source_table=table, source_id=str(source['id']), purpose_provenance_id=assigned_attempt.purpose_provenance_id)); db.flush()
+                return assigned_attempt
     if participant is not None and db.execute(text('SELECT id FROM participant WHERE id=:id'), {'id': participant}).first() is None:
         participant = None
     if visit is not None and db.execute(text('SELECT id FROM visit WHERE id=:id'), {'id': visit}).first() is None:

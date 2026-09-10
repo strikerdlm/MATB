@@ -12,6 +12,8 @@ import { useExecutionPurpose } from "@/lib/execution-purpose";
 import { useReportExperimentFlow } from "@/lib/experiment-flow";
 import { listParticipants, listVisits } from "@/lib/api";
 import { useAppLocale } from "@/lib/i18n";
+import {useAssignedAttempt} from '@/lib/assigned-attempt';
+import {useAssessmentAdmission} from '@/lib/assessment-admission';
 import { createOpenMatbSession, getOpenMatbReadiness, getOpenMatbDisplays, listOpenMatbInstructions,
   listOpenMatbPresets, listOpenMatbVisualProfiles, storeOpenMatbCredentials } from "@/lib/openmatb/api";
 import { openMatbErrorMessage } from "@/lib/openmatb/errors";
@@ -31,7 +33,10 @@ const CHECKS: Record<string, [string, string, string, string]> = {
 
 function SetupContent() {
   const router = useRouter();
-  const { copy, locale } = useAppLocale();
+  const preferred = useAppLocale();
+  const assigned = useAssignedAttempt();
+  const locale = assigned.context?.locale ?? preferred.locale;
+  const copy = useCallback((es:string,en:string) => locale === 'en' ? en : es, [locale]);
   const purpose = useExecutionPurpose();
   useReportExperimentFlow("openmatb", "prepare");
   const copyRef = useRef(copy); copyRef.current = copy;
@@ -56,6 +61,9 @@ function SetupContent() {
   const [error, setError] = useState<string | null>(null);
   const [stationError, setStationError] = useState<string | null>(null);
 
+  useEffect(() => {if(assigned.context) setParticipantId(assigned.context.participant_id);}, [assigned.context]);
+  const admission = useAssessmentAdmission(assigned.attempt && assigned.context ? {attemptId:assigned.attempt.id, participantId:assigned.context.participant_id, visitId:assigned.context.visit_id, purpose:'study', locale:assigned.context.locale} : null);
+  const frozen = assigned.context?.config as {preset?:{id:string;version:string};instructions?:{id:string;version:string};visual?:{id:string;version:string}} | undefined;
   const checkStation = useCallback(async () => {
     const revision = ++stationRequest.current;
     setChecking(true);
@@ -93,10 +101,10 @@ function SetupContent() {
     let active = true;
     setVisits([]); setVisitOrdinal("");
     if (participantId) void listVisits(participantId).then(rows => {
-      if (active) { setVisits(rows); setVisitOrdinal(rows[0] ? String(rows[0].visit_ordinal) : ""); }
+      if (active) { setVisits(rows); setVisitOrdinal(String((rows.find(v=>v.id===assigned.context?.visit_id)??rows[0])?.visit_ordinal??'')); }
     }).catch(reason => { if (active) setError(openMatbErrorMessage(reason, copyRef.current)); });
     return () => { active = false; };
-  }, [participantId]);
+  }, [participantId, assigned.context?.visit_id]);
 
   useEffect(() => {
     const matching = instructions.filter(row => row.locale === locale);
@@ -104,12 +112,13 @@ function SetupContent() {
       ? current : matching[0] ? `${matching[0].protocol_id}@${matching[0].version}` : "");
   }, [instructions, locale]);
 
-  const preset = useMemo(() => presets.find(row => `${row.preset_id}@${row.version}` === presetKey), [presets, presetKey]);
-  const protocol = useMemo(() => instructions.find(row => `${row.protocol_id}@${row.version}` === instructionKey), [instructions, instructionKey]);
-  const visual = useMemo(() => visualProfiles.find(row => `${row.profile_id}@${row.version}` === visualProfileKey), [visualProfiles, visualProfileKey]);
+  const preset = useMemo(() => presets.find(row => `${row.preset_id}@${row.version}` === (frozen?.preset ? `${frozen.preset.id}@${frozen.preset.version}` : presetKey)), [presets, presetKey, frozen?.preset]);
+  const protocol = useMemo(() => instructions.find(row => `${row.protocol_id}@${row.version}` === (frozen?.instructions ? `${frozen.instructions.id}@${frozen.instructions.version}` : instructionKey)), [instructions, instructionKey, frozen?.instructions]);
+  const visual = useMemo(() => visualProfiles.find(row => `${row.profile_id}@${row.version}` === (frozen?.visual ? `${frozen.visual.id}@${frozen.visual.version}` : visualProfileKey)), [visualProfiles, visualProfileKey, frozen?.visual]);
   const selectedDisplay = displays.find(row => row.index === displayIndex);
   const stationReady = Boolean(readiness?.ready && displays.length && !stationError);
   const missing: Array<{ target: string; label: string }> = [];
+  if (purpose === "study" && !assigned.context) missing.push({target:"om-purpose",label:copy("Seleccione una evaluación asignada en /study/assignments", "Select an assigned assessment at /study/assignments")});
   if (!purpose) missing.push({ target: "om-purpose", label: copy("Elija práctica o estudio", "Choose practice or study") });
   if (!stationReady) missing.push({ target: "om-station", label: copy("Resuelva los requisitos de la estación", "Resolve the station requirements") });
   if (!participantId || !isParticipantId(participantId)) missing.push({ target: "om-participant", label: copy("Seleccione un participante", "Select a participant") });
@@ -138,7 +147,9 @@ function SetupContent() {
       const current = await checkStation();
       if (!current?.ready?.ready) throw new Error(copy("Resuelva los requisitos de la estación y vuelva a comprobar.", "Resolve the station requirements and check again."));
       if (!current.screens.some(row => row.index === displayIndex)) throw new Error(copy("La pantalla seleccionada se desconectó. Seleccione una pantalla conectada.", "The selected display disconnected. Select a connected display."));
-      const prepared = await createOpenMatbSession({ execution_purpose: purpose, participant_id: participantId, visit_ordinal: Number(visitOrdinal),
+      const admitted = purpose === 'study' ? await admission.admit() : null;
+      if(purpose === 'study' && !admitted) throw new Error('Select an assigned assessment');
+      const prepared = await createOpenMatbSession({ attempt_id: admitted?.attemptId, execution_purpose: purpose, participant_id: participantId, visit_ordinal: Number(visitOrdinal),
         preset_id: preset.preset_id, preset_version: preset.version, instruction_protocol_id: protocol.protocol_id,
         instruction_version: protocol.version, visual_profile_id: visual.profile_id, visual_profile_version: visual.version, display_index: displayIndex });
       storeOpenMatbCredentials(prepared);
@@ -153,7 +164,8 @@ function SetupContent() {
   }
 
   return <div className="min-w-0 space-y-6 text-base [&_button]:text-sm [&_button]:normal-case [&_button]:tracking-normal">
-    <div id="om-purpose" tabIndex={-1}><ExperimentGuide id="openmatb" /></div>
+    <div id="om-purpose" tabIndex={-1}><Link className="underline" href="/study/assignments">{copy("Evaluaciones asignadas", "Assigned assessments")}</Link>
+      <ExperimentGuide id="openmatb" /></div>
     <PageHeader kicker={copy("Preparación", "Preparation")} title={copy("Suite OpenMATB", "OpenMATB suite")}
       description={copy("Compruebe la estación, confirme la visita y abra las instrucciones. La tarea se inicia después desde el panel del investigador.", "Check the station, confirm the visit, and open the instructions. The researcher starts the task afterward from the controller.")} />
     {error && <div role="alert" className="rounded border border-danger/40 p-3 text-danger"><p>{error}</p><Button variant="link" onClick={() => location.reload()}>{copy("Volver a cargar la preparación", "Reload preparation")}</Button></div>}
@@ -179,7 +191,7 @@ function SetupContent() {
             {displays.map(display => <option key={display.index} value={display.index}>{copy("Pantalla", "Display")} {display.index + 1} · {display.width} × {display.height}{display.index === 0 && displays.length > 1 ? copy(" · primera pantalla", " · first display") : ""}</option>)}
           </select><p className="text-sm text-muted-foreground">{copy("La aplicación nativa usará esta pantalla. Las instrucciones se abren en una ventana del navegador independiente.", "The native task uses this display. Instructions open in a separate browser window.")}</p>
         </div>
-        <label className="flex items-start gap-3 rounded border p-3 text-sm"><input id="om-equipment" type="checkbox" checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} disabled={busy} className="mt-1" />
+        <label className="flex items-start gap-3 rounded border p-3 text-sm"><input id="om-equipment" type="checkbox" checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} disabled={busy || admission.pending} className="mt-1" />
           <span>{copy("Confirmo que verificaré físicamente audio, mouse, teclado o joystick antes de recolectar datos.", "I confirm that I will physically verify audio, mouse, keyboard, or joystick before collecting data.")}</span></label>
       </CardContent>
     </Card>
@@ -202,9 +214,9 @@ function SetupContent() {
         <p className="text-sm text-muted-foreground">{purpose === "practice" ? copy("Un bloque de práctica, sin cuestionario ni cierre de visita de estudio.", "One practice block, with no questionnaire or completion of a study visit.") : purpose === "study" ? copy("Práctica seguida de tres bloques en el orden asignado, con escalas después de cada bloque de estudio.", "Practice followed by three blocks in the assigned order, with ratings after each study block.") : copy("Elija la finalidad para ver la secuencia.", "Choose a purpose to see the sequence.")}</p>
         <details className="rounded border p-3"><summary className="cursor-pointer text-sm font-semibold">{copy("Ver configuración", "View configuration")}</summary>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <label className="space-y-2 text-sm" htmlFor="om-preset">{copy("Preset publicado", "Published preset")}<select id="om-preset" className="native-select w-full" value={presetKey} disabled={busy} onChange={event => setPresetKey(event.target.value)}>{presets.map(row => <option key={`${row.preset_id}@${row.version}`} value={`${row.preset_id}@${row.version}`}>{row.label_es} · v{row.version}</option>)}</select></label>
-            <label className="space-y-2 text-sm" htmlFor="om-protocol">{copy("Protocolo de instrucciones", "Instruction protocol")}<select id="om-protocol" className="native-select w-full" value={instructionKey} disabled={busy} onChange={event => setInstructionKey(event.target.value)}>{instructions.filter(row => row.locale === locale).map(row => <option key={`${row.protocol_id}@${row.version}`} value={`${row.protocol_id}@${row.version}`}>{row.title} · v{row.version}</option>)}</select></label>
-            <label className="space-y-2 text-sm" htmlFor="om-theme">{copy("Perfil visual publicado", "Published visual profile")}<select id="om-theme" className="native-select w-full" value={visualProfileKey} disabled={busy} onChange={event => setVisualProfileKey(event.target.value)}>{visualProfiles.map(row => <option key={`${row.profile_id}@${row.version}`} value={`${row.profile_id}@${row.version}`}>{row.label} · v{row.version}</option>)}</select></label>
+            <label className="space-y-2 text-sm" htmlFor="om-preset">{copy("Preset publicado", "Published preset")}<select id="om-preset" className="native-select w-full" value={frozen?.preset ? `${frozen.preset.id}@${frozen.preset.version}` : presetKey} disabled={busy || admission.pending || !!assigned.context} onChange={event => setPresetKey(event.target.value)}>{presets.map(row => <option key={`${row.preset_id}@${row.version}`} value={`${row.preset_id}@${row.version}`}>{row.label_es} · v{row.version}</option>)}</select></label>
+            <label className="space-y-2 text-sm" htmlFor="om-protocol">{copy("Protocolo de instrucciones", "Instruction protocol")}<select id="om-protocol" className="native-select w-full" value={frozen?.instructions ? `${frozen.instructions.id}@${frozen.instructions.version}` : instructionKey} disabled={busy || admission.pending || !!assigned.context} onChange={event => setInstructionKey(event.target.value)}>{instructions.filter(row => row.locale === locale).map(row => <option key={`${row.protocol_id}@${row.version}`} value={`${row.protocol_id}@${row.version}`}>{row.title} · v{row.version}</option>)}</select></label>
+            <label className="space-y-2 text-sm" htmlFor="om-theme">{copy("Perfil visual publicado", "Published visual profile")}<select id="om-theme" className="native-select w-full" value={frozen?.visual ? `${frozen.visual.id}@${frozen.visual.version}` : visualProfileKey} disabled={busy || admission.pending || !!assigned.context} onChange={event => setVisualProfileKey(event.target.value)}>{visualProfiles.map(row => <option key={`${row.profile_id}@${row.version}`} value={`${row.profile_id}@${row.version}`}>{row.label} · v{row.version}</option>)}</select></label>
             <p className="text-sm text-muted-foreground">{copy("Los perfiles y sus huellas quedan congelados con la sesión.", "Profiles and their hashes are frozen with the session.")}</p>
           </div>
           {preset && <div className="mt-4 overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr>{[copy("Bloque", "Block"), copy("Duración", "Duration"), copy("Dificultad", "Difficulty"), "TRACK", "RESMAN", "ISA"].map(label => <th key={label} className="p-2">{label}</th>)}</tr></thead><tbody>{Object.entries(preset.profiles).map(([name, value]) => <tr key={name} className="border-t"><td className="p-2">{name}</td><td>{value.duration_seconds}s</td><td>{value.difficulty}</td><td>{value.track_target_proportion}</td><td>{value.resman_loss_per_min} L/min</td><td>{value.isa_probe_interval_sec}s</td></tr>)}</tbody></table></div>}

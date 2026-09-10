@@ -163,9 +163,9 @@ class LiftoffManager:
             raise LiftoffRuntimeError("liftoff_active_session")
         try:
             visit = self.persistence.require_visit(request.participant_id, request.visit_ordinal)
+            self.persistence.admit_request(request, visit)
             if request.execution_purpose == "study":
-                self.persistence.require_retake_allowed(request.participant_id, visit.id)
-                self.persistence.require_study_order(request.participant_id, visit.id)
+                self.persistence.require_study_order(request.participant_id, visit.id, attempt_id=request.attempt_id)
         except KeyError as exc:
             raise LiftoffRuntimeError(str(exc.args[0])) from exc
         except ValueError as exc:
@@ -211,7 +211,7 @@ class LiftoffManager:
             artifact_root=str(run_dir),
             controller_lease_hash=lease_hash,
         )
-        row = self.persistence.insert_session(row)
+        row = self.persistence.insert_session(row, attempt_id=request.attempt_id)
         self._active[session_id] = _ActiveLiftoffSession(
             recorder=recorder,
             lease_hash=lease_hash,
@@ -265,6 +265,7 @@ class LiftoffManager:
         lease: str,
     ) -> LiftoffSessionView:
         active = self._require_controller(session_id, lease)
+        self.persistence.guard_acquisition(session_id)
         if action == "task/start" and not await self.receiver.wait_ready(
             min_valid=20,
             timeout_seconds=2.0,

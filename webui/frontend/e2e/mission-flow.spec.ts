@@ -9,10 +9,10 @@ test("researcher completes the full native sUAS protocol", async ({ page, reques
     data: { id: participant, enrollment_date: "2026-08-01" },
   });
   expect(participantResponse.status()).toBe(201);
-  await seedStudyPvt(request, participant);
+  const assignedAttempt=await seedStudyPvt(request, participant);
   let mission: OpenMission | null = null;
   try {
-    await page.goto("/mission/setup?purpose=study");
+    await page.goto(`/mission/setup?purpose=study&attempt=${assignedAttempt}`);
     await expect(page).toHaveTitle(/MATB - FAC/i);
     await selectSetup(page, participant, "e2e_area_search", "en");
     await page.getByRole("checkbox", { name: /research instrument/i }).check();

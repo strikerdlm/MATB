@@ -41,6 +41,7 @@ class LiftoffConfiguration(BaseModel):
 
 
 class CreateLiftoffSession(BaseModel):
+    attempt_id: str | None = None
     model_config = ConfigDict(extra="forbid")
     execution_purpose: Literal["practice", "study"]
     locale: Literal["es-419", "en"] = "es-419"

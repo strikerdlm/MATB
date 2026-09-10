@@ -9,7 +9,7 @@ import { AssessmentPicker } from "@/components/assessments/AssessmentPicker";
 import { type Attempt } from "@/lib/assessments";
 import { useAssessmentAdmission } from "@/lib/assessment-admission";
 import { listParticipants, listVisits, postScreen } from "@/lib/api";
-import { useAppLocale } from "@/lib/i18n";
+import { useAppLocale, FixedLocaleProvider } from "@/lib/i18n";
 import { useExecutionPurpose } from "@/lib/execution-purpose";
 import { flowStageForScreen, useReportExperimentFlow } from "@/lib/experiment-flow";
 import type { Participant, Visit, ScreenIngestResult } from "@/types";
@@ -17,7 +17,7 @@ import type { ScreenPayload } from "@/lib/screen";
 
 const TaskRunner = dynamic(() => import("@/components/screen/TaskRunner").then((module) => module.TaskRunner), { ssr: false });
 export default function ScreenPage() {
-  const { copy } = useAppLocale();
+  const { copy, locale } = useAppLocale();
   const purpose = useExecutionPurpose();
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [participant, setParticipant] = useState("");
@@ -31,13 +31,14 @@ export default function ScreenPage() {
   const [activityStarted, setActivityStarted] = useState(false);
   useEffect(() => {
     let active = true;
+    setParticipant(new URLSearchParams(window.location.search).get('participant') ?? '');
     void listParticipants().then((rows) => { if (active) setParticipants(rows); })
       .catch(() => { if (active) setError("connection"); });
     return () => { active = false; };
   }, []);
-  useEffect(() => { let active = true; setVisits([]); setVisitId(null); if (participant) void listVisits(participant).then(rows => {if(active) {setVisits(rows); setVisitId(rows[0]?.id ?? null);}}).catch(e => {if(active) setError(String(e));}); return () => {active = false;}; }, [participant]);
+  useEffect(() => { let active = true; setVisits([]); setVisitId(null); if (participant) void listVisits(participant).then(rows => {if(active) {setVisits(rows); setVisitId(rows.find(row => row.id === Number(new URLSearchParams(window.location.search).get('visit')))?.id ?? rows[0]?.id ?? null);}}).catch(e => {if(active) setError(String(e));}); return () => {active = false;}; }, [participant]);
   const admission = useAssessmentAdmission(selectedAttempt && participant && visitId && purpose
-    ? {attemptId: selectedAttempt.id, participantId: participant, visitId, purpose} : null);
+    ? {attemptId: selectedAttempt.id, participantId: participant, visitId, purpose, locale: selectedAttempt.assignment_context?.locale ?? locale} : null);
   async function begin() {if (!selectedAttempt) return; try {if (await admission.admit()) setStage("run");} catch(e) {setError(String(e));}}
   useReportExperimentFlow("screen", flowStageForScreen(stage, activityStarted, Boolean(result)));
   async function save(raw: ScreenPayload) {
@@ -75,7 +76,7 @@ export default function ScreenPage() {
       <p>{error === "connection" ? copy("No se pudieron cargar los códigos. Compruebe la conexión y vuelva a abrir esta actividad.", "Could not load participant codes. Check the connection and reopen this activity.") : copy("No se pudo guardar. Sus respuestas siguen disponibles en esta pantalla. Compruebe la conexión y vuelva a intentarlo.", "Could not save. Your responses remain available on this screen. Check the connection and try again.")}</p>
       {payload && <Button className="mt-3" onClick={() => void save(payload)}>{copy("Reintentar guardado", "Retry saving")}</Button>}
     </div>}
-    {stage === "run" && <TaskRunner fast={admission.admitted?.purpose === "practice"} onStart={() => setActivityStarted(true)} onComplete={(raw) => void save(raw)} />}
+    {stage === "run" && <FixedLocaleProvider locale={admission.admitted?.locale ?? locale}><TaskRunner fast={admission.admitted?.purpose === "practice"} onStart={() => setActivityStarted(true)} onComplete={(raw) => void save(raw)} /></FixedLocaleProvider>}
     {stage === "saving" && <p role="status">{copy("Guardando respuestas…", "Saving responses…")}</p>}
     {stage === "review" && result && <section className="space-y-4">
       <h2 className="text-2xl font-semibold">{copy("Respuestas guardadas", "Responses saved")}</h2>

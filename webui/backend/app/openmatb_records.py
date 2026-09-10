@@ -33,7 +33,9 @@ class OpenMatbRecords:
         db.add(suite)
         db.flush()
         from app.assessment_adapters import attach_source
-        attach_source(db, "openmatb_block_attempt", attempt.model_dump(mode="json"), historical=False)
+        from app.study_native import bind_block
+        if not bind_block(db, suite, attempt):
+            attach_source(db, "openmatb_block_attempt", attempt.model_dump(mode="json"), historical=False)
         return attempt
 
     def finish(self, db: Session, suite: OpenMatbSuiteSession, *, outcome: str, csv: Path | None) -> None:
@@ -62,6 +64,8 @@ class OpenMatbRecords:
                 attempt.artifact_status = "invalid"
                 attempt.artifact_error = "native_artifacts_outside_session"
                 attempt.evidence_status = "unavailable"
+        from app.study_native import finish_block
+        finish_block(db, attempt, outcome)
         db.add(attempt)
 
     def recover(self) -> None:
@@ -72,6 +76,8 @@ class OpenMatbRecords:
                     attempt.finished_at = attempt.finished_at or datetime.now(timezone.utc)
                     attempt.evidence_status = "queued" if attempt.session_csv else "unavailable"
                     attempt.artifact_status = "unknown"
+                    from app.study_native import finish_block
+                    finish_block(db, attempt, "interrupted")
                 if attempt.evidence_status == "processing":
                     attempt.evidence_status = "failed"
                     attempt.evidence_error = "interrupted_processing"
@@ -79,7 +85,10 @@ class OpenMatbRecords:
             db.commit()
 
     def _controlled_csv(self, suite: OpenMatbSuiteSession, attempt: OpenMatbBlockAttempt) -> Path:
-        root = (self.artifact_root / suite.id / "sessions" / attempt.profile).resolve()
+        with Session(self.engine) as db:
+            from app.study_native import storage_key
+            instance_key = storage_key(db, suite, attempt.profile)
+        root = (self.artifact_root / suite.id / "sessions" / instance_key).resolve()
         if self.artifact_root not in root.parents:
             raise ValueError("native_artifacts_outside_session")
         csv = Path(attempt.session_csv or "").resolve()

@@ -181,3 +181,9 @@ export function useAppLocale(): AppLocaleContextValue {
     copy: (spanish, english) => (locale === "en" ? english : spanish),
   }), [locale, store]);
 }
+
+/** Participant acquisition language is frozen independently of researcher preference. */
+export function FixedLocaleProvider({locale, children}: {locale: AppLocale; children: React.ReactNode}) {
+  const store = useMemo<LocaleStore>(() => ({getSnapshot: () => locale, getServerSnapshot: () => locale, subscribe: () => () => undefined, update: () => undefined}), [locale]);
+  return <AppLocaleContext.Provider value={store}>{children}</AppLocaleContext.Provider>;
+}

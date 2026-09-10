@@ -195,6 +195,8 @@ def ingest_pvt(body: PvtAssessmentIn, session: Session = Depends(get_session)) -
     visit = _visit(session, body.participant_id, body.visit_ordinal)
     from app.assessment_service import prepare_result, save_result, raw_view
     attempt = None
+    from app.study_admission import resolve_assignment
+    resolve_assignment(session, attempt_id=body.attempt_id, instrument='pvt', participant_id=body.participant_id, visit_id=visit.id, purpose=body.execution_purpose, require_started=True)
     final_payload = body.model_dump(exclude={"overwrite", "attempt_id"})
     if body.attempt_id:
         attempt, duplicate = prepare_result(session, body.attempt_id, instrument="pvt", participant_id=body.participant_id,

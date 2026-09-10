@@ -1,3 +1,5 @@
+
+from tests.study_fixtures import study_post
 """Purpose declarations distinguish recorded values from supported intent."""
 import pytest
 from pydantic import ValidationError
@@ -123,7 +125,7 @@ def test_replacement_retains_original_history_and_protected_review(client, engin
     from app.models import ArchivedAssessment
     from tests.test_pvt_endpoint import _payload, _enroll
     _enroll(client)
-    first = client.post('/pvt', json=_payload()).json()
+    first = study_post(client, '/pvt', json=_payload()).json()
     identity = first['purpose_provenance_id']
     original = client.get(f'/purpose-provenance/{identity}').json()
     assert original['current']['classification'] == 'explicit'
@@ -139,7 +141,7 @@ def test_replacement_retains_original_history_and_protected_review(client, engin
     assert reviewed['current']['classification'] == 'retrospective'
     from tests.test_assessments import occasion, attempt
     next_attempt = attempt(client, occasion(client))
-    second = client.post('/pvt', json=_payload(attempt_id=next_attempt['id'], kss_score=2)).json()
+    second = study_post(client, '/pvt', json=_payload(attempt_id=next_attempt['id'], kss_score=2)).json()
     assert second['purpose_provenance_id'] != identity
     assert client.get(f'/purpose-provenance/{identity}').json() == reviewed
     with Session(engine) as db:
@@ -153,7 +155,7 @@ def test_replacement_retains_original_history_and_protected_review(client, engin
 def test_screen_fast_conflict_is_rejected(client):
     from tests.test_screen_endpoint import _enroll, _payload
     _enroll(client, 'P01')
-    response = client.post('/screen', json={'participant_id': 'P01',
+    response = study_post(client, '/screen', json={'participant_id': 'P01',
         'execution_purpose': 'study', 'payload': {**_payload(), 'fast_mode': True}})
     assert response.status_code == 422
 
@@ -194,7 +196,7 @@ def test_historical_practice_and_archive_preserve_dates_and_raw_values(tmp_path)
 def test_screen_non_boolean_fast_mode_cannot_skip_study_protocol(client, fast_mode):
     from tests.test_screen_endpoint import _enroll, _payload
     _enroll(client, 'P01')
-    response = client.post('/screen', json={'participant_id': 'P01',
+    response = study_post(client, '/screen', json={'participant_id': 'P01',
         'execution_purpose': 'study', 'payload': {**_payload(), 'fast_mode': fast_mode}})
     assert response.status_code == 422
 
