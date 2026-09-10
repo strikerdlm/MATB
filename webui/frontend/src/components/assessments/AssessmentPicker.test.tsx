@@ -3,8 +3,10 @@ import {fireEvent, render, screen, waitFor} from '@testing-library/react';
 import {afterEach, expect, it, vi} from 'vitest';
 import {AssessmentPicker} from './AssessmentPicker';
 import type {Attempt} from '@/lib/assessments';
+// Supply the App Router query snapshot for this fixture's history-driven URLs.
+vi.mock('next/navigation', () => ({useSearchParams: () => new URLSearchParams(window.location.search)}));
 vi.mock('@/lib/i18n', () => ({useAppLocale: () => ({copy: (_es: string, en: string) => en})}));
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {vi.unstubAllGlobals(); window.history.replaceState(null, '', '/');});
 it('reopens exact saved evidence and prepares a reasoned repeat without selecting the completed run', async () => {
   const original = {id: 'attempt-original', occasion_id: 'occasion-1', ordinal: 1, execution_purpose: 'study', acquisition_state: 'finished'};
   const next = {...original, id: 'attempt-repeat', ordinal: 2, acquisition_state: 'created'};

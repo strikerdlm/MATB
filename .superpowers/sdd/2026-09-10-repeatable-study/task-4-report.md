@@ -278,3 +278,23 @@ Runtime source was frozen after the bounded ownership/lint fixes and self-review
 | Browser complete selection | `MATB_PYTHON=/root/repos/MATB/.venv/bin/python PYTHONPATH=/tmp/matb-predictability-testdeps MATB_COMPONENTS=auto PW_TEST_MATCH='**/{study-registry,study-preparation,participant-journey,frontend-predictability}.spec.ts' npm run test:e2e -- --retries=0 --max-failures=1 --output=/tmp/task4-fix2-browser-final` | **36 passed, no retries**, exit 0, 2.5 minutes — `/tmp/task4-fix2-browser-final.log` |
 
 Self-review verified request/persisted ownership agreement, reload recovery without a presentation event, fail-closed ambiguity/read failures, exact abort response identity, retained original stop/write retry behavior, and preservation of participant navigation/locale/reuse fixes. Software-only fixtures do not qualify physical devices. Existing backend warning remains deferred to Task7. All final gates completed successfully; N1 and N2 are resolved. `git diff --check` is clean and all eleven source inventory hashes match the current files. This fix and report are committed together from reviewed base `7349c395dd7593752c81cadea9e15550aa9a65fe`; the full resulting commit SHA is supplied in the implementer handoff. No push, merge, or worker reviewer was used. Root owns scoped independent re-review.
+
+## Post-review Linux Console CI test-context follow-up
+
+Base: `4e47612a3acfa553429e131457c862a28653f86d`. Workflow `34532854611`, Linux Console job `103057489859`, retained log `/tmp/matb-task4-console-linux.log`: 9 failures in `AssessmentPicker.test.tsx`, 252 other tests passed. The picker fixture rendered outside Next's router context after Task4 changed `useAssignedAttempt` to reactive `useSearchParams`; the real hook therefore returned null in the isolated fixture. Its `window.history` URL alone did not provide the App Router context.
+
+The bounded correction is test-only: `webui/frontend/src/components/assessments/AssessmentPicker.test.tsx` supplies a `next/navigation` mock returning the current fixture URL's search-parameter snapshot, and resets that URL during teardown even after a failed assertion. No production route/identity guard, source fingerprint, or test assertion changed. Exact saved-evidence reopen and reasoned repeat, stale creation context, all six explicit interruption causes, and the assigned URL with delayed visit arrival remain asserted. Existing hook/page tests separately cover reactive navigation and stale/spoofed attempt identity.
+
+All commands run from `webui/frontend`:
+
+| Gate | Exact command | Result/log |
+| --- | --- | --- |
+| RED exact CI file | `npm test -- src/components/assessments/AssessmentPicker.test.tsx` | **9 failed**, exit 1, same null `.get` cause — `/tmp/task4-ci-picker-red.log` |
+| GREEN related callers | `npm test -- src/components/assessments/AssessmentPicker.test.tsx src/lib/assigned-attempt.test.tsx src/components/assessments/AssessmentPages.test.tsx` | **20 passed / 3 files**, exit 0 — `/tmp/task4-ci-picker-green.log` |
+| Full frontend unit suite | `npm test` | **261 passed / 77 files**, exit 0, 107.68 seconds — `/tmp/task4-ci-frontend-full.log` |
+| Strict lint | `npm run lint -- --max-warnings=0` | exit 0, zero warnings — `/tmp/task4-ci-lint.log` |
+| TypeScript | `npm run typecheck` | exit 0 — `/tmp/task4-ci-typecheck.log` |
+
+Task5 was paused by the controller. A pre-edit SHA-256 inventory of all 13 existing Task5 working files was retained at `/tmp/task4-ci-task5-preserved.json`; all 13 byte hashes were verified unchanged before staging. The controller also reported the same 9 picker failures / 252 passes on Windows (`/tmp/matb-task4-console-windows.log`), without additional test failures. The resulting full commit SHA for this follow-up is supplied in the implementer handoff. Only the picker test and this report belong to this follow-up. No unchanged backend/native/browser/build gates are required for this test-only correction, and none were rerun. No push, merge, or subagent was used; the controller owns scoped re-review and CI retry.
+
+Follow-up self-review: all existing picker assertions are unchanged; the mock supplies the same query values used by the original URL fixture and teardown prevents leakage. Full-suite coverage found no omitted caller failures. `git diff --check` is clean. Production implementation and Task5 working files are unchanged.
