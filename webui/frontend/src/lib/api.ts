@@ -216,11 +216,12 @@ export async function postScreen(
   participantId: string, payload: import("@/lib/screen").ScreenPayload,
   overwrite: boolean,
   executionPurpose: "practice" | "study",
+  attemptId?: string,
 ): Promise<ScreenIngestResult> {
   const res = await request("/screen", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ participant_id: participantId, payload, overwrite, execution_purpose: executionPurpose }),
+    body: JSON.stringify({ participant_id: participantId, payload, overwrite, execution_purpose: executionPurpose, ...(attemptId ? {attempt_id: attemptId} : {}) }),
   });
   if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();

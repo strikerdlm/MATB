@@ -5,11 +5,13 @@ import { useEffect, useState } from "react";
 import { ExecutionPurposeBadge, ExperimentGuide } from "@/components/experiments/ExperimentGuide";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
-import { listParticipants, postScreen } from "@/lib/api";
+import { AssessmentPicker } from "@/components/assessments/AssessmentPicker";
+import { startAttempt, type Attempt } from "@/lib/assessments";
+import { listParticipants, listVisits, postScreen } from "@/lib/api";
 import { useAppLocale } from "@/lib/i18n";
 import { useExecutionPurpose } from "@/lib/execution-purpose";
 import { flowStageForScreen, useReportExperimentFlow } from "@/lib/experiment-flow";
-import type { Participant, ScreenIngestResult } from "@/types";
+import type { Participant, Visit, ScreenIngestResult } from "@/types";
 import type { ScreenPayload } from "@/lib/screen";
 
 const TaskRunner = dynamic(() => import("@/components/screen/TaskRunner").then((module) => module.TaskRunner), { ssr: false });
@@ -18,6 +20,9 @@ export default function ScreenPage() {
   const purpose = useExecutionPurpose();
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [participant, setParticipant] = useState("");
+  const [visits, setVisits] = useState<Visit[]>([]);
+  const [visitId, setVisitId] = useState<number | null>(null);
+  const [selectedAttempt, setSelectedAttempt] = useState<Attempt | null>(null);
   const [stage, setStage] = useState<"select" | "run" | "saving" | "review">("select");
   const [payload, setPayload] = useState<ScreenPayload | null>(null);
   const [result, setResult] = useState<ScreenIngestResult | null>(null);
@@ -29,11 +34,13 @@ export default function ScreenPage() {
       .catch(() => { if (active) setError("connection"); });
     return () => { active = false; };
   }, []);
+  useEffect(() => { let active = true; setVisits([]); setVisitId(null); if (participant) void listVisits(participant).then(rows => {if(active) {setVisits(rows); setVisitId(rows[0]?.id ?? null);}}).catch(e => {if(active) setError(String(e));}); return () => {active = false;}; }, [participant]);
+  async function begin() {if (!selectedAttempt) return; try {await startAttempt(selectedAttempt.id); setStage("run");} catch(e) {setError(String(e));}}
   useReportExperimentFlow("screen", flowStageForScreen(stage, activityStarted, Boolean(result)));
   async function save(raw: ScreenPayload) {
     if (!purpose) return;
     setPayload(raw); setStage("saving"); setError(null);
-    try { setResult(await postScreen(participant, raw, false, purpose)); }
+    try { setResult(await postScreen(participant, raw, false, purpose, selectedAttempt?.id)); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "save"); }
     finally { setStage("review"); }
   }
@@ -55,7 +62,9 @@ export default function ScreenPage() {
           {participants.map((row) => <option key={row.id} value={row.id}>{row.id}</option>)}
         </select>
         <p className="text-sm text-muted-foreground">{copy("Necesita teclado y mouse. Lea las instrucciones y responda cuando aparezca el estímulo.", "You need a keyboard and mouse. Read the instructions and respond when the stimulus appears.")}</p>
-        <Button disabled={!purpose || !participant} onClick={() => setStage("run")}>{copy("Ver instrucciones y comenzar", "View instructions and begin")}</Button>
+        <label className="block">{copy("Visita", "Visit")}<select className="native-select block" value={visitId ?? ''} onChange={e => setVisitId(Number(e.target.value))}>{visits.map(v => <option key={v.id} value={v.id}>V{v.visit_ordinal}</option>)}</select></label>
+        <AssessmentPicker participantId={participant} visitId={visitId} instrument="screen" purpose={purpose} onSelect={setSelectedAttempt} />
+        <Button disabled={!purpose || !participant || !selectedAttempt} onClick={() => void begin()}>{copy("Ver instrucciones y comenzar", "View instructions and begin")}</Button>
       </div>
     </>}
     {error && <div role="alert" className="rounded border border-danger/40 p-4">

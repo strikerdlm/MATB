@@ -54,15 +54,16 @@ def test_pvt_stores_kss_and_standard_metrics_per_visit(client):
     assert len(summary["assessments"]) == 1
 
 
-def test_pvt_is_unique_per_visit_and_supports_explicit_overwrite(client):
+def test_pvt_requires_explicit_repeat_and_preserves_original(client):
     _enroll(client)
     assert client.post("/pvt", json=_payload()).status_code == 201
     assert client.post("/pvt", json=_payload()).status_code == 201
     assert client.post("/pvt", json=_payload(kss_score=4)).status_code == 409
     replacement = _payload(kss_score=2, overwrite=True)
     response = client.post("/pvt", json=replacement)
-    assert response.status_code == 201
-    assert response.json()["kss_score"] == 2
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "explicit_repeat_required"
+    assert client.get("/pvt").json()["assessments"][0]["kss_score"] == 6
 
 
 def test_pvt_rejects_short_production_run_and_bad_timing(client):

@@ -33,6 +33,8 @@ def capture_list(db: Session, *, purpose: str, session_id: str | None, query: st
         item = dict(row._mapping)
         if item["created_at"].tzinfo is None:
             item["created_at"] = item["created_at"].replace(tzinfo=timezone.utc)
+        from app.assessment_adapters import source_identity
+        item.update(source_identity(db, "evidence_capture", item["id"]))
         item.update(review_summary(db, item["id"]))
         items.append(item)
     return {"total": total, "offset": offset, "limit": limit, "items": items}

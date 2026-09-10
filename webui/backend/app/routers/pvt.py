@@ -63,6 +63,7 @@ class PvtTrialIn(BaseModel):
 class PvtAssessmentIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    attempt_id: str | None = None
     participant_id: str
     visit_ordinal: int = Field(ge=1)
     kss_score: int = Field(ge=1, le=9)
@@ -173,6 +174,7 @@ def _visit(session: Session, participant_id: str, visit_ordinal: int) -> Visit:
 def _view(row: PvtAssessment) -> dict[str, object]:
     return {
         "id": row.id,
+        "attempt_id": row.attempt_id,
         "purpose_provenance_id": row.purpose_provenance_id,
         "participant_id": row.participant_id,
         "visit_id": row.visit_id,
@@ -191,6 +193,17 @@ def _view(row: PvtAssessment) -> dict[str, object]:
 @router.post("", status_code=status.HTTP_201_CREATED)
 def ingest_pvt(body: PvtAssessmentIn, session: Session = Depends(get_session)) -> dict[str, object]:
     visit = _visit(session, body.participant_id, body.visit_ordinal)
+    from app.assessment_service import prepare_result, save_result, raw_view
+    attempt = None
+    final_payload = body.model_dump(exclude={"overwrite", "attempt_id"})
+    if body.attempt_id:
+        attempt, duplicate = prepare_result(session, body.attempt_id, instrument="pvt", participant_id=body.participant_id,
+            visit_id=visit.id, purpose=body.execution_purpose, payload=final_payload)
+        if duplicate:
+            links = raw_view(session, attempt.id)["record"]
+            if body.execution_purpose == "practice":
+                return {"id": links["id"], "attempt_id": attempt.id, "purpose_provenance_id": attempt.purpose_provenance_id, **json.loads(links["result_json"])}
+            return _view(session.get(PvtAssessment, links["id"]))
     metrics = _metrics(body.trials, duration_ms=body.duration_ms)
     timing = {"locale": body.locale, "timing_version": body.timing_version, "interruption_count": body.interruption_count,
               "max_frame_gap_ms": body.max_frame_gap_ms, "terminal_phase": body.terminal_phase,
@@ -204,22 +217,21 @@ def ingest_pvt(body: PvtAssessmentIn, session: Session = Depends(get_session)) -
                   "execution_purpose": "practice", "timing_evidence": timing}
         practice = PracticeResult(experiment_id="pvt", participant_id=body.participant_id,
                                   payload_json=body.model_dump_json(), result_json=json.dumps(result, allow_nan=False))
-        declare_acquisition(session, practice, purpose="practice")
+        if attempt:
+            save_result(session, attempt, practice, final_payload)
+        else:
+            declare_acquisition(session, practice, purpose="practice")
         session.commit()
         session.refresh(practice)
-        return {"id": practice.id, "purpose_provenance_id": practice.purpose_provenance_id, **result}
-    existing = session.exec(
-        select(PvtAssessment).where(PvtAssessment.visit_id == visit.id)
-    ).first()
-    if existing is not None and existing.administered_at == body.administered_at and existing.kss_score == body.kss_score and existing.duration_ms == body.duration_ms and json.loads(existing.raw_trials_json) == [trial.model_dump() for trial in body.trials] and json.loads(existing.timing_evidence_json) == timing:
-        return _view(existing)
-    if existing is not None and not body.overwrite:
-        raise HTTPException(status.HTTP_409_CONFLICT, "PVT already recorded for this visit")
-    if existing is not None:
-        session.add(ArchivedAssessment(experiment_id="pvt", participant_id=existing.participant_id,
-                      original_id=existing.id, purpose_provenance_id=existing.purpose_provenance_id, snapshot_json=existing.model_dump_json()))
-        session.delete(existing)
-        session.flush()
+        return {"id": practice.id, "attempt_id": practice.attempt_id, "purpose_provenance_id": practice.purpose_provenance_id, **result}
+    if body.attempt_id is None:
+        existing_rows = session.exec(select(PvtAssessment).where(PvtAssessment.visit_id == visit.id)).all()
+        if existing_rows:
+            if len(existing_rows) == 1:
+                existing = existing_rows[0]
+                if existing.administered_at == body.administered_at and existing.kss_score == body.kss_score and existing.duration_ms == body.duration_ms and json.loads(existing.raw_trials_json) == [trial.model_dump() for trial in body.trials] and json.loads(existing.timing_evidence_json) == timing:
+                    return _view(existing)
+            raise HTTPException(409, {"code": "explicit_repeat_required", "message": "Create an occasion/attempt or repeat a prior attempt.", "attempt_ids": [r.attempt_id for r in existing_rows]})
     row = PvtAssessment(
         participant_id=body.participant_id,
         visit_id=visit.id,
@@ -233,7 +245,10 @@ def ingest_pvt(body: PvtAssessmentIn, session: Session = Depends(get_session)) -
         execution_purpose="study",
         timing_evidence_json=json.dumps(timing, allow_nan=False),
     )
-    declare_acquisition(session, row, purpose=body.execution_purpose)
+    if attempt:
+        save_result(session, attempt, row, final_payload)
+    else:
+        declare_acquisition(session, row, purpose=body.execution_purpose)
     session.commit()
     session.refresh(row)
     return _view(row)
@@ -249,6 +264,7 @@ def list_pvt(
         statement = statement.where(PvtAssessment.participant_id == participant_id)
     rows = session.exec(statement.order_by(PvtAssessment.participant_id, PvtAssessment.visit_id)).all()
     return {
+        "selection_mode": "all_attempts",
         "pvt_version": PVT_VERSION,
         "protocol_duration_ms": PVT_DURATION_MS,
         "assessments": [_view(row) for row in rows],

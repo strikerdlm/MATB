@@ -261,10 +261,14 @@ class SimulationManager:
             handle.purpose_provenance_id = acquisition_row.purpose_provenance_id
             db.flush()
             for index, block_id in enumerate(("PRACTICE", *(item.value for item in order)), start=0):
-                db.add(SimulationBlock(
+                block_row = SimulationBlock(
                     session_id=session_id, block_id=block_id, profile=block_id,
                     order_index=index, lifecycle="PREPARED",
-                ))
+                )
+                db.add(block_row)
+                db.flush()
+                from app.assessment_adapters import attach_source
+                attach_source(db, "simulation_block", block_row.model_dump(mode="json"), historical=False)
             db.commit()
             self.persistence.update_session(session_id, lifecycle="PREPARED")
             return self._prepared_view(handle, lease)
@@ -354,14 +358,18 @@ class SimulationManager:
             declare_acquisition(db, acquisition_row, purpose=request.execution_purpose)
             handle.purpose_provenance_id = acquisition_row.purpose_provenance_id
             db.flush()
-            db.add(TechnicalSimulationBlock(
+            block_row = TechnicalSimulationBlock(
                 session_id=session_id,
                 block_id=request.block_id,
                 profile=request.block_id,
                 order_index=0,
                 lifecycle="PREPARED",
                 validity="technical_only",
-            ))
+            )
+            db.add(block_row)
+            db.flush()
+            from app.assessment_adapters import attach_source
+            attach_source(db, "technical_simulation_block", block_row.model_dump(mode="json"), historical=False)
             db.commit()
             self.persistence.update_session(
                 session_id,

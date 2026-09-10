@@ -161,3 +161,20 @@ def test_inspector_preserves_original_text_and_large_clock_values(client, seeded
     page = client.get(f"/evidence/captures/{response.json()['id']}/records", params={"stream": "timing"}).json()
     assert page["raw_items"][0].encode() == bundle["timing"].splitlines(keepends=True)[0]
     assert page["value_texts"][0] == str(2**53 + 1)
+
+
+def test_imported_capture_links_unknown_purpose_without_rewriting_manifest(client, engine, seeded_participant, tmp_path):
+    bundle = synthetic_capture(tmp_path / 'external')
+    response = upload(client, bundle)
+    assert response.status_code == 201, response.text
+    capture_id = response.json()['id']
+    association = client.get(f'/assessments/sources/evidence_capture/{capture_id}')
+    assert association.status_code == 200, association.text
+    a = association.json()
+    history = client.get(f"/purpose-provenance/{a['purpose_provenance_id']}").json()
+    assert history['current']['classification'] == 'unknown'
+    assert history['current']['actor'] == 'system:migration'
+    assert upload(client, bundle).status_code == 200
+    assert client.get(f'/assessments/sources/evidence_capture/{capture_id}').json()['id'] == a['id']
+    with Session(engine) as db:
+        assert db.get(EvidenceCapture, capture_id).manifest_json.encode() == bundle['capture_manifest']

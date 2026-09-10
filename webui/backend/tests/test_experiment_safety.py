@@ -37,17 +37,21 @@ def test_pvt_exact_protocol_boundaries(rt, outcome):
                       response_at_ms=2000 + rt, rt_ms=rt, outcome=outcome).outcome == outcome
 
 
-def test_practice_cannot_overwrite_study_and_retakes_are_archived(client, engine):
+def test_practice_cannot_overwrite_study_and_explicit_retakes_preserve_original(client, engine):
     from app.models import ArchivedAssessment, PracticeResult
     client.post("/participants", json={"id": "P01", "enrollment_date": "2026-06-01"})
     study = client.post("/pvt", json=full_pvt()).json()
     practice = client.post("/pvt", json=full_pvt(execution_purpose="practice", overwrite=True, kss_score=9))
     assert practice.status_code == 201
     assert client.get("/pvt").json()["assessments"][0] == study
-    assert client.post("/pvt", json=full_pvt(overwrite=True, kss_score=5)).status_code == 201
+    assert client.post("/pvt", json=full_pvt(overwrite=True, kss_score=5)).status_code == 409
+    from tests.test_assessments import occasion, attempt
+    next_attempt = attempt(client, occasion(client))
+    assert client.post("/pvt", json=full_pvt(attempt_id=next_attempt['id'], kss_score=5)).status_code == 201
+    from app.models import PvtAssessment
     with Session(engine) as db:
-        archive = db.exec(select(ArchivedAssessment)).one()
-        assert json.loads(archive.snapshot_json)["kss_score"] == 3
+        assert db.get(PvtAssessment, study['id']).kss_score == 3
+        assert len(db.exec(select(PvtAssessment)).all()) == 2
         assert len(db.exec(select(PracticeResult)).all()) == 1
 
 

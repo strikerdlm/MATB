@@ -28,7 +28,7 @@ def _json(raw):
 
 @router.get("/{participant_id}/{visit_ordinal}")
 def participant_journey(participant_id: str, visit_ordinal: int, request: Request,
-                        experiment: Experiment = "suas", session: Session = Depends(get_session)):
+                        experiment: Experiment = "suas", attempt_id: str | None = None, pvt_attempt_id: str | None = None, session: Session = Depends(get_session)):
     if session.get(Participant, participant_id) is None:
         raise HTTPException(404, "participant not found")
     visit = session.exec(select(Visit).where(Visit.participant_id == participant_id,
@@ -36,9 +36,12 @@ def participant_journey(participant_id: str, visit_ordinal: int, request: Reques
     if visit is None:
         raise HTTPException(404, "visit not found")
     tables = set(inspect(session.connection()).get_table_names())
-    pvt = session.exec(select(PvtAssessment).where(PvtAssessment.visit_id == visit.id,
-                    PvtAssessment.execution_purpose == "study", PvtAssessment.pvt_version >= 2,
-                    PvtAssessment.protocol_valid == True)).first()  # noqa: E712
+    from app.assessment_readers import select_one, select_source_rows
+    pvt_rows = session.exec(select(PvtAssessment).where(PvtAssessment.visit_id == visit.id,
+                    PvtAssessment.execution_purpose == "study")).all()
+    pvt = select_one(pvt_rows, pvt_attempt_id or (attempt_id if experiment == "pvt" else None))
+    if pvt and (not pvt.protocol_valid or pvt.pvt_version < 2):
+        pvt = None
     registry = getattr(request.app.state, "component_registry", None)
     active = {item.component_id for item in registry.manifests()} if registry else set()
     descriptor = next(row for row in EXPERIMENTS if row["id"] == experiment)
@@ -53,6 +56,7 @@ def participant_journey(participant_id: str, visit_ordinal: int, request: Reques
             PolarCaptureRecord.matb_session_id == baseline_id,
             PolarCaptureRecord.execution_purpose == "study",
             PolarCaptureRecord.artifact_state == "finalized")).all()
+        captures = select_source_rows(session, captures, "polar_capture", attempt_id if experiment == "physiology" else None)
         # Saved capture completion is not a claim that its HRV quality gate passed.
         polar_complete = any(row.started_at and row.ended_at and
                              (row.ended_at - row.started_at).total_seconds() >= 300 and
@@ -64,6 +68,7 @@ def participant_journey(participant_id: str, visit_ordinal: int, request: Reques
             missions = session.exec(select(SimulationSession).where(
                 SimulationSession.participant_id == participant_id,
                 SimulationSession.visit_id == visit.id).order_by(SimulationSession.created_at.desc())).all()
+            missions = select_source_rows(session, missions, "simulation_session", attempt_id)
             for mission in missions:
                 blocks = session.exec(select(SimulationBlock).where(SimulationBlock.session_id == mission.id)).all()
                 by_id = {block.block_id: block for block in blocks}
@@ -89,8 +94,8 @@ def participant_journey(participant_id: str, visit_ordinal: int, request: Reques
         steps = [_step("welcome", True), _step("kss", pvt is not None), _step("pvt", pvt is not None), _step("complete", pvt is not None)]
     elif experiment == "screen":
         from matb_integration.screen.hcf_mapping import SCREEN_VERSION
-        row = session.exec(select(ScreenResult).where(ScreenResult.participant_id == participant_id,
-            ScreenResult.execution_purpose == "study", ScreenResult.screen_version == SCREEN_VERSION)).first()
+        row = select_one(session.exec(select(ScreenResult).where(ScreenResult.participant_id == participant_id,
+            ScreenResult.execution_purpose == "study", ScreenResult.screen_version == SCREEN_VERSION)).all(), attempt_id)
         scores = _json(row.scores_json) if row else {}
         steps = [_step("welcome", True)] + [_step(task, scores.get(task, {}).get("valid") is True)
                     for task in ("simple_rt", "choice_rt", "nback", "tracking")]
@@ -101,6 +106,7 @@ def participant_journey(participant_id: str, visit_ordinal: int, request: Reques
             from app.openmatb_models import OpenMatbSuiteSession
             rows = session.exec(select(OpenMatbSuiteSession).where(
                 OpenMatbSuiteSession.visit_id == visit.id, OpenMatbSuiteSession.execution_purpose == "study")).all()
+            rows = select_source_rows(session, rows, "openmatb_suite_session", attempt_id)
             prepared = bool(rows)
             complete = any(row.lifecycle == "COMPLETE" and all(level in _json(row.scores_json)
                            for level in ("LOW", "MEDIUM", "HIGH")) for row in rows)
@@ -111,6 +117,7 @@ def participant_journey(participant_id: str, visit_ordinal: int, request: Reques
             from app.liftoff_models import LiftoffSession
             rows = session.exec(select(LiftoffSession).where(LiftoffSession.visit_id == visit.id,
                                      LiftoffSession.execution_purpose == "study")).all()
+            rows = select_source_rows(session, rows, "liftoff_session", attempt_id)
             prepared = bool(rows)
             complete = any(row.status == "FINISHED" and row.validity == "valid" and row.metrics_json for row in rows)
         steps = [_step("welcome", True), _step("prepare", prepared), _step("record", complete), _step("complete", complete)]
@@ -120,5 +127,5 @@ def participant_journey(participant_id: str, visit_ordinal: int, request: Reques
         if item["status"] == "upcoming":
             item["status"] = "current" if available else "unavailable"
             break
-    return {"participant_id": participant_id, "visit_id": visit.id, "visit_ordinal": visit.visit_ordinal,
+    return {"selection_mode": "explicit" if attempt_id else "legacy_unambiguous", "attempt_id": attempt_id, "participant_id": participant_id, "visit_id": visit.id, "visit_ordinal": visit.visit_ordinal,
             "selected_experiment": experiment, "execution_purpose": "study", "steps": steps}

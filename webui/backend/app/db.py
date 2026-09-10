@@ -84,6 +84,7 @@ def init_db(*, component_model_modules: tuple[str, ...] = ()) -> None:
         models,  # noqa: F401
         study_models,  # noqa: F401
         purpose_models,
+        assessment_models,
         evidence_models,  # noqa: F401
     )
 
@@ -98,6 +99,8 @@ def init_db(*, component_model_modules: tuple[str, ...] = ()) -> None:
     _migrate_experiment_execution_v1(_engine)
     from app.purpose_service import migrate_purpose_provenance
     migrate_purpose_provenance(_engine)
+    from app.assessment_migration import migrate_assessments
+    migrate_assessments(_engine)
     _migrate_openmatb_receipts_v1(_engine)
     _migrate_evidence_parent_v1(_engine)
     _audit_sqlite_foreign_keys(_engine)

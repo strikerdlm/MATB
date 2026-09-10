@@ -86,6 +86,8 @@ def ingest_evidence(db: Session, artifacts: dict[str, bytes]) -> tuple[str, bool
                 if ordinal % 500 == 499:
                     db.flush()
         db.add(EvidenceRun(id=pending_run_id, capture_id=capture.id, version=DERIVATION_VERSION))
+        from app.assessment_adapters import attach_source
+        attach_source(db, "evidence_capture", capture.model_dump(mode="json"), historical=True)
         db.commit()
     except IntegrityError as exc:
         db.rollback()

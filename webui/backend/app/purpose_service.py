@@ -16,7 +16,7 @@ from .purpose_models import PurposeClassification, PurposeProvenance
 ACQUISITION_TABLES = (
     'screenresult', 'pvt_assessment', 'practiceresult', 'openmatb_suite_session',
     'liftoff_session', 'polar_capture', 'simulation_session', 'technical_simulation_session',
-    'archived_assessment',
+    'archived_assessment', 'assessment_attempt',
 )
 
 
@@ -37,7 +37,7 @@ def _append(db, identity, *, purpose, classification, actor, reason, references=
     return row
 
 
-def declare_acquisition(db: Session, row, *, purpose: str) -> str:
+def declare_acquisition(db: Session, row, *, purpose: str, attempt_id: str | None = None) -> str:
     """Persist a new row and explicit request declaration in the caller's transaction.
 
     Never call for historical imports; use migration + retrospective review.
@@ -51,6 +51,9 @@ def declare_acquisition(db: Session, row, *, purpose: str) -> str:
         raise ValueError('invalid execution purpose')
     if row.purpose_provenance_id is not None or inspect(row).persistent or inspect(row).detached:
         raise ValueError('explicit declaration requires a new acquisition')
+    if attempt_id is not None:
+        from .assessment_service import bind_new_source
+        return bind_new_source(db, attempt_id, row, purpose=purpose)
     db.add(row)
     db.flush()
     identity = _identity(db, table=row.__tablename__, source_id=row.id,
@@ -59,6 +62,13 @@ def declare_acquisition(db: Session, row, *, purpose: str) -> str:
     db.add(row)
     _append(db, identity, purpose=purpose, classification='explicit', actor='local:acquisition-request',
             reason='Purpose explicitly declared in the new acquisition request')
+    if row.__tablename__ != "assessment_attempt":
+        from .assessment_adapters import attach_source
+        attempt = attach_source(db, row.__tablename__, row.model_dump(mode="json"), historical=False)
+        if attempt is not None and hasattr(row, "attempt_id"):
+            row.attempt_id = attempt.id
+            db.add(row)
+            db.flush()
     return identity
 
 
@@ -134,3 +144,15 @@ def migrate_purpose_provenance(engine) -> None:
                 connection.execute(text(f'UPDATE "{table}" SET purpose_provenance_id=:identity WHERE id=:id'),
                     {'identity': identity, 'id': snapshot['id']})
         db.commit()
+
+
+def historical_association_identity(db, *, source_table, source_id, purpose, snapshot):
+    """Append unknown provenance for an imported instance lacking its own ledger.
+
+    This is an association migration, never a prospective declaration. In particular
+    a historic practice block cannot borrow the enclosing study suite declaration.
+    """
+    identity = _identity(db, table=source_table, source_id=source_id, purpose=purpose, snapshot=snapshot)
+    _append(db, identity, purpose=purpose, classification='unknown', actor='system:migration',
+            reason='Historical instance association; prospective declaration evidence unavailable')
+    return identity

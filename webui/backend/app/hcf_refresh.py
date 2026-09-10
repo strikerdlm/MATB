@@ -17,6 +17,9 @@ def build_hcf_store(session: Session):
     from matb_integration.screen.hcf_mapping import SCREEN_VERSION, compute_cohort_hcf
 
     rows = session.exec(select(ScreenResult).where(ScreenResult.execution_purpose == "study", ScreenResult.screen_version == SCREEN_VERSION)).all()
+    from app.assessment_readers import reject_ambiguous, exclude_known_nonstudy
+    rows = exclude_known_nonstudy(session, rows)
+    reject_ambiguous(rows)
     scores = {r.participant_id: json.loads(r.scores_json) for r in rows}
     return compute_cohort_hcf(scores)
 
@@ -27,7 +30,14 @@ def refresh_fit_hcf(session: Session) -> int:
     number of rows changed."""
     from matb_integration.suhir.hcf import F0_DEFAULT
 
-    store = build_hcf_store(session)
+    from fastapi import HTTPException
+    try:
+        store = build_hcf_store(session)
+    except HTTPException as exc:
+        if exc.status_code != 409:
+            raise
+        # Explicit selection is required. Preserve already derived legacy fits.
+        return 0
     changed = 0
     for fit in session.exec(select(DepdfFit)).all():
         est = store.get(fit.participant_id)

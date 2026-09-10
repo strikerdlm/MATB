@@ -71,12 +71,13 @@ class DepdfFit(SQLModel, table=True):
 
 class ScreenResult(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    participant_id: str = Field(foreign_key="participant.id", unique=True, index=True)
+    participant_id: str = Field(foreign_key="participant.id", index=True)
     administered_at: str                            # ISO timestamp from the browser
     screen_version: int
     raw_trials_json: str                            # full raw payload (re-derivable)
     scores_json: str                                # score_screen() output
     created_at: datetime = Field(default_factory=_utcnow)
+    attempt_id: str | None = Field(default=None, foreign_key="assessment_attempt.id", unique=True, index=True)
     purpose_provenance_id: str | None = None
     execution_purpose: str = "study"
 
@@ -90,7 +91,6 @@ class PvtAssessment(SQLModel, table=True):
 
     __tablename__ = "pvt_assessment"
     __table_args__ = (
-        UniqueConstraint("visit_id"),
         Index("ix_pvt_assessment_participant_visit", "participant_id", "visit_id"),
     )
 
@@ -105,6 +105,7 @@ class PvtAssessment(SQLModel, table=True):
     raw_trials_json: str
     metrics_json: str
     created_at: datetime = Field(default_factory=_utcnow)
+    attempt_id: str | None = Field(default=None, foreign_key="assessment_attempt.id", unique=True, index=True)
     purpose_provenance_id: str | None = None
     execution_purpose: str = "study"
     timing_evidence_json: str = "{}"
@@ -116,6 +117,7 @@ class PracticeResult(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     experiment_id: str = Field(index=True)
     participant_id: str | None = Field(default=None, foreign_key="participant.id")
+    attempt_id: str | None = Field(default=None, foreign_key="assessment_attempt.id", unique=True, index=True)
     purpose_provenance_id: str | None = None
     execution_purpose: str = "practice"
     payload_json: str

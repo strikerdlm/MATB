@@ -460,3 +460,20 @@ def test_console_profile_frontend_matches_frozen_definition():
     assert f'id: "{expected["id"]}"' in frontend
     assert f'version: {expected["version"]}' in frontend
     assert f'sha256: "{expected["sha256"]}"' in frontend
+
+
+@pytest.mark.anyio
+async def test_mission_block_sources_keep_practice_separate(manager, runtime_db):
+    from app.assessment_models import AssessmentAttempt, AssessmentSourceLink
+    from app.simulation_models import SimulationBlock
+    from sqlmodel import select
+    with Session(runtime_db) as db:
+        prepared = await manager.prepare(request(), db)
+        blocks = db.exec(select(SimulationBlock).where(SimulationBlock.session_id == prepared.id)).all()
+        assert len(blocks) == 4
+        for block in blocks:
+            link = db.exec(select(AssessmentSourceLink).where(AssessmentSourceLink.source_table == 'simulation_block', AssessmentSourceLink.source_id == str(block.id))).one()
+            attempt = db.get(AssessmentAttempt, link.attempt_id)
+            assert attempt.execution_purpose == ('practice' if block.profile == 'PRACTICE' else 'study')
+            assert attempt.purpose_provenance_id is not None
+    await manager.shutdown()

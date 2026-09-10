@@ -430,3 +430,22 @@ def test_restart_does_not_process_while_a_previous_native_process_survives(contr
     asyncio.run(second._process_evidence())
     with Session(engine) as db:
         assert db.get(EvidenceCapture, cid) is not None
+
+
+def test_shared_native_practice_and_rating_target_keep_actual_purpose(controlled, engine):
+    from app.assessment_models import AssessmentSourceLink, AssessmentAttempt
+    from app.purpose_service import provenance_view
+    from sqlmodel import select
+    manager, prepared = controlled
+    with Session(engine) as db:
+        suite = db.get(OpenMatbSuiteSession, prepared.session.id)
+        native = manager.records.begin(db, suite, 'PRACTICE')
+        db.commit()
+        links = db.exec(select(AssessmentSourceLink).where(AssessmentSourceLink.source_table == 'openmatb_block_attempt', AssessmentSourceLink.source_id == native.id)).all()
+        assert {link.role for link in links} == {'acquisition', 'ratings'}
+        task = db.get(AssessmentAttempt, next(link.attempt_id for link in links if link.role == 'acquisition'))
+        rating = db.get(AssessmentAttempt, next(link.attempt_id for link in links if link.role == 'ratings'))
+        assert task.execution_purpose == rating.execution_purpose == 'practice'
+        assert rating.target_attempt_id == task.id
+        assert task.purpose_provenance_id != suite.purpose_provenance_id
+        assert provenance_view(db, task.purpose_provenance_id)['current']['classification'] == 'explicit'

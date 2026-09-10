@@ -30,19 +30,19 @@ EXPERIMENTS = (
 )
 
 
-def require_study_pvt(session: Session, visit_id: int) -> None:
-    assessment = session.exec(select(PvtAssessment).where(
+def require_study_pvt(session: Session, visit_id: int, *, attempt_id: str | None = None) -> None:
+    from app.assessment_readers import select_one, exclude_known_nonstudy
+    rows = session.exec(select(PvtAssessment).where(
         PvtAssessment.visit_id == visit_id, PvtAssessment.execution_purpose == "study",
-        PvtAssessment.pvt_version >= 2,
-        PvtAssessment.protocol_valid == True,  # noqa: E712
-    )).first()
-    if assessment is None:
+    )).all()
+    assessment = select_one(exclude_known_nonstudy(session, rows), attempt_id)
+    if assessment is None or assessment.pvt_version < 2 or not assessment.protocol_valid:
         raise HTTPException(409, detail={"code": "study_pvt_required",
                                         "message": "Complete a valid study PVT for this visit first."})
 
 
 def require_task_order(session: Session, participant_id: str, visit_id: int, family: str,
-                       *, require_context: bool = False) -> None:
+                       *, require_context: bool = False, source_session_id: str | None = None) -> None:
     from app.study_models import StudyParticipantContext
     from app.models import Block
     from sqlalchemy import inspect
@@ -58,17 +58,27 @@ def require_task_order(session: Session, participant_id: str, visit_id: int, fam
             return
         if "openmatb_suite_session" in inspect(session.connection()).get_table_names():
             from app.openmatb_models import OpenMatbSuiteSession
-            row = session.exec(select(OpenMatbSuiteSession).where(OpenMatbSuiteSession.visit_id == visit_id,
-                  OpenMatbSuiteSession.execution_purpose == "study", OpenMatbSuiteSession.lifecycle == "COMPLETE")).first()
+            rows = session.exec(select(OpenMatbSuiteSession).where(OpenMatbSuiteSession.visit_id == visit_id,
+                  OpenMatbSuiteSession.execution_purpose == "study", OpenMatbSuiteSession.lifecycle == "COMPLETE")).all()
+            if source_session_id:
+                rows = [row for row in rows if row.id == source_session_id]
+            if len(rows) > 1:
+                raise ValueError("explicit_assessment_selection_required")
+            row = rows[0] if rows else None
             if row is not None:
                 return
         raise ValueError("assigned_matb_first")
     if context.task_sequence == "LIFTOFF_MATB" and family == "openmatb":
         if "liftoff_session" in inspect(session.connection()).get_table_names():
             from app.liftoff_models import LiftoffSession
-            row = session.exec(select(LiftoffSession).where(LiftoffSession.visit_id == visit_id,
+            rows = session.exec(select(LiftoffSession).where(LiftoffSession.visit_id == visit_id,
                   LiftoffSession.execution_purpose == "study", LiftoffSession.status == "FINISHED",
-                  LiftoffSession.validity == "valid")).first()
+                  LiftoffSession.validity == "valid")).all()
+            if source_session_id:
+                rows = [row for row in rows if row.id == source_session_id]
+            if len(rows) > 1:
+                raise ValueError("explicit_assessment_selection_required")
+            row = rows[0] if rows else None
             if row is not None:
                 return
         raise ValueError("assigned_liftoff_first")

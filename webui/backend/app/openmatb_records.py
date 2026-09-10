@@ -32,6 +32,8 @@ class OpenMatbRecords:
         db.add(attempt)
         db.add(suite)
         db.flush()
+        from app.assessment_adapters import attach_source
+        attach_source(db, "openmatb_block_attempt", attempt.model_dump(mode="json"), historical=False)
         return attempt
 
     def finish(self, db: Session, suite: OpenMatbSuiteSession, *, outcome: str, csv: Path | None) -> None:
@@ -158,13 +160,16 @@ class OpenMatbRecords:
     def receipt(self, db: Session, suite: OpenMatbSuiteSession) -> dict:
         from app.evidence_models import EvidenceCapture
         from app.evidence_discovery import review_summary
+        from app.assessment_adapters import source_identity
         rows = list(db.exec(select(OpenMatbBlockAttempt).where(OpenMatbBlockAttempt.session_id == suite.id)
                             .order_by(OpenMatbBlockAttempt.started_at, OpenMatbBlockAttempt.id)))
         attempts = []
         for attempt in rows:
             capture = db.get(EvidenceCapture, attempt.capture_id) if attempt.capture_id else None
             summary = review_summary(db, capture.id) if capture else None
-            attempts.append({"block_instance_id": attempt.id, "block_index": attempt.block_index,
+            attempts.append({**source_identity(db, "openmatb_block_attempt", attempt.id),
+                "rating_attempt_id": source_identity(db, "openmatb_block_attempt", attempt.id, "ratings")["assessment_attempt_id"],
+                "block_instance_id": attempt.id, "block_index": attempt.block_index,
                 "profile": attempt.profile, "task_status": attempt.task_status,
                 "execution_purpose": "practice" if attempt.profile == "PRACTICE" else suite.execution_purpose,
                 "started_at": attempt.started_at, "finished_at": attempt.finished_at,
@@ -175,7 +180,7 @@ class OpenMatbRecords:
                 "evidence_status": attempt.evidence_status, "evidence_error": attempt.evidence_error,
                 "capture_id": attempt.capture_id, "capture_status": summary["capture_status"] if summary else None,
                 "qualification": summary["qualification"] if summary else None})
-        return {"session_id": suite.id, "participant_id": suite.participant_id,
+        return {**source_identity(db, "openmatb_suite_session", suite.id), "session_id": suite.id, "participant_id": suite.participant_id,
                 "visit_ordinal": suite.visit_ordinal, "execution_purpose": suite.execution_purpose,
                 "lifecycle": suite.lifecycle, "historical": suite.receipt_version == 0,
                 "block_order": json.loads(suite.block_order_json), "attempts": attempts}

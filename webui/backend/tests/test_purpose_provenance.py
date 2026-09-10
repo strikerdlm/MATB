@@ -137,13 +137,17 @@ def test_replacement_retains_original_history_and_protected_review(client, engin
         'purpose': 'practice', 'reviewer': 'Reviewer', 'reason': 'log reviewed', 'supporting_references': ['log:1']}).json()
     assert reviewed['history'][0] == original['history'][0]
     assert reviewed['current']['classification'] == 'retrospective'
-    second = client.post('/pvt', json=_payload(overwrite=True, kss_score=2)).json()
+    from tests.test_assessments import occasion, attempt
+    next_attempt = attempt(client, occasion(client))
+    second = client.post('/pvt', json=_payload(attempt_id=next_attempt['id'], kss_score=2)).json()
     assert second['purpose_provenance_id'] != identity
     assert client.get(f'/purpose-provenance/{identity}').json() == reviewed
     with Session(engine) as db:
-        archived = db.exec(select(ArchivedAssessment)).one()
-        assert archived.purpose_provenance_id == identity
-        assert json.loads(archived.snapshot_json)['purpose_provenance_id'] == identity
+        from app.models import PvtAssessment
+        original_row = db.get(PvtAssessment, first['id'])
+        assert original_row.purpose_provenance_id == identity
+        assert original_row.kss_score == 6
+        assert len(db.exec(select(PvtAssessment)).all()) == 2
 
 
 def test_screen_fast_conflict_is_rejected(client):

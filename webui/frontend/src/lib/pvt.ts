@@ -14,6 +14,7 @@ export interface PvtTrial {
   outcome: PvtOutcome;
 }
 export interface PvtPayload {
+  attempt_id?: string;
   locale?: "es-419" | "en";
   execution_purpose: "practice" | "study";
   timing_version?: 1 | 2;

@@ -191,6 +191,7 @@ app.add_middleware(LoopbackRequestSecurityMiddleware, settings=app.state)
 
 _CORE_ROUTER_MODULES = (
     "app.routers.analysis",
+    "app.routers.assessments",
     "app.routers.experiments",
     "app.routers.exports",
     "app.routers.fits",

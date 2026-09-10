@@ -37,6 +37,7 @@ def ingest_screen(
     participant_id: str = Body(...),
     payload: dict[str, Any] = Body(...),
     overwrite: bool = Body(False),
+    attempt_id: str | None = Body(None),
     execution_purpose: Literal["practice", "study"] = Body(...),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
@@ -48,6 +49,16 @@ def ingest_screen(
         raise HTTPException(422, "fast_mode must be a boolean")
     if execution_purpose == "study" and payload.get("fast_mode") is True:
         raise HTTPException(422, "fast_mode requires practice purpose")
+    from app.assessment_service import prepare_result, save_result, raw_view
+    attempt = None
+    final_payload = {"participant_id": participant_id, "payload": payload, "execution_purpose": execution_purpose}
+    if attempt_id:
+        attempt, duplicate = prepare_result(session, attempt_id, instrument="screen", participant_id=participant_id,
+            visit_id=None, purpose=execution_purpose, payload=final_payload)
+        if duplicate:
+            record = raw_view(session, attempt.id)["record"]
+            result = json.loads(record["result_json"]) if execution_purpose == "practice" else {"participant_id": participant_id, "screen_version": record["screen_version"], "scores": json.loads(record["scores_json"]), "execution_purpose": execution_purpose}
+            return {**result, "id": record["id"], "attempt_id": attempt.id, "purpose_provenance_id": attempt.purpose_provenance_id}
     scores = _score_payload(payload)
     version = SCREEN_VERSION if payload.get("schema_version") == 2 else 1
     if execution_purpose == "study":
@@ -63,24 +74,23 @@ def ingest_screen(
         practice = PracticeResult(experiment_id="screen", participant_id=participant_id,
                                   payload_json=json.dumps(payload, allow_nan=False),
                                   result_json=json.dumps(result, allow_nan=False))
-        declare_acquisition(session, practice, purpose="practice")
+        if attempt:
+            save_result(session, attempt, practice, final_payload)
+        else:
+            declare_acquisition(session, practice, purpose="practice")
+        result["id"] = practice.id
+        result["attempt_id"] = practice.attempt_id
         result["purpose_provenance_id"] = practice.purpose_provenance_id
         session.commit()
         return result
-    existing = session.exec(
-        select(ScreenResult).where(ScreenResult.participant_id == participant_id)
-    ).first()
-    if existing is not None and json.loads(existing.raw_trials_json) == payload:
-        return {"participant_id": participant_id, "screen_version": existing.screen_version,
-                "scores": json.loads(existing.scores_json), "execution_purpose": "study", "purpose_provenance_id": existing.purpose_provenance_id}
-    if existing is not None and not overwrite:
-        raise HTTPException(status_code=409,
-                            detail=f"screen already recorded for {participant_id}")
-    if existing is not None:
-        session.add(ArchivedAssessment(experiment_id="screen", participant_id=existing.participant_id,
-                      original_id=existing.id, purpose_provenance_id=existing.purpose_provenance_id, snapshot_json=existing.model_dump_json()))
-        session.delete(existing)
-        session.flush()
+    if attempt_id is None:
+        existing_rows = session.exec(select(ScreenResult).where(ScreenResult.participant_id == participant_id)).all()
+        if existing_rows:
+            if len(existing_rows) == 1 and json.loads(existing_rows[0].raw_trials_json) == payload:
+                existing = existing_rows[0]
+                return {"id": existing.id, "attempt_id": existing.attempt_id, "participant_id": participant_id, "screen_version": existing.screen_version,
+                        "scores": json.loads(existing.scores_json), "execution_purpose": "study", "purpose_provenance_id": existing.purpose_provenance_id}
+            raise HTTPException(409, {"code": "explicit_repeat_required", "message": "Create an occasion/attempt or repeat a prior attempt.", "attempt_ids": [r.attempt_id for r in existing_rows]})
     row = ScreenResult(
         participant_id=participant_id,
         administered_at=str(payload.get("administered_at") or ""),
@@ -88,11 +98,15 @@ def ingest_screen(
         raw_trials_json=json.dumps(payload, allow_nan=False),
         scores_json=json.dumps(scores, allow_nan=False),
     )
-    declare_acquisition(session, row, purpose=execution_purpose)
+    if attempt:
+        save_result(session, attempt, row, final_payload)
+    else:
+        declare_acquisition(session, row, purpose=execution_purpose)
     session.commit()
     from app.hcf_refresh import refresh_fit_hcf
-    refresh_fit_hcf(session)
-    return {"participant_id": participant_id, "screen_version": SCREEN_VERSION,
+    if not attempt:
+        refresh_fit_hcf(session)
+    return {"id": row.id, "attempt_id": row.attempt_id, "participant_id": participant_id, "screen_version": SCREEN_VERSION,
             "scores": scores, "execution_purpose": "study", "purpose_provenance_id": row.purpose_provenance_id}
 
 
@@ -102,12 +116,16 @@ def screen_summary(session: Session = Depends(get_session)) -> dict[str, Any]:
                                                      compute_cohort_hcf)
 
     rows = session.exec(select(ScreenResult).where(ScreenResult.execution_purpose == "study", ScreenResult.screen_version == SCREEN_VERSION)).all()
+    from app.assessment_readers import reject_ambiguous, exclude_known_nonstudy
+    rows = exclude_known_nonstudy(session, rows)
+    reject_ambiguous(rows)
     scores_by_pid = {r.participant_id: json.loads(r.scores_json) for r in rows}
     store = compute_cohort_hcf(scores_by_pid)
     screens = []
     for r in sorted(rows, key=lambda x: x.participant_id):
         est = store.get(r.participant_id)
         screens.append({
+            "id": r.id, "attempt_id": r.attempt_id,
             "participant_id": r.participant_id,
             "purpose_provenance_id": r.purpose_provenance_id,
             "administered_at": r.administered_at,
@@ -116,6 +134,6 @@ def screen_summary(session: Session = Depends(get_session)) -> dict[str, Any]:
             "hcf_value": est.value if est else None,
             "components": est.components if est else None,
         })
-    return {"n_screened": len(rows), "min_cohort": MIN_COHORT,
+    return {"selection_mode": "legacy_unambiguous", "n_screened": len(rows), "min_cohort": MIN_COHORT,
             "hcf_active": bool(store), "screen_version": SCREEN_VERSION,
             "screens": screens}

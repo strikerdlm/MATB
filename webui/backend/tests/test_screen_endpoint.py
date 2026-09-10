@@ -35,7 +35,7 @@ def test_screen_unknown_participant_404(client):
     assert r.status_code == 404
 
 
-def test_screen_duplicate_guard_and_overwrite(client):
+def test_screen_duplicate_guard_refuses_destructive_overwrite(client):
     _enroll(client, "P01")
     assert client.post("/screen", json={"execution_purpose": "study", "participant_id": "P01",
                                         "payload": _payload()}).status_code == 201
@@ -45,8 +45,9 @@ def test_screen_duplicate_guard_and_overwrite(client):
     r = client.post("/screen", json={"execution_purpose": "study", "participant_id": "P01",
                                      "payload": _payload(simple=280.0),
                                      "overwrite": True})
-    assert r.status_code == 201
-    assert r.json()["scores"]["simple_rt"]["median_ms"] == 280.0
+    assert r.status_code == 409
+    assert r.json()["detail"]["code"] == "explicit_repeat_required"
+    assert client.get("/screen").json()["screens"][0]["scores"]["simple_rt"]["median_ms"] == 300.0
 
 
 def test_screen_summary_gate_status(client):

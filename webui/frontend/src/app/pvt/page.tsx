@@ -4,6 +4,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, MoonStar } from "lucide-react";
 
+import { AssessmentPicker } from "@/components/assessments/AssessmentPicker";
+import { startAttempt, type Attempt } from "@/lib/assessments";
 import { InstructionAudio } from "@/components/instructions/InstructionAudio";
 import { ExecutionPurposeBadge, ExperimentGuide } from "@/components/experiments/ExperimentGuide";
 import { useExecutionPurpose } from "@/lib/execution-purpose";
@@ -60,6 +62,7 @@ export default function PvtPage() {
   const [error, setError] = useState<string | null>(null);
   const [pendingRun, setPendingRun] = useState<PvtRunResult | null>(null);
   const [fastMode, setFastMode] = useState(false);
+  const [selectedAttempt, setSelectedAttempt] = useState<Attempt | null>(null);
   const [pvtStarted, setPvtStarted] = useState(false);
 
   useEffect(() => {
@@ -89,10 +92,7 @@ export default function PvtPage() {
       .then((rows) => {
         if (!active) return;
         setVisits(rows);
-        const completedVisitIds = new Set(
-          summary?.assessments.filter((row) => row.participant_id === participantId && row.protocol_valid && row.pvt_version >= 2).map((row) => row.visit_id) ?? [],
-        );
-        const next = rows.find((visit) => !completedVisitIds.has(visit.id)) ?? rows[0];
+        const next = rows[0];
         if (next) setVisitOrdinal(String(next.visit_ordinal));
       })
       .catch((reason) => setError(reason instanceof Error ? reason.message : String(reason)));
@@ -103,16 +103,14 @@ export default function PvtPage() {
     () => visits.find((row) => row.visit_ordinal === Number(visitOrdinal)) ?? null,
     [visitOrdinal, visits],
   );
-  const alreadyRecorded = Boolean(
-    purpose === "study" && visit && summary?.assessments.some((row) => row.visit_id === visit.id && row.protocol_valid && row.pvt_version >= 2),
-  );
   useReportExperimentFlow("pvt", flowStageForPvt(stage, pvtStarted));
   const kssLabels = locale === "en" ? KSS_EN : KSS_ES;
   const durationMs = fastMode ? 12_000 : purpose === "practice" ? 60_000 : PVT_PROTOCOL_DURATION_MS;
   const audioLocale = locale === "en" ? "en" : "es";
 
-  function beginKss() {
-    if (!purpose || !participantId || !visitOrdinal || alreadyRecorded) return;
+  async function beginKss() {
+    if (!purpose || !participantId || !visitOrdinal || !selectedAttempt) return;
+    try { await startAttempt(selectedAttempt.id); } catch (e) {setError(String(e)); return;}
     setError(null);
     setKssScore(null);
     setPvtStarted(false);
@@ -126,6 +124,7 @@ export default function PvtPage() {
     setStage("saving");
     try {
       const saved = await postPvt({
+        attempt_id: selectedAttempt?.id,
         participant_id: participantId,
         visit_ordinal: Number(visitOrdinal),
         kss_score: kssScore,
@@ -138,7 +137,6 @@ export default function PvtPage() {
         max_frame_gap_ms: run.maxFrameGapMs,
         terminal_phase: run.terminalPhase,
         terminal_stimulus_at_ms: run.terminalStimulusAtMs,
-        overwrite: purpose === "study" && Boolean(visit && summary?.assessments.some((row) => row.visit_id === visit.id && (!row.protocol_valid || row.pvt_version < 2))),
         fast_mode: fastMode,
         trials: run.trials,
       });
@@ -200,8 +198,8 @@ export default function PvtPage() {
                 </select>
               </div>
             </div>
-            {alreadyRecorded && <p className="text-sm text-warning">{copy("Esta visita ya tiene una PVT registrada.", "This visit already has a recorded PVT.")}</p>}
-            <Button type="button" onClick={beginKss} disabled={!purpose || !participantId || !visitOrdinal || alreadyRecorded}>
+            <AssessmentPicker participantId={participantId} visitId={visit?.id ?? null} instrument="pvt" purpose={purpose} onSelect={setSelectedAttempt} />
+            <Button type="button" onClick={beginKss} disabled={!purpose || !participantId || !visitOrdinal || !selectedAttempt}>
               {copy("Continuar a KSS", "Continue to KSS")}<ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </CardContent>

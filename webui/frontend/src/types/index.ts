@@ -412,6 +412,8 @@ export interface ScreenSummary {
 }
 
 export interface ScreenIngestResult {
+  id?: number;
+  attempt_id?: string | null;
   purpose_provenance_id?: string | null;
   execution_purpose?: "study" | "practice";
   participant_id: string;
@@ -433,6 +435,7 @@ export interface PvtMetrics {
 }
 
 export interface PvtAssessment {
+  attempt_id?: string | null;
   purpose_provenance_id?: string | null;
   execution_purpose?: "practice" | "study";
   timing_evidence?: { validity_reasons: string[] };
