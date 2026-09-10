@@ -199,3 +199,44 @@ coverage is provided by the expanded acquisition suite. No production DB migrate
   analysis eligibility must not mistake them for named retrospective reviews.
 - No unresolved blocker. Independent review and subsequent task gates remain
   root responsibilities. No changes to instrument scoring or experimental controls.
+
+## Review fix round 1 of 5
+
+Important finding addressed: the historical migration's Python `is True` test was
+narrower than the removed SQLite `json_extract(..., '$.fast_mode') = 1` predicate.
+The migration now evaluates that original SQLite predicate behind `json_valid`,
+so JSON `true`, `1`, and `1.0` produce the documented system retrospective practice
+classification. New HTTP strict-boolean validation is unchanged. No source purpose
+or raw bytes are rewritten. Scope is only `app/purpose_service.py`, the new numeric
+migration regression in `tests/test_purpose_provenance.py`, and this report.
+
+Regression cases cover JSON true/integer-one/float-one, string-one, false, zero,
+two and null, with unchanged raw values/source purpose and identical UUID/full
+history after rerunning migration. Existing covering tests retain validation of
+strict new HTTP booleans, classification immutability, and later review stability.
+
+RED command (cwd `webui/backend`, escalated execution for async worker support):
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/tmp/matb-predictability-testdeps PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 MATB_COMPONENTS=auto /root/repos/MATB/.venv/bin/python -B -m pytest -q -p no:cacheprovider -p anyio.pytest_plugin tests/test_purpose_provenance.py -k historical_screen_numeric
+```
+
+Exact result summary: **2 failed, 6 passed, 26 deselected, 1 warning in 0.61s**.
+Failures were exactly `[1-True]` and `[1.0-True]`: expected system retrospective
+practice history event missing. Full output: `/tmp/task1-fix1-red.log`.
+
+GREEN command (same cwd and execution environment):
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/tmp/matb-predictability-testdeps PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 MATB_COMPONENTS=auto /root/repos/MATB/.venv/bin/python -B -m pytest -q -p no:cacheprovider -p anyio.pytest_plugin tests/test_purpose_provenance.py tests/test_db_migrations.py
+```
+
+Exact result summary: **46 passed, 1 warning in 2.52s**. Full output:
+`/tmp/task1-fix1-green.log`. The warning is the previously ledgered Starlette
+`python_multipart` pending deprecation. `git diff --check` passed. No other suites
+were rerun because no other source changed. Task 2/5 consumer checks remain root
+integration responsibilities; there is no new blocker or broader source change.
+
+Fix commit: **`961b13aea1989ee4b761655f197257f300f994c4`**
+(`fix: preserve numeric legacy fast-mode purpose inference`). This report update
+is committed separately so it can record the exact fix SHA without a self-reference.
