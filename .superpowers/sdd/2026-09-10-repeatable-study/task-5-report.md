@@ -179,3 +179,70 @@ Final actual exported fixture identities:
 - `checksums.json` SHA256: `00e429e3f0344d2866b853281a6a7933db815e9e1c48e4e4eeae35d0346f2f54`.
 
 Final `git diff --cached --check` passes after EOF cleanup. Task5 complete; independent review remains root-owned. Expected release followups remain Task6 heavy-work admission and Task7 distribution/full-study restoration, with no claim those followups are implemented here.
+
+# Task5 review fix round1
+
+Fix base: `362d7c2d4e5c5805fd5f14fdaf5d9879b610ab3b`. Scope is Important findings1–3 in `task-5-review.md`; the controller assigned Minor navigation/warning/packaging work to Tasks6/7. No unrelated cleanup, subagents, production dataset, push or merge.
+
+## Corrected interfaces and behavior
+
+**I1 — resolved historical association.** Every newly frozen analysis row now contains a distinct `resolved_association`: `occasion_key`, resolved `visit_id`, matched-spec `visit_ordinal`, `phase`, `order`, `classification_id` (historical only), and `basis` (`retrospective_analysis_association` or `prospective_assignment`). A historical association takes the reviewed current classification's visit and exact matched plan key/order; an assigned association takes the real assignment's visit. Analysis row `visit_id` now reflects that association, so visit-unit grouping no longer uses an original null/stale visit. `hcf_occasion_order` orders selected references by frozen resolved visit ordinal/order, then attempt ordinal/ID. Original `occasion` remains a byte-equivalent model snapshot, and full append-only classification history remains separate. Nothing updates the original occasion or creates historical assignments/admissions. Previously saved artifacts remain historical original bytes; changed calculator binding requires a newly authored executable version, as before.
+
+The integrated screen regression constructs two historical occasions whose UUID lexical order deliberately opposes the reviewed order. It tests both first_finished and latest_finished HCF policies, original nullable visit/order, a later append-only correction to a different visit, distinct resolved visit units, classification IDs/history and unchanged original DB occasions. It uses the unchanged minimum3-participant HCF cohort; the initial one-participant test fixture lacked an HCF estimate and was corrected to the real calculator contract rather than altering scientific criteria.
+
+**I2 — saved evidence versus execution state.** Reopen by button or URL enters saved-view mode. Editable plan/actor/reason/attempt/native/HCF/qualification controls and their preview/execute action are hidden. The stored result has its own expandable frozen eligibility/selection snapshot. Reopening no longer assigns that immutable snapshot to the editable preview. `Start a new analysis` resets version, actor, reason and every selection map, clears preview and URL execution parameters, and requires a new explicit preview before an execution button is exposed. New execution also enters saved-view mode. Read-only comparison remains separate.
+
+Unit tests load a prior plan/attempt/native metric/qualification selection before opening a stored execution from a different saved version; button and URL paths have no accessible execution action or editable attempt selector. After starting a new analysis, tests assert exact subsequent preview **and execute POST bodies**, with no prior selections. The real browser case additionally previews another frozen plan, reopens the earlier execution, checks read-only controls, starts a fresh analysis, and asserts the actual next network request. No saved result is reinterpreted as the editable selection.
+
+**I3 — scientific observation reconstruction.** The packaged verifier now begins with a new empty observation map for every frozen row. It executes calculator specs from the frozen plan against the original raw source, validates complete recorded calculation objects, then includes fresh numeric values only when frozen eligibility, native source eligibility and the original per-unit pooling decision allow them. HCF raw screens are rescored, the unchanged mapping is recomputed and checked against the HCF snapshot/identity, and each eligible selected `screen.hcf` observation is populated from those recomputed participant estimates. It compares saved and fresh observation maps, then aggregates only the fresh maps. Frozen denominator/missing rules and contrast configuration exclusions remain unchanged and reconciled.
+
+An actual exported HCF execution test first verifies the original package, preserves `original-export.zip` and `original-replay-proof.json`, then alters one HCF observation by0.2 and rebuilds the saved aggregate/result/SVG/data fingerprint/checksums consistently. The HCF raw input/snapshot is unchanged. Replay now rejects `Selected observation mismatch` rather than accepting the internally consistent saved scientific error. A second real export regression verifies pooling-excluded observations, purpose-excluded observations and configuration-excluded contrasts stay excluded, with a2-visit denominator and exact missing units. No inference/qualification is recalculated or promoted by offline replay; the frozen eligibility and exclusions remain its recorded selection authority.
+
+## RED/GREEN evidence and self-review
+
+All fix logs are in `.test-tmp/repeatable-study/task5-fix1/`. The documented backend command prefix remains:
+
+```text
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/tmp/matb-predictability-testdeps PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 MATB_COMPONENTS=auto /root/repos/MATB/.venv/bin/python -B -m pytest -q -p no:cacheprovider -p anyio.pytest_plugin
+```
+
+- Backend RED appended `tests/test_study_analysis_review.py`: **3 failed,1 existing warning in1.86s**, `backend-red.log`. Both historical cases failed `None == 1`; HCF replay failed `DID NOT RAISE ValueError` after consistent container updates. This is the expected missing-behavior evidence after correcting the three-participant fixture.
+- Frontend RED: `npx vitest run src/components/study/StudyAnalysis.test.tsx`: **2 failed,1 passed in2.12s**, `frontend-red.log`. Both reopen paths still exposed the execute button. Tests assert actual subsequent requests, not merely an export link.
+- Focused GREEN after implementation: backend **4 passed,1 existing python_multipart warning in2.30s**, `backend-focused.log`; frontend **3 passed in1.60s**, `frontend-focused.log`.
+- Batched self-review confirmed resolved association never overwrites original facts, HCF order no longer reads original unknown order, saved-view mode cannot submit an editable execution, every request map is cleared for a fresh analysis, and fresh replay honors original purpose/pooling/contrast exclusions. Touched selection/replay logic uses named helpers and ordinary statements; no unrelated formatter sweep was performed. Installed frontend AGENTS.md/use-client documentation was read. Prettier and staged diff whitespace checks completed before final hash/attestation gates; no source changes followed the final freeze.
+
+## Evidence retention correction
+
+Earlier Task5 report paths under `/tmp/pytest-of-root/pytest-151` and `pytest-153` were valid and checked at original completion, including the controller's committed-source continuity audit. Initial fix-round pytest invocations used the default rotating pytest root, which automatically removed those old expanded fixture directories. They **no longer remain available**, contrary to the original report's then-current retention statement. Existing original logs/report/controller audit remain; no old proof is silently represented as a new one. No application source/raw acquisition artifacts were manually deleted. Final fix gates use unique dedicated `--basetemp` paths under this worktree's ignored `.test-tmp/repeatable-study/task5-fix1/`; these must not be reused by pytest, which would clear them. New valid exported ZIPs, corruption-test copies, exact imported source and fresh venv proofs are retained there. Recreating older venvs/results was not attempted or claimed.
+
+## Final fix gates
+
+Final results and exact artifact identities follow below after the stable gate completes. Previously reported broad backend/frontend/instrument gates are prior-checkpoint evidence; this fix round reruns the affected tests and real new browser workflow, without relabeling prior broad runs as current.
+
+Stable fix gate results:
+
+- Backend auto: documented prefix plus `--basetemp=../../.test-tmp/repeatable-study/task5-fix1/final-auto-evidence-1 tests/test_study_analysis.py tests/test_study_analysis_review.py tests/test_study_calculators.py tests/test_study_registry.py tests/test_study_acquisition.py tests/test_study_preparation.py tests/test_hcf_refresh.py tests/test_screen_endpoint.py tests/test_pvt_endpoint.py tests/test_fit_trigger.py tests/test_endpoints.py tests/test_body_limits.py tests/test_evidence.py tests/test_evidence_qualification.py`: **107 passed,1 existing python_multipart warning in86.38s**, `backend-final.log`. Includes all fix regressions and both new fresh-venv no-index proofs.
+- Core: same prefix with `MATB_COMPONENTS=core --basetemp=../../.test-tmp/repeatable-study/task5-fix1/final-core-evidence-1 tests/test_study_analysis.py tests/test_study_analysis_review.py tests/test_study_registry.py -k 'not execution_freezes'`: **31 passed,1 deselected,1 existing python_multipart warning in13.73s**, `core-final.log`. The single deselection is the duplicated fresh PVT venv proof already run by auto; historical association and scientific HCF replay run under both component profiles.
+- Frontend: `npx vitest run src/components/study`: **17 passed/5 files in8.45s**, `frontend-final.log`. `npm run typecheck`, `npm run lint -- --max-warnings=0`, `npm run build`: **all passed**, `typecheck-final.log`, `lint-final.log`, `build-final.log`; final lint emitted zero warnings. Initial typecheck found an unsupported Testing Library `exact` option in the new test locator; its failing output is preserved in `typecheck-test-fixture-red.log`. Removing that test-only option changed no fingerprinted production bytes; the affected frontend gate was rerun. No backend repeat was needed for that test-only edit.
+
+Preserved final evidence root (absolute): `/root/repos/MATB/.worktrees/repeatable-study/.test-tmp/repeatable-study/task5-fix1/final-auto-evidence-1/`:
+
+- `test_execution_freezes_raw_val0/bundle/offline-proof.json`, complete exported package and `replay-venv`: successful actual PVT execution replay from matching pinned wheels, fresh venv with system-site packages disabled, clean environment and `-I` execution.
+- `test_selected_calculator_wheel0/offline/isolation-proof.json`: all68 imported application modules are under the package's own source tree. Matching dependency wheels/lock and isolated venv remain there. No inherited checkout/PYTHONPATH/testdeps satisfy the proof.
+- `test_exported_hcf_rebuilds_obs0/original-export.zip` and `original-replay-proof.json`: original3-screen HCF export and successful replay. `hcf-bundle/` is the intentionally scientifically inconsistent copy with updated container fingerprints, retained for inspection. `isolated-original/` preserves the separate untouched extraction.
+- `test_exported_hcf_rebuilds_obs0/isolated-scientific-replay-proof.json`: independently executed both packages with the existing fresh PVT venv's Python, `-I`, no PYTHONPATH/PYTHONHOME/VIRTUAL_ENV, and each package's own `verify.py`/cwd. Original: **exit0, reproduced, raw_attempts3, automatic_model null, no stderr**. Inconsistent copy: **exit1, `ValueError: Selected observation mismatch`** despite internally updated container fingerprints. The command asserts both outcomes and exited0; the negative package failure is expected, not a failed gate.
+- `test_replay_preserves_pooling_0/original-export.zip`, `original-replay-proof.json`, `excluded-bundle/`: successful raw replay with frozen purpose/pooling exclusions, preserved2-visit denominator and excluded paired contrast.
+
+Final package continuity inspection confirms the exported `verify.py`, portable PVT source and replay rules are byte-identical to final worktree source. No production source or formatter changes followed these proofs.
+
+Final actual PVT export identities:
+
+- `id`: `64bd2f23-7fbb-4ea5-b139-04c06352480e`.
+- `plan_sha256`: `55ee28a994efd830c912a465968d84453a22e42972d4eab21724eaee873fd128`.
+- `data_sha256`: `9549cb3b89778f7a3fbe8c78ebfd6ab9aee459e6ede8932d55ad5b3ffbe9dc66`.
+- `implementation_sha256`: `ac021d3b6054069cfb8aab8135f01ff32f38473c358ce62c775166d561236778`.
+- `checksums.json` SHA256: `5a06f887067dc0ba7fc877db07c0b88ade5a5600d476cbf14bc5a8c7d10c875d`.
+
+Final browser command from frontend: `MATB_PYTHON=/root/repos/MATB/.venv/bin/python PYTHONPATH=/tmp/matb-predictability-testdeps PYTHONDONTWRITEBYTECODE=1 npx playwright test --config=playwright.config.ts e2e/study-analysis.spec.ts`: **1 passed in12.4s, zero retries**, `browser-final.log`. This expanded case includes ID and URL read-only reopen, another plan already previewed, fresh request reset and exact actual preview POST. Existing NO_COLOR/FORCE_COLOR environment warnings remain disclosed. No other browser workflow or unchanged full-suite rerun is claimed in this fix round.
+
+Fix files: `webui/backend/app/study_analysis.py`, new `webui/backend/tests/test_study_analysis_review.py`, `tools/verify_study_descriptive.py`, `webui/frontend/src/components/study/StudyAnalysis.tsx`, its unit test, `webui/frontend/e2e/study-analysis.spec.ts`, and this report. Staged whitespace check passes. Important findings1–3 are addressed and all selected final gates pass. No remaining correctness concern is known within these three fixes; the review's separate Minor/Task6/Task7 items and the disclosed temp-retention correction remain as recorded. The user/controller explicitly waived another review round; no reviewer or additional sweep was run. Root owns delivery and remaining release tasks.

@@ -28,14 +28,32 @@ def version(db, identity):
     return row,study,plan
 
 
+def resolved_association(spec, visit_id, classification=None):
+    """Analysis association only; original occasion and exposure facts stay separate."""
+    return dict(
+        occasion_key=spec['key'], visit_id=visit_id,
+        visit_ordinal=spec['visit_ordinal'], phase=spec['phase'], order=spec['order'],
+        classification_id=classification.id if classification else None,
+        basis='retrospective_analysis_association' if classification else 'prospective_assignment',
+    )
+
+
+def hcf_occasion_order(row):
+    association = row['resolved_association']
+    attempt = next(a for a in row['attempts'] if a['id'] == row['attempt_id'])
+    return (association['visit_ordinal'], association['order'], attempt['ordinal'], attempt['id'])
+
+
 def _contexts(db, v, study):
     contexts=[]; assigned=set()
+    specs = {spec['key']: spec for spec in study['occasions']}
     from app.study_registry import assignment_is_current
     for assignment in db.exec(select(StudyAssignment).where(StudyAssignment.version_id==v.id).order_by(StudyAssignment.id)):
         if not assignment_is_current(db,assignment): continue
         for key,occasion_id in json.loads(assignment.occasions_json).items():
             assigned.add(occasion_id)
-            contexts.append(dict(occasion_id=occasion_id,occasion_key=key,assignment=assignment.model_dump(mode='json'),historical=False))
+            contexts.append(dict(occasion_id=occasion_id,occasion_key=key,assignment=assignment.model_dump(mode='json'),historical=False,
+                resolved_association=resolved_association(specs[key], assignment.visit_id)))
     # Only a named explicit association to this exact frozen version supplies a historical occasion.
     for occasion in db.exec(select(AssessmentOccasion).where(AssessmentOccasion.origin.in_(['legacy','legacy_compat'])).order_by(AssessmentOccasion.id)):
         history=db.exec(select(AssessmentOccasionClassification).where(AssessmentOccasionClassification.occasion_id==occasion.id).order_by(AssessmentOccasionClassification.id)).all()
@@ -46,7 +64,9 @@ def _contexts(db, v, study):
         visit=db.get(Visit,current.visit_id)
         matching=[o for o in matching if visit and o['visit_ordinal']==visit.visit_ordinal]
         if len(matching)==1 and named(current.reviewer) and current.reason:
-            contexts.append(dict(occasion_id=occasion.id,occasion_key=matching[0]['key'],assignment=None,historical=True,classification_history=[h.model_dump(mode='json') for h in history]))
+            contexts.append(dict(occasion_id=occasion.id,occasion_key=matching[0]['key'],assignment=None,historical=True,
+                resolved_association=resolved_association(matching[0], current.visit_id, current),
+                classification_history=[h.model_dump(mode='json') for h in history]))
     return contexts
 
 
@@ -65,7 +85,7 @@ def preview(db, request):
         attempt=next((a for a in attempts if selected and a.id==selected['id']),None)
         denominator=policy['incomplete_denominator']=='assigned' or any(a.started_at or a.acquisition_state in {'started','finished','interrupted'} for a in attempts) if policy['incomplete_denominator']!='finished' else any(a.acquisition_state=='finished' for a in attempts)
         if context['historical'] and policy['incomplete_denominator']=='assigned': denominator=False
-        row=dict(**context,participant_id=occasion.participant_id,visit_id=occasion.visit_id,attempt_id=attempt.id if attempt else None,
+        row=dict(**context,participant_id=occasion.participant_id,visit_id=context['resolved_association']['visit_id'],attempt_id=attempt.id if attempt else None,
             instrument=occasion.instrument,attempts=all_attempts,denominator=bool(denominator),values={},criteria={},source=None,calculations={},eligible=False,
             occasion=occasion.model_dump(mode='json'),configuration=None)
         relevant=[o for o in plan['outcomes'] if context['occasion_key'] in o['occasion_keys'] and o['metric']!='screen.hcf']
@@ -173,7 +193,7 @@ def execute_frozen(db, input_id):
             else:
                 if requested is not None: raise HTTPException(422,'HCF explicit selection cannot override frozen first/latest rule.')
                 options=[r for r in options if next(a for a in r['attempts'] if a['id']==r['attempt_id'])['acquisition_state']=='finished']
-                options=sorted(options,key=lambda r:(next(o['visit_ordinal'] for o in snapshot['study']['occasions'] if o['key']==r['occasion_key']),r['occasion']['order'] or 0,next(a['ordinal'] for a in r['attempts'] if a['id']==r['attempt_id']),r['attempt_id']))
+                options = sorted(options, key=hcf_occasion_order)
                 options=options[:1] if policy['hcf_attempt_selection']=='first_finished' else options[-1:]
             if len(options)!=1: raise HTTPException(422,'Select exactly one designated eligible HCF screen attempt per participant.')
             row=options[0]

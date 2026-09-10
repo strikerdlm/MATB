@@ -55,6 +55,7 @@ export function StudyAnalysis() {
   const [preview, setPreview] = useState<Snapshot | null>(null),
     [result, setResult] = useState<Result | null>(null),
     [comparison, setComparison] = useState<Result | null>(null);
+  const [savedView, setSavedView] = useState(false);
   const [executions, setExecutions] = useState<
       { id: string; version_id: string }[]
     >([]),
@@ -74,7 +75,7 @@ export function StudyAnalysis() {
         .then((value) => {
           if (active) {
             setResult(value);
-            setPreview(value.snapshot);
+            setSavedView(true);
             setReopen(value.id);
           }
         })
@@ -141,6 +142,19 @@ export function StudyAnalysis() {
       qualification_ids: qualification,
     };
   }
+  function startNewAnalysis() {
+    epoch.current++;
+    setSavedView(false);
+    setVersion("");
+    setActor("");
+    setReason("");
+    setAttempts({});
+    setNativeIds({});
+    setHcfAttempts({});
+    setQualification({});
+    setPreview(null);
+    updateUrl();
+  }
   async function run(action: "preview" | "execute" | "open" | "compare") {
     const generation = epoch.current;
     setBusy(true);
@@ -162,7 +176,7 @@ export function StudyAnalysis() {
             updateUrl(result?.id, value.id);
           } else {
             setResult(value);
-            setPreview(value.snapshot);
+            setSavedView(true);
             setReopen(value.id);
             updateUrl(value.id, comparison?.id);
           }
@@ -198,220 +212,230 @@ export function StudyAnalysis() {
       <Link href="/study">
         {copy("Editar y congelar planes", "Author and freeze plans")}
       </Link>
-      <label className="block">
-        {copy("Plan congelado", "Frozen plan")}
-        <select
-          aria-label={copy("Plan congelado", "Frozen plan")}
-          className="native-select block"
-          value={version}
-          disabled={busy}
-          onChange={(e) => {
-            epoch.current++;
-            setVersion(e.target.value);
-            updateUrl();
-            setPreview(null);
-            setResult(null);
-            setAttempts({});
-            setNativeIds({});
-            setHcfAttempts({});
-            setQualification({});
-          }}
-        >
-          <option value="">—</option>
-          {versions.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.study.title}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="block">
-        {copy("Investigador", "Researcher")}
-        <input
-          className="native-input block"
-          value={actor}
-          onChange={(e) => setActor(e.target.value)}
-        />
-      </label>
-      <label className="block">
-        {copy("Motivo", "Reason")}
-        <input
-          className="native-input block w-full"
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-        />
-      </label>
-      <Button
-        disabled={busy || !version || !actor.trim() || !reason.trim()}
-        onClick={() => void run("preview")}
+      {savedView && (
+        <Button onClick={startNewAnalysis}>
+          {copy("Iniciar un análisis nuevo", "Start a new analysis")}
+        </Button>
+      )}
+      <section
+        hidden={savedView}
+        aria-label={copy("Análisis editable", "Editable analysis")}
       >
-        {copy("Inspeccionar elegibilidad", "Inspect eligibility")}
-      </Button>
-      {error && <p role="alert">{error}</p>}
-      {preview && (
-        <section className="space-y-4">
-          <h2>
-            {copy("Ocasiones y denominadores", "Occasions and denominators")}
-          </h2>
-          {preview.rows.map((row) => (
-            <article className="rounded border p-3" key={row.occasion_id}>
-              <h3>
-                {row.participant_id} · {row.occasion_key}
-              </h3>
-              <p>
-                {row.denominator
-                  ? copy("Incluido en denominador", "Included in denominator")
-                  : copy(
-                      "Fuera del denominador declarado",
-                      "Outside declared denominator",
-                    )}{" "}
-                ·{" "}
-                {row.eligible
-                  ? copy(
-                      "Criterios requeridos satisfechos",
-                      "Required criteria satisfied",
-                    )
-                  : copy("Excluido o pendiente", "Excluded or unresolved")}
-              </p>
-              {preview.plan.eligibility_policy.repeat_selection ===
-                "explicit" && (
-                <label>
-                  {copy("Intento exacto", "Exact attempt")}
-                  <select
-                    className="native-select block"
-                    value={attempts[row.occasion_id] ?? row.attempt_id ?? ""}
-                    onChange={(e) => {
-                      setAttempts({
-                        ...attempts,
-                        [row.occasion_id]: e.target.value,
-                      });
-                      setResult(null);
-                    }}
-                  >
-                    <option value="">—</option>
-                    {row.attempts.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.ordinal} · {a.acquisition_state} · {a.id}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              {row.instrument === "screen" && (
-                <label className="block">
-                  {copy(
-                    "Intento HCF explícito para participante",
-                    "Explicit participant HCF attempt",
-                  )}
-                  <select
-                    className="native-select block"
-                    value={hcfAttempts[row.participant_id] ?? ""}
-                    onChange={(e) =>
-                      setHcfAttempts({
-                        ...hcfAttempts,
-                        [row.participant_id]: e.target.value,
-                      })
-                    }
-                  >
-                    <option value="">—</option>
-                    {row.attempts.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.id}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              {row.instrument === "openmatb" && row.attempt_id && (
-                <>
+        <label className="block">
+          {copy("Plan congelado", "Frozen plan")}
+          <select
+            aria-label={copy("Plan congelado", "Frozen plan")}
+            className="native-select block"
+            value={version}
+            disabled={busy}
+            onChange={(e) => {
+              epoch.current++;
+              setVersion(e.target.value);
+              updateUrl();
+              setPreview(null);
+              setResult(null);
+              setAttempts({});
+              setNativeIds({});
+              setHcfAttempts({});
+              setQualification({});
+            }}
+          >
+            <option value="">—</option>
+            {versions.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.study.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          {copy("Investigador", "Researcher")}
+          <input
+            className="native-input block"
+            value={actor}
+            onChange={(e) => setActor(e.target.value)}
+          />
+        </label>
+        <label className="block">
+          {copy("Motivo", "Reason")}
+          <input
+            className="native-input block w-full"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+        </label>
+        <Button
+          disabled={busy || !version || !actor.trim() || !reason.trim()}
+          onClick={() => void run("preview")}
+        >
+          {copy("Inspeccionar elegibilidad", "Inspect eligibility")}
+        </Button>
+        {error && <p role="alert">{error}</p>}
+        {preview && (
+          <section className="space-y-4">
+            <h2>
+              {copy("Ocasiones y denominadores", "Occasions and denominators")}
+            </h2>
+            {preview.rows.map((row) => (
+              <article className="rounded border p-3" key={row.occasion_id}>
+                <h3>
+                  {row.participant_id} · {row.occasion_key}
+                </h3>
+                <p>
+                  {row.denominator
+                    ? copy("Incluido en denominador", "Included in denominator")
+                    : copy(
+                        "Fuera del denominador declarado",
+                        "Outside declared denominator",
+                      )}{" "}
+                  ·{" "}
+                  {row.eligible
+                    ? copy(
+                        "Criterios requeridos satisfechos",
+                        "Required criteria satisfied",
+                      )
+                    : copy("Excluido o pendiente", "Excluded or unresolved")}
+                </p>
+                {preview.plan.eligibility_policy.repeat_selection ===
+                  "explicit" && (
                   <label>
+                    {copy("Intento exacto", "Exact attempt")}
+                    <select
+                      className="native-select block"
+                      value={attempts[row.occasion_id] ?? row.attempt_id ?? ""}
+                      onChange={(e) => {
+                        setAttempts({
+                          ...attempts,
+                          [row.occasion_id]: e.target.value,
+                        });
+                        setResult(null);
+                      }}
+                    >
+                      <option value="">—</option>
+                      {row.attempts.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.ordinal} · {a.acquisition_state} · {a.id}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {row.instrument === "screen" && (
+                  <label className="block">
                     {copy(
-                      "IDs exactos de métricas nativas (separados por coma)",
-                      "Exact native metric IDs (comma separated)",
+                      "Intento HCF explícito para participante",
+                      "Explicit participant HCF attempt",
                     )}
-                    <input
-                      className="native-input block w-full"
-                      value={nativeIds[row.attempt_id] ?? ""}
+                    <select
+                      className="native-select block"
+                      value={hcfAttempts[row.participant_id] ?? ""}
                       onChange={(e) =>
-                        setNativeIds({
-                          ...nativeIds,
-                          [row.attempt_id!]: e.target.value,
+                        setHcfAttempts({
+                          ...hcfAttempts,
+                          [row.participant_id]: e.target.value,
                         })
                       }
-                    />
+                    >
+                      <option value="">—</option>
+                      {row.attempts.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.id}
+                        </option>
+                      ))}
+                    </select>
                   </label>
-                  {["physical_timing", "human_calibration"].map((kind) => (
-                    <label className="block" key={kind}>
-                      {kind}
+                )}
+                {row.instrument === "openmatb" && row.attempt_id && (
+                  <>
+                    <label>
+                      {copy(
+                        "IDs exactos de métricas nativas (separados por coma)",
+                        "Exact native metric IDs (comma separated)",
+                      )}
                       <input
-                        aria-label={kind}
-                        className="native-input block"
-                        value={qualification[row.attempt_id!]?.[kind] ?? ""}
+                        className="native-input block w-full"
+                        value={nativeIds[row.attempt_id] ?? ""}
                         onChange={(e) =>
-                          setQualification({
-                            ...qualification,
-                            [row.attempt_id!]: {
-                              ...qualification[row.attempt_id!],
-                              [kind]: e.target.value,
-                            },
+                          setNativeIds({
+                            ...nativeIds,
+                            [row.attempt_id!]: e.target.value,
                           })
                         }
                       />
                     </label>
-                  ))}
-                </>
-              )}
-              <p>
-                {copy("Resultados incluidos", "Included outcomes")}:{" "}
-                {Object.keys(row.values ?? {}).join(", ") ||
-                  copy("Ninguno", "None")}
-              </p>
-              {row.source_error && <p>{row.source_error}</p>}
-              {Object.entries(row.criteria).map(([key, c]) => (
-                <details key={key}>
-                  <summary>
-                    {key} · {c.passed ? "✓" : "—"} ·{" "}
-                    {c.required
-                      ? copy("requerido", "required")
-                      : copy("informado", "reported")}
-                  </summary>
-                  <p>{c.reason}</p>
-                  <a
-                    href={`${api}/assessments/attempts/${row.attempt_id ?? ""}/raw`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {copy("Evidencia original", "Original evidence")}
-                  </a>
-                  <pre className="overflow-auto whitespace-pre-wrap text-xs">
-                    {JSON.stringify(c.evidence, null, 2)}
-                  </pre>
-                </details>
-              ))}
-            </article>
-          ))}
-          <details>
-            <summary>
+                    {["physical_timing", "human_calibration"].map((kind) => (
+                      <label className="block" key={kind}>
+                        {kind}
+                        <input
+                          aria-label={kind}
+                          className="native-input block"
+                          value={qualification[row.attempt_id!]?.[kind] ?? ""}
+                          onChange={(e) =>
+                            setQualification({
+                              ...qualification,
+                              [row.attempt_id!]: {
+                                ...qualification[row.attempt_id!],
+                                [kind]: e.target.value,
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                    ))}
+                  </>
+                )}
+                <p>
+                  {copy("Resultados incluidos", "Included outcomes")}:{" "}
+                  {Object.keys(row.values ?? {}).join(", ") ||
+                    copy("Ninguno", "None")}
+                </p>
+                {row.source_error && <p>{row.source_error}</p>}
+                {Object.entries(row.criteria).map(([key, c]) => (
+                  <details key={key}>
+                    <summary>
+                      {key} · {c.passed ? "✓" : "—"} ·{" "}
+                      {c.required
+                        ? copy("requerido", "required")
+                        : copy("informado", "reported")}
+                    </summary>
+                    <p>{c.reason}</p>
+                    <a
+                      href={`${api}/assessments/attempts/${row.attempt_id ?? ""}/raw`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {copy("Evidencia original", "Original evidence")}
+                    </a>
+                    <pre className="overflow-auto whitespace-pre-wrap text-xs">
+                      {JSON.stringify(c.evidence, null, 2)}
+                    </pre>
+                  </details>
+                ))}
+              </article>
+            ))}
+            <details>
+              <summary>
+                {copy(
+                  "Comparación de configuraciones",
+                  "Configuration comparison",
+                )}
+              </summary>
+              <pre className="overflow-auto whitespace-pre-wrap text-xs">
+                {JSON.stringify(preview.comparisons, null, 2)}
+              </pre>
+            </details>
+            <Button
+              disabled={busy || !version || !actor.trim() || !reason.trim()}
+              onClick={() => void run("execute")}
+            >
               {copy(
-                "Comparación de configuraciones",
-                "Configuration comparison",
+                "Ejecutar y congelar descripción",
+                "Execute and freeze description",
               )}
-            </summary>
-            <pre className="overflow-auto whitespace-pre-wrap text-xs">
-              {JSON.stringify(preview.comparisons, null, 2)}
-            </pre>
-          </details>
-          <Button
-            disabled={busy || !version || !actor.trim() || !reason.trim()}
-            onClick={() => void run("execute")}
-          >
-            {copy(
-              "Ejecutar y congelar descripción",
-              "Execute and freeze description",
-            )}
-          </Button>
-        </section>
-      )}
+            </Button>
+          </section>
+        )}
+      </section>
       <section className="space-y-2">
         <h2>{copy("Reabrir por ID", "Reopen by ID")}</h2>
         <input
@@ -471,6 +495,17 @@ export function StudyAnalysis() {
             <pre className="overflow-auto whitespace-pre-wrap text-xs">
               {JSON.stringify(r.result, null, 2)}
             </pre>
+            <details>
+              <summary>
+                {copy(
+                  "Elegibilidad y selección congeladas",
+                  "Frozen eligibility and selection",
+                )}
+              </summary>
+              <pre className="overflow-auto whitespace-pre-wrap text-xs">
+                {JSON.stringify(r.snapshot, null, 2)}
+              </pre>
+            </details>
           </section>
         ))}
       <section>
