@@ -185,3 +185,38 @@ def test_screen_non_boolean_fast_mode_cannot_skip_study_protocol(client, fast_mo
     response = client.post('/screen', json={'participant_id': 'P01',
         'execution_purpose': 'study', 'payload': {**_payload(), 'fast_mode': fast_mode}})
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize('encoded_fast_mode,inferred_practice', [
+    ('true', True), ('1', True), ('1.0', True),
+    ('"1"', False), ('false', False), ('0', False), ('2', False), ('null', False),
+])
+def test_historical_screen_numeric_fast_mode_inference_and_rerun(
+    tmp_path, encoded_fast_mode, inferred_practice,
+):
+    from app.purpose_service import migrate_purpose_provenance, provenance_view
+    engine = create_engine(f'sqlite:///{tmp_path / "numeric-fast-mode.db"}')
+    raw = '{"fast_mode": ' + encoded_fast_mode + ', "original": "retained"}'
+    with engine.begin() as connection:
+        connection.execute(text('CREATE TABLE screenresult (id INTEGER PRIMARY KEY, execution_purpose TEXT, raw_trials_json TEXT)'))
+        connection.execute(text('INSERT INTO screenresult VALUES (1, :purpose, :raw)'),
+                           {'purpose': 'study', 'raw': raw})
+    migrate_purpose_provenance(engine)
+    with Session(engine) as db:
+        row = db.connection().execute(text('SELECT * FROM screenresult')).mappings().one()
+        assert row['execution_purpose'] == 'study'
+        assert row['raw_trials_json'] == raw
+        identity = row['purpose_provenance_id']
+        before = provenance_view(db, identity)
+        expected = [('unknown', 'study', 'system:migration')]
+        if inferred_practice:
+            expected.append(('retrospective', 'practice', 'system:migration'))
+        assert [(event['classification'], event['purpose'], event['actor'])
+                for event in before['history']] == expected
+    migrate_purpose_provenance(engine)
+    with Session(engine) as db:
+        row = db.connection().execute(text('SELECT * FROM screenresult')).mappings().one()
+        assert row['purpose_provenance_id'] == identity
+        assert row['execution_purpose'] == 'study'
+        assert row['raw_trials_json'] == raw
+        assert provenance_view(db, identity) == before

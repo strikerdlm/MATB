@@ -120,10 +120,12 @@ def migrate_purpose_provenance(engine) -> None:
                         reason='Historical recorded purpose retained; prospective declaration evidence unavailable')
                 fast = False
                 if table == 'screenresult':
-                    try:
-                        fast = json.loads(snapshot.get('raw_trials_json', '{}')).get('fast_mode') is True
-                    except (ValueError, AttributeError, TypeError):
-                        pass
+                    # Preserve the old SQLite migration predicate, including
+                    # JSON true, 1 and 1.0; new HTTP requests remain strict booleans.
+                    fast = connection.execute(text(
+                        "SELECT CASE WHEN json_valid(:raw) THEN "
+                        "json_extract(:raw, '$.fast_mode') = 1 ELSE 0 END"
+                    ), {'raw': snapshot.get('raw_trials_json')}).scalar_one() == 1
                 if table == 'pvt_assessment':
                     fast = snapshot.get('pvt_version') == 1 and snapshot.get('protocol_valid') == 0
                 if fast:
