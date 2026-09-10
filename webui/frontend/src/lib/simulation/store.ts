@@ -397,7 +397,6 @@ export function createSimulationStore() {
         const lease = explicitLease === undefined ? readLease(session.id) : explicitLease;
         if (!lease) {
           const error = new SimulationApiError(403, "invalid_lease", "controller lease is unavailable");
-          set({ transportError: `${error.code}: ${error.message}` });
           throw error;
         }
         if (!get().pendingCommandIds.includes(command.command_id)) {
@@ -408,13 +407,11 @@ export function createSimulationStore() {
           set({
             pendingCommandIds: get().pendingCommandIds.filter((id) => id !== command.command_id),
             commandResults: { ...get().commandResults, [command.command_id]: result },
-            transportError: null,
           });
           return result;
         } catch (error) {
           set({
             pendingCommandIds: get().pendingCommandIds.filter((id) => id !== command.command_id),
-            transportError: errorMessage(error),
           });
           throw error;
         }

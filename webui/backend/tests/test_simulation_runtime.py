@@ -202,6 +202,7 @@ async def test_repeated_pause_reconnect_and_checkpoint_recovery_cycles(manager, 
             prepared.id, prepared.controller_lease, checkpoint_version,
         )
         assert recovered.lifecycle == "PAUSED"
+        assert recovered.console_profile == prepared.console_profile
         await manager.resume(prepared.id, prepared.controller_lease)
         assert manager.active.lifecycle == "RUNNING"
 
@@ -419,3 +420,43 @@ def test_v2_strict_contract_and_legacy_reader():
         v2_exposure(dict(sha256="0" * 64), pose=dict(camera_position=[float("nan"), 0, 0], camera_quaternion=[0, 0, 0, 1]))
     with pytest.raises(ValidationError):
         v2_exposure(dict(sha256="0" * 64), pose=dict(camera_position=[0, 0, 0], camera_quaternion=[0, 0, 0, 2]))
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("technical", [False, True])
+async def test_console_profile_frozen_without_optional_scene(manager, runtime_db, technical):
+    import json
+    from app.console_profile import current_console_profile
+    from app.simulation_schemas import CreateTechnicalSimulationSession
+
+    with Session(runtime_db) as db:
+        prepared = (await manager.prepare_technical(CreateTechnicalSimulationSession(
+            scenario_id="reference_area_search", block_id="LOW", locale="en"), db)
+            if technical else await manager.prepare(request(), db))
+    expected = current_console_profile()
+    assert prepared.console_profile.model_dump() == expected
+    assert prepared.presentation is None
+    handle = manager.active
+    frozen = (handle.recorder.run_dir / "manifest.json").read_bytes()
+    assert json.loads(frozen)["console_profile"] == expected
+    assert manager._view(handle).console_profile.model_dump() == expected
+    # Read paths neither bind current identity to historical runs nor replace
+    # unknown recorded identity with the currently supported definition.
+    handle.manifest.pop("console_profile")
+    assert manager._view(handle).console_profile is None
+    handle.manifest["console_profile"] = {**expected, "version": 99}
+    assert manager._view(handle).console_profile.version == 99
+    assert (handle.recorder.run_dir / "manifest.json").read_bytes() == frozen
+    await manager.shutdown()
+
+
+def test_console_profile_frontend_matches_frozen_definition():
+    from app.console_profile import current_console_profile
+    from hashlib import sha256
+    root = Path(__file__).resolve().parents[3]
+    artifact = root / "matb_integration/suas/presentation/console-profile.v1.json"
+    expected = current_console_profile()
+    assert expected["sha256"] == sha256(artifact.read_bytes()).hexdigest()
+    frontend = (root / "webui/frontend/src/lib/simulation/console-profile.ts").read_text()
+    assert f'id: "{expected["id"]}"' in frontend
+    assert f'version: {expected["version"]}' in frontend
+    assert f'sha256: "{expected["sha256"]}"' in frontend

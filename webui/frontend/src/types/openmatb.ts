@@ -196,6 +196,9 @@ export interface OpenMatbSession {
   block_order: OpenMatbProfile[];
   current_block_index: number;
   active_block: OpenMatbProfile | null;
+  active_block_instance_id: string | null;
+  evidence_processing: boolean;
+  native_recovery_required: boolean;
   preset_id: string;
   preset_version: string;
   preset_sha256: string;
@@ -222,6 +225,52 @@ export interface PreparedOpenMatbSession {
 }
 
 export interface WorkloadScaleSubmission {
+  block_instance_id?: string; // Required for sessions with durable block identities.
   nasa_tlx: Record<"mental_demand" | "physical_demand" | "temporal_demand" | "performance" | "effort" | "frustration", number>;
   bedford: number;
+}
+
+export interface OpenMatbDisplay {
+  index: number;
+  label: string;
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+}
+
+export interface OpenMatbReceipt {
+  session_id: string;
+  participant_id: string;
+  visit_ordinal: number;
+  execution_purpose: "study" | "practice";
+  lifecycle: OpenMatbLifecycle;
+  historical: boolean;
+  block_order: OpenMatbProfile[];
+  attempts: OpenMatbBlockReceipt[];
+}
+
+export interface OpenMatbBlockReceipt {
+  block_instance_id: string;
+  block_index: number;
+  profile: OpenMatbProfile;
+  execution_purpose: "study" | "practice";
+  task_status: string;
+  started_at: string;
+  finished_at: string | null;
+  artifact_status: string;
+  artifact_error: string | null;
+  ratings_status: "saved" | "pending" | "not_required";
+  ratings_saved_at: string | null;
+  legacy_import_status: string;
+  legacy_import_error: string | null;
+  evidence_status: string;
+  evidence_error: string | null;
+  capture_id: string | null;
+  capture_status: string | null;
+  qualification: {
+    physical_timing: string;
+    human_calibration: string;
+    protocol_eligibility: { status: string; reason: string };
+  } | null;
 }

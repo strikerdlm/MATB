@@ -7,8 +7,12 @@ import { listSimulationScenarios } from "@/lib/simulation/api";
 import { MissionSetupForm } from "@/components/mission/setup/MissionSetupForm";
 import type { Participant } from "@/types";
 import type { ScenarioSummary } from "@/types/simulation";
+import { useExecutionPurpose } from "@/lib/execution-purpose";
+import { useReportExperimentFlow } from "@/lib/experiment-flow";
 
 export default function MissionSetupPage() {
+  const purpose = useExecutionPurpose();
+  useReportExperimentFlow("suas", "prepare");
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,6 +46,7 @@ export default function MissionSetupPage() {
       scenarios={scenarios}
       loading={loading}
       loadError={error}
+      preparationEnabled={purpose === "study"}
     /></div>
   );
 }

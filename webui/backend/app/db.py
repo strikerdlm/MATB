@@ -95,10 +95,48 @@ def init_db(*, component_model_modules: tuple[str, ...] = ()) -> None:
     _migrate_analysisresult_v2(_engine)
     _migrate_bayesresult_v3(_engine)
     _migrate_experiment_execution_v1(_engine)
+    _migrate_openmatb_receipts_v1(_engine)
+    _migrate_evidence_parent_v1(_engine)
     _audit_sqlite_foreign_keys(_engine)
     from app.hcf_refresh import refresh_fit_hcf
     with Session(_engine) as session:
         refresh_fit_hcf(session)
+
+
+def _migrate_evidence_parent_v1(engine) -> None:
+    """Index the suite identity already sealed in valid capture manifests."""
+    from matb_integration.evidence.contracts import CaptureManifestV1, strict_json
+    with engine.begin() as connection:
+        if "evidence_capture" not in inspect(connection).get_table_names():
+            return
+        columns = {c["name"] for c in inspect(connection).get_columns("evidence_capture")}
+        if "parent_session_id" not in columns:
+            connection.execute(text("ALTER TABLE evidence_capture ADD COLUMN parent_session_id VARCHAR"))
+            for row in connection.execute(text("SELECT id, session_id, block_instance_id, manifest_json FROM evidence_capture")).mappings():
+                try:
+                    manifest = CaptureManifestV1.model_validate(strict_json(row["manifest_json"]))
+                except (ValueError, TypeError):
+                    continue
+                if (manifest.capture_id == row["id"] and manifest.session_id == row["session_id"]
+                        and manifest.block_instance_id == row["block_instance_id"]):
+                    connection.execute(text("UPDATE evidence_capture SET parent_session_id=:parent WHERE id=:id"),
+                                       {"parent": manifest.parent_session_id, "id": row["id"]})
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_evidence_capture_parent_session_id ON evidence_capture (parent_session_id)"))
+
+
+def _migrate_openmatb_receipts_v1(engine) -> None:
+    """Unknown legacy receipt facts remain unknown; never invent saved evidence."""
+    with engine.begin() as connection:
+        tables = set(inspect(connection).get_table_names())
+        if "openmatb_suite_session" in tables:
+            columns = {c["name"] for c in inspect(connection).get_columns("openmatb_suite_session")}
+            for name, definition in {
+                "active_block_instance_id": "VARCHAR",
+                "recovery_pid": "INTEGER",
+                "receipt_version": "INTEGER NOT NULL DEFAULT 0",
+            }.items():
+                if name not in columns:
+                    connection.execute(text(f'ALTER TABLE openmatb_suite_session ADD COLUMN "{name}" {definition}'))
 
 
 def _migrate_experiment_execution_v1(engine) -> None:

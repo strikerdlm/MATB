@@ -235,6 +235,7 @@ def build_public_debrief(
         "metrics": metrics,
         "frames": unique_frames,
         "presentation": manifest.get("presentation"),
+        **({"console_profile": manifest["console_profile"]} if "console_profile" in manifest else {}),
         "traffic_frames": [json.loads(line) for line in (Path(run_dir) / "traffic.jsonl").read_text().splitlines()] if (Path(run_dir) / "traffic.jsonl").exists() else [],
         "presentation_events": [json.loads(line) for line in (Path(run_dir) / "presentation.jsonl").read_text().splitlines()] if (Path(run_dir) / "presentation.jsonl").exists() else [],
         "timeline": _timeline(effective),

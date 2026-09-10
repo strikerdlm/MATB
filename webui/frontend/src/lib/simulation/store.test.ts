@@ -185,3 +185,18 @@ describe("validCommandsFor", () => {
     expect(validCommandsFor(contact)).toEqual(["INSPECT_CONTACT"]);
   });
 });
+
+it("command requests never overwrite independent transport errors", async () => {
+  const store = createSimulationStore();
+  store.getState().initialize(session);
+  store.setState({ transportError: "Socket lost" });
+  const command = { command_id: "independent-command", expected_state_version: 0, kind: "HOLD" as const, payload: { aircraft_id: "UAS-01" } };
+  submitSimulationCommand.mockResolvedValueOnce({ command_id: command.command_id, status: "accepted" });
+  await store.getState().submitCommand(command, "lease");
+  expect(store.getState().transportError).toBe("Socket lost");
+  submitSimulationCommand.mockRejectedValueOnce(new Error("Command unavailable"));
+  await expect(store.getState().submitCommand(command, "lease")).rejects.toThrow("Command unavailable");
+  expect(store.getState().transportError).toBe("Socket lost");
+  await store.getState().applyEnvelope(envelope(1, "snapshot", snapshot(1) as unknown as Record<string, JsonValue>));
+  expect(store.getState().transportError).toBeNull();
+});

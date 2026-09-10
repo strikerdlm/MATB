@@ -241,6 +241,24 @@ def get_session(session_id: str, runtime: OpenMatbManager = Depends(manager)):
     return _managed(lambda: runtime.session_view(session_id))
 
 
+@router.get("/displays")
+def displays(runtime: OpenMatbManager = Depends(manager)):
+    return _managed(runtime.displays)
+
+
+@router.get("/sessions/{session_id}/receipt")
+def receipt(session_id: str, runtime: OpenMatbManager = Depends(manager)):
+    return _managed(lambda: runtime.receipt(session_id))
+
+
+@router.post("/sessions/{session_id}/blocks/{block_instance_id}/evidence/retry")
+async def retry_evidence(session_id: str, block_instance_id: str, body: EmptyRequest,
+                         lease: str | None = Header(default=None, alias=_CONTROLLER),
+                         runtime: OpenMatbManager = Depends(manager)):
+    return await _managed_async(lambda: runtime.retry_evidence(session_id, block_instance_id,
+        _required(lease, "openmatb_controller_required")))
+
+
 @router.post("/sessions/{session_id}/instructions/acknowledge", response_model=OpenMatbSessionView)
 def acknowledge(session_id: str, body: EmptyRequest, token: str | None = Header(default=None, alias=_PARTICIPANT), runtime: OpenMatbManager = Depends(manager)):
     del body
@@ -289,9 +307,9 @@ async def abort(session_id: str, body: AbortRequest, request: Request, lease: st
 
 @router.post("/sessions/{session_id}/scales", response_model=OpenMatbSessionView)
 async def submit_scales(session_id: str, body: WorkloadScaleRequest, request: Request, token: str | None = Header(default=None, alias=_PARTICIPANT), runtime: OpenMatbManager = Depends(manager)):
-    result = _managed(lambda: runtime.submit_scale(session_id, _required(token, "openmatb_participant_token_required"), body))
+    result, changed = _managed(lambda: runtime.submit_scale_once(session_id, _required(token, "openmatb_participant_token_required"), body))
     physiology = getattr(request.app.state, "polar_manager", None)
-    if physiology is not None:
+    if physiology is not None and changed:
         label = "RECOVERY" if result.lifecycle == "COMPLETE" else "BETWEEN_BLOCKS"
         await physiology.system_marker_for_session(
             "openmatb", session_id, label,

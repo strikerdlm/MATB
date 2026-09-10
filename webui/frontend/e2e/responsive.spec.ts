@@ -7,6 +7,7 @@ const screenshotDiffRatio = process.platform === "win32" ? 0.05 : 0.01;
 
 async function settleForScreenshot(page: Parameters<typeof openRunningMission>[0]): Promise<void> {
   await waitForOperationalView(page);
+  await expect(page.locator(".simulation-console")).toHaveAttribute("data-console-profile", "supported");
   const pause = page.getByRole("button", { name: /pause/i });
   if (await pause.isVisible().catch(() => false)) {
     await pause.click();
@@ -34,7 +35,7 @@ test("1280px mission layout stays operable without horizontal overflow", async (
     await expect(contactsTab).toBeFocused();
     await contactsTab.press("Enter");
     await expect(page.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", "mission-contacts-tab");
-    await expect(page).toHaveScreenshot("mission-1280x720-linux.png", {
+    await expect(page).toHaveScreenshot("mission-console-v1-1280x720-linux.png", {
       fullPage: true,
       animations: "disabled",
       mask: [page.getByTestId("mission-clock")],
@@ -58,12 +59,28 @@ test("1920px mission layout keeps the three-column operations view", async ({ pa
     const map = await mapPanel.boundingBox();
     expect(map).not.toBeNull();
     expect(map!.width).toBeGreaterThanOrEqual(900);
-    await expect(page).toHaveScreenshot("mission-1920x1080-linux.png", {
+    await expect(page).toHaveScreenshot("mission-console-v1-1920x1080-linux.png", {
       fullPage: true,
       animations: "disabled",
       mask: [page.getByTestId("mission-clock")],
       maxDiffPixelRatio: screenshotDiffRatio,
     });
+  } finally {
+    if (mission) await abortMission(request, mission);
+  }
+});
+
+test("1366px mission console profile v1 keeps controls reachable", async ({ page, request }, testInfo) => {
+  let mission: OpenMission | null = null;
+  try {
+    await page.setViewportSize({ width: 1366, height: 768 });
+    mission = await openRunningMission(page, request, testInfo, "e2e_ui_area_search", 5);
+    await settleForScreenshot(page);
+    const dimensions = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, viewport: window.innerWidth }));
+    expect(dimensions.width).toBeLessThanOrEqual(dimensions.viewport);
+    await expect(page.getByRole("tab", { name: "Contacts", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /finish session/i })).toBeInViewport();
+    await page.screenshot({ path: testInfo.outputPath("mission-console-v1-1366x768-en.png"), fullPage: true });
   } finally {
     if (mission) await abortMission(request, mission);
   }

@@ -379,6 +379,9 @@ class OpenMatbSessionView(BaseModel):
     block_order: list[Profile]
     current_block_index: int = Field(ge=0)
     active_block: Profile | None
+    active_block_instance_id: str | None = None
+    evidence_processing: bool = False
+    native_recovery_required: bool = False
     preset_id: str
     preset_version: str
     preset_sha256: str
@@ -409,6 +412,8 @@ class AbortRequest(BaseModel):
 
 class WorkloadScaleRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    # Optional only for historical sessions created before attempt binding.
+    block_instance_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
     nasa_tlx: dict[str, int]
     bedford: int = Field(ge=1, le=10)
 

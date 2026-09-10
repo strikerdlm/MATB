@@ -16,8 +16,9 @@ import {
 
 const SUBTEST_COUNT = 4;
 
-export function TaskRunner({ fast, onComplete }: {
+export function TaskRunner({ fast, onStart, onComplete }: {
   fast: boolean;
+  onStart?: () => void;
   onComplete: (payload: ScreenPayload) => void;
 }) {
   const strings = useScreenStrings();
@@ -36,7 +37,7 @@ export function TaskRunner({ fast, onComplete }: {
         {strings.common.subtestOf(Math.min(step + 1, SUBTEST_COUNT), SUBTEST_COUNT)}
       </p>
       {step === 0 && (
-        <SimpleRT config={config} rng={rng} onDone={(trials: RtTrial[]) => {
+        <SimpleRT config={config} rng={rng} onStart={onStart} onDone={(trials: RtTrial[]) => {
           acc.current.simple_rt = { trials }; advance();
         }} />
       )}

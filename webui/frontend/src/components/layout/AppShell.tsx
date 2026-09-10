@@ -1,12 +1,16 @@
 "use client";
 
+import { Suspense } from "react";
+import Link from "next/link";
 import { SidebarNav } from "@/components/layout/SidebarNav";
 import { useAppLocale, type AppLocale } from "@/lib/i18n";
 import { useConsole } from "@/lib/console-context";
+import { useNavigationRole } from "@/lib/navigation-role";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { locale, setLocale, tr, copy } = useAppLocale();
   const { status } = useConsole();
+  const { role, setRole } = useNavigationRole();
   return (
     <div className="mission-grid flex min-h-screen flex-col text-foreground md:flex-row">
       <aside className="relative z-10 w-full shrink-0 border-b border-white/10 bg-black/75 backdrop-blur md:min-h-screen md:w-72 md:border-b-0 md:border-r">
@@ -17,36 +21,40 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 {tr("brand.console")}
               </p>
               <h1 className="mt-2 font-display text-3xl font-semibold uppercase leading-none text-white">
-                MATB-FAC
+                MATB - FAC
               </h1>
             </div>
             <div className="mt-1 h-9 w-9 border border-white/20 bg-white text-center font-display text-xl font-semibold leading-9 text-black">
               M
             </div>
           </div>
-          <div className="mt-5 hidden grid-cols-2 gap-2 md:grid font-mono text-[10px] uppercase tracking-[0.16em]">
-            <div className="border border-white/10 px-2 py-2 text-muted-foreground">
+          <div className="mt-5 grid gap-2 text-sm sm:grid-cols-2">
+            <div className="border border-white/10 px-3 py-2 text-muted-foreground">
               {tr("shell.mode")}
-              <span className="mt-1 block text-foreground">{tr("shell.operations")}</span>
+              <span className="ml-2 text-foreground">{tr("shell.operations")}</span>
             </div>
-            <div className="border border-white/10 px-2 py-2 text-muted-foreground">
+            <div className="border border-white/10 px-3 py-2 text-muted-foreground">
               {tr("shell.link")}
-              <span role="status" className={"mt-1 inline-flex items-center gap-1.5 " + (status === "online" ? "text-success" : "text-warning")}>
+              <span role="status" aria-label={copy("Estado de conexión", "Connection status")} className={"ml-2 inline-flex items-center gap-1.5 " + (status === "online" ? "text-success" : "text-warning")}>
                 <span className="h-1.5 w-1.5 rounded-full bg-current" />
                 {status === "online" ? copy("Conectado", "Connected") : status === "checking" ? copy("Comprobando", "Checking") : copy("Sin conexión", "Offline")}
               </span>
             </div>
           </div>
+          <nav aria-label={copy("Cambiar espacio de trabajo", "Switch workspace")} className="mt-3 grid grid-cols-2 gap-2 text-sm">
+            <Link href="/start" onClick={() => setRole("participant")} className={`rounded border px-3 py-2 text-center ${role === "participant" ? "border-info bg-info/10 text-info" : "border-white/15 text-muted-foreground"}`}>{copy("Participante", "Participant")}</Link>
+            <Link href="/tracker" onClick={() => setRole("researcher")} className={`rounded border px-3 py-2 text-center ${role === "researcher" ? "border-info bg-info/10 text-info" : "border-white/15 text-muted-foreground"}`}>{copy("Investigador", "Researcher")}</Link>
+          </nav>
         </div>
-        <div className="hidden md:block"><SidebarNav /></div>
-        <details className="border-b border-white/10 md:hidden"><summary className="cursor-pointer px-5 py-3 text-sm font-semibold">{copy("Menú de experimentos", "Experiment menu")}</summary><SidebarNav /></details>
+        <div className="hidden md:block"><Suspense><SidebarNav /></Suspense></div>
+        <details className="border-b border-white/10 md:hidden"><summary className="cursor-pointer px-5 py-3 text-sm font-semibold">{copy("Menú de experimentos", "Experiment menu")}</summary><Suspense><SidebarNav /></Suspense></details>
         <div className="px-5 pb-6 pt-3">
           <div className="signal-sweep hidden h-px md:block bg-white/10" />
           <p className="mt-4 hidden font-mono text-[10px] md:block uppercase tracking-[0.18em] text-muted-foreground">
             {tr("brand.lab")}
           </p>
           <p className="mt-2 hidden text-[10px] leading-4 md:block text-muted-foreground">{tr("brand.author")}</p>
-          <label htmlFor="app-language" className="mt-1 block font-mono md:mt-5 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+          <label htmlFor="app-language" className="mt-1 block text-sm font-medium md:mt-5 text-muted-foreground">
             {tr("language.label")}
           </label>
           <select

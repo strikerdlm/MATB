@@ -51,12 +51,11 @@ async def ingest(
 
 @router.get("/evidence/captures")
 def captures(offset: int = Query(0, ge=0), limit: int = Query(25, ge=1, le=100),
-             purpose: Literal["study", "practice", "exploration"] = "study", db: Session = Depends(get_session)):
-    query = select(EvidenceCapture).where(EvidenceCapture.execution_purpose == purpose)
-    total = db.exec(select(func.count()).select_from(EvidenceCapture).where(EvidenceCapture.execution_purpose == purpose)).one()
-    rows = db.exec(query.order_by(EvidenceCapture.created_at.desc(), EvidenceCapture.id).offset(offset).limit(limit))
-    return {"total": total, "offset": offset, "limit": limit,
-            "items": [r.model_dump(exclude={"manifest_json"}) for r in rows]}
+             purpose: Literal["study", "practice", "exploration", "all"] = "study",
+             session: str | None = Query(None, max_length=64), q: str = Query("", max_length=200),
+             db: Session = Depends(get_session)):
+    from app.evidence_discovery import capture_list
+    return capture_list(db, purpose=purpose, session_id=session, query=q, offset=offset, limit=limit)
 
 
 @router.get("/evidence/captures/{capture_id}")

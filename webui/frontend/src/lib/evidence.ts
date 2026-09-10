@@ -28,6 +28,25 @@ export interface EvidenceRecord {
 }
 export interface EvidencePage<T> { total: number; offset: number; limit: number; items: T[]; raw_items?: string[]; value_texts?: string[] }
 
+export interface EvidenceCaptureSummary {
+  id: string;
+  participant_id: string | null;
+  session_id: string;
+  parent_session_id: string | null;
+  block_instance_id: string;
+  visit_ordinal: number | null;
+  condition: string;
+  execution_purpose: string;
+  completion: string;
+  created_at: string;
+  capture_status: string;
+  qualification: {
+    physical_timing: string;
+    human_calibration: string;
+    protocol_eligibility: { status: string; reason: string };
+  };
+}
+
 export async function evidenceRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${await getApiBase()}${path}`, { ...init, cache: "no-store" });
   if (!response.ok) {

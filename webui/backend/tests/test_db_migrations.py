@@ -17,6 +17,41 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import create_engine
 
 
+def test_receipt_migration_keeps_historical_state_unknown(tmp_path):
+    from app.db import _migrate_openmatb_receipts_v1
+    engine = create_engine(f"sqlite:///{tmp_path / 'receipts.sqlite3'}")
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE openmatb_suite_session (id VARCHAR PRIMARY KEY, lifecycle VARCHAR)"))
+        connection.execute(text("INSERT INTO openmatb_suite_session VALUES ('old', 'COMPLETE')"))
+    _migrate_openmatb_receipts_v1(engine)
+    _migrate_openmatb_receipts_v1(engine)
+    with engine.begin() as connection:
+        assert tuple(connection.execute(text("SELECT lifecycle, active_block_instance_id, receipt_version FROM openmatb_suite_session")).one()) == ("COMPLETE", None, 0)
+
+
+def test_evidence_parent_migration_only_uses_valid_matching_manifests(tmp_path):
+    from app.db import _migrate_evidence_parent_v1
+    from matb_integration.evidence.reference import synthetic_capture
+    from matb_integration.evidence.contracts import strict_json, canonical_bytes
+    from uuid import uuid4
+    engine = create_engine(f"sqlite:///{tmp_path / 'parent.sqlite3'}")
+    manifest = strict_json(synthetic_capture(tmp_path / 'capture')["capture_manifest"])
+    manifest["parent_session_id"] = str(uuid4())
+    raw = canonical_bytes(manifest).decode()
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE evidence_capture (id VARCHAR PRIMARY KEY, session_id VARCHAR, block_instance_id VARCHAR, manifest_json VARCHAR)"))
+        for cid, value in ((manifest["capture_id"], raw), ("malformed", "{"), ("wrong-identity", raw)):
+            connection.execute(text("INSERT INTO evidence_capture VALUES (:id, :sid, :bid, :raw)"),
+                {"id": cid, "sid": manifest["session_id"], "bid": manifest["block_instance_id"], "raw": value})
+    _migrate_evidence_parent_v1(engine)
+    _migrate_evidence_parent_v1(engine)
+    with engine.begin() as connection:
+        rows = connection.execute(text("SELECT id, parent_session_id, manifest_json FROM evidence_capture")).all()
+        assert {row[0]: row[1] for row in rows} == {manifest["capture_id"]: manifest["parent_session_id"], "malformed": None, "wrong-identity": None}
+        assert rows[0][2] == raw
+        assert "ix_evidence_capture_parent_session_id" in {i["name"] for i in inspect(connection).get_indexes("evidence_capture")}
+
+
 @pytest.mark.parametrize("days", [(0, 8, 15), (0, 3, 6, 9, 12, 15)])
 def test_execution_migration_preserves_schedule_and_raw_observations(tmp_path, days):
     from app.db import _migrate_experiment_execution_v1

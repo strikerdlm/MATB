@@ -6,7 +6,8 @@ import { Activity, Battery, Bluetooth, Download, Play, Radio, Square, WifiOff } 
 
 import { experimentErrorMessage } from "@/lib/experiment-errors";
 import { ExperimentGuide } from "@/components/experiments/ExperimentGuide";
-import { useExecutionPurpose } from "@/lib/execution-purpose";
+import { useExecutionPurpose, withExecutionPurpose } from "@/lib/execution-purpose";
+import { useReportExperimentFlow } from "@/lib/experiment-flow";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { InstructionAudio } from "@/components/instructions/InstructionAudio";
 import { Badge } from "@/components/ui/badge";
@@ -94,6 +95,7 @@ export default function PolarH10Page() {
   const [analysis, setAnalysis] = useState<PolarAnalysis | null>(null);
   const lastSequence = useRef(0);
   const captureId = capture?.capture_id;
+  useReportExperimentFlow("physiology", capture?.lifecycle === "capturing" ? "perform" : capture?.lifecycle === "complete" ? "complete" : capture ? "instructions" : "prepare");
 
   useEffect(() => {
     void getPolarConnection().then(setConnection).catch(() => undefined);
@@ -163,6 +165,7 @@ export default function PolarH10Page() {
   }
 
   async function prepare() {
+    if (!purpose) return;
     await run(async () => {
       const prepared = await createPolarCapture({
         execution_purpose: purpose,
@@ -274,11 +277,11 @@ export default function PolarH10Page() {
             <div className="space-y-2"><Label htmlFor="polar-acc-range">ACC ±G</Label><select id="polar-acc-range" className="native-select w-full" value={accRange} onChange={(event) => setAccRange(Number(event.target.value) as AccRange)} disabled={Boolean(capture)}>{[2, 4, 8].map((value) => <option key={value}>{value}</option>)}</select></div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {!capture && <Button disabled={busy || !connection.connected || !sessionId || !participant} onClick={() => void prepare()}>{copy("Preparar", "Prepare")}</Button>}
+            {!capture && <Button disabled={!purpose || busy || !connection.connected || !sessionId || !participant} onClick={() => void prepare()}>{copy("Preparar", "Prepare")}</Button>}
             {capture?.lifecycle === "created" && <Button disabled={busy} onClick={() => void start()}><Play className="mr-2 h-4 w-4" />{copy("Iniciar línea base", "Start baseline")}</Button>}
             {capturing && <Button variant="destructive" disabled={busy} onClick={() => void stop()}><Square className="mr-2 h-4 w-4" />{copy("Detener y finalizar", "Stop and finalize")}</Button>}
             {capture && capture.execution_purpose !== "practice" && ["finalized", "incomplete"].includes(capture.artifact_state) && <Button variant="outline" disabled={busy} onClick={() => void run(() => downloadPolarBundle(capture.capture_id, lease))}><Download className="mr-2 h-4 w-4" />{copy("Descargar paquete", "Download bundle")}</Button>}
-            {capture?.artifact_state === "finalized" && <Button asChild><Link href="/mission/setup#briefing">{copy("Continuar a instrucciones de misión", "Continue to mission briefing")}</Link></Button>}
+            {capture?.artifact_state === "finalized" && purpose && <Button asChild><Link href={withExecutionPurpose("/mission/setup#briefing", purpose)}>{copy("Continuar a instrucciones de misión", "Continue to mission briefing")}</Link></Button>}
           </div>
           {capture && <div className="border border-white/10 p-3 font-mono text-xs text-muted-foreground"><p>{capture.capture_id}</p><p className="mt-1">{capture.lifecycle} · ECG {settings?.ecg_sample_rate_hz} Hz · ACC {settings?.acc_sample_rate_hz} Hz ±{settings?.acc_range_g}G</p></div>}
         </CardContent>

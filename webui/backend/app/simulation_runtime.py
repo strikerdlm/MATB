@@ -37,6 +37,8 @@ from matb_integration.suas.recording.recorder import SessionRecorder
 from matb_integration.suas.recording.checkpoints import load_checkpoint
 from matb_integration.suas.recording.replay import ReplayVerifier, event_chain_hash, effective_records
 from matb_integration.suas.scenarios.loader import load_scenario
+from app.console_profile import current_console_profile
+
 from matb_integration.suas.scenarios.manifest import build_session_manifest, build_technical_session_manifest
 from matb_integration.suas.scenarios.profiles import block_order_for_participant
 from matb_integration.suas.research.protocol import (
@@ -217,6 +219,7 @@ class SimulationManager:
             # Bind the immutable manifest to the durable session identity before
             # it is written into the append-only run directory.
             manifest["session_id"] = session_id
+            manifest["console_profile"] = current_console_profile()
             self._bind_presentation(manifest, request, loaded)
             lease = secrets.token_urlsafe(32)
             run_dir = self.artifact_root / session_id
@@ -292,6 +295,7 @@ class SimulationManager:
                 engine_version=ENGINE_VERSION,
             )
             manifest["session_id"] = session_id
+            manifest["console_profile"] = current_console_profile()
             self._bind_presentation(manifest, request, loaded)
             lease = secrets.token_urlsafe(32)
             run_dir = self.artifact_root / "technical" / session_id
@@ -1545,6 +1549,7 @@ class SimulationManager:
         return SessionView(
             id=handle.session_id, participant_id=handle.participant_id, visit_id=handle.visit_id,
             presentation=handle.manifest.get("presentation"),
+            console_profile=handle.manifest.get("console_profile"),
             scenario_id=handle.scenario.definition.scenario_id, scenario_sha256=handle.scenario.sha256,
             locale=handle.locale, lifecycle=handle.lifecycle, active_block_id=handle.active_block_id,
             block_order=list(protocol_order), state_version=self._version(handle),

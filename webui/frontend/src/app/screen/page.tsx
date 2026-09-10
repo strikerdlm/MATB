@@ -2,12 +2,13 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import { ExperimentGuide } from "@/components/experiments/ExperimentGuide";
+import { ExecutionPurposeBadge, ExperimentGuide } from "@/components/experiments/ExperimentGuide";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { listParticipants, postScreen } from "@/lib/api";
 import { useAppLocale } from "@/lib/i18n";
-import { announceExperimentStage, useExecutionPurpose } from "@/lib/execution-purpose";
+import { useExecutionPurpose } from "@/lib/execution-purpose";
+import { flowStageForScreen, useReportExperimentFlow } from "@/lib/experiment-flow";
 import type { Participant, ScreenIngestResult } from "@/types";
 import type { ScreenPayload } from "@/lib/screen";
 
@@ -21,14 +22,16 @@ export default function ScreenPage() {
   const [payload, setPayload] = useState<ScreenPayload | null>(null);
   const [result, setResult] = useState<ScreenIngestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activityStarted, setActivityStarted] = useState(false);
   useEffect(() => {
     let active = true;
     void listParticipants().then((rows) => { if (active) setParticipants(rows); })
       .catch(() => { if (active) setError("connection"); });
     return () => { active = false; };
   }, []);
-  useEffect(() => { announceExperimentStage(stage === "select" ? 1 : stage === "review" ? 4 : 3); }, [stage]);
+  useReportExperimentFlow("screen", flowStageForScreen(stage, activityStarted, Boolean(result)));
   async function save(raw: ScreenPayload) {
+    if (!purpose) return;
     setPayload(raw); setStage("saving"); setError(null);
     try { setResult(await postScreen(participant, raw, false, purpose)); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "save"); }
@@ -42,6 +45,7 @@ export default function ScreenPage() {
   ];
   return <div className="space-y-6">
     <PageHeader kicker={copy("Evaluación cognitiva", "Cognitive assessment")} title={copy("Batería cognitiva", "Cognitive battery")} description={copy("Cuatro pruebas breves, con instrucciones y práctica antes de cada una.", "Four short tests, with instructions and practice before each one.")} />
+    {stage !== "select" && purpose && <ExecutionPurposeBadge purpose={purpose} />}
     {stage === "select" && <>
       <ExperimentGuide id="screen" />
       <div className="space-y-4 rounded-lg border border-white/15 p-5">
@@ -51,14 +55,14 @@ export default function ScreenPage() {
           {participants.map((row) => <option key={row.id} value={row.id}>{row.id}</option>)}
         </select>
         <p className="text-sm text-muted-foreground">{copy("Necesita teclado y mouse. Lea las instrucciones y responda cuando aparezca el estímulo.", "You need a keyboard and mouse. Read the instructions and respond when the stimulus appears.")}</p>
-        <Button disabled={!participant} onClick={() => setStage("run")}>{copy("Ver instrucciones y comenzar", "View instructions and begin")}</Button>
+        <Button disabled={!purpose || !participant} onClick={() => setStage("run")}>{copy("Ver instrucciones y comenzar", "View instructions and begin")}</Button>
       </div>
     </>}
     {error && <div role="alert" className="rounded border border-danger/40 p-4">
       <p>{error === "connection" ? copy("No se pudieron cargar los códigos. Compruebe la conexión y vuelva a abrir esta actividad.", "Could not load participant codes. Check the connection and reopen this activity.") : copy("No se pudo guardar. Sus respuestas siguen disponibles en esta pantalla. Compruebe la conexión y vuelva a intentarlo.", "Could not save. Your responses remain available on this screen. Check the connection and try again.")}</p>
       {payload && <Button className="mt-3" onClick={() => void save(payload)}>{copy("Reintentar guardado", "Retry saving")}</Button>}
     </div>}
-    {stage === "run" && <TaskRunner fast={purpose === "practice"} onComplete={(raw) => void save(raw)} />}
+    {stage === "run" && <TaskRunner fast={purpose === "practice"} onStart={() => setActivityStarted(true)} onComplete={(raw) => void save(raw)} />}
     {stage === "saving" && <p role="status">{copy("Guardando respuestas…", "Saving responses…")}</p>}
     {stage === "review" && result && <section className="space-y-4">
       <h2 className="text-2xl font-semibold">{copy("Respuestas guardadas", "Responses saved")}</h2>
@@ -73,7 +77,7 @@ export default function ScreenPage() {
         </div>;
       })}</div>
       <p className="text-sm text-muted-foreground">{copy("Las medidas describen su desempeño en estas tareas. No representan un diagnóstico ni una calificación global.", "These measures describe performance on these tasks. They do not represent a diagnosis or an overall grade.")}</p>
-      <Button asChild><Link href="/start">{copy("Volver a los experimentos", "Return to experiments")}</Link></Button>
+      <Button asChild><Link href={`/start?purpose=${purpose}`}>{copy("Volver a los experimentos", "Return to experiments")}</Link></Button>
     </section>}
   </div>;
 }

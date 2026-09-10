@@ -20,7 +20,14 @@ for (const locale of ["es-419", "en"] as const) {
         const details = page.locator("#experiment-details");
         await expect(details).toBeFocused();
         await expect(details.locator("dt")).toHaveCount(5);
-        await expect(details.getByRole("radio", { name: locale === "en" ? /^Practice/ : /^Practicar/ })).toBeChecked();
+        const practice = details.getByRole("radio", { name: locale === "en" ? /^Practice/ : /^Practicar/ });
+        if (index === 0) {
+          await expect(practice).not.toBeChecked();
+          await expect(details.getByRole("radio", { name: locale === "en" ? /Join my study/ : /Participar en mi estudio/ })).not.toBeChecked();
+          await practice.check();
+        } else {
+          await expect(practice).toBeChecked();
+        }
       }
       await page.getByRole("radio", { name: locale === "en" ? /Join my study/ : /Participar en mi estudio/ }).check();
       await page.locator("#app-language").selectOption(locale === "en" ? "es-419" : "en");
@@ -53,10 +60,12 @@ test("unavailable experiment remains visible with a next action", async ({ page 
 test("cognitive battery is reachable and practice is preserved", async ({ page }) => {
   await page.goto("/start?experiment=screen");
   await page.locator("#app-language").selectOption("en");
+  await page.getByRole("radio", { name: /^Practice/ }).check();
   await page.getByRole("link", { name: "Prepare experiment" }).click();
   await expect(page).toHaveURL(/\/screen\?purpose=practice/);
   await expect(page.getByRole("heading", { name: "Cognitive battery" })).toBeVisible();
-  await expect(page.getByText("Practice · Familiarization")).toBeVisible();
+  await expect(page.getByText("Practice", { exact: true })).toBeVisible();
+  await expect(page.getByText("Practice is saved separately and does not complete a study visit.")).toBeVisible();
   await page.locator("#app-language").selectOption("es-419");
   await expect(page.getByRole("heading", { name: "Batería cognitiva" })).toBeVisible();
 });
@@ -64,10 +73,15 @@ test("cognitive battery is reachable and practice is preserved", async ({ page }
 test("OpenMATB language changes preserve setup choices", async ({ page, request }) => {
   const participant = `P${(process.pid % 50000) + 600000}`;
   expect((await request.post("http://127.0.0.1:8000/participants", { data: { id: participant, enrollment_date: "2026-09-04" } })).status()).toBe(201);
+  await page.route("**/openmatb/displays", route => route.fulfill({ json: [
+    { index: 0, label: "Display 1", width: 1920, height: 1080, x: 0, y: 0 },
+    { index: 1, label: "Display 2", width: 1920, height: 1080, x: 1920, y: 0 },
+  ] }));
   await page.goto("/openmatb/setup?purpose=practice");
   await page.locator("#om-participant").selectOption(participant);
   await page.locator("#om-visit").selectOption("2");
-  await page.locator("#om-display").fill("0");
+  await page.locator("#om-display").selectOption("0");
+  await page.getByText("Ver configuración", { exact: true }).click();
   await page.locator("#om-theme").selectOption("cockpit@1.0.0");
   await page.locator("#app-language").selectOption("en");
   await expect(page.locator("#om-protocol")).toHaveValue("matb-fac-en@1.0.0");

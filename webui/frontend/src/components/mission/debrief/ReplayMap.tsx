@@ -66,6 +66,7 @@ export function ReplayMap({
     .at(-1);
   const session = {
     id: String(debrief.session_id ?? "replay"),
+    console_profile: debrief.console_profile,
     presentation:
       config && data.kind === "fallback"
         ? { ...config, blocks: { ...config.blocks, [snapshot.block_id]: "2d" } }

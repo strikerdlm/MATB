@@ -24,12 +24,16 @@ from sqlmodel import Session
 
 
 def _manager(engine, tmp_path: Path) -> OpenMatbManager:
-    return OpenMatbManager(
+    manager = OpenMatbManager(
         engine=engine,
         repo_root=Path(__file__).resolve().parents[3],
         artifact_root=tmp_path / "controlled",
         python_executable=Path(__file__),
     )
+    manager.displays = lambda: [{"index": index, "label": f"Display {index + 1}",
+                                "width": 1920, "height": 1080, "x": index * 1920, "y": 0}
+                               for index in range(2)]
+    return manager
 
 
 def _seed_visit(engine) -> None:

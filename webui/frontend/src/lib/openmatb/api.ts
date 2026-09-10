@@ -1,6 +1,8 @@
 import { getApiBase } from "@/lib/runtime-config";
 import type {
   OpenMatbInstructionProtocol,
+  OpenMatbDisplay,
+  OpenMatbReceipt,
   OpenMatbPresetSet,
   OpenMatbReadiness,
   OpenMatbSession,
@@ -39,6 +41,13 @@ const json = (body: object, headers: HeadersInit = {}): RequestInit => ({
 });
 
 export const getOpenMatbReadiness = () => call<OpenMatbReadiness>("/openmatb/readiness");
+export const getOpenMatbDisplays = () => call<OpenMatbDisplay[]>("/openmatb/displays");
+export const getOpenMatbReceipt = (id: string) => call<OpenMatbReceipt>(`/openmatb/sessions/${encodeURIComponent(id)}/receipt`);
+
+export function retryOpenMatbEvidence(id: string, blockId: string, lease: string) {
+  return call<OpenMatbReceipt>(`/openmatb/sessions/${encodeURIComponent(id)}/blocks/${encodeURIComponent(blockId)}/evidence/retry`,
+    json({}, { "X-OpenMATB-Controller": lease }));
+}
 export const listOpenMatbPresets = () => call<OpenMatbPresetSet[]>("/openmatb/presets");
 export const listOpenMatbInstructions = () => call<OpenMatbInstructionProtocol[]>("/openmatb/instruction-protocols");
 export const listOpenMatbVisualProfiles = () => call<OpenMatbVisualProfile[]>("/openmatb/visual-profiles");

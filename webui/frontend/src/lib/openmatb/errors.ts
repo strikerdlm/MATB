@@ -3,6 +3,14 @@ import { OpenMatbApiError } from "@/lib/openmatb/api";
 type Copy = (spanish: string, english: string) => string;
 
 const MESSAGES: Record<string, [string, string]> = {
+  openmatb_native_recovery_required: ["Una tarea de la conexión anterior sigue abierta. Cierre esa ventana nativa y actualice la consola antes de continuar.", "A task from the previous connection is still open. Close that native window and refresh the console before continuing."],
+  openmatb_display_discovery_failed: ["No se pudieron detectar las pantallas. Compruebe que la estación tenga una sesión gráfica activa y vuelva a comprobar.", "Displays could not be detected. Check that the station has an active desktop session, then check again."],
+  openmatb_display_unavailable: ["La pantalla seleccionada ya no está conectada. Vuelva a Preparar y seleccione una pantalla disponible.", "The selected display is no longer connected. Return to Prepare and select an available display."],
+  openmatb_evidence_processing_active: ["Se están procesando los resultados de la sesión anterior. Espere a que termine el procesamiento antes de abrir otra tarea.", "The previous session’s results are being processed. Wait for processing to finish before opening another task."],
+  openmatb_block_identity_required: ["No se pudo identificar este bloque. Actualice la sesión antes de guardar las respuestas.", "This block could not be identified. Refresh the session before saving your ratings."],
+  openmatb_block_mismatch: ["Estas respuestas pertenecen a otro bloque. Actualice la sesión; las respuestas no se transfieren entre bloques.", "These ratings belong to a different block. Refresh the session; ratings cannot transfer between blocks."],
+  openmatb_scale_already_saved: ["Este bloque ya tiene respuestas guardadas. Actualice la sesión para continuar.", "Ratings for this block are already saved. Refresh the session to continue."],
+  openmatb_evidence_wait_for_completion: ["El procesamiento comienza al finalizar o interrumpir la sesión.", "Processing starts after the session finishes or is interrupted."],
   openmatb_station_not_ready: ["La estación dejó de estar lista. Revise pantalla y dependencias en Preparar.", "The station is no longer ready. Review display and dependencies in Prepare."],
   assigned_liftoff_first: ["Su protocolo requiere completar Liftoff antes de OpenMATB en esta visita.", "Your protocol requires Liftoff before OpenMATB for this visit."],
   openmatb_active_session: [

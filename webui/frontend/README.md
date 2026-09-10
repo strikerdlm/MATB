@@ -71,10 +71,13 @@ read-only behavior, controller disconnect/reconnect, and 1280×720 and
   Mission scenes use Three.js/TypeScript; the national explorer uses MapLibre.
   [Setup and capture/replay guide](../../docs/implementation/colombia-geography-traffic.md).
 
-- **Tracker** (`/`) — the participant × active-visit × 3 completeness grid; click a filled cell for that
+- **Workspace** (`/`) — explicit participant/researcher navigation choice, remembered per tab. Participant catalog is `/start`; preparation requires an explicit practice/study choice.
+- **Tracker** (`/tracker`) — the participant × active-visit × 3 completeness grid; click a filled cell for that
   block's metrics (SYSMON d′, hit-rate, RT; COMM d′; NASA-TLX; Bedford; ISA) plus
   the visit's DEPDF fit (G₀/P₀/τ₀) once all three levels are ingested.
 - **Participants** (`/participants`) — list + add (auto-generates the active protocol visits; ASTRA uses T0, DM8, and DM15).
+- **OpenMATB** (`/openmatb/setup`) — readiness, detected displays, assigned visit and published configuration. The controller preserves session purpose, reports block attempts, and links its completion receipt to the session's evidence. Unfinished participant ratings are restored only for the same session/block in the current tab.
+- **Scientific evidence** (`/evidence`) — searchable capture list; `capture`, `session`, `purpose`, `q` and `offset` remain in the URL. Registration, source eligibility and measurement qualification are distinct.
 - **Upload** (`/upload`) — tag + ingest an OpenMATB CSV, with guard feedback
   (duplicate / filled-cell / validation). Optionally attach the adjacent
   `*.txt.manifest.json` scenario manifest so the backend can store provenance and

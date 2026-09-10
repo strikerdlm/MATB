@@ -3,6 +3,7 @@
 import React from "react";
 import { AlertTriangle, Crosshair, Headphones, MousePointer2 } from "lucide-react";
 
+import { consoleProfileStatus } from "@/lib/simulation/console-profile";
 import { InstructionAudio } from "@/components/instructions/InstructionAudio";
 import type { AircraftSnapshot, ContactSnapshot, Locale, SessionView } from "@/types/simulation";
 
@@ -52,20 +53,21 @@ function instructions(session: SessionView, locale: Locale): { eyebrow: string; 
 }
 export function MissionInstructionPanel({ session, locale, selectedAircraft, selectedContact }: { session: SessionView; locale: Locale; selectedAircraft: AircraftSnapshot | null; selectedContact: ContactSnapshot | null }) {
   const content = instructions(session, locale);
+  const modern = consoleProfileStatus(session.console_profile) === "supported";
   const es = locale === "es-CO";
   return (
     <section className="mission-panel border-info/25 p-4" aria-labelledby="mission-instruction-title">
       <div className="flex items-start justify-between gap-3">
-        <div><p className="page-kicker text-info">{content.eyebrow}</p><h2 id="mission-instruction-title" className="mt-2 font-display text-xl font-semibold uppercase leading-tight">{content.title}</h2></div>
+        <div><p className={modern ? "text-sm text-info" : "page-kicker text-info"}>{content.eyebrow}</p><h2 id="mission-instruction-title" className={`mt-2 font-display text-xl font-semibold leading-tight ${modern ? "" : "uppercase"}`}>{content.title}</h2></div>
         <Headphones className="h-5 w-5 shrink-0 text-info" />
       </div>
       <ol className="mt-4 space-y-2">
-        {content.items.map((item, index) => <li key={item} className="flex gap-2 text-sm leading-5"><span className="font-mono text-info">{index + 1}</span><span>{item}</span></li>)}
+        {content.items.map((item, index) => <li key={item} className="flex gap-2 text-sm leading-5"><span className="font-mono text-info">{index + 1}</span><span>{modern ? item.replace("INICIAR", "Iniciar").replace("START", "Start") : item}</span></li>)}
       </ol>
-      <div className="mt-4 border-t border-white/10 pt-4">
+      <div className={`mt-4 border-t border-white/10 pt-4 ${modern ? "[&_button]:text-sm [&_button]:normal-case [&_button]:tracking-normal" : ""}`}>
         <InstructionAudio src={`/audio/instructions/mission-${es ? "es" : "en"}.mp3`} label={es ? "Escuchar instrucciones" : "Listen to instructions"} unavailableLabel={es ? "Audio no disponible" : "Audio unavailable"} />
       </div>
-      <div className="mt-4 rounded border border-white/10 bg-black/25 p-3 text-xs text-muted-foreground">
+      <div className={`mt-4 rounded border border-white/10 bg-black/25 p-3 text-muted-foreground ${modern ? "text-sm" : "text-xs"}`}>
         {selectedAircraft ? <span className="flex items-center gap-2"><Crosshair className="h-3.5 w-3.5 text-success" />{es ? "Aeronave seleccionada" : "Selected aircraft"}: <strong className="text-foreground">{selectedAircraft.aircraft_id}</strong></span> : selectedContact ? <span className="flex items-center gap-2"><AlertTriangle className="h-3.5 w-3.5 text-warning" />{es ? "Contacto seleccionado" : "Selected contact"}: <strong className="text-foreground">{selectedContact.contact_id}</strong></span> : <span className="flex items-center gap-2"><MousePointer2 className="h-3.5 w-3.5" />{es ? "Seleccione un símbolo para mostrar comandos válidos." : "Select a symbol to reveal valid commands."}</span>}
       </div>
     </section>
