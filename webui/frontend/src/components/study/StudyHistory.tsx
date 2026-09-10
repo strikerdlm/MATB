@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,12 @@ import type { Occasion } from "@/lib/assessments";
 
 export function StudyHistory() {
   const participant = useSearchParams().get("participant");
+  return (
+    <ParticipantHistory key={participant ?? ""} participant={participant} />
+  );
+}
+
+function ParticipantHistory({ participant }: { participant: string | null }) {
   const { copy } = useAppLocale();
   const [exposure, setExposure] = useState<Record<string, unknown>[]>([]);
   const [occasions, setOccasions] = useState<Occasion[]>([]);
@@ -219,7 +225,11 @@ export function StudyHistory() {
         </>
       )}
       {error && <p role="alert">{error}</p>}
-      <PurposeReview exposure={exposure} />
+      <PurposeReview
+        key={participant ?? ""}
+        participant={participant}
+        exposure={exposure}
+      />
       <Link className="block underline" href="/study/assignments">
         {copy("Asignaciones", "Assignments")}
       </Link>
@@ -227,7 +237,13 @@ export function StudyHistory() {
   );
 }
 
-function PurposeReview({ exposure }: { exposure: Record<string, unknown>[] }) {
+function PurposeReview({
+  exposure,
+  participant,
+}: {
+  exposure: Record<string, unknown>[];
+  participant: string | null;
+}) {
   const { copy } = useAppLocale();
   const [identity, setIdentity] = useState("");
   const [record, setRecord] = useState<{
@@ -238,9 +254,40 @@ function PurposeReview({ exposure }: { exposure: Record<string, unknown>[] }) {
   const [reviewer, setReviewer] = useState("");
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
+  const eligible = exposure.filter(
+    (item) =>
+      item.participant_id === participant &&
+      item.purpose_provenance_id &&
+      item.purpose_origin !== "explicit",
+  );
+  const membership = eligible
+    .map((item) => String(item.purpose_provenance_id))
+    .toSorted()
+    .join("|");
+  const scope = useRef({ active: true, identity, ids: new Set<string>() });
+  scope.current.identity = identity;
+  scope.current.ids = new Set(
+    eligible.map((item) => String(item.purpose_provenance_id)),
+  );
+  useEffect(() => {
+    scope.current.active = true;
+    return () => {
+      scope.current.active = false;
+    };
+  }, []);
+  const selected = scope.current.ids.has(identity);
   async function request(id: string, body?: unknown) {
+    const base = await getApiBase();
+    if (
+      !scope.current.active ||
+      scope.current.identity !== id ||
+      !scope.current.ids.has(id)
+    )
+      throw new Error(
+        "Purpose selection no longer belongs to this participant.",
+      );
     const response = await fetch(
-      `${await getApiBase()}/purpose-provenance/${encodeURIComponent(id)}${body ? "/classifications" : ""}`,
+      `${base}/purpose-provenance/${encodeURIComponent(id)}${body ? "/classifications" : ""}`,
       {
         method: body ? "POST" : "GET",
         headers: { "Content-Type": "application/json" },
@@ -253,7 +300,8 @@ function PurposeReview({ exposure }: { exposure: Record<string, unknown>[] }) {
   }
   useEffect(() => {
     let active = true;
-    if (identity)
+    setRecord(null);
+    if (selected)
       void request(identity)
         .then((value) => {
           if (active) setRecord({ identity, value });
@@ -264,7 +312,7 @@ function PurposeReview({ exposure }: { exposure: Record<string, unknown>[] }) {
     return () => {
       active = false;
     };
-  }, [identity]);
+  }, [identity, membership, selected]);
   return (
     <section className="space-y-3 rounded border p-4">
       <h2>
@@ -274,26 +322,22 @@ function PurposeReview({ exposure }: { exposure: Record<string, unknown>[] }) {
         {copy("Registro de finalidad", "Purpose record")}
         <select
           className="native-select block"
-          value={identity}
+          value={selected ? identity : ""}
           onChange={(e) => setIdentity(e.target.value)}
         >
           <option value="">—</option>
-          {exposure
-            .filter(
-              (e) => e.purpose_provenance_id && e.purpose_origin !== "explicit",
-            )
-            .map((e) => (
-              <option
-                key={String(e.attempt_id)}
-                value={String(e.purpose_provenance_id)}
-              >
-                {String(e.instrument)} · {String(e.attempt_id)} ·{" "}
-                {String(e.purpose_origin)}
-              </option>
-            ))}
+          {eligible.map((e) => (
+            <option
+              key={String(e.attempt_id)}
+              value={String(e.purpose_provenance_id)}
+            >
+              {String(e.instrument)} · {String(e.attempt_id)} ·{" "}
+              {String(e.purpose_origin)}
+            </option>
+          ))}
         </select>
       </label>
-      {identity && (
+      {selected && (
         <>
           <label>
             {copy("Finalidad revisada", "Reviewed purpose")}
@@ -329,7 +373,7 @@ function PurposeReview({ exposure }: { exposure: Record<string, unknown>[] }) {
             />
           </label>
           <Button
-            disabled={!reviewer || !reason}
+            disabled={!selected || !reviewer || !reason}
             onClick={() =>
               void request(identity, {
                 purpose,
@@ -337,8 +381,22 @@ function PurposeReview({ exposure }: { exposure: Record<string, unknown>[] }) {
                 reason,
                 supporting_references: [],
               })
-                .then((value) => setRecord({ identity, value }))
-                .catch((e) => setError(String(e)))
+                .then((value) => {
+                  if (
+                    scope.current.active &&
+                    scope.current.identity === identity &&
+                    scope.current.ids.has(identity)
+                  )
+                    setRecord({ identity, value });
+                })
+                .catch((e) => {
+                  if (
+                    scope.current.active &&
+                    scope.current.identity === identity &&
+                    scope.current.ids.has(identity)
+                  )
+                    setError(String(e));
+                })
             }
           >
             {copy("Registrar revisión de finalidad", "Record purpose review")}

@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -109,14 +109,32 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
   const [error, setError] = useState("");
   const [help, setHelp] = useState(false);
   const [stopped, setStopped] = useState(false);
+  const [stopSelection, setStopSelection] = useState("");
+  const mounted = useRef(true);
+  const refreshEpoch = useRef(0);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const id = initial.assignment.id;
   const refresh = useCallback(async () => {
+    const epoch = ++refreshEpoch.current;
     const [next, prepared] = await Promise.all([
       assignmentDetail(id),
       studyCall<Readiness>(`/assignments/${id}/preparation`),
     ]);
+    if (!mounted.current || epoch !== refreshEpoch.current) return;
+    if (next.assignment.id !== id)
+      throw new Error("Assignment response identity changed.");
     setDetail(next);
     setReadiness(prepared);
+    setRun((current) =>
+      current
+        ? (prepared.preparations.find((item) => item.id === current.id) ?? null)
+        : null,
+    );
   }, [id]);
   useEffect(() => {
     void refresh().catch((e) => setError(String(e)));
@@ -126,11 +144,11 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
     setError("");
     try {
       await action();
-      await refresh();
+      if (mounted.current) await refresh();
     } catch (e) {
-      setError(String(e));
+      if (mounted.current) setError(String(e));
     } finally {
-      setBusy(false);
+      if (mounted.current) setBusy(false);
     }
   }
   const occasions = detail.version.study.occasions
@@ -148,6 +166,18 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
   const missing = next
     ? readiness?.requirements[next.key]?.find((r) => r.state !== "prepared")
     : null;
+  const stopCandidates =
+    readiness?.preparations.filter(
+      (preparation) =>
+        preparation.next_action !== "stopped" &&
+        !detail.attempts[preparation.occasion_key]?.some((attempt) =>
+          ["started", "finished"].includes(attempt.acquisition_state),
+        ),
+    ) ?? [];
+  const stopTarget =
+    stopCandidates.find((item) => item.id === run?.id) ??
+    stopCandidates.find((item) => item.id === stopSelection) ??
+    (stopCandidates.length === 1 ? stopCandidates[0] : null);
   const recovery = detail.version.study.recovery_intervals?.find(
     (interval) =>
       interval.before_key === next?.key &&
@@ -193,9 +223,27 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
         </Button>
         <Button
           variant="outline"
+          disabled={busy || !stopTarget}
           onClick={() =>
             void act(async () => {
-              const native = run?.events.toReversed().find((e) => e.session_id);
+              if (!stopTarget) return;
+              const latest = await studyCall<Readiness>(
+                `/assignments/${id}/preparation`,
+              );
+              const target = latest.preparations.find(
+                (item) =>
+                  item.id === stopTarget.id && item.next_action !== "stopped",
+              );
+              if (!target)
+                throw new Error(
+                  copy(
+                    "Seleccione una preparación activa exacta.",
+                    "Select an exact active preparation.",
+                  ),
+                );
+              const native = target.events
+                .toReversed()
+                .find((e) => e.session_id);
               if (native?.session_id) {
                 const lease = readOpenMatbController(native.session_id);
                 if (!lease)
@@ -206,23 +254,61 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
                     ),
                   );
                 const active = await getOpenMatbSession(native.session_id);
-                if (!["COMPLETE", "ABORTED"].includes(active.lifecycle))
-                  await abortOpenMatbSession(native.session_id, lease);
+                if (!["COMPLETE", "ABORTED"].includes(active.lifecycle)) {
+                  const aborted = await abortOpenMatbSession(
+                    native.session_id,
+                    lease,
+                  );
+                  if (aborted.lifecycle !== "ABORTED")
+                    throw new Error(
+                      copy(
+                        "La detención nativa no está confirmada.",
+                        "Native stop is not confirmed.",
+                      ),
+                    );
+                }
               }
-              if (run)
-                setRun(
-                  await studyCall<Preparation>(
-                    `/preparation/${run.id}/stop`,
-                    {},
+              const saved = await studyCall<Preparation>(
+                `/preparation/${target.id}/stop`,
+                {},
+              );
+              if (saved.id !== target.id || saved.next_action !== "stopped")
+                throw new Error(
+                  copy(
+                    "No se confirmó el registro de detención.",
+                    "The stop evidence write was not confirmed.",
                   ),
                 );
-              setStopped(true);
+              if (mounted.current) {
+                setRun(saved);
+                setStopped(true);
+              }
             })
           }
         >
           {copy("Detener preparación", "Stop preparation")}
         </Button>
       </div>
+      {stopCandidates.length > 1 &&
+        !stopCandidates.some((item) => item.id === run?.id) && (
+          <label>
+            {copy(
+              "Preparación exacta para detener",
+              "Exact preparation to stop",
+            )}
+            <select
+              value={stopSelection}
+              onChange={(event) => setStopSelection(event.target.value)}
+            >
+              <option value="">—</option>
+              {stopCandidates.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.occasion_key} · {item.id}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       {help && (
         <p>
           {copy(
@@ -310,7 +396,16 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
                   >
                     {copy("Realizar práctica", "Perform practice")}
                   </Button>
-                  <PracticeReuse preparation={run} onReused={setRun} />
+                  <PracticeReuse
+                    key={run.id}
+                    preparation={run}
+                    onReused={async (updated) => {
+                      if (mounted.current)
+                        await act(async () => {
+                          setRun(updated);
+                        });
+                    }}
+                  />
                   {run.practice_attempt_ids.map((attempt) => (
                     <Button
                       key={attempt}
@@ -633,7 +728,7 @@ function PracticeReuse({
   onReused,
 }: {
   preparation: Preparation;
-  onReused: (run: Preparation) => void;
+  onReused: (run: Preparation) => Promise<void>;
 }) {
   const copy = (es: string, en: string) =>
     preparation.presentation.locale === "en" ? en : es;

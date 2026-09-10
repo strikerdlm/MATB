@@ -74,12 +74,12 @@ for (const locale of ["en", "es-419"] as const) {
         name: en ? /Prepare: demonstration/ : /Preparar: demostración/,
       }),
     ).toBeVisible();
-    await page
-      .getByRole("button", {
-        name: en ? "Stop preparation" : "Detener preparación",
-        exact: true,
-      })
-      .focus();
+    const stopPreparation = page.getByRole("button", {
+      name: en ? "Stop preparation" : "Detener preparación",
+      exact: true,
+    });
+    await expect(stopPreparation).toBeEnabled();
+    await stopPreparation.focus();
     await page.keyboard.press("Enter");
     await expect(
       page.getByText(en ? /Preparation stopped/ : /Preparación detenida/),
@@ -235,6 +235,111 @@ for (const locale of ["en", "es-419"] as const) {
     expect(
       events.find((e: { stage: string }) => e.stage === "practice").attempt_id,
     ).toBe(attempt);
+    // Reuse through the actual parent flow after an explicit stop and new preparation.
+    await page
+      .getByRole("button", {
+        name: en ? "Stop preparation" : "Detener preparación",
+        exact: true,
+      })
+      .click();
+    await expect(
+      page.getByText(
+        en
+          ? /Preparation stopped. Prior records/
+          : /Preparación detenida. Los registros/,
+      ),
+    ).toBeVisible();
+    await page.reload();
+    await page
+      .getByRole("button", {
+        name: en ? "Prepare · baseline" : "Preparar · baseline",
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("button", {
+        name: en
+          ? "Explicitly restart preparation"
+          : "Reiniciar preparación explícitamente",
+        exact: true,
+      })
+      .click();
+    for (let stage = 0; stage < 2; stage++)
+      await page
+        .getByRole("button", {
+          name: en ? "Continue" : "Continuar",
+          exact: true,
+        })
+        .click();
+    await page.getByRole("textbox").fill("SPACE");
+    await page
+      .getByRole("button", { name: en ? "Continue" : "Continuar", exact: true })
+      .click();
+    await page
+      .getByText(
+        en
+          ? "Researcher: select compatible prior competence"
+          : "Investigador: seleccionar competencia previa compatible",
+        { exact: true },
+      )
+      .click();
+    await page
+      .getByRole("combobox", {
+        name: en ? "Exact prior observations" : "Observaciones previas exactas",
+        exact: true,
+      })
+      .selectOption(
+        events.find((event: { stage: string }) => event.stage === "practice")
+          .id,
+      );
+    await page
+      .getByLabel(en ? "Researcher" : "Investigador", { exact: true })
+      .fill("Dr Reuse Fixture");
+    await page
+      .getByLabel(en ? "Reuse reason" : "Motivo de reutilización", {
+        exact: true,
+      })
+      .fill("Same frozen actual practice evidence");
+    await page
+      .getByRole("button", {
+        name: en
+          ? "Use these prior observations"
+          : "Usar estas observaciones previas",
+        exact: true,
+      })
+      .click();
+    await expect(
+      page.getByRole("button", {
+        name: en ? "Perform assessment" : "Realizar evaluación",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", {
+        name: en ? "Perform practice" : "Realizar práctica",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", {
+        name: en ? "Prepare · baseline" : "Preparar · baseline",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    const reused = await (
+      await request.get(
+        `${base}/study/assignments/${assignment.id}/preparation`,
+      )
+    ).json();
+    expect(reused.preparations).toHaveLength(3);
+    const reusedDecision = reused.preparations
+      .find((run: { next_action: string }) => run.next_action === "ready")
+      .events.find((event: { stage: string }) => event.stage === "practice");
+    expect(reusedDecision.attempt_id).toBe(attempt);
+    expect(reusedDecision.reused_from_event_id).toBe(
+      events.find((event: { stage: string }) => event.stage === "practice").id,
+    );
+    expect(reusedDecision.duration_seconds).toBeNull();
     await page
       .getByRole("button", {
         name: en ? "Perform assessment" : "Realizar evaluación",
@@ -526,148 +631,167 @@ test("historical unknown exposure and exact immutable classification history", a
 });
 
 // Failure paths remain unresolved until both native abort and the durable stop write succeed.
-for (const locale of ["en", "es-419"] as const) {
-  test(`native preparation stop preserves abort uncertainty and write failures in ${locale}`, async ({
-    page,
-  }) => {
-    const { fixture, SUITE } = await import("./openmatb-fixtures");
-    const native = await fixture(page, locale);
-    const en = locale === "en";
-    native.current = { ...native.current, lifecycle: "PREFLIGHT_HELD" };
-    const assignment = "native-stop-fixture";
-    const preparation = {
-      id: "native-stop-preparation",
-      occasion_key: "task",
-      next_action: "acknowledgement",
-      presentation: { locale, instrument: "openmatb", items: [] },
-      events: [
-        { stage: "native_presentation", session_id: SUITE, passed: true },
-      ],
-      practice_attempt_ids: [],
-    };
-    const detail = {
-      assignment: {
-        id: assignment,
-        participant_id: "P01",
-        visit_id: 1,
-        version_id: "frozen-fixture",
-      },
-      version: {
-        study: {
-          title: "Software stop fixture",
-          occasions: [
-            { key: "task", instrument: "openmatb", locale, order: 1 },
-          ],
+for (const phase of ["acknowledgement", "ready"] as const)
+  for (const locale of ["en", "es-419"] as const) {
+    test(`native preparation stop preserves abort uncertainty and write failures after ${phase} reload in ${locale}`, async ({
+      page,
+    }) => {
+      const { fixture, SUITE } = await import("./openmatb-fixtures");
+      const native = await fixture(page, locale);
+      const en = locale === "en";
+      native.current = { ...native.current, lifecycle: "PREFLIGHT_HELD" };
+      const assignment = "native-stop-fixture";
+      const preparation = {
+        id: "native-stop-preparation",
+        occasion_key: "task",
+        next_action: phase as string,
+        presentation: { locale, instrument: "openmatb", items: [] },
+        events: [
+          { stage: "native_presentation", session_id: SUITE, passed: true },
+        ],
+        practice_attempt_ids: [],
+      };
+      const detail = {
+        assignment: {
+          id: assignment,
+          participant_id: "P01",
+          visit_id: 1,
+          version_id: "frozen-fixture",
         },
-      },
-      occasions: { task: "task-occasion" },
-      attempts: { task: [] },
-    };
-    await page.route(`**/study/assignments/${assignment}`, (route) =>
-      route.fulfill({ json: detail }),
-    );
-    await page.route(
-      `**/study/assignments/${assignment}/preparation`,
-      (route) =>
-        route.fulfill({
-          json: {
-            requirements: {
-              task: [{ occasion_key: "task", state: "required" }],
-            },
-            preparations: [preparation],
+        version: {
+          study: {
+            title: "Software stop fixture",
+            occasions: [
+              { key: "task", instrument: "openmatb", locale, order: 1 },
+            ],
           },
-        }),
-    );
-    const calls: string[] = [];
-    let abortFailed = false,
-      writeFailed = false;
-    await page.route(`**/openmatb/sessions/${SUITE}/abort`, (route) => {
-      if (!abortFailed) {
-        abortFailed = true;
-        calls.push("abort-unconfirmed");
-        return route.fulfill({
-          status: 409,
-          json: {
-            detail: {
-              code: "openmatb_stop_unconfirmed",
-              message: "Native stop unconfirmed",
+        },
+        occasions: { task: "task-occasion" },
+        attempts: { task: [] },
+      };
+      await page.route(`**/study/assignments/${assignment}`, (route) =>
+        route.fulfill({ json: detail }),
+      );
+      await page.route(
+        `**/study/assignments/${assignment}/preparation`,
+        (route) =>
+          route.fulfill({
+            json: {
+              requirements: {
+                task: [
+                  {
+                    occasion_key: "task",
+                    state: phase === "ready" ? "prepared" : "required",
+                    preparation_id: preparation.id,
+                  },
+                ],
+              },
+              preparations: [preparation],
             },
-          },
-        });
-      }
-      calls.push("abort-confirmed");
-      native.current = { ...native.current, lifecycle: "ABORTED" };
-      return route.fulfill({ json: native.current });
-    });
-    await page.route(
-      "**/study/preparation/native-stop-preparation/stop",
-      (route) => {
-        if (!writeFailed) {
-          writeFailed = true;
-          calls.push("stop-write-failed");
+          }),
+      );
+      const calls: string[] = [];
+      let abortFailed = false,
+        writeFailed = false;
+      await page.route(`**/openmatb/sessions/${SUITE}/abort`, (route) => {
+        if (!abortFailed) {
+          abortFailed = true;
+          calls.push("abort-unconfirmed");
           return route.fulfill({
-            status: 500,
-            json: { detail: "Stop evidence write unavailable" },
+            status: 409,
+            json: {
+              detail: {
+                code: "openmatb_stop_unconfirmed",
+                message: "Native stop unconfirmed",
+              },
+            },
           });
         }
-        calls.push("stop-written");
-        preparation.next_action = "stopped";
-        preparation.events.push({
-          stage: "stopped",
-          session_id: "",
-          passed: false,
-        });
-        return route.fulfill({ json: preparation });
-      },
-    );
-    await page.goto(`/study/participant?assignment=${assignment}`);
-    await page
-      .getByRole("button", {
-        name: en ? "Prepare · task" : "Preparar · task",
+        calls.push("abort-confirmed");
+        native.current = { ...native.current, lifecycle: "ABORTED" };
+        return route.fulfill({ json: native.current });
+      });
+      await page.route(
+        "**/study/preparation/native-stop-preparation/stop",
+        (route) => {
+          if (!writeFailed) {
+            writeFailed = true;
+            calls.push("stop-write-failed");
+            return route.fulfill({
+              status: 500,
+              json: { detail: "Stop evidence write unavailable" },
+            });
+          }
+          calls.push("stop-written");
+          preparation.next_action = "stopped";
+          preparation.events.push({
+            stage: "stopped",
+            session_id: "",
+            passed: false,
+          });
+          return route.fulfill({ json: preparation });
+        },
+      );
+      await page.goto(`/study/participant?assignment=${assignment}`);
+      if (phase === "acknowledgement") {
+        await page
+          .getByRole("button", {
+            name: en ? "Prepare · task" : "Preparar · task",
+            exact: true,
+          })
+          .click();
+      }
+      await page.reload();
+      const stop = page.getByRole("button", {
+        name: en ? "Stop preparation" : "Detener preparación",
         exact: true,
-      })
-      .click();
-    const stop = page.getByRole("button", {
-      name: en ? "Stop preparation" : "Detener preparación",
-      exact: true,
+      });
+      const stoppedMessage = page.getByText(
+        en
+          ? /Preparation stopped. Prior records/
+          : /Preparación detenida. Los registros/,
+      );
+      await expect(stop).toBeEnabled();
+      await stop.focus();
+      await page.keyboard.press("Enter");
+      await expect(
+        page.getByRole("alert").filter({ hasText: "Native stop unconfirmed" }),
+      ).toBeVisible();
+      await expect.poll(() => calls).toEqual(["abort-unconfirmed"]);
+      await expect(stoppedMessage).toHaveCount(0);
+      await stop.focus();
+      await page.keyboard.press("Enter");
+      await expect
+        .poll(() => calls)
+        .toEqual(["abort-unconfirmed", "abort-confirmed", "stop-write-failed"]);
+      await expect(
+        page
+          .getByRole("alert")
+          .filter({ hasText: "Stop evidence write unavailable" }),
+      ).toBeVisible();
+      await expect(stoppedMessage).toHaveCount(0);
+      await stop.focus();
+      await page.keyboard.press("Enter");
+      await expect(stoppedMessage).toBeVisible();
+      expect(calls).toEqual([
+        "abort-unconfirmed",
+        "abort-confirmed",
+        "stop-write-failed",
+        "stop-written",
+      ]);
+      expect(native.current.lifecycle).toBe("ABORTED");
+      expect(preparation.events[0]).toMatchObject({
+        stage: "native_presentation",
+        session_id: SUITE,
+      });
+      expect(preparation.next_action).toBe("stopped");
+      await page.reload();
+      await expect(
+        page.getByRole("button", {
+          name: en ? "Stop preparation" : "Detener preparación",
+          exact: true,
+        }),
+      ).toBeDisabled();
+      await expect(stoppedMessage).toHaveCount(0);
     });
-    const stoppedMessage = page.getByText(
-      en
-        ? /Preparation stopped. Prior records/
-        : /Preparación detenida. Los registros/,
-    );
-    await stop.focus();
-    await page.keyboard.press("Enter");
-    await expect(
-      page.getByRole("alert").filter({ hasText: "Native stop unconfirmed" }),
-    ).toBeVisible();
-    await expect.poll(() => calls).toEqual(["abort-unconfirmed"]);
-    await expect(stoppedMessage).toHaveCount(0);
-    await stop.focus();
-    await page.keyboard.press("Enter");
-    await expect
-      .poll(() => calls)
-      .toEqual(["abort-unconfirmed", "abort-confirmed", "stop-write-failed"]);
-    await expect(
-      page
-        .getByRole("alert")
-        .filter({ hasText: "Stop evidence write unavailable" }),
-    ).toBeVisible();
-    await expect(stoppedMessage).toHaveCount(0);
-    await stop.focus();
-    await page.keyboard.press("Enter");
-    await expect(stoppedMessage).toBeVisible();
-    expect(calls).toEqual([
-      "abort-unconfirmed",
-      "abort-confirmed",
-      "stop-write-failed",
-      "stop-written",
-    ]);
-    expect(native.current.lifecycle).toBe("ABORTED");
-    expect(preparation.events[0]).toMatchObject({
-      stage: "native_presentation",
-      session_id: SUITE,
-    });
-    expect(preparation.next_action).toBe("stopped");
-  });
-}
+  }
