@@ -82,8 +82,16 @@ def test_declaration_is_atomic_and_reviewer_required(tmp_path):
 @pytest.mark.parametrize('path', ['/pvt', '/screen', '/openmatb/sessions', '/liftoff/sessions',
     '/physiology/polar-h10/v1/captures', '/simulation/sessions', '/simulation/technical-sessions'])
 def test_omitted_purpose_http_rejection(client, path):
-    from app.main import app
-    from app.routers import openmatb, liftoff, physiology, simulation
+    from fastapi import FastAPI
+    from app.main import app as installed_app
+    from tests.conftest import SyncASGIClient
+    from app.routers import openmatb, liftoff, physiology, simulation, pvt, screen
+    app = FastAPI()
+    app.exception_handlers.update(installed_app.exception_handlers)
+    app.dependency_overrides.update(installed_app.dependency_overrides)
+    for module in (openmatb, liftoff, physiology, simulation, pvt, screen):
+        app.include_router(module.router)
+    client = SyncASGIClient(app)
     from tests.test_liftoff_endpoints import create_payload
     from tests.test_screen_endpoint import _payload as screen_payload
     from tests.test_pvt_endpoint import _payload as pvt_payload
