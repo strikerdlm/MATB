@@ -15,7 +15,7 @@ from app.simulation_models import SimulationSession, TechnicalSimulationSession
 async def _prepare(client, *, scenario_id: str = "reference_area_search"):
     return await client.post(
         "/simulation/sessions",
-        json={
+        json={"execution_purpose": "study",
             "participant_id": "P01",
             "visit_ordinal": 1,
             "scenario_id": scenario_id,
@@ -27,7 +27,7 @@ async def _prepare(client, *, scenario_id: str = "reference_area_search"):
 async def _prepare_technical(client, *, block_id: str = "LOW"):
     return await client.post(
         "/simulation/technical-sessions",
-        json={
+        json={"execution_purpose": "practice",
             "scenario_id": "reference_area_search",
             "block_id": block_id,
             "locale": "es-CO",
@@ -95,7 +95,7 @@ async def test_technical_session_rejects_research_fields_and_other_profile(simul
     client, _manager = simulation_client
     contaminated = await client.post(
         "/simulation/technical-sessions",
-        json={
+        json={"execution_purpose": "practice",
             "scenario_id": "reference_area_search",
             "block_id": "LOW",
             "locale": "es-CO",
@@ -145,7 +145,7 @@ async def test_prepare_unknown_identity_and_path_safe_scenario(simulation_client
     client, _manager = simulation_client
     unknown_participant = await client.post(
         "/simulation/sessions",
-        json={"participant_id": "P02", "visit_ordinal": 1, "scenario_id": "reference_area_search", "locale": "en"},
+        json={"execution_purpose": "study", "participant_id": "P02", "visit_ordinal": 1, "scenario_id": "reference_area_search", "locale": "en"},
     )
     assert unknown_participant.status_code == 404
     assert unknown_participant.json()["detail"]["code"] == "participant_not_found"
@@ -167,7 +167,7 @@ async def test_prepare_transport_allows_legacy_ordinal_but_runtime_requires_visi
 
     legacy_ordinal = await client.post(
         "/simulation/sessions",
-        json={
+        json={"execution_purpose": "study",
             "participant_id": "P01",
             "visit_ordinal": 16,
             "scenario_id": "reference_area_search",
@@ -176,7 +176,7 @@ async def test_prepare_transport_allows_legacy_ordinal_but_runtime_requires_visi
     )
     outside_transport_bound = await client.post(
         "/simulation/sessions",
-        json={
+        json={"execution_purpose": "study",
             "participant_id": "P01",
             "visit_ordinal": 17,
             "scenario_id": "reference_area_search",
@@ -389,7 +389,7 @@ async def test_recovery_requires_lease_while_runtime_exists(simulation_client, s
 @pytest.mark.anyio
 async def test_request_validation_uses_stable_error_shape(simulation_client, seeded_participant) -> None:
     client, _manager = simulation_client
-    invalid = await client.post("/simulation/sessions", json={})
+    invalid = await client.post("/simulation/sessions", json={"execution_purpose": "study", })
     assert invalid.status_code == 422
     detail = invalid.json()["detail"]
     assert detail["code"] == "invalid_request"

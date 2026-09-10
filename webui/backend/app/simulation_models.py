@@ -21,6 +21,7 @@ def _utcnow() -> datetime:
 
 class SimulationSession(SQLModel, table=True):
     __tablename__ = "simulation_session"
+    purpose_provenance_id: str | None = None
 
     id: str = Field(primary_key=True)
     participant_id: str = Field(foreign_key="participant.id", index=True)
@@ -48,6 +49,7 @@ class TechnicalSimulationSession(SQLModel, table=True):
     """
 
     __tablename__ = "technical_simulation_session"
+    purpose_provenance_id: str | None = None
 
     id: str = Field(primary_key=True)
     scenario_id: str

@@ -336,7 +336,7 @@ class OpenMatbReadiness(BaseModel):
 
 class CreateOpenMatbSession(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    execution_purpose: Literal["practice", "study"] = "study"
+    execution_purpose: Literal["practice", "study"]
     participant_id: str = Field(pattern=PARTICIPANT_ID_PATTERN)
     visit_ordinal: int = Field(ge=1, le=16)
     preset_id: str = "matb-fac-standard"
@@ -367,6 +367,7 @@ class PreparedOpenMatbSession(BaseModel):
 
 
 class OpenMatbSessionView(BaseModel):
+    purpose_provenance_id: str | None = None
     model_config = ConfigDict(extra="forbid")
     execution_purpose: Literal["practice", "study"] = "study"
     locale: str = "es-419"

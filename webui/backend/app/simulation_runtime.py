@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.purpose_service import declare_acquisition
+
 import asyncio
 import hashlib
 import inspect
@@ -132,6 +134,7 @@ class RuntimeHandle:
     probe_timeout_task: asyncio.Task[Any] | None = None
     block_closed: bool = False
     session_mode: str = "research"
+    purpose_provenance_id: str | None = None
     record_class: str = "research"
     selected_block_id: str | None = None
 
@@ -242,7 +245,7 @@ class SimulationManager:
             self._append(handle, RecordKind.LIFECYCLE, {
                 "event": "session_prepared", "scenario_id": loaded.definition.scenario_id,
             }, 0, 0)
-            db.add(SimulationSession(
+            acquisition_row = SimulationSession(
                 id=session_id,
                 participant_id=request.participant_id,
                 visit_id=int(visit.id),
@@ -253,7 +256,9 @@ class SimulationManager:
                 lifecycle="PREPARED",
                 validity="valid",
                 artifact_root=str(run_dir),
-            ))
+            )
+            declare_acquisition(db, acquisition_row, purpose=request.execution_purpose)
+            handle.purpose_provenance_id = acquisition_row.purpose_provenance_id
             db.flush()
             for index, block_id in enumerate(("PRACTICE", *(item.value for item in order)), start=0):
                 db.add(SimulationBlock(
@@ -334,7 +339,7 @@ class SimulationManager:
                 "execution_purpose": "practice",
                 "selected_block_id": request.block_id,
             }, 0, 0)
-            db.add(TechnicalSimulationSession(
+            acquisition_row = TechnicalSimulationSession(
                 id=session_id,
                 scenario_id=loaded.definition.scenario_id,
                 scenario_sha256=loaded.sha256,
@@ -345,7 +350,9 @@ class SimulationManager:
                 validity="technical_only",
                 record_class="technical_only",
                 artifact_root=str(run_dir),
-            ))
+            )
+            declare_acquisition(db, acquisition_row, purpose=request.execution_purpose)
+            handle.purpose_provenance_id = acquisition_row.purpose_provenance_id
             db.flush()
             db.add(TechnicalSimulationBlock(
                 session_id=session_id,
@@ -1086,6 +1093,7 @@ class SimulationManager:
         handle = RuntimeHandle(
             session_id=session_id,
             participant_id=participant_id,
+            purpose_provenance_id=row.purpose_provenance_id,
             visit_id=int(visit_id) if visit_id is not None else None,
             locale=row.locale,
             scenario=loaded,
@@ -1555,6 +1563,7 @@ class SimulationManager:
             block_order=list(protocol_order), state_version=self._version(handle),
             simulation_time_ms=self._time(handle), validity=effective_validity,
             execution_purpose="practice" if handle.record_class == "technical_only" else "study",
+            purpose_provenance_id=handle.purpose_provenance_id,
             session_mode=handle.session_mode,
             record_class=handle.record_class,
             selected_block_id=handle.selected_block_id,

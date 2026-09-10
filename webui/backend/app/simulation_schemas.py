@@ -190,6 +190,7 @@ class PresentationEvent(BaseModel):
 
 
 class CreateSimulationSession(BaseModel):
+    execution_purpose: Literal["study"]
     model_config = ConfigDict(extra="forbid")
 
     participant_id: str = Field(pattern=PARTICIPANT_ID_PATTERN)
@@ -201,6 +202,7 @@ class CreateSimulationSession(BaseModel):
 
 class CreateTechnicalSimulationSession(BaseModel):
     """Strict contract for a direct, non-participant interactive launch."""
+    execution_purpose: Literal["practice"]
 
     model_config = ConfigDict(extra="forbid")
 
@@ -220,6 +222,7 @@ class ConsoleProfile(BaseModel):
 
 
 class SessionView(BaseModel):
+    purpose_provenance_id: str | None = None
     """Public session metadata that never includes a controller lease."""
 
     model_config = ConfigDict(extra="forbid")

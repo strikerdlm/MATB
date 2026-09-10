@@ -214,8 +214,8 @@ export async function getBayesStatus(jobId?: number): Promise<BayesJob | null> {
 
 export async function postScreen(
   participantId: string, payload: import("@/lib/screen").ScreenPayload,
-  overwrite = false,
-  executionPurpose: "practice" | "study" = "study",
+  overwrite: boolean,
+  executionPurpose: "practice" | "study",
 ): Promise<ScreenIngestResult> {
   const res = await request("/screen", {
     method: "POST",

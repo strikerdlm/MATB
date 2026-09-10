@@ -11,6 +11,7 @@ import pytest
 def create_payload(*, polar_recording_confirmed: bool = True) -> dict[str, object]:
     return {
         "participant_id": "P01",
+        "execution_purpose": "study",
         "visit_ordinal": 1,
         "configuration": {
             "liftoff_build": "1.6.0-test",

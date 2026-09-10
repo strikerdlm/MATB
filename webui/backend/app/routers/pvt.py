@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlmodel import Session, select
 
+from app.purpose_service import declare_acquisition
 from app.db import get_session
 from app.models import ArchivedAssessment, Participant, PracticeResult, PvtAssessment, Visit
 
@@ -70,7 +71,7 @@ class PvtAssessmentIn(BaseModel):
     fast_mode: bool = False
     trials: list[PvtTrialIn] = Field(min_length=0, max_length=10000)
     overwrite: bool = False
-    execution_purpose: Literal["practice", "study"] = "study"
+    execution_purpose: Literal["practice", "study"]
     locale: Literal["es-419", "en"] = "es-419"
     timing_version: Literal[1, 2] = 1
     interruption_count: int = Field(default=0, ge=0)
@@ -80,6 +81,8 @@ class PvtAssessmentIn(BaseModel):
 
     @model_validator(mode="after")
     def validate_protocol_duration(self) -> "PvtAssessmentIn":
+        if self.fast_mode and self.execution_purpose == "study":
+            raise ValueError("fast_mode requires practice purpose")
         indices = [trial.index for trial in self.trials]
         if indices != list(range(len(indices))):
             raise ValueError("trial indices must be contiguous from zero")
@@ -170,6 +173,7 @@ def _visit(session: Session, participant_id: str, visit_ordinal: int) -> Visit:
 def _view(row: PvtAssessment) -> dict[str, object]:
     return {
         "id": row.id,
+        "purpose_provenance_id": row.purpose_provenance_id,
         "participant_id": row.participant_id,
         "visit_id": row.visit_id,
         "kss_score": row.kss_score,
@@ -200,10 +204,10 @@ def ingest_pvt(body: PvtAssessmentIn, session: Session = Depends(get_session)) -
                   "execution_purpose": "practice", "timing_evidence": timing}
         practice = PracticeResult(experiment_id="pvt", participant_id=body.participant_id,
                                   payload_json=body.model_dump_json(), result_json=json.dumps(result, allow_nan=False))
-        session.add(practice)
+        declare_acquisition(session, practice, purpose="practice")
         session.commit()
         session.refresh(practice)
-        return {"id": practice.id, **result}
+        return {"id": practice.id, "purpose_provenance_id": practice.purpose_provenance_id, **result}
     existing = session.exec(
         select(PvtAssessment).where(PvtAssessment.visit_id == visit.id)
     ).first()
@@ -213,7 +217,7 @@ def ingest_pvt(body: PvtAssessmentIn, session: Session = Depends(get_session)) -
         raise HTTPException(status.HTTP_409_CONFLICT, "PVT already recorded for this visit")
     if existing is not None:
         session.add(ArchivedAssessment(experiment_id="pvt", participant_id=existing.participant_id,
-                      original_id=existing.id, snapshot_json=existing.model_dump_json()))
+                      original_id=existing.id, purpose_provenance_id=existing.purpose_provenance_id, snapshot_json=existing.model_dump_json()))
         session.delete(existing)
         session.flush()
     row = PvtAssessment(
@@ -229,7 +233,7 @@ def ingest_pvt(body: PvtAssessmentIn, session: Session = Depends(get_session)) -
         execution_purpose="study",
         timing_evidence_json=json.dumps(timing, allow_nan=False),
     )
-    session.add(row)
+    declare_acquisition(session, row, purpose=body.execution_purpose)
     session.commit()
     session.refresh(row)
     return _view(row)

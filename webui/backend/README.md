@@ -137,3 +137,35 @@ INTERRUPTED.  Recovery is explicit: an in-process interruption requires the
 
 Spec: `docs/superpowers/specs/2026-06-03-webui-phase1-data-tracker-design.md`
 Plan: `docs/superpowers/plans/2026-06-03-webui-phase1a-backend.md`
+
+### Acquisition purpose and historical provenance
+
+All new acquisition POST bodies require `execution_purpose`: `study` or
+`practice` for `/pvt`, `/screen`, `/openmatb/sessions`, `/liftoff/sessions` and
+`/physiology/polar-h10/v1/captures`; `/simulation/sessions` requires `study`, and
+`/simulation/technical-sessions` requires `practice`. A fast screen or PVT declared
+as study returns 422. Existing artifact readers retain tolerant historical defaults.
+
+Record views expose `purpose_provenance_id`. Read its immutable identity and full
+classification history at `GET /purpose-provenance/{id}`. Append a retrospective
+local attestation with `POST /purpose-provenance/{id}/classifications`:
+
+```json
+{
+  "purpose": "practice",
+  "reviewer": "Named local reviewer",
+  "reason": "Retained training log identifies this observation as practice",
+  "supporting_references": ["training-log:retained-local-reference"]
+}
+```
+
+These routes use the existing loopback Host and mutation Origin/bearer protections.
+There is no public API to assign historical observations an `explicit`
+classification or edit/delete history. Source purposes, scores, raw observations,
+and collection timestamps remain unchanged by classification. New declarations
+and acquisition rows persist in one transaction; UUID provenance survives archived
+assessment replacement even if SQLite reuses a numeric row ID. Migration labels
+unsupported historical prospective intent `unknown`, including historical practice
+rows, and records legacy fast-mode inference as a system retrospective event at
+migration time. A classification is evidence for subsequent plan-based selection,
+not automatic scientific eligibility or approval.

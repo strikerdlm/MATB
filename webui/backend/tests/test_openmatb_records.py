@@ -26,7 +26,7 @@ def controlled(engine, tmp_path):
                              artifact_root=tmp_path / "controlled", python_executable=Path(__file__))
     manager.displays = lambda: [{"index": 0, "label": "Display 1", "width": 1920, "height": 1080, "x": 0, "y": 0},
                                 {"index": 1, "label": "Display 2", "width": 1920, "height": 1080, "x": 1920, "y": 0}]
-    prepared = asyncio.run(manager.create_session(CreateOpenMatbSession(participant_id="P01", visit_ordinal=1)))
+    prepared = asyncio.run(manager.create_session(CreateOpenMatbSession(execution_purpose="study", participant_id="P01", visit_ordinal=1)))
     return manager, prepared
 
 
@@ -130,7 +130,7 @@ def test_display_disappearing_blocks_preparation(controlled):
     asyncio.run(manager.abort(prepared.session.id, prepared.controller_lease, "test_abort"))
     manager.displays = lambda: [{"index": 0, "label": "Display 1", "width": 1920, "height": 1080, "x": 0, "y": 0}]
     with pytest.raises(OpenMatbRuntimeError, match="display_unavailable"):
-        asyncio.run(manager.create_session(CreateOpenMatbSession(participant_id="P01", visit_ordinal=1, display_index=1)))
+        asyncio.run(manager.create_session(CreateOpenMatbSession(execution_purpose="study", participant_id="P01", visit_ordinal=1, display_index=1)))
 
 
 def sealed_attempt(controlled, engine, *, terminal=True):

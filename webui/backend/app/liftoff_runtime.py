@@ -235,6 +235,7 @@ class LiftoffManager:
         visit_ordinal = int(manifest.get("visit_ordinal", 0))
         return LiftoffSessionView(
             execution_purpose=row.execution_purpose,
+            purpose_provenance_id=row.purpose_provenance_id,
             locale=manifest.get("locale", "es-419"),
             id=row.id,
             participant_id=row.participant_id,

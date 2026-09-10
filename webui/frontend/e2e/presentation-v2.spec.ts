@@ -16,6 +16,7 @@ test("v2 records camera, layer and contact actions and replays offline", async (
   await page.route("https://**/*", route => route.abort());
   const scene = (await (await request.get(`${api}/simulation/scenes`)).json())[0];
   const response = await request.post(`${api}/simulation/technical-sessions`, { data: {
+      execution_purpose: "practice",
     scenario_id: "presentation_area_search", block_id: "LOW", locale: "en",
     presentation: { version: 2, scene_id: scene.id, scene_sha256: scene.sha256, blocks: { LOW: "3d" }, camera: "overview",
       controls: { smooth_camera: true, contact_cycling: true, adjustable_layers: true },

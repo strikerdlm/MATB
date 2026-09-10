@@ -154,6 +154,7 @@ export function MissionSetupForm({
     setSubmitting(true);
     try {
       const prepared: PreparedSession = await createSimulationSession({
+        execution_purpose: "study",
         participant_id: participantId,
         visit_ordinal: Number(visitOrdinal),
         scenario_id: scenarioId,

@@ -172,14 +172,14 @@ def test_protocol_deviation_round_trip(engine) -> None:
 
 def test_create_schema_rejects_real_identity_and_invalid_locale() -> None:
     with pytest.raises(ValidationError):
-        CreateSimulationSession(
+        CreateSimulationSession(execution_purpose="study",
             participant_id="John Smith",
             visit_ordinal=1,
             scenario_id="reference_area_search",
             locale="en",
         )
     with pytest.raises(ValidationError):
-        CreateSimulationSession(
+        CreateSimulationSession(execution_purpose="study",
             participant_id="P01",
             visit_ordinal=1,
             scenario_id="reference_area_search",
@@ -189,7 +189,7 @@ def test_create_schema_rejects_real_identity_and_invalid_locale() -> None:
 
 def test_create_schema_forbids_unknown_fields() -> None:
     with pytest.raises(ValidationError):
-        CreateSimulationSession(
+        CreateSimulationSession(execution_purpose="study",
             participant_id="P01",
             visit_ordinal=1,
             scenario_id="reference_area_search",
@@ -198,7 +198,7 @@ def test_create_schema_forbids_unknown_fields() -> None:
         )
 
     with pytest.raises(ValidationError):
-        CreateTechnicalSimulationSession(
+        CreateTechnicalSimulationSession(execution_purpose="practice",
             scenario_id="reference_area_search",
             block_id="LOW",
             locale="es-CO",
@@ -207,14 +207,14 @@ def test_create_schema_forbids_unknown_fields() -> None:
 
 
 def test_technical_create_schema_accepts_only_programmed_profiles() -> None:
-    request = CreateTechnicalSimulationSession(
+    request = CreateTechnicalSimulationSession(execution_purpose="practice",
         scenario_id="reference_area_search",
         block_id="HIGH",
         locale="es-CO",
     )
     assert request.block_id == "HIGH"
     with pytest.raises(ValidationError):
-        CreateTechnicalSimulationSession(
+        CreateTechnicalSimulationSession(execution_purpose="practice",
             scenario_id="reference_area_search",
             block_id="HARD",
             locale="es-CO",

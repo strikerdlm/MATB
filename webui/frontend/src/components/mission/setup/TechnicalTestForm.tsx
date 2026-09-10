@@ -71,6 +71,7 @@ export function TechnicalTestForm({ scenarios, loading = false, loadError = null
     setSubmitting(true);
     try {
       const prepared = await createTechnicalSimulationSession({
+        execution_purpose: "practice",
         scenario_id: scenarioId,
         ...(presentation ? {presentation}:{}),
         block_id: profile,

@@ -84,6 +84,7 @@ describe("TechnicalTestForm", () => {
     await user.click(screen.getByRole("button", { name: /Iniciar prueba interactiva.*Alta.*HIGH/i }));
 
     await waitFor(() => expect(createTechnical).toHaveBeenCalledWith({
+      execution_purpose: "practice",
       scenario_id: "reference_area_search",
       block_id: "HIGH",
       locale: "es-CO",

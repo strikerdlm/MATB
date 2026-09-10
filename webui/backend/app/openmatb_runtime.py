@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.purpose_service import declare_acquisition
+
 import asyncio
 import ctypes
 import hashlib
@@ -920,7 +922,7 @@ class OpenMatbManager:
                     controller_lease_hash=_token_hash(controller_lease), participant_token_hash=_token_hash(participant_token),
                     artifact_root=str(run_dir),
                 )
-                db.add(row)
+                declare_acquisition(db, row, purpose=request.execution_purpose)
                 db.commit()
                 return PreparedOpenMatbSession(session=self._view(db, row), controller_lease=controller_lease, participant_token=participant_token)
 
@@ -939,7 +941,7 @@ class OpenMatbManager:
         order = json.loads(row.block_order_json)
         active = order[row.current_block_index] if row.current_block_index < len(order) and row.lifecycle in {"STARTING", "RUNNING", "PAUSED", "AWAITING_SCALE"} else None
         return OpenMatbSessionView(
-            execution_purpose=row.execution_purpose, locale=row.locale,
+            execution_purpose=row.execution_purpose, purpose_provenance_id=row.purpose_provenance_id, locale=row.locale,
             id=row.id, participant_id=row.participant_id, visit_ordinal=row.visit_ordinal,
             visit_code=protocol_visit.code, scheduled_day=visit.scheduled_day if visit else protocol_visit.scheduled_day,
             lifecycle=row.lifecycle, block_order=order, current_block_index=row.current_block_index, active_block=active,

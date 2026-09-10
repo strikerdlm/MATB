@@ -165,6 +165,7 @@ export interface ConsoleProfile {
 }
 
 export interface SessionView {
+  purpose_provenance_id?: string | null;
   console_profile?: ConsoleProfile | null;
   presentation?: PresentationConfig | null;
   id: string;
@@ -194,6 +195,7 @@ export interface SessionView {
 }
 
 export interface CreateSimulationSession {
+  execution_purpose: "study";
   presentation?: PresentationConfig;
   participant_id: string;
   visit_ordinal: number;
@@ -202,6 +204,7 @@ export interface CreateSimulationSession {
 }
 
 export interface CreateTechnicalSimulationSession {
+  execution_purpose: "practice";
   presentation?: PresentationConfig;
   scenario_id: string;
   block_id: Profile;

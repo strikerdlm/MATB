@@ -29,11 +29,10 @@ aliases remain reproducible but exploratory. LOW/MEDIUM/HIGH are engineering
 presets pending human calibration, and software timing QC is not a substitute
 for physical-onset qualification.
 
-Strict v3 event and separate timing-observation contracts are published. The
-runtime emits an ordered additive JSONL envelope that explicitly identifies
-itself as pre-v3 until contract-pair promotion and reconciliation are complete;
-it already records explicit SYSMON target/non-target opportunities and an
-optional fail-observable LSL mirror. The adaptive-automation policy and
+The tracked OpenMATB runtime emits strict v3 events and separate timing
+observations. The Console ingests paired capture bundles, verifies their sealed
+identities and hashes, and reconciles event-derived metrics. It records explicit
+SYSMON target/non-target opportunities and an optional fail-observable LSL mirror. The adaptive-automation policy and
 failure-model engine is implemented as an experimental component; it is not yet
 a validated participant-facing closed-loop intervention.
 
@@ -50,7 +49,21 @@ The Research Console is a loopback FastAPI/Next.js application with local
 SQLite and artifact storage. Its current OpenMATB upload path accepts legacy CSV
 plus an optional scenario manifest; derived Console metrics are labeled
 `legacy_csv_derived_not_reconciled_to_authoritative_event_stream` and remain
-confirmatory-ineligible until paired v3 JSONL reconciliation is implemented.
+confirmatory-ineligible. Paired v3 capture ingestion and reconciliation are available
+through the separate evidence workflow; CSV-only ingestion does not acquire that
+qualification.
+New PVT, screen, OpenMATB, Liftoff, mission and H10 acquisition requests must
+explicitly declare `execution_purpose`. Fast tests require `practice`; technical
+mission launches require `practice`, and participant mission launches require
+`study`. A study suite may contain protocol-declared practice blocks whose capture
+purpose remains practice. Each new record links to a stable purpose provenance
+identity and an atomic explicit declaration. Historical recorded purposes and raw
+observations are preserved; unsupported prospective intent is labeled `unknown`.
+System migration records legacy fast-mode inference at migration time without
+inventing a human reviewer or collection-time declaration. Named retrospective
+reviews append history through `/purpose-provenance/{id}/classifications`;
+classification alone does not grant analysis eligibility.
+
 Its sUAS surface is a synthetic, non-kinetic,
 supervisory simulator. Optional Colombia maps and read-only aircraft observations
 provide geographic context; live traffic is limited to exploration and technical
@@ -104,7 +117,7 @@ MATB/
 The four primary flows are deliberately separate:
 
 ```text
-Tracked/compatible OpenMATB -> ordered pre-v3 JSONL + timing QC + legacy CSV + manifest -> future v3 pair/reconciliation
+Tracked OpenMATB -> paired v3 events + timing observations + sealed manifest -> Console reconciliation
 Legacy CSV upload -> provisional Console metrics -> tracker/analysis/export (not event-stream reconciled)
 Browser -> FastAPI Research Console -> local SQLite/artifacts -> tracker/analysis/export
 Synthetic YAML -> deterministic sUAS engine -> observer-safe state -> replay/debrief artifacts
@@ -608,10 +621,6 @@ for the completeness tracker (`/tracker`). Workspace choice is remembered in
 the current browser tab. Choose practice or study explicitly before preparation;
 the workspace choice does not select a study purpose.
 
-Elija **Participante** para el catálogo (`/start`) o **Investigador** para el
-seguimiento (`/tracker`). La elección se conserva en esta pestaña. Seleccione
-práctica o estudio antes de preparar la actividad.
-
 Run exactly one Uvicorn worker for each Research Console database. The backend
 holds a durable database-instance lease and rejects a second live process so
 Bayesian jobs and SQLite writes cannot split across competing process-local
@@ -1094,10 +1103,10 @@ endpoint, release, and evidence explanations stay in their specialist guides.
 
 | Module | Purpose | User | Inputs → outputs | Runtime | Example | Verification | Limitation |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `webui/backend/` tracker and ingestion | Pseudonymous participant/visit grid, CSV/manifest checks, fits | Data steward | Legacy CSV + optional manifest → provisional SQLite block/provenance rows | FastAPI, Python 3.12+, one worker, port 8000 | [Console walkthrough](examples/research-console/README.md) | `cd webui/backend && python -m pytest -q` | Paired authoritative JSONL reconciliation remains a named release gate; duplicate/fill guards are not consent |
+| `webui/backend/` tracker, ingestion and evidence | Pseudonymous participant/visit grid, CSV checks, paired capture reconciliation, fits | Data steward | CSV → provisional metrics; paired v3 capture bundle → reconciled event derivatives | FastAPI, Python 3.12+, one worker, port 8000 | [Console walkthrough](examples/research-console/README.md) | `cd webui/backend && python -m pytest -q` | Reconciliation is software evidence; physical timing, human calibration and study eligibility require separate evidence |
 | `webui/backend/` analysis and export | Cache frequentist/Bayesian results and build reproducible bundles | Analyst | Stored metrics/fits/figures → analysis records and ZIP | FastAPI/background PyMC | Console walkthrough | Backend analysis/export tests | Export remains research data under owner custody |
 | `webui/frontend/` tracker, ingestion, and visualization | Browser grid, upload, descriptive charts | Research staff | Backend JSON → interactive local UI/PNG | Next.js, Node >=20.9, port 3100 | Console walkthrough | `npm test`, `npm run typecheck`, `npm run build` | Descriptive plots are not inferential conclusions |
-| `webui/frontend/` screen, analysis, and export | Administer baseline screen, review analyses, request bundle | Research staff | Raw trials/backend artifacts → UI summaries/export request | Browser/Next.js | Console walkthrough | Screen is exploratory; browser is not a clinical device |
+| `webui/frontend/` screen, analysis, and export | Administer baseline screen, review analyses, request bundle | Research staff | Raw trials/backend artifacts → UI summaries/export request | Browser/Next.js | Console walkthrough | Frontend and backend acquisition tests | Screen is exploratory; browser is not a clinical device |
 
 Endpoint and screen contracts are maintained in the [backend guide](webui/backend/README.md)
 and [frontend guide](webui/frontend/README.md).

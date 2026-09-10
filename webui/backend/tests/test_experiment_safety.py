@@ -7,7 +7,7 @@ from app.routers.pvt import PvtAssessmentIn, PvtTrialIn
 
 
 def full_pvt(**overrides):
-    body = dict(participant_id="P01", visit_ordinal=1, kss_score=3,
+    body = dict(execution_purpose="study", participant_id="P01", visit_ordinal=1, kss_score=3,
                 administered_at="2026-09-04T12:00:00Z", duration_ms=600000,
                 timing_version=2, max_frame_gap_ms=17, terminal_phase="waiting",
                 trials=[dict(index=i, wait_ms=2000, stimulus_at_ms=2000 + i * 2200,
@@ -82,7 +82,7 @@ def test_pvt_rejects_inconsistent_false_start():
 
 def test_pvt_rejects_events_after_session_end():
     with pytest.raises(ValueError):
-        PvtAssessmentIn(participant_id="P01", visit_ordinal=1, kss_score=3,
+        PvtAssessmentIn(execution_purpose="study", participant_id="P01", visit_ordinal=1, kss_score=3,
                         administered_at="2026-09-04T12:00:00Z", duration_ms=600000,
                         trials=[dict(index=0, wait_ms=2000, stimulus_at_ms=900000,
                                      response_at_ms=900200, rt_ms=200, outcome="response")])

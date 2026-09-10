@@ -29,6 +29,7 @@ class LiftoffSession(SQLModel, table=True):
     telemetry_profile: str
     manifest_json: str
     status: str = "PREPARED"
+    purpose_provenance_id: str | None = None
     execution_purpose: str = "study"
     validity: str = "pending_review"
     artifact_root: str

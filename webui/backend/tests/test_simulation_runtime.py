@@ -43,7 +43,7 @@ def manager(tmp_path: Path):
 
 
 def request() -> CreateSimulationSession:
-    return CreateSimulationSession(participant_id="P01", visit_ordinal=1, scenario_id="reference_area_search", locale="en")
+    return CreateSimulationSession(execution_purpose="study", participant_id="P01", visit_ordinal=1, scenario_id="reference_area_search", locale="en")
 
 
 @pytest.mark.anyio
@@ -299,7 +299,7 @@ async def test_live_traffic_is_separate_paused_concealed_and_sealed(manager,runt
     monkeypatch.setattr(service.traffic_service,'snapshot',snapshot)
     config=PresentationConfig(scene_id=scene['id'],scene_sha256=scene['sha256'],traffic=TrafficConfig(mode='live'))
     with Session(runtime_db) as db:
-        prepared=await manager.prepare_technical(CreateTechnicalSimulationSession(scenario_id='reference_area_search',block_id='LOW',locale='en',presentation=config),db)
+        prepared=await manager.prepare_technical(CreateTechnicalSimulationSession(execution_purpose="practice", scenario_id='reference_area_search',block_id='LOW',locale='en',presentation=config),db)
     await manager.start(prepared.id,'LOW',prepared.controller_lease)
     before=manager.active.engine.state_hash
     await manager.traffic_once()
@@ -338,7 +338,7 @@ async def test_recorded_traffic_uses_simulation_time_and_embedded_source(manager
     source=tmp_path/'capture.json';raw=json.dumps({'version':1,'id':'test','title':'Test','scene_id':scene['id'],'scene_sha256':scene['sha256'],'duration_ms':600000,'provider':'adsb.lol','frames':[{**base,'simulation_time_ms':0},{**base,'simulation_time_ms':200,'tracks':[]}]}).encode();source.write_bytes(raw)
     monkeypatch.setattr(service,'recording_path',lambda identifier:source)
     config=PresentationConfig(scene_id=scene['id'],scene_sha256=scene['sha256'],traffic=TrafficConfig(mode='recorded',recording_id='test',recording_sha256=hashlib.sha256(raw).hexdigest()))
-    with Session(runtime_db) as db:prepared=await manager.prepare_technical(CreateTechnicalSimulationSession(scenario_id='reference_area_search',block_id='LOW',locale='en',presentation=config),db)
+    with Session(runtime_db) as db:prepared=await manager.prepare_technical(CreateTechnicalSimulationSession(execution_purpose="practice", scenario_id='reference_area_search',block_id='LOW',locale='en',presentation=config),db)
     source.unlink() # The active run owns its verified immutable source.
     await manager.start(prepared.id,'LOW',prepared.controller_lease);await manager.traffic_once()
     assert len(manager.active.traffic_frame['tracks'])==1
@@ -429,7 +429,7 @@ async def test_console_profile_frozen_without_optional_scene(manager, runtime_db
     from app.simulation_schemas import CreateTechnicalSimulationSession
 
     with Session(runtime_db) as db:
-        prepared = (await manager.prepare_technical(CreateTechnicalSimulationSession(
+        prepared = (await manager.prepare_technical(CreateTechnicalSimulationSession(execution_purpose="practice",
             scenario_id="reference_area_search", block_id="LOW", locale="en"), db)
             if technical else await manager.prepare(request(), db))
     expected = current_console_profile()

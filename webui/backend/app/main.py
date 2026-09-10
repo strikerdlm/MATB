@@ -200,6 +200,7 @@ _CORE_ROUTER_MODULES = (
     "app.routers.metrics",
     "app.routers.participants",
     "app.routers.pvt",
+    "app.routers.purpose",
     "app.routers.screen",
     "app.routers.study",
     "app.routers.tracker",

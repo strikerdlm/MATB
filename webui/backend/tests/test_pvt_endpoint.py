@@ -26,6 +26,7 @@ def _trial(index: int, rt_ms: float = 275.0) -> dict[str, object]:
 def _payload(**overrides) -> dict[str, object]:
     payload: dict[str, object] = {
         "participant_id": "P01",
+        "execution_purpose": "study",
         "visit_ordinal": 1,
         "kss_score": 6,
         "administered_at": "2026-09-04T14:00:00.000Z",
@@ -79,7 +80,7 @@ def test_fast_mode_is_stored_as_non_protocol_data(client):
     _enroll(client)
     response = client.post(
         "/pvt",
-        json=_payload(duration_ms=5_000, fast_mode=True, trials=[_trial(0)]),
+        json=_payload(duration_ms=5_000, fast_mode=True, execution_purpose="practice", trials=[_trial(0)]),
     )
     assert response.status_code == 201, response.text
     assert response.json()["protocol_valid"] is False

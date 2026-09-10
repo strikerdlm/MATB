@@ -364,6 +364,7 @@ def _session_view_from_row(row: SessionMetadataRow, db: Session) -> SessionView:
         active_block_id=row.active_block_id,
         validity=row.validity,
         execution_purpose="practice" if technical else "study",
+        purpose_provenance_id=row.purpose_provenance_id,
         session_mode="interactive_technical" if technical else "research",
         record_class="technical_only" if technical else "research",
         selected_block_id=selected_block_id,

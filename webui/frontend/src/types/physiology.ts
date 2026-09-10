@@ -29,6 +29,7 @@ export interface PolarConnection {
 }
 
 export interface PolarCapture {
+  purpose_provenance_id?: string | null;
   execution_purpose?: "practice" | "study";
   schema_version: "1.0";
   capture_id: string;

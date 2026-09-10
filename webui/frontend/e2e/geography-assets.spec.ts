@@ -126,6 +126,7 @@ for (const id of [
       `${api}/simulation/technical-sessions`,
       {
         data: {
+          execution_purpose: "practice",
           scenario_id: "presentation_area_search",
           block_id: "LOW",
           locale: "en",

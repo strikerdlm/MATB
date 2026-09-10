@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.purpose_service import declare_acquisition
+
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 import json
@@ -40,7 +42,7 @@ class SQLModelLiftoffPersistence:
 
     def insert_session(self, row: LiftoffSession) -> LiftoffSession:
         with Session(self.engine) as db:
-            db.add(row)
+            declare_acquisition(db, row, purpose=row.execution_purpose)
             db.commit()
             db.refresh(row)
             db.expunge(row)

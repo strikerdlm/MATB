@@ -19,6 +19,7 @@ for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
       `${api}/simulation/technical-sessions`,
       {
         data: {
+          execution_purpose: "practice",
           scenario_id: "presentation_area_search",
           block_id: block,
           locale: "en",
@@ -195,6 +196,7 @@ test("corrupt offline imagery cannot satisfy readiness", async ({
   const prepared = await (
     await request.post(`${api}/simulation/technical-sessions`, {
       data: {
+      execution_purpose: "practice",
         scenario_id: "presentation_area_search",
         block_id: "LOW",
         locale: "en",
@@ -257,6 +259,7 @@ test(`3D SAGAT concealment and sealed public replay v${version}`, async ({
   )[0];
   const response = await request.post(`${api}/simulation/technical-sessions`, {
     data: {
+      execution_purpose: "practice",
       scenario_id: "e2e_area_search",
       block_id: "LOW",
       locale: "en",

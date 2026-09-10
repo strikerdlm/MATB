@@ -185,6 +185,7 @@ export interface OpenMatbVisualPreview {
 }
 
 export interface OpenMatbSession {
+  purpose_provenance_id?: string | null;
   execution_purpose: "practice" | "study";
   locale: "es-419" | "en";
   id: string;

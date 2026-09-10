@@ -77,6 +77,7 @@ class ScreenResult(SQLModel, table=True):
     raw_trials_json: str                            # full raw payload (re-derivable)
     scores_json: str                                # score_screen() output
     created_at: datetime = Field(default_factory=_utcnow)
+    purpose_provenance_id: str | None = None
     execution_purpose: str = "study"
 
 
@@ -104,6 +105,7 @@ class PvtAssessment(SQLModel, table=True):
     raw_trials_json: str
     metrics_json: str
     created_at: datetime = Field(default_factory=_utcnow)
+    purpose_provenance_id: str | None = None
     execution_purpose: str = "study"
     timing_evidence_json: str = "{}"
 
@@ -114,6 +116,7 @@ class PracticeResult(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     experiment_id: str = Field(index=True)
     participant_id: str | None = Field(default=None, foreign_key="participant.id")
+    purpose_provenance_id: str | None = None
     execution_purpose: str = "practice"
     payload_json: str
     result_json: str
@@ -155,6 +158,7 @@ class BayesResult(SQLModel, table=True):
 
 class ArchivedAssessment(SQLModel, table=True):
     """Immutable observations retained when an explicitly requested retake replaces a result."""
+    purpose_provenance_id: str | None = None
     __tablename__ = "archived_assessment"
     id: int | None = Field(default=None, primary_key=True)
     experiment_id: str = Field(index=True)

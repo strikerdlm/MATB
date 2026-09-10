@@ -10,6 +10,7 @@ import type { CreateLiftoffSession, PreparedLiftoffSession } from "@/types/lifto
 beforeEach(() => vi.restoreAllMocks());
 
 const request: CreateLiftoffSession = {
+  execution_purpose: "study",
   participant_id: "P01",
   visit_ordinal: 2,
   configuration: {

@@ -66,7 +66,7 @@ function participantFor(testInfo: TestInfo, offset: number): string {
 /** Save explicit synthetic prerequisite evidence for mission browser acceptance. */
 export async function seedStudyPvt(request: APIRequestContext, participant: string): Promise<void> {
   const pvt = await request.post(`${BACKEND_ORIGIN}/pvt`, { data: {
-    participant_id: participant, visit_ordinal: 1, kss_score: 3,
+    execution_purpose: "study", participant_id: participant, visit_ordinal: 1, kss_score: 3,
     administered_at: "2026-09-04T12:00:00Z", duration_ms: 600000,
     timing_version: 2, max_frame_gap_ms: 17, terminal_phase: "waiting",
     trials: Array.from({ length: 272 }, (_, i) => ({ index: i, wait_ms: 2000,

@@ -55,7 +55,7 @@ export const getOpenMatbVisualPreview = () => call<OpenMatbVisualPreview>("/open
 export const getOpenMatbSession = (id: string) => call<OpenMatbSession>(`/openmatb/sessions/${encodeURIComponent(id)}`);
 
 export function createOpenMatbSession(body: {
-  execution_purpose?: "practice" | "study";
+  execution_purpose: "practice" | "study";
   participant_id: string; visit_ordinal: number; preset_id: string; preset_version: string;
   instruction_protocol_id: string; instruction_version: string; display_index: number;
   visual_profile_id?: string; visual_profile_version?: string;

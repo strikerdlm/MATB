@@ -133,3 +133,9 @@ Detenga el desarrollo nativo con `Ctrl-C` en cada terminal. Para restablecer est
 ejemplo, detenga los servicios y elimine únicamente el directorio de datos del
 ejemplo seleccionado o su archivo SQLite dedicado; nunca una base de datos de
 estudio compartida.
+
+Las solicitudes nuevas de adquisición deben incluir `execution_purpose` (`study`
+o `practice`). Los modos rápidos de screen/PVT requieren `practice`. Las vistas
+incluyen `purpose_provenance_id`; la API local conserva el historial inmutable y
+la intención histórica desconocida. Consulte el
+[contrato del backend](../../webui/backend/README.md#acquisition-purpose-and-historical-provenance).

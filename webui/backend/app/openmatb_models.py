@@ -81,6 +81,7 @@ class OpenMatbSuiteSession(SQLModel, table=True):
     visual_profile_version: str | None = None
     visual_profile_schema_version: str | None = None
     visual_profile_sha256: str | None = None
+    purpose_provenance_id: str | None = None
     execution_purpose: str = "study"
     display_index: int = 1
     lifecycle: str = "INSTRUCTIONS"

@@ -29,12 +29,11 @@ LOW/MEDIUM/HIGH son preajustes de ingeniería pendientes de calibración humana,
 el control de calidad temporal del software no sustituye la calificación del
 inicio físico del estímulo.
 
-Se publican contratos estrictos de eventos v3 y observaciones temporales
-separadas. El entorno de ejecución emite un sobre JSONL aditivo y ordenado que
-se identifica explícitamente como previo a v3 hasta completar la promoción y
-reconciliación de los pares de contratos; ya registra oportunidades
-objetivo/no objetivo explícitas de SYSMON y un espejo LSL opcional cuyos fallos
-quedan registrados. El motor de políticas y modos de fallo de automatización
+El entorno OpenMATB incluido emite eventos v3 estrictos y observaciones
+temporales separadas. La Consola ingiere paquetes de capturas pareadas,
+verifica identidades y sumas de comprobación selladas y reconcilia métricas
+derivadas de eventos. Registra oportunidades objetivo/no objetivo explícitas
+de SYSMON y un espejo LSL opcional cuyos fallos quedan registrados. El motor de políticas y modos de fallo de automatización
 adaptativa está implementado como componente experimental; aún no es una
 intervención de bucle cerrado validada y presentada a participantes.
 
@@ -53,7 +52,24 @@ La Consola de Investigación es una aplicación FastAPI/Next.js enlazada a loopb
 almacenamiento local de artefactos. Su ruta actual de carga OpenMATB acepta CSV heredado y un
 manifiesto opcional; las métricas derivadas quedan etiquetadas como
 `legacy_csv_derived_not_reconciled_to_authoritative_event_stream` y no son elegibles para análisis
-confirmatorio hasta implementar la reconciliación con JSONL v3. Su superficie sUAS es un simulador sintético, no cinético y de
+confirmatorio. La ingestión y reconciliación de capturas v3 pareadas están
+disponibles en el flujo de evidencia separado; un CSV por sí solo no adquiere
+esa calificación.
+
+Las nuevas solicitudes PVT, screen, OpenMATB, Liftoff, misión y H10 requieren
+`execution_purpose` explícito. Los modos rápidos y las misiones técnicas requieren
+`practice`; las misiones con participante requieren `study`. Los bloques de práctica
+de un protocolo conservan propósito de captura `practice` dentro de una suite de
+estudio. Cada registro nuevo enlaza una identidad estable de procedencia y una
+declaración atómica. Los registros históricos conservan su propósito y datos
+originales; la intención prospectiva sin evidencia queda como `unknown`. Las
+inferencias históricas de modo rápido se registran como decisiones del sistema
+en la fecha de migración, sin inventar revisores ni fechas humanas. Las revisiones
+retrospectivas requieren revisor y motivo, y agregan historial mediante
+`/purpose-provenance/{id}/classifications`; no otorgan por sí solas elegibilidad
+para análisis.
+
+Su superficie sUAS es un simulador sintético, no cinético y de
 supervisión. Los mapas opcionales de Colombia y las observaciones de aeronaves
 de solo lectura aportan contexto geográfico. El tráfico en vivo está disponible
 en exploración y pruebas técnicas; las sesiones de investigación utilizan
@@ -106,7 +122,7 @@ MATB/
 Los cuatro flujos principales se mantienen separados de forma deliberada:
 
 ```text
-Tracked/compatible OpenMATB -> ordered pre-v3 JSONL + timing QC + legacy CSV + manifest -> future v3 pair/reconciliation
+Tracked OpenMATB -> paired v3 events + timing observations + sealed manifest -> Console reconciliation
 Legacy CSV upload -> provisional Console metrics -> tracker/analysis/export (not event-stream reconciled)
 Browser -> FastAPI Research Console -> local SQLite/artifacts -> tracker/analysis/export
 Synthetic YAML -> deterministic sUAS engine -> observer-safe state -> replay/debrief artifacts
@@ -617,6 +633,10 @@ npm run dev -- --hostname 127.0.0.1 --port 3100
 
 Abra `http://127.0.0.1:3100/`.
 
+Elija **Participante** para el catálogo (`/start`) o **Investigador** para el
+seguimiento (`/tracker`). La elección se conserva en esta pestaña. Seleccione
+práctica o estudio antes de preparar la actividad.
+
 Ejecute exactamente un worker de Uvicorn por base de datos de la Consola. El
 backend mantiene un arrendamiento durable de instancia y rechaza un segundo
 proceso vivo para impedir que los trabajos bayesianos y las escrituras SQLite
@@ -1102,7 +1122,7 @@ liberación y evidencia detalladas se mantienen en sus guías especializadas.
 
 | Módulo | Propósito | Usuario | Entradas → salidas | Entorno de ejecución | Ejemplo | Verificación | Limitación |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Seguimiento e ingestión de `webui/backend/` | Cuadrícula seudónima de participantes/visitas, comprobaciones CSV/manifiesto y ajustes | Custodio de datos | CSV heredado + manifiesto opcional → filas SQLite provisionales de bloque/procedencia | FastAPI, Python 3.12+, un worker, puerto 8000 | [Recorrido de la consola](examples/research-console/README.es.md) | `cd webui/backend && python -m pytest -q` | La reconciliación con JSONL autoritativo es una compuerta de publicación; los controles de duplicados/relleno no son consentimiento |
+| Seguimiento, ingestión y evidencia de `webui/backend/` | Cuadrícula seudónima, comprobaciones CSV y reconciliación de capturas pareadas | Custodio de datos | CSV → métricas provisionales; paquete v3 pareado → derivados reconciliados | FastAPI, Python 3.12+, un worker, puerto 8000 | [Recorrido de la consola](examples/research-console/README.es.md) | `cd webui/backend && python -m pytest -q` | La reconciliación aporta evidencia de software; temporización física, calibración humana y elegibilidad requieren evidencia independiente |
 | Análisis y exportación de `webui/backend/` | Almacenar en caché resultados frecuentistas/bayesianos y construir paquetes reproducibles | Analista | Métricas/ajustes/figuras almacenados → registros de análisis y ZIP | FastAPI/PyMC en segundo plano | Recorrido de la consola | Pruebas de análisis/exportación del backend | La exportación sigue siendo datos de investigación bajo custodia del propietario |
 | Seguimiento, ingestión y visualización de `webui/frontend/` | Cuadrícula del navegador, carga y gráficos descriptivos | Personal de investigación | JSON del backend → UI local interactiva/PNG | Next.js, Node >=20.9, puerto 3100 | Recorrido de la consola | `npm test`, `npm run typecheck`, `npm run build` | Los gráficos descriptivos no son conclusiones inferenciales |
 | Evaluación, análisis y exportación de `webui/frontend/` | Administrar la evaluación inicial, revisar análisis y solicitar el paquete | Personal de investigación | Ensayos sin procesar/artefactos del backend → resúmenes UI/solicitud de exportación | Navegador/Next.js | Recorrido de la consola | La evaluación es exploratoria; el navegador no es un dispositivo clínico |
@@ -1249,7 +1269,7 @@ fijada, las dependencias bloqueadas y las entradas controladas por la instituci�
 | Servicio | Valor predeterminado | Límite |
 | --- | --- | --- |
 | FastAPI de investigación/sUAS | `127.0.0.1:8000` | Loopback; salud en `/health` |
-| Next.js de investigación/sUAS | `127.0.0.1:3100` | Loopback; seguimiento `/`, sUAS `/mission/setup` |
+| Next.js de investigación/sUAS | `127.0.0.1:3100` | Loopback; espacio `/`, seguimiento `/tracker`, sUAS `/mission/setup` |
 | Despliegue edge del SMS | Valor predeterminado del host `127.0.0.1:8443` | HTTPS en un despliegue controlado de contenedor |
 | Consola Vite del SMS | 5173 desarrollo / 4173 vista previa controlada | Solo UI de desarrollo/revisión |
 

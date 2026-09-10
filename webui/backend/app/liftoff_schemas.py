@@ -42,7 +42,7 @@ class LiftoffConfiguration(BaseModel):
 
 class CreateLiftoffSession(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    execution_purpose: Literal["practice", "study"] = "study"
+    execution_purpose: Literal["practice", "study"]
     locale: Literal["es-419", "en"] = "es-419"
 
     participant_id: str = Field(pattern=PARTICIPANT_ID_PATTERN)
@@ -61,6 +61,7 @@ class CreateLiftoffSession(BaseModel):
 
 
 class LiftoffSessionView(BaseModel):
+    purpose_provenance_id: str | None = None
     model_config = ConfigDict(extra="forbid")
     execution_purpose: Literal["practice", "study"] = "study"
     locale: Literal["es-419", "en"] = "es-419"

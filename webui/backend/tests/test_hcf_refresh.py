@@ -33,7 +33,7 @@ def test_existing_fits_refresh_when_cohort_gate_crossed(client, engine,
     # screens for P01..P03 crosses the >=3 gate; P01 is fastest -> F > 1
     for pid, simple in (("P01", 260.0), ("P02", 320.0), ("P03", 380.0)):
         _enroll(client, pid)
-        client.post("/screen", json={"participant_id": pid,
+        client.post("/screen", json={"execution_purpose": "study", "participant_id": pid,
                                      "payload": _payload(simple=simple)})
     with Session(engine) as s:
         fit = s.exec(select(DepdfFit)).one()
@@ -43,7 +43,7 @@ def test_existing_fits_refresh_when_cohort_gate_crossed(client, engine,
 def test_new_fit_uses_screen_hcf(client, engine, sample_csv_bytes):
     for pid, simple in (("P01", 260.0), ("P02", 320.0), ("P03", 380.0)):
         _enroll(client, pid)
-        client.post("/screen", json={"participant_id": pid,
+        client.post("/screen", json={"execution_purpose": "study", "participant_id": pid,
                                      "payload": _payload(simple=simple)})
     _fill_visit(client, sample_csv_bytes, "P03")
     with Session(engine) as s:
@@ -54,7 +54,7 @@ def test_new_fit_uses_screen_hcf(client, engine, sample_csv_bytes):
 def test_fits_endpoint_curve_uses_f(client, sample_csv_bytes):
     for pid, simple in (("P01", 260.0), ("P02", 320.0), ("P03", 380.0)):
         _enroll(client, pid)
-        client.post("/screen", json={"participant_id": pid,
+        client.post("/screen", json={"execution_purpose": "study", "participant_id": pid,
                                      "payload": _payload(simple=simple)})
     _fill_visit(client, sample_csv_bytes, "P01")
     fit = client.get("/fits").json()[0]

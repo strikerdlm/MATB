@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.purpose_service import declare_acquisition
+
 import asyncio
 from collections import deque
 from dataclasses import dataclass, field
@@ -256,7 +258,7 @@ class PolarCaptureManager:
                 requested_settings_json=json.dumps(settings, sort_keys=True),
                 controller_lease_hash=_token_hash(lease),
             )
-            db.add(row)
+            declare_acquisition(db, row, purpose=execution_purpose)
             db.commit()
             db.refresh(row)
             return self._view(row), lease
@@ -284,6 +286,7 @@ class PolarCaptureManager:
     @staticmethod
     def _view(row: PolarCaptureRecord) -> PolarCaptureV1:
         return PolarCaptureV1(
+            purpose_provenance_id=row.purpose_provenance_id,
             execution_purpose=row.execution_purpose,
             capture_id=row.id,
             participant_pseudonym=row.participant_id,
