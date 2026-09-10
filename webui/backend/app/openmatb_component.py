@@ -44,6 +44,7 @@ class OpenMatbComponentProvider:
             engine=get_engine(), repo_root=root, artifact_root=artifact_root,
             python_executable=Path(python) if python else None,
         )
+        app.state.openmatb_manager.schedule_evidence_processing()
 
     async def shutdown(self, app: FastAPI) -> None:
         runtime = getattr(app.state, "openmatb_manager", None)

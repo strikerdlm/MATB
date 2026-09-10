@@ -7,6 +7,22 @@ arbitrary protocol design, and the Replay Studio remain separate extensions.
 
 ## Use the Console
 
+New suites prepared through **OpenMATB** register complete native captures
+automatically. Each launch has a durable block-attempt UUID, including repeated
+practice. Finished blocks are queued; derivation runs after the suite terminates
+and no native task or preview is active. The completion receipt links to
+`/evidence?session=SUITE_ID&purpose=all` and separates native files, browser
+ratings, legacy CSV import, scientific processing and qualification. Failed
+processing can be retried with the suite's controller credential. Browser
+ratings are never inserted into the immutable native scientific event stream.
+
+After a backend restart, a surviving native process must be closed before
+queued derivation or another launch can proceed. Upgrade between sessions.
+Historical sessions without attempt records show unavailable detail explicitly;
+they are not automatically reprocessed or upgraded.
+
+For captures acquired outside this managed suite flow, manual import remains:
+
 1. Run a native block using the current runtime and its bound scenario manifest.
    See [scientific capture](classic-scientific-capture.md) for the output files.
 2. Register its pseudonymized participant and visit in the Console when the
@@ -47,7 +63,10 @@ it does not edit the original evidence or previous calculations.
 
 Read interfaces:
 
-- `GET /evidence/captures?purpose=study&offset=0&limit=25`
+- `GET /evidence/captures?purpose=study&offset=0&limit=25`: lightweight discovery summaries; also accepts `purpose=all`, exact parent suite `session`, and literal search `q`. Dates indicate Console registration time.
+- `GET /openmatb/sessions/{id}/receipt`: durable per-attempt save/processing outcomes.
+- `POST /openmatb/sessions/{id}/blocks/{block_instance_id}/evidence/retry`: retry queued native evidence with the controller lease after suite termination.
+- `GET /openmatb/displays`: current native display order, dimensions and position; preparation and launch independently revalidate the selected index.
 - `GET /evidence/captures/{id}`: provenance, attempts, findings and metric results.
 - `GET /evidence/captures/{id}/records`: `stream=events|timing`, optional `task`,
   `event_id`, `metric_id`, and pagination; maximum page size 200.

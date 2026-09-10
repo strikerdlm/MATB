@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { useAppLocale } from "@/lib/i18n";
 import { EXPERIMENTS, type ExperimentId, type ExecutionPurpose } from "@/lib/experiments";
 import { useConsole } from "@/lib/console-context";
+import { resolveExecutionPurpose, withExecutionPurpose } from "@/lib/execution-purpose";
 
 const icons = { openmatb: MonitorPlay, suas: Radar, liftoff: Gamepad2, screen: Brain, pvt: Clock3, physiology: Activity };
 export default function StartPage() { return <Suspense><Catalog /></Suspense>; }
@@ -17,18 +18,29 @@ function Catalog() {
   const { copy } = useAppLocale();
   const { catalog, status, refresh } = useConsole();
   const [selected, setSelected] = useState<ExperimentId | null>(null);
-  const [purpose, setPurpose] = useState<ExecutionPurpose>("practice");
+  const [purpose, setPurpose] = useState<ExecutionPurpose | null>(() => resolveExecutionPurpose(search));
   useEffect(() => {
     const candidate = search.get("experiment");
     setSelected(EXPERIMENTS.some((item) => item.id === candidate) ? candidate as ExperimentId : null);
+    setPurpose(resolveExecutionPurpose(search));
   }, [search]);
   const info = EXPERIMENTS.find((item) => item.id === selected);
   const entry = catalog.find((item) => item.id === selected);
   const available = status === "online" && entry?.component_available;
   function choose(id: ExperimentId) {
     setSelected(id);
-    window.history.replaceState(null, "", "/start?experiment=" + id);
+    const href = purpose
+      ? withExecutionPurpose(`/start?experiment=${id}`, purpose)
+      : `/start?experiment=${id}`;
+    window.history.replaceState(null, "", href);
     requestAnimationFrame(() => document.getElementById("experiment-details")?.focus());
+  }
+  function choosePurpose(nextPurpose: ExecutionPurpose) {
+    setPurpose(nextPurpose);
+    window.history.replaceState(null, "", withExecutionPurpose(
+      `/start${selected ? `?experiment=${selected}` : ""}`,
+      nextPurpose,
+    ));
   }
   const destination = selected === "suas" && purpose === "practice" ? "/mission/test" : info?.route;
   return <div className="space-y-7">
@@ -68,13 +80,14 @@ function Catalog() {
         <legend className="px-1 font-semibold">{copy("Cómo desea participar", "How you want to participate")}</legend>
         <div className="mt-2 grid gap-3 sm:grid-cols-2">
           {(["practice", "study"] as const).map((mode) => <label key={mode} className={"flex cursor-pointer items-start gap-3 rounded border p-4 " + (purpose === mode ? "border-info bg-info/5" : "border-white/15")}>
-            <input type="radio" name="execution-purpose" value={mode} checked={purpose === mode} onChange={() => setPurpose(mode)} className="mt-1 accent-cyan-400" />
+            <input type="radio" name="execution-purpose" value={mode} checked={purpose === mode} onChange={() => choosePurpose(mode)} className="mt-1 accent-cyan-400" />
             <span><strong>{mode === "practice" ? copy("Practicar", "Practice") : copy("Participar en mi estudio", "Join my study")}</strong><span className="mt-1 block text-sm text-muted-foreground">{mode === "practice" ? copy("Familiarícese con los controles. Los resultados se guardan aparte del estudio.", "Learn the controls. Results are saved separately from the study.") : copy("Use su código y visita asignados. Se conserva la secuencia del protocolo.", "Use your assigned code and visit. The protocol sequence is preserved.")}</span></span>
           </label>)}
         </div>
       </fieldset>
       <div className="mt-5 flex flex-wrap items-center gap-4">
-        {available && destination ? <Button asChild><Link href={destination + "?purpose=" + purpose}>{copy("Preparar experimento", "Prepare experiment")}<ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+        {available && destination && purpose ? <Button asChild><Link href={withExecutionPurpose(destination, purpose)}>{copy("Preparar experimento", "Prepare experiment")}<ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+          : available && destination ? <p role="status" className="text-sm text-warning">{copy("Elija práctica o estudio para continuar.", "Choose practice or study to continue.")}</p>
           : <p className="text-sm text-warning">{status !== "online" ? copy("Conecte la consola para preparar esta actividad.", "Connect the console to prepare this activity.") : copy("Este componente no está habilitado. Solicite al investigador que lo active y revise el equipo indicado arriba.", "This component is not enabled. Ask the researcher to enable it and check the equipment listed above.")}</p>}
         <span className="text-sm text-muted-foreground">{copy("Antes de iniciar se verifican los requisitos del experimento.", "Experiment requirements are checked before starting.")}</span>
       </div>

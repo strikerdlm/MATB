@@ -64,7 +64,8 @@ def ingest_evidence(db: Session, artifacts: dict[str, bytes]) -> tuple[str, bool
             if visit is None:
                 raise EvidenceError("visit_not_found")
     capture = EvidenceCapture(id=manifest.capture_id, manifest_sha256=hashlib.sha256(artifacts["capture_manifest"]).hexdigest(),
-        artifact_fingerprint=fingerprint, session_id=manifest.session_id, block_instance_id=manifest.block_instance_id,
+        artifact_fingerprint=fingerprint, session_id=manifest.session_id, parent_session_id=manifest.parent_session_id,
+        block_instance_id=manifest.block_instance_id,
         participant_id=manifest.participant_id, visit_id=visit.id if visit else None,
         condition=manifest.condition, execution_purpose=manifest.execution_purpose, completion=manifest.completion,
         manifest_json=artifacts["capture_manifest"].decode("utf-8"))

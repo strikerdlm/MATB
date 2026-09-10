@@ -160,6 +160,7 @@ async def test_process_restart_recovery_preserves_technical_classification(engin
         checkpoint_version=1,
         confirm_process_restart=True,
     )
+    assert recovered.console_profile == prepared.console_profile
     assert recovered.session_mode == "interactive_technical"
     assert recovered.record_class == "technical_only"
     assert recovered.selected_block_id == "HIGH"

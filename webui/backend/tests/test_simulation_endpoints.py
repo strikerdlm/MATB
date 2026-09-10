@@ -46,6 +46,8 @@ async def test_technical_session_launches_selected_profile_without_research_iden
     prepared = await _prepare_technical(client, block_id=block_id)
     assert prepared.status_code == 201, prepared.text
     body = prepared.json()
+    from app.console_profile import current_console_profile
+    assert body["console_profile"] == current_console_profile()
     assert body["participant_id"] is None
     assert body["visit_id"] is None
     assert body["session_mode"] == "interactive_technical"
@@ -79,6 +81,7 @@ async def test_technical_session_launches_selected_profile_without_research_iden
     debrief = await client.get(f"/simulation/sessions/{body['id']}/debrief")
     assert debrief.status_code == 200, debrief.text
     assert debrief.json()["record_class"] == "technical_only"
+    assert debrief.json()["console_profile"] == body["console_profile"]
     manifest = json.loads((manager.active.recorder.run_dir / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["selected_block_id"] == block_id
     assert manifest["record_class"] == "technical_only"
@@ -359,6 +362,9 @@ async def test_public_bundle_excludes_private_run_files(simulation_client, seede
         names = set(archive.namelist())
         assert "manifest.json" in names
         assert "debrief.json" in names
+        from app.console_profile import current_console_profile
+        assert json.loads(archive.read("manifest.json"))["console_profile"] == current_console_profile()
+        assert json.loads(archive.read("debrief.json"))["console_profile"] == current_console_profile()
         assert "metrics.json" in names
         assert not {"events.jsonl", "questionnaires.json", "scenario.yaml"} & names
         manifest = json.loads(archive.read("manifest.json"))
@@ -388,3 +394,88 @@ async def test_request_validation_uses_stable_error_shape(simulation_client, see
     detail = invalid.json()["detail"]
     assert detail["code"] == "invalid_request"
     assert isinstance(detail["context"]["fields"], list)
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("recorded", ["current", "legacy", "unknown"])
+async def test_sealed_view_reads_recorded_profile_without_upgrading(simulation_client, engine, recorded):
+    from app.console_profile import current_console_profile
+    from app.routers.simulation import _session_view_from_row
+
+    client, manager = simulation_client
+    prepared = await _prepare_technical(client)
+    body = prepared.json()
+    with Session(engine) as db:
+        row = db.get(TechnicalSimulationSession, body["id"])
+        manifest = json.loads(row.manifest_json)
+        if recorded == "legacy":
+            manifest.pop("console_profile")
+        elif recorded == "unknown":
+            manifest["console_profile"]["sha256"] = "0" * 64
+        row.manifest_json = json.dumps(manifest)
+        original = row.manifest_json
+        view = _session_view_from_row(row, db)
+        assert view.execution_purpose == "practice"
+        assert row.manifest_json == original
+        if recorded == "legacy":
+            assert view.console_profile is None
+        else:
+            assert view.console_profile.model_dump() == manifest["console_profile"]
+            assert (view.console_profile.model_dump() == current_console_profile()) == (recorded == "current")
+    await manager.shutdown()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("recorded", ["current", "legacy", "unknown"])
+@pytest.mark.parametrize("technical", [False, True])
+async def test_aborted_debrief_preserves_recorded_console_profile(
+    simulation_client, seeded_participant, engine, monkeypatch, recorded, technical,
+):
+    client, manager = simulation_client
+    prepared = await (_prepare_technical(client) if technical else _prepare(client))
+    assert prepared.status_code == 201, prepared.text
+    body = prepared.json()
+    session_id = body["id"]
+    aborted = await client.post(
+        f"/simulation/sessions/{session_id}/finish",
+        json={"disposition": "abort"},
+        headers={"X-Simulation-Controller": body["controller_lease"]},
+    )
+    assert aborted.status_code == 200, aborted.text
+    assert aborted.json()["lifecycle"] == "ABORTED"
+    handle = manager.active
+    assert not (handle.recorder.run_dir / "debrief.json").exists()
+    expected = dict(body["console_profile"])
+    if recorded == "legacy":
+        handle.manifest.pop("console_profile")
+        expected = None
+    elif recorded == "unknown":
+        expected = {"id": "future-console", "version": 99, "sha256": "0" * 64}
+        handle.manifest["console_profile"] = expected
+    # Arrange matching durable metadata so both active and restarted lookup
+    # paths exercise the partial debrief without upgrading recorded identity.
+    with Session(engine) as db:
+        row = db.get(TechnicalSimulationSession if technical else SimulationSession, session_id)
+        manifest = json.loads(row.manifest_json)
+        if expected is None:
+            manifest.pop("console_profile")
+        else:
+            manifest["console_profile"] = expected
+        row.manifest_json = json.dumps(manifest)
+        db.add(row)
+        db.commit()
+    frozen = (handle.recorder.run_dir / "manifest.json").read_bytes()
+    for restarted in (False, True):
+        with monkeypatch.context() as context:
+            if restarted:
+                context.setattr(manager, "_handle", None)
+            response = await client.get(f"/simulation/sessions/{session_id}/debrief")
+        assert response.status_code == 200, response.text
+        partial = response.json()
+        assert partial["status"] == "partial_unverified"
+        assert partial["timeline"] == []
+        if expected is None:
+            assert "console_profile" not in partial
+        else:
+            assert partial["console_profile"] == expected
+        assert (handle.recorder.run_dir / "manifest.json").read_bytes() == frozen
+    await manager.shutdown()

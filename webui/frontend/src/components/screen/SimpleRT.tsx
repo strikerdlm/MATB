@@ -15,10 +15,12 @@ type TrialPhase = "waiting" | "stimulus";
 export function SimpleRT({
   config,
   rng,
+  onStart,
   onDone,
 }: {
   config: ScreenConfig;
   rng: () => number;
+  onStart?: () => void;
   onDone: (trials: RtTrial[]) => void;
 }) {
   const strings = useScreenStrings();
@@ -107,6 +109,7 @@ export function SimpleRT({
   }
 
   function startPractice() {
+    onStart?.();
     streamIndexRef.current = 0;
     stageRef.current = "practice";
     setStage("practice");

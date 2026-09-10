@@ -1,46 +1,39 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useConsole } from "@/lib/store";
-import { CompletenessGrid } from "@/components/tracker/CompletenessGrid";
-import { CellDetailDialog } from "@/components/tracker/CellDetailDialog";
+import { useRouter } from "next/navigation";
+import { Microscope, UserRound } from "lucide-react";
+
 import { PageHeader } from "@/components/layout/PageHeader";
-import { summarize } from "@/lib/tracker";
-import type { TrackerCell } from "@/types";
 import { useAppLocale } from "@/lib/i18n";
+import { destinationForRole, useNavigationRole, type NavigationRole } from "@/lib/navigation-role";
 
-export default function TrackerPage() {
+export default function HomePage() {
   const { copy } = useAppLocale();
-  const { tracker, liftoffTracker, componentIds, refreshTracker, error } = useConsole();
-  const [selected, setSelected] = useState<TrackerCell | null>(null);
-  const summary = summarize(tracker);
-  const visitCount = new Set(tracker.map((cell) => cell.visit_ordinal)).size;
-  const liftoffEnabled = componentIds.includes("matb-liftoff");
+  const { setRole } = useNavigationRole();
+  const router = useRouter();
 
-  useEffect(() => { void refreshTracker(); }, [refreshTracker]);
+  function choose(role: NavigationRole) {
+    setRole(role);
+    router.push(destinationForRole(role));
+  }
 
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        kicker={copy("Matriz de misión", "Mission grid")}
-        title={copy("Completitud del estudio", "Study Completeness")}
-        description={liftoffEnabled
-          ? copy("Visitas del protocolo en los regímenes de carga de OpenMATB y el instrumento FPV manual.", "Protocol visits across OpenMATB workload regimes and the manual FPV instrument.")
-          : copy("Visitas del protocolo en los regímenes de carga de OpenMATB.", "Protocol visits across OpenMATB workload regimes.")}
-        stats={[
-          { label: copy("Celdas", "Cells"), value: `${summary.filled}/${summary.total || 0}` },
-          { label: copy("Visitas", "Visits"), value: String(visitCount).padStart(2, "0") },
-          { label: copy("Niveles", "Levels"), value: "03" },
-        ]}
-      />
-      {error && <p className="rounded-[4px] border border-danger/40 bg-danger/10 px-4 py-2 text-sm text-danger">{copy("Error al cargar", "Failed to load")}: {error}</p>}
-      <CompletenessGrid
-        cells={tracker}
-        liftoffCells={liftoffTracker}
-        showLiftoff={liftoffEnabled}
-        onCellClick={setSelected}
-      />
-      <CellDetailDialog cell={selected} onClose={() => setSelected(null)} />
+  return <div className="mx-auto max-w-5xl space-y-7 py-4 sm:py-8">
+    <PageHeader
+      kicker="MATB - FAC"
+      title={copy("Elija su espacio de trabajo", "Choose your workspace")}
+      description={copy("Esta elección organiza la navegación de esta pestaña. No cambia el propósito de una ejecución ni sus credenciales.", "This choice organizes navigation in this tab. It does not change a run's purpose or credentials.")}
+    />
+    <div className="grid gap-4 md:grid-cols-2">
+      <button type="button" onClick={() => choose("participant")} className="rounded-lg border border-info/30 bg-info/5 p-6 text-left hover:border-info focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info">
+        <UserRound className="h-7 w-7 text-info" aria-hidden="true" />
+        <span className="mt-4 block text-xl font-semibold">{copy("Participante", "Participant")}</span>
+        <span className="mt-2 block text-sm leading-6 text-muted-foreground">{copy("Elija una actividad y seleccione práctica o estudio antes de prepararla.", "Choose an activity and select practice or study before preparing it.")}</span>
+      </button>
+      <button type="button" onClick={() => choose("researcher")} className="rounded-lg border border-white/20 bg-card p-6 text-left hover:border-white/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info">
+        <Microscope className="h-7 w-7 text-info" aria-hidden="true" />
+        <span className="mt-4 block text-xl font-semibold">{copy("Investigador", "Researcher")}</span>
+        <span className="mt-2 block text-sm leading-6 text-muted-foreground">{copy("Revise participantes, seguimiento, configuración y evidencia.", "Review participants, tracking, configuration, and evidence.")}</span>
+      </button>
     </div>
-  );
+  </div>;
 }

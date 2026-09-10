@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, startTransition, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { Locale as SimulationLocale } from "@/types/simulation";
 
 export type AppLocale = "es-419" | "en";
@@ -26,7 +26,7 @@ const EN = {
   "nav.screen": "PVT",
   "nav.liftoff": "Liftoff",
   "nav.mission": "Research mission",
-  "nav.tests": "MATB-FAC tests",
+  "nav.tests": "MATB - FAC tests",
   "nav.openmatb": "Classic OpenMATB",
   "nav.physiology": "Polar H10",
   "nav.soon": "soon",
@@ -34,7 +34,7 @@ const EN = {
   "common.loading": "Loading…",
   "common.error": "Could not load the requested information.",
   "technical.kicker": "Interactive technical mode",
-  "technical.title": "MATB-FAC tests",
+  "technical.title": "MATB - FAC tests",
   "technical.subtitle": "Launch one programmed profile directly from the frontend.",
   "technical.scenario": "Scenario",
   "technical.profile": "Workload profile",
@@ -77,7 +77,7 @@ const ES_419: Record<keyof typeof EN, string> = {
   "nav.screen": "PVT · Vigilancia psicomotora",
   "nav.liftoff": "Liftoff",
   "nav.mission": "Misión de investigación",
-  "nav.tests": "Pruebas MATB-FAC",
+  "nav.tests": "Pruebas MATB - FAC",
   "nav.openmatb": "OpenMATB clásico",
   "nav.physiology": "Polar H10",
   "nav.soon": "pronto",
@@ -85,7 +85,7 @@ const ES_419: Record<keyof typeof EN, string> = {
   "common.loading": "Cargando…",
   "common.error": "No se pudo cargar la información solicitada.",
   "technical.kicker": "Modo técnico interactivo",
-  "technical.title": "Pruebas MATB-FAC",
+  "technical.title": "Pruebas MATB - FAC",
   "technical.subtitle": "Inicie directamente desde la interfaz uno de los perfiles programados.",
   "technical.scenario": "Escenario",
   "technical.profile": "Perfil de carga",
@@ -117,42 +117,67 @@ interface AppLocaleContextValue {
   copy: (spanish: string, english: string) => string;
 }
 
-const AppLocaleContext = createContext<AppLocaleContextValue>({
-  locale: "en",
-  simulationLocale: "en",
-  setLocale: () => undefined,
-  tr: (key) => EN[key],
-  copy: (_spanish, english) => english,
-});
 const STORAGE_KEY = "matb-fac.locale";
+const SERVER_LOCALE: AppLocale = "es-419";
+
+function createLocaleStore() {
+  let locale = SERVER_LOCALE;
+  const listeners = new Set<() => void>();
+  return {
+    getSnapshot: () => locale,
+    // Every streamed consumer must first match its server-rendered Spanish,
+    // even when the shell has already restored or changed the preference.
+    getServerSnapshot: () => SERVER_LOCALE,
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => { listeners.delete(listener); };
+    },
+    update: (next: AppLocale) => {
+      if (locale === next) return;
+      locale = next;
+      listeners.forEach((listener) => listener());
+    },
+  };
+}
+
+type LocaleStore = ReturnType<typeof createLocaleStore>;
+// Preserve the English fallback for isolated components without a provider.
+const fallbackStore: LocaleStore = {
+  getSnapshot: () => "en",
+  getServerSnapshot: () => "en",
+  subscribe: () => () => undefined,
+  update: () => undefined,
+};
+const AppLocaleContext = createContext<LocaleStore>(fallbackStore);
 
 export function AppLocaleProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocaleState] = useState<AppLocale>("es-419");
+  // A provider owns its store; server requests and separate roots never share it.
+  const [store] = useState(createLocaleStore);
+  const locale = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot);
 
   useEffect(() => {
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored === "en" || stored === "es-419") startTransition(() => setLocaleState(stored));
-  }, []);
+    if (stored === "en" || stored === "es-419") store.update(stored);
+  }, [store]);
 
   useEffect(() => {
     document.documentElement.lang = locale;
   }, [locale]);
 
-  const value = useMemo<AppLocaleContextValue>(() => ({
-    locale,
-    simulationLocale: locale === "en" ? "en" : "es-CO",
-    setLocale: (next) => {
-      // Let streamed page boundaries hydrate before replacing their language.
-      startTransition(() => setLocaleState(next));
-      window.localStorage.setItem(STORAGE_KEY, next);
-    },
-    tr: (key) => (locale === "en" ? EN[key] : ES_419[key]),
-    copy: (spanish, english) => (locale === "en" ? english : spanish),
-  }), [locale]);
-
-  return <AppLocaleContext.Provider value={value}>{children}</AppLocaleContext.Provider>;
+  return <AppLocaleContext.Provider value={store}>{children}</AppLocaleContext.Provider>;
 }
 
 export function useAppLocale(): AppLocaleContextValue {
-  return useContext(AppLocaleContext);
+  const store = useContext(AppLocaleContext);
+  const locale = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot);
+  return useMemo<AppLocaleContextValue>(() => ({
+    locale,
+    simulationLocale: locale === "en" ? "en" : "es-CO",
+    setLocale: (next) => {
+      store.update(next);
+      if (store !== fallbackStore) window.localStorage.setItem(STORAGE_KEY, next);
+    },
+    tr: (key) => (locale === "en" ? EN[key] : ES_419[key]),
+    copy: (spanish, english) => (locale === "en" ? english : spanish),
+  }), [locale, store]);
 }

@@ -1,8 +1,11 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { MissionPresentation, preflightSnapshot } from "./presentation/MissionPresentation";
+import { MissionDetailTabs } from "./MissionDetailTabs";
+import { MissionNotices, connectionNotice, type MissionNotice } from "./MissionNotices";
+import { consoleProfileStatus } from "@/lib/simulation/console-profile";
 import { AlertQueue } from "@/components/mission/AlertQueue";
 import { ContactQueue } from "@/components/mission/ContactQueue";
 import { CommandBar } from "@/components/mission/CommandBar";
@@ -42,8 +45,7 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
   const initialized = useRef(false);
   const cleanupTimer = useRef<number | null>(null);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [detailView, setDetailView] = useState<"alerts" | "contacts">("alerts");
+  const [notice, setNotice] = useState<MissionNotice | null>(null);
   const [waypointMode, setWaypointMode] = useState(false);
   const [journeySteps, setJourneySteps] = useState<ParticipantJourneyStep[] | null>(null);
   const session = useSimulationStore((state) => state.session);
@@ -66,6 +68,10 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
   const submitCommand = useSimulationStore((state) => state.submitCommand);
   const currentSession = session ?? initialSession;
   const currentSnapshot = snapshot ?? initialSnapshot;
+  const profileStatus = consoleProfileStatus(currentSession.console_profile);
+  const modern = profileStatus === "supported";
+  const transportNotice = connectionNotice(connection, transportError, locale);
+  const notices = [transportNotice, notice].filter((item): item is MissionNotice => item !== null);
   const lease = controllerLease(currentSession.id);
   const canControl = !readOnly && Boolean(lease);
   const nextStep = currentSession.lifecycle === "PREPARED"
@@ -120,7 +126,7 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
 
   async function lifecycle(action: "start" | "pause" | "resume" | "finish", body: Record<string, string> = {}) {
     if (!canControl) return;
-    setBusy(true); setMessage(null);
+    setBusy(true); setNotice(null);
     try {
       if (action === "finish" && body.disposition !== "abort") {
         await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
@@ -135,25 +141,26 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
           : body,
       );
       useSimulationStore.setState({ session: updated });
-      setMessage(t(locale, `lifecycle.${updated.lifecycle.toLowerCase()}` as never));
+      setNotice({ severity: "success", source: "lifecycle", message: t(locale, `lifecycle.${updated.lifecycle.toLowerCase()}` as never), action: null, resolution: "resolved" });
       if (updated.lifecycle === "FINISHED") onFinished?.(updated);
       if (action === "start") {
         const state = await getSimulationState(currentSession.id);
         useSimulationStore.getState().replaceAuthoritativeState(state);
       }
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : t(locale, "error.unknown_error"));
+      setNotice({ severity: "error", source: "lifecycle", message: error instanceof Error ? error.message : t(locale, "error.unknown_error"), action: locale === "es-CO" ? "Revise el estado de la sesión antes de reintentar." : "Check the session state before trying again.", resolution: "pending" });
     } finally { setBusy(false); }
   }
 
   async function issueCommand(kind: CommandKind | ProtocolCommandKind, payload: Record<string, unknown>): Promise<boolean> {
     if (!currentSnapshot || !canControl) return false;
-    setMessage(null);
+    setNotice(null);
     try {
-      await submitCommand({ command_id: commandId(), expected_state_version: currentSnapshot.state_version, kind, payload: payload as Record<string, JsonValue> });
-      setMessage(t(locale, "command.accepted"));
+      const result = await submitCommand({ command_id: commandId(), expected_state_version: currentSnapshot.state_version, kind, payload: payload as Record<string, JsonValue> });
+      if (result.status === "rejected") throw new Error(result.message ?? result.code ?? t(locale, "error.unknown_error"));
+      setNotice({ severity: "info", source: "command", message: t(locale, "command.accepted"), action: modern ? (locale === "es-CO" ? "Confirma la recepción; no evalúa el desempeño." : "Acknowledges receipt; it does not evaluate performance.") : null, resolution: "acknowledged" });
       return true;
-    } catch (error) { setMessage(error instanceof Error ? error.message : t(locale, "error.unknown_error")); return false; }
+    } catch (error) { setNotice({ severity: "error", source: "command", message: error instanceof Error ? error.message : t(locale, "error.unknown_error"), action: locale === "es-CO" ? "Revise la selección y el estado antes de reintentar." : "Check the selection and state before trying again.", resolution: "pending" }); return false; }
   }
 
   function acknowledgeAlert(alertId: string) { void issueCommand("ACKNOWLEDGE_ALERT", { alert_id: alertId }); }
@@ -186,14 +193,15 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
   const probeOverlay = activeProbe ? <ProbeOverlay locale={locale} probe={activeProbe} pending={pendingCommandIds.length > 0} onIsa={(rating) => void probeSubmit("SUBMIT_ISA", { probe_id: activeProbe.kind === "ISA" ? activeProbe.probe_id : "", rating })} onSagat={(answer) => void probeSubmit("SUBMIT_SAGAT", { probe_id: activeProbe.kind === "SAGAT" ? activeProbe.probe_id : "", answer })} onPostBlock={(values: PostBlockScaleValues) => void probeSubmit("SUBMIT_POST_BLOCK_SCALE", { ...values })} /> : null;
 
   return (
-    <div className="simulation-console relative flex min-h-screen flex-col bg-background text-foreground" aria-busy={busy}>
-      <div className="signal-sweep pointer-events-none absolute inset-x-0 top-0 z-20 h-px bg-white/10" aria-hidden="true" />
+    <div className="simulation-console relative flex min-h-screen flex-col bg-background text-foreground" aria-busy={busy} data-console-profile={profileStatus}>
+      {!modern && <div className="signal-sweep pointer-events-none absolute inset-x-0 top-0 z-20 h-px bg-white/10" aria-hidden="true" />}
       <MissionTopBar session={currentSession} locale={locale} connection={connection} canControl={canControl} busy={busy} onStart={() => void lifecycle("start", { block_id: currentSession.next_block_id ?? currentSession.active_block_id ?? "PRACTICE" })} onPause={() => void lifecycle("pause", { reason: "operator_pause" })} onResume={() => void lifecycle("resume")} onFinish={() => void lifecycle("finish", { disposition: currentSession.lifecycle === "PREPARED" ? "abort" : "complete" })} />
-      <div role="note" className="border-b border-info/30 bg-info/5 px-4 py-2 text-sm text-info lg:px-6">{nextStep}</div>
-      {(transportError || message) && <div role="status" aria-live="polite" className="flex items-center gap-2 border-b border-warning/30 bg-warning/5 px-4 py-2 font-mono text-xs text-warning"><AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />{transportError ?? message}</div>}
+      <div role="note" className="border-b border-info/30 bg-info/5 px-4 py-2 text-sm text-info lg:px-6">{modern ? nextStep.replace("INICIAR", "Iniciar").replace("START", "Start") : nextStep}</div>
+      {profileStatus === "unsupported" && <div role="alert" className="border-b border-warning/30 px-4 py-2 text-sm text-warning">{locale === "es-CO" ? "Perfil de consola desconocido o incompatible. Se muestra la apariencia histórica; no se puede verificar la apariencia registrada." : "Unknown or mismatched console profile. Historical appearance is displayed; recorded appearance cannot be verified."}</div>}
+      <MissionNotices modern={modern} notices={notices} legacyMessage={transportError ?? notice?.message} />
       {busy && <div className="sr-only" role="status">{t(locale, "mission.working")}</div>}
       {concealOperationalState ? probeOverlay : !currentSnapshot?.aircraft ? (
-        <main className="grid flex-1 place-items-center p-8">{currentSession.presentation?.blocks[(currentSession.next_block_id ?? "PRACTICE") as "PRACTICE" | "LOW" | "MEDIUM" | "HIGH"] === "3d" ? <MissionPresentation session={currentSession} lease={canControl ? lease : null} readOnly snapshot={preflightSnapshot(currentSession.next_block_id ?? "PRACTICE")} locale={locale}/> : <div className="mission-panel max-w-lg p-8 text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-info" aria-hidden="true" /><h1 className="mt-4 font-display text-2xl uppercase">{t(locale, "mission.telemetry_standing_by")}</h1><p className="mt-2 text-sm text-muted-foreground">{t(locale, "mission.start_for_telemetry")}</p></div>}</main>
+        <main className="grid flex-1 place-items-center p-8">{currentSession.presentation?.blocks[(currentSession.next_block_id ?? "PRACTICE") as "PRACTICE" | "LOW" | "MEDIUM" | "HIGH"] === "3d" ? <MissionPresentation session={currentSession} lease={canControl ? lease : null} readOnly snapshot={preflightSnapshot(currentSession.next_block_id ?? "PRACTICE")} locale={locale}/> : <div className="mission-panel max-w-lg p-8 text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-info" aria-hidden="true" /><h1 className={`mt-4 font-display text-2xl ${modern ? "" : "uppercase"}`}>{t(locale, "mission.telemetry_standing_by")}</h1><p className="mt-2 text-sm text-muted-foreground">{t(locale, "mission.start_for_telemetry")}</p></div>}</main>
       ) : <main className="grid min-h-0 flex-1 gap-3 p-3 xl:grid-cols-[14rem_minmax(32rem,1fr)_21rem] xl:p-4" aria-label={t(locale, "mission.operations")}>
         <div className="grid min-h-0 gap-3 md:grid-cols-2 xl:grid-cols-1 xl:grid-rows-[auto_minmax(15rem,1fr)]">
           <MissionJourneyRail session={currentSession} locale={locale} steps={journeySteps} />
@@ -202,10 +210,9 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
         <MissionPresentation session={currentSession} lease={canControl ? lease : null} readOnly={!canControl} frozen={busy || concealOperationalState || currentSession.lifecycle === "PAUSED" && currentSession.protocol_phase !== "READY_FOR_BLOCK" || currentSession.lifecycle === "RUNNING" && connection !== "live"} snapshot={currentSnapshot} previousSnapshot={previousSnapshot} interpolate={currentSession.lifecycle === "RUNNING" && connection === "live" && !concealOperationalState} locale={locale} selectedAircraftId={selectedAircraftId} selectedContactId={selectedContactId} onSelectAircraft={(aircraftId) => { setWaypointMode(false); selectAircraft(aircraftId); }} onSelectContact={(contactId) => { setWaypointMode(false); selectContact(contactId); }} waypointAircraftId={waypointMode ? selectedAircraftId : null} onSetWaypoint={(aircraftId, waypoint) => { setWaypointMode(false); void issueCommand("SET_WAYPOINT", { aircraft_id: aircraftId, waypoint }); }} />
         <aside className="flex min-h-0 flex-col gap-3" aria-label={t(locale, "mission.detail_panel")} data-testid="mission-detail-panel" tabIndex={-1}>
           <MissionInstructionPanel session={currentSession} locale={locale} selectedAircraft={selectedAircraft} selectedContact={selectedContact} />
-          <section className="mission-panel flex min-h-[15rem] flex-1 flex-col">
-            <div className="grid grid-cols-2 border-b border-white/10" role="tablist" aria-label={t(locale, "mission.detail_views")}><button type="button" role="tab" id="mission-alerts-tab" aria-selected={detailView === "alerts"} aria-controls="mission-detail-panel-content" tabIndex={detailView === "alerts" ? 0 : -1} onClick={() => setDetailView("alerts")} className={`border-b-2 px-3 py-3 font-mono text-[10px] uppercase tracking-wider ${detailView === "alerts" ? "border-white" : "border-transparent text-muted-foreground"}`}>{t(locale, "mission.alerts")}</button><button type="button" role="tab" id="mission-contacts-tab" aria-selected={detailView === "contacts"} aria-controls="mission-detail-panel-content" tabIndex={detailView === "contacts" ? 0 : -1} onClick={() => setDetailView("contacts")} className={`border-b-2 px-3 py-3 font-mono text-[10px] uppercase tracking-wider ${detailView === "contacts" ? "border-white" : "border-transparent text-muted-foreground"}`}>{t(locale, "mission.contacts")}</button></div>
-            <div className="min-h-0 flex-1" id="mission-detail-panel-content" role="tabpanel" tabIndex={0} aria-labelledby={detailView === "alerts" ? "mission-alerts-tab" : "mission-contacts-tab"}>{detailView === "alerts" ? <AlertQueue alerts={alerts} locale={locale} readOnly={!canControl} onAcknowledge={(alert) => acknowledgeAlert(alert.alert_id)} /> : <ContactQueue contacts={contacts} locale={locale} selectedContactId={selectedContactId} readOnly={!canControl} onSelect={selectContact} onInspect={(contact) => void issueCommand("INSPECT_CONTACT", { contact_id: contact.contact_id })} />}</div>
-          </section>
+          <MissionDetailTabs locale={locale} modern={modern}
+            alerts={<AlertQueue alerts={alerts} locale={locale} readOnly={!canControl} onAcknowledge={(alert) => acknowledgeAlert(alert.alert_id)} />}
+            contacts={<ContactQueue contacts={contacts} locale={locale} selectedContactId={selectedContactId} readOnly={!canControl} onSelect={selectContact} onInspect={(contact) => void issueCommand("INSPECT_CONTACT", { contact_id: contact.contact_id })} />} />
         </aside>
       </main>}
       {activeProbe && !concealOperationalState && probeOverlay}

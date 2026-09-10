@@ -1,308 +1,222 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CheckCircle2, Loader2, MonitorUp, Play } from "lucide-react";
-
+import { CheckCircle2, AlertCircle } from "lucide-react";
 import { ExperimentGuide } from "@/components/experiments/ExperimentGuide";
-import { useExecutionPurpose } from "@/lib/execution-purpose";
-import { GuidedSteps, type GuidedStepState } from "@/components/layout/GuidedSteps";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useExecutionPurpose } from "@/lib/execution-purpose";
+import { useReportExperimentFlow } from "@/lib/experiment-flow";
 import { listParticipants, listVisits } from "@/lib/api";
 import { useAppLocale } from "@/lib/i18n";
-import {
-  createOpenMatbSession,
-  getOpenMatbReadiness,
-  listOpenMatbInstructions,
-  listOpenMatbPresets,
-  listOpenMatbVisualProfiles,
-  storeOpenMatbCredentials,
-} from "@/lib/openmatb/api";
+import { createOpenMatbSession, getOpenMatbReadiness, getOpenMatbDisplays, listOpenMatbInstructions,
+  listOpenMatbPresets, listOpenMatbVisualProfiles, storeOpenMatbCredentials } from "@/lib/openmatb/api";
 import { openMatbErrorMessage } from "@/lib/openmatb/errors";
+import { saveParticipantWindowState } from "@/lib/openmatb/participant-window";
 import { isParticipantId } from "@/lib/participant-id";
 import type { Participant, Visit } from "@/types";
-import type {
-  OpenMatbInstructionProtocol,
-  OpenMatbPresetSet,
-  OpenMatbReadiness,
-  OpenMatbVisualProfile,
-} from "@/types/openmatb";
+import type { OpenMatbDisplay, OpenMatbInstructionProtocol, OpenMatbPresetSet, OpenMatbReadiness, OpenMatbVisualProfile } from "@/types/openmatb";
 
-const CHECK_LABELS: Record<string, [string, string]> = {
-  python: ["Python compatible", "Compatible Python"],
-  runtime_dependencies: ["Dependencias nativas", "Native dependencies"],
-  openmatb: ["Aplicación OpenMATB", "OpenMATB application"],
-  questionnaires_es: ["Cuestionarios en español", "Spanish questionnaires"],
-  graphical_display: ["Pantalla gráfica", "Graphical display"],
+const CHECKS: Record<string, [string, string, string, string]> = {
+  python: ["Python compatible", "Compatible Python", "Ejecute el preparador de la estación para configurar Python.", "Run the station preparation launcher to configure Python."],
+  runtime_dependencies: ["Dependencias nativas", "Native dependencies", "Ejecute el preparador de la estación para instalar las dependencias.", "Run the station preparation launcher to install the dependencies."],
+  openmatb: ["Aplicación OpenMATB", "OpenMATB application", "Restaure OpenMATB con el preparador de la estación.", "Restore OpenMATB with the station preparation launcher."],
+  questionnaires_es: ["Cuestionarios en español", "Spanish questionnaires", "Restaure los cuestionarios con el preparador de la estación.", "Restore the questionnaires with the station preparation launcher."],
+  graphical_display: ["Escritorio gráfico", "Graphical desktop", "Conecte una pantalla y abra una sesión de escritorio en la estación.", "Connect a display and open a desktop session on the station."],
+  native_process_clear: ["Tarea anterior cerrada", "Previous task closed", "Cierre la ventana nativa de la conexión anterior.", "Close the native task window from the previous connection."],
 };
 
-function stepState(complete: boolean, current: boolean): GuidedStepState {
-  return complete ? "complete" : current ? "current" : "upcoming";
-}
-
-export default function OpenMatbSetupPage() {
+function SetupContent() {
   const router = useRouter();
   const { copy, locale } = useAppLocale();
   const purpose = useExecutionPurpose();
-  const copyRef = useRef(copy);
-  copyRef.current = copy;
+  useReportExperimentFlow("openmatb", "prepare");
+  const copyRef = useRef(copy); copyRef.current = copy;
+  const stationRequest = useRef(0);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [visits, setVisits] = useState<Visit[]>([]);
   const [presets, setPresets] = useState<OpenMatbPresetSet[]>([]);
   const [instructions, setInstructions] = useState<OpenMatbInstructionProtocol[]>([]);
   const [visualProfiles, setVisualProfiles] = useState<OpenMatbVisualProfile[]>([]);
   const [readiness, setReadiness] = useState<OpenMatbReadiness | null>(null);
+  const [displays, setDisplays] = useState<OpenMatbDisplay[]>([]);
   const [participantId, setParticipantId] = useState("");
   const [visitOrdinal, setVisitOrdinal] = useState("");
   const [presetKey, setPresetKey] = useState("");
   const [instructionKey, setInstructionKey] = useState("");
   const [visualProfileKey, setVisualProfileKey] = useState("");
-  const [displayIndex, setDisplayIndex] = useState(1);
+  const [displayIndex, setDisplayIndex] = useState<number | null>(null);
   const [acknowledged, setAcknowledged] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [checking, setChecking] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stationError, setStationError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    void Promise.all([
-      listParticipants(),
-      listOpenMatbPresets(),
-      listOpenMatbInstructions(),
-      listOpenMatbVisualProfiles(),
-      getOpenMatbReadiness(),
-    ])
-      .then(([people, presetRows, instructionRows, visualProfileRows, ready]) => {
-        if (!active) return;
-        const publishedPresets = presetRows.filter((row) => row.status === "published");
-        const publishedInstructions = instructionRows.filter((row) => row.status === "published");
-        const publishedVisualProfiles = visualProfileRows.filter((row) => row.status === "published");
-        setParticipants(people);
-        setPresets(publishedPresets);
-        setInstructions(publishedInstructions);
-        setVisualProfiles(publishedVisualProfiles);
-        setReadiness(ready);
-        if (publishedPresets[0]) setPresetKey(`${publishedPresets[0].preset_id}@${publishedPresets[0].version}`);
-        const preferredVisualProfile = publishedVisualProfiles.find(
-          (row) => row.profile_id === "matb-fac-modern" && row.version === "1.0.0",
-        ) ?? publishedVisualProfiles[0];
-        if (preferredVisualProfile) {
-          setVisualProfileKey(`${preferredVisualProfile.profile_id}@${preferredVisualProfile.version}`);
-        }
-        setDisplayIndex(ready.display_index_default);
-      })
-      .catch((reason: unknown) => {
-        if (active) setError(openMatbErrorMessage(reason, copyRef.current, ["No se pudo preparar OpenMATB.", "OpenMATB setup could not be loaded."]));
-      })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+  const checkStation = useCallback(async () => {
+    const revision = ++stationRequest.current;
+    setChecking(true);
+    const [readyResult, displayResult] = await Promise.allSettled([getOpenMatbReadiness(), getOpenMatbDisplays()]);
+    if (revision !== stationRequest.current) return null;
+    const ready = readyResult.status === "fulfilled" ? readyResult.value : null;
+    const screens = displayResult.status === "fulfilled" ? displayResult.value : [];
+    setReadiness(ready); setDisplays(screens);
+    setDisplayIndex(current => current ?? (screens.length === 1 ? screens[0].index : screens[1]?.index ?? null));
+    const failure = readyResult.status === "rejected" ? readyResult.reason : displayResult.status === "rejected" ? displayResult.reason : null;
+    setStationError(failure ? openMatbErrorMessage(failure, copyRef.current) : null);
+    setChecking(false);
+    return { ready, screens };
   }, []);
 
   useEffect(() => {
     let active = true;
-    if (!participantId) {
-      setVisits([]);
-      setVisitOrdinal("");
-      return () => { active = false; };
-    }
-    setVisitOrdinal("");
-    void listVisits(participantId)
-      .then((rows) => {
+    void checkStation();
+    void Promise.all([listParticipants(), listOpenMatbPresets(), listOpenMatbInstructions(), listOpenMatbVisualProfiles()])
+      .then(([people, presetRows, instructionRows, visualRows]) => {
         if (!active) return;
-        setVisits(rows);
-        setVisitOrdinal(rows[0] ? String(rows[0].visit_ordinal) : "");
-      })
-      .catch((reason: unknown) => {
-        if (active) setError(openMatbErrorMessage(reason, copyRef.current, ["No se pudieron cargar las visitas.", "Visits could not be loaded."]));
-      });
+        const approvedPresets = presetRows.filter(row => row.status === "published");
+        const approvedVisuals = visualRows.filter(row => row.status === "published");
+        setParticipants(people); setPresets(approvedPresets);
+        setInstructions(instructionRows.filter(row => row.status === "published")); setVisualProfiles(approvedVisuals);
+        if (approvedPresets[0]) setPresetKey(`${approvedPresets[0].preset_id}@${approvedPresets[0].version}`);
+        const preferred = approvedVisuals.find(row => row.profile_id === "matb-fac-modern" && row.version === "1.0.0") ?? approvedVisuals[0];
+        if (preferred) setVisualProfileKey(`${preferred.profile_id}@${preferred.version}`);
+      }).catch(reason => { if (active) setError(openMatbErrorMessage(reason, copyRef.current)); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; stationRequest.current += 1; };
+  }, [checkStation]);
+
+  useEffect(() => {
+    let active = true;
+    setVisits([]); setVisitOrdinal("");
+    if (participantId) void listVisits(participantId).then(rows => {
+      if (active) { setVisits(rows); setVisitOrdinal(rows[0] ? String(rows[0].visit_ordinal) : ""); }
+    }).catch(reason => { if (active) setError(openMatbErrorMessage(reason, copyRef.current)); });
     return () => { active = false; };
   }, [participantId]);
 
   useEffect(() => {
-    const matching = instructions.filter((row) => row.locale === locale);
-    setInstructionKey((current) => matching.some((row) => `${row.protocol_id}@${row.version}` === current)
+    const matching = instructions.filter(row => row.locale === locale);
+    setInstructionKey(current => matching.some(row => `${row.protocol_id}@${row.version}` === current)
       ? current : matching[0] ? `${matching[0].protocol_id}@${matching[0].version}` : "");
   }, [instructions, locale]);
 
-  const preset = useMemo(
-    () => presets.find((row) => `${row.preset_id}@${row.version}` === presetKey),
-    [presetKey, presets],
-  );
-  const protocol = useMemo(
-    () => instructions.find((row) => `${row.protocol_id}@${row.version}` === instructionKey),
-    [instructionKey, instructions],
-  );
-  const visualProfile = useMemo(
-    () => visualProfiles.find((row) => `${row.profile_id}@${row.version}` === visualProfileKey),
-    [visualProfileKey, visualProfiles],
-  );
-  const participantIsValid = !participantId || isParticipantId(participantId);
-  const stationReady = Boolean(readiness?.ready);
-  const identityReady = Boolean(participantId && participantIsValid && visitOrdinal);
-  const configurationReady = Boolean(
-    identityReady && preset && protocol && visualProfile && Number.isInteger(displayIndex),
-  );
-  const canPrepare = Boolean(stationReady && configurationReady && acknowledged && !busy && !loading);
+  const preset = useMemo(() => presets.find(row => `${row.preset_id}@${row.version}` === presetKey), [presets, presetKey]);
+  const protocol = useMemo(() => instructions.find(row => `${row.protocol_id}@${row.version}` === instructionKey), [instructions, instructionKey]);
+  const visual = useMemo(() => visualProfiles.find(row => `${row.profile_id}@${row.version}` === visualProfileKey), [visualProfiles, visualProfileKey]);
+  const selectedDisplay = displays.find(row => row.index === displayIndex);
+  const stationReady = Boolean(readiness?.ready && displays.length && !stationError);
+  const missing: Array<{ target: string; label: string }> = [];
+  if (!purpose) missing.push({ target: "om-purpose", label: copy("Elija práctica o estudio", "Choose practice or study") });
+  if (!stationReady) missing.push({ target: "om-station", label: copy("Resuelva los requisitos de la estación", "Resolve the station requirements") });
+  if (!participantId || !isParticipantId(participantId)) missing.push({ target: "om-participant", label: copy("Seleccione un participante", "Select a participant") });
+  if (!visits.some(row => String(row.visit_ordinal) === visitOrdinal)) missing.push({ target: "om-visit", label: copy("Seleccione la visita asignada", "Select the assigned visit") });
+  if (!preset || !protocol || !visual) missing.push({ target: !preset ? "om-preset" : !protocol ? "om-protocol" : "om-theme", label: copy("Seleccione una configuración publicada", "Select a published configuration") });
+  if (!selectedDisplay) missing.push({ target: "om-display", label: copy("Seleccione una pantalla conectada", "Select a connected display") });
+  if (!acknowledged) missing.push({ target: "om-equipment", label: copy("Confirme la comprobación del equipo", "Confirm the equipment check") });
+  const pendingReason = loading ? copy("Cargando participantes y configuración…", "Loading participants and configuration…")
+    : checking ? copy("Comprobando los requisitos de la estación…", "Checking the station requirements…")
+    : busy ? copy("Creando sesión…", "Creating session…") : null;
+  const canPrepare = !missing.length && !pendingReason;
 
+  function focusRequirement(target: string) {
+    const element = document.getElementById(target);
+    const details = element?.closest("details");
+    if (details) details.open = true;
+    element?.focus();
+  }
   async function prepare() {
-    if (!canPrepare || !preset || !protocol || !visualProfile) return;
+    if (!canPrepare || !purpose || !preset || !protocol || !visual || displayIndex === null) return;
     const participantWindow = window.open("about:blank", "matb-fac-participant");
-    setBusy(true);
-    setError(null);
+    setBusy(true); setError(null);
     try {
-      const ready = await getOpenMatbReadiness();
-      setReadiness(ready);
-      if (!ready.ready) throw new Error(copy("Revise los requisitos de la estación e intente de nuevo.", "Check station requirements and try again."));
-      const prepared = await createOpenMatbSession({
-        execution_purpose: purpose,
-        participant_id: participantId,
-        visit_ordinal: Number(visitOrdinal),
-        preset_id: preset.preset_id,
-        preset_version: preset.version,
-        instruction_protocol_id: protocol.protocol_id,
-        instruction_version: protocol.version,
-        visual_profile_id: visualProfile.profile_id,
-        visual_profile_version: visualProfile.version,
-        display_index: displayIndex,
-      });
+      // Credentials must survive this route change and a reload in this tab.
+      sessionStorage.setItem("openmatb.storage-check", "ok"); sessionStorage.removeItem("openmatb.storage-check");
+      const current = await checkStation();
+      if (!current?.ready?.ready) throw new Error(copy("Resuelva los requisitos de la estación y vuelva a comprobar.", "Resolve the station requirements and check again."));
+      if (!current.screens.some(row => row.index === displayIndex)) throw new Error(copy("La pantalla seleccionada se desconectó. Seleccione una pantalla conectada.", "The selected display disconnected. Select a connected display."));
+      const prepared = await createOpenMatbSession({ execution_purpose: purpose, participant_id: participantId, visit_ordinal: Number(visitOrdinal),
+        preset_id: preset.preset_id, preset_version: preset.version, instruction_protocol_id: protocol.protocol_id,
+        instruction_version: protocol.version, visual_profile_id: visual.profile_id, visual_profile_version: visual.version, display_index: displayIndex });
       storeOpenMatbCredentials(prepared);
-      const participantUrl = `/openmatb/participant?session=${encodeURIComponent(prepared.session.id)}#token=${encodeURIComponent(prepared.participant_token)}`;
-      if (participantWindow) participantWindow.location.href = participantUrl;
-      router.push(`/openmatb/session?session=${encodeURIComponent(prepared.session.id)}`);
-    } catch (reason: unknown) {
+      const windowState = participantWindow ? "opened" : "blocked";
+      saveParticipantWindowState(prepared.session.id, windowState);
+      if (participantWindow) participantWindow.location.href = `/openmatb/participant?session=${encodeURIComponent(prepared.session.id)}#token=${encodeURIComponent(prepared.participant_token)}`;
+      router.push(`/openmatb/session?session=${encodeURIComponent(prepared.session.id)}&participant_window=${windowState}`);
+    } catch (reason) {
       participantWindow?.close();
-      setError(openMatbErrorMessage(reason, copyRef.current, ["No se pudo crear la sesión.", "The session could not be created."]));
-    } finally {
-      setBusy(false);
-    }
+      setError(openMatbErrorMessage(reason, copyRef.current));
+    } finally { setBusy(false); }
   }
 
-  return (
-    <div className="space-y-6">
-      <ExperimentGuide id="openmatb" />
-      <PageHeader
-        kicker={copy("Control nativo", "Native control")}
-        title={copy("Suite OpenMATB", "OpenMATB suite")}
-        description={copy(
-          "Primero se crean las instrucciones del participante; la ventana nativa se abre en el paso siguiente.",
-          "Participant instructions are created first; the native window opens in the next step.",
-        )}
-        actions={<div className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link href="/openmatb/appearance">{copy("Apariencia", "Appearance")}</Link></Button><Button asChild variant="outline"><Link href="/openmatb/settings">{copy("Configuración avanzada", "Advanced settings")}</Link></Button></div>}
-        stats={[
-          { label: copy("Sistema", "System"), value: readiness?.platform ?? "—" },
-          { label: copy("Bloques", "Blocks"), value: purpose === "practice" ? "01" : "04" },
-          { label: copy("Estación", "Station"), value: stationReady ? copy("Lista", "Ready") : copy("Revisar", "Check") },
-        ]}
-      />
-
-      <GuidedSteps
-        label={copy("Pasos para abrir OpenMATB", "Steps to open OpenMATB")}
-        steps={[
-          { title: copy("Estación", "Station"), description: copy("Compruebe Python, OpenMATB y la pantalla.", "Check Python, OpenMATB, and the display."), state: stepState(stationReady, true) },
-          { title: copy("Participante", "Participant"), description: copy("Seleccione el código y la visita.", "Select the code and visit."), state: stepState(identityReady, stationReady) },
-          { title: copy("Configuración", "Configuration"), description: copy("Confirme preset, instrucciones y pantalla.", "Confirm preset, instructions, and display."), state: stepState(configurationReady && acknowledged, identityReady) },
-          { title: copy("Instrucciones", "Instructions"), description: copy("Cree la sesión y abra la pantalla del participante.", "Create the session and open the participant display."), state: stepState(false, canPrepare) },
-        ]}
-      />
-
-      {error && <p role="alert" className="border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">{error}</p>}
-      {readiness && !readiness.ready && (
-        <div role="alert" className="flex gap-3 border border-warning/40 bg-warning/5 p-4 text-sm text-warning">
-          <AlertTriangle className="h-5 w-5 shrink-0" aria-hidden="true" />
-          <div>
-            <strong>{copy("La estación aún no está lista.", "The station is not ready yet.")}</strong>
-            <p className="mt-1 text-xs">{copy("Cierre la consola y vuelva a abrir “01 - Abrir consola UAS” para reparar dependencias o compilación.", "Close the console and reopen “01 - Open UAS console” to repair dependencies or the build.")}</p>
-          </div>
+  return <div className="min-w-0 space-y-6 text-base [&_button]:text-sm [&_button]:normal-case [&_button]:tracking-normal">
+    <div id="om-purpose" tabIndex={-1}><ExperimentGuide id="openmatb" /></div>
+    <PageHeader kicker={copy("Preparación", "Preparation")} title={copy("Suite OpenMATB", "OpenMATB suite")}
+      description={copy("Compruebe la estación, confirme la visita y abra las instrucciones. La tarea se inicia después desde el panel del investigador.", "Check the station, confirm the visit, and open the instructions. The researcher starts the task afterward from the controller.")} />
+    {error && <div role="alert" className="rounded border border-danger/40 p-3 text-danger"><p>{error}</p><Button variant="link" onClick={() => location.reload()}>{copy("Volver a cargar la preparación", "Reload preparation")}</Button></div>}
+    <Card id="om-station" tabIndex={-1}>
+      <CardHeader><CardTitle className="text-xl">{copy("1. ¿Está lista la estación?", "1. Is the station ready?")}</CardTitle></CardHeader>
+      <CardContent className="space-y-4">
+        {stationError && <p role="alert" className="text-danger">{stationError}</p>}
+        <ul className="grid gap-3 md:grid-cols-2">{Object.entries(readiness?.checks ?? {}).map(([key, ready]) => {
+          const text = CHECKS[key];
+          return <li key={key} className="rounded border p-3 text-sm"><div className="flex items-center gap-2">
+            {ready ? <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" /> : <AlertCircle className="h-4 w-4 text-warning" aria-hidden="true" />}
+            <span className="font-medium">{text ? copy(text[0], text[1]) : copy("Requisito de la estación", "Station requirement")}</span>
+            <span className="ml-auto">{ready ? copy("Correcto", "Ready") : copy("Revisar", "Needs attention")}</span></div>
+            {!ready && <div className="mt-2"><p>{text ? copy(text[2], text[3]) : copy("Consulte los diagnósticos y vuelva a comprobar.", "Review diagnostics and check again.")}</p>
+              <Button variant="link" disabled={checking || busy} onClick={() => void checkStation()}>{copy("Comprobar este requisito", "Recheck this requirement")}</Button></div>}
+          </li>;
+        })}</ul>
+        <Button variant="outline" disabled={checking || busy} onClick={() => void checkStation()}>{checking ? copy("Comprobando…", "Checking…") : copy("Comprobar de nuevo", "Check again")}</Button>
+        <div className="max-w-xl space-y-2"><label htmlFor="om-display" className="text-sm font-medium">{copy("Pantalla del participante", "Participant display")}</label>
+          <select id="om-display" className="native-select w-full" value={displayIndex ?? ""} disabled={busy || checking} onChange={event => setDisplayIndex(event.target.value === "" ? null : Number(event.target.value))}>
+            <option value="">{copy("Seleccione una pantalla", "Select a display")}</option>
+            {displayIndex !== null && !selectedDisplay && <option value={displayIndex}>{copy("Desconectada", "Disconnected")} · {copy("Pantalla", "Display")} {displayIndex + 1}</option>}
+            {displays.map(display => <option key={display.index} value={display.index}>{copy("Pantalla", "Display")} {display.index + 1} · {display.width} × {display.height}{display.index === 0 && displays.length > 1 ? copy(" · primera pantalla", " · first display") : ""}</option>)}
+          </select><p className="text-sm text-muted-foreground">{copy("La aplicación nativa usará esta pantalla. Las instrucciones se abren en una ventana del navegador independiente.", "The native task uses this display. Instructions open in a separate browser window.")}</p>
         </div>
-      )}
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_23rem]">
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-display text-xl uppercase tracking-wide">{copy("Paso 2 · Preparar visita", "Step 2 · Prepare visit")}</CardTitle>
-            <CardDescription>{copy("Complete los campos de arriba hacia abajo.", "Complete the fields from top to bottom.")}</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-5 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="om-participant">{copy("1. Participante", "1. Participant")}</Label>
-              <select id="om-participant" className="native-select w-full" value={participantId} onChange={(event) => setParticipantId(event.target.value)} disabled={loading || busy}>
-                <option value="">{loading ? copy("Cargando…", "Loading…") : "—"}</option>
-                {participants.map((row) => <option key={row.id} value={row.id}>{row.id}</option>)}
-              </select>
-              {!loading && participants.length === 0 && <p className="text-xs text-muted-foreground"><Link href="/participants" className="text-info underline underline-offset-2">{copy("Cree primero un participante P01.", "Create a P01 participant first.")}</Link></p>}
-              {participantId && !participantIsValid && <p role="alert" className="text-xs text-danger">{copy("Este registro antiguo no es compatible. Cree un código como P01.", "This older record is not compatible. Create a code such as P01.")}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="om-visit">{copy("2. Visita", "2. Visit")}</Label>
-              <select id="om-visit" className="native-select w-full" value={visitOrdinal} onChange={(event) => setVisitOrdinal(event.target.value)} disabled={!participantId || busy}>
-                <option value="">—</option>
-                {visits.map((row) => <option key={row.id} value={row.visit_ordinal}>{copy("Día", "Day")} {row.scheduled_day} · V{row.visit_ordinal}</option>)}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="om-preset">{copy("3. Preset publicado", "3. Published preset")}</Label>
-              <select id="om-preset" className="native-select w-full" value={presetKey} onChange={(event) => setPresetKey(event.target.value)} disabled={busy}>
-                {presets.map((row) => <option key={`${row.preset_id}@${row.version}`} value={`${row.preset_id}@${row.version}`}>{row.label_es} · v{row.version}</option>)}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="om-protocol">{copy("4. Instrucciones", "4. Instructions")}</Label>
-              <select id="om-protocol" className="native-select w-full" value={instructionKey} onChange={(event) => setInstructionKey(event.target.value)} disabled={busy}>
-                {instructions.filter((row) => row.locale === locale).map((row) => <option key={`${row.protocol_id}@${row.version}`} value={`${row.protocol_id}@${row.version}`}>{row.title} · v{row.version}</option>)}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="om-theme">{copy("5. Presentación visual", "5. Visual presentation")}</Label>
-              <select id="om-theme" className="native-select w-full" value={visualProfileKey} onChange={(event) => setVisualProfileKey(event.target.value)} disabled={busy}>
-                {visualProfiles.map((row) => <option key={`${row.profile_id}@${row.version}`} value={`${row.profile_id}@${row.version}`}>{row.label} · v{row.version}</option>)}
-              </select>
-              <p className="text-xs text-muted-foreground">{copy("El perfil publicado y su SHA-256 quedan congelados con la sesión. No combine condiciones sin validar equivalencia.", "The published profile and its SHA-256 are frozen with the session. Do not pool conditions without validating equivalence.")}</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="om-display">{copy("6. Pantalla donde se abrirá OpenMATB", "6. Display where OpenMATB will open")}</Label>
-              <Input id="om-display" type="number" min={0} max={15} value={displayIndex} onChange={(event) => setDisplayIndex(Number(event.target.value))} disabled={busy} />
-              <p className="text-xs text-muted-foreground">{copy("Use 1 para la segunda pantalla; use 0 si sólo hay una.", "Use 1 for the second display; use 0 for a single display.")}</p>
-            </div>
-            <label className="flex items-start gap-3 border border-white/10 bg-white/[0.02] p-3 text-sm text-muted-foreground sm:col-span-2">
-              <input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} disabled={busy} className="mt-1" />
-              <span>{copy("Confirmo que verificaré físicamente audio, mouse, teclado o joystick antes de recolectar datos.", "I confirm that I will physically verify audio, mouse, keyboard, or joystick before collecting data.")}</span>
-            </label>
-            <Button className="sm:col-span-2" size="lg" disabled={!canPrepare} onClick={() => void prepare()}>
-              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <Play className="mr-2 h-4 w-4" aria-hidden="true" />}
-              {busy ? copy("Creando sesión…", "Creating session…") : copy("Crear sesión y abrir instrucciones", "Create session and open instructions")}
-            </Button>
-            <p className="text-center text-xs text-muted-foreground sm:col-span-2">{copy("Este botón todavía no inicia OpenMATB. Después de confirmar las instrucciones, el panel mostrará “Abrir OpenMATB”.", "This button does not start OpenMATB yet. After instructions are confirmed, the console will show “Open OpenMATB”.")}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="h-fit">
-          <CardHeader><CardTitle className="font-display text-xl uppercase tracking-wide">{copy("Paso 1 · Comprobaciones", "Step 1 · Checks")}</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            {readiness ? Object.entries(readiness.checks).map(([name, ok]) => {
-              const label = CHECK_LABELS[name];
-              return <div key={name} className="flex items-center justify-between border-b border-white/10 pb-2 text-sm"><span>{label ? copy(label[0], label[1]) : name.replaceAll("_", " ")}</span><CheckCircle2 className={`h-4 w-4 ${ok ? "text-success" : "text-danger"}`} aria-label={ok ? copy("Correcto", "Ready") : copy("Falta", "Missing")} /></div>;
-            }) : <p className="text-sm text-muted-foreground">{copy("Consultando…", "Checking…")}</p>}
-            {readiness?.warnings.map((warning) => <p key={warning} className="text-xs text-warning">{warning}</p>)}
-            <div className="mt-5 flex gap-3 border border-info/30 bg-info/5 p-3 text-xs text-muted-foreground">
-              <MonitorUp className="h-4 w-4 shrink-0 text-info" aria-hidden="true" />
-              <span>{copy("El panel del investigador queda en esta pantalla. La aplicación nativa usará el índice seleccionado.", "The researcher console stays on this display. The native application uses the selected index.")}</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {preset && (
-        <Card>
-          <CardHeader><CardTitle className="font-display text-xl uppercase tracking-wide">{copy("Parámetros de carga", "Workload parameters")}</CardTitle><CardDescription>{copy("Preset de ingeniería versionado; no equivale a calibración humana independiente.", "Versioned engineering preset; it is not independent human calibration.")}</CardDescription></CardHeader>
-          <CardContent className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="pb-3">{copy("Perfil", "Profile")}</th><th>{copy("Duración", "Duration")}</th><th>{copy("Dificultad", "Difficulty")}</th><th>TRACK</th><th>RESMAN</th><th>ISA</th></tr></thead><tbody>{Object.entries(preset.profiles).map(([name, value]) => <tr key={name} className="border-t border-white/10"><td className="py-3 font-semibold">{name}</td><td>{value.duration_seconds}s</td><td>{value.difficulty.toFixed(2)}</td><td>{value.track_target_proportion.toFixed(2)}</td><td>{value.resman_loss_per_min} L/min</td><td>{value.isa_probe_interval_sec}s</td></tr>)}</tbody></table></CardContent>
-        </Card>
-      )}
-    </div>
-  );
+        <label className="flex items-start gap-3 rounded border p-3 text-sm"><input id="om-equipment" type="checkbox" checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} disabled={busy} className="mt-1" />
+          <span>{copy("Confirmo que verificaré físicamente audio, mouse, teclado o joystick antes de recolectar datos.", "I confirm that I will physically verify audio, mouse, keyboard, or joystick before collecting data.")}</span></label>
+      </CardContent>
+    </Card>
+    <Card><CardHeader><CardTitle className="text-xl">{copy("2. ¿Quién participa?", "2. Who is participating?")}</CardTitle></CardHeader>
+      <CardContent className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2"><label htmlFor="om-participant" className="text-sm font-medium">{copy("Participante", "Participant")}</label>
+          <select id="om-participant" className="native-select w-full" value={participantId} disabled={loading || busy} onChange={event => setParticipantId(event.target.value)}><option value="">—</option>{participants.map(person => <option key={person.id}>{person.id}</option>)}</select>
+          {!loading && !participants.length && <Link href="/participants" className="text-sm text-info underline">{copy("Registrar participante", "Register participant")}</Link>}
+        </div>
+        <div className="space-y-2"><label htmlFor="om-visit" className="text-sm font-medium">{copy("Visita asignada", "Assigned visit")}</label>
+          <select id="om-visit" className="native-select w-full" value={visitOrdinal} disabled={!participantId || busy} onChange={event => setVisitOrdinal(event.target.value)}><option value="">—</option>{visits.map(visit => <option key={visit.id} value={visit.visit_ordinal}>V{visit.visit_ordinal} · {copy("Día", "Day")} {visit.scheduled_day}</option>)}</select>
+        </div>
+        {participantId && visitOrdinal && <p className="text-sm sm:col-span-2">{copy("Seleccionado", "Selected")}: <strong className="font-mono">{participantId}</strong> · V{visitOrdinal}</p>}
+      </CardContent>
+    </Card>
+    <Card><CardHeader><CardTitle className="text-xl">{copy("3. ¿Qué se ejecutará?", "3. What will run?")}</CardTitle></CardHeader>
+      <CardContent className="space-y-4">
+        <p className="font-medium">{protocol?.title ?? copy("Seleccione un protocolo publicado", "Select a published protocol")}</p>
+        <p className="text-sm">{preset?.label_es} · {visual?.label}</p>
+        <p className="text-sm text-muted-foreground">{purpose === "practice" ? copy("Un bloque de práctica, sin cuestionario ni cierre de visita de estudio.", "One practice block, with no questionnaire or completion of a study visit.") : purpose === "study" ? copy("Práctica seguida de tres bloques en el orden asignado, con escalas después de cada bloque de estudio.", "Practice followed by three blocks in the assigned order, with ratings after each study block.") : copy("Elija la finalidad para ver la secuencia.", "Choose a purpose to see the sequence.")}</p>
+        <details className="rounded border p-3"><summary className="cursor-pointer text-sm font-semibold">{copy("Ver configuración", "View configuration")}</summary>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <label className="space-y-2 text-sm" htmlFor="om-preset">{copy("Preset publicado", "Published preset")}<select id="om-preset" className="native-select w-full" value={presetKey} disabled={busy} onChange={event => setPresetKey(event.target.value)}>{presets.map(row => <option key={`${row.preset_id}@${row.version}`} value={`${row.preset_id}@${row.version}`}>{row.label_es} · v{row.version}</option>)}</select></label>
+            <label className="space-y-2 text-sm" htmlFor="om-protocol">{copy("Protocolo de instrucciones", "Instruction protocol")}<select id="om-protocol" className="native-select w-full" value={instructionKey} disabled={busy} onChange={event => setInstructionKey(event.target.value)}>{instructions.filter(row => row.locale === locale).map(row => <option key={`${row.protocol_id}@${row.version}`} value={`${row.protocol_id}@${row.version}`}>{row.title} · v{row.version}</option>)}</select></label>
+            <label className="space-y-2 text-sm" htmlFor="om-theme">{copy("Perfil visual publicado", "Published visual profile")}<select id="om-theme" className="native-select w-full" value={visualProfileKey} disabled={busy} onChange={event => setVisualProfileKey(event.target.value)}>{visualProfiles.map(row => <option key={`${row.profile_id}@${row.version}`} value={`${row.profile_id}@${row.version}`}>{row.label} · v{row.version}</option>)}</select></label>
+            <p className="text-sm text-muted-foreground">{copy("Los perfiles y sus huellas quedan congelados con la sesión.", "Profiles and their hashes are frozen with the session.")}</p>
+          </div>
+          {preset && <div className="mt-4 overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr>{[copy("Bloque", "Block"), copy("Duración", "Duration"), copy("Dificultad", "Difficulty"), "TRACK", "RESMAN", "ISA"].map(label => <th key={label} className="p-2">{label}</th>)}</tr></thead><tbody>{Object.entries(preset.profiles).map(([name, value]) => <tr key={name} className="border-t"><td className="p-2">{name}</td><td>{value.duration_seconds}s</td><td>{value.difficulty}</td><td>{value.track_target_proportion}</td><td>{value.resman_loss_per_min} L/min</td><td>{value.isa_probe_interval_sec}s</td></tr>)}</tbody></table></div>}
+          <div className="mt-4 flex flex-wrap gap-4 text-sm"><Link href="/openmatb/settings" className="text-info underline">{copy("Configuración avanzada", "Advanced settings")}</Link><Link href="/openmatb/appearance" className="text-info underline">{copy("Apariencia", "Appearance")}</Link></div>
+          <details className="mt-4 text-sm"><summary className="cursor-pointer">{copy("Diagnósticos y procedencia", "Diagnostics and provenance")}</summary><pre className="mt-2 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify({ display_index: displayIndex, preset_id: preset?.preset_id, preset_version: preset?.version, preset_sha256: preset?.sha256, instruction_protocol_id: protocol?.protocol_id, instruction_protocol_version: protocol?.version, instruction_protocol_sha256: protocol?.sha256, visual_profile_id: visual?.profile_id, visual_profile_version: visual?.version, visual_profile_sha256: visual?.sha256, readiness }, null, 2)}</pre></details>
+        </details>
+        <div aria-live="polite" className="text-sm">{missing.length > 0 && <><p>{copy("Para continuar:", "To continue:")}</p><ul className="mt-1 space-y-1">{missing.map(item => <li key={item.target}><button className="text-left text-info underline" onClick={() => focusRequirement(item.target)}>{item.label}</button></li>)}</ul></>}</div>
+        {pendingReason && <p role="status" className="text-sm">{pendingReason}</p>}
+        <Button size="lg" className="h-auto min-h-11 max-w-full whitespace-normal" disabled={!canPrepare} onClick={() => void prepare()}>{busy ? copy("Creando sesión…", "Creating session…") : copy("Crear sesión y abrir instrucciones", "Create session and open instructions")}</Button>
+      </CardContent>
+    </Card>
+  </div>;
 }
+
+export default function OpenMatbSetupPage() { return <Suspense><SetupContent /></Suspense>; }

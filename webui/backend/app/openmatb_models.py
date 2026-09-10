@@ -92,8 +92,34 @@ class OpenMatbSuiteSession(SQLModel, table=True):
     participant_token_hash: str
     artifact_root: str
     active_pid: int | None = None
+    recovery_pid: int | None = None
     active_session_csv: str | None = None
+    active_block_instance_id: str | None = None
+    receipt_version: int = 1
     last_error: str | None = None
     created_at: datetime = Field(default_factory=_utcnow)
     started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
+class OpenMatbBlockAttempt(SQLModel, table=True):
+    """One native launch; its identity also binds external workload ratings."""
+
+    __tablename__ = "openmatb_block_attempt"
+    id: str = Field(primary_key=True)
+    session_id: str = Field(foreign_key="openmatb_suite_session.id", index=True)
+    block_index: int
+    profile: str
+    task_status: str = "starting"
+    artifact_status: str = "unknown"
+    artifact_error: str | None = None
+    session_csv: str | None = None
+    ratings_json: str | None = None
+    ratings_saved_at: datetime | None = None
+    legacy_import_status: str = "pending"
+    legacy_import_error: str | None = None
+    evidence_status: str = "awaiting_completion"
+    evidence_error: str | None = None
+    capture_id: str | None = Field(default=None, index=True)
+    started_at: datetime = Field(default_factory=_utcnow)
     finished_at: datetime | None = None

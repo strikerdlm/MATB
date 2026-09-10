@@ -210,12 +210,22 @@ class CreateTechnicalSimulationSession(BaseModel):
     locale: Locale
 
 
+class ConsoleProfile(BaseModel):
+    """Recorded identity; unknown versions remain identifiable without upgrading."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    id: str = Field(min_length=1, max_length=80)
+    version: int = Field(ge=1)
+    sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
 class SessionView(BaseModel):
     """Public session metadata that never includes a controller lease."""
 
     model_config = ConfigDict(extra="forbid")
 
     id: str
+    console_profile: ConsoleProfile | None = None
     presentation: PresentationConfig | None = None
     participant_id: str | None = Field(default=None, pattern=PARTICIPANT_ID_PATTERN)
     visit_id: int | None = Field(default=None, ge=1)

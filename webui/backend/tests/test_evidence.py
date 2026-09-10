@@ -18,6 +18,35 @@ def upload(client, bundle):
     return client.post("/ingest/evidence", files={k: (f"{k}.json", v, "application/octet-stream") for k, v in bundle.items()})
 
 
+def test_capture_discovery_keeps_suite_practice_and_reports_review_states(client, seeded_participant, tmp_path):
+    suite_id = str(uuid4())
+    capture_ids = []
+    for purpose in ("study", "practice"):
+        bundle = synthetic_capture(tmp_path / purpose, purpose=purpose, identity=purpose)
+        manifest = strict_json(bundle["capture_manifest"])
+        manifest["parent_session_id"] = suite_id
+        bundle["capture_manifest"] = canonical_bytes(manifest)
+        response = upload(client, bundle)
+        assert response.status_code == 201, response.text
+        capture_ids.append(response.json()["id"])
+    page = client.get("/evidence/captures", params={"purpose": "all", "session": suite_id, "q": "p01", "limit": 1}).json()
+    assert page["total"] == 2
+    assert len(page["items"]) == 1
+    item = page["items"][0]
+    assert item["parent_session_id"] == suite_id
+    assert item["visit_ordinal"] == 1
+    assert item["created_at"]  # Registration time, not claimed acquisition time.
+    assert item["created_at"].endswith(("Z", "+00:00"))
+    assert item["capture_status"] in {"reconciled", "partially_excluded"}
+    assert item["qualification"]["physical_timing"] == "not_qualified"
+    assert item["qualification"]["protocol_eligibility"]["status"] == "not_assessed"
+    assert not ({"manifest_json", "manifest", "metrics", "runs", "reconciliation"} & item.keys())
+    assert client.get("/evidence/captures", params={"purpose": "all", "session": str(uuid4())}).json()["total"] == 0
+    assert client.get("/evidence/captures", params={"purpose": "all", "q": capture_ids[0]}).json()["total"] == 1
+    assert client.get("/evidence/captures", params={"purpose": "all", "q": "%"}).json()["total"] == 0
+    assert client.get(f"/evidence/captures/{capture_ids[1]}").json()["id"] == capture_ids[1]
+
+
 def test_round_trip_inspector_and_offline_recomputation(client, engine, seeded_participant, tmp_path):
     bundle = synthetic_capture(tmp_path / "source")
     response = upload(client, bundle)

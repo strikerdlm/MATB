@@ -15,6 +15,7 @@ import { getStudyContext } from "@/lib/api";
 import { createLiftoffSession, getLiftoffReadiness } from "@/lib/liftoff/api";
 import type { Participant, StudyParticipantContext, StudyProtocol } from "@/types";
 import { useAppLocale } from "@/lib/i18n";
+import { useReportExperimentFlow } from "@/lib/experiment-flow";
 
 export function LiftoffSetupForm({
   participants,
@@ -25,6 +26,7 @@ export function LiftoffSetupForm({
 }) {
   const { copy, locale } = useAppLocale();
   const purpose = useExecutionPurpose();
+  useReportExperimentFlow("liftoff", "prepare");
   const copyRef = useRef(copy);
   copyRef.current = copy;
   const router = useRouter();
@@ -60,7 +62,7 @@ export function LiftoffSetupForm({
 
   async function prepare(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!participantId || !visitOrdinal || !readiness?.ready) return;
+    if (!purpose || !participantId || !visitOrdinal || !readiness?.ready) return;
     setBusy(true);
     setError(null);
     try {
@@ -142,7 +144,7 @@ export function LiftoffSetupForm({
           </label>
           {!polarConfirmed ? <div className="space-y-2 sm:col-span-2"><Label htmlFor="performance-reason">{copy("Razón para registrar solo desempeño", "Performance-only reason")}</Label><Input id="performance-reason" value={performanceReason} onChange={(event) => setPerformanceReason(event.target.value)} /></div> : null}
           {error ? <p role="alert" className="text-sm text-danger sm:col-span-2">{error}</p> : null}
-          <Button className="sm:col-span-2" disabled={busy || contextLoading || !participantId || !visitOrdinal || !readiness?.ready || !build || !controllerFirmware}>
+          <Button className="sm:col-span-2" disabled={!purpose || busy || contextLoading || !participantId || !visitOrdinal || !readiness?.ready || !build || !controllerFirmware}>
             {busy ? copy("Preparando…", "Preparing…") : copy("Preparar sesión de Liftoff", "Prepare Liftoff session")}
           </Button>
         </CardContent>

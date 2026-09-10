@@ -158,7 +158,14 @@ export interface WorldSnapshot {
   coverage: CoverageSnapshot;
 }
 
+export interface ConsoleProfile {
+  id: string;
+  version: number;
+  sha256: string;
+}
+
 export interface SessionView {
+  console_profile?: ConsoleProfile | null;
   presentation?: PresentationConfig | null;
   id: string;
   participant_id: string | null;

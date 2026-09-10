@@ -5,8 +5,9 @@ import Link from "next/link";
 import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, MoonStar } from "lucide-react";
 
 import { InstructionAudio } from "@/components/instructions/InstructionAudio";
-import { ExperimentGuide } from "@/components/experiments/ExperimentGuide";
-import { announceExperimentStage, useExecutionPurpose } from "@/lib/execution-purpose";
+import { ExecutionPurposeBadge, ExperimentGuide } from "@/components/experiments/ExperimentGuide";
+import { useExecutionPurpose } from "@/lib/execution-purpose";
+import { flowStageForPvt, useReportExperimentFlow } from "@/lib/experiment-flow";
 import { useConsole } from "@/lib/console-context";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PvtRunner } from "@/components/pvt/PvtRunner";
@@ -59,6 +60,7 @@ export default function PvtPage() {
   const [error, setError] = useState<string | null>(null);
   const [pendingRun, setPendingRun] = useState<PvtRunResult | null>(null);
   const [fastMode, setFastMode] = useState(false);
+  const [pvtStarted, setPvtStarted] = useState(false);
 
   useEffect(() => {
     setFastMode(new URLSearchParams(window.location.search).get("fast") === "1");
@@ -104,20 +106,21 @@ export default function PvtPage() {
   const alreadyRecorded = Boolean(
     purpose === "study" && visit && summary?.assessments.some((row) => row.visit_id === visit.id && row.protocol_valid && row.pvt_version >= 2),
   );
-  useEffect(() => { announceExperimentStage(stage === "select" ? 1 : stage === "instructions" || stage === "kss" ? 2 : stage === "complete" ? 4 : 3); }, [stage]);
+  useReportExperimentFlow("pvt", flowStageForPvt(stage, pvtStarted));
   const kssLabels = locale === "en" ? KSS_EN : KSS_ES;
   const durationMs = fastMode ? 12_000 : purpose === "practice" ? 60_000 : PVT_PROTOCOL_DURATION_MS;
   const audioLocale = locale === "en" ? "en" : "es";
 
   function beginKss() {
-    if (!participantId || !visitOrdinal || alreadyRecorded) return;
+    if (!purpose || !participantId || !visitOrdinal || alreadyRecorded) return;
     setError(null);
     setKssScore(null);
+    setPvtStarted(false);
     setStage("kss");
   }
 
   async function completePvt(run: PvtRunResult) {
-    if (kssScore === null) return;
+    if (!purpose || kssScore === null) return;
     setPendingRun(run);
     setError(null);
     setStage("saving");
@@ -150,6 +153,7 @@ export default function PvtPage() {
   return (
     <div className="space-y-6">
       {stage === "select" && <ExperimentGuide id="pvt" />}
+      {stage !== "select" && purpose && <ExecutionPurposeBadge purpose={purpose} />}
       <PageHeader
         kicker={copy("Somnolencia y atención", "Sleepiness and attention")}
         title={copy("KSS + Test de Vigilancia Psicomotora (PVT)", "KSS + Psychomotor Vigilance Test (PVT)")}
@@ -160,7 +164,7 @@ export default function PvtPage() {
         stats={[
           { label: copy("Orden", "Order"), value: "KSS → PVT" },
           { label: copy("Duración PVT", "PVT duration"), value: String(durationMs / 60000) + " min" },
-          { label: copy("Modo", "Mode"), value: purpose === "practice" ? copy("Práctica", "Practice") : copy("Estudio", "Study") },
+          { label: copy("Modo", "Mode"), value: purpose === "practice" ? copy("Práctica", "Practice") : purpose === "study" ? copy("Estudio", "Study") : copy("Sin elegir", "Not chosen") },
         ]}
       />
 
@@ -197,7 +201,7 @@ export default function PvtPage() {
               </div>
             </div>
             {alreadyRecorded && <p className="text-sm text-warning">{copy("Esta visita ya tiene una PVT registrada.", "This visit already has a recorded PVT.")}</p>}
-            <Button type="button" onClick={beginKss} disabled={!participantId || !visitOrdinal || alreadyRecorded}>
+            <Button type="button" onClick={beginKss} disabled={!purpose || !participantId || !visitOrdinal || alreadyRecorded}>
               {copy("Continuar a KSS", "Continue to KSS")}<ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </CardContent>
@@ -260,7 +264,7 @@ export default function PvtPage() {
         </Card>
       )}
 
-      {stage === "pvt" && <PvtRunner durationMs={durationMs} onComplete={(value) => void completePvt(value)} />}
+      {stage === "pvt" && <PvtRunner durationMs={durationMs} onStart={() => setPvtStarted(true)} onComplete={(value) => void completePvt(value)} />}
       {stage === "saving" && <div role="status" className="grid min-h-[50vh] place-items-center text-center"><div><Clock3 className="mx-auto mb-4 h-10 w-10 animate-pulse text-info" /><p>{copy("Guardando la PVT…", "Saving PVT…")}</p></div></div>}
       {stage === "complete" && result && (
         <Card className="border-success/40 bg-success/5">
@@ -276,7 +280,7 @@ export default function PvtPage() {
             <div className="metric-tile"><div className="page-kicker">{copy("Anticipaciones", "False starts")}</div><div className="mt-1 text-2xl">{result.metrics.false_starts}</div></div>
             <div className="sm:col-span-4 space-y-3">
               <p role="status" className={result.protocol_valid ? "text-success" : "text-warning"}>{result.protocol_valid ? copy("Registro válido para continuar el estudio.", "Valid recording to continue the study.") : purpose === "practice" ? copy("Práctica guardada por separado.", "Practice saved separately.") : copy("Registro no válido para el protocolo: revise interrupciones, duración y continuidad. Puede repetir la prueba.", "Recording not valid for the protocol: review interruptions, duration, and continuity. You may repeat the test.")}</p>
-              <div className="flex flex-wrap gap-3"><Button asChild><Link href="/start">{copy("Volver a los experimentos", "Return to experiments")}</Link></Button>
+              <div className="flex flex-wrap gap-3"><Button asChild><Link href={`/start?purpose=${purpose}`}>{copy("Volver a los experimentos", "Return to experiments")}</Link></Button>
               {result.protocol_valid && catalog.some((item) => item.id === "suas" && item.component_available) && <Button asChild variant="outline"><Link href="/mission/setup?purpose=study">{copy("Continuar a la misión sUAS", "Continue to the sUAS mission")}</Link></Button>}</div>
             </div>
           </CardContent>

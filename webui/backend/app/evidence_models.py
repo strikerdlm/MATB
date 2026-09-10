@@ -15,6 +15,7 @@ class EvidenceCapture(SQLModel, table=True):
     manifest_sha256: str = Field(index=True)
     artifact_fingerprint: str
     session_id: str = Field(index=True)
+    parent_session_id: str | None = Field(default=None, index=True)
     block_instance_id: str = Field(index=True)
     participant_id: str | None = Field(default=None, foreign_key="participant.id", index=True)
     visit_id: int | None = Field(default=None, foreign_key="visit.id", index=True)

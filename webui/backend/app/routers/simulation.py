@@ -353,6 +353,7 @@ def _session_view_from_row(row: SessionMetadataRow, db: Session) -> SessionView:
     return SessionView(
         id=row.id,
         presentation=manifest.get("presentation"),
+        console_profile=manifest.get("console_profile"),
         participant_id=participant_id,
         visit_id=visit_id,
         visit_ordinal=visit.visit_ordinal if visit is not None else None,
@@ -362,6 +363,7 @@ def _session_view_from_row(row: SessionMetadataRow, db: Session) -> SessionView:
         lifecycle=row.lifecycle,
         active_block_id=row.active_block_id,
         validity=row.validity,
+        execution_purpose="practice" if technical else "study",
         session_mode="interactive_technical" if technical else "research",
         record_class="technical_only" if technical else "research",
         selected_block_id=selected_block_id,
@@ -655,6 +657,7 @@ async def get_debrief(
         if view.lifecycle == "ABORTED":
             return {
                 "status": "partial_unverified",
+                **({"console_profile": view.console_profile.model_dump(mode="json")} if view.console_profile is not None else {}),
                 "timeline": [],
                 "session_mode": view.session_mode,
                 "record_class": view.record_class,
@@ -692,6 +695,7 @@ async def get_public_bundle(
     )
     manifest = {
         "bundle_version": "suas-public-bundle-v1",
+        **({"console_profile": view.console_profile.model_dump(mode="json")} if view.console_profile is not None else {}),
         "session_id": session_id,
         "scenario_id": view.scenario_id,
         "scenario_sha256": view.scenario_sha256,

@@ -78,7 +78,7 @@ describe("TechnicalTestForm", () => {
     const user = userEvent.setup();
     render(<AppLocaleProvider><TechnicalTestForm scenarios={[scenario]} /></AppLocaleProvider>);
 
-    expect(await screen.findByRole("heading", { name: "Pruebas MATB-FAC" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Pruebas MATB - FAC" })).toBeInTheDocument();
     await user.click(screen.getByRole("radio", { name: /Alta HIGH/ }));
     await user.click(screen.getByRole("checkbox", { name: /prueba técnica interactiva/i }));
     await user.click(screen.getByRole("button", { name: /Iniciar prueba interactiva.*Alta.*HIGH/i }));

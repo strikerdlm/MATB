@@ -16,9 +16,11 @@ type Phase = "ready" | "waiting" | "stimulus" | "feedback" | "complete";
 
 export function PvtRunner({
   durationMs = PVT_PROTOCOL_DURATION_MS,
+  onStart,
   onComplete,
 }: {
   durationMs?: number;
+  onStart?: () => void;
   onComplete: (result: PvtRunResult) => void;
 }) {
   const { copy } = useAppLocale();
@@ -125,6 +127,7 @@ export function PvtRunner({
   }, [copy, elapsed, setCurrentPhase]);
 
   function start() {
+    onStart?.();
     startRef.current = performance.now();
     startedAtRef.current = new Date().toISOString();
     interruptionRef.current = document.hidden ? 1 : 0;

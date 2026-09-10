@@ -5,6 +5,30 @@ test.skip(
   "Requires the explicit traffic test fixture",
 );
 
+for (const selection of ["early change", "saved preference"] as const) {
+  test(`language ${selection} survives delayed page hydration`, async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    if (selection === "saved preference") {
+      await page.addInitScript(() => localStorage.setItem("matb-fac.locale", "en"));
+    }
+
+    // A slow client can use the shell before the streamed page hydrates.
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+    await page.route("https://tiles.openfreemap.org/styles/liberty", (route) =>
+      route.fulfill({ json: { version: 8, sources: {}, layers: [] } }),
+    );
+    await page.goto("/colombia");
+    if (selection === "early change") {
+      await page.locator("#app-language").selectOption("en");
+    }
+    await expect(page.locator(".page-kicker")).toContainText("Geographic context");
+    await expect(page.getByRole("combobox", { name: "Region", exact: true })).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+}
+
 test("Colombia regions, layers, offline-area handoff and provider outage", async ({
   page,
 }, testInfo) => {

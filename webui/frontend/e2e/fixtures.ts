@@ -13,6 +13,33 @@ export interface OpenMission {
   participant: string;
 }
 
+/** Navigate the manual-activation tabs without consuming task input keys. */
+export async function exerciseMissionTabs(page: Page, locale: TestLocale = "en"): Promise<void> {
+  const alerts = locale === "en" ? "Alerts" : "Alertas";
+  const contacts = locale === "en" ? "Contacts" : "Contactos";
+  const alertsTab = page.getByRole("tab", { name: alerts, exact: true });
+  const contactsTab = page.getByRole("tab", { name: contacts, exact: true });
+  for (let index = 0; index < 100; index += 1) {
+    if (await alertsTab.evaluate((element) => element === document.activeElement)) break;
+    await page.keyboard.press("Tab");
+  }
+  await expect(alertsTab).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await expect(contactsTab).toBeFocused();
+  await expect(alertsTab).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Enter");
+  await expect(contactsTab).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("tabpanel", { name: contacts })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Home");
+  await expect(alertsTab).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(alertsTab).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("End");
+  await expect(contactsTab).toBeFocused();
+}
+
 /** Select only controls rendered by the researcher setup screen. */
 export async function selectSetup(
   page: Page,
@@ -75,7 +102,7 @@ export async function openRunningMission(
   let sessionId: string | null = null;
   let lease: string | null = null;
   try {
-    await page.goto("/mission/setup");
+    await page.goto("/mission/setup?purpose=study");
     await selectSetup(page, participant, scenario, "en");
     await page.getByRole("checkbox", { name: /research instrument/i }).check();
     await page.getByRole("button", { name: /prepare session/i }).click();

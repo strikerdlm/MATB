@@ -603,6 +603,15 @@ npm run dev -- --hostname 127.0.0.1 --port 3100
 
 Open `http://127.0.0.1:3100/`.
 
+Choose **Participant** for the experiment catalog (`/start`) or **Researcher**
+for the completeness tracker (`/tracker`). Workspace choice is remembered in
+the current browser tab. Choose practice or study explicitly before preparation;
+the workspace choice does not select a study purpose.
+
+Elija **Participante** para el catálogo (`/start`) o **Investigador** para el
+seguimiento (`/tracker`). La elección se conserva en esta pestaña. Seleccione
+práctica o estudio antes de preparar la actividad.
+
 Run exactly one Uvicorn worker for each Research Console database. The backend
 holds a durable database-instance lease and rejects a second live process so
 Bayesian jobs and SQLite writes cannot split across competing process-local
@@ -1231,7 +1240,7 @@ image, locked dependencies, and institution-controlled inputs.
 | Service | Default | Boundary |
 | --- | --- | --- |
 | Research/sUAS FastAPI | `127.0.0.1:8000` | Loopback; health at `/health` |
-| Research/sUAS Next.js | `127.0.0.1:3100` | Loopback; tracker `/`, sUAS `/mission/setup` |
+| Research/sUAS Next.js | `127.0.0.1:3100` | Loopback; workspace `/`, tracker `/tracker`, sUAS `/mission/setup` |
 | SMS edge deployment | `127.0.0.1:8443` host default | HTTPS in controlled container deployment |
 | SMS Vite console | 5173 dev / 4173 controlled preview | Development/reviewer UI only |
 

@@ -12,8 +12,8 @@ test("researcher completes the full native sUAS protocol", async ({ page, reques
   await seedStudyPvt(request, participant);
   let mission: OpenMission | null = null;
   try {
-    await page.goto("/mission/setup");
-    await expect(page).toHaveTitle(/MATB-FAC/i);
+    await page.goto("/mission/setup?purpose=study");
+    await expect(page).toHaveTitle(/MATB - FAC/i);
     await selectSetup(page, participant, "e2e_area_search", "en");
     await page.getByRole("checkbox", { name: /research instrument/i }).check();
     await page.getByRole("button", { name: /prepare session/i }).click();

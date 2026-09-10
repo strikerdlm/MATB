@@ -4,9 +4,11 @@ import "./globals.css";
 import { RouteShell } from "@/components/layout/RouteShell";
 import { AppLocaleProvider } from "@/lib/i18n";
 import { ConsoleProvider } from "@/lib/console-context";
+import { ExperimentFlowProvider } from "@/lib/experiment-flow";
+import { NavigationRoleProvider } from "@/lib/navigation-role";
 
 export const metadata: Metadata = {
-  title: "MATB-FAC",
+  title: "MATB - FAC",
   description: "Longitudinal Human Performance Lab",
 };
 
@@ -15,7 +17,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es-419" className="dark">
       <body className="font-sans antialiased">
         <AppLocaleProvider>
-          <ConsoleProvider><RouteShell><Suspense>{children}</Suspense></RouteShell></ConsoleProvider>
+          <NavigationRoleProvider>
+            <ConsoleProvider>
+              <ExperimentFlowProvider><RouteShell><Suspense>{children}</Suspense></RouteShell></ExperimentFlowProvider>
+            </ConsoleProvider>
+          </NavigationRoleProvider>
         </AppLocaleProvider>
       </body>
     </html>
