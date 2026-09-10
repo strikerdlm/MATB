@@ -261,3 +261,120 @@ webui/frontend/src/types/simulation.ts
 ```
 
 Final `git diff --check` passed. Implementation commit: `d3f71b7bb1b0b4dbc848120dd754460f8292ce32` (`Add frozen study plans and assigned acquisition gates`). The complete Task3 range is `1871e899d93086eb45523e8e207f1e8687c67ab4..HEAD`, including the following documentation-only report commit. No push or merge was performed.
+
+## Fix round 1 — review I1–I6
+
+Fix base: `89217b7234728fbbb96bf7015eaafe65a333bfec`. This round addresses the findings in `task-3-review.md` together. Controller package/startup and original lint evidence is recorded in `task-3-controller-verification.md`: physically stripped core and auto application startup/catalog passed at the fix base, while frontend lint had five memoization errors and one internal-navigation warning. Those package results are attributed to the controller at that exact base, not claimed as rerun on this fix.
+
+### Changed behavior by finding
+
+- **I1:** Removed unnecessary memoization around native published preset/instruction/visual lookups. The callbacks no longer capture a broader dependency than their dependency arrays. Study assignment launch uses Next router navigation. No lint rule or warning was suppressed.
+- **I2:** The supported native questionnaire must be the immediate post-target assessment. Declared H10 accompaniment of that same native task, in its explicit collection group, may occupy intervening order positions. An intervening assessment, unrelated questionnaire prerequisite, or recovery interval delaying the questionnaire rejects validation/rehearsal/freeze with an actionable immediate-rating limitation. The exact native target may itself be an explicit prerequisite; saving records its immutable exact attempt selection and checks its finished/current-study status. The authoring row and native setup explain the supported sequence. Assigned setup now describes one prescribed condition and immediate ratings, with prior preparation separately prescribed.
+- **I2 repeat/source closure:** Native participant display offers an explicit questionnaire-attempt selector. An interrupted questionnaire stays interrupted; an explicit permitted repeat keeps the same target task and has its own draft, raw record and sidecar. Completed questionnaires can likewise be explicitly repeated through the completed native display. A selected questionnaire for another task or an interrupted/terminal-unsaved attempt cannot save. The originally bound questionnaire remains the compatibility default when an older caller omits the new field; it never silently switches to a later attempt. Changed answers require an explicit repeat, while identical retries are idempotent. The first native sidecar is never replaced by later ratings, and evidence processing is not rerun with substituted workload values.
+- **I3:** Actual abort passes `operator_stop` into the first terminal native-block transition, including its pending exact-target questionnaire. The later suite synchronization cannot erase that cause. Recovery with no known cause remains `unknown`. The live-handle abort regression checks the actual abort branch and then creates a repeat under a policy permitting only `operator_stop`.
+- **I4:** Liftoff assigned setup obtains its visit ordinal/code/day from the immutable assignment context and needs no legacy StudyParticipantContext request. Server preparation and the manifest builder use that same admitted visit and frozen version. The stored Liftoff protocol fields match the assigned manifest's study identity/version. A real assigned visit 16 works with no legacy participant context; actual first-party browser preparation, phase actions, results, questionnaires and sealing pass. Practice retains the existing supported legacy schedule.
+- **I5:** Saved drafts are discovered and reopened by their exact server ID. Reopening restores the canonical payload and exposes validation/rehearsal/approval history. Save updates the selected draft in place; edit invalidates rehearsal; freeze retains the actual returned version ID. Both component and actual browser tests perform save → leave/unmount → reopen exact draft → edit → rehearse/freeze.
+- **I6:** Stored enum codes remain unchanged. Researchers see English/Spanish labels for preparation placement, affirmative choices, attempt selection, incomplete denominators, missing-data handling, all five independent eligibility requirements, pooling decisions, HCF selection, interruption causes, comparators, supported preparation observation metrics, analysis units and summaries. Short bilingual copy explains exclusion, report-only qualification and reviewed pooling without implying equivalence.
+- **Validation-record deliverable:** Added immutable `study_validation` receipts, tied to exact draft ID/hash and timestamp. `POST /study/drafts/{id}/validate` persists and returns a receipt, including issues. Editing does not rewrite previous validation results. `GET /study/drafts/{id}/history` exposes validation receipts, rehearsal receipts and the actual approval. The UI provides history inspection/refresh alongside draft reopening.
+- **Maintainability:** The new study components and types are normally formatted. Bilingual policy labels are a focused helper; native assigned questionnaire selection is a separate component around the unchanged instrument response controls. No speculative framework was added.
+
+### Updated downstream contracts — Tasks4/5/7
+
+`StudyValidation` (`study_validation`): `id`, `draft_id`, `draft_sha256`, `issues_json`, `created_at`. The validate response also exposes parsed `issues[]`. History response is `{validations, rehearsals, approval}`; `approval` is a version view or null. Immutable SQL triggers prohibit validation UPDATE/DELETE, as for rehearsal/approval records. Validation calls remain explicit inspectable events; rehearsal/freeze still revalidate independently.
+
+Assignment context now also supplies `study_id`, `assigned_visit:{ordinal,code,scheduled_day}`, and `schedule_sha256` (SHA256 of canonical authored visits). Liftoff freezes those values in its manifest, with `assignment_id` and `study_version_id`. `LiftoffSession.protocol_id/protocol_version` reflect the corresponding assigned study/version. Legacy practice manifests retain their old protocol identity. Engines must consume the frozen assignment rather than infer eligibility from a legacy protocol identifier.
+
+`WorkloadScaleRequest` and frontend `WorkloadScaleSubmission` add optional `questionnaire_attempt_id`. `OpenMatbSessionView` adds nullable `study_assignment_id`. First-party assigned rating submissions always send both the actual `block_instance_id` and selected `questionnaire_attempt_id`. The returned score entry identifies `questionnaire_attempt_id`, `target_attempt_id`, `block_instance_id`, `occasion_id`, condition, locale and instrument version. Acceptance checks both block and questionnaire identity before clearing a draft. Draft keys append the questionnaire UUID, and draft contents record/check it; historical unassigned draft keys stay compatible.
+
+`StudyNativeRating` (`study_native_rating`) is an additive immutable source table. Its primary `id` equals the questionnaire AssessmentAttempt UUID; other fields are `target_attempt_id`, `session_id`, `block_instance_id`, canonical `payload_json` containing the original six NASA-TLX ratings and Bedford value, `payload_sha256`, and `created_at`. Each saved record has an immutable AssessmentSourceLink with `source_table='study_native_rating'`, `source_id=questionnaire_attempt_id`, `role='acquisition'`. The generic raw endpoint exposes this source. Task5 must select that exact source/attempt, not infer a later questionnaire from the original block's ratings role or take an arbitrary score-map entry.
+
+The original block `role='ratings'` association is preserved and continues to identify its original questionnaire, including when that attempt was interrupted. Current assigned questionnaire receipts use their own `study_native_rating` evidence; a subsequently saved repeat cannot make the original interrupted questionnaire appear saved. Genuine legacy records still obtain truthful read-only receipts from original block rating bytes/timestamps, preserving unknown timestamps.
+
+Every assigned rating writes `scales/ratings/{questionnaire_attempt_id}.json`. The first successfully saved rating additionally creates the existing `scales/{assigned_native_occasion_id}.json` projection. Later repeats get distinct score-map entries keyed by their questionnaire ID and never replace that first sidecar or its score entry. Only the block's original questionnaire may populate its original `ratings_json/ratings_saved_at` projection. Task7 must inventory every per-attempt rating file plus its immutable database/source-link record. Original native capture evidence and its previously derived workload remain unchanged; later analysis can select the separately recorded questionnaire explicitly.
+
+The assigned rating writer holds the registry's SQLite write lock, uses the existing same-directory atomic artifact writer, and accepts an already-existing file only if its bytes match. An injected artifact failure rolls back the unsaved questionnaire/source transaction; no false finished state remains. Retrying the same payload succeeds and earlier sidecars remain byte-identical. A conflicting existing artifact fails closed for review instead of being overwritten.
+
+Fingerprint inventory additions: native implementation now includes `webui/backend/app/study_native.py`; questionnaire implementation includes that helper plus `webui/frontend/src/components/openmatb/AssignedWorkloadQuestionnaire.tsx`, alongside the already inventoried WorkloadQuestionnaire, i18n and native runtime files. Existing POSIX logical-path sorting/serialization and original-byte hashing rules remain unchanged. These changed implementations require a reviewed new frozen version; old source reads do not require reapproval.
+
+### Fixture integrity and failure analysis
+
+Controller approved keeping assigned saves independent of legacy Block projection. Concurrent saves now assert one exact immutable rating source, one state advance, identical retry idempotence and rejection of changed answers. The legacy rollback regression directly seeds genuine historical native/rating rows and invokes the real legacy ingestion service with an injected persistence failure; it verifies committed original rating bytes survive rollback. Current questionnaire receipt tests use real assigned saves; the unknown historical receipt regression uses genuine legacy records without a prospective declaration or assignment. No public admission gate is mocked away to recover passing tests.
+
+Initial expanded backend covering run had six failures: one test fixture opened a nested Session on the same in-memory SQLite connection and rolled back its outer participant seed; five exercised obsolete legacy-projection assumptions for newly assigned ratings. The fixture scopes above resolve those contracts. New assigned-store failure/retry coverage separately protects current persistence.
+
+The first actual reopening browser attempt showed the saved draft and exact UUID in the page snapshot, but its exact nested-label locator did not match. Using the accessible `combobox` name exercised the visible control and the entire intended flow passed. This is recorded as a browser locator correction, not a product reopening defect. The unit reopening RED separately reproduced the previously absent feature.
+
+A later frontend covering run exposed an existing test mock race: participant polling returned BETWEEN_BLOCKS before the test submitted ratings, removing the controls mid-input. The fixture now advances the mock server state only when submit is called, preserving all draft-clear-failure assertions. This is an explicit sequencing fix, not retry-only acceptance.
+
+### Verification commands and evidence
+
+Commands ran from the same backend/frontend directories and Python environment as the original report. Backend prefix:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/tmp/matb-predictability-testdeps PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 MATB_COMPONENTS=auto /root/repos/MATB/.venv/bin/python -B -m pytest -q -p no:cacheprovider -p anyio.pytest_plugin
+```
+
+- RED `/tmp/task3-fix1-red.log`: prefix + `tests/test_study_registry.py::test_validation_history_retains_exact_hash_results_after_edit tests/test_study_acquisition.py::test_native_live_handle_abort_records_operator_cause_and_permits_authored_repeat tests/test_study_acquisition.py::test_liftoff_authored_visit_16_launches_without_legacy_context`: **3 failed** (missing receipt hash, actual unknown abort category, legacy visit rejection). Intermediate GREEN had 2 pass/1 fail because the Liftoff manifest builder had the second legacy schedule dependency; final covering includes all three passing.
+- RED `/tmp/task3-fix1-questionnaire-red.log`: prefix + `tests/test_study_acquisition.py -k questionnaire_rejects`: **3 failed, 8 deselected** after initializing actual published native binding fixtures. Those failures prove accepted unexecutable delayed/other-prerequisite/recovery schedules. Final covering includes their rejection and the accepted exact-target/H10 schedule.
+- RED `/tmp/task3-fix1-rating-repeat-red.log`: prefix + `tests/test_study_acquisition.py -k explicit_rating`: new explicit questionnaire identity absent from the request schema; later passing coverage exercises independent interrupted and completed repeats, exact target prerequisite, immutable raw records and rollback/retry.
+- RED `/tmp/task3-fix1-draft-red.log`: `npm test -- src/components/study/StudyEditor.test.tsx`: **1 failed, 2 passed**, saved-draft reopening missing. Later affected runs include passing reopening/freeze and consequential bilingual-choice coverage.
+- Final affected auto `/tmp/task3-fix1-backend-final.log`: prefix + `tests/test_study_registry.py tests/test_study_acquisition.py tests/test_openmatb_records.py tests/test_openmatb_runtime.py tests/test_liftoff_endpoints.py tests/test_experiment_safety.py`: **80 passed, 1 warning, 40.22s**.
+- Final atomic-file refinement `/tmp/task3-fix1-atomic-rating-final.log`: prefix + `tests/test_study_acquisition.py::test_native_explicit_rating_attempt_prerequisite_and_independent_repeat tests/test_openmatb_records.py::test_concurrent_duplicate_scale_requests_only_import_once tests/test_openmatb_records.py::test_scale_endpoint_emits_one_marker_and_receipt_keeps_saved_block`: **3 passed, 1 warning, 6.18s**.
+- Final shared core `/tmp/task3-fix1-core-final.log`: prefix with `MATB_COMPONENTS=core`, plus `-rs tests/test_study_registry.py tests/test_assessments.py tests/test_assessment_review_fixes.py tests/test_pvt_endpoint.py tests/test_screen_endpoint.py tests/test_study_acquisition.py tests/test_openmatb_records.py::test_legacy_questionnaire_receipt_keeps_unknown_without_rating_time tests/test_openmatb_records.py::test_legacy_import_rollback_cannot_discard_confirmed_ratings`: **55 passed, 14 explicit optional skips, 1 warning, 25.60s**. Shared PVT/screen/registry/admission and genuine historical reads/rollback run. Native/H10/Liftoff skips identify disabled components; none skips common setup merely because optional instruments exist.
+- Browser command: `MATB_PYTHON=/root/repos/MATB/.venv/bin/python PYTHONPATH=/tmp/matb-predictability-testdeps MATB_COMPONENTS=auto PW_TEST_MATCH='**/{study-registry,liftoff}.spec.ts' npm run test:e2e -- --output=/tmp/task3-fix1-browser-results`. Actual Liftoff assigned visit 16 without legacy context completed all phase/result/questionnaire/seal steps and accessibility checks: **1 passed**; the other test's locator failure is documented above.
+- Corrected actual study browser command uses `PW_TEST_MATCH='**/study-registry.spec.ts'`, output `/tmp/task3-fix1-browser-study-results`, log `/tmp/task3-fix1-browser-study.log`: **1 passed (21.3s)**. It asserts actual same-ID saved draft reopening/edit/validation/rehearsal/approval history, then the persisted started assigned PVT with frozen English and Spanish researcher preference.
+
+- Final frontend command: `npm test -- src/components/study src/components/openmatb/AssignedWorkloadQuestionnaire.test.tsx src/components/openmatb/WorkloadQuestionnaire.test.tsx src/components/liftoff/LiftoffSetupForm.test.tsx src/app/openmatb/participant/page.test.tsx src/app/openmatb/setup/page.test.tsx src/components/assessments/AssessmentPages.test.tsx`: `/tmp/task3-fix1-frontend-green.log`, **8 files, 33 tests passed (19.75s)**. This includes rejection of a response naming the wrong questionnaire while retaining the correct per-attempt draft.
+- Final `npm run lint`: `/tmp/task3-fix1-lint-committing.log`, exit 0, no errors or warnings. `npm run typecheck`: `/tmp/task3-fix1-types-final.log`, exit 0. Final `npm run build`: `/tmp/task3-fix1-build-final.log`, exit 0 including /study and /study/assignments; this also typechecks the final source.
+- Final built browser closure after preserving the actual returned frozen-version ID uses the same single-study browser command with output `/tmp/task3-fix1-browser-committing-results`: `/tmp/task3-fix1-browser-committing.log`, **1 passed (10.2s)**. No retry setting or weakened assertion was used.
+- Final `git diff --check` passed. Implementation/report commit identities and changed-file inventory follow below.
+
+### Remaining limits and warnings
+
+No scientific thresholds, scoring formula, native stimulus timing or instrument task sequence was changed. Delayed native questionnaires remain unsupported and are rejected before approval; only immediate native ratings plus the specified H10 accompaniment are executable here. The new source store preserves later questionnaire observations without substituting them into earlier evidence. Measured preparation, plan execution/HCF and whole-visit resource protection remain Tasks4/5/6, with their existing honest pending markers and fail-closed required preparation. No physical qualification or hardware timing conclusion is claimed.
+
+The current focused backend warning is Starlette's multipart pending deprecation. The original full-suite SQLModel query deprecations and separate statsmodels MLE-boundary convergence warning remain documented from their proper dependency/inferential paths; none was blanket-suppressed. Unrelated passing full suites were reused instead of rerun indiscriminately. The controller's physically stripped-package checks are referenced at the fix base; final package/review decisions remain controller-owned.
+
+### Fix-round commit and file inventory
+
+Implementation commit: `f92997b1c5ee2bb9b26957d411468bbd9fdc9338` (`Fix study authoring and assigned instrument review gaps`). The complete fix range is `89217b7234728fbbb96bf7015eaafe65a333bfec..HEAD`, including the following report-only commit. No push or merge was performed.
+
+```text
+webui/backend/app/assessment_adapters.py
+webui/backend/app/liftoff_persistence.py
+webui/backend/app/liftoff_runtime.py
+webui/backend/app/openmatb_records.py
+webui/backend/app/openmatb_runtime.py
+webui/backend/app/openmatb_schemas.py
+webui/backend/app/routers/study_registry.py
+webui/backend/app/study_admission.py
+webui/backend/app/study_bindings.py
+webui/backend/app/study_native.py
+webui/backend/app/study_registry.py
+webui/backend/app/study_registry_models.py
+webui/backend/tests/test_openmatb_records.py
+webui/backend/tests/test_study_acquisition.py
+webui/backend/tests/test_study_registry.py
+webui/frontend/e2e/liftoff.spec.ts
+webui/frontend/e2e/study-fixtures.ts
+webui/frontend/e2e/study-registry.spec.ts
+webui/frontend/src/app/openmatb/participant/page.test.tsx
+webui/frontend/src/app/openmatb/participant/page.tsx
+webui/frontend/src/app/openmatb/setup/page.tsx
+webui/frontend/src/components/liftoff/LiftoffSetupForm.test.tsx
+webui/frontend/src/components/liftoff/LiftoffSetupForm.tsx
+webui/frontend/src/components/openmatb/AssignedWorkloadQuestionnaire.test.tsx
+webui/frontend/src/components/openmatb/AssignedWorkloadQuestionnaire.tsx
+webui/frontend/src/components/openmatb/WorkloadQuestionnaire.tsx
+webui/frontend/src/components/study/OccasionEditor.tsx
+webui/frontend/src/components/study/OptionalBindings.tsx
+webui/frontend/src/components/study/PolicyEditor.test.tsx
+webui/frontend/src/components/study/PolicyEditor.tsx
+webui/frontend/src/components/study/StudyAssignments.tsx
+webui/frontend/src/components/study/StudyEditor.test.tsx
+webui/frontend/src/components/study/StudyEditor.tsx
+webui/frontend/src/components/study/policy-labels.ts
+webui/frontend/src/lib/assessments.ts
+webui/frontend/src/lib/study.ts
+webui/frontend/src/types/openmatb.ts
+```
