@@ -453,3 +453,8 @@ context; later live-visit gating/optional runtime lifecycle synchronization rema
 Task6. Later assignment and analysis eligibility integration remains with the
 controller, as requested. No new browser E2E, hardware run or production migration was
 performed for this focused correction. No subagents, push, or sibling worktree edits.
+
+Fix round 1 implementation/report commit:
+`458149d79e6206f12e4728cbc0feceb34b88c566`
+(`fix: preserve assessment admission context and independent receipts`).
+This exact-SHA note is committed separately; it changes no implementation or tests.
