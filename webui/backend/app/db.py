@@ -84,6 +84,7 @@ def init_db(*, component_model_modules: tuple[str, ...] = ()) -> None:
         models,  # noqa: F401
         study_models,  # noqa: F401
         study_registry_models,  # noqa: F401
+        study_analysis_models,  # noqa: F401
         purpose_models,
         assessment_models,
         evidence_models,  # noqa: F401

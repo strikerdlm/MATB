@@ -26,7 +26,7 @@ def _fill_visit(client, sample_csv_bytes, pid, visit=1):
         assert r.status_code == 201, r.text
 
 
-def test_existing_fits_refresh_when_cohort_gate_crossed(client, engine,
+def test_existing_fits_remain_immutable_when_cohort_gate_crossed(client, engine,
                                                         sample_csv_bytes):
     _fill_visit(client, sample_csv_bytes, "P01")
     with Session(engine) as s:
@@ -48,7 +48,16 @@ def test_existing_fits_refresh_when_cohort_gate_crossed(client, engine,
             refresh_fit_hcf(db)
     with Session(engine) as s:
         fit = s.exec(select(DepdfFit)).one()
-        assert fit.hcf_source == "screen" and fit.hcf_value > 1.0
+        assert fit.hcf_source == "F0_default" and fit.hcf_value == 1.0
+        from app.study_analysis_models import HcfDerivation, HcfExploratoryPointer
+        pointer=s.get(HcfExploratoryPointer,'legacy-unambiguous')
+        derivation=s.get(HcfDerivation,pointer.derivation_id)
+        assert json.loads(derivation.snapshot_json)['values']['P01']['value']>1.0
+        from app.routers.fits import collect_full_fit_rows
+        frozen=collect_full_fit_rows(s)[0]
+        compared=collect_full_fit_rows(s,hcf_derivation_id=derivation.id)[0]
+        assert frozen['curve']==compared['curve']
+        assert compared['exploratory_derivation']['curve']!=frozen['curve']
 
 
 def test_new_fit_uses_screen_hcf(client, engine, sample_csv_bytes):
@@ -79,3 +88,4 @@ def test_fits_endpoint_curve_uses_f(client, sample_csv_bytes):
     ordinary_at_3 = p0 * math.exp((1 - 9) * 1.0)
     assert fit["curve"][-1]["p"] > ordinary_at_3
     assert "hcf_value" in fit
+    assert fit["hcf_reference_cohort"] != "unknown_unrecoverable_legacy_reference_cohort"

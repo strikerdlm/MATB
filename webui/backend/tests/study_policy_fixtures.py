@@ -5,4 +5,12 @@ def fixture_policies(payload):
     payload['study']['repeat_policy']=dict(permitted_causes=['intentional_repeat','withdrawal','operator_stop','hardware_failure','software_failure','planned_interruption','unknown','participant_stop','technical_failure','lost_connection','other'],max_attempts=20,selection='explicit',rationale='Retain explicit repeats in this isolated lifecycle fixture.')
     payload['study']['interruption_policy']=dict(available_outcomes='retain_available',rationale='Retain observable fixture evidence without analysis eligibility claims.')
     payload['analysis']['eligibility_policy']=dict(repeat_selection='explicit',incomplete_denominator='assigned',missing_handling='exclude_outcome',source_requirement='report_status',physical_requirement='report_status',human_calibration_requirement='report_status',participant_preparation_requirement='report_status',protocol_requirement='report_status',configuration_pooling='identical_only',pooling_review=None,hcf_enabled=False,hcf_screen_keys=[],hcf_attempt_selection='explicit',rationale='No scientific analysis is executed by this integration fixture.')
+    from app.study_analysis_catalog import CATALOG
+    aliases={'openmatb.performance':'openmatb.sysmon_hit_rate','openmatb.workload':'openmatb.sysmon_hit_rate','physiology.raw':'physiology.mean_hr_bpm','liftoff.performance':'liftoff.primary.valid_laps','suas.performance':'suas.contacts.correct_fraction'}
+    for outcome in payload['analysis']['outcomes']:
+        outcome['metric']=aliases.get(outcome['metric'],outcome['metric'])
+        if outcome['metric']=='screen.hcf' and not payload['analysis']['eligibility_policy']['hcf_enabled']: outcome['metric']='screen.simple_rt'
+        if outcome['metric'] in CATALOG: outcome['units']=CATALOG[outcome['metric']][1]
+        if outcome['metric'].startswith('physiology.'): outcome['source_keys']=['baseline']
+        if outcome['metric'].startswith('suas.'): outcome.update(source_keys=['LOW'],source_summary='individual')
     return payload

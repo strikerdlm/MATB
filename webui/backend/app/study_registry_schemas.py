@@ -68,6 +68,9 @@ class StudySpecV1(Strict):
 class OutcomeSpec(Strict):
     key: str = Field(pattern=r'^[a-z][a-z0-9_-]{0,63}$')
     metric: str
+    units: str | None = None
+    source_keys: list[str] = Field(default_factory=list)
+    source_summary: Literal['individual', 'mean', 'median'] = 'individual'
     occasion_keys: list[str] = Field(min_length=1)
     summary: Literal['mean', 'median', 'individual']
 
@@ -91,6 +94,8 @@ class AnalysisPlanV1(Strict):
     schema_version: Literal['AnalysisPlanV1'] = 'AnalysisPlanV1'
     version_id: str | None = None
     study_version_id: str | None = None
+    calculation_sha256: str | None = None
+    calculator_dependencies: dict[str,str] = Field(default_factory=dict)
     unit: Literal['participant', 'visit', 'attempt']
     outcomes: list[OutcomeSpec] = Field(min_length=1)
     contrasts: list[ContrastSpec] = Field(default_factory=list)

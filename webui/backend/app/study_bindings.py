@@ -17,6 +17,7 @@ def browser_binding(instrument):
     # Include all stimulus implementation and scoring files, preserving actual source bytes.
     files = {p for folder in [f'webui/frontend/src/components/{instrument}', f'matb_integration/{instrument}']
              for p in (_ROOT / folder).rglob('*') if p.is_file() and p.suffix in {'.py', '.ts', '.tsx'} and '.test.' not in p.name}
+    if instrument == 'pvt': paths += ['matb_integration/pvt_scoring.py']
     if instrument == 'screen': paths += ['matb_integration/log_converter.py', 'matb_integration/suhir/hcf.py']
     files.update(_ROOT / p for p in paths if (_ROOT / p).exists())
     audio_prefixes = ['pvt', 'kss'] if instrument == 'pvt' else ['screen']

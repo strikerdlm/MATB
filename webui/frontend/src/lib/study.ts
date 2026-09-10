@@ -50,6 +50,9 @@ export interface StudyPayload {
     outcomes: {
       key: string;
       metric: string;
+      units?: string | null;
+      source_keys?: string[];
+      source_summary?: "individual" | "mean" | "median";
       occasion_keys: string[];
       summary: "mean" | "median" | "individual";
     }[];
@@ -93,7 +96,12 @@ export interface Assignment {
   started: boolean;
 }
 export interface AssignmentDetail {
-  recovery_intervals?: {interval_key:string;anchor_attempt_id:string;started_at:string;ended_at:string|null}[];
+  recovery_intervals?: {
+    interval_key: string;
+    anchor_attempt_id: string;
+    started_at: string;
+    ended_at: string | null;
+  }[];
   assignment: Assignment;
   current: boolean;
   started: boolean;

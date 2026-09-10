@@ -35,6 +35,12 @@ class InterruptionPolicy(Strict):
     available_outcomes: Literal['retain_available','exclude_attempt']
     rationale: str = Field(min_length=1)
 
+class PoolingAttestation(Strict):
+    actor: str = Field(min_length=1)
+    rationale: str = Field(min_length=1)
+    reference: str = Field(min_length=1)
+
+
 class EligibilityPolicy(Strict):
     repeat_selection: Selection
     incomplete_denominator: Literal['assigned','started','finished']
@@ -46,6 +52,7 @@ class EligibilityPolicy(Strict):
     protocol_requirement: Literal['valid','report_status']
     configuration_pooling: Literal['identical_only','explicit_review']
     pooling_review: str | None
+    pooling_attestation: PoolingAttestation | None = None
     hcf_enabled: bool
     hcf_screen_keys: list[str]
     hcf_attempt_selection: Selection
@@ -91,6 +98,9 @@ def policy_issues(study, analysis):
     else:
         if study.repeat_policy and policy.repeat_selection!=study.repeat_policy.selection: issue('analysis.eligibility_policy.repeat_selection','Study and analysis attempt-selection policies must agree.')
         if policy.configuration_pooling=='explicit_review' and not (policy.pooling_review or '').strip(): issue('analysis.eligibility_policy.pooling_review','An explicit reviewed pooling rationale and review reference is required.')
+        if policy.configuration_pooling=='explicit_review':
+            from .study_analysis_rules import named
+            if policy.pooling_attestation is None or not named(policy.pooling_attestation.actor): issue('analysis.eligibility_policy.pooling_attestation','A named pooling actor, rationale and review reference must be frozen.')
         keys={o.key:o for o in study.occasions}
         if policy.hcf_enabled != bool(policy.hcf_screen_keys): issue('analysis.eligibility_policy.hcf_screen_keys','Enabled HCF requires designated screen occasions; disabled HCF must have none.')
         if len(set(policy.hcf_screen_keys))!=len(policy.hcf_screen_keys) or any(key not in keys or keys[key].instrument!='screen' for key in policy.hcf_screen_keys): issue('analysis.eligibility_policy.hcf_screen_keys','Designate unique screen occasions. HCF selects exactly one eligible attempt per participant.')

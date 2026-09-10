@@ -16,6 +16,22 @@ import { policyChoice } from "./policy-labels";
 import { PolicyEditor } from "./PolicyEditor";
 import { OccasionEditor } from "./OccasionEditor";
 
+const metricUnits: Record<string, string> = {
+  "pvt.median_rt_ms": "ms",
+  "pvt.lapses": "count",
+  "pvt.kss": "1-9",
+  "screen.hcf": "F/F0",
+  "screen.simple_rt": "ms",
+  "openmatb.sysmon_hit_rate": "proportion",
+  "openmatb.track_rmse_deviation": "normalized_cursor_distance",
+  "questionnaire.rtlx_mean_0_100": "0-100",
+  "questionnaire.bedford": "1-10",
+  "physiology.mean_hr_bpm": "bpm",
+  "liftoff.primary.median_lap_time_s": "s",
+  "liftoff.primary.valid_laps": "count",
+  "suas.contacts.correct_fraction": "proportion",
+  "suas.coverage.percent": "percent",
+};
 export function StudyEditor() {
   const { copy } = useAppLocale();
   const [kind, setKind] = useState("pre-post-recovery");
@@ -23,13 +39,20 @@ export function StudyEditor() {
   const [draft, setDraft] = useState<StudyDraft | null>(null);
   const [drafts, setDrafts] = useState<StudyDraft[]>([]);
   const [selectedDraft, setSelectedDraft] = useState("");
-  const [history, setHistory] = useState<{draftId: string; value: unknown} | null>(null);
+  const [history, setHistory] = useState<{
+    draftId: string;
+    value: unknown;
+  } | null>(null);
   const contentEpoch = useRef(0);
-  function clearHistory() { contentEpoch.current += 1; setHistory(null); }
+  function clearHistory() {
+    contentEpoch.current += 1;
+    setHistory(null);
+  }
   async function loadHistory(identity: string) {
     const epoch = contentEpoch.current;
     const value = await studyCall(`/drafts/${identity}/history`);
-    if (epoch === contentEpoch.current) setHistory({draftId: identity, value});
+    if (epoch === contentEpoch.current)
+      setHistory({ draftId: identity, value });
   }
   const [rehearsal, setRehearsal] = useState<string | null>(null);
   const [versions, setVersions] = useState<StudyVersion[]>([]);
@@ -96,6 +119,9 @@ export function StudyEditor() {
     analysis = payload?.analysis;
   return (
     <div className="space-y-5">
+      <Link href="/study/analysis">
+        {copy("Análisis descriptivo congelado", "Frozen descriptive analysis")}
+      </Link>
       <h1 className="text-2xl font-semibold">
         {copy(
           "Protocolo y plan de análisis",
@@ -149,17 +175,15 @@ export function StudyEditor() {
               "Validation, rehearsal and approval history",
             )}
           </summary>
-          <Button
-            onClick={() =>
-              void run(async () =>
-                loadHistory(draft.id),
-              )
-            }
-          >
+          <Button onClick={() => void run(async () => loadHistory(draft.id))}>
             {copy("Actualizar historial", "Refresh history")}
           </Button>
           <pre className="overflow-auto whitespace-pre-wrap text-xs">
-            {JSON.stringify(history?.draftId === draft.id ? history.value : null, null, 2)}
+            {JSON.stringify(
+              history?.draftId === draft.id ? history.value : null,
+              null,
+              2,
+            )}
           </pre>
         </details>
       )}
@@ -187,7 +211,9 @@ export function StudyEditor() {
             void run(async () => {
               clearHistory();
               const epoch = contentEpoch.current;
-              const template = await studyCall<StudyPayload>(`/templates/${kind}`);
+              const template = await studyCall<StudyPayload>(
+                `/templates/${kind}`,
+              );
               if (epoch !== contentEpoch.current) return;
               setPayload(template);
               setSelectedDraft("");
@@ -574,31 +600,96 @@ export function StudyEditor() {
                       analysis: {
                         ...analysis,
                         outcomes: analysis.outcomes.map((o, n) =>
-                          n === i ? { ...o, metric: e.target.value } : o,
+                          n === i
+                            ? {
+                                ...o,
+                                metric: e.target.value,
+                                units: metricUnits[e.target.value],
+                                source_keys: [],
+                                source_summary: "individual",
+                              }
+                            : o,
                         ),
                       },
                     })
                   }
                 >
-                  {[
-                    "pvt.median_rt_ms",
-                    "pvt.lapses",
-                    "pvt.kss",
-                    "screen.hcf",
-                    "screen.simple_rt",
-                    "openmatb.workload",
-                    "openmatb.performance",
-                    "physiology.raw",
-                    "physiology.mean_hr_bpm",
-                    "liftoff.performance",
-                    "suas.performance",
-                  ].map((m) => (
+                  {Object.keys(metricUnits).map((m) => (
                     <option key={m} value={m}>
                       {policyChoice(m, copy)}
                     </option>
                   ))}
                 </select>
               </label>
+              <p>
+                {copy("Unidad", "Unit")}:{" "}
+                {outcome.units ?? metricUnits[outcome.metric] ?? "—"}
+              </p>
+              {(outcome.metric.startsWith("suas.") ||
+                outcome.metric.startsWith("physiology.")) && (
+                <>
+                  <label>
+                    {copy(
+                      "Claves exactas de bloque/fase (separadas por coma)",
+                      "Exact block/phase keys (comma separated)",
+                    )}
+                    <input
+                      className="native-input block"
+                      value={(outcome.source_keys ?? []).join(",")}
+                      onChange={(e) =>
+                        change({
+                          ...payload,
+                          analysis: {
+                            ...analysis,
+                            outcomes: analysis.outcomes.map((o, n) =>
+                              n === i
+                                ? {
+                                    ...o,
+                                    source_keys: e.target.value
+                                      .split(",")
+                                      .map((v) => v.trim())
+                                      .filter(Boolean),
+                                  }
+                                : o,
+                            ),
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    {copy(
+                      "Resumen dentro de la sesión",
+                      "Within-session summary",
+                    )}
+                    <select
+                      className="native-select block"
+                      value={outcome.source_summary ?? "individual"}
+                      onChange={(e) =>
+                        change({
+                          ...payload,
+                          analysis: {
+                            ...analysis,
+                            outcomes: analysis.outcomes.map((o, n) =>
+                              n === i
+                                ? {
+                                    ...o,
+                                    source_summary: e.target.value as
+                                      "individual" | "mean" | "median",
+                                  }
+                                : o,
+                            ),
+                          },
+                        })
+                      }
+                    >
+                      {["individual", "mean", "median"].map((v) => (
+                        <option key={v}>{v}</option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              )}
               <label>
                 {copy("Resumen", "Summary")}
                 <select
@@ -672,6 +763,9 @@ export function StudyEditor() {
                     {
                       key: `outcome${analysis.outcomes.length + 1}`,
                       metric: "pvt.median_rt_ms",
+                      units: "ms",
+                      source_keys: [],
+                      source_summary: "individual",
                       occasion_keys: [],
                       summary: "individual",
                     },
@@ -885,16 +979,21 @@ export function StudyEditor() {
           onClick={() =>
             void run(async () => {
               if (!draft) return;
-              const frozen = await studyCall<StudyVersion>(`/drafts/${draft.id}/freeze`, {
-                sha256: draft.sha256,
-                rehearsal_id: rehearsal,
-                actor,
-                reason,
-              });
+              const frozen = await studyCall<StudyVersion>(
+                `/drafts/${draft.id}/freeze`,
+                {
+                  sha256: draft.sha256,
+                  rehearsal_id: rehearsal,
+                  actor,
+                  reason,
+                },
+              );
               setVersions((await studyVersions()).versions);
               const saved = { ...draft, frozen_version_id: frozen.id };
               setDraft(saved);
-              setDrafts(rows => rows.map(row => row.id === draft.id ? saved : row));
+              setDrafts((rows) =>
+                rows.map((row) => (row.id === draft.id ? saved : row)),
+              );
             })
           }
         >
@@ -951,7 +1050,10 @@ export function StudyEditor() {
                   if (epoch !== contentEpoch.current) return;
                   setDraft(next);
                   setSelectedDraft(next.id);
-                  setDrafts((rows) => [...rows.filter((row) => row.id !== next.id), next]);
+                  setDrafts((rows) => [
+                    ...rows.filter((row) => row.id !== next.id),
+                    next,
+                  ]);
                   setPayload(JSON.parse(next.payload_json));
                   setRehearsal(null);
                   setDirty(false);

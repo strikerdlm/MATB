@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlmodel import Session, select
 
 from app.db import get_session
@@ -26,13 +26,25 @@ def collect_fit_rows(session: Session) -> list[dict[str, Any]]:
     ]
 
 
-def collect_full_fit_rows(session: Session, participant_id: str | None = None) -> list[dict[str, Any]]:
+def collect_full_fit_rows(session: Session, participant_id: str | None = None, hcf_derivation_id: str | None = None) -> list[dict[str, Any]]:
     query = select(DepdfFit, Visit).where(DepdfFit.visit_id == Visit.id)
     if participant_id is not None:
         query = query.where(DepdfFit.participant_id == participant_id)
+    from app.study_analysis_models import HcfFitSnapshot, HcfDerivation
+    from app.hcf_derivations import fingerprint
+    import json
+    exploratory = session.get(HcfDerivation, hcf_derivation_id) if hcf_derivation_id else None
+    if hcf_derivation_id and exploratory is None: raise HTTPException(404, 'HCF derivation not found')
+    estimates = json.loads(exploratory.snapshot_json)['values'] if exploratory else {}
     out: list[dict[str, Any]] = []
     for fit, visit in session.exec(query).all():
+        binding = session.get(HcfFitSnapshot, fingerprint(fit.model_dump(mode='json')))
+        identified = estimates.get(fit.participant_id)
         out.append({
+            "scope": "legacy_visit_fit_snapshot",
+            "hcf_reference_cohort": binding.derivation_id if binding else "unknown_unrecoverable_legacy_reference_cohort",
+            "exploratory_derivation": ({"id": exploratory.id, "value": identified['value'] if identified else None,
+                "curve": _curve(fit.p0, identified['value']) if identified else None, "status":"exploratory"} if exploratory else None),
             "participant_id": fit.participant_id,
             "visit_ordinal": visit.visit_ordinal,
             "g0": fit.g0, "p0": fit.p0, "tau0": fit.tau0,
@@ -58,5 +70,6 @@ def _curve(p0: float, f_ratio: float = 1.0) -> list[dict[str, float]]:
 def list_fits(
     participant_id: str | None = Query(None),
     session: Session = Depends(get_session),
+    hcf_derivation_id: str | None = Query(None),
 ) -> list[dict[str, Any]]:
-    return collect_full_fit_rows(session, participant_id)
+    return collect_full_fit_rows(session, participant_id, hcf_derivation_id)

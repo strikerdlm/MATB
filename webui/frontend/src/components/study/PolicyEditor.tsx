@@ -558,6 +558,37 @@ export function PolicyEditor({
               }
             />
           </label>
+          {a.eligibility_policy.configuration_pooling === "explicit_review" &&
+            ["actor", "rationale", "reference"].map((field) => (
+              <label className="block" key={field}>
+                {copy("Revisión de agrupación", "Pooling review")} · {field}
+                <input
+                  className="native-input block w-full"
+                  value={String(
+                    (
+                      a.eligibility_policy?.pooling_attestation as
+                        Record<string, string> | undefined
+                    )?.[field] ?? "",
+                  )}
+                  onChange={(e) =>
+                    onChange({
+                      ...payload,
+                      analysis: {
+                        ...a,
+                        eligibility_policy: {
+                          ...a.eligibility_policy,
+                          pooling_attestation: {
+                            ...(a.eligibility_policy?.pooling_attestation as
+                              Record<string, string> | undefined),
+                            [field]: e.target.value,
+                          },
+                        },
+                      },
+                    })
+                  }
+                />
+              </label>
+            ))}
           {pick(
             "hcf_enabled",
             a.eligibility_policy.hcf_enabled,

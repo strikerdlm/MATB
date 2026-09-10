@@ -38,7 +38,7 @@ def template(kind):
         template_family=protocol.protocol_id, synthetic=True, enabled_instruments=['pvt'], visits=visits,
         arms=['A'], assignment_method='explicit_researcher_selection', occasions=occasions,
         recovery_intervals=[], rules=dict(preparation='', repeat='', interruption='')),
-        analysis=dict(unit='participant', outcomes=[dict(key='primary', metric='pvt.median_rt_ms', occasion_keys=[occasions[0]['key']], summary='individual')],
+        analysis=dict(unit='participant', outcomes=[dict(key='primary', metric='pvt.median_rt_ms', units='ms', occasion_keys=[occasions[0]['key']], summary='individual')],
         contrasts=[], rules=dict(exclusions='', denominators='', qualification='', pooling='', historical_unknowns='exclude')))).model_dump()
 
 
@@ -52,6 +52,9 @@ def create_draft(db, payload):
     lock_registry(db)
     normalized = DraftPayload.model_validate(payload).model_dump()
     from .study_bindings import implementation_binding
+    from .study_analysis_bundle import calculation_binding, dependency_versions
+    normalized['analysis']['calculation_sha256'] = calculation_binding()
+    normalized['analysis']['calculator_dependencies'] = dependency_versions(set(normalized['study']['enabled_instruments']))
     normalized['study']['implementation_sha256'] = {key: implementation_binding(key) for key in normalized['study']['enabled_instruments']}
     row = StudyDraft(payload_json=canonical(normalized), sha256=payload_hash(normalized))
     db.add(row); db.flush()
@@ -64,6 +67,9 @@ def update_draft(db, identity, payload):
     if row.frozen_version_id: raise HTTPException(409, 'Frozen draft: clone a version to author an amendment.')
     normalized = DraftPayload.model_validate(payload).model_dump()
     from .study_bindings import implementation_binding
+    from .study_analysis_bundle import calculation_binding, dependency_versions
+    normalized['analysis']['calculation_sha256'] = calculation_binding()
+    normalized['analysis']['calculator_dependencies'] = dependency_versions(set(normalized['study']['enabled_instruments']))
     normalized['study']['implementation_sha256'] = {key: implementation_binding(key) for key in normalized['study']['enabled_instruments']}
     row.payload_json = canonical(normalized); row.sha256 = payload_hash(normalized)
     db.add(row); db.flush()
@@ -76,6 +82,9 @@ def validate(db, identity):
     study, analysis = payload.study, payload.analysis
     from .study_policies import policy_issues
     issues = policy_issues(study, analysis)
+    from .study_analysis_bundle import calculation_binding, dependency_versions
+    if analysis.calculation_sha256 != calculation_binding() or analysis.calculator_dependencies != dependency_versions(set(study.enabled_instruments)):
+        issues.append(dict(path='analysis.calculation_sha256',message='Save draft to refresh the exact installed calculator/dependency binding before approval.'))
     def issue(path, message): issues.append(dict(path=path, message=message))
     for group, rules in [('study', study.rules), ('analysis', analysis.rules)]:
         for key, value in rules.model_dump().items():
@@ -141,12 +150,10 @@ def validate(db, identity):
             issue(f'study.recovery_intervals.{i}', 'Recovery requires an earlier anchor and later assessment in the same visit.')
     outcome_keys = {o.key for o in analysis.outcomes}
     if len(outcome_keys) != len(analysis.outcomes): issue('analysis.outcomes', 'Outcome keys must be unique.')
-    metrics = {'pvt': {'pvt.median_rt_ms', 'pvt.lapses', 'pvt.kss'}, 'screen': {'screen.hcf', 'screen.simple_rt'},
-               'openmatb': {'openmatb.workload', 'openmatb.performance'}, 'physiology': {'physiology.raw', 'physiology.mean_hr_bpm'}, 'liftoff': {'liftoff.performance'}, 'suas': {'suas.performance'}}
+    from .study_analysis_catalog import issues as descriptive_issues
+    issues.extend(descriptive_issues(study, analysis))
     for i, outcome in enumerate(analysis.outcomes):
         if any(key not in keys for key in outcome.occasion_keys): issue(f'analysis.outcomes.{i}.occasion_keys', 'Unknown occasion reference.')
-        elif any(outcome.metric not in metrics.get(keys[key].instrument, set()) for key in outcome.occasion_keys):
-            issue(f'analysis.outcomes.{i}.metric', 'Unsupported outcome/instrument binding.')
     for i, contrast in enumerate(analysis.contrasts):
         if contrast.left_outcome not in outcome_keys or contrast.right_outcome not in outcome_keys:
             issue(f'analysis.contrasts.{i}', 'Unknown outcome reference.')

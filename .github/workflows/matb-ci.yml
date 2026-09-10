@@ -102,6 +102,9 @@ jobs:
           cache-dependency-path: MATB relocation ñ/requirements-dev.txt
       - run: python -m pip install -r requirements-dev.txt
         working-directory: MATB relocation ñ
+      - name: Prepare pinned descriptive replay wheels
+        working-directory: MATB relocation ñ
+        run: python tools/prepare_study_wheels.py .test-tmp/repeatable-study/descriptive-wheels
       - name: Backend core tests
         working-directory: MATB relocation ñ/webui/backend
         env:

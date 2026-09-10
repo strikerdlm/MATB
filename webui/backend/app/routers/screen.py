@@ -121,6 +121,8 @@ def screen_summary(session: Session = Depends(get_session)) -> dict[str, Any]:
     from app.assessment_readers import reject_ambiguous, exclude_known_nonstudy
     rows = exclude_known_nonstudy(session, rows)
     reject_ambiguous(rows)
+    from app.hcf_derivations import derive, screen_reference
+    derivation = derive(session, [screen_reference(r) for r in rows]); session.commit()
     scores_by_pid = {r.participant_id: json.loads(r.scores_json) for r in rows}
     store = compute_cohort_hcf(scores_by_pid)
     screens = []
@@ -136,6 +138,6 @@ def screen_summary(session: Session = Depends(get_session)) -> dict[str, Any]:
             "hcf_value": est.value if est else None,
             "components": est.components if est else None,
         })
-    return {"selection_mode": "legacy_unambiguous", "n_screened": len(rows), "min_cohort": MIN_COHORT,
+    return {"hcf_derivation_id": derivation.id, "status": "exploratory", "selection_mode": "legacy_unambiguous", "n_screened": len(rows), "min_cohort": MIN_COHORT,
             "hcf_active": bool(store), "screen_version": SCREEN_VERSION,
             "screens": screens}

@@ -31,7 +31,7 @@ def for_occasion(db, occasion_id):
                 occasion_key=key, occasion_id=occasion_id, **spec, rules=study['rules'],
                 study_id=study['study_id'], assigned_visit=next(v for v in study['visits'] if v['ordinal'] == spec['visit_ordinal']),
                 schedule_sha256=__import__('hashlib').sha256(canonical(study['visits']).encode()).hexdigest(),
-                recovery_intervals=study['recovery_intervals'], preparation_policy=[p for p in study['preparation_policy'] if p['occasion_key'] in json.loads(assignment.occasions_json)], repeat_policy=study['repeat_policy'], interruption_policy=study['interruption_policy'], analysis_gate='not_implemented', preparation_gate='measured', resource_gate='not_implemented')
+                recovery_intervals=study['recovery_intervals'], preparation_policy=[p for p in study['preparation_policy'] if p['occasion_key'] in json.loads(assignment.occasions_json)], repeat_policy=study['repeat_policy'], interruption_policy=study['interruption_policy'], analysis_gate='explicit_frozen_descriptive' , preparation_gate='measured', resource_gate='not_implemented')
     _required()
 
 

@@ -380,7 +380,8 @@ def _maybe_fit_visit(session: Session, visit: Visit) -> None:
     # already-committed Block must never roll back) because a fit could not be
     # computed or stored. Failures are logged, not raised.
     try:
-        from app.hcf_refresh import build_hcf_store
+        from app.hcf_refresh import build_hcf_store, refresh_fit_hcf
+        refresh_fit_hcf(session)
         out = fit_participant(visit.participant_id, blocks_arg, source="rtlx_mean_0_100",
                               hcf_store=build_hcf_store(session) or None)
         existing = session.exec(
@@ -389,7 +390,7 @@ def _maybe_fit_visit(session: Session, visit: Visit) -> None:
         if existing is not None:
             session.delete(existing)
             session.flush()
-        session.add(DepdfFit(
+        saved_fit = DepdfFit(
             participant_id=visit.participant_id,
             visit_id=visit.id,
             mwl_source=out["mwl_source"],
@@ -397,7 +398,14 @@ def _maybe_fit_visit(session: Session, visit: Visit) -> None:
             hcf_value=out["hcf_value"], hcf_source=out["hcf_source"],
             criteria_version=out["criteria_version"],
             per_level_json=json.dumps(out["per_level"], ensure_ascii=False),
-        ))
+        )
+        session.add(saved_fit); session.flush(); session.refresh(saved_fit)
+        from app.study_analysis_models import HcfFitSnapshot, HcfExploratoryPointer
+        from app.hcf_derivations import canonical, fingerprint
+        pointer = session.get(HcfExploratoryPointer, "legacy-unambiguous")
+        if pointer is not None:
+            snapshot = saved_fit.model_dump(mode="json")
+            session.add(HcfFitSnapshot(id=fingerprint(snapshot), derivation_id=pointer.derivation_id, fit_json=canonical(snapshot)))
         session.commit()
     except Exception as exc:  # noqa: BLE001 — fit/store must not break ingestion
         session.rollback()
