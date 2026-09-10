@@ -458,3 +458,112 @@ Fix round 1 implementation/report commit:
 `458149d79e6206f12e4728cbc0feceb34b88c566`
 (`fix: preserve assessment admission context and independent receipts`).
 This exact-SHA note is committed separately; it changes no implementation or tests.
+
+## Review fix round 2 — N1 H10 compatibility selection
+
+N1 in `task-2-rereview-1.md` is addressed. Base:
+`71f1143fc9889932b5d128c31d56a45a951dde6c`. The prior I1–I4/M1 fixes remain intact.
+
+Only production change: `webui/backend/app/routers/journey.py`. Tests added to
+`webui/backend/tests/test_assessment_review_fixes.py`; this report is the remaining
+changed file. No frontend, source model, acquisition runtime, migration, raw artifact
+or optional-router production code changed.
+
+### Explicit compatibility contract
+
+- Exact existing H10 selections use
+  `/journey/{participant}/{visit_ordinal}?experiment=physiology&attempt_id={id}&legacy_polar=true`.
+  An optional mission accompaniment uses `experiment=suas&polar_attempt_id={id}&legacy_polar=true`.
+- Strict assigned selection remains the default. The compatibility flag admits a
+  NULL-visit physiology occasion only when its original origin is legacy or
+  legacy_compat, its participant matches, and exactly one linked H10 acquisition
+  source records that same participant, matb_session_kind=generic, and the exact
+  stored baseline session ID `baseline:{participant}:V{visit_ordinal}`. The check
+  follows the immutable source link, not a first/latest capture choice.
+- A non-NULL assigned occasion must still match the actual requested Visit ID.
+  The compatibility flag cannot override a mismatched assigned visit. Wrong source
+  participant or baseline-session context is rejected404. Multiple unselected
+  baseline captures still require explicit selection.
+- Physiology compatibility responses label
+  `selection_mode=legacy_polar_recorded_baseline`, preserve the selected attempt_id,
+  and set assessment_visit_id=null. Mission responses separately expose the exact
+  polar_attempt_id, polar_selection_mode=legacy_polar_recorded_baseline and
+  polar_assessment_visit_id=null; the mission's own context is not relabeled.
+- The original occasion visit/phase/origin, capture metadata and purpose ledger remain
+  unchanged. The recorded baseline label supports compatibility navigation only;
+  it does not establish a frozen study assignment, approval or analysis eligibility.
+  No purpose declaration or retrospective classification is added by the reader.
+
+### Regression and verification evidence
+
+The new regression runs twice: once with real normal-declaration source associations
+and once with real purpose/shared-assessment migration associations. Each fixture has
+two finalized H10 baseline sources whose additive occasions retain visit_id=None;
+300-second versus180-second durations produce different completion results to prove
+independent exact selection. It also creates wrong-baseline and wrong-participant
+sources. The test verifies physiology and optional mission selection for both captures,
+compatibility labels, strict-default refusal, wrong-context refusal, and complete
+before/after equality of original occasion/capture metadata and purpose history.
+A separate assigned-context test uses otherwise qualifying finalized baseline evidence
+and proves the flag cannot bypass its different, real assigned Visit ID.
+
+Backend command prefix (cwd webui/backend; async worker support enabled):
+
+```
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/tmp/matb-predictability-testdeps PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 MATB_COMPONENTS=auto /root/repos/MATB/.venv/bin/python -B -m pytest -q -p no:cacheprovider -p anyio.pytest_plugin
+```
+
+RED, same prefix +:
+
+```
+tests/test_assessment_review_fixes.py -k 'legacy_polar_exact or polar_compatibility_flag'
+```
+
+**2 failed, 1 passed, 14 deselected, 1 warning in0.72s**
+(`/tmp/task2-fix2-red.log`). Both declaration and migration cases returned404 for
+otherwise valid exact H10 selections; the existing strict assigned-visit case passed.
+
+GREEN auto, same prefix +:
+
+```
+tests/test_assessment_review_fixes.py tests/test_assessments.py tests/test_experiment_safety.py tests/test_physiology_api.py
+```
+
+**48 passed, 1 warning in5.05s** (`/tmp/task2-fix2-auto-green.log`). This includes the
+unchanged optional physiology HTTP workflow and the new cross-component regressions.
+
+GREEN core, same prefix with MATB_COMPONENTS=core +:
+
+```
+tests/test_assessment_review_fixes.py tests/test_assessments.py tests/test_experiment_safety.py
+```
+
+**46 passed, 1 warning in3.62s** (`/tmp/task2-fix2-core-scoped-final.log`).
+The new H10 declaration/migration source-link and journey regressions run in both
+component profiles. No optional HTTP router was added to production core routing.
+
+Final stricter fixture check (after making the mismatched assigned source otherwise
+qualifying/finalized), auto prefix +
+`tests/test_assessment_review_fixes.py -k polar_compatibility_flag`:
+**1 passed, 16 deselected, 1 warning in0.25s** (`/tmp/task2-fix2-strict-final.log`).
+No production source changed after the48/46-test runs. Counts overlap.
+
+Scope correction: an initial core command incorrectly included the existing optional-
+only `tests/test_physiology_api.py` and produced **2 failed, 46 passed, 1 warning
+in5.91s** (`/tmp/task2-fix2-core-green.log`): those two tests expected optional routes
+on the global core app. The controller confirmed core CI deliberately excludes that
+file. A brief uncommitted fixture-isolation experiment was removed completely at the
+controller's direction; its exploratory runs are not final-source verification.
+The file has no diff. Final core evidence uses the appropriate shared subset above,
+and the original optional HTTP workflow remains covered by the48-test auto run.
+
+`git diff --check` passed. All warnings are the existing python_multipart pending
+deprecation; no suppression or dependency change. No frontend tests/build were rerun,
+because this correction changes no frontend. No hardware/production migration/push,
+subagents or sibling worktree changes. No unresolved N1 blocker; remaining study
+assignment/eligibility integration stays with the controller as previously scoped.
+
+Fix round2 implementation/test commit:
+`577cf8624aa3f2b88aa2084b307fc18c13ddfb9a`
+(`fix: select legacy H10 attempts through recorded baseline context`).
+The report is committed separately to record this exact source commit.
