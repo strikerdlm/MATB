@@ -111,6 +111,19 @@ actionable findings. Implementation and verification took place in the isolated
 `python3 -B scripts/verify_documentation.py` also passed. The original checkout's
 pre-existing changes were left untouched.
 
+## CI follow-up
+
+The initial GitHub run exposed an endpoint-test setup dependency on the global
+application: `MATB_COMPONENTS=core` correctly omits native routes. The scale and
+receipt regression now mounts its own OpenMATB router, preserving the missing-token,
+duplicate-save, physiology-marker and receipt assertions in either component mode.
+The focused core-mode record/profile suite passed all 19 tests.
+
+Cross-platform review also reproduced a profile hash mismatch when Git converted
+the versioned JSON artifact to Windows line endings. `.gitattributes` now preserves
+its canonical LF bytes, and a regression checks the exact published frontend
+contract. A simulated Windows checkout retains the recorded SHA-256 above.
+
 ## Practical limits
 
 These are software and browser checks, not physical timing or human calibration.

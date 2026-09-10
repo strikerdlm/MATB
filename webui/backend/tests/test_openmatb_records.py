@@ -7,6 +7,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+import httpx
 from sqlmodel import Session
 
 from app.models import Participant, Visit
@@ -290,23 +291,30 @@ def test_concurrent_duplicate_scale_requests_only_import_once(controlled, engine
     assert manager.session_view(prepared.session.id).current_block_index == 2
 
 
-def test_scale_endpoint_emits_one_marker_and_receipt_keeps_saved_block(client, controlled, engine, monkeypatch):
-    from app.main import app
+@pytest.mark.anyio
+async def test_scale_endpoint_emits_one_marker_and_receipt_keeps_saved_block(controlled, engine):
+    from fastapi import FastAPI
+    from app.routers.openmatb import router
     from types import SimpleNamespace
     manager, prepared = controlled
     aid, _ = awaiting_scale(manager, prepared, engine)
     markers = []
     async def marker(*args):
         markers.append(args)
-    monkeypatch.setattr(app.state, "openmatb_manager", manager, raising=False)
-    monkeypatch.setattr(app.state, "polar_manager", SimpleNamespace(system_marker_for_session=marker), raising=False)
+    # Exercise the component router without depending on the global app's
+    # MATB_COMPONENTS selection (the core-only CI app omits native routes).
+    app = FastAPI()
+    app.include_router(router)
+    app.state.openmatb_manager = manager
+    app.state.polar_manager = SimpleNamespace(system_marker_for_session=marker)
     url = f"/openmatb/sessions/{prepared.session.id}/scales"
-    assert client.post(url, json=ratings(aid).model_dump()).status_code == 403
-    for _ in range(2):
-        response = client.post(url, json=ratings(aid).model_dump(), headers={"X-OpenMATB-Participant": prepared.participant_token})
-        assert response.status_code == 200, response.text
-    assert len(markers) == 1
-    receipt = client.get(f"/openmatb/sessions/{prepared.session.id}/receipt").json()
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as client:
+        assert (await client.post(url, json=ratings(aid).model_dump())).status_code == 403
+        for _ in range(2):
+            response = await client.post(url, json=ratings(aid).model_dump(), headers={"X-OpenMATB-Participant": prepared.participant_token})
+            assert response.status_code == 200, response.text
+        assert len(markers) == 1
+        receipt = (await client.get(f"/openmatb/sessions/{prepared.session.id}/receipt")).json()
     assert receipt["attempts"][0]["block_instance_id"] == aid
     assert receipt["attempts"][0]["ratings_status"] == "saved"
 
