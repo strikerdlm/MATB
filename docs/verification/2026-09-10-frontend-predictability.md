@@ -124,6 +124,21 @@ the versioned JSON artifact to Windows line endings. `.gitattributes` now preser
 its canonical LF bytes, and a regression checks the exact published frontend
 contract. A simulated Windows checkout retains the recorded SHA-256 above.
 
+The full backend suite then passed 315 tests with one pre-existing skip. A later
+Linux browser gate exposed a locale hydration race: the shell could restore or
+select English before the streamed Colombia page hydrated its Spanish HTML.
+Both early selection and saved-preference cases reproduced the text mismatch
+under 4× CPU throttling before the fix. The locale provider now owns an external
+store whose server snapshot lets each consumer hydrate in Spanish before applying
+the current preference. This preserves server rendering and error reporting.
+
+Both added browser regressions passed after the fix, and the production geography
+suite passed all three cases, including the existing region, layer, outage and
+mission-handoff workflow. The full frontend suite passed all 224 tests; lint,
+typecheck and production build passed. Independent reviews of both CI corrections
+found no actionable issues. The browser regressions run in the existing GitHub
+geography gate on Linux and Windows.
+
 ## Practical limits
 
 These are software and browser checks, not physical timing or human calibration.
