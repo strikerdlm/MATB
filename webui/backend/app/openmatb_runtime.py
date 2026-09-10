@@ -246,6 +246,8 @@ class _ProcessHandle:
     monitor: asyncio.Task[None] | None = None
     windows_job: _WindowsJob | None = None
     block_instance_id: str | None = None
+    preflight_snapshot: dict | None = None
+    released: asyncio.Event = field(default_factory=asyncio.Event)
 
 
 @dataclass
@@ -339,7 +341,7 @@ class OpenMatbManager:
 
     def _mark_interrupted(self) -> None:
         with Session(self.engine) as db:
-            rows = db.exec(select(OpenMatbSuiteSession).where(OpenMatbSuiteSession.lifecycle.in_(("STARTING", "RUNNING", "PAUSED")))).all()
+            rows = db.exec(select(OpenMatbSuiteSession).where(OpenMatbSuiteSession.lifecycle.in_(("PREFLIGHT_STARTING", "PREFLIGHT_HELD", "STARTING", "RUNNING", "PAUSED")))).all()
             for row in rows:
                 from app.study_admission import sync_runtime_attempt
                 sync_runtime_attempt(db, row, state='interrupted')
@@ -855,7 +857,7 @@ class OpenMatbManager:
         async with self._lock:
             self._validate_display(request.display_index)
             with Session(self.engine) as db:
-                active = db.exec(select(OpenMatbSuiteSession).where(OpenMatbSuiteSession.lifecycle.in_(("INSTRUCTIONS", "READY", "STARTING", "RUNNING", "PAUSED", "AWAITING_SCALE", "BETWEEN_BLOCKS")))).first()
+                active = db.exec(select(OpenMatbSuiteSession).where(OpenMatbSuiteSession.lifecycle.in_(("INSTRUCTIONS", "READY", "PREFLIGHT_READY", "PREFLIGHT_STARTING", "PREFLIGHT_HELD", "STARTING", "RUNNING", "PAUSED", "AWAITING_SCALE", "BETWEEN_BLOCKS")))).first()
                 if active is not None:
                     raise OpenMatbRuntimeError("openmatb_active_session")
                 participant = db.get(Participant, request.participant_id)
@@ -866,9 +868,21 @@ class OpenMatbManager:
                     raise OpenMatbRuntimeError("visit_not_found")
                 from app.study_admission import resolve_assignment
                 context = resolve_assignment(db, attempt_id=request.attempt_id, instrument='openmatb', participant_id=request.participant_id,
-                    visit_id=visit.id, purpose=request.execution_purpose, require_started=True)
-                if context:
-                    frozen = context['config']
+                    visit_id=visit.id, purpose=request.execution_purpose, require_started=not request.preparation_only)
+                if request.preparation_only:
+                    from app.assessment_models import AssessmentAttempt
+                    selected = db.get(AssessmentAttempt, request.attempt_id) if request.attempt_id else None
+                    if not context or request.execution_purpose != 'study' or not selected or selected.acquisition_state != 'created':
+                        raise OpenMatbRuntimeError('study_unstarted_assignment_required')
+                    from app.study_preparation import require_preflight_practice
+                    require_preflight_practice(db, context)
+                if not request.preparation_only:
+                    from app.study_preflight import require_held_launch
+                    require_held_launch(context)
+                from app.study_preparation import practice_context
+                preparation = practice_context(db, request.attempt_id, validate=True) if request.attempt_id and request.execution_purpose == 'practice' else None
+                if context or preparation:
+                    frozen = (context or preparation)['config']
                     expected = (frozen['preset']['id'], frozen['preset']['version'], frozen['instructions']['id'], frozen['instructions']['version'], frozen['visual']['id'], frozen['visual']['version'])
                     actual = (request.preset_id, request.preset_version, request.instruction_protocol_id, request.instruction_version, request.visual_profile_id, request.visual_profile_version)
                     if actual != expected or request.visual_theme is not None:
@@ -936,6 +950,7 @@ class OpenMatbManager:
                     visual_profile_schema_version=visual_profile.schema_version,
                     visual_profile_sha256=profile_sha256(visual_payload),
                     execution_purpose=request.execution_purpose, locale=instructions.locale,
+                    lifecycle="PREFLIGHT_READY" if request.preparation_only else "INSTRUCTIONS",
                     display_index=request.display_index,
                     block_order_json=_canonical(order), scenario_paths_json=_canonical(paths),
                     controller_lease_hash=_token_hash(controller_lease), participant_token_hash=_token_hash(participant_token),
@@ -962,18 +977,30 @@ class OpenMatbManager:
             from app.study_admission import for_occasion
             context = for_occasion(db, source_attempt(db, 'openmatb_suite_session', row.id).occasion_id)
         except HTTPException: pass
-        if context:
-            from app.study_registry import get_version
+        from app.study_preparation import practice_context
+        preparation_context = None
+        if row.execution_purpose == 'practice':
+            try: preparation_context = practice_context(db, source_attempt(db, 'openmatb_suite_session', row.id).id)
+            except HTTPException: pass
+        visit_context = context or preparation_context
+        if visit_context:
             from app.study_protocol import VisitDefinition
-            study = json.loads(get_version(db, context['version_id']).study_json)
-            protocol_visit = VisitDefinition(**next(v for v in study['visits'] if v['ordinal'] == row.visit_ordinal))
+            protocol_visit = VisitDefinition(**visit_context['assigned_visit'])
         else:
             protocol_visit = next(item for item in selected_protocol().visits if item.ordinal == row.visit_ordinal)
         instruction_view = self._instruction_view(instruction)
         order = json.loads(row.block_order_json)
         active = order[row.current_block_index] if row.current_block_index < len(order) and row.lifecycle in {"STARTING", "RUNNING", "PAUSED", "AWAITING_SCALE"} else None
+        from app.study_registry_models import StudyNativePreflight
+        preflight = db.get(StudyNativePreflight, row.id)
+        prepared_at = preflight.created_at if preflight and row.execution_purpose == 'study' else None
+        released_at = row.started_at if prepared_at else None
+        preflight_seconds = max(0, (released_at.replace(tzinfo=timezone.utc) - prepared_at.replace(tzinfo=timezone.utc)).total_seconds()) if released_at else None
         return OpenMatbSessionView(
+            preflight_prepared_at=prepared_at, preflight_released_at=released_at, preflight_wall_duration_seconds=preflight_seconds,
             study_assignment_id=context['assignment_id'] if context else None,
+            preparation_assignment_id=preparation_context['assignment_id'] if preparation_context else None,
+            preparation_id=preparation_context['preparation_id'] if preparation_context else None,
             execution_purpose=row.execution_purpose, purpose_provenance_id=row.purpose_provenance_id, locale=row.locale,
             id=row.id, participant_id=row.participant_id, visit_ordinal=row.visit_ordinal,
             visit_code=protocol_visit.code, scheduled_day=visit.scheduled_day if visit else protocol_visit.scheduled_day,
@@ -1036,7 +1063,7 @@ class OpenMatbManager:
             raise OpenMatbRuntimeError("openmatb_visual_profile_tampered")
         return profile_path
 
-    async def start_block(self, session_id: str, lease: str) -> OpenMatbSessionView:
+    async def start_block(self, session_id: str, lease: str, *, preparation_only: bool = False) -> OpenMatbSessionView:
         async with self._lock:
             if self._native_recovery_required():
                 raise OpenMatbRuntimeError("openmatb_native_recovery_required")
@@ -1046,14 +1073,19 @@ class OpenMatbManager:
                 raise OpenMatbRuntimeError("openmatb_visual_preview_active")
             with Session(self.engine) as db:
                 row = self._controller_row(db, session_id, lease)
-                if row.lifecycle not in {"READY", "BETWEEN_BLOCKS"}:
+                if row.lifecycle == "PREFLIGHT_HELD" and not preparation_only:
+                    return await self._release_preflight(db, row)
+                if row.lifecycle not in ({"PREFLIGHT_READY"} if preparation_only else {"READY", "BETWEEN_BLOCKS"}):
                     raise OpenMatbRuntimeError("openmatb_invalid_transition")
                 if not self.readiness().ready:
                     raise OpenMatbRuntimeError("openmatb_station_not_ready")
                 self._validate_display(row.display_index)
                 from app.study_native import native_context, storage_key
                 assigned_context = native_context(db, row)
-                if row.execution_purpose == "study":
+                if not preparation_only:
+                    from app.study_preflight import require_held_launch
+                    require_held_launch(assigned_context)
+                if row.execution_purpose == "study" and not preparation_only:
                     from app.experiment_catalog import require_task_order
                     try:
                         selected_source = selected_task_source(db, row)
@@ -1070,7 +1102,11 @@ class OpenMatbManager:
                 if scenario.parent != Path(row.artifact_root).resolve() / "scenarios" or not scenario.is_file():
                     raise OpenMatbRuntimeError("openmatb_scenario_missing")
                 visual_profile_path = self._verified_session_visual_profile_path(row)
-                attempt = self.records.begin(db, row, block)
+                if preparation_only:
+                    from types import SimpleNamespace
+                    attempt = SimpleNamespace(id=str(uuid4()))
+                else:
+                    attempt = self.records.begin(db, row, block)
                 db.commit()
                 command = [
                     str(self.python_executable), str(self.openmatb_root / "main.py"), "--scenario", str(scenario),
@@ -1093,6 +1129,8 @@ class OpenMatbManager:
                     "condition": block,
                     "execution_purpose": "practice" if block == "PRACTICE" else row.execution_purpose,
                 })}
+                if preparation_only:
+                    kwargs["env"]["MATB_PREPARATION_HOLD"] = "1"
                 if os.name == "nt":
                     kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
                 else:
@@ -1119,7 +1157,10 @@ class OpenMatbManager:
                     raise OpenMatbRuntimeError("openmatb_job_assignment_failed") from exc
                 handle = _ProcessHandle(session_id=session_id, block=block, process=process, windows_job=windows_job, block_instance_id=attempt.id)
                 self._handles[session_id] = handle
-                row.lifecycle = "STARTING"; row.active_pid = process.pid; row.started_at = row.started_at or _utcnow(); row.last_error = None
+                row.lifecycle = "PREFLIGHT_STARTING" if preparation_only else "STARTING"
+                row.active_pid = process.pid
+                if not preparation_only: row.started_at = row.started_at or _utcnow()
+                row.last_error = None
                 db.add(row); db.commit()
                 handle.monitor = asyncio.create_task(self._monitor(handle))
             ready_wait = asyncio.create_task(handle.ready.wait())
@@ -1148,6 +1189,20 @@ class OpenMatbManager:
             with Session(self.engine) as db:
                 row = db.get(OpenMatbSuiteSession, session_id)
                 assert row is not None
+                if preparation_only:
+                    from app.study_preflight import retain_snapshot
+                    if not handle.preflight_snapshot or not handle.session_csv:
+                        await self._terminate(handle)
+                        self._set_failure(session_id, 'openmatb_preflight_snapshot_missing')
+                        raise OpenMatbRuntimeError('openmatb_preflight_snapshot_missing')
+                    retain_snapshot(db, row, handle)
+                    row.lifecycle = "PREFLIGHT_HELD"
+                    db.add(row); db.commit(); db.refresh(row)
+                else:
+                    from app.study_preflight import retain_snapshot
+                    if handle.preflight_snapshot and handle.session_csv:
+                        retain_snapshot(db, row, handle)
+                        db.commit()
                 # A short block can finish between ready and this refresh.
                 if row.lifecycle == "STARTING":
                     row.lifecycle = "RUNNING"
@@ -1158,6 +1213,39 @@ class OpenMatbManager:
                         db.add(attempt)
                     db.add(row); db.commit(); db.refresh(row)
                 return self._view(db, row)
+
+    async def _release_preflight(self, db, row):
+        from app.study_preflight import validate_release
+        from app.assessment_service import transition
+        from app.assessment_adapters import source_attempt
+        handle = self._handles.get(row.id)
+        if handle is None or handle.process.returncode is not None:
+            raise OpenMatbRuntimeError('openmatb_preflight_closed')
+        validate_release(db, row, handle)
+        task = source_attempt(db, 'openmatb_suite_session', row.id)
+        transition(db, task.id, 'started', native_session_id=row.id)
+        block = json.loads(row.block_order_json)[row.current_block_index]
+        record = self.records.begin(db, row, block, block_instance_id=handle.block_instance_id)
+        record.session_csv = str(handle.session_csv)
+        db.add(record); db.commit()
+        try:
+            assert handle.process.stdin is not None
+            handle.process.stdin.write((json.dumps(dict(command='release_preflight', snapshot_sha256=handle.preflight_snapshot['sha256'])) + '\n').encode())
+            await handle.process.stdin.drain()
+            await asyncio.wait_for(handle.released.wait(), timeout=5)
+        except (asyncio.TimeoutError, BrokenPipeError, ConnectionError) as exc:
+            # Admission was persisted before sending. Never retry an unconfirmed release as a fresh start.
+            row.lifecycle = 'INTERRUPTED'
+            row.last_error = 'openmatb_preflight_release_unconfirmed'
+            transition(db, task.id, 'interrupted', 'unknown')
+            record.task_status = 'interrupted'
+            db.add(row); db.add(record); db.commit()
+            await self._terminate(handle)
+            raise OpenMatbRuntimeError('openmatb_preflight_release_unconfirmed') from exc
+        row.lifecycle = 'RUNNING'; row.started_at = _utcnow()
+        record.task_status = 'running'
+        db.add(row); db.add(record); db.commit(); db.refresh(row)
+        return self._view(db, row)
 
     def visual_profile_preview_status(self) -> VisualProfilePreviewView:
         return self._preview_view()
@@ -1366,7 +1454,10 @@ class OpenMatbManager:
                 if event.get("event") == "ready":
                     raw = event.get("session_csv")
                     handle.session_csv = Path(raw).resolve() if isinstance(raw, str) else None
+                    handle.preflight_snapshot = event.get("preflight")
                     handle.ready.set()
+                elif event.get("event") == "preflight_released":
+                    handle.released.set()
                 elif event.get("event") == "finished":
                     raw = event.get("session_csv")
                     handle.session_csv = Path(raw).resolve() if isinstance(raw, str) else handle.session_csv
@@ -1391,6 +1482,13 @@ class OpenMatbManager:
                     self.schedule_evidence_processing()
                     return
                 row.active_pid = None
+                if row.lifecycle.startswith("PREFLIGHT_"):
+                    row.lifecycle = "INTERRUPTED"
+                    row.finished_at = _utcnow()
+                    row.last_error = "openmatb_preflight_closed"
+                    db.add(row); db.commit()
+                    self._handles.pop(handle.session_id, None)
+                    return
                 if not handle.ready.is_set() or handle.process.returncode != 0:
                     row.lifecycle = "FAILED"
                     row.finished_at = _utcnow()

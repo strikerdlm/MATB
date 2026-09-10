@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 TASKS = ("sysmon", "track", "communications", "resman", "genericscales")
 SHA = r"^[0-9a-f]{64}$"
-DERIVATION_VERSION = "classic-evidence-1.1"
+DERIVATION_VERSION = "classic-evidence-1.1-preflight1"
 MAX_JSONL_LINE_BYTES = 256 * 1024
 MAX_STREAM_BYTES = 256 * 1024 * 1024
 MAX_STREAM_RECORDS = 500_000

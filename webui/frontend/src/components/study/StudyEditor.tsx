@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useAppLocale } from "@/lib/i18n";
@@ -23,7 +23,14 @@ export function StudyEditor() {
   const [draft, setDraft] = useState<StudyDraft | null>(null);
   const [drafts, setDrafts] = useState<StudyDraft[]>([]);
   const [selectedDraft, setSelectedDraft] = useState("");
-  const [history, setHistory] = useState<unknown>(null);
+  const [history, setHistory] = useState<{draftId: string; value: unknown} | null>(null);
+  const contentEpoch = useRef(0);
+  function clearHistory() { contentEpoch.current += 1; setHistory(null); }
+  async function loadHistory(identity: string) {
+    const epoch = contentEpoch.current;
+    const value = await studyCall(`/drafts/${identity}/history`);
+    if (epoch === contentEpoch.current) setHistory({draftId: identity, value});
+  }
   const [rehearsal, setRehearsal] = useState<string | null>(null);
   const [versions, setVersions] = useState<StudyVersion[]>([]);
   const [bindings, setBindings] = useState<Record<string, unknown>>({});
@@ -66,6 +73,7 @@ export function StudyEditor() {
       payload,
       draft ? "PUT" : "POST",
     );
+    if (next.id !== draft?.id) clearHistory();
     setDraft(next);
     setDrafts((rows) => [...rows.filter((row) => row.id !== next.id), next]);
     setSelectedDraft(next.id);
@@ -73,13 +81,16 @@ export function StudyEditor() {
     return next;
   }
   async function openDraft(identity: string) {
+    clearHistory();
+    const epoch = contentEpoch.current;
     const next = await studyCall<StudyDraft>(`/drafts/${identity}`);
+    if (epoch !== contentEpoch.current) return;
     setDraft(next);
     setPayload(JSON.parse(next.payload_json));
     setSelectedDraft(next.id);
     setDirty(false);
     setRehearsal(null);
-    setHistory(await studyCall(`/drafts/${identity}/history`));
+    await loadHistory(identity);
   }
   const study = payload?.study,
     analysis = payload?.analysis;
@@ -141,14 +152,14 @@ export function StudyEditor() {
           <Button
             onClick={() =>
               void run(async () =>
-                setHistory(await studyCall(`/drafts/${draft.id}/history`)),
+                loadHistory(draft.id),
               )
             }
           >
             {copy("Actualizar historial", "Refresh history")}
           </Button>
           <pre className="overflow-auto whitespace-pre-wrap text-xs">
-            {JSON.stringify(history, null, 2)}
+            {JSON.stringify(history?.draftId === draft.id ? history.value : null, null, 2)}
           </pre>
         </details>
       )}
@@ -174,7 +185,12 @@ export function StudyEditor() {
         <Button
           onClick={() =>
             void run(async () => {
-              setPayload(await studyCall<StudyPayload>(`/templates/${kind}`));
+              clearHistory();
+              const epoch = contentEpoch.current;
+              const template = await studyCall<StudyPayload>(`/templates/${kind}`);
+              if (epoch !== contentEpoch.current) return;
+              setPayload(template);
+              setSelectedDraft("");
               setDraft(null);
               setRehearsal(null);
               setDirty(true);
@@ -926,11 +942,16 @@ export function StudyEditor() {
               disabled={busy}
               onClick={() =>
                 void run(async () => {
+                  clearHistory();
+                  const epoch = contentEpoch.current;
                   const next = await studyCall<StudyDraft>(
                     `/versions/${v.id}/clone`,
                     {},
                   );
+                  if (epoch !== contentEpoch.current) return;
                   setDraft(next);
+                  setSelectedDraft(next.id);
+                  setDrafts((rows) => [...rows.filter((row) => row.id !== next.id), next]);
                   setPayload(JSON.parse(next.payload_json));
                   setRehearsal(null);
                   setDirty(false);

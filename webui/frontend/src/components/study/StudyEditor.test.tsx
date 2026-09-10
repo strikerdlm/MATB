@@ -231,3 +231,33 @@ it("reopens the same saved draft after leaving and edits before rehearsing/freez
     ),
   );
 });
+
+it('clears draft A history when a template or cloned version changes the content source', async () => {
+  const api = await import('@/lib/study');
+  const payload = {study:{study_id:'history-fixture',title:'History fixture',synthetic:true,arms:['A'],visits:[],occasions:[],enabled_instruments:[],recovery_intervals:[],rules:{preparation:'',repeat:'',interruption:''}},analysis:{unit:'participant',outcomes:[],contrasts:[],rules:{exclusions:'',denominators:'',qualification:'',pooling:'',historical_unknowns:'exclude'}}};
+  const a = {id:'draft-a',sha256:'a',payload_json:JSON.stringify(payload),frozen_version_id:null};
+  const b = {...a,id:'draft-b',sha256:'b'};
+  vi.mocked(api.studyVersions).mockResolvedValue({active_version_id:null,versions:[{id:'version-b',...payload}]} as never);
+  vi.mocked(api.studyCall).mockImplementation(async (path, body) => {
+    if (path === '/bindings') return {} as never;
+    if (path === '/drafts' && body === undefined) return [a] as never;
+    if (path === '/drafts/draft-a') return a as never;
+    if (path === '/drafts/draft-a/history') return {validations:[{draft_id:'draft-a',marker:'ONLY_A_HISTORY'}]} as never;
+    if (path.startsWith('/templates')) return structuredClone(payload) as never;
+    return b as never;
+  });
+  render(<StudyEditor/>);
+  fireEvent.change(await screen.findByLabelText(/Saved draft|Borrador guardado/),{target:{value:'draft-a'}});
+  fireEvent.click(screen.getByRole('button',{name:/Open saved draft|Abrir borrador/}));
+  await screen.findByText(/ONLY_A_HISTORY/);
+  fireEvent.click(screen.getByRole('button',{name:/Load template|Cargar plantilla/}));
+  await waitFor(()=>expect(screen.queryByText(/ONLY_A_HISTORY/)).not.toBeInTheDocument());
+  fireEvent.click(screen.getByRole('button',{name:/Save draft|Guardar borrador/}));
+  await screen.findByText(/Draft identity.*draft-b|Identidad del borrador.*draft-b/);
+  expect(screen.queryByText(/ONLY_A_HISTORY/)).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText(/Saved draft|Borrador guardado/),{target:{value:'draft-a'}});
+  fireEvent.click(screen.getByRole('button',{name:/Open saved draft|Abrir borrador/}));
+  await screen.findByText(/ONLY_A_HISTORY/);
+  fireEvent.click(screen.getByRole('button',{name:/Author amendment|Crear enmienda/}));
+  await waitFor(()=>expect(screen.queryByText(/ONLY_A_HISTORY/)).not.toBeInTheDocument());
+});

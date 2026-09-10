@@ -7,11 +7,14 @@ const api = vi.hoisted(() => ({
   getSourceAttempt: vi.fn(),
   listAttempts: vi.fn(),
   repeatAttempt: vi.fn(),
+  query: "",
 }));
 vi.mock("@/lib/assessments", () => api);
+vi.mock("next/navigation", () => ({useSearchParams: () => new URLSearchParams(api.query)}));
 beforeEach(() => {
   sessionStorage.clear();
   vi.clearAllMocks();
+  api.query = "";
 });
 it("selects the exact questionnaire, saves its identity, and separates a repeated draft", async () => {
   const original = {
@@ -108,4 +111,18 @@ it("selects the exact questionnaire, saves its identity, and separates a repeate
       "openmatb.workload-draft.openmatb-workload-v1.suite.block.q-repeat",
     ),
   ).toBeNull();
+});
+
+it("opens only the exact requested questionnaire and refuses another target", async () => {
+  const row = {id:'q-exact',occasion_id:'q',target_attempt_id:'task',ordinal:1,acquisition_state:'created'};
+  api.getSourceAttempt.mockResolvedValue(row); api.listAttempts.mockResolvedValue([row]);
+  api.query='questionnaire=q-exact';
+  const props={sessionId:'suite',blockInstanceId:'block',profile:'HIGH' as const,tokenAvailable:true,onSubmit:vi.fn(),onAccepted:vi.fn()};
+  const mounted=render(<FixedLocaleProvider locale="en"><AssignedWorkloadQuestionnaire {...props}/></FixedLocaleProvider>);
+  await screen.findByRole('button',{name:'Use 50 for Mental demand'});
+  expect(screen.getByLabelText('Questionnaire attempt for this task')).toHaveValue('q-exact');
+  api.query='questionnaire=other-task';
+  mounted.rerender(<FixedLocaleProvider locale="en"><AssignedWorkloadQuestionnaire {...props}/></FixedLocaleProvider>);
+  await screen.findByRole('alert');
+  expect(screen.queryByRole('button',{name:'Save ratings and continue'})).toBeNull();
 });

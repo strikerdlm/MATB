@@ -190,7 +190,7 @@ def test_required_preparation_fails_closed_and_repeat_limits_are_enforced(engine
         v=freeze(db,draft.id,dict(actor='Dr Test',reason='Required acknowledgement',sha256=draft.sha256,rehearsal_id=r.id));activate(db,v.id,actor='Dr Test',reason='Test');a=assign(db,v.id,'R01',1,'A',actor='Dr Test')
         task=create_attempt(db,json.loads(a.occasions_json)['pre'],AttemptIn(execution_purpose='study'))
         with pytest.raises(HTTPException) as exc: transition(db,task.id,'started')
-        assert exc.value.detail['code']=='study_preparation_engine_pending'
+        assert exc.value.detail['code']=='study_preparation_required'
         payload['study']['preparation_policy'][0]['practice']=[dict(id='guess',rationale='Unsupported metric test',metric='invented.pass',comparator='gte',threshold=7)]
         assert any('Unsupported practice observation' in i['message'] for i in validate(db,create_draft(db,payload).id))
 

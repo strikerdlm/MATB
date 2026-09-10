@@ -500,11 +500,11 @@ def test_legacy_questionnaire_receipt_keeps_unknown_without_rating_time(engine):
         native.artifact_status = 'saved'
         native.task_status = 'completed'
         db.add(questionnaire); db.add(native); db.commit()
-        assert attempt_view(db, questionnaire)['receipt'] == {'raw_saving': 'unknown', 'acquisition': 'unknown', 'ratings': 'unknown', 'processing': 'unknown'}
+        assert attempt_view(db, questionnaire)['receipt'] == {'raw_saving': 'unknown', 'acquisition': 'unknown', 'ratings': 'unknown', 'processing': 'unknown', 'preparation': 'unknown', 'plan_eligibility': 'pending'}
         native.ratings_json = '{"bedford":4}'
         db.add(native); db.commit()
         assert native.ratings_saved_at is None
-        assert attempt_view(db, questionnaire)['receipt'] == {'raw_saving': 'saved', 'acquisition': 'unknown', 'ratings': 'saved', 'processing': 'unknown'}
+        assert attempt_view(db, questionnaire)['receipt'] == {'raw_saving': 'saved', 'acquisition': 'unknown', 'ratings': 'saved', 'processing': 'unknown', 'preparation': 'unknown', 'plan_eligibility': 'pending'}
 
 
 def legacy_rating_source(engine):

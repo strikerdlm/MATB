@@ -6,7 +6,8 @@ import ScreenPage from '@/app/screen/page';
 import type {Attempt} from '@/lib/assessments';
 import * as api from '@/lib/api';
 import * as assessments from '@/lib/assessments';
-const controls = vi.hoisted(() => ({purpose: 'study' as 'study' | 'practice', select: null as null | ((a: Attempt | null) => void)}));
+const controls = vi.hoisted(() => ({query: '', purpose: 'study' as 'study' | 'practice', select: null as null | ((a: Attempt | null) => void)}));
+vi.mock('next/navigation', () => ({useSearchParams: () => new URLSearchParams(controls.query)}));
 vi.mock('@/lib/execution-purpose', () => ({useExecutionPurpose: () => controls.purpose}));
 vi.mock('@/lib/i18n', () => ({FixedLocaleProvider: ({children}: {children: React.ReactNode}) => <>{children}</>, useAppLocale: () => ({locale: 'en', copy: (_es: string, en: string) => en})}));
 vi.mock('@/lib/console-context', () => ({useConsole: () => ({catalog: []})}));
@@ -26,7 +27,7 @@ vi.mock('@/lib/api', () => ({
   listVisits: async (participant: string) => [{id: participant === 'P01' ? 7 : 8, visit_ordinal: 1, scheduled_day: 0}],
   getPvtSummary: async () => ({assessments: []}), postPvt: vi.fn(), postScreen: vi.fn(),
 }));
-beforeEach(() => {controls.purpose = 'study'; controls.select = null; vi.clearAllMocks();});
+beforeEach(() => {controls.query = ''; controls.purpose = 'study'; controls.select = null; vi.clearAllMocks();});
 afterEach(cleanup);
 
 async function choose(kind: 'pvt' | 'screen') {
@@ -85,4 +86,14 @@ it.each(['pvt', 'screen'] as const)('%s saves and retries with the admitted immu
     for (const [participant, , , purpose, attemptId] of vi.mocked(api.postScreen).mock.calls) expect([participant, purpose, attemptId]).toEqual(['P01', 'study', 'attempt-A']);
     expect(vi.mocked(api.postScreen).mock.calls[0]).toEqual(vi.mocked(api.postScreen).mock.calls[1]);
   }
+});
+
+it.each(['pvt','screen'] as const)('%s updates visible participant and clears old selection on same-path assignment navigation',async kind=>{
+  controls.query='attempt=A&participant=P01&visit=7';
+  const element=()=>kind==='pvt'?<PvtPage/>:<ScreenPage/>;
+  const view=render(element());await choose(kind);
+  controls.query='attempt=B&participant=P02&visit=8';view.rerender(element());
+  await waitFor(()=>expect(screen.getByLabelText(kind==='pvt'?'Participant':'Your participant code')).toHaveValue('P02'));
+  await waitFor(()=>expect(screen.getByLabelText('Visit')).toHaveValue(kind==='pvt'?'1':'8'));
+  expect(screen.getByRole('button',{name:kind==='pvt'?'Continue to KSS':'View instructions and begin'})).toBeDisabled();
 });

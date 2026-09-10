@@ -62,7 +62,7 @@ function SetupContent() {
   const [stationError, setStationError] = useState<string | null>(null);
 
   useEffect(() => {if(assigned.context) setParticipantId(assigned.context.participant_id);}, [assigned.context]);
-  const admission = useAssessmentAdmission(assigned.attempt && assigned.context ? {attemptId:assigned.attempt.id, participantId:assigned.context.participant_id, visitId:assigned.context.visit_id, purpose:'study', locale:assigned.context.locale} : null);
+  const admission = useAssessmentAdmission(assigned.attempt && assigned.context ? {attemptId:assigned.attempt.id, participantId:assigned.context.participant_id, visitId:assigned.context.visit_id, purpose:assigned.attempt.execution_purpose, locale:assigned.context.locale} : null);
   const frozen = assigned.context?.config as {preset?:{id:string;version:string};instructions?:{id:string;version:string};visual?:{id:string;version:string}} | undefined;
   const checkStation = useCallback(async () => {
     const revision = ++stationRequest.current;
@@ -147,7 +147,7 @@ function SetupContent() {
       const current = await checkStation();
       if (!current?.ready?.ready) throw new Error(copy("Resuelva los requisitos de la estación y vuelva a comprobar.", "Resolve the station requirements and check again."));
       if (!current.screens.some(row => row.index === displayIndex)) throw new Error(copy("La pantalla seleccionada se desconectó. Seleccione una pantalla conectada.", "The selected display disconnected. Select a connected display."));
-      const admitted = purpose === 'study' ? await admission.admit() : null;
+      const admitted = assigned.attempt ? await admission.admit() : null;
       if(purpose === 'study' && !admitted) throw new Error('Select an assigned assessment');
       const prepared = await createOpenMatbSession({ attempt_id: admitted?.attemptId, execution_purpose: purpose, participant_id: participantId, visit_ordinal: Number(visitOrdinal),
         preset_id: preset.preset_id, preset_version: preset.version, instruction_protocol_id: protocol.protocol_id,

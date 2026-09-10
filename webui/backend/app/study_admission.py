@@ -31,7 +31,7 @@ def for_occasion(db, occasion_id):
                 occasion_key=key, occasion_id=occasion_id, **spec, rules=study['rules'],
                 study_id=study['study_id'], assigned_visit=next(v for v in study['visits'] if v['ordinal'] == spec['visit_ordinal']),
                 schedule_sha256=__import__('hashlib').sha256(canonical(study['visits']).encode()).hexdigest(),
-                recovery_intervals=study['recovery_intervals'], preparation_policy=[p for p in study['preparation_policy'] if p['occasion_key'] in json.loads(assignment.occasions_json)], repeat_policy=study['repeat_policy'], interruption_policy=study['interruption_policy'], analysis_gate='not_implemented', preparation_gate='not_implemented', resource_gate='not_implemented')
+                recovery_intervals=study['recovery_intervals'], preparation_policy=[p for p in study['preparation_policy'] if p['occasion_key'] in json.loads(assignment.occasions_json)], repeat_policy=study['repeat_policy'], interruption_policy=study['interruption_policy'], analysis_gate='not_implemented', preparation_gate='measured', resource_gate='not_implemented')
     _required()
 
 
@@ -82,8 +82,8 @@ def select_prerequisites(db, attempt_id, selections):
 
 def require_prerequisites(db, attempt_id, context):
     from .experiment_catalog import require_study_pvt
-    from .study_policies import require_preparation
-    require_preparation(context)
+    from .study_preparation import require_preparation
+    require_preparation(db, context)
     selection = db.get(StudyAttemptSelection, attempt_id)
     selected = json.loads(selection.selections_json) if selection else {}
     if set(selected) != set(context['prerequisite_keys']): _required('Select the exact prerequisite attempts on the assignment page.')

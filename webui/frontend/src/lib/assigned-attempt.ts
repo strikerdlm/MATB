@@ -1,9 +1,41 @@
 "use client";
-import {useEffect,useState} from 'react';
-import {getAttempt,type Attempt} from './assessments';
-/** URL selects a server-owned identity; it never supplies trusted config. */
-export function useAssignedAttempt(){
- const [attempt,setAttempt]=useState<Attempt|null>(null); const [error,setError]=useState('');
- useEffect(()=>{let active=true;const id=new URLSearchParams(window.location.search).get('attempt');if(id)void getAttempt(id).then(a=>{if(active)setAttempt(a);}).catch(e=>{if(active)setError(String(e));});return()=>{active=false;};},[]);
- return {attempt,context:attempt?.assignment_context??null,error};
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { getAttempt, type Attempt } from "./assessments";
+/** Reactive exact identity; stale responses cannot select an earlier URL's attempt. */
+export function useAssignedAttempt() {
+  const params = useSearchParams();
+  const identity = params.get("attempt");
+  const [loaded, setLoaded] = useState<{
+    identity: string;
+    attempt: Attempt;
+  } | null>(null);
+  const [failure, setFailure] = useState<{
+    identity: string;
+    message: string;
+  } | null>(null);
+  useEffect(() => {
+    let active = true;
+    if (identity)
+      void getAttempt(identity)
+        .then((attempt) => {
+          if (attempt.id !== identity)
+            throw new Error("Attempt response identity mismatch");
+          if (active) setLoaded({ identity, attempt });
+        })
+        .catch((error) => {
+          if (active) setFailure({ identity, message: String(error) });
+        });
+    return () => {
+      active = false;
+    };
+  }, [identity]);
+  const attempt = loaded?.identity === identity ? loaded.attempt : null;
+  return {
+    identity,
+    attempt,
+    context:
+      attempt?.assignment_context ?? attempt?.preparation_context ?? null,
+    error: failure?.identity === identity ? failure.message : "",
+  };
 }

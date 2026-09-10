@@ -55,6 +55,7 @@ export const getOpenMatbVisualPreview = () => call<OpenMatbVisualPreview>("/open
 export const getOpenMatbSession = (id: string) => call<OpenMatbSession>(`/openmatb/sessions/${encodeURIComponent(id)}`);
 
 export function createOpenMatbSession(body: {
+  preparation_only?: boolean;
   attempt_id?: string;
   execution_purpose: "practice" | "study";
   participant_id: string; visit_ordinal: number; preset_id: string; preset_version: string;
@@ -64,7 +65,7 @@ export function createOpenMatbSession(body: {
   return call<PreparedOpenMatbSession>("/openmatb/sessions", json(body));
 }
 
-export function controllerAction(id: string, action: "start" | "pause" | "resume" | "repeat-practice", lease: string) {
+export function controllerAction(id: string, action: "start" | "pause" | "resume" | "repeat-practice" | "preflight", lease: string) {
   return call<OpenMatbSession>(`/openmatb/sessions/${encodeURIComponent(id)}/${action}`, json({}, { "X-OpenMATB-Controller": lease }));
 }
 

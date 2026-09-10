@@ -11,7 +11,7 @@ from app.models import Participant, Visit
 from app.assessment_models import AssessmentAttempt, AssessmentOccasion
 
 
-def assigned(db, instrument, config, *, participant='P01', locale='es-419', keys=None, modify=None, visit_ordinal=1):
+def assigned(db, instrument, config, *, participant='P01', locale='es-419', keys=None, modify=None, visit_ordinal=1, start=True):
     from app.study_registry import create_draft, template, rehearse, freeze, activate, assign
     from app.assessment_service import create_attempt, transition
     from app.assessment_schemas import AttemptIn
@@ -42,7 +42,9 @@ def assigned(db, instrument, config, *, participant='P01', locale='es-419', keys
     assignment=assign(db,version.id,participant,visit.id,'A',actor='Dr Test')
     result=[]
     for key in keys or ['task']:
-        a=create_attempt(db,json.loads(assignment.occasions_json)[key],AttemptIn(execution_purpose='study'));transition(db,a.id,'started');result.append(a.id)
+        a=create_attempt(db,json.loads(assignment.occasions_json)[key],AttemptIn(execution_purpose='study'))
+        if start: transition(db,a.id,'started')
+        result.append(a.id)
     db.commit()
     return assignment.id,result
 

@@ -1,7 +1,9 @@
 "use client";
+import {StudyReturn} from "@/components/study/StudyReturn";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import {useSearchParams} from "next/navigation";
 import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, MoonStar } from "lucide-react";
 
 import { AssessmentPicker } from "@/components/assessments/AssessmentPicker";
@@ -49,6 +51,11 @@ const KSS_ES = [
 type Stage = "select" | "kss" | "instructions" | "pvt" | "saving" | "save_error" | "complete";
 
 export default function PvtPage() {
+  const query = useSearchParams();
+  const requestedIdentity = query.get("attempt");
+  const requestedParticipant = query.get("participant") ?? "";
+  const requestedVisit = query.get("visit");
+  const lastIdentity = useRef(requestedIdentity);
   const preferred = useAppLocale();
   const purpose = useExecutionPurpose();
   const { catalog } = useConsole();
@@ -64,9 +71,18 @@ export default function PvtPage() {
   const [pendingRun, setPendingRun] = useState<PvtRunResult | null>(null);
   const [fastMode, setFastMode] = useState(false);
   const [selectedAttempt, setSelectedAttempt] = useState<Attempt | null>(null);
-  const locale = selectedAttempt?.assignment_context?.locale ?? preferred.locale;
+  const locale = selectedAttempt?.assignment_context?.locale ?? selectedAttempt?.preparation_context?.locale ?? preferred.locale;
   const copy = useCallback((es: string, en: string) => locale === 'en' ? en : es, [locale]);
   const [pvtStarted, setPvtStarted] = useState(false);
+
+  useEffect(() => {
+    if (lastIdentity.current === requestedIdentity || !['select','complete'].includes(stage)) return;
+    lastIdentity.current = requestedIdentity;
+    setStage('select'); setResult(null); setSelectedAttempt(null);
+    setParticipantId(requestedParticipant);
+    const requested = visits.find(row => row.id === Number(requestedVisit));
+    setVisitOrdinal(requested ? String(requested.visit_ordinal) : '');
+  }, [requestedIdentity, requestedParticipant, requestedVisit, stage, visits]);
 
   useEffect(() => {
     setParticipantId(new URLSearchParams(window.location.search).get('participant') ?? '');
@@ -278,6 +294,7 @@ export default function PvtPage() {
           <CardHeader>
             <CheckCircle2 className="mb-3 h-10 w-10 text-success" />
             <CardTitle>{copy("KSS y PVT completadas", "KSS and PVT complete")}</CardTitle>
+            <StudyReturn attempt={selectedAttempt}/>
             <CardDescription>{copy("Sus respuestas están guardadas. Revise el estado de calidad antes de continuar.", "Your responses are saved. Review the quality status before continuing.")}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-4">

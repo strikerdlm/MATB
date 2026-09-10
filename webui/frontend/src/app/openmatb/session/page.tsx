@@ -23,6 +23,9 @@ import { readParticipantWindowState, saveParticipantWindowState, type Participan
 
 const PROFILE_LABELS = { PRACTICE: ["Práctica", "Practice"], LOW: ["Bajo", "Low"], MEDIUM: ["Medio", "Medium"], HIGH: ["Alto", "High"] } as const;
 const LIFECYCLE_LABELS: Record<string, [string, string]> = {
+  PREFLIGHT_READY: ["Preparación nativa pendiente", "Native preflight pending"],
+  PREFLIGHT_STARTING: ["Resolviendo la preparación nativa", "Resolving native preparation"],
+  PREFLIGHT_HELD: ["Preparado sin iniciar adquisición", "Prepared; acquisition has not started"],
   INSTRUCTIONS: ["Instrucciones", "Instructions"], READY: ["Listo para abrir la tarea", "Ready to open task"], STARTING: ["Abriendo la ventana de tarea", "Task window opening"],
   RUNNING: ["Tarea en ejecución", "Task running"], PAUSED: ["Tarea en pausa", "Task paused"], AWAITING_SCALE: ["Esperando escalas", "Waiting for ratings"],
   BETWEEN_BLOCKS: ["Entre bloques", "Between blocks"], COMPLETE: ["Sesión completada", "Session completed"], ABORTED: ["Sesión abortada", "Session aborted"],
@@ -109,7 +112,7 @@ function Content() {
   const terminal = OPENMATB_TERMINAL.has(session.lifecycle);
   const nextBlock = session.block_order[session.current_block_index];
   const nextBlockLabel = nextBlock ? copy(PROFILE_LABELS[nextBlock][0], PROFILE_LABELS[nextBlock][1]) : "—";
-  const canStart = session.lifecycle === "READY" || session.lifecycle === "BETWEEN_BLOCKS";
+  const canStart = session.lifecycle === "READY" || session.lifecycle === "BETWEEN_BLOCKS" || session.lifecycle === "PREFLIGHT_HELD";
   const startBlocked = busy || !lease || session.evidence_processing || session.native_recovery_required;
   const flowSteps: Array<[ExperimentFlowStage, string]> = [["prepare", copy("Preparar", "Prepare")], ["instructions", copy("Instrucciones", "Instructions")], ["perform", copy("Realizar actividad", "Run activity")], ["complete", copy("Completar", "Complete")]];
   const currentStage = flowSteps.findIndex(([key]) => key === stage);

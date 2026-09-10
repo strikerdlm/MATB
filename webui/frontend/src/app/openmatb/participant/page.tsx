@@ -207,6 +207,7 @@ function ParticipantContent() {
           <Check className="mx-auto h-14 w-14 text-success" />
           <h2 className="mt-5 font-display text-4xl uppercase">{session.execution_purpose === "practice" ? copy("Práctica completada", "Practice completed") : copy("Sesión completada", "Session completed")}</h2>
           <p className="mt-3 text-muted-foreground">{copy("Los datos de la sesión quedaron guardados.", "Session data has been saved.")}</p>
+          {(session.study_assignment_id || session.preparation_assignment_id) && <Link className="block underline" href={`/study/participant?assignment=${session.study_assignment_id ?? session.preparation_assignment_id}`}>{copy("Continuar visita: siguiente acción", "Continue visit: next action")}</Link>}
           <Link href={withExecutionPurpose("/start", session.execution_purpose)} className="mt-4 inline-block underline">{copy("Volver a los experimentos", "Back to experiments")}</Link>
         </div>
       </section>}

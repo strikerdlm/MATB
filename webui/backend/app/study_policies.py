@@ -71,8 +71,17 @@ def policy_issues(study, analysis):
             if not occasion: continue
             for c in p.comprehension:
                 if c.metric!='comprehension.correct_fraction' or not 0<=c.threshold<=1: issue('study.preparation_policy','Comprehension supports correct_fraction with a researcher-entered threshold from 0 to 1.')
+            if occasion.instrument == 'openmatb' and p.placement == 'prescribed_later' and p.practice:
+                issue('study.preparation_policy', 'This adapter must complete native practice derivation before baseline. Move native practice before baseline; later native recognition/comprehension may remain prescribed. / Este adaptador debe evaluar la práctica nativa antes de la línea base. Mueva la práctica nativa antes de la línea base; puede conservar el reconocimiento/comprensión posterior prescrito.')
             for c in p.practice:
                 if c.metric not in PRACTICE_METRICS.get(occasion.instrument,set()): issue('study.preparation_policy',f'Unsupported practice observation metric for {occasion.instrument}: {c.metric}')
+            if occasion.instrument == 'openmatb' and p.placement == 'before_baseline' and any([p.demonstration_required,p.acknowledgement_required,p.comprehension,p.practice]):
+                prior_native = [other for other in study.preparation_policy if other.occasion_key != p.occasion_key
+                    and other.placement == 'before_baseline' and other.occasion_key in keys
+                    and keys[other.occasion_key].instrument == 'openmatb' and keys[other.occasion_key].visit_ordinal == occasion.visit_ordinal
+                    and keys[other.occasion_key].order < occasion.order
+                    and any([other.demonstration_required,other.acknowledgement_required,other.comprehension,other.practice])]
+                if prior_native: issue('study.preparation_policy','Only one native runtime can be held before baseline. Explicitly prescribe later preparation for subsequent native occasions with run-specific callsign recognition.')
             criteria=p.comprehension+p.practice
             if len({c.id for c in criteria})!=len(criteria): issue('study.preparation_policy','Criterion identities must be unique within the requirement.')
     if study.repeat_policy is None: issue('study.repeat_policy','Choose permitted repeat causes, a maximum attempt count and selection policy.')
@@ -88,11 +97,6 @@ def policy_issues(study, analysis):
     return issues
 
 
-def require_preparation(context):
-    from fastapi import HTTPException
-    # Task4 must replace this hook with measured evidence evaluation. No prose interpretation.
-    requirements=context['preparation_policy']
-    required=[p for p in requirements if (p['placement']=='before_baseline' or p['occasion_key']==context['occasion_key']) and
-              (p['demonstration_required'] or p['acknowledgement_required'] or p['comprehension'] or p['practice'])]
-    if required:
-        raise HTTPException(409,dict(code='study_preparation_engine_pending',message='This version requires measured preparation. Preparation evaluation is not implemented yet.',occasion_keys=[p['occasion_key'] for p in required],assignment_url='/study/assignments'))
+def require_preparation(db, context):
+    from .study_preparation import require_preparation as measured_preparation
+    return measured_preparation(db, context)

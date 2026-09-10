@@ -11,7 +11,7 @@ def native_context(db, suite):
     if suite.execution_purpose != 'study': return None
     attempt = source_attempt(db, 'openmatb_suite_session', suite.id)
     return resolve_assignment(db, attempt_id=attempt.id, instrument='openmatb', participant_id=suite.participant_id,
-                              visit_id=suite.visit_id, purpose='study', require_started=True)
+                              visit_id=suite.visit_id, purpose='study', require_started=not suite.lifecycle.startswith('PREFLIGHT_'))
 
 
 def storage_key(db, suite, profile):

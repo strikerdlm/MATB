@@ -89,7 +89,7 @@ def native_row(event: ScientificEventV3) -> dict[str, str]:
 
 def reconcile(artifacts: dict[str, bytes], *, execution: dict | None = None,
               derivation_version: str = DERIVATION_VERSION) -> dict[str, Any]:
-    if derivation_version not in {"classic-evidence-1.0", DERIVATION_VERSION}:
+    if derivation_version not in {"classic-evidence-1.0", "classic-evidence-1.1", DERIVATION_VERSION}:
         raise ValueError("unsupported derivation version")
     if derivation_version != "classic-evidence-1.0":
         from .provenance import collect_analysis_execution, validate_execution
@@ -119,8 +119,29 @@ def reconcile(artifacts: dict[str, bytes], *, execution: dict | None = None,
         issue("unverified_scenario_manifest")
     if capture.completion != "completed":
         issue("interrupted_or_failed_block", detail=capture.completion)
-    if events and (events[0].event_type != "block.started" or events[-1].event_type != "block.completed"):
-        issue("incomplete_block_lifecycle")
+    if derivation_version != DERIVATION_VERSION:
+        # Frozen historical derivations retain their original lifecycle rule and fingerprint.
+        if events and (events[0].event_type != "block.started" or events[-1].event_type != "block.completed"):
+            issue("incomplete_block_lifecycle")
+    else:
+        # Legacy direct starts retain their original boundary. Held runtimes explicitly
+        # distinguish bootstrap metadata from admission; task observations cannot precede it.
+        starts = [index for index, event in enumerate(events) if event.event_type == "block.started"]
+        prepared = bool(events and events[0].event_type == "block.prepared")
+        if (events and (len(starts) != 1 or events[-1].event_type != "block.completed"
+                       or (not prepared and starts[0] != 0))):
+            issue("incomplete_block_lifecycle")
+        if prepared:
+            before = events[1:starts[0]] if starts else events[1:]
+            for event in before:
+                payload = event.payload
+                bootstrap = (payload["record_type"] in {"parameter", "seed_value", "seed_output", "aoi", "state"}
+                             or (not payload["module"] and payload["record_type"] in {
+                                 "manual", "scenario_sha256", "scenario_manifest_evidence", "version",
+                                 "scenario_path", "visual_theme", "visual_profile_id", "visual_profile_version",
+                                 "visual_profile_schema_version", "visual_profile_sha256"}))
+                if event.scenario_time_ns != 0 or not bootstrap:
+                    issue("task_observation_before_admission", event.task, [str(event.event_id)])
     by_id: dict[str, ScientificEventV3] = {}
     task_events: dict[str, list[ScientificEventV3]] = defaultdict(list)
     last_time = -1

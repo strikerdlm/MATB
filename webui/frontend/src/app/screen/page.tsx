@@ -1,7 +1,9 @@
 "use client";
+import {StudyReturn} from "@/components/study/StudyReturn";
 import Link from "next/link";
+import {useSearchParams} from "next/navigation";
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { ExecutionPurposeBadge, ExperimentGuide } from "@/components/experiments/ExperimentGuide";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -17,6 +19,11 @@ import type { ScreenPayload } from "@/lib/screen";
 
 const TaskRunner = dynamic(() => import("@/components/screen/TaskRunner").then((module) => module.TaskRunner), { ssr: false });
 export default function ScreenPage() {
+  const query = useSearchParams();
+  const requestedIdentity = query.get('attempt');
+  const requestedParticipant = query.get('participant') ?? '';
+  const requestedVisit = query.get('visit');
+  const lastIdentity = useRef(requestedIdentity);
   const { copy, locale } = useAppLocale();
   const purpose = useExecutionPurpose();
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -30,6 +37,12 @@ export default function ScreenPage() {
   const [error, setError] = useState<string | null>(null);
   const [activityStarted, setActivityStarted] = useState(false);
   useEffect(() => {
+    if (lastIdentity.current === requestedIdentity || !['select','review'].includes(stage)) return;
+    lastIdentity.current=requestedIdentity;
+    setStage('select'); setResult(null); setSelectedAttempt(null);
+    setParticipant(requestedParticipant); setVisitId(Number(requestedVisit)||null);
+  },[requestedIdentity,requestedParticipant,requestedVisit,stage]);
+  useEffect(() => {
     let active = true;
     setParticipant(new URLSearchParams(window.location.search).get('participant') ?? '');
     void listParticipants().then((rows) => { if (active) setParticipants(rows); })
@@ -38,7 +51,7 @@ export default function ScreenPage() {
   }, []);
   useEffect(() => { let active = true; setVisits([]); setVisitId(null); if (participant) void listVisits(participant).then(rows => {if(active) {setVisits(rows); setVisitId(rows.find(row => row.id === Number(new URLSearchParams(window.location.search).get('visit')))?.id ?? rows[0]?.id ?? null);}}).catch(e => {if(active) setError(String(e));}); return () => {active = false;}; }, [participant]);
   const admission = useAssessmentAdmission(selectedAttempt && participant && visitId && purpose
-    ? {attemptId: selectedAttempt.id, participantId: participant, visitId, purpose, locale: selectedAttempt.assignment_context?.locale ?? locale} : null);
+    ? {attemptId: selectedAttempt.id, participantId: participant, visitId, purpose, locale: selectedAttempt.assignment_context?.locale ?? selectedAttempt.preparation_context?.locale ?? locale} : null);
   async function begin() {if (!selectedAttempt) return; try {if (await admission.admit()) setStage("run");} catch(e) {setError(String(e));}}
   useReportExperimentFlow("screen", flowStageForScreen(stage, activityStarted, Boolean(result)));
   async function save(raw: ScreenPayload) {
@@ -78,7 +91,7 @@ export default function ScreenPage() {
     </div>}
     {stage === "run" && <FixedLocaleProvider locale={admission.admitted?.locale ?? locale}><TaskRunner fast={admission.admitted?.purpose === "practice"} onStart={() => setActivityStarted(true)} onComplete={(raw) => void save(raw)} /></FixedLocaleProvider>}
     {stage === "saving" && <p role="status">{copy("Guardando respuestas…", "Saving responses…")}</p>}
-    {stage === "review" && result && <section className="space-y-4">
+    {stage === "review" && result && <section className="space-y-4"><StudyReturn attempt={selectedAttempt}/>
       <h2 className="text-2xl font-semibold">{copy("Respuestas guardadas", "Responses saved")}</h2>
       <p>{purpose === "practice" ? copy("Práctica completada. Estos resultados no se incorporan al estudio.", "Practice completed. These results are not included in the study.") : copy("Batería completada. Revise las medidas de cada tarea.", "Battery completed. Review the measures for each task.")}</p>
       <div className="grid gap-3 sm:grid-cols-2">{fields.map(([key, label, field, unit]) => {

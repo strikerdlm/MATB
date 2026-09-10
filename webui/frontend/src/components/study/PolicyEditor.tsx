@@ -166,14 +166,20 @@ export function PolicyEditor({
       </h2>
       <p>
         {copy(
-          "Cada elección debe ser explícita. Las reglas de preparación exigidas bloquean el inicio hasta disponer del motor de evidencia; el análisis aún no se ejecuta.",
-          "Every choice must be explicit. Required preparation blocks starting until the evidence engine is available; analysis execution is still pending.",
+          "Cada elección debe ser explícita. La preparación exigida requiere respuestas y observaciones medidas antes del inicio; el análisis aún no se ejecuta.",
+          "Every choice must be explicit. Required preparation needs responses and measured observations before starting; analysis execution is still pending.",
         )}
       </p>
       <p className="text-sm">
         {copy(
           "Excluir un intento elimina sus resultados de la selección analítica; conservar disponibles permite evaluarlos según la política de datos faltantes. Informar estado no impone un umbral de aprobación. Agrupar diferencias requiere una justificación y no declara equivalencia entre configuraciones.",
           "Excluding an attempt removes its outcomes from analysis selection; retaining available outcomes lets the missing-data policy evaluate them. Reporting status imposes no pass threshold. Pooling differences requires a rationale and does not establish configuration equivalence.",
+        )}
+      </p>
+      <p className="text-sm">
+        {copy(
+          "La práctica nativa debe evaluarse antes de la línea base. Este adaptador no admite derivar una nueva práctica nativa durante la visita medida: muévala antes de la línea base. El reconocimiento/comprensión nativo posterior y la práctica posterior en el navegador siguen disponibles cuando están prescritos.",
+          "Native practice must be graded before baseline. This adapter cannot derive new native practice during the measurement visit: move it before baseline. Prescribed later native recognition/comprehension and browser practice remain available.",
         )}
       </p>
       {s.occasions.map((o) => {

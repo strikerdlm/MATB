@@ -181,6 +181,14 @@ jobs:
           PW_TEST_MATCH: "**/evidence.spec.ts"
           PLAYWRIGHT_HTML_OUTPUT_DIR: "playwright-report/evidence"
         run: npm run test:e2e -- --output=test-results/evidence
+      - name: Repeatable study participant browser verification
+        working-directory: MATB relocation ñ/webui/frontend
+        env:
+          MATB_PYTHON: python
+          MATB_COMPONENTS: auto
+          PW_TEST_MATCH: "**/{study-registry,study-preparation,participant-journey,frontend-predictability}.spec.ts"
+          PLAYWRIGHT_HTML_OUTPUT_DIR: "playwright-report/repeatable-study"
+        run: npm run test:e2e -- --output=test-results/repeatable-study
       - name: Retain browser verification
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

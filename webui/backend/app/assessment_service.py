@@ -80,7 +80,7 @@ def create_attempt(db, occasion_id, body, *, repeat_of=None, reason=None):
     return row
 
 
-def transition(db, identity, state, category=None):
+def transition(db, identity, state, category=None, *, native_session_id=None):
     if state == 'started':
         from .study_registry import lock_registry
         lock_registry(db)
@@ -95,6 +95,17 @@ def transition(db, identity, state, category=None):
     allowed = {'started': {'created'}, 'finished': {'started'}, 'interrupted': {'created', 'started'}}
     if row.acquisition_state not in allowed[state]:
         raise HTTPException(409, {'code': 'invalid_attempt_transition', 'state': row.acquisition_state})
+    if state == 'started' and row.execution_purpose == 'study':
+        if context['instrument'] == 'openmatb':
+            from .study_preflight import require_held_launch
+            if native_session_id is None:
+                require_held_launch(context)
+            else:
+                from .assessment_adapters import source_attempt
+                if source_attempt(db, 'openmatb_suite_session', native_session_id).id != row.id:
+                    raise HTTPException(409, 'Native release must bind this exact attempt.')
+        from .study_preparation import freeze_preparation_admission
+        freeze_preparation_admission(db, row, context)
     row.acquisition_state = state
     if state == 'started':
         row.started_at = now()
@@ -111,6 +122,9 @@ def source_links(db, identity):
 
 
 def attempt_view(db, row):
+    from .study_preparation import practice_context
+    from .study_registry_models import StudyPreparationAdmission
+    admission = db.get(StudyPreparationAdmission, row.id)
     db.refresh(row)
     from .assessment_adapters import receipt_facets
     context = None
@@ -119,6 +133,8 @@ def attempt_view(db, row):
         try: context = for_occasion(db, row.occasion_id)
         except HTTPException: pass
     return {**row.model_dump(mode='json'), 'assignment_context': context, 'sources': [x.model_dump() for x in source_links(db, row.id)],
+        'preparation_admission': admission.model_dump(mode='json') if admission else None,
+        'preparation_context': practice_context(db, row.id) if row.execution_purpose == 'practice' else None,
         'receipt': receipt_facets(db, row)}
 
 
@@ -148,6 +164,10 @@ def prepare_result(db, identity, *, instrument, participant_id, visit_id, purpos
         raise HTTPException(422, 'attempt does not match acquisition context or declared purpose')
     from .study_admission import resolve_assignment
     context = resolve_assignment(db, attempt_id=identity, instrument=instrument, participant_id=participant_id, visit_id=visit_id, purpose=purpose, require_started=True)
+    from .study_preparation import practice_context
+    preparation = practice_context(db, identity, validate=True) if purpose == 'practice' else None
+    if preparation and payload.get('payload', payload).get('locale') != preparation['locale']:
+        raise HTTPException(422, 'Practice language differs from the frozen preparation.')
     if context:
         submitted = payload.get('payload', payload)
         if submitted.get('locale') != context['locale'] or submitted.get('fast_mode', False):

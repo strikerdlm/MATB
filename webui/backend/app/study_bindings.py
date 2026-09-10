@@ -13,7 +13,7 @@ _BROWSER_FILES = {
 
 
 def browser_binding(instrument):
-    paths = [*_BROWSER_FILES[instrument], 'webui/frontend/src/lib/i18n.tsx', 'webui/frontend/src/components/instructions/InstructionAudio.tsx', f'webui/backend/app/routers/{instrument}.py', f'matb_integration/{instrument}.py']
+    paths = [*_BROWSER_FILES[instrument], 'webui/backend/app/study_preparation.py', 'webui/backend/app/study_policies.py', 'webui/backend/app/routers/study_preparation.py', 'webui/frontend/src/components/study/StudyReturn.tsx', 'webui/frontend/src/components/study/StudyParticipant.tsx', 'webui/frontend/src/lib/assigned-attempt.ts', 'webui/frontend/src/lib/i18n.tsx', 'webui/frontend/src/components/instructions/InstructionAudio.tsx', f'webui/backend/app/routers/{instrument}.py', f'matb_integration/{instrument}.py']
     # Include all stimulus implementation and scoring files, preserving actual source bytes.
     files = {p for folder in [f'webui/frontend/src/components/{instrument}', f'matb_integration/{instrument}']
              for p in (_ROOT / folder).rglob('*') if p.is_file() and p.suffix in {'.py', '.ts', '.tsx'} and '.test.' not in p.name}
@@ -112,7 +112,7 @@ def implementation_binding(instrument):
     """Server-resolved installed implementation identity, included in the draft attestation hash."""
     if instrument in _BROWSER_FILES: return browser_binding(instrument)['sha256']
     roots = {
-        'openmatb': ['openmatb', 'matb_integration/scenario_builder.py', 'matb_integration/openmatb_visual_profiles.py', 'matb_integration/log_converter.py', 'matb_integration/metrics_schema.py', 'matb_integration/metrics_spec.json', 'webui/backend/app/openmatb_runtime.py', 'webui/backend/app/study_native.py'],
+        'openmatb': ['openmatb', 'matb_integration/evidence', 'webui/backend/app/study_policies.py', 'webui/backend/app/routers/study_preparation.py', 'matb_integration/scenario_builder.py', 'matb_integration/openmatb_visual_profiles.py', 'matb_integration/log_converter.py', 'matb_integration/metrics_schema.py', 'matb_integration/metrics_spec.json', 'webui/backend/app/openmatb_runtime.py', 'webui/backend/app/study_native.py', 'webui/backend/app/study_preparation.py', 'webui/backend/app/study_native_practice.py', 'webui/backend/app/study_preflight.py', 'webui/frontend/src/components/study/StudyParticipant.tsx'],
         'questionnaire': ['webui/frontend/src/components/openmatb/AssignedWorkloadQuestionnaire.tsx', 'webui/backend/app/study_native.py', 'webui/frontend/src/components/openmatb/WorkloadQuestionnaire.tsx', 'webui/frontend/src/lib/i18n.tsx', 'webui/backend/app/openmatb_runtime.py'],
         'liftoff': ['matb_integration/liftoff', 'webui/backend/app/liftoff_runtime.py', 'webui/backend/app/liftoff_schemas.py'],
         'suas': ['matb_integration/suas', 'webui/frontend/src/components/mission', 'webui/frontend/src/lib/simulation', 'webui/backend/app/simulation_runtime.py'],

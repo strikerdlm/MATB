@@ -3,7 +3,7 @@ import type { OpenMatbLifecycle } from "@/types/openmatb";
 
 export function openMatbStage(lifecycle?: OpenMatbLifecycle): ExperimentFlowStage | null {
   if (!lifecycle || ["ABORTED", "FAILED", "INTERRUPTED"].includes(lifecycle)) return null;
-  if (lifecycle === "INSTRUCTIONS" || lifecycle === "READY") return "instructions";
+  if (lifecycle === "INSTRUCTIONS" || lifecycle === "READY" || lifecycle.startsWith("PREFLIGHT_")) return "instructions";
   return lifecycle === "COMPLETE" ? "complete" : "perform";
 }
 

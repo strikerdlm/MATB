@@ -93,6 +93,7 @@ export interface Assignment {
   started: boolean;
 }
 export interface AssignmentDetail {
+  recovery_intervals?: {interval_key:string;anchor_attempt_id:string;started_at:string;ended_at:string|null}[];
   assignment: Assignment;
   current: boolean;
   started: boolean;
@@ -110,7 +111,7 @@ export interface AssignmentContext extends StudyOccasion {
   arm: string;
   occasion_id: string;
   rules: StudyPayload["study"]["rules"];
-  preparation_gate: "not_implemented";
+  preparation_gate: "measured";
   resource_gate: "not_implemented";
 }
 export async function studyCall<T>(

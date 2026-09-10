@@ -30,7 +30,14 @@ export function AssessmentPicker({participantId, visitId, instrument, purpose, o
     return () => {active = false;};
     // The callback is a React state setter; context changes invalidate the selection.
   }, [participantId, visitId, instrument, purpose, onSelect]);
-  useEffect(() => {if (assigned.attempt && assigned.context?.participant_id === participantId && assigned.context.visit_id === visitId && assigned.context.instrument === instrument && purpose === 'study') onSelect(assigned.attempt);}, [assigned.attempt, assigned.context, participantId, visitId, instrument, purpose, onSelect]);
+  useEffect(() => {
+    if (disabled) return;
+    if (assigned.attempt && assigned.context?.participant_id === participantId && assigned.context.visit_id === visitId && assigned.context.instrument === instrument && purpose === assigned.attempt.execution_purpose) {
+      setOccasionId(assigned.attempt.occasion_id);
+      setAttempts([assigned.attempt]);
+      onSelect(assigned.attempt);
+    } else if (assigned.identity) { setOccasionId(''); setAttempts([]); onSelect(null); }
+  }, [assigned.identity, assigned.attempt, assigned.context, participantId, visitId, instrument, purpose, onSelect, disabled]);
   async function run(action: () => Promise<void>) {setBusy(true); setError(''); try {await action();} catch(e) {setError(e instanceof Error ? e.message : String(e));} finally {setBusy(false);}}
   async function open(value: string) {setInterruptionCause(''); setOccasionId(value); onSelect(null); setRaw(null); const rows = value ? await listAttempts(value) : []; if (current()) setAttempts(rows);}
   return <fieldset disabled={disabled || busy} className="space-y-3 rounded border border-white/15 p-4">
@@ -67,6 +74,6 @@ export function AssessmentPicker({participantId, visitId, instrument, purpose, o
     </div>)}
     {attempts.length > 0 && <label className="block">{copy('Motivo de repetición', 'Repeat reason')}<input className="native-input block w-full" value={reason} onChange={e => setReason(e.target.value)} /></label>}
     {raw !== null && <details open><summary>{copy('Evidencia guardada', 'Saved evidence')}</summary><pre className="max-h-80 overflow-auto text-xs">{JSON.stringify(raw, null, 2)}</pre></details>}
-    {error && <p role="alert">{error}</p>}
+    {(error || assigned.error) && <p role="alert">{error || assigned.error}</p>}
   </fieldset>;
 }

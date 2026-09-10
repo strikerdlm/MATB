@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   getSourceAttempt,
@@ -18,6 +19,7 @@ export function AssignedWorkloadQuestionnaire(
   props: WorkloadQuestionnaireProps,
 ) {
   const { copy } = useAppLocale();
+  const requested = useSearchParams().get("questionnaire");
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [selected, setSelected] = useState("");
   const [reason, setReason] = useState("");
@@ -40,7 +42,20 @@ export function AssignedWorkloadQuestionnaire(
           ),
         )
         .then((rows) => {
-          if (active) setAttempts(rows);
+          if (active) {
+            setAttempts(rows);
+            if (requested) {
+              if (rows.some((row) => row.id === requested))
+                setSelected(requested);
+              else
+                setError(
+                  copy(
+                    "El cuestionario solicitado no pertenece a esta tarea exacta.",
+                    "The requested questionnaire does not belong to this exact task.",
+                  ),
+                );
+            }
+          }
         })
         .catch((e) => {
           if (active) setError(String(e));
@@ -48,7 +63,7 @@ export function AssignedWorkloadQuestionnaire(
     return () => {
       active = false;
     };
-  }, [props.blockInstanceId]);
+  }, [props.blockInstanceId, requested, copy]);
   const attempt = attempts.find((row) => row.id === selected);
   const pending =
     attempt && ["created", "started"].includes(attempt.acquisition_state);

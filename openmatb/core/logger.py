@@ -418,6 +418,7 @@ class Logger:
         component_version: str,
         scenario_manifest_evidence: dict[str, Any],
         source_dirty: bool | None = None,
+        preparation_hold: bool = False,
     ) -> None:
         """Attach immutable scenario and software provenance to future records."""
         if re.fullmatch(r"[0-9a-f]{64}", scenario_sha256) is None:
@@ -464,11 +465,18 @@ class Logger:
                 self.path, self.scientific_session_id, self._scientific_context,
                 json.loads(os.environ.get("MATB_EVIDENCE_IDENTITY", "{}")),
             )
-            self._evidence_writer.lifecycle("started", self.scenario_time, perf_counter_ns())
+            self._evidence_preparation_held = preparation_hold
+            self._evidence_writer.lifecycle("prepared" if preparation_hold else "started", self.scenario_time, perf_counter_ns())
         # Bind the legacy CSV session to the exact runtime scenario. This row is
         # required before a separately uploaded manifest can confer confirmatory
         # eligibility; filenames alone are not cryptographic provenance.
         self.log_manual_entry(scenario_sha256, key="scenario_sha256")
+
+    def admit_preflight(self) -> None:
+        """Record acquisition admission without altering the prepared source identity."""
+        if getattr(self, "_evidence_preparation_held", False):
+            self._evidence_writer.lifecycle("started", self.scenario_time, perf_counter_ns())
+            self._evidence_preparation_held = False
 
     def configure_evidence_tasks(self, tasks: list[str]) -> None:
         writer = getattr(self, "_evidence_writer", None)

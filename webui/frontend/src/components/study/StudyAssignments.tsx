@@ -268,6 +268,8 @@ export function StudyAssignments() {
           <h2 className="font-semibold">
             {detail.assignment.participant_id} · {detail.assignment.version_id}
           </h2>
+          <Link className="block underline" href={`/study/participant?assignment=${detail.assignment.id}`}>{copy('Preparación y siguiente acción del participante', 'Participant preparation and next action')}</Link>
+          <Link className="block underline" href={`/study/history?participant=${detail.assignment.participant_id}`}>{copy('Exposición y clasificación histórica', 'Exposure and historical classification')}</Link>
           {detail.version.study.occasions
             .filter((o) => detail.occasions[o.key])
             .sort((a, b) => a.order - b.order)

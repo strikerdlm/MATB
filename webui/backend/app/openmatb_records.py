@@ -23,8 +23,8 @@ class OpenMatbRecords:
         self.engine = engine
         self.artifact_root = artifact_root.resolve()
 
-    def begin(self, db: Session, suite: OpenMatbSuiteSession, profile: str) -> OpenMatbBlockAttempt:
-        attempt = OpenMatbBlockAttempt(id=str(uuid4()), session_id=suite.id,
+    def begin(self, db: Session, suite: OpenMatbSuiteSession, profile: str, *, block_instance_id: str | None = None) -> OpenMatbBlockAttempt:
+        attempt = OpenMatbBlockAttempt(id=block_instance_id or str(uuid4()), session_id=suite.id,
             block_index=suite.current_block_index, profile=profile,
             legacy_import_status="not_required" if profile == "PRACTICE" or suite.execution_purpose == "practice" else "pending")
         suite.active_block_instance_id = attempt.id

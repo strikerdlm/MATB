@@ -171,6 +171,22 @@ def receipt_facets(db, attempt):
             facets['acquisition'] = row['lifecycle']
         elif link.source_table == 'liftoff_session':
             facets['acquisition'] = row['status']
+    facets.update(preparation='unknown', plan_eligibility='pending')
+    if attempt.execution_purpose == 'study':
+        from .study_admission import for_occasion
+        from .study_preparation import required_preparation
+        from fastapi import HTTPException
+        try:
+            requirements = required_preparation(db, for_occasion(db, attempt.occasion_id))
+            facets['preparation'] = ('prepared' if requirements else 'not_required') if all(r['state'] == 'prepared' for r in requirements) else 'required'
+        except HTTPException:
+            pass
+    from .study_registry_models import StudyPreparationAdmission
+    admission = db.get(StudyPreparationAdmission, attempt.id)
+    if admission:
+        facets['preparation'] = 'prepared' if json.loads(admission.snapshot_json)['requirements'] else 'not_required'
+    elif attempt.acquisition_state != 'created':
+        facets['preparation'] = 'unknown'
     return facets
 
 

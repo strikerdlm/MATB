@@ -127,3 +127,77 @@ class StudyNativeRating(SQLModel, table=True):
     payload_json: str
     payload_sha256: str
     created_at: datetime = Field(default_factory=now)
+
+
+class StudyPreparation(SQLModel, table=True):
+    """Immutable presentation and researcher criterion snapshot, before measurement."""
+    __tablename__ = 'study_preparation'
+    id: str = Field(default_factory=uid, primary_key=True)
+    assignment_id: str = Field(foreign_key='study_assignment.id', index=True)
+    participant_id: str = Field(foreign_key='participant.id', index=True)
+    version_id: str = Field(foreign_key='study_version.id')
+    occasion_key: str
+    instrument: str
+    identity_sha256: str = Field(index=True)
+    config_sha256: str
+    presentation_json: str
+    requirement_json: str
+    created_at: datetime = Field(default_factory=now)
+
+
+class StudyPreparationEvent(SQLModel, table=True):
+    __tablename__ = 'study_preparation_event'
+    id: str = Field(default_factory=uid, primary_key=True)
+    preparation_id: str = Field(foreign_key='study_preparation.id', index=True)
+    stage: str
+    payload_json: str
+    passed: bool | None = None
+    attempt_id: str | None = Field(default=None, foreign_key='assessment_attempt.id', index=True)
+    duration_seconds: float | None = None
+    created_at: datetime = Field(default_factory=now)
+
+
+class StudyPreparationPractice(SQLModel, table=True):
+    """Bind an actual practice attempt before acquisition; retrospective guesses cannot qualify."""
+    __tablename__ = 'study_preparation_practice'
+    attempt_id: str = Field(primary_key=True, foreign_key='assessment_attempt.id')
+    preparation_id: str = Field(foreign_key='study_preparation.id')
+    created_at: datetime = Field(default_factory=now)
+
+
+
+class StudyPreparationAdmission(SQLModel, table=True):
+    """Exact preparation decision at measurement admission; never inferred retrospectively."""
+    __tablename__ = 'study_preparation_admission'
+    attempt_id: str = Field(primary_key=True, foreign_key='assessment_attempt.id')
+    assignment_id: str = Field(foreign_key='study_assignment.id', index=True)
+    snapshot_json: str
+    snapshot_sha256: str
+    created_at: datetime = Field(default_factory=now)
+
+
+from sqlalchemy import DDL, event
+for _model in (StudyPreparation, StudyPreparationEvent, StudyPreparationPractice, StudyPreparationAdmission):
+    for _operation in ('UPDATE', 'DELETE'):
+        event.listen(_model.__table__, 'after_create', DDL(
+            f'CREATE TRIGGER IF NOT EXISTS {_model.__tablename__}_no_{_operation.lower()} '
+            f'BEFORE {_operation} ON {_model.__tablename__} BEGIN '
+            "SELECT RAISE(ABORT, 'preparation evidence is immutable'); END"))
+
+
+class StudyNativePreflight(SQLModel, table=True):
+    """Exact process metadata, never an acquisition start timestamp."""
+    __tablename__ = 'study_native_preflight'
+    session_id: str = Field(primary_key=True)
+    attempt_id: str = Field(foreign_key='assessment_attempt.id', index=True)
+    block_instance_id: str
+    snapshot_json: str
+    session_csv: str
+    created_at: datetime = Field(default_factory=now)
+
+
+for _operation in ('UPDATE', 'DELETE'):
+    event.listen(StudyNativePreflight.__table__, 'after_create', DDL(
+        f'CREATE TRIGGER IF NOT EXISTS study_native_preflight_no_{_operation.lower()} '
+        f'BEFORE {_operation} ON study_native_preflight BEGIN '
+        "SELECT RAISE(ABORT, 'preflight snapshot is immutable'); END"))
