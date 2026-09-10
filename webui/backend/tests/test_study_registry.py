@@ -250,3 +250,22 @@ def test_browser_fingerprint_tracks_shared_copy_and_server_scoring(tmp_path,monk
     second=study_bindings.browser_binding('pvt')['sha256']
     scoring.write_bytes(b'scoring B')
     assert len({first,second,study_bindings.browser_binding('pvt')['sha256']})==3
+
+
+def test_validation_history_retains_exact_hash_results_after_edit(client, engine):
+    from app.study_registry import template
+    draft = client.post('/study/drafts', json=template('pre-post-recovery')).json()
+    first = client.post(f"/study/drafts/{draft['id']}/validate").json()
+    assert first['draft_sha256'] == draft['sha256']
+    assert first['issues']
+    payload = json.loads(draft['payload_json']); payload['study']['title'] = 'Edited later'
+    changed = client.put(f"/study/drafts/{draft['id']}", json=payload).json()
+    second = client.post(f"/study/drafts/{draft['id']}/validate").json()
+    history = client.get(f"/study/drafts/{draft['id']}/history").json()
+    assert [r['draft_sha256'] for r in history['validations']] == [draft['sha256'], changed['sha256']]
+    assert first['id'] != second['id']
+    from app.study_registry import install_registry_guards
+    install_registry_guards(engine)
+    with engine.begin() as conn:
+        with pytest.raises(Exception, match='immutable'):
+            conn.execute(text('DELETE FROM study_validation'))

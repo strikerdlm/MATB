@@ -29,6 +29,8 @@ def for_occasion(db, occasion_id):
                 study_sha256=version.study_sha256, analysis_sha256=version.analysis_sha256, implementation_sha256=study['implementation_sha256'][spec['instrument']],
                 participant_id=assignment.participant_id, visit_id=assignment.visit_id, arm=assignment.arm,
                 occasion_key=key, occasion_id=occasion_id, **spec, rules=study['rules'],
+                study_id=study['study_id'], assigned_visit=next(v for v in study['visits'] if v['ordinal'] == spec['visit_ordinal']),
+                schedule_sha256=__import__('hashlib').sha256(canonical(study['visits']).encode()).hexdigest(),
                 recovery_intervals=study['recovery_intervals'], preparation_policy=[p for p in study['preparation_policy'] if p['occasion_key'] in json.loads(assignment.occasions_json)], repeat_policy=study['repeat_policy'], interruption_policy=study['interruption_policy'], analysis_gate='not_implemented', preparation_gate='not_implemented', resource_gate='not_implemented')
     _required()
 

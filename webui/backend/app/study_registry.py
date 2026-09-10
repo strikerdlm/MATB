@@ -113,6 +113,13 @@ def validate(db, identity):
             target = keys.get(occasion.target_key)
             if target is None or target.instrument != 'openmatb':
                 issue(path + '.target_key', 'The implemented workload questionnaire requires an OpenMATB target.')
+            elif (any(o.visit_ordinal == target.visit_ordinal and target.order < o.order < occasion.order
+                      and not (o.instrument == 'physiology' and o.accompanying_key == target.key
+                               and o.collection_group == target.collection_group and o.collection_group)
+                      for o in study.occasions)
+                  or set(occasion.prerequisite_keys) - {target.key}
+                  or any(r.before_key == occasion.key for r in study.recovery_intervals)):
+                issue(path, 'Native ratings must be immediate after their target (declared H10 accompaniment allowed); only the exact target may be a questionnaire prerequisite. Delayed questionnaires are unsupported.')
         if occasion.accompanying_key:
             target = keys.get(occasion.accompanying_key)
             if (occasion.instrument != 'physiology' or target is None or target.instrument not in {'openmatb','liftoff','suas'}
@@ -325,6 +332,6 @@ def install_registry_guards(engine):
         conn.execute(text("CREATE TRIGGER IF NOT EXISTS frozen_study_draft_delete BEFORE DELETE ON study_draft WHEN OLD.frozen_version_id IS NOT NULL BEGIN SELECT RAISE(ABORT, 'immutable frozen draft'); END"))
         conn.execute(text("CREATE TRIGGER IF NOT EXISTS immutable_recovery_identity BEFORE UPDATE ON study_recovery_interval WHEN OLD.ended_at IS NOT NULL OR NEW.assignment_id != OLD.assignment_id OR NEW.interval_key != OLD.interval_key OR NEW.anchor_attempt_id != OLD.anchor_attempt_id OR NEW.started_at != OLD.started_at OR NEW.actor != OLD.actor OR NEW.reason != OLD.reason BEGIN SELECT RAISE(ABORT, 'immutable recovery record'); END"))
         conn.execute(text("CREATE TRIGGER IF NOT EXISTS immutable_recovery_delete BEFORE DELETE ON study_recovery_interval BEGIN SELECT RAISE(ABORT, 'immutable recovery record'); END"))
-        for table in ('study_version', 'study_rehearsal', 'study_activation', 'study_assignment', 'study_amendment', 'study_attempt_selection'):
+        for table in ('study_version', 'study_rehearsal', 'study_validation', 'study_native_rating', 'study_activation', 'study_assignment', 'study_amendment', 'study_attempt_selection'):
             for operation in ('UPDATE', 'DELETE'):
                 conn.execute(text(f'CREATE TRIGGER IF NOT EXISTS immutable_{table}_{operation.lower()} BEFORE {operation} ON {table} BEGIN SELECT RAISE(ABORT, \'immutable study record\'); END'))

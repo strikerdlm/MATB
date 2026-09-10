@@ -12,13 +12,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getStudyContext } from "@/lib/api";
 import {useAssignedAttempt} from '@/lib/assigned-attempt';
 import {useAssessmentAdmission} from '@/lib/assessment-admission';
 import type {LiftoffConfiguration} from '@/types/liftoff';
-import {listVisits} from '@/lib/api';
 import { createLiftoffSession, getLiftoffReadiness } from "@/lib/liftoff/api";
-import type { Participant, StudyParticipantContext, StudyProtocol } from "@/types";
+import type { Participant, StudyProtocol } from "@/types";
 import { useAppLocale } from "@/lib/i18n";
 import { useReportExperimentFlow } from "@/lib/experiment-flow";
 
@@ -45,8 +43,6 @@ export function LiftoffSetupForm({
   const [polarConfirmed, setPolarConfirmed] = useState(true);
   const [performanceReason, setPerformanceReason] = useState("polar_unavailable");
   const [readiness, setReadiness] = useState<{ ready: boolean; valid_packets: number } | null>(null);
-  const [context, setContext] = useState<StudyParticipantContext | null>(null);
-  const [contextLoading, setContextLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,20 +52,17 @@ export function LiftoffSetupForm({
       .catch((reason: unknown) => setError(experimentErrorMessage(reason, copyRef.current)));
   }, []);
 
-  useEffect(() => {
-    let active = true;
-    setContext(null);
-    if (!participantId) return () => { active = false; };
-    setContextLoading(true);
-    void getStudyContext(participantId)
-      .then((value) => { if (active) setContext(value); })
-      .catch((reason: unknown) => { if (active) setError(experimentErrorMessage(reason, copyRef.current)); })
-      .finally(() => { if (active) setContextLoading(false); });
-    return () => { active = false; };
-  }, [participantId]);
-
   const admission=useAssessmentAdmission(assigned.attempt&&assigned.context?{attemptId:assigned.attempt.id,participantId,visitId:assigned.context.visit_id,purpose:'study',locale}:null);
-  useEffect(()=>{let active=true;const bound=assigned.context;if(bound){setParticipantId(bound.participant_id);const config=bound.config.configuration as LiftoffConfiguration;setBuild(config.liftoff_build);setControllerFirmware(config.controller_firmware);void listVisits(bound.participant_id).then(rows=>{if(active)setVisitOrdinal(String(rows.find(v=>v.id===bound.visit_id)?.visit_ordinal??''));});}return()=>{active=false;};},[assigned.context]);
+  useEffect(() => {
+    const bound = assigned.context;
+    if (!bound) return;
+    setParticipantId(bound.participant_id);
+    const config = bound.config.configuration as LiftoffConfiguration;
+    setBuild(config.liftoff_build);
+    setControllerFirmware(config.controller_firmware);
+    setVisitOrdinal(String(bound.assigned_visit.ordinal));
+  }, [assigned.context]);
+  const visits = assigned.context ? [assigned.context.assigned_visit] : protocol.visits;
   async function prepare(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!purpose || !participantId || !visitOrdinal || !readiness?.ready) return;
@@ -79,7 +72,6 @@ export function LiftoffSetupForm({
       const ready = await getLiftoffReadiness();
       setReadiness(ready);
       if (!ready.ready) throw new Error(copy("No se reciben datos de Liftoff. Abra el simulador y vuelva a comprobar.", "No Liftoff data is arriving. Open the simulator and check again."));
-      if (purpose === "study" && !context) throw new Error(copy("Solicite al investigador que asigne su protocolo antes de iniciar.", "Ask the researcher to assign your protocol before starting."));
       const admitted=purpose==='study'?await admission.admit():null;
       if(purpose==='study'&&!admitted)throw new Error('Select an assigned assessment at /study/assignments');
       const session = await createLiftoffSession({ attempt_id:admitted?.attemptId,
@@ -139,7 +131,7 @@ export function LiftoffSetupForm({
             <Label htmlFor="liftoff-visit">{copy("Visita", "Visit")}</Label>
             <select id="liftoff-visit" aria-label={copy("Visita", "Visit")} className="native-select w-full" value={visitOrdinal} disabled={busy||!!assigned.context} onChange={(event) => setVisitOrdinal(event.target.value)}>
               <option value="">{copy("Seleccionar…", "Select…")}</option>
-              {protocol.visits.map((visit) => <option key={visit.ordinal} value={visit.ordinal}>{visit.code} · {copy("día", "day")} {visit.scheduled_day}</option>)}
+              {visits.map((visit) => <option key={visit.ordinal} value={visit.ordinal}>{visit.code} · {copy("día", "day")} {visit.scheduled_day}</option>)}
             </select>
           </div>
           <div className="space-y-2">
@@ -150,14 +142,13 @@ export function LiftoffSetupForm({
             <Label htmlFor="controller-firmware">{copy("Firmware del controlador", "Controller firmware")}</Label>
             <Input id="controller-firmware" value={controllerFirmware} disabled={busy||!!assigned.context} onChange={(event) => setControllerFirmware(event.target.value)} />
           </div>
-          {purpose === "study" && !context && participantId && !contextLoading && <p role="status" className="text-sm text-warning sm:col-span-2">{copy("Falta su protocolo asignado. El investigador debe registrar el contexto del estudio en Participantes.", "Your assigned protocol is missing. The researcher must register the study context in Participants.")}</p>}
           <label className="flex items-center gap-3 border border-white/10 p-3 text-sm sm:col-span-2">
             <input type="checkbox" checked={polarConfirmed} onChange={(event) => setPolarConfirmed(event.target.checked)} />
             {copy("La grabación del Polar H10 está activa", "Polar H10 recording is running")}
           </label>
           {!polarConfirmed ? <div className="space-y-2 sm:col-span-2"><Label htmlFor="performance-reason">{copy("Razón para registrar solo desempeño", "Performance-only reason")}</Label><Input id="performance-reason" value={performanceReason} onChange={(event) => setPerformanceReason(event.target.value)} /></div> : null}
           {error ? <p role="alert" className="text-sm text-danger sm:col-span-2">{error}</p> : null}
-          <Button className="sm:col-span-2" disabled={!purpose || busy || contextLoading || !participantId || !visitOrdinal || !readiness?.ready || !build || !controllerFirmware}>
+          <Button className="sm:col-span-2" disabled={!purpose || busy || !participantId || !visitOrdinal || !readiness?.ready || !build || !controllerFirmware}>
             {busy ? copy("Preparando…", "Preparing…") : copy("Preparar sesión de Liftoff", "Prepare Liftoff session")}
           </Button>
         </CardContent>

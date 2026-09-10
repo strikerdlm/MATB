@@ -185,6 +185,7 @@ export interface OpenMatbVisualPreview {
 }
 
 export interface OpenMatbSession {
+  study_assignment_id?: string | null;
   purpose_provenance_id?: string | null;
   execution_purpose: "practice" | "study";
   locale: "es-419" | "en";
@@ -226,6 +227,7 @@ export interface PreparedOpenMatbSession {
 }
 
 export interface WorkloadScaleSubmission {
+  questionnaire_attempt_id?: string;
   block_instance_id?: string; // Required for sessions with durable block identities.
   nasa_tlx: Record<"mental_demand" | "physical_demand" | "temporal_demand" | "performance" | "effort" | "frustration", number>;
   bedford: number;

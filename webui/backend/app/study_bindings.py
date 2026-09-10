@@ -112,8 +112,8 @@ def implementation_binding(instrument):
     """Server-resolved installed implementation identity, included in the draft attestation hash."""
     if instrument in _BROWSER_FILES: return browser_binding(instrument)['sha256']
     roots = {
-        'openmatb': ['openmatb', 'matb_integration/scenario_builder.py', 'matb_integration/openmatb_visual_profiles.py', 'matb_integration/log_converter.py', 'matb_integration/metrics_schema.py', 'matb_integration/metrics_spec.json', 'webui/backend/app/openmatb_runtime.py'],
-        'questionnaire': ['webui/frontend/src/components/openmatb/WorkloadQuestionnaire.tsx', 'webui/frontend/src/lib/i18n.tsx', 'webui/backend/app/openmatb_runtime.py'],
+        'openmatb': ['openmatb', 'matb_integration/scenario_builder.py', 'matb_integration/openmatb_visual_profiles.py', 'matb_integration/log_converter.py', 'matb_integration/metrics_schema.py', 'matb_integration/metrics_spec.json', 'webui/backend/app/openmatb_runtime.py', 'webui/backend/app/study_native.py'],
+        'questionnaire': ['webui/frontend/src/components/openmatb/AssignedWorkloadQuestionnaire.tsx', 'webui/backend/app/study_native.py', 'webui/frontend/src/components/openmatb/WorkloadQuestionnaire.tsx', 'webui/frontend/src/lib/i18n.tsx', 'webui/backend/app/openmatb_runtime.py'],
         'liftoff': ['matb_integration/liftoff', 'webui/backend/app/liftoff_runtime.py', 'webui/backend/app/liftoff_schemas.py'],
         'suas': ['matb_integration/suas', 'webui/frontend/src/components/mission', 'webui/frontend/src/lib/simulation', 'webui/backend/app/simulation_runtime.py'],
         'physiology': ['matb_integration/physiology', 'webui/backend/app/physiology_runtime.py', 'webui/backend/app/physiology_schemas.py'],

@@ -16,9 +16,11 @@ export const listOccasions = (participant: string, instrument: Instrument) => ca
 export const createOccasion = (body: OccasionInput) => call<Occasion>('/occasions', body);
 export const listAttempts = (occasion: string) => call<Attempt[]>(`/occasions/${id(occasion)}/attempts`);
 export const createAttempt = (occasion: string, purpose: 'study' | 'practice', target_attempt_id?: string) => call<Attempt>(`/occasions/${id(occasion)}/attempts`, {execution_purpose: purpose, ...(target_attempt_id ? {target_attempt_id} : {})});
-export const repeatAttempt = (attempt: string, purpose: 'study' | 'practice', reason: string) => call<Attempt>(`/attempts/${id(attempt)}/repeat`, {execution_purpose: purpose, reason});
+export const repeatAttempt = (attempt: string, purpose: 'study' | 'practice', reason: string, target_attempt_id?: string) => call<Attempt>(`/attempts/${id(attempt)}/repeat`, {execution_purpose: purpose, reason, ...(target_attempt_id ? {target_attempt_id} : {})});
 export const startAttempt = (attempt: string) => call<Attempt>(`/attempts/${id(attempt)}/start`, undefined, 'POST');
 export const interruptAttempt = (attempt: string, category: InterruptionCategory) => call<Attempt>(`/attempts/${id(attempt)}/interrupt`, {category});
 export const getAttemptRaw = (attempt: string) => call<{attempt: Attempt; record: Record<string, unknown> | null}>(`/attempts/${id(attempt)}/raw`);
 
 export const getAttempt = (attempt: string) => call<Attempt>(`/attempts/${id(attempt)}`);
+
+export const getSourceAttempt = (table: string, identity: string, role = "acquisition") => call<Attempt>(`/sources/${id(table)}/${id(identity)}?role=${id(role)}`);

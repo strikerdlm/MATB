@@ -368,6 +368,7 @@ class PreparedOpenMatbSession(BaseModel):
 
 
 class OpenMatbSessionView(BaseModel):
+    study_assignment_id: str | None = None
     purpose_provenance_id: str | None = None
     model_config = ConfigDict(extra="forbid")
     execution_purpose: Literal["practice", "study"] = "study"
@@ -413,6 +414,7 @@ class AbortRequest(BaseModel):
 
 
 class WorkloadScaleRequest(BaseModel):
+    questionnaire_attempt_id: str | None = None
     model_config = ConfigDict(extra="forbid")
     # Optional only for historical sessions created before attempt binding.
     block_instance_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")

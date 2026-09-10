@@ -58,6 +58,7 @@ type TlxKey = WorkloadScaleSubmission["nasa_tlx"] extends Record<infer Key, numb
 type TlxDraft = Partial<Record<TlxKey, number>>;
 
 interface WorkloadDraft {
+  questionnaire_attempt_id?: string;
   instrument_version: typeof INSTRUMENT_VERSION;
   session_id: string;
   block_instance_id: string;
@@ -77,26 +78,28 @@ interface BoundDraftState {
 export interface WorkloadQuestionnaireProps {
   sessionId: string;
   blockInstanceId: string | null;
+  questionnaireAttemptId?: string;
   profile: Exclude<OpenMatbProfile, "PRACTICE">;
   tokenAvailable: boolean;
   onSubmit: (submission: WorkloadScaleSubmission) => Promise<OpenMatbSession>;
   onAccepted: (session: OpenMatbSession, outcome: { draftClearFailed: boolean }) => void;
 }
 
-export function workloadDraftKey(sessionId: string, blockInstanceId: string): string {
-  return `openmatb.workload-draft.${INSTRUMENT_VERSION}.${sessionId}.${blockInstanceId}`;
+export function workloadDraftKey(sessionId: string, blockInstanceId: string, questionnaireAttemptId?: string): string {
+  return `openmatb.workload-draft.${INSTRUMENT_VERSION}.${sessionId}.${blockInstanceId}${questionnaireAttemptId ? `.${questionnaireAttemptId}` : ""}`;
 }
 
 function isScaleValue(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 100 && value % 5 === 0;
 }
 
-function parseDraft(raw: string, sessionId: string, blockInstanceId: string): WorkloadDraft | null {
+function parseDraft(raw: string, sessionId: string, blockInstanceId: string, questionnaireAttemptId?: string): WorkloadDraft | null {
   const value: unknown = JSON.parse(raw);
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const candidate = value as Partial<WorkloadDraft>;
   if (
-    candidate.instrument_version !== INSTRUMENT_VERSION
+    candidate.questionnaire_attempt_id !== questionnaireAttemptId
+    || candidate.instrument_version !== INSTRUMENT_VERSION
     || candidate.session_id !== sessionId
     || candidate.block_instance_id !== blockInstanceId
     || !candidate.nasa_tlx
@@ -110,13 +113,14 @@ function parseDraft(raw: string, sessionId: string, blockInstanceId: string): Wo
   return candidate as WorkloadDraft;
 }
 
-function confirmsSavedBlock(session: OpenMatbSession, _profile: OpenMatbProfile, blockInstanceId: string): boolean {
-  return Object.values(session.scores).some(score => score.block_instance_id === blockInstanceId);
+function confirmsSavedBlock(session: OpenMatbSession, _profile: OpenMatbProfile, blockInstanceId: string, questionnaireAttemptId?: string): boolean {
+  return Object.values(session.scores).some(score => score.block_instance_id === blockInstanceId && (!questionnaireAttemptId || score.questionnaire_attempt_id === questionnaireAttemptId));
 }
 
 export function WorkloadQuestionnaire({
   sessionId,
   blockInstanceId,
+  questionnaireAttemptId,
   profile,
   tokenAvailable,
   onSubmit,
@@ -125,7 +129,7 @@ export function WorkloadQuestionnaire({
   const { copy, locale } = useAppLocale();
   const tlxScales = locale === "en" ? TLX_EN : TLX_ES;
   const bedfordChoices = locale === "en" ? BEDFORD_EN : BEDFORD_ES;
-  const draftIdentity = blockInstanceId ? workloadDraftKey(sessionId, blockInstanceId) : null;
+  const draftIdentity = blockInstanceId ? workloadDraftKey(sessionId, blockInstanceId, questionnaireAttemptId) : null;
   const [draftState, setDraftState] = useState<BoundDraftState>({ identity: null, ready: false, tlx: {}, bedford: null });
   const [draftNotice, setDraftNotice] = useState<DraftNotice | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -148,7 +152,7 @@ export function WorkloadQuestionnaire({
       if (raw) {
         let draft: WorkloadDraft | null = null;
         try {
-          draft = parseDraft(raw, sessionId, blockInstanceId);
+          draft = parseDraft(raw, sessionId, blockInstanceId, questionnaireAttemptId);
         } catch {
           draft = null;
         }
@@ -166,11 +170,12 @@ export function WorkloadQuestionnaire({
     } finally {
       setDraftState({ identity: draftIdentity, ready: true, tlx: nextTlx, bedford: nextBedford });
     }
-  }, [blockInstanceId, draftIdentity, sessionId]);
+  }, [blockInstanceId, draftIdentity, sessionId, questionnaireAttemptId]);
 
   useEffect(() => {
     if (!blockInstanceId || !draftIdentity || !draftState.ready || draftState.identity !== draftIdentity || (Object.keys(draftState.tlx).length === 0 && draftState.bedford === null)) return;
     const draft: WorkloadDraft = {
+      ...(questionnaireAttemptId ? {questionnaire_attempt_id: questionnaireAttemptId} : {}),
       instrument_version: INSTRUMENT_VERSION,
       session_id: sessionId,
       block_instance_id: blockInstanceId,
@@ -182,7 +187,7 @@ export function WorkloadQuestionnaire({
     } catch {
       setDraftNotice("unavailable");
     }
-  }, [blockInstanceId, draftIdentity, draftState, sessionId]);
+  }, [blockInstanceId, draftIdentity, draftState, sessionId, questionnaireAttemptId]);
 
   const missing: string[] = tlxScales.filter(([key]) => !isScaleValue(tlx[key])).map(([, label]) => label);
   if (bedford === null) missing.push("Bedford");
@@ -206,13 +211,14 @@ export function WorkloadQuestionnaire({
     setSubmitting(true);
     setSubmitError(null);
     const submission: WorkloadScaleSubmission = {
+      ...(questionnaireAttemptId ? {questionnaire_attempt_id: questionnaireAttemptId} : {}),
       block_instance_id: durableBlockInstanceId,
       nasa_tlx: tlx as WorkloadScaleSubmission["nasa_tlx"],
       bedford: bedford as number,
     };
     try {
       const response = await onSubmit(submission);
-      if (!confirmsSavedBlock(response, profile, durableBlockInstanceId)) {
+      if (!confirmsSavedBlock(response, profile, durableBlockInstanceId, questionnaireAttemptId)) {
         setSubmitError(copy(
           "El servidor no confirmó las respuestas de este bloque. Se conservó el borrador; inténtelo de nuevo.",
           "The server did not confirm ratings for this block. Your draft was kept; try again.",
@@ -221,7 +227,7 @@ export function WorkloadQuestionnaire({
       }
       let draftClearFailed = false;
       try {
-        window.sessionStorage.removeItem(workloadDraftKey(sessionId, durableBlockInstanceId));
+        window.sessionStorage.removeItem(workloadDraftKey(sessionId, durableBlockInstanceId, questionnaireAttemptId));
       } catch {
         draftClearFailed = true;
         setDraftNotice("clear_failed");

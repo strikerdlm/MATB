@@ -957,7 +957,10 @@ class OpenMatbManager:
         instruction = db.exec(select(OpenMatbInstructionProtocol).where(OpenMatbInstructionProtocol.protocol_id == row.instruction_protocol_id, OpenMatbInstructionProtocol.version == row.instruction_version)).one()
         from app.study_native import native_context
         context = None
-        try: context = native_context(db, row)
+        try:
+            from app.assessment_adapters import source_attempt
+            from app.study_admission import for_occasion
+            context = for_occasion(db, source_attempt(db, 'openmatb_suite_session', row.id).occasion_id)
         except HTTPException: pass
         if context:
             from app.study_registry import get_version
@@ -970,6 +973,7 @@ class OpenMatbManager:
         order = json.loads(row.block_order_json)
         active = order[row.current_block_index] if row.current_block_index < len(order) and row.lifecycle in {"STARTING", "RUNNING", "PAUSED", "AWAITING_SCALE"} else None
         return OpenMatbSessionView(
+            study_assignment_id=context['assignment_id'] if context else None,
             execution_purpose=row.execution_purpose, purpose_provenance_id=row.purpose_provenance_id, locale=row.locale,
             id=row.id, participant_id=row.participant_id, visit_ordinal=row.visit_ordinal,
             visit_code=protocol_visit.code, scheduled_day=visit.scheduled_day if visit else protocol_visit.scheduled_day,
@@ -1457,7 +1461,7 @@ class OpenMatbManager:
                 handle = self._handles.get(session_id)
                 if handle is not None:
                     await self._terminate(handle)
-                    self.records.finish(db, row, outcome="aborted", csv=handle.session_csv)
+                    self.records.finish(db, row, outcome="aborted", csv=handle.session_csv, cause="operator_stop")
                 from app.study_admission import sync_runtime_attempt
                 sync_runtime_attempt(db, row, state='interrupted', cause='operator_stop')
                 row.lifecycle = "ABORTED"; row.active_pid = None; row.last_error = reason; row.finished_at = _utcnow()
@@ -1506,6 +1510,14 @@ class OpenMatbManager:
                 attempt = db.get(OpenMatbBlockAttempt, request.block_instance_id)
                 if attempt is None or attempt.session_id != row.id:
                     raise OpenMatbRuntimeError("openmatb_block_mismatch")
+                from app.study_native import native_context, submit_assigned_ratings
+                if native_context(db, row):
+                    if row.lifecycle not in {'AWAITING_SCALE', 'COMPLETE'}:
+                        raise OpenMatbRuntimeError("openmatb_scale_not_expected")
+                    saved = submit_assigned_ratings(db, row, attempt, request)
+                    db.commit(); db.refresh(row)
+                    if saved: self.schedule_evidence_processing()
+                    return self._view(db, row), saved
                 if attempt.ratings_json is not None:
                     if attempt.ratings_json != submission:
                         raise OpenMatbRuntimeError("openmatb_scale_already_saved")

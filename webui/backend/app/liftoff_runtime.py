@@ -90,12 +90,17 @@ def build_session_manifest(
     request: CreateLiftoffSession,
     session_id: str,
     configuration_sha256: str,
+    assignment_context: dict | None = None,
 ) -> dict[str, object]:
     protocol = selected_protocol()
-    try:
-        visit = next(item for item in protocol.visits if item.ordinal == request.visit_ordinal)
-    except StopIteration as exc:
-        raise LiftoffRuntimeError("liftoff_visit_not_in_protocol") from exc
+    if assignment_context:
+        from types import SimpleNamespace
+        visit = SimpleNamespace(**assignment_context['assigned_visit'])
+    else:
+        try:
+            visit = next(item for item in protocol.visits if item.ordinal == request.visit_ordinal)
+        except StopIteration as exc:
+            raise LiftoffRuntimeError("liftoff_visit_not_in_protocol") from exc
     configuration = request.configuration.model_dump(mode="json")
     return {
         "schema_version": "liftoff-session-manifest-v1",
@@ -107,9 +112,10 @@ def build_session_manifest(
         "visit_code": visit.code,
         "scheduled_day": visit.scheduled_day,
         "attempt_number": 0,
-        "protocol_id": protocol.protocol_id,
-        "protocol_version": protocol.protocol_version,
-        "schedule_sha256": protocol.schedule_sha256,
+        "protocol_id": assignment_context["study_id"] if assignment_context else protocol.protocol_id,
+        "protocol_version": assignment_context["version_id"] if assignment_context else protocol.protocol_version,
+        "schedule_sha256": assignment_context["schedule_sha256"] if assignment_context else protocol.schedule_sha256,
+        **({"assignment_id": assignment_context["assignment_id"], "study_version_id": assignment_context["version_id"]} if assignment_context else {}),
         "liftoff_build": request.configuration.liftoff_build,
         "track_id": request.configuration.track_id,
         "telemetry_profile": request.configuration.telemetry_profile,
@@ -163,7 +169,7 @@ class LiftoffManager:
             raise LiftoffRuntimeError("liftoff_active_session")
         try:
             visit = self.persistence.require_visit(request.participant_id, request.visit_ordinal)
-            self.persistence.admit_request(request, visit)
+            assignment_context = self.persistence.admit_request(request, visit)
             if request.execution_purpose == "study":
                 self.persistence.require_study_order(request.participant_id, visit.id, attempt_id=request.attempt_id)
         except KeyError as exc:
@@ -171,7 +177,7 @@ class LiftoffManager:
         except ValueError as exc:
             raise LiftoffRuntimeError(str(exc)) from exc
         protocol = selected_protocol()
-        if not any(item.ordinal == request.visit_ordinal for item in protocol.visits):
+        if request.execution_purpose != "study" and not any(item.ordinal == request.visit_ordinal for item in protocol.visits):
             raise LiftoffRuntimeError("liftoff_visit_not_in_protocol")
         if not await self.receiver.wait_ready(min_valid=20, timeout_seconds=2.0):
             raise LiftoffRuntimeError("liftoff_telemetry_not_ready")
@@ -189,6 +195,7 @@ class LiftoffManager:
             request=request,
             session_id=session_id,
             configuration_sha256=configuration_sha256,
+            assignment_context=assignment_context,
         )
         manifest["attempt_number"] = attempt_number
         recorder = LiftoffSessionRecorder.prepare(run_dir, manifest=manifest)
@@ -199,8 +206,8 @@ class LiftoffManager:
             participant_id=request.participant_id,
             visit_id=visit.id,
             attempt_number=attempt_number,
-            protocol_id=protocol.protocol_id,
-            protocol_version=protocol.protocol_version,
+            protocol_id=str(manifest["protocol_id"]),
+            protocol_version=str(manifest["protocol_version"]),
             liftoff_build=request.configuration.liftoff_build,
             configuration_sha256=configuration_sha256,
             track_id=request.configuration.track_id,

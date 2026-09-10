@@ -275,6 +275,7 @@ class SQLModelLiftoffPersistence:
             if context and context['locale'] != request.locale:
                 from fastapi import HTTPException
                 raise HTTPException(422, 'Liftoff locale differs from the frozen assignment.')
+            return context
 
     def guard_acquisition(self, session_id):
         from app.study_admission import guard_source

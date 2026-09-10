@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, AlertCircle } from "lucide-react";
@@ -112,9 +112,9 @@ function SetupContent() {
       ? current : matching[0] ? `${matching[0].protocol_id}@${matching[0].version}` : "");
   }, [instructions, locale]);
 
-  const preset = useMemo(() => presets.find(row => `${row.preset_id}@${row.version}` === (frozen?.preset ? `${frozen.preset.id}@${frozen.preset.version}` : presetKey)), [presets, presetKey, frozen?.preset]);
-  const protocol = useMemo(() => instructions.find(row => `${row.protocol_id}@${row.version}` === (frozen?.instructions ? `${frozen.instructions.id}@${frozen.instructions.version}` : instructionKey)), [instructions, instructionKey, frozen?.instructions]);
-  const visual = useMemo(() => visualProfiles.find(row => `${row.profile_id}@${row.version}` === (frozen?.visual ? `${frozen.visual.id}@${frozen.visual.version}` : visualProfileKey)), [visualProfiles, visualProfileKey, frozen?.visual]);
+  const preset = presets.find(row => `${row.preset_id}@${row.version}` === (frozen?.preset ? `${frozen.preset.id}@${frozen.preset.version}` : presetKey));
+  const protocol = instructions.find(row => `${row.protocol_id}@${row.version}` === (frozen?.instructions ? `${frozen.instructions.id}@${frozen.instructions.version}` : instructionKey));
+  const visual = visualProfiles.find(row => `${row.profile_id}@${row.version}` === (frozen?.visual ? `${frozen.visual.id}@${frozen.visual.version}` : visualProfileKey));
   const selectedDisplay = displays.find(row => row.index === displayIndex);
   const stationReady = Boolean(readiness?.ready && displays.length && !stationError);
   const missing: Array<{ target: string; label: string }> = [];
@@ -211,7 +211,7 @@ function SetupContent() {
       <CardContent className="space-y-4">
         <p className="font-medium">{protocol?.title ?? copy("Seleccione un protocolo publicado", "Select a published protocol")}</p>
         <p className="text-sm">{preset?.label_es} · {visual?.label}</p>
-        <p className="text-sm text-muted-foreground">{purpose === "practice" ? copy("Un bloque de práctica, sin cuestionario ni cierre de visita de estudio.", "One practice block, with no questionnaire or completion of a study visit.") : purpose === "study" ? copy("Práctica seguida de tres bloques en el orden asignado, con escalas después de cada bloque de estudio.", "Practice followed by three blocks in the assigned order, with ratings after each study block.") : copy("Elija la finalidad para ver la secuencia.", "Choose a purpose to see the sequence.")}</p>
+        <p className="text-sm text-muted-foreground">{purpose === "practice" ? copy("Un bloque de práctica, sin cuestionario ni cierre de visita de estudio.", "One practice block, with no questionnaire or completion of a study visit.") : purpose === "study" ? copy("Una condición asignada, con escalas inmediatamente después. La preparación prescrita se realiza antes de esta ejecución.", "One assigned condition, with ratings immediately afterward. Prescribed preparation happens before this run.") : copy("Elija la finalidad para ver la secuencia.", "Choose a purpose to see the sequence.")}</p>
         <details className="rounded border p-3"><summary className="cursor-pointer text-sm font-semibold">{copy("Ver configuración", "View configuration")}</summary>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className="space-y-2 text-sm" htmlFor="om-preset">{copy("Preset publicado", "Published preset")}<select id="om-preset" className="native-select w-full" value={frozen?.preset ? `${frozen.preset.id}@${frozen.preset.version}` : presetKey} disabled={busy || admission.pending || !!assigned.context} onChange={event => setPresetKey(event.target.value)}>{presets.map(row => <option key={`${row.preset_id}@${row.version}`} value={`${row.preset_id}@${row.version}`}>{row.label_es} · v{row.version}</option>)}</select></label>

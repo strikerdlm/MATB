@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Check, Monitor } from "lucide-react";
 
 import { ExecutionPurposeBadge } from "@/components/experiments/ExperimentGuide";
+import { AssignedWorkloadQuestionnaire } from "@/components/openmatb/AssignedWorkloadQuestionnaire";
 import { WorkloadQuestionnaire } from "@/components/openmatb/WorkloadQuestionnaire";
 import { Button } from "@/components/ui/button";
 import { useReportExperimentFlow } from "@/lib/experiment-flow";
@@ -99,6 +100,8 @@ function ParticipantContent() {
     </main>;
   }
 
+  const Ratings = session.study_assignment_id ? AssignedWorkloadQuestionnaire : WorkloadQuestionnaire;
+  const savedBlock = Object.values(session.scores).find(score => typeof score.block_instance_id === "string")?.block_instance_id;
   const title = session.lifecycle === "INSTRUCTIONS"
     ? session.instruction_protocol.title
     : session.lifecycle === "AWAITING_SCALE"
@@ -176,7 +179,7 @@ function ParticipantContent() {
         <p className="text-muted-foreground">{copy("Los bloques de práctica no recopilan calificaciones de carga de trabajo. Espere mientras avanza la sesión.", "Practice blocks do not collect workload ratings. Wait while the session advances.")}</p>
       </section>}
 
-      {session.lifecycle === "AWAITING_SCALE" && session.active_block && session.active_block !== "PRACTICE" && <FixedLocaleProvider locale={locale}><WorkloadQuestionnaire
+      {session.lifecycle === "AWAITING_SCALE" && session.active_block && session.active_block !== "PRACTICE" && <FixedLocaleProvider locale={locale}><Ratings
         sessionId={session.id}
         blockInstanceId={session.active_block_instance_id}
         profile={session.active_block}
@@ -188,6 +191,16 @@ function ParticipantContent() {
       {session.lifecycle === "AWAITING_SCALE" && !session.active_block && <p role="alert" className="border border-warning/40 bg-warning/10 p-4 text-sm text-warning">
         {copy("No se puede identificar el bloque activo. Actualice esta página y avise al investigador si el mensaje continúa.", "The active block cannot be identified. Refresh this page and tell the researcher if the message remains.")}
       </p>}
+
+      {session.lifecycle === "COMPLETE" && session.study_assignment_id && <details className="space-y-4">
+        <summary>{copy("Revisar o repetir cuestionario", "Review or repeat questionnaire")}</summary>
+        <FixedLocaleProvider locale={locale}><AssignedWorkloadQuestionnaire
+          sessionId={session.id}
+          blockInstanceId={typeof savedBlock === "string" ? savedBlock : null}
+          profile={session.block_order[0] as "LOW" | "MEDIUM" | "HIGH"}
+          tokenAvailable={Boolean(token)} onSubmit={submit} onAccepted={acceptWorkload}
+        /></FixedLocaleProvider>
+      </details>}
 
       {session.lifecycle === "COMPLETE" && <section className="grid min-h-[45vh] place-items-center text-center">
         <div>

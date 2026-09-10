@@ -1,19 +1,620 @@
 "use client";
-import {Button} from '@/components/ui/button';
-import {useAppLocale} from '@/lib/i18n';
-import type {Binding,StudyPayload} from '@/lib/study';
-const causes=['intentional_repeat','withdrawal','operator_stop','hardware_failure','software_failure','planned_interruption','unknown','participant_stop','technical_failure','lost_connection','other'];
-const selectPolicies={repeat_selection:['explicit','first_finished','latest_finished'],incomplete_denominator:['assigned','started','finished'],missing_handling:['exclude_outcome','complete_case'],source_requirement:['complete_verified','report_status'],physical_requirement:['qualified','report_status'],human_calibration_requirement:['calibrated','report_status'],participant_preparation_requirement:['prepared','report_status'],protocol_requirement:['valid','report_status'],configuration_pooling:['identical_only','explicit_review'],hcf_attempt_selection:['explicit','first_finished','latest_finished']};
-export function PolicyEditor({payload,onChange}:{payload:StudyPayload;onChange:(payload:StudyPayload)=>void}){
- const {copy}=useAppLocale();const s=payload.study,a=payload.analysis;
- const label=(key:string)=>({placement:copy('Momento de preparación','Preparation placement'),demonstration_required:copy('Demostración requerida','Demonstration required'),acknowledgement_required:copy('Confirmación requerida','Acknowledgement required'),rationale:copy('Justificación del investigador','Researcher rationale'),selection:copy('Selección de intento','Attempt selection'),max_attempts:copy('Máximo de intentos','Maximum attempts'),available_outcomes:copy('Resultados disponibles tras interrupción','Available outcomes after interruption'),repeat_selection:copy('Selección de repetición','Repeat selection'),incomplete_denominator:copy('Denominador incompleto','Incomplete denominator'),missing_handling:copy('Tratamiento de datos faltantes','Missing handling'),source_requirement:copy('Evidencia de fuente','Source evidence'),physical_requirement:copy('Calificación física','Physical qualification'),human_calibration_requirement:copy('Calibración humana','Human calibration'),participant_preparation_requirement:copy('Preparación del participante','Participant preparation'),protocol_requirement:copy('Validez del protocolo','Protocol validity'),configuration_pooling:copy('Agrupación de configuraciones','Configuration pooling'),hcf_attempt_selection:copy('Un intento HCF por participante','One HCF attempt per participant'),pooling_review:copy('Justificación y referencia de revisión de agrupación','Pooling rationale and review reference'),hcf_enabled:copy('HCF habilitado','HCF enabled')}as Record<string,string>)[key]??key;
- function pick(key:string,value:unknown,options:string[],set:(v:string)=>void){return <label key={key}>{label(key)}<select className="native-select block" value={typeof value==='boolean'?String(value):String(value??'')} onChange={e=>set(e.target.value)}><option value="">{copy('Elección obligatoria','Required choice')}</option>{options.map(v=><option key={v}>{v}</option>)}</select></label>;}
- function rationale(value:unknown,set:(v:string)=>void){return <label className="block">{label('rationale')}<textarea className="native-input block w-full" value={String(value??'')} onChange={e=>set(e.target.value)}/></label>;}
- function preparation(key:string,next:Binding){const rows=s.preparation_policy??[];onChange({...payload,study:{...s,preparation_policy:[...rows.filter(p=>p.occasion_key!==key),next]}});}
- return <section className="space-y-4"><h2 className="font-semibold">{copy('Políticas prespecificadas ejecutables','Prespecified executable policies')}</h2><p>{copy('Cada elección debe ser explícita. Las reglas de preparación exigidas bloquean el inicio hasta disponer del motor de evidencia; el análisis aún no se ejecuta.','Every choice must be explicit. Required preparation blocks starting until the evidence engine is available; analysis execution is still pending.')}</p>
- {s.occasions.map(o=>{const p=s.preparation_policy?.find(r=>r.occasion_key===o.key);const update=(next:Binding)=>preparation(o.key,next);return <fieldset key={o.key} className="space-y-3 rounded border p-3"><legend>{o.key} · {o.instrument} · {o.locale}</legend>{!p?<Button onClick={()=>update({occasion_key:o.key,placement:'',demonstration_required:null,acknowledgement_required:null,comprehension:[],practice:[],rationale:''})}>{copy('Definir preparación','Author preparation')}</Button>:<><div className="flex flex-wrap gap-3">{pick('placement',p.placement,['before_baseline','prescribed_later'],v=>update({...p,placement:v}))}{(['demonstration_required','acknowledgement_required']as const).map(k=>pick(k,p[k],['true','false'],v=>update({...p,[k]:v===''?null:v==='true'})))}</div>{rationale(p.rationale,v=>update({...p,rationale:v}))}{(['comprehension','practice']as const).map(kind=><div key={kind}><p>{kind==='comprehension'?copy('Criterios de comprensión','Comprehension criteria'):copy('Criterios medidos de práctica','Measured practice criteria')}</p>{((p[kind]??[])as Binding[]).map((c,i)=>{const set=(next:Binding)=>update({...p,[kind]:(p[kind]as Binding[]).map((r,n)=>n===i?next:r)});const metrics=kind==='comprehension'?['comprehension.correct_fraction']:({pvt:['pvt.median_rt_ms','pvt.lapses'],screen:['screen.simple_rt'],openmatb:['sysmon.hit_rate','track.rmse_deviation']}as Record<string,string[]>)[o.instrument]??[];return <div className="space-y-2 border-t py-2" key={i}><label>{copy('Identidad del criterio','Criterion identity')}<input className="native-input block" value={String(c.id??'')} onChange={e=>set({...c,id:e.target.value})}/></label>{pick('metric',c.metric,metrics,v=>set({...c,metric:v}))}{pick('comparator',c.comparator,['gte','lte','eq'],v=>set({...c,comparator:v}))}<label>{copy('Umbral definido por el investigador','Researcher-defined threshold')}<input type="number" step="any" className="native-input block" value={String(c.threshold??'')} onChange={e=>set({...c,threshold:e.target.value===''?'':Number(e.target.value)})}/></label>{rationale(c.rationale,v=>set({...c,rationale:v}))}<Button variant="outline" onClick={()=>update({...p,[kind]:(p[kind]as Binding[]).filter((_,n)=>n!==i)})}>{copy('Quitar criterio','Remove criterion')}</Button></div>;})}<Button onClick={()=>update({...p,[kind]:[...(p[kind]as Binding[]),{id:'',rationale:'',metric:'',comparator:'',threshold:''}]})}>{kind==='comprehension'?copy('Agregar criterio de comprensión','Add comprehension criterion'):copy('Agregar criterio de práctica','Add practice criterion')}</Button></div>)}</>}</fieldset>;})}
- {!s.repeat_policy?<Button onClick={()=>onChange({...payload,study:{...s,repeat_policy:{permitted_causes:[],max_attempts:'',selection:'',rationale:''}}})}>{copy('Definir repetición','Author repeat policy')}</Button>:<fieldset className="space-y-3 rounded border p-3"><legend>{copy('Repeticiones','Repeats')}</legend><div>{causes.map(c=><label className="mr-3" key={c}><input type="checkbox" checked={(s.repeat_policy!.permitted_causes as string[]).includes(c)} onChange={e=>onChange({...payload,study:{...s,repeat_policy:{...s.repeat_policy,permitted_causes:e.target.checked?[...(s.repeat_policy!.permitted_causes as string[]),c]:(s.repeat_policy!.permitted_causes as string[]).filter(v=>v!==c)}}})}/>{c}</label>)}</div><label>{label('max_attempts')}<input className="native-input block" type="number" min={1} value={String(s.repeat_policy.max_attempts??'')} onChange={e=>onChange({...payload,study:{...s,repeat_policy:{...s.repeat_policy,max_attempts:Number(e.target.value)}}})}/></label>{pick('selection',s.repeat_policy.selection,['explicit','first_finished','latest_finished'],v=>onChange({...payload,study:{...s,repeat_policy:{...s.repeat_policy,selection:v}}}))}{rationale(s.repeat_policy.rationale,v=>onChange({...payload,study:{...s,repeat_policy:{...s.repeat_policy,rationale:v}}}))}</fieldset>}
- {!s.interruption_policy?<Button onClick={()=>onChange({...payload,study:{...s,interruption_policy:{available_outcomes:'',rationale:''}}})}>{copy('Definir interrupciones','Author interruption policy')}</Button>:<fieldset className="space-y-3 rounded border p-3"><legend>{copy('Interrupciones','Interruptions')}</legend>{pick('available_outcomes',s.interruption_policy.available_outcomes,['retain_available','exclude_attempt'],v=>onChange({...payload,study:{...s,interruption_policy:{...s.interruption_policy,available_outcomes:v}}}))}{rationale(s.interruption_policy.rationale,v=>onChange({...payload,study:{...s,interruption_policy:{...s.interruption_policy,rationale:v}}}))}</fieldset>}
- {!a.eligibility_policy?<Button onClick={()=>onChange({...payload,analysis:{...a,eligibility_policy:{hcf_screen_keys:[],pooling_review:null,rationale:''}}})}>{copy('Definir elegibilidad y HCF','Author eligibility and HCF')}</Button>:<fieldset className="space-y-3 rounded border p-3"><legend>{copy('Elegibilidad analítica','Analysis eligibility')}</legend><div className="grid gap-3 sm:grid-cols-3">{Object.entries(selectPolicies).map(([key,options])=>pick(key,a.eligibility_policy![key],options,v=>onChange({...payload,analysis:{...a,eligibility_policy:{...a.eligibility_policy,[key]:v}}})))}</div><label>{label('pooling_review')}<input className="native-input block w-full" value={String(a.eligibility_policy.pooling_review??'')} onChange={e=>onChange({...payload,analysis:{...a,eligibility_policy:{...a.eligibility_policy,pooling_review:e.target.value||null}}})}/></label>{pick('hcf_enabled',a.eligibility_policy.hcf_enabled,['true','false'],v=>onChange({...payload,analysis:{...a,eligibility_policy:{...a.eligibility_policy,hcf_enabled:v===''?null:v==='true'}}}))}<div>{s.occasions.filter(o=>o.instrument==='screen').map(o=><label className="mr-3" key={o.key}><input type="checkbox" checked={(a.eligibility_policy!.hcf_screen_keys as string[]).includes(o.key)} onChange={e=>onChange({...payload,analysis:{...a,eligibility_policy:{...a.eligibility_policy,hcf_screen_keys:e.target.checked?[...(a.eligibility_policy!.hcf_screen_keys as string[]),o.key]:(a.eligibility_policy!.hcf_screen_keys as string[]).filter(k=>k!==o.key)}}})}/>{o.key}</label>)}</div>{rationale(a.eligibility_policy.rationale,v=>onChange({...payload,analysis:{...a,eligibility_policy:{...a.eligibility_policy,rationale:v}}}))}</fieldset>}
- </section>;
+import { policyChoice } from "./policy-labels";
+import { Button } from "@/components/ui/button";
+import { useAppLocale } from "@/lib/i18n";
+import type { Binding, StudyPayload } from "@/lib/study";
+const causes = [
+  "intentional_repeat",
+  "withdrawal",
+  "operator_stop",
+  "hardware_failure",
+  "software_failure",
+  "planned_interruption",
+  "unknown",
+  "participant_stop",
+  "technical_failure",
+  "lost_connection",
+  "other",
+];
+const selectPolicies = {
+  repeat_selection: ["explicit", "first_finished", "latest_finished"],
+  incomplete_denominator: ["assigned", "started", "finished"],
+  missing_handling: ["exclude_outcome", "complete_case"],
+  source_requirement: ["complete_verified", "report_status"],
+  physical_requirement: ["qualified", "report_status"],
+  human_calibration_requirement: ["calibrated", "report_status"],
+  participant_preparation_requirement: ["prepared", "report_status"],
+  protocol_requirement: ["valid", "report_status"],
+  configuration_pooling: ["identical_only", "explicit_review"],
+  hcf_attempt_selection: ["explicit", "first_finished", "latest_finished"],
+};
+export function PolicyEditor({
+  payload,
+  onChange,
+}: {
+  payload: StudyPayload;
+  onChange: (payload: StudyPayload) => void;
+}) {
+  const { copy } = useAppLocale();
+  const s = payload.study,
+    a = payload.analysis;
+  const label = (key: string) =>
+    (
+      ({
+        metric: copy("Métrica observada", "Observed metric"),
+        comparator: copy("Comparación del umbral", "Threshold comparison"),
+        placement: copy("Momento de preparación", "Preparation placement"),
+        demonstration_required: copy(
+          "Demostración requerida",
+          "Demonstration required",
+        ),
+        acknowledgement_required: copy(
+          "Confirmación requerida",
+          "Acknowledgement required",
+        ),
+        rationale: copy(
+          "Justificación del investigador",
+          "Researcher rationale",
+        ),
+        selection: copy("Selección de intento", "Attempt selection"),
+        max_attempts: copy("Máximo de intentos", "Maximum attempts"),
+        available_outcomes: copy(
+          "Resultados disponibles tras interrupción",
+          "Available outcomes after interruption",
+        ),
+        repeat_selection: copy("Selección de repetición", "Repeat selection"),
+        incomplete_denominator: copy(
+          "Denominador incompleto",
+          "Incomplete denominator",
+        ),
+        missing_handling: copy(
+          "Tratamiento de datos faltantes",
+          "Missing handling",
+        ),
+        source_requirement: copy("Evidencia de fuente", "Source evidence"),
+        physical_requirement: copy(
+          "Calificación física",
+          "Physical qualification",
+        ),
+        human_calibration_requirement: copy(
+          "Calibración humana",
+          "Human calibration",
+        ),
+        participant_preparation_requirement: copy(
+          "Preparación del participante",
+          "Participant preparation",
+        ),
+        protocol_requirement: copy(
+          "Validez del protocolo",
+          "Protocol validity",
+        ),
+        configuration_pooling: copy(
+          "Agrupación de configuraciones",
+          "Configuration pooling",
+        ),
+        hcf_attempt_selection: copy(
+          "Un intento HCF por participante",
+          "One HCF attempt per participant",
+        ),
+        pooling_review: copy(
+          "Justificación y referencia de revisión de agrupación",
+          "Pooling rationale and review reference",
+        ),
+        hcf_enabled: copy("HCF habilitado", "HCF enabled"),
+      }) as Record<string, string>
+    )[key] ?? key;
+  function pick(
+    key: string,
+    value: unknown,
+    options: string[],
+    set: (v: string) => void,
+  ) {
+    return (
+      <label key={key}>
+        {label(key)}
+        <select
+          className="native-select block"
+          value={
+            typeof value === "boolean" ? String(value) : String(value ?? "")
+          }
+          onChange={(e) => set(e.target.value)}
+        >
+          <option value="">
+            {copy("Elección obligatoria", "Required choice")}
+          </option>
+          {options.map((v) => (
+            <option key={v} value={v}>
+              {policyChoice(v, copy)}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  }
+  function rationale(value: unknown, set: (v: string) => void) {
+    return (
+      <label className="block">
+        {label("rationale")}
+        <textarea
+          className="native-input block w-full"
+          value={String(value ?? "")}
+          onChange={(e) => set(e.target.value)}
+        />
+      </label>
+    );
+  }
+  function preparation(key: string, next: Binding) {
+    const rows = s.preparation_policy ?? [];
+    onChange({
+      ...payload,
+      study: {
+        ...s,
+        preparation_policy: [
+          ...rows.filter((p) => p.occasion_key !== key),
+          next,
+        ],
+      },
+    });
+  }
+  return (
+    <section className="space-y-4">
+      <h2 className="font-semibold">
+        {copy(
+          "Políticas prespecificadas ejecutables",
+          "Prespecified executable policies",
+        )}
+      </h2>
+      <p>
+        {copy(
+          "Cada elección debe ser explícita. Las reglas de preparación exigidas bloquean el inicio hasta disponer del motor de evidencia; el análisis aún no se ejecuta.",
+          "Every choice must be explicit. Required preparation blocks starting until the evidence engine is available; analysis execution is still pending.",
+        )}
+      </p>
+      <p className="text-sm">
+        {copy(
+          "Excluir un intento elimina sus resultados de la selección analítica; conservar disponibles permite evaluarlos según la política de datos faltantes. Informar estado no impone un umbral de aprobación. Agrupar diferencias requiere una justificación y no declara equivalencia entre configuraciones.",
+          "Excluding an attempt removes its outcomes from analysis selection; retaining available outcomes lets the missing-data policy evaluate them. Reporting status imposes no pass threshold. Pooling differences requires a rationale and does not establish configuration equivalence.",
+        )}
+      </p>
+      {s.occasions.map((o) => {
+        const p = s.preparation_policy?.find((r) => r.occasion_key === o.key);
+        const update = (next: Binding) => preparation(o.key, next);
+        return (
+          <fieldset key={o.key} className="space-y-3 rounded border p-3">
+            <legend>
+              {o.key} · {o.instrument} · {o.locale}
+            </legend>
+            {!p ? (
+              <Button
+                onClick={() =>
+                  update({
+                    occasion_key: o.key,
+                    placement: "",
+                    demonstration_required: null,
+                    acknowledgement_required: null,
+                    comprehension: [],
+                    practice: [],
+                    rationale: "",
+                  })
+                }
+              >
+                {copy("Definir preparación", "Author preparation")}
+              </Button>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-3">
+                  {pick(
+                    "placement",
+                    p.placement,
+                    ["before_baseline", "prescribed_later"],
+                    (v) => update({ ...p, placement: v }),
+                  )}
+                  {(
+                    [
+                      "demonstration_required",
+                      "acknowledgement_required",
+                    ] as const
+                  ).map((k) =>
+                    pick(k, p[k], ["true", "false"], (v) =>
+                      update({ ...p, [k]: v === "" ? null : v === "true" }),
+                    ),
+                  )}
+                </div>
+                {rationale(p.rationale, (v) => update({ ...p, rationale: v }))}
+                {(["comprehension", "practice"] as const).map((kind) => (
+                  <div key={kind}>
+                    <p>
+                      {kind === "comprehension"
+                        ? copy(
+                            "Criterios de comprensión",
+                            "Comprehension criteria",
+                          )
+                        : copy(
+                            "Criterios medidos de práctica",
+                            "Measured practice criteria",
+                          )}
+                    </p>
+                    {((p[kind] ?? []) as Binding[]).map((c, i) => {
+                      const set = (next: Binding) =>
+                        update({
+                          ...p,
+                          [kind]: (p[kind] as Binding[]).map((r, n) =>
+                            n === i ? next : r,
+                          ),
+                        });
+                      const metrics =
+                        kind === "comprehension"
+                          ? ["comprehension.correct_fraction"]
+                          : ((
+                              {
+                                pvt: ["pvt.median_rt_ms", "pvt.lapses"],
+                                screen: ["screen.simple_rt"],
+                                openmatb: [
+                                  "sysmon.hit_rate",
+                                  "track.rmse_deviation",
+                                ],
+                              } as Record<string, string[]>
+                            )[o.instrument] ?? []);
+                      return (
+                        <div className="space-y-2 border-t py-2" key={i}>
+                          <label>
+                            {copy(
+                              "Identidad del criterio",
+                              "Criterion identity",
+                            )}
+                            <input
+                              className="native-input block"
+                              value={String(c.id ?? "")}
+                              onChange={(e) =>
+                                set({ ...c, id: e.target.value })
+                              }
+                            />
+                          </label>
+                          {pick("metric", c.metric, metrics, (v) =>
+                            set({ ...c, metric: v }),
+                          )}
+                          {pick(
+                            "comparator",
+                            c.comparator,
+                            ["gte", "lte", "eq"],
+                            (v) => set({ ...c, comparator: v }),
+                          )}
+                          <label>
+                            {copy(
+                              "Umbral definido por el investigador",
+                              "Researcher-defined threshold",
+                            )}
+                            <input
+                              type="number"
+                              step="any"
+                              className="native-input block"
+                              value={String(c.threshold ?? "")}
+                              onChange={(e) =>
+                                set({
+                                  ...c,
+                                  threshold:
+                                    e.target.value === ""
+                                      ? ""
+                                      : Number(e.target.value),
+                                })
+                              }
+                            />
+                          </label>
+                          {rationale(c.rationale, (v) =>
+                            set({ ...c, rationale: v }),
+                          )}
+                          <Button
+                            variant="outline"
+                            onClick={() =>
+                              update({
+                                ...p,
+                                [kind]: (p[kind] as Binding[]).filter(
+                                  (_, n) => n !== i,
+                                ),
+                              })
+                            }
+                          >
+                            {copy("Quitar criterio", "Remove criterion")}
+                          </Button>
+                        </div>
+                      );
+                    })}
+                    <Button
+                      onClick={() =>
+                        update({
+                          ...p,
+                          [kind]: [
+                            ...(p[kind] as Binding[]),
+                            {
+                              id: "",
+                              rationale: "",
+                              metric: "",
+                              comparator: "",
+                              threshold: "",
+                            },
+                          ],
+                        })
+                      }
+                    >
+                      {kind === "comprehension"
+                        ? copy(
+                            "Agregar criterio de comprensión",
+                            "Add comprehension criterion",
+                          )
+                        : copy(
+                            "Agregar criterio de práctica",
+                            "Add practice criterion",
+                          )}
+                    </Button>
+                  </div>
+                ))}
+              </>
+            )}
+          </fieldset>
+        );
+      })}
+      {!s.repeat_policy ? (
+        <Button
+          onClick={() =>
+            onChange({
+              ...payload,
+              study: {
+                ...s,
+                repeat_policy: {
+                  permitted_causes: [],
+                  max_attempts: "",
+                  selection: "",
+                  rationale: "",
+                },
+              },
+            })
+          }
+        >
+          {copy("Definir repetición", "Author repeat policy")}
+        </Button>
+      ) : (
+        <fieldset className="space-y-3 rounded border p-3">
+          <legend>{copy("Repeticiones", "Repeats")}</legend>
+          <div>
+            {causes.map((c) => (
+              <label className="mr-3" key={c}>
+                <input
+                  type="checkbox"
+                  checked={(
+                    s.repeat_policy!.permitted_causes as string[]
+                  ).includes(c)}
+                  onChange={(e) =>
+                    onChange({
+                      ...payload,
+                      study: {
+                        ...s,
+                        repeat_policy: {
+                          ...s.repeat_policy,
+                          permitted_causes: e.target.checked
+                            ? [
+                                ...(s.repeat_policy!
+                                  .permitted_causes as string[]),
+                                c,
+                              ]
+                            : (
+                                s.repeat_policy!.permitted_causes as string[]
+                              ).filter((v) => v !== c),
+                        },
+                      },
+                    })
+                  }
+                />
+                {policyChoice(c, copy)}
+              </label>
+            ))}
+          </div>
+          <label>
+            {label("max_attempts")}
+            <input
+              className="native-input block"
+              type="number"
+              min={1}
+              value={String(s.repeat_policy.max_attempts ?? "")}
+              onChange={(e) =>
+                onChange({
+                  ...payload,
+                  study: {
+                    ...s,
+                    repeat_policy: {
+                      ...s.repeat_policy,
+                      max_attempts: Number(e.target.value),
+                    },
+                  },
+                })
+              }
+            />
+          </label>
+          {pick(
+            "selection",
+            s.repeat_policy.selection,
+            ["explicit", "first_finished", "latest_finished"],
+            (v) =>
+              onChange({
+                ...payload,
+                study: {
+                  ...s,
+                  repeat_policy: { ...s.repeat_policy, selection: v },
+                },
+              }),
+          )}
+          {rationale(s.repeat_policy.rationale, (v) =>
+            onChange({
+              ...payload,
+              study: {
+                ...s,
+                repeat_policy: { ...s.repeat_policy, rationale: v },
+              },
+            }),
+          )}
+        </fieldset>
+      )}
+      {!s.interruption_policy ? (
+        <Button
+          onClick={() =>
+            onChange({
+              ...payload,
+              study: {
+                ...s,
+                interruption_policy: { available_outcomes: "", rationale: "" },
+              },
+            })
+          }
+        >
+          {copy("Definir interrupciones", "Author interruption policy")}
+        </Button>
+      ) : (
+        <fieldset className="space-y-3 rounded border p-3">
+          <legend>{copy("Interrupciones", "Interruptions")}</legend>
+          {pick(
+            "available_outcomes",
+            s.interruption_policy.available_outcomes,
+            ["retain_available", "exclude_attempt"],
+            (v) =>
+              onChange({
+                ...payload,
+                study: {
+                  ...s,
+                  interruption_policy: {
+                    ...s.interruption_policy,
+                    available_outcomes: v,
+                  },
+                },
+              }),
+          )}
+          {rationale(s.interruption_policy.rationale, (v) =>
+            onChange({
+              ...payload,
+              study: {
+                ...s,
+                interruption_policy: { ...s.interruption_policy, rationale: v },
+              },
+            }),
+          )}
+        </fieldset>
+      )}
+      {!a.eligibility_policy ? (
+        <Button
+          onClick={() =>
+            onChange({
+              ...payload,
+              analysis: {
+                ...a,
+                eligibility_policy: {
+                  hcf_screen_keys: [],
+                  pooling_review: null,
+                  rationale: "",
+                },
+              },
+            })
+          }
+        >
+          {copy("Definir elegibilidad y HCF", "Author eligibility and HCF")}
+        </Button>
+      ) : (
+        <fieldset className="space-y-3 rounded border p-3">
+          <legend>
+            {copy("Elegibilidad analítica", "Analysis eligibility")}
+          </legend>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {Object.entries(selectPolicies).map(([key, options]) =>
+              pick(key, a.eligibility_policy![key], options, (v) =>
+                onChange({
+                  ...payload,
+                  analysis: {
+                    ...a,
+                    eligibility_policy: { ...a.eligibility_policy, [key]: v },
+                  },
+                }),
+              ),
+            )}
+          </div>
+          <label>
+            {label("pooling_review")}
+            <input
+              className="native-input block w-full"
+              value={String(a.eligibility_policy.pooling_review ?? "")}
+              onChange={(e) =>
+                onChange({
+                  ...payload,
+                  analysis: {
+                    ...a,
+                    eligibility_policy: {
+                      ...a.eligibility_policy,
+                      pooling_review: e.target.value || null,
+                    },
+                  },
+                })
+              }
+            />
+          </label>
+          {pick(
+            "hcf_enabled",
+            a.eligibility_policy.hcf_enabled,
+            ["true", "false"],
+            (v) =>
+              onChange({
+                ...payload,
+                analysis: {
+                  ...a,
+                  eligibility_policy: {
+                    ...a.eligibility_policy,
+                    hcf_enabled: v === "" ? null : v === "true",
+                  },
+                },
+              }),
+          )}
+          <div>
+            {s.occasions
+              .filter((o) => o.instrument === "screen")
+              .map((o) => (
+                <label className="mr-3" key={o.key}>
+                  <input
+                    type="checkbox"
+                    checked={(
+                      a.eligibility_policy!.hcf_screen_keys as string[]
+                    ).includes(o.key)}
+                    onChange={(e) =>
+                      onChange({
+                        ...payload,
+                        analysis: {
+                          ...a,
+                          eligibility_policy: {
+                            ...a.eligibility_policy,
+                            hcf_screen_keys: e.target.checked
+                              ? [
+                                  ...(a.eligibility_policy!
+                                    .hcf_screen_keys as string[]),
+                                  o.key,
+                                ]
+                              : (
+                                  a.eligibility_policy!
+                                    .hcf_screen_keys as string[]
+                                ).filter((k) => k !== o.key),
+                          },
+                        },
+                      })
+                    }
+                  />
+                  {o.key}
+                </label>
+              ))}
+          </div>
+          {rationale(a.eligibility_policy.rationale, (v) =>
+            onChange({
+              ...payload,
+              analysis: {
+                ...a,
+                eligibility_policy: { ...a.eligibility_policy, rationale: v },
+              },
+            }),
+          )}
+        </fieldset>
+      )}
+    </section>
+  );
 }

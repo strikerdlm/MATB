@@ -38,7 +38,7 @@ class OpenMatbRecords:
             attach_source(db, "openmatb_block_attempt", attempt.model_dump(mode="json"), historical=False)
         return attempt
 
-    def finish(self, db: Session, suite: OpenMatbSuiteSession, *, outcome: str, csv: Path | None) -> None:
+    def finish(self, db: Session, suite: OpenMatbSuiteSession, *, outcome: str, csv: Path | None, cause: str = "unknown") -> None:
         attempt = db.get(OpenMatbBlockAttempt, suite.active_block_instance_id) if suite.active_block_instance_id else None
         if attempt is None:
             return
@@ -65,7 +65,7 @@ class OpenMatbRecords:
                 attempt.artifact_error = "native_artifacts_outside_session"
                 attempt.evidence_status = "unavailable"
         from app.study_native import finish_block
-        finish_block(db, attempt, outcome)
+        finish_block(db, attempt, outcome, cause=cause)
         db.add(attempt)
 
     def recover(self) -> None:

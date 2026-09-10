@@ -5,7 +5,7 @@ from sqlmodel import select
 from .assessment_models import AssessmentOccasion, AssessmentAttempt, AssessmentSourceLink
 
 SOURCE_INSTRUMENTS = {
-    'pvt_assessment': 'pvt', 'screenresult': 'screen', 'practiceresult': None,
+    'study_native_rating': 'questionnaire', 'pvt_assessment': 'pvt', 'screenresult': 'screen', 'practiceresult': None,
     'archived_assessment': None, 'openmatb_suite_session': 'openmatb',
     'openmatb_block_attempt': 'openmatb', 'liftoff_session': 'liftoff',
     'simulation_session': 'suas', 'technical_simulation_session': 'suas',
@@ -152,9 +152,12 @@ def receipt_facets(db, attempt):
             continue
         if link.source_table == 'openmatb_block_attempt' and link.role == 'ratings':
             # A task's completion/artifacts establish no questionnaire facts.
-            if row['ratings_json'] is not None:
+            occasion = db.get(AssessmentOccasion, attempt.occasion_id)
+            if row['ratings_json'] is not None and not occasion.version_ref:
                 facets.update(raw_saving='saved', ratings='saved',
                               acquisition='finished' if row['ratings_saved_at'] is not None else 'unknown')
+        elif link.source_table == 'study_native_rating':
+            facets.update(raw_saving='saved', ratings='saved', acquisition='finished')
         elif link.source_table == 'openmatb_block_attempt':
             facets.update(raw_saving=row['artifact_status'], acquisition=row['task_status'],
                           ratings='saved' if row['ratings_json'] is not None else 'unknown', processing=row['evidence_status'])

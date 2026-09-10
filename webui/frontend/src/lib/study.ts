@@ -1,17 +1,141 @@
-import {getApiBase} from './runtime-config';
-import type {Attempt, Instrument} from './assessments';
+import { getApiBase } from "./runtime-config";
+import type { Attempt, Instrument } from "./assessments";
 export type Binding = Record<string, unknown>;
-export interface StudyOccasion {key: string; visit_ordinal: number; instrument: Instrument; phase: string; order: number; condition_by_arm: Record<string,string>; locale: 'en'|'es-419'; config: Binding; prerequisite_keys: string[]; target_key: string|null; collection_group: string|null; accompanying_key: string|null}
-export interface StudyPayload {study: {preparation_policy:Binding[]|null;repeat_policy:Binding|null;interruption_policy:Binding|null;schema_version: 'StudySpecV1'; version_id: string|null; analysis_plan_id: string|null; study_id: string; title: string; template_family: string; synthetic: boolean; enabled_instruments: string[]; implementation_sha256?:Record<string,string>; visits: {ordinal: number; code: string; scheduled_day: number}[]; arms: string[]; assignment_method: 'explicit_researcher_selection'; occasions: StudyOccasion[]; recovery_intervals: {key: string; anchor_key: string; before_key: string; duration_seconds: number}[]; rules: {preparation: string; repeat: string; interruption: string}}; analysis: {eligibility_policy:Binding|null;schema_version: 'AnalysisPlanV1'; version_id: string|null; study_version_id: string|null; unit: 'participant'|'visit'|'attempt'; outcomes: {key: string; metric: string; occasion_keys: string[]; summary: 'mean'|'median'|'individual'}[]; contrasts: {key: string; left_outcome: string; right_outcome: string; operation: 'difference'}[]; rules: {exclusions: string; denominators: string; qualification: string; pooling: string; historical_unknowns: 'exclude'|'reviewed_classification_required'}}}
-export interface StudyDraft {id:string; payload_json:string; sha256:string; frozen_version_id:string|null}
-export interface StudyVersion extends StudyPayload {id:string; analysis_plan_id:string; study_sha256:string; analysis_sha256:string; actor:string; reason:string}
-export interface Assignment {id:string; version_id:string; participant_id:string; visit_id:number; arm:string; occasions_json:string; current:boolean; started:boolean}
-export interface AssignmentDetail {assignment:Assignment; current:boolean; started:boolean; version:StudyVersion; occasions:Record<string,string>; attempts:Record<string,Attempt[]>}
-export interface AssignmentContext extends StudyOccasion {assignment_id:string; version_id:string; analysis_plan_id:string; participant_id:string; visit_id:number; arm:string; occasion_id:string; rules:StudyPayload['study']['rules']; preparation_gate:'not_implemented'; resource_gate:'not_implemented'}
-export async function studyCall<T>(path:string, body?:unknown, method=body===undefined?'GET':'POST'):Promise<T> {
- const response = await fetch(`${await getApiBase()}/study${path}`, {method, headers:{'Content-Type':'application/json'}, ...(body===undefined?{}:{body:JSON.stringify(body)})});
- const value = await response.json(); if(!response.ok) throw new Error(typeof value.detail==='string'?value.detail:JSON.stringify(value.detail)); return value;
+export interface StudyOccasion {
+  key: string;
+  visit_ordinal: number;
+  instrument: Instrument;
+  phase: string;
+  order: number;
+  condition_by_arm: Record<string, string>;
+  locale: "en" | "es-419";
+  config: Binding;
+  prerequisite_keys: string[];
+  target_key: string | null;
+  collection_group: string | null;
+  accompanying_key: string | null;
 }
-export const studyVersions = () => studyCall<{active_version_id:string|null;versions:StudyVersion[]}>('/versions');
-export const studyAssignments = () => studyCall<Assignment[]>('/assignments');
-export const assignmentDetail = (id:string) => studyCall<AssignmentDetail>(`/assignments/${encodeURIComponent(id)}`);
+export interface StudyPayload {
+  study: {
+    preparation_policy: Binding[] | null;
+    repeat_policy: Binding | null;
+    interruption_policy: Binding | null;
+    schema_version: "StudySpecV1";
+    version_id: string | null;
+    analysis_plan_id: string | null;
+    study_id: string;
+    title: string;
+    template_family: string;
+    synthetic: boolean;
+    enabled_instruments: string[];
+    implementation_sha256?: Record<string, string>;
+    visits: { ordinal: number; code: string; scheduled_day: number }[];
+    arms: string[];
+    assignment_method: "explicit_researcher_selection";
+    occasions: StudyOccasion[];
+    recovery_intervals: {
+      key: string;
+      anchor_key: string;
+      before_key: string;
+      duration_seconds: number;
+    }[];
+    rules: { preparation: string; repeat: string; interruption: string };
+  };
+  analysis: {
+    eligibility_policy: Binding | null;
+    schema_version: "AnalysisPlanV1";
+    version_id: string | null;
+    study_version_id: string | null;
+    unit: "participant" | "visit" | "attempt";
+    outcomes: {
+      key: string;
+      metric: string;
+      occasion_keys: string[];
+      summary: "mean" | "median" | "individual";
+    }[];
+    contrasts: {
+      key: string;
+      left_outcome: string;
+      right_outcome: string;
+      operation: "difference";
+    }[];
+    rules: {
+      exclusions: string;
+      denominators: string;
+      qualification: string;
+      pooling: string;
+      historical_unknowns: "exclude" | "reviewed_classification_required";
+    };
+  };
+}
+export interface StudyDraft {
+  id: string;
+  payload_json: string;
+  sha256: string;
+  frozen_version_id: string | null;
+}
+export interface StudyVersion extends StudyPayload {
+  id: string;
+  analysis_plan_id: string;
+  study_sha256: string;
+  analysis_sha256: string;
+  actor: string;
+  reason: string;
+}
+export interface Assignment {
+  id: string;
+  version_id: string;
+  participant_id: string;
+  visit_id: number;
+  arm: string;
+  occasions_json: string;
+  current: boolean;
+  started: boolean;
+}
+export interface AssignmentDetail {
+  assignment: Assignment;
+  current: boolean;
+  started: boolean;
+  version: StudyVersion;
+  occasions: Record<string, string>;
+  attempts: Record<string, Attempt[]>;
+}
+export interface AssignmentContext extends StudyOccasion {
+  assigned_visit: { ordinal: number; code: string; scheduled_day: number };
+  assignment_id: string;
+  version_id: string;
+  analysis_plan_id: string;
+  participant_id: string;
+  visit_id: number;
+  arm: string;
+  occasion_id: string;
+  rules: StudyPayload["study"]["rules"];
+  preparation_gate: "not_implemented";
+  resource_gate: "not_implemented";
+}
+export async function studyCall<T>(
+  path: string,
+  body?: unknown,
+  method = body === undefined ? "GET" : "POST",
+): Promise<T> {
+  const response = await fetch(`${await getApiBase()}/study${path}`, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  const value = await response.json();
+  if (!response.ok)
+    throw new Error(
+      typeof value.detail === "string"
+        ? value.detail
+        : JSON.stringify(value.detail),
+    );
+  return value;
+}
+export const studyVersions = () =>
+  studyCall<{ active_version_id: string | null; versions: StudyVersion[] }>(
+    "/versions",
+  );
+export const studyAssignments = () => studyCall<Assignment[]>("/assignments");
+export const assignmentDetail = (id: string) =>
+  studyCall<AssignmentDetail>(`/assignments/${encodeURIComponent(id)}`);

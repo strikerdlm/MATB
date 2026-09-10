@@ -5,7 +5,7 @@ from sqlmodel import Session, select
 from app.db import get_session
 from app import study_registry as service
 from app.study_registry_schemas import DraftPayload, FreezeRequest, Attestation, AssignmentRequest, AmendmentRequest, SelectionRequest
-from app.study_registry_models import StudyDraft, StudyVersion, StudyAssignment, StudyAmendment, StudyRecoveryInterval
+from app.study_registry_models import StudyDraft, StudyVersion, StudyAssignment, StudyAmendment, StudyRecoveryInterval, StudyValidation, StudyRehearsal
 
 router = APIRouter(prefix='/study', tags=['study registry'])
 
@@ -39,7 +39,23 @@ def edit(identity: str, body: DraftPayload, db: Session = Depends(get_session)):
 
 
 @router.post('/drafts/{identity}/validate')
-def validate(identity: str, db: Session = Depends(get_session)): return dict(issues=service.validate(db, identity))
+def validate(identity: str, db: Session = Depends(get_session)):
+    service.lock_registry(db)
+    draft = service._draft(db, identity)
+    issues = service.validate(db, identity)
+    row = StudyValidation(draft_id=identity, draft_sha256=draft.sha256, issues_json=service.canonical(issues))
+    db.add(row); db.commit(); db.refresh(row)
+    return {**row.model_dump(), 'issues': issues}
+
+
+@router.get('/drafts/{identity}/history')
+def draft_history(identity: str, db: Session = Depends(get_session)):
+    draft = service._draft(db, identity)
+    return dict(
+        validations=[{**r.model_dump(), 'issues': json.loads(r.issues_json)} for r in db.exec(select(StudyValidation).where(StudyValidation.draft_id == identity).order_by(StudyValidation.created_at)).all()],
+        rehearsals=db.exec(select(StudyRehearsal).where(StudyRehearsal.draft_id == identity).order_by(StudyRehearsal.created_at)).all(),
+        approval=service.version_view(db, draft.frozen_version_id) if draft.frozen_version_id else None,
+    )
 
 
 @router.post('/drafts/{identity}/rehearse', status_code=201)

@@ -43,6 +43,15 @@ class StudyVersion(SQLModel, table=True):
     created_at: datetime = Field(default_factory=now)
 
 
+class StudyValidation(SQLModel, table=True):
+    __tablename__ = 'study_validation'
+    id: str = Field(default_factory=uid, primary_key=True)
+    draft_id: str = Field(foreign_key='study_draft.id')
+    draft_sha256: str
+    issues_json: str
+    created_at: datetime = Field(default_factory=now)
+
+
 class StudyRehearsal(SQLModel, table=True):
     __tablename__ = 'study_rehearsal'
     id: str = Field(default_factory=uid, primary_key=True)
@@ -107,3 +116,14 @@ class StudyRecoveryInterval(SQLModel, table=True):
 class StudyRegistryLock(SQLModel, table=True):
     __tablename__ = 'study_registry_lock'
     id: int = Field(default=1, primary_key=True)
+
+
+class StudyNativeRating(SQLModel, table=True):
+    __tablename__ = 'study_native_rating'
+    id: str = Field(primary_key=True, foreign_key='assessment_attempt.id')
+    target_attempt_id: str = Field(foreign_key='assessment_attempt.id')
+    session_id: str
+    block_instance_id: str
+    payload_json: str
+    payload_sha256: str
+    created_at: datetime = Field(default_factory=now)
