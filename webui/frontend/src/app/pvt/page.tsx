@@ -5,7 +5,8 @@ import Link from "next/link";
 import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, MoonStar } from "lucide-react";
 
 import { AssessmentPicker } from "@/components/assessments/AssessmentPicker";
-import { startAttempt, type Attempt } from "@/lib/assessments";
+import { type Attempt } from "@/lib/assessments";
+import { useAssessmentAdmission } from "@/lib/assessment-admission";
 import { InstructionAudio } from "@/components/instructions/InstructionAudio";
 import { ExecutionPurposeBadge, ExperimentGuide } from "@/components/experiments/ExperimentGuide";
 import { useExecutionPurpose } from "@/lib/execution-purpose";
@@ -103,14 +104,17 @@ export default function PvtPage() {
     () => visits.find((row) => row.visit_ordinal === Number(visitOrdinal)) ?? null,
     [visitOrdinal, visits],
   );
+  const admission = useAssessmentAdmission(selectedAttempt && purpose && participantId && visit
+    ? {attemptId: selectedAttempt.id, participantId, visitId: visit.id, visitOrdinal: visit.visit_ordinal, purpose, locale, fastMode}
+    : null);
   useReportExperimentFlow("pvt", flowStageForPvt(stage, pvtStarted));
   const kssLabels = locale === "en" ? KSS_EN : KSS_ES;
-  const durationMs = fastMode ? 12_000 : purpose === "practice" ? 60_000 : PVT_PROTOCOL_DURATION_MS;
+  const durationMs = (admission.admitted?.fastMode ?? fastMode) ? 12_000 : (admission.admitted?.purpose ?? purpose) === "practice" ? 60_000 : PVT_PROTOCOL_DURATION_MS;
   const audioLocale = locale === "en" ? "en" : "es";
 
   async function beginKss() {
     if (!purpose || !participantId || !visitOrdinal || !selectedAttempt) return;
-    try { await startAttempt(selectedAttempt.id); } catch (e) {setError(String(e)); return;}
+    try { if (!await admission.admit()) return; } catch (e) {setError(String(e)); return;}
     setError(null);
     setKssScore(null);
     setPvtStarted(false);
@@ -118,26 +122,27 @@ export default function PvtPage() {
   }
 
   async function completePvt(run: PvtRunResult) {
-    if (!purpose || kssScore === null) return;
+    const acquired = admission.admitted;
+    if (!acquired || kssScore === null) return;
     setPendingRun(run);
     setError(null);
     setStage("saving");
     try {
       const saved = await postPvt({
-        attempt_id: selectedAttempt?.id,
-        participant_id: participantId,
-        visit_ordinal: Number(visitOrdinal),
+        attempt_id: acquired.attemptId,
+        participant_id: acquired.participantId,
+        visit_ordinal: acquired.visitOrdinal,
         kss_score: kssScore,
         administered_at: run.administeredAt,
         duration_ms: run.durationMs,
-        execution_purpose: purpose,
-        locale,
+        execution_purpose: acquired.purpose,
+        locale: acquired.locale,
         timing_version: 2,
         interruption_count: run.interruptionCount,
         max_frame_gap_ms: run.maxFrameGapMs,
         terminal_phase: run.terminalPhase,
         terminal_stimulus_at_ms: run.terminalStimulusAtMs,
-        fast_mode: fastMode,
+        fast_mode: acquired.fastMode,
         trials: run.trials,
       });
       setResult(saved);
@@ -185,21 +190,21 @@ export default function PvtPage() {
             <div className="grid gap-5 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="pvt-participant">{copy("Participante", "Participant")}</Label>
-                <select id="pvt-participant" className="native-select w-full" value={participantId} onChange={(event) => setParticipantId(event.target.value)}>
+                <select id="pvt-participant" disabled={admission.pending} className="native-select w-full" value={participantId} onChange={(event) => setParticipantId(event.target.value)}>
                   <option value="">—</option>
                   {participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.id}</option>)}
                 </select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="pvt-visit">{copy("Visita", "Visit")}</Label>
-                <select id="pvt-visit" className="native-select w-full" value={visitOrdinal} onChange={(event) => setVisitOrdinal(event.target.value)} disabled={!participantId}>
+                <select id="pvt-visit" className="native-select w-full" value={visitOrdinal} onChange={(event) => setVisitOrdinal(event.target.value)} disabled={admission.pending || !participantId}>
                   <option value="">—</option>
                   {visits.map((row) => <option key={row.id} value={row.visit_ordinal}>{copy("Día", "Day")} {row.scheduled_day} · V{row.visit_ordinal}</option>)}
                 </select>
               </div>
             </div>
-            <AssessmentPicker participantId={participantId} visitId={visit?.id ?? null} instrument="pvt" purpose={purpose} onSelect={setSelectedAttempt} />
-            <Button type="button" onClick={beginKss} disabled={!purpose || !participantId || !visitOrdinal || !selectedAttempt}>
+            <AssessmentPicker participantId={participantId} visitId={visit?.id ?? null} instrument="pvt" purpose={purpose} onSelect={setSelectedAttempt} disabled={admission.pending} />
+            <Button type="button" onClick={beginKss} disabled={admission.pending || !purpose || !participantId || !visitOrdinal || !selectedAttempt}>
               {copy("Continuar a KSS", "Continue to KSS")}<ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </CardContent>

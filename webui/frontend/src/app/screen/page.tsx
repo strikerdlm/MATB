@@ -6,7 +6,8 @@ import { ExecutionPurposeBadge, ExperimentGuide } from "@/components/experiments
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { AssessmentPicker } from "@/components/assessments/AssessmentPicker";
-import { startAttempt, type Attempt } from "@/lib/assessments";
+import { type Attempt } from "@/lib/assessments";
+import { useAssessmentAdmission } from "@/lib/assessment-admission";
 import { listParticipants, listVisits, postScreen } from "@/lib/api";
 import { useAppLocale } from "@/lib/i18n";
 import { useExecutionPurpose } from "@/lib/execution-purpose";
@@ -35,12 +36,15 @@ export default function ScreenPage() {
     return () => { active = false; };
   }, []);
   useEffect(() => { let active = true; setVisits([]); setVisitId(null); if (participant) void listVisits(participant).then(rows => {if(active) {setVisits(rows); setVisitId(rows[0]?.id ?? null);}}).catch(e => {if(active) setError(String(e));}); return () => {active = false;}; }, [participant]);
-  async function begin() {if (!selectedAttempt) return; try {await startAttempt(selectedAttempt.id); setStage("run");} catch(e) {setError(String(e));}}
+  const admission = useAssessmentAdmission(selectedAttempt && participant && visitId && purpose
+    ? {attemptId: selectedAttempt.id, participantId: participant, visitId, purpose} : null);
+  async function begin() {if (!selectedAttempt) return; try {if (await admission.admit()) setStage("run");} catch(e) {setError(String(e));}}
   useReportExperimentFlow("screen", flowStageForScreen(stage, activityStarted, Boolean(result)));
   async function save(raw: ScreenPayload) {
-    if (!purpose) return;
+    const acquired = admission.admitted;
+    if (!acquired) return;
     setPayload(raw); setStage("saving"); setError(null);
-    try { setResult(await postScreen(participant, raw, false, purpose, selectedAttempt?.id)); }
+    try { setResult(await postScreen(acquired.participantId, raw, false, acquired.purpose, acquired.attemptId)); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "save"); }
     finally { setStage("review"); }
   }
@@ -57,21 +61,21 @@ export default function ScreenPage() {
       <ExperimentGuide id="screen" />
       <div className="space-y-4 rounded-lg border border-white/15 p-5">
         <label htmlFor="screen-participant" className="block font-semibold">{copy("Su código de participante", "Your participant code")}</label>
-        <select id="screen-participant" className="native-select w-full max-w-sm" value={participant} onChange={(event) => setParticipant(event.target.value)}>
+        <select id="screen-participant" disabled={admission.pending} className="native-select w-full max-w-sm" value={participant} onChange={(event) => setParticipant(event.target.value)}>
           <option value="">{copy("Seleccione su código", "Select your code")}</option>
           {participants.map((row) => <option key={row.id} value={row.id}>{row.id}</option>)}
         </select>
         <p className="text-sm text-muted-foreground">{copy("Necesita teclado y mouse. Lea las instrucciones y responda cuando aparezca el estímulo.", "You need a keyboard and mouse. Read the instructions and respond when the stimulus appears.")}</p>
-        <label className="block">{copy("Visita", "Visit")}<select className="native-select block" value={visitId ?? ''} onChange={e => setVisitId(Number(e.target.value))}>{visits.map(v => <option key={v.id} value={v.id}>V{v.visit_ordinal}</option>)}</select></label>
-        <AssessmentPicker participantId={participant} visitId={visitId} instrument="screen" purpose={purpose} onSelect={setSelectedAttempt} />
-        <Button disabled={!purpose || !participant || !selectedAttempt} onClick={() => void begin()}>{copy("Ver instrucciones y comenzar", "View instructions and begin")}</Button>
+        <label className="block">{copy("Visita", "Visit")}<select disabled={admission.pending} className="native-select block" value={visitId ?? ''} onChange={e => setVisitId(Number(e.target.value))}>{visits.map(v => <option key={v.id} value={v.id}>V{v.visit_ordinal}</option>)}</select></label>
+        <AssessmentPicker participantId={participant} visitId={visitId} instrument="screen" purpose={purpose} onSelect={setSelectedAttempt} disabled={admission.pending} />
+        <Button disabled={admission.pending || !purpose || !participant || !selectedAttempt} onClick={() => void begin()}>{copy("Ver instrucciones y comenzar", "View instructions and begin")}</Button>
       </div>
     </>}
     {error && <div role="alert" className="rounded border border-danger/40 p-4">
       <p>{error === "connection" ? copy("No se pudieron cargar los códigos. Compruebe la conexión y vuelva a abrir esta actividad.", "Could not load participant codes. Check the connection and reopen this activity.") : copy("No se pudo guardar. Sus respuestas siguen disponibles en esta pantalla. Compruebe la conexión y vuelva a intentarlo.", "Could not save. Your responses remain available on this screen. Check the connection and try again.")}</p>
       {payload && <Button className="mt-3" onClick={() => void save(payload)}>{copy("Reintentar guardado", "Retry saving")}</Button>}
     </div>}
-    {stage === "run" && <TaskRunner fast={purpose === "practice"} onStart={() => setActivityStarted(true)} onComplete={(raw) => void save(raw)} />}
+    {stage === "run" && <TaskRunner fast={admission.admitted?.purpose === "practice"} onStart={() => setActivityStarted(true)} onComplete={(raw) => void save(raw)} />}
     {stage === "saving" && <p role="status">{copy("Guardando respuestas…", "Saving responses…")}</p>}
     {stage === "review" && result && <section className="space-y-4">
       <h2 className="text-2xl font-semibold">{copy("Respuestas guardadas", "Responses saved")}</h2>

@@ -51,3 +51,22 @@ it('does not select an old context after an in-flight occasion creation', async 
   await waitFor(() => expect(screen.getByRole('button', {name: 'Prepare occasion'})).toBeEnabled());
   expect(screen.getByRole('status')).toHaveTextContent('none selected');
 });
+
+it.each(['withdrawal', 'operator_stop', 'hardware_failure', 'software_failure', 'planned_interruption', 'unknown'])('records the explicitly selected interruption cause %s', async category => {
+  let interrupted: string | null = null;
+  vi.stubGlobal('fetch', vi.fn(async (url: string, options?: RequestInit) => {
+    if (url.includes('/occasions?')) return new Response(JSON.stringify([{id: 'occasion-1', participant_id: 'P01', visit_id: 7, instrument: 'pvt', phase: 'post', order: 1}]));
+    if (url.endsWith('/attempts')) return new Response(JSON.stringify([{id: 'attempt-A', ordinal: 1, execution_purpose: 'study', acquisition_state: interrupted ? 'interrupted' : 'started'}]));
+    if (url.endsWith('/interrupt')) {interrupted = JSON.parse(String(options?.body)).category; return new Response('{}');}
+    throw new Error(url);
+  }));
+  const select = vi.fn();
+  render(<AssessmentPicker participantId="P01" visitId={7} instrument="pvt" purpose="study" onSelect={select} />);
+  await screen.findByRole('option', {name: /post/});
+  fireEvent.change(screen.getByLabelText('Occasion'), {target: {value: 'occasion-1'}});
+  const button = await screen.findByRole('button', {name: 'Record interruption'});
+  expect(button).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('Interruption cause'), {target: {value: category}});
+  fireEvent.click(button);
+  await waitFor(() => expect(interrupted).toBe(category));
+});

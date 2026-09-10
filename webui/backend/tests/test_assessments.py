@@ -142,14 +142,24 @@ def test_journey_rejects_ambiguous_pvt_instead_of_first(client):
 
 
 def test_refresh_ambiguous_repeat_does_not_modify_fit_or_fail_startup(client, engine):
+    from app.models import DepdfFit, ArchivedAssessment
+    from sqlmodel import select
     from app.hcf_refresh import refresh_fit_hcf
     from sqlmodel import Session
     _enroll(client)
+    visit_id = client.get('/participants/P01/visits').json()[0]['id']
+    with Session(engine) as db:
+        fit = DepdfFit(participant_id='P01', visit_id=visit_id, mwl_source='nasa_tlx', g0=2.5, p0=3.5, tau0=4.5, hcf_value=1.37, hcf_source='screen', criteria_version=7, per_level_json=' {"original":  true} ')
+        db.add(fit); db.commit(); db.refresh(fit)
+        before = fit.model_dump()
+        archive_count = len(db.exec(select(ArchivedAssessment)).all())
     for i in range(2):
         a = attempt(client, occasion(client, 'screen', order=i + 1))
         assert client.post('/screen', json={'participant_id': 'P01', 'execution_purpose': 'study', 'attempt_id': a['id'], 'payload': screen_payload(300 + i)}).status_code == 201
     with Session(engine) as db:
         assert refresh_fit_hcf(db) == 0
+        assert db.get(DepdfFit, before['id']).model_dump() == before
+        assert len(db.exec(select(ArchivedAssessment)).all()) == archive_count
 
 
 def test_known_practice_classification_excluded_from_legacy_screen_cohort(client):

@@ -28,7 +28,7 @@ def _json(raw):
 
 @router.get("/{participant_id}/{visit_ordinal}")
 def participant_journey(participant_id: str, visit_ordinal: int, request: Request,
-                        experiment: Experiment = "suas", attempt_id: str | None = None, pvt_attempt_id: str | None = None, session: Session = Depends(get_session)):
+                        experiment: Experiment = "suas", attempt_id: str | None = None, pvt_attempt_id: str | None = None, polar_attempt_id: str | None = None, legacy_screen: bool = False, session: Session = Depends(get_session)):
     if session.get(Participant, participant_id) is None:
         raise HTTPException(404, "participant not found")
     visit = session.exec(select(Visit).where(Visit.participant_id == participant_id,
@@ -37,17 +37,36 @@ def participant_journey(participant_id: str, visit_ordinal: int, request: Reques
         raise HTTPException(404, "visit not found")
     tables = set(inspect(session.connection()).get_table_names())
     from app.assessment_readers import select_one, select_source_rows
-    pvt_rows = session.exec(select(PvtAssessment).where(PvtAssessment.visit_id == visit.id,
-                    PvtAssessment.execution_purpose == "study")).all()
-    pvt = select_one(pvt_rows, pvt_attempt_id or (attempt_id if experiment == "pvt" else None))
-    if pvt and (not pvt.protocol_valid or pvt.pvt_version < 2):
-        pvt = None
+    from app.assessment_models import AssessmentAttempt, AssessmentOccasion
+
+    def selected_context(identity, instrument, *, allow_unknown_screen=False):
+        selected = session.get(AssessmentAttempt, identity)
+        context = session.get(AssessmentOccasion, selected.occasion_id) if selected else None
+        unknown_screen = bool(context and allow_unknown_screen and context.visit_id is None
+                              and context.origin in {'legacy', 'legacy_compat'})
+        if (context is None or context.instrument != instrument or context.participant_id != participant_id
+                or (context.visit_id != visit.id and not unknown_screen)):
+            raise HTTPException(404, "selected attempt not found in this participant visit")
+        return context
+
+    if attempt_id:
+        selected_context(attempt_id, experiment, allow_unknown_screen=experiment == "screen" and legacy_screen)
+    pvt = None
+    if experiment in {"pvt", "suas"}:
+        pvt_selection = attempt_id if experiment == "pvt" else pvt_attempt_id
+        if pvt_selection:
+            selected_context(pvt_selection, "pvt")
+        pvt_rows = session.exec(select(PvtAssessment).where(PvtAssessment.visit_id == visit.id,
+                        PvtAssessment.execution_purpose == "study")).all()
+        pvt = select_one(pvt_rows, pvt_selection)
+        if pvt and (not pvt.protocol_valid or pvt.pvt_version < 2):
+            pvt = None
     registry = getattr(request.app.state, "component_registry", None)
     active = {item.component_id for item in registry.manifests()} if registry else set()
     descriptor = next(row for row in EXPERIMENTS if row["id"] == experiment)
     available = descriptor["component_id"] is None or descriptor["component_id"] in active
     polar_complete = False
-    if "polar_capture" in tables:
+    if "polar_capture" in tables and experiment in {"physiology", "suas"}:
         from app.physiology_models import PolarCaptureRecord
         baseline_id = f"baseline:{participant_id}:V{visit_ordinal}"
         captures = session.exec(select(PolarCaptureRecord).where(
@@ -56,7 +75,14 @@ def participant_journey(participant_id: str, visit_ordinal: int, request: Reques
             PolarCaptureRecord.matb_session_id == baseline_id,
             PolarCaptureRecord.execution_purpose == "study",
             PolarCaptureRecord.artifact_state == "finalized")).all()
-        captures = select_source_rows(session, captures, "polar_capture", attempt_id if experiment == "physiology" else None)
+        polar_selection = attempt_id if experiment == "physiology" else polar_attempt_id
+        if polar_selection:
+            selected_context(polar_selection, "physiology")
+        # H10 accompanies a mission; an unselected repeat does not block it.
+        if experiment == "suas" and len(captures) > 1 and polar_selection is None:
+            captures = []
+        else:
+            captures = select_source_rows(session, captures, "polar_capture", polar_selection)
         # Saved capture completion is not a claim that its HRV quality gate passed.
         polar_complete = any(row.started_at and row.ended_at and
                              (row.ended_at - row.started_at).total_seconds() >= 300 and
@@ -94,8 +120,19 @@ def participant_journey(participant_id: str, visit_ordinal: int, request: Reques
         steps = [_step("welcome", True), _step("kss", pvt is not None), _step("pvt", pvt is not None), _step("complete", pvt is not None)]
     elif experiment == "screen":
         from matb_integration.screen.hcf_mapping import SCREEN_VERSION
-        row = select_one(session.exec(select(ScreenResult).where(ScreenResult.participant_id == participant_id,
-            ScreenResult.execution_purpose == "study", ScreenResult.screen_version == SCREEN_VERSION)).all(), attempt_id)
+        rows = session.exec(select(ScreenResult).where(ScreenResult.participant_id == participant_id,
+            ScreenResult.execution_purpose == "study", ScreenResult.screen_version == SCREEN_VERSION)).all()
+        matching = []
+        for candidate in rows:
+            linked = session.get(AssessmentAttempt, candidate.attempt_id) if candidate.attempt_id else None
+            context = session.get(AssessmentOccasion, linked.occasion_id) if linked else None
+            unknown = context is None or (context.visit_id is None and context.origin in {"legacy", "legacy_compat"})
+            if legacy_screen:
+                if unknown:
+                    matching.append(candidate)
+            elif context and context.visit_id == visit.id and context.participant_id == participant_id:
+                matching.append(candidate)
+        row = select_one(matching, attempt_id)
         scores = _json(row.scores_json) if row else {}
         steps = [_step("welcome", True)] + [_step(task, scores.get(task, {}).get("valid") is True)
                     for task in ("simple_rt", "choice_rt", "nback", "tracking")]
@@ -127,5 +164,6 @@ def participant_journey(participant_id: str, visit_ordinal: int, request: Reques
         if item["status"] == "upcoming":
             item["status"] = "current" if available else "unavailable"
             break
-    return {"selection_mode": "explicit" if attempt_id else "legacy_unambiguous", "attempt_id": attempt_id, "participant_id": participant_id, "visit_id": visit.id, "visit_ordinal": visit.visit_ordinal,
+    return {"selection_mode": "legacy_screen_visit_unknown" if experiment == "screen" and legacy_screen else "explicit" if attempt_id else "legacy_unambiguous",
+            "assessment_visit_id": None if experiment == "screen" and legacy_screen else visit.id, "attempt_id": attempt_id, "participant_id": participant_id, "visit_id": visit.id, "visit_ordinal": visit.visit_ordinal,
             "selected_experiment": experiment, "execution_purpose": "study", "steps": steps}

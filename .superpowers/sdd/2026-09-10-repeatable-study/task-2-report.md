@@ -298,3 +298,158 @@ heavy-work admission and study-first navigation remain Tasks3–7 as specified.
 - Source adapters expose independent acquisition/raw/rating/processing facets and
   preserve existing scoring/qualification distinctions. No scoring, experimental
   geometry, shortcuts, native event streams or manifests were changed.
+
+## Review fix round 1 — I1–I4 and M1
+
+All four Important review findings are addressed together. M1 now has a real
+nondefault fit preservation assertion. M2 remains the existing dependency warning;
+no warning filter, dependency upgrade or unrelated production change was made.
+The review source is `task-2-review.md`, base
+`1d9d2e15844d1825506dbb82d070984207e74680`.
+
+### Changes and concrete contract corrections
+
+- **I1:** `InterruptIn` now distinguishes withdrawal, operator_stop,
+  hardware_failure, software_failure, planned_interruption and unknown. The older
+  participant_stop, technical_failure, lost_connection and other values remain
+  accepted/preserved without reinterpretation. No migration rewrites existing causes,
+  including NULL/unknown or a nonspecific technical/disconnection record. The picker
+  requires an explicit cause choice, including “Cause unknown or not established,”
+  before enabling Record interruption; it no longer assigns operator_stop. EN/ES
+  choices cover every required cause, reset on context/occasion change, and the typed
+  frontend API uses the same interruption union.
+- **I2:** added `useAssessmentAdmission` as the shared page admission boundary. It
+  prevents duplicate pending requests, freezes a snapshot of the chosen attempt and
+  acquisition context, and only admits the response if the page remains mounted and
+  its context key is unchanged. It also verifies the returned attempt ID. PVT and
+  screen disable participant/visit/picker/start controls while admission is pending.
+  Both pages require the admitted snapshot for saving/retrying; neither uses optional
+  selectedAttempt IDs nor falls back to legacy ingestion after selection changes.
+  PVT snapshots participant, assigned visit ordinal/ID, purpose, locale and fast mode;
+  screen snapshots participant, visit ID and purpose. Runner duration/fast-mode settings
+  use the admitted purpose/configuration. No stimulus runner implementation changed.
+  A stale server start response does not launch KSS or the screen battery. Its durable
+  attempt remains available for explicit researcher review; the client does not invent
+  an interruption cause or erase that identity.
+- **I3:** journey resolves PVT only for PVT or the actual sUAS PVT prerequisite.
+  Baseline H10 is resolved only for physiology or its optional mission accompaniment.
+  Repeated unrelated PVT/H10 cannot block an exact screen/PVT selection. Optional
+  mission H10 repeats require explicit `polar_attempt_id` to report one as complete;
+  absent that selection the optional step stays incomplete and does not block the
+  mission. Explicit attempt selections validate occasion instrument, participant and
+  visit before source lookup. Screen rows are restricted to the requested occasion
+  visit. Cross-visit explicit screens return404 rather than reporting their evidence
+  under another visit. Historical unknown-visit screens are accessible through the
+  deliberate `legacy_screen=true` compatibility path, labeled
+  `selection_mode=legacy_screen_visit_unknown` and `assessment_visit_id=null`.
+  The default assigned-visit path excludes those unknown-visit rows. No historical
+  visit is fabricated and no assignment/classification is silently rewritten.
+- **I4:** native source receipt projection now honors `role=ratings`. A questionnaire
+  with no rating payload retains its own acquisition/raw/rating/processing facts;
+  completed task artifacts do not supply them. Actual ratings_json establishes
+  saved raw/ratings; recorded ratings_saved_at additionally establishes finished
+  questionnaire acquisition. If the payload exists but its save time is unknown,
+  acquisition stays unknown. Task artifact/processing failures do not erase saved
+  ratings, and task receipt facts remain on the separately targeted task attempt.
+- **M1:** the ambiguous-fit regression seeds nondefault g0/p0/tau0/HCF/version/source
+  values and deliberately spaced original JSON, then compares the entire refreshed
+  model dump and archive count with their originals. It proves both unchanged fit
+  fields and no spurious archive creation, beyond the previous return-value check.
+
+Changed production paths:
+
+```
+webui/backend/app/assessment_schemas.py
+webui/backend/app/assessment_adapters.py
+webui/backend/app/routers/journey.py
+webui/frontend/src/lib/assessment-admission.ts (new)
+webui/frontend/src/lib/assessments.ts
+webui/frontend/src/components/assessments/AssessmentPicker.tsx
+webui/frontend/src/app/pvt/page.tsx
+webui/frontend/src/app/screen/page.tsx
+```
+
+Changed/new tests: `webui/backend/tests/test_assessment_review_fixes.py` (new),
+`test_assessments.py`, `test_openmatb_records.py`,
+`webui/frontend/src/components/assessments/AssessmentPages.test.tsx` (new), and
+`AssessmentPicker.test.tsx`. The only other changed path is this report.
+
+### Exact RED/GREEN evidence
+
+Backend prefix, cwd webui/backend (async worker support enabled):
+
+```
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/tmp/matb-predictability-testdeps PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 MATB_COMPONENTS=auto /root/repos/MATB/.venv/bin/python -B -m pytest -q -p no:cacheprovider -p anyio.pytest_plugin
+```
+
+RED suffix:
+
+```
+tests/test_assessment_review_fixes.py tests/test_openmatb_records.py tests/test_assessments.py -k 'category_is_preserved or journey or questionnaire_receipt or refresh_ambiguous'
+```
+
+**16 failed, 2 passed, 32 deselected, 1 warning in 2.52s**.
+`/tmp/task2-fix1-back-red.log`. New causes were rejected, unrelated instruments blocked
+journey/cross-visit screens were accepted, and rating receipts borrowed task facts.
+The seeded fit retention test already passed, as expected for M1's coverage issue.
+
+GREEN suffix:
+
+```
+tests/test_assessment_review_fixes.py tests/test_openmatb_records.py tests/test_assessments.py tests/test_experiment_safety.py tests/test_hcf_refresh.py
+```
+
+**68 passed, 1 warning in 9.45s** (`/tmp/task2-fix1-back-green.log`). This covers every
+new category and preserved older category, conflicting cause retries, scoped journey
+selection, explicitly labeled unknown-visit compatibility, rating absence/save/task
+artifact failure, source/lifecycle/migration preservation and the seeded fit assertion.
+
+Final additional historical-unknown rating regression, same prefix +:
+
+```
+tests/test_openmatb_records.py -k 'questionnaire_receipt'
+```
+
+**4 passed, 19 deselected, 1 warning in 0.94s**
+(`/tmp/task2-fix1-rating-final.log`). Added after the 68-test run; it verifies unknown
+questionnaire acquisition before payload and after payload without a recorded save
+time. No backend production source changed after the 68-test run. Counts overlap.
+All warnings are the pre-existing Starlette python_multipart PendingDeprecationWarning.
+
+Frontend cwd webui/frontend, RED:
+
+```
+npm test -- src/components/assessments/AssessmentPages.test.tsx src/components/assessments/AssessmentPicker.test.tsx
+```
+
+**10 failed, 2 passed / 2 failed files, 3.60s**
+(`/tmp/task2-fix1-front-red.log`). The new page tests exercise both PVT and screen:
+controlled deferred start responses, conflicting selection controls, stale participant
+updates before response resolution, and clearing/changing current selection/purpose
+before save and retry. The real pages and admission/save handlers run; only the
+stimulus runners and transport are controlled. Six picker cases cover the required
+operator-selected causes and unknown rather than an assigned default.
+
+GREEN:
+
+```
+npm test -- src/components/assessments/AssessmentPages.test.tsx src/components/assessments/AssessmentPicker.test.tsx src/lib/assessments.test.ts src/lib/api.test.ts src/lib/pvt.test.ts src/lib/screen.test.ts
+npm run typecheck
+```
+
+**42 passed / 6 files, 7.81s** (`/tmp/task2-fix1-front-green.log`).
+**Typecheck passed** (`/tmp/task2-fix1-types.log`). An initial typecheck found the new
+picker test double's callback lacked the real nullable selection signature; corrected
+that fixture type and reran typecheck. No frontend production code changed afterward.
+`git diff --check` passed.
+
+### Self-review and scope limits
+
+No unresolved I1–I4/M1 concern. Raw snapshots, source IDs, original classification
+histories, instrument scoring/geometry and native task artifacts remain unchanged.
+Existing historical interruption causes are retained; technical signals do not become
+asserted hardware/software causes. The shared start boundary admits an immutable page
+context; later live-visit gating/optional runtime lifecycle synchronization remains
+Task6. Later assignment and analysis eligibility integration remains with the
+controller, as requested. No new browser E2E, hardware run or production migration was
+performed for this focused correction. No subagents, push, or sibling worktree edits.

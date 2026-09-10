@@ -30,7 +30,9 @@ class RepeatIn(AttemptIn):
 
 
 class InterruptIn(Strict):
-    category: Literal['operator_stop', 'participant_stop', 'technical_failure', 'lost_connection', 'other']
+    category: Literal['withdrawal', 'operator_stop', 'hardware_failure', 'software_failure',
+                      'planned_interruption', 'unknown',
+                      'participant_stop', 'technical_failure', 'lost_connection', 'other']
 
 
 class OccasionClassificationIn(Strict):

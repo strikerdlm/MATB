@@ -449,3 +449,51 @@ def test_shared_native_practice_and_rating_target_keep_actual_purpose(controlled
         assert rating.target_attempt_id == task.id
         assert task.purpose_provenance_id != suite.purpose_provenance_id
         assert provenance_view(db, task.purpose_provenance_id)['current']['classification'] == 'explicit'
+
+
+@pytest.mark.parametrize('has_ratings,artifact_status', [(False, 'saved'), (True, 'saved'), (True, 'missing')])
+def test_questionnaire_receipt_uses_its_own_evidence(controlled, engine, has_ratings, artifact_status):
+    from app.assessment_adapters import source_attempt
+    from app.assessment_service import attempt_view
+    from app.openmatb_models import OpenMatbBlockAttempt
+    manager, prepared = controlled
+    native_id, _ = awaiting_scale(manager, prepared, engine)
+    with Session(engine) as db:
+        native = db.get(OpenMatbBlockAttempt, native_id)
+        native.artifact_status = artifact_status
+        native.task_status = 'completed'
+        native.evidence_status = 'failed' if artifact_status == 'missing' else 'processed'
+        if has_ratings:
+            from datetime import datetime, timezone
+            native.ratings_json = '{"bedford":4}'
+            native.ratings_saved_at = datetime(2026, 9, 10, 12, tzinfo=timezone.utc)
+        db.add(native); db.commit()
+        questionnaire = source_attempt(db, 'openmatb_block_attempt', native_id, 'ratings')
+        receipt = attempt_view(db, questionnaire)['receipt']
+        assert receipt['raw_saving'] == ('saved' if has_ratings else 'unknown')
+        assert receipt['acquisition'] == ('finished' if has_ratings else 'created')
+        assert receipt['ratings'] == ('saved' if has_ratings else 'unknown')
+        assert receipt['processing'] == 'unknown'
+        task = attempt_view(db, source_attempt(db, 'openmatb_block_attempt', native_id))['receipt']
+        assert task['raw_saving'] == artifact_status
+        assert task['acquisition'] == 'completed'
+
+
+def test_legacy_questionnaire_receipt_keeps_unknown_without_rating_time(controlled, engine):
+    from app.assessment_adapters import source_attempt
+    from app.assessment_service import attempt_view
+    from app.openmatb_models import OpenMatbBlockAttempt
+    manager, prepared = controlled
+    native_id, _ = awaiting_scale(manager, prepared, engine)
+    with Session(engine) as db:
+        questionnaire = source_attempt(db, 'openmatb_block_attempt', native_id, 'ratings')
+        questionnaire.acquisition_state = 'unknown'
+        native = db.get(OpenMatbBlockAttempt, native_id)
+        native.artifact_status = 'saved'
+        native.task_status = 'completed'
+        db.add(questionnaire); db.add(native); db.commit()
+        assert attempt_view(db, questionnaire)['receipt'] == {'raw_saving': 'unknown', 'acquisition': 'unknown', 'ratings': 'unknown', 'processing': 'unknown'}
+        native.ratings_json = '{"bedford":4}'
+        db.add(native); db.commit()
+        assert native.ratings_saved_at is None
+        assert attempt_view(db, questionnaire)['receipt'] == {'raw_saving': 'saved', 'acquisition': 'unknown', 'ratings': 'saved', 'processing': 'unknown'}

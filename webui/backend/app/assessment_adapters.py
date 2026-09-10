@@ -139,7 +139,12 @@ def receipt_facets(db, attempt):
         row = db.execute(text(f'SELECT * FROM "{link.source_table}" WHERE id=:id'), {'id': link.source_id}).mappings().first()
         if row is None:
             continue
-        if link.source_table == 'openmatb_block_attempt':
+        if link.source_table == 'openmatb_block_attempt' and link.role == 'ratings':
+            # A task's completion/artifacts establish no questionnaire facts.
+            if row['ratings_json'] is not None:
+                facets.update(raw_saving='saved', ratings='saved',
+                              acquisition='finished' if row['ratings_saved_at'] is not None else 'unknown')
+        elif link.source_table == 'openmatb_block_attempt':
             facets.update(raw_saving=row['artifact_status'], acquisition=row['task_status'],
                           ratings='saved' if row['ratings_json'] is not None else 'unknown', processing=row['evidence_status'])
         elif link.source_table == 'evidence_capture':
