@@ -4,6 +4,7 @@ import asyncio
 from datetime import date
 
 import pyarrow.parquet as pq
+import pytest
 from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
@@ -122,32 +123,86 @@ def test_queue_pressure_and_disconnect_are_never_silent(tmp_path) -> None:
     asyncio.run(exercise())
 
 
-def test_sensor_timestamp_discontinuity_emits_gap_event(tmp_path) -> None:
+@pytest.mark.parametrize(
+    "delay_consumer", [False, True], ids=["normal", "delayed-pump"]
+)
+def test_sensor_timestamp_discontinuity_emits_gap_event(
+    tmp_path, monkeypatch, delay_consumer
+) -> None:
     async def exercise() -> None:
         transport = SimulatedPolarTransport()
-        manager = PolarCaptureManager(engine=_engine(), artifact_root=tmp_path, transport=transport)
-        await manager.startup()
-        token, _candidate = (await manager.scan(0.25))[0]
-        await manager.connect(token)
-        capture, lease = manager.create_capture(**h10_arguments(manager.engine,
-            participant_id="P01", session_kind="generic", session_id="timestamp-gap",
-            settings={"ecg_sample_rate_hz": 130, "ecg_resolution_bits": 14,
-                      "acc_sample_rate_hz": 50, "acc_resolution_bits": 16, "acc_range_g": 2},
-        ))
-        await manager.start_capture(capture.capture_id, lease)
-        transport.emit_ecg(10_000_000_000, (1, 2))
-        transport.emit_ecg(11_000_000_000, (3, 4))
-        await asyncio.sleep(0.05)
-
-        events = await manager.events_after(capture.capture_id, 0, timeout_s=0.01)
-        assert any(
-            event.event_type == "gap"
-            and event.payload.get("reason") == "sensor_timestamp_discontinuity"
-            for event in events
+        manager = PolarCaptureManager(
+            engine=_engine(), artifact_root=tmp_path, transport=transport
         )
-        final = await manager.stop_capture(capture.capture_id, lease)
-        assert "ecg_sensor_timestamp_discontinuity" in final.incomplete_reasons
-        await manager.shutdown()
+        release_consumer = asyncio.Event()
+        original_consume = manager._consume
+
+        async def gated_consume(stream, context):
+            if stream == "ecg":
+                await release_consumer.wait()
+            await original_consume(stream, context)
+
+        if delay_consumer:
+            monkeypatch.setattr(manager, "_consume", gated_consume)
+        await manager.startup()
+        try:
+            token, _candidate = (await manager.scan(0.25))[0]
+            await manager.connect(token)
+            capture, lease = manager.create_capture(
+                **h10_arguments(
+                    manager.engine,
+                    participant_id="P01",
+                    session_kind="generic",
+                    session_id="timestamp-gap",
+                    settings={
+                        "ecg_sample_rate_hz": 130,
+                        "ecg_resolution_bits": 14,
+                        "acc_sample_rate_hz": 50,
+                        "acc_resolution_bits": 16,
+                        "acc_range_g": 2,
+                    },
+                )
+            )
+            await manager.start_capture(capture.capture_id, lease)
+            transport.emit_ecg(10_000_000_000, (1, 2))
+            transport.emit_ecg(11_000_000_000, (3, 4))
+            # Existing status events are returned immediately, even while the
+            # consumer is still waiting to write the first ECG packet.
+            events = await manager.events_after(capture.capture_id, 0, timeout_s=0.01)
+            if delay_consumer:
+                assert events and all(event.event_type == "status" for event in events)
+                assert not release_consumer.is_set()
+            release_consumer.set()
+
+            async def wait_for_gap():
+                batch = events
+                cursor = 0
+                while True:
+                    for event in batch:
+                        cursor = max(cursor, event.sequence)
+                        if (
+                            event.event_type == "gap"
+                            and event.payload.get("reason")
+                            == "sensor_timestamp_discontinuity"
+                        ):
+                            return event
+                    batch = await manager.events_after(
+                        capture.capture_id, cursor, timeout_s=1
+                    )
+
+            gap = await asyncio.wait_for(wait_for_gap(), timeout=5)
+            assert gap.payload["stream"] == "ecg"
+            assert gap.payload["observed_sensor_timestamp_ns"] == 11_000_000_000
+            final = await manager.stop_capture(capture.capture_id, lease)
+            assert "ecg_sensor_timestamp_discontinuity" in final.incomplete_reasons
+            assert final.artifact_state == "incomplete"
+            assert (
+                pq.read_table(tmp_path / capture.capture_id / "ecg.parquet").num_rows
+                == 4
+            )
+        finally:
+            release_consumer.set()
+            await manager.shutdown()
 
     asyncio.run(exercise())
 

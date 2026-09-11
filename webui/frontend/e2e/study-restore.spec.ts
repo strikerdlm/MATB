@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { approveStudyFixture, baseOccasion, post } from "./study-fixtures";
+import { studyParticipantId } from "./study-participant-id";
 
 for (const locale of ["en", "es-419"] as const) {
   test(`study backup keyboard and empty restore (${locale})`, async ({
@@ -11,11 +12,11 @@ for (const locale of ["en", "es-419"] as const) {
     test.setTimeout(120000);
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    const participant = `P${((process.pid % 7000) + 1) * 60 + (locale === "en" ? 51 : 52)}`;
-    await post(request, "/participants", {
-      id: participant,
-      enrollment_date: "2026-09-10",
+    const participant = studyParticipantId("restore", locale, info);
+    const created = await request.post("http://127.0.0.1:8000/participants", {
+      data: { id: participant, enrollment_date: "2026-09-10" },
     });
+    expect(created.status(), await created.text()).toBe(201);
     await approveStudyFixture(request, participant, [
       { ...(await baseOccasion(request)), key: "baseline" },
     ]);

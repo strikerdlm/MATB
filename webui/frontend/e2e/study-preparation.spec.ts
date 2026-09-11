@@ -1,16 +1,17 @@
 import { test, expect } from "@playwright/test";
 import { approveStudyFixture, baseOccasion, post } from "./study-fixtures";
+import { studyParticipantId } from "./study-participant-id";
 const base = "http://127.0.0.1:8000";
 for (const locale of ["en", "es-419"] as const) {
   test(`measured preparation and exact PVT return in ${locale}`, async ({
     page,
     request,
-  }) => {
-    const participant = `P${((process.pid % 8000) + 1) * 60 + (locale === "en" ? 51 : 52)}`;
-    await post(request, "/participants", {
-      id: participant,
-      enrollment_date: "2026-09-10",
+  }, info) => {
+    const participant = studyParticipantId("preparation", locale, info);
+    const created = await request.post(base + "/participants", {
+      data: { id: participant, enrollment_date: "2026-09-10" },
     });
+    expect(created.status(), await created.text()).toBe(201);
     const occasion = {
       ...(await baseOccasion(request)),
       key: "baseline",

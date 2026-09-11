@@ -56,7 +56,7 @@ def _translate(exc: PolarRuntimeError) -> HTTPException:
     }:
         code = status.HTTP_503_SERVICE_UNAVAILABLE
     elif exc.code in {"exact_stream_settings_unavailable", "mandatory_stream_unavailable"}:
-        code = status.HTTP_422_UNPROCESSABLE_ENTITY
+        code = status.HTTP_422_UNPROCESSABLE_CONTENT
     else:
         code = status.HTTP_409_CONFLICT
     return HTTPException(

@@ -374,3 +374,76 @@ No broad suites/re-review or production mutation. Inventory 5 records only the
 converter test hash delta from inventory 4; the expected contracts pass count is
 now 599 plus the explicit missing-SAGAT-plugin skip. Parent holds the push while
 remaining current CI jobs finish, so any additional actual failures can be batched.
+
+### Actual Windows event ordering / HTTP warnings and Linux fixture collision
+
+The completed 6360e49 workflow 34550840968 exposed two additional concrete
+console failures. Windows full backend completed 482 passed, 1 failed, 1 skipped
+and three HTTP 422 deprecation warnings; both-OS core completed 352 passed / 36
+skipped / zero warnings. Linux full backend completed 483 passed / 1 skipped with
+the same three warnings, then the strict browser gate rejected one flaky restore
+case (39 passed / 1 flaky). These were actual failures, not accepted retries.
+
+The ECG test fetched events from cursor zero after a fixed 50 ms sleep. Existing
+capture status events return immediately, while the second ECG packet is processed
+only after the first packet's asynchronous Parquet write. The test now consumes
+successive event batches with an advancing sequence cursor until the exact
+sensor_timestamp_discontinuity event, bounded by a five-second deadline. A gated
+ECG consumer deterministically keeps the initial batch at status-only, then is
+released before the same observation path. The delayed case reproduced the old
+failure (1 failed / 1 passed, physiology-pump-red-1.log). Final assertions retain
+the precise gap reason and incomplete reason, and additionally check the ECG
+stream/timestamp, incomplete artifact state, and all four retained samples.
+Finally cleanup releases the gate and shuts down the manager even on failure.
+Production physiology processing, timing and scientific calculations are unchanged.
+
+Replaced all 15 reachable deprecated HTTP_422_UNPROCESSABLE_ENTITY references in
+the owned Liftoff, physiology and simulation routers with
+HTTP_422_UNPROCESSABLE_CONTENT. Numeric 422 responses and error payloads remain
+unchanged. No warning filters or relaxed assertions were introduced.
+
+Linux preparation and restore used the same PID-derived offsets (51/52), so a
+shared worker could create the same participant in both tests. The restore retry
+merely changed the worker PID. Both fixture families now use disjoint reserved
+P91xxxx/P92xxxx namespaces, with explicit locale, repeat and retry slots and bounds
+checks. Creation must return exactly 201; a 409 is neither reused nor retried.
+The deterministic allocator regression checks 4,000 distinct valid IDs across all
+supported slots and rejects six invalid/exhausted slot cases. The existing runner
+continues to provide a fresh isolated database for each browser invocation.
+
+Focused validation (all retained under task7):
+
+- windows-backend-fixes-2.log/xml: 36 passed / 27.24 s / zero warnings with
+  `-W error::DeprecationWarning`; selected test_physiology_runtime.py,
+  test_physiology_api.py, test_liftoff_failures.py and test_simulation_endpoints.py.
+  Unique basetemp /tmp/matb-task7-windows-backend-fixes-2.
+- physiology-pump-final-1.log/xml: final formatted runtime test source, 7 passed /
+  2.24 s / zero warnings under the same strict warning setting; unique basetemp
+  /tmp/matb-task7-physiology-pump-final-1.
+- study-participant-id-final-1.log: 7 passed / 2.18 s via
+  `npm run test -- e2e/study-participant-id.test.ts`.
+- ci-fixes-types-1.log and ci-fixes-lint-1.log: TypeScript and
+  `eslint . --max-warnings=0` passed.
+
+Backend commands used PYTHONDONTWRITEBYTECODE=1,
+PYTHONPATH=/tmp/matb-task7-webdeps:/tmp/matb-predictability-testdeps and
+/root/repos/MATB/.venv/bin/python -B -m pytest, -q -p no:cacheprovider,
+explicit unique basetemp and JUnit output. A first command referenced the nonexistent
+module test_physiology_endpoints.py and collected no tests; its retained log is
+windows-backend-fixes-1.log, followed by the correctly named API suite above.
+
+The complete explicit study browser matcher then passed 40 / 2.9 min with no
+retries or accepted flaky results, including both preparation and both actual
+backup/empty-restore cases in the same isolated DB. Log and outputs:
+ci-fixes-browsers-study-1.log and ci-fixes-browsers-study-1/. Command from frontend:
+`MATB_PYTHON=/root/repos/MATB/.venv/bin/python PYTHONPATH=/tmp/matb-task7-webdeps:/tmp/matb-predictability-testdeps MATB_COMPONENTS=auto PW_TEST_MATCH='**/{study-registry,study-preparation,study-analysis,station,study-restore,participant-journey,frontend-predictability}.spec.ts' npm run test:e2e -- --fail-on-flaky-tests --output=../../.test-tmp/repeatable-study/task7/ci-fixes-browsers-study-1`.
+Server shutdown completed. Production source stayed frozen throughout verification.
+No broad review or scientific/figure rebuild was performed for this bounded fix.
+
+Inventory 6 records 52 source/docs hashes: eight changed/added files versus
+inventory 5 (three router aliases, physiology regression, two browser specs and
+the allocator plus its tests). All other fingerprints remain exact. Expected
+fresh full CI counts are 484 backend passes plus one explicit OS skip, 352 core
+passes plus 36 exclusions, 279 frontend tests, and 599 scientific contracts plus
+the explicit SAGAT exclusion. These are expectations until the parent pushes
+this batch together with a80353f and verifies actual fresh both-OS CI output.
