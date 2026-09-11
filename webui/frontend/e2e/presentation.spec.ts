@@ -1,6 +1,18 @@
 import { writeFileSync } from "node:fs";
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 const api = "http://127.0.0.1:8000";
+
+async function waitForRenderedFrame(page: Page) {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => resolve()),
+        );
+      }),
+  );
+}
+
 for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
   test(`offline 3D ${block}: readiness, camera, pause and technical fallback`, async ({
     page,
@@ -96,14 +108,7 @@ for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
           // Settle it before spending the click's input/completion budget.
           await traffic.scrollIntoViewIfNeeded();
           await expect(traffic).toBeInViewport();
-          await page.evaluate(
-            () =>
-              new Promise<void>((resolve) => {
-                requestAnimationFrame(() =>
-                  requestAnimationFrame(() => resolve()),
-                );
-              }),
-          );
+          await waitForRenderedFrame(page);
           selectionTiming.scrollMs = Date.now() - phaseStarted;
           selectionTiming.phase = "click";
           phaseStarted = Date.now();
@@ -204,10 +209,12 @@ for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
       expect(rebuilt.memory.geometries).toBeLessThanOrEqual(
         metrics.memory.geometries + 2,
       );
-      await page
+      const pause = page
         .getByRole("button", { name: /pause/i, exact: false })
-        .first()
-        .click();
+        .first();
+      await pause.scrollIntoViewIfNeeded();
+      await waitForRenderedFrame(page);
+      await pause.click({ timeout: 15000 });
       await expect
         .poll(
           async () =>
