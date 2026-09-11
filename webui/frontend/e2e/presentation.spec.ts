@@ -17,11 +17,13 @@ async function activateInteractiveButton({
   page,
   button,
   completed,
+  pending,
   timeout = 15000,
 }: {
   page: Page;
   button: Locator;
   completed: () => Promise<boolean>;
+  pending: () => Promise<boolean>;
   timeout?: number;
 }) {
   const deadline = Date.now() + timeout;
@@ -44,6 +46,11 @@ async function activateInteractiveButton({
     throw error;
   }
   if (await completed()) return;
+  if (await completedSoon()) return;
+  if (!(await pending())) {
+    await expect.poll(completed, { timeout: remainingTimeout() }).toBe(true);
+    return;
+  }
   await button.focus();
   await button.press("Space");
   if (await completedSoon()) return;
@@ -158,6 +165,8 @@ for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
               && ((await observedTraffic.textContent()) ?? "").includes(
                 "a12345",
               ),
+            pending: async () =>
+              (await traffic.getAttribute("aria-pressed")) !== "true",
           });
           selectionTiming.clickMs = Date.now() - phaseStarted;
           selectionTiming.phase = "assertions";
@@ -261,6 +270,7 @@ for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
         button: page.getByRole("button", { name: /pause/i, exact: false })
           .first(),
         completed: async () => (await lifecycle()) === "PAUSED",
+        pending: async () => (await lifecycle()) !== "PAUSED",
       });
       await expect
         .poll(lifecycle)
