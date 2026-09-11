@@ -447,3 +447,38 @@ fresh full CI counts are 484 backend passes plus one explicit OS skip, 352 core
 passes plus 36 exclusions, 279 frontend tests, and 599 scientific contracts plus
 the explicit SAGAT exclusion. These are expectations until the parent pushes
 this batch together with a80353f and verifies actual fresh both-OS CI output.
+
+### Actual Linux zoom screenshot capture readiness correction
+
+Workflow 34552726234 at f264d9f passed Linux core 352 / 36 skips, full backend
+484 / 1 skip, frontend 279, strict lint/types/build, geography 14, evidence 1 and
+study 40 cleanly. The final real-browser zoom gate correctly rejected one flaky
+English case: CDP Page.captureScreenshot returned "Unable to capture screenshot"
+after the actual 200% XTest zoom, width-halving and no-horizontal-overflow
+assertions passed. The original failure directory contained no PNG, identifying
+the first preparation capture; the retry and Spanish case each produced all eight
+images. The failed screenshot is not accepted as successful evidence. Parent
+retained the full CI log and extracted zoom artifacts under /tmp/matb-ci-f264d9f-*.
+
+Direct CDP capture bypasses Playwright's screenshot font preparation and its
+screenshot-expectation frame settlement. The test now activates the real page and
+awaits document.fonts.ready plus two animation frames after navigation/zoom before
+measuring/capturing. This is a bounded readiness correction supported by the code
+path; a specific Chromium GPU/compositor root cause was not proven. There is still
+exactly one screenshot request per route: no capture retry or exception swallowing.
+Full-page DIP dimensions and genuine browser zoom remain unchanged. Each route
+attaches CDP metrics to the test report, asserts positive measured dimensions,
+and checks the resulting PNG width/height against the complete measured content.
+CDP sessions detach in finally. All eight routes and both languages remain covered.
+
+Focused final verification: zoom-capture-readiness-1.log, 6 passed / 1.8 min,
+using --repeat-each=3 --retries=0 --fail-on-flaky-tests. All 48 full-page PNGs are
+retained in zoom-capture-readiness-1/; dimensions and SHA-256 hashes are recorded
+in zoom-capture-readiness-1-images.json. Command from frontend:
+`MATB_PYTHON=/root/repos/MATB/.venv/bin/python PYTHONPATH=/tmp/matb-task7-webdeps:/tmp/matb-predictability-testdeps MATB_COMPONENTS=auto PW_TEST_MATCH='**/browser-zoom.spec.ts' npm run test:e2e -- --fail-on-flaky-tests --repeat-each=3 --retries=0 --output=../../.test-tmp/repeatable-study/task7/zoom-capture-readiness-1`.
+zoom-capture-types-1.log and zoom-capture-lint-1.log record passing TypeScript and
+strict zero-warning lint. Server shutdown completed. Inventory 7 changes only the
+zoom spec hash from inventory 6; all other 51 source/docs fingerprints are exact.
+Production is unchanged; no broad local suite or re-review was performed. Parent
+holds push pending completion of the current Windows CI job, then owns the fresh
+full both-OS verification of the exact final commit.

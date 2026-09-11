@@ -112,24 +112,46 @@ for (const locale of ["en", "es-419"] as const) {
         );
         // Playwright's fullPage CSS clip crops an actual browser-zoom capture.
         // CDP contentSize is in display-independent pixels, matching this clip.
-        const cdp = await context.newCDPSession(page);
-        const metrics = await cdp.send("Page.getLayoutMetrics");
-        const capture = await cdp.send("Page.captureScreenshot", {
-          format: "png",
-          captureBeyondViewport: true,
-          clip: {
-            x: 0,
-            y: 0,
-            width: metrics.contentSize.width,
-            height: metrics.contentSize.height,
-            scale: 1,
-          },
+        // Direct CDP also bypasses Playwright's screenshot preparation. Wait for
+        // fonts and two rendered frames after navigation/zoom before measuring.
+        await page.bringToFront();
+        await page.evaluate(async () => {
+          await document.fonts.ready;
+          await new Promise<void>((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+          });
         });
-        fs.writeFileSync(
-          info.outputPath(`${name}-zoom-200.png`),
-          Buffer.from(capture.data, "base64"),
-        );
-        await cdp.detach();
+        const cdp = await context.newCDPSession(page);
+        try {
+          const metrics = await cdp.send("Page.getLayoutMetrics");
+          await info.attach(`${name}-zoom-200-metrics`, {
+            contentType: "application/json",
+            body: JSON.stringify(metrics),
+          });
+          expect(metrics.contentSize.width).toBeGreaterThan(0);
+          expect(metrics.contentSize.height).toBeGreaterThan(0);
+          const capture = await cdp.send("Page.captureScreenshot", {
+            format: "png",
+            captureBeyondViewport: true,
+            clip: {
+              x: 0,
+              y: 0,
+              width: metrics.contentSize.width,
+              height: metrics.contentSize.height,
+              scale: 1,
+            },
+          });
+          const png = Buffer.from(capture.data, "base64");
+          fs.writeFileSync(info.outputPath(`${name}-zoom-200.png`), png);
+          expect(png.readUInt32BE(16)).toBe(
+            Math.ceil(metrics.contentSize.width),
+          );
+          expect(png.readUInt32BE(20)).toBe(
+            Math.ceil(metrics.contentSize.height),
+          );
+        } finally {
+          await cdp.detach();
+        }
       }
       expect(errors).toEqual([]);
     } finally {
