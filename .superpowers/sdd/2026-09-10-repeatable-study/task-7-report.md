@@ -325,3 +325,27 @@ verification. Physical timing/H10 hardware, human calibration and reliability,
 SAGAT plugin availability, public reference data, privacy/licensing requirements,
 and the deferred P2 station inventory/synchronization/replay/shared-network
 capabilities remain truthful limitations. No scientific qualification was promoted.
+
+### CI-only Node 24 action correction
+
+Workflow 34550487523 at 5435e38 emitted actual Node 20 action-runtime deprecation
+annotations. Updated the 10 existing checkout/setup-python/upload-artifact/
+setup-node references to immutable official release commits, verified directly
+against GitHub release tag objects and the action.yml at each commit:
+
+| Official action | Release | Immutable commit / verified metadata |
+| --- | --- | --- |
+| actions/checkout | v7.0.1 | [3d3c42e5aac5ba805825da76410c181273ba90b1](https://github.com/actions/checkout/blob/3d3c42e5aac5ba805825da76410c181273ba90b1/action.yml) |
+| actions/setup-python | v7.0.0 | [5fda3b95a4ea91299a34e894583c3862153e4b97](https://github.com/actions/setup-python/blob/5fda3b95a4ea91299a34e894583c3862153e4b97/action.yml) |
+| actions/upload-artifact | v7.0.1 | [043fb46d1a93c77aae656e7c1c64a875d1fc6a0a](https://github.com/actions/upload-artifact/blob/043fb46d1a93c77aae656e7c1c64a875d1fc6a0a/action.yml) |
+| actions/setup-node | v7.0.0 | [820762786026740c76f36085b0efc47a31fe5020](https://github.com/actions/setup-node/blob/820762786026740c76f36085b0efc47a31fe5020/action.yml) |
+
+All four declare runs.using=node24. The previous setup-node commit 49933ea also
+explicitly declared node20. YAML parsing/structural comparison passed: only the
+action references changed; every configured action input remains supported and
+job commands, matrix, permissions and application Node/Python versions are
+unchanged. Retained official metadata and validation are in
+`task7/actions-node24-official-metadata.json` and `actions-node24-validation.json`;
+`final-source-inventory-4.json` records only the workflow hash delta from inventory
+3. No production changes or local scientific/browser suite reruns. Parent owns
+push and the fresh full GitHub verification; no re-review was performed.
