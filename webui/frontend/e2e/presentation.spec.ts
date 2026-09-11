@@ -24,11 +24,13 @@ async function activateInteractiveButton({
   completed: () => Promise<boolean>;
   timeout?: number;
 }) {
+  const deadline = Date.now() + timeout;
+  const remainingTimeout = () => Math.max(0, deadline - Date.now());
   const completedSoon = async (waitMs = 2000) => {
+    const budget = Math.min(remainingTimeout(), waitMs);
+    if (budget <= 0) return false;
     try {
-      await expect.poll(completed, { timeout: Math.min(timeout, waitMs) }).toBe(
-        true,
-      );
+      await expect.poll(completed, { timeout: budget }).toBe(true);
       return true;
     } catch {
       return false;
@@ -36,7 +38,7 @@ async function activateInteractiveButton({
   };
   await settleInteractiveButton(page, button);
   try {
-    await button.click({ timeout });
+    await button.click({ timeout: remainingTimeout() });
   } catch (error) {
     if (await completed()) return;
     throw error;
@@ -46,7 +48,7 @@ async function activateInteractiveButton({
   await button.press("Space");
   if (await completedSoon()) return;
   await button.press("Enter");
-  await expect.poll(completed, { timeout }).toBe(true);
+  await expect.poll(completed, { timeout: remainingTimeout() }).toBe(true);
 }
 for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
   test(`offline 3D ${block}: readiness, camera, pause and technical fallback`, async ({
