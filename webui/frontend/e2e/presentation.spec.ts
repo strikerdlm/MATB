@@ -33,6 +33,8 @@ async function activateInteractiveButton({
   }
   if (await completed()) return;
   await button.focus();
+  await button.press("Space");
+  if (await completed()) return;
   await button.press("Enter");
   await expect.poll(completed, { timeout }).toBe(true);
 }
