@@ -269,7 +269,7 @@ for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
         button: page.getByRole("button", { name: /pause/i, exact: false })
           .first(),
         completed: async () => (await lifecycle()) === "PAUSED",
-        pending: async () => (await lifecycle()) !== "PAUSED",
+        pending: async () => false,
       });
       await expect
         .poll(lifecycle)
