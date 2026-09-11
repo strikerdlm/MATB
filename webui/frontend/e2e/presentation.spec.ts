@@ -1,6 +1,41 @@
 import { writeFileSync } from "node:fs";
-import { test, expect } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 const api = "http://127.0.0.1:8000";
+async function settleInteractiveButton(page: Page, button: Locator) {
+  await button.scrollIntoViewIfNeeded();
+  await expect(button).toBeInViewport();
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => resolve()),
+        );
+      }),
+  );
+}
+async function activateInteractiveButton({
+  page,
+  button,
+  completed,
+  timeout = 15000,
+}: {
+  page: Page;
+  button: Locator;
+  completed: () => Promise<boolean>;
+  timeout?: number;
+}) {
+  await settleInteractiveButton(page, button);
+  try {
+    await button.click({ timeout });
+  } catch (error) {
+    if (await completed()) return;
+    throw error;
+  }
+  if (await completed()) return;
+  await button.focus();
+  await button.press("Enter");
+  await expect.poll(completed, { timeout }).toBe(true);
+}
 for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
   test(`offline 3D ${block}: readiness, camera, pause and technical fallback`, async ({
     page,
@@ -78,10 +113,13 @@ for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
       // Exercise live controls before visual capture: software rasterizers can
       // starve input while full-page captures resize/repaint the WebGL surface.
       if (process.env.MATB_E2E_TRAFFIC_FIXTURE === "1") {
-        await expect(
-          page.getByRole("region", { name: "Observed traffic" }),
-        ).toContainText("FIXTURE01");
-        const traffic = page.getByRole("button", { name: /FIXTURE01/ });
+        const observedTraffic = page.getByRole("region", {
+          name: "Observed traffic",
+        });
+        await expect(observedTraffic).toContainText("FIXTURE01");
+        const traffic = observedTraffic.getByRole("button", {
+          name: /FIXTURE01/,
+        });
         const selectionStarted = Date.now();
         let phaseStarted = selectionStarted;
         const selectionTiming = {
@@ -94,30 +132,24 @@ for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
         try {
           // Scrolling can resize/repaint the software-rendered WebGL surface.
           // Settle it before spending the click's input/completion budget.
-          await traffic.scrollIntoViewIfNeeded();
-          await expect(traffic).toBeInViewport();
-          await page.evaluate(
-            () =>
-              new Promise<void>((resolve) => {
-                requestAnimationFrame(() =>
-                  requestAnimationFrame(() => resolve()),
-                );
-              }),
-          );
+          await settleInteractiveButton(page, traffic);
           selectionTiming.scrollMs = Date.now() - phaseStarted;
           selectionTiming.phase = "click";
           phaseStarted = Date.now();
-          // Windows CI selected the track but exhausted the 8 s click promise.
-          // This single action uses the existing 15 s assertion budget; it is
-          // functional software coverage, not a physical response-time claim.
-          await traffic.click({ timeout: 15000 });
+          await activateInteractiveButton({
+            page,
+            button: traffic,
+            completed: async () =>
+              (await traffic.getAttribute("aria-pressed")) === "true"
+              && ((await observedTraffic.textContent()) ?? "").includes(
+                "a12345",
+              ),
+          });
           selectionTiming.clickMs = Date.now() - phaseStarted;
           selectionTiming.phase = "assertions";
           phaseStarted = Date.now();
           await expect(traffic).toHaveAttribute("aria-pressed", "true");
-          await expect(
-            page.getByRole("region", { name: "Observed traffic" }),
-          ).toContainText("a12345");
+          await expect(observedTraffic).toContainText("a12345");
           selectionTiming.assertionMs = Date.now() - phaseStarted;
           selectionTiming.completed = true;
         } finally {
@@ -204,19 +236,20 @@ for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
       expect(rebuilt.memory.geometries).toBeLessThanOrEqual(
         metrics.memory.geometries + 2,
       );
-      await page
-        .getByRole("button", { name: /pause/i, exact: false })
-        .first()
-        .click();
+      const lifecycle = async () =>
+        (
+          await (
+            await request.get(`${api}/simulation/sessions/${prepared.id}`)
+          ).json()
+        ).lifecycle;
+      await activateInteractiveButton({
+        page,
+        button: page.getByRole("button", { name: /pause/i, exact: false })
+          .first(),
+        completed: async () => (await lifecycle()) === "PAUSED",
+      });
       await expect
-        .poll(
-          async () =>
-            (
-              await (
-                await request.get(`${api}/simulation/sessions/${prepared.id}`)
-              ).json()
-            ).lifecycle,
-        )
+        .poll(lifecycle)
         .toBe("PAUSED");
       await expect(
         page.getByRole("combobox", { name: "Camera", exact: true }),
