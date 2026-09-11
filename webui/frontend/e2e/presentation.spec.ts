@@ -1,16 +1,81 @@
 import { writeFileSync } from "node:fs";
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, errors, type Locator } from "@playwright/test";
 const api = "http://127.0.0.1:8000";
 
-async function waitForRenderedFrame(page: Page) {
-  await page.evaluate(
-    () =>
-      new Promise<void>((resolve) => {
-        requestAnimationFrame(() =>
-          requestAnimationFrame(() => resolve()),
-        );
-      }),
-  );
+async function activateInteractiveButton({
+  button,
+  completed,
+  spaceFallback,
+  timeout = 15000,
+}: {
+  button: Locator;
+  completed: (remaining: () => number) => Promise<boolean>;
+  spaceFallback?: (remaining: () => number) => Promise<boolean>;
+  timeout?: number;
+}) {
+  const deadline = performance.now() + timeout;
+  const remaining = (until = deadline) => {
+    const budget = Math.ceil(until - performance.now());
+    // Playwright treats zero as unlimited, so never start an expired action.
+    if (budget <= 0) {
+      throw new errors.TimeoutError(`Button activation exceeded ${timeout} ms`);
+    }
+    return budget;
+  };
+  const settle = async () => {
+    await button.scrollIntoViewIfNeeded({ timeout: remaining() });
+    await expect(button).toBeInViewport({ timeout: remaining() });
+    // The trial checks stability across rendered frames without activating it.
+    await button.click({ trial: true, timeout: remaining() });
+  };
+  const waitForCompletion = async (waitMs = remaining()) => {
+    const until = Math.min(deadline, performance.now() + waitMs);
+    await expect
+      .poll(() => completed(() => remaining(until)), {
+        timeout: remaining(until),
+      })
+      .toBe(true);
+  };
+
+  await settle();
+  try {
+    // Reserve part of the same deadline for state to arrive after real input.
+    await button.click({ timeout: Math.min(8000, Math.ceil(remaining() / 2)) });
+  } catch (error) {
+    if (!(error instanceof errors.TimeoutError)) throw error;
+    // A timed-out click may already have activated the control. Check its
+    // observable effect before considering another input event.
+  }
+  if (await completed(remaining)) return;
+  if (spaceFallback) {
+    try {
+      await waitForCompletion(2000);
+      return;
+    } catch (error) {
+      if (
+        !(error instanceof errors.TimeoutError) &&
+        !(error instanceof Error && "matcherResult" in error)
+      ) {
+        throw error;
+      }
+    }
+    if (await spaceFallback(remaining)) {
+      await settle();
+      await button.focus({ timeout: remaining() });
+      // Selection may have arrived during scrolling/focus. Only the locally
+      // unselected traffic button permits one native keyboard activation.
+      if (await spaceFallback(remaining)) {
+        try {
+          await button.press("Space", {
+            timeout: Math.min(8000, Math.ceil(remaining() / 2)),
+          });
+        } catch (error) {
+          if (!(error instanceof errors.TimeoutError)) throw error;
+        }
+      }
+    }
+  }
+  await waitForCompletion();
 }
 
 for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
@@ -90,51 +155,40 @@ for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
       // Exercise live controls before visual capture: software rasterizers can
       // starve input while full-page captures resize/repaint the WebGL surface.
       if (process.env.MATB_E2E_TRAFFIC_FIXTURE === "1") {
-        await expect(
-          page.getByRole("region", { name: "Observed traffic" }),
-        ).toContainText("FIXTURE01");
-        const traffic = page.getByRole("button", { name: /FIXTURE01/ });
+        const observedTraffic = page.getByRole("region", {
+          name: "Observed traffic",
+        });
+        await expect(observedTraffic).toContainText("FIXTURE01");
+        const traffic = observedTraffic.getByRole("button", {
+          name: /FIXTURE01/,
+        });
         const selectionStarted = Date.now();
-        let phaseStarted = selectionStarted;
-        const selectionTiming = {
-          phase: "scroll",
-          scrollMs: 0,
-          clickMs: 0,
-          assertionMs: 0,
-          completed: false,
-        };
+        let selectionCompleted = false;
         try {
-          // Scrolling can resize/repaint the software-rendered WebGL surface.
-          // Settle it before spending the click's input/completion budget.
-          await traffic.scrollIntoViewIfNeeded();
-          await expect(traffic).toBeInViewport();
-          await waitForRenderedFrame(page);
-          selectionTiming.scrollMs = Date.now() - phaseStarted;
-          selectionTiming.phase = "click";
-          phaseStarted = Date.now();
-          // Windows CI selected the track but exhausted the 8 s click promise.
-          // This single action uses the existing 15 s assertion budget; it is
-          // functional software coverage, not a physical response-time claim.
-          await traffic.click({ timeout: 15000 });
-          selectionTiming.clickMs = Date.now() - phaseStarted;
-          selectionTiming.phase = "assertions";
-          phaseStarted = Date.now();
-          await expect(traffic).toHaveAttribute("aria-pressed", "true");
-          await expect(
-            page.getByRole("region", { name: "Observed traffic" }),
-          ).toContainText("a12345");
-          selectionTiming.assertionMs = Date.now() - phaseStarted;
-          selectionTiming.completed = true;
+          await activateInteractiveButton({
+            button: traffic,
+            completed: async (remaining) =>
+              (await traffic.getAttribute("aria-pressed", {
+                timeout: remaining(),
+              })) === "true" &&
+              (
+                (await observedTraffic.textContent({ timeout: remaining() })) ?? ""
+              ).includes("a12345"),
+            spaceFallback: async (remaining) =>
+              (await traffic.getAttribute("aria-pressed", {
+                timeout: remaining(),
+              })) === "false",
+          });
+          selectionCompleted = true;
         } finally {
           writeFileSync(
             testInfo.outputPath("traffic-selection-timing.json"),
             JSON.stringify(
               {
                 block,
-                ...selectionTiming,
-                phaseElapsedMs: Date.now() - phaseStarted,
+                completed: selectionCompleted,
                 totalMs: Date.now() - selectionStarted,
-                clickTimeoutMs: 15000,
+                activationTimeoutMs: 15000,
                 physicalTimingQualified: false,
               },
               null,
@@ -212,19 +266,18 @@ for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
       const pause = page
         .getByRole("button", { name: /pause/i, exact: false })
         .first();
-      await pause.scrollIntoViewIfNeeded();
-      await waitForRenderedFrame(page);
-      await pause.click({ timeout: 15000 });
-      await expect
-        .poll(
-          async () =>
-            (
-              await (
-                await request.get(`${api}/simulation/sessions/${prepared.id}`)
-              ).json()
-            ).lifecycle,
-        )
-        .toBe("PAUSED");
+      await activateInteractiveButton({
+        button: pause,
+        // Pause is a toggle: only observe the backend after the single click.
+        completed: async (remaining) =>
+          (
+            await (
+              await request.get(`${api}/simulation/sessions/${prepared.id}`, {
+                timeout: remaining(),
+              })
+            ).json()
+          ).lifecycle === "PAUSED",
+      });
       await expect(
         page.getByRole("combobox", { name: "Camera", exact: true }),
       ).toBeDisabled();
