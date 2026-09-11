@@ -51,6 +51,7 @@ async function activateInteractiveButton({
     await expect.poll(completed, { timeout: remainingTimeout() }).toBe(true);
     return;
   }
+  await settleInteractiveButton(page, button);
   await button.focus();
   await button.press("Space");
   if (await completedSoon()) return;
