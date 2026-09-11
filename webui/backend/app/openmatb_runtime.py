@@ -19,6 +19,7 @@ import sys
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from app.artifact_paths import resolve_artifact
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -874,7 +875,7 @@ class OpenMatbManager:
                     raise OpenMatbRuntimeError("visit_not_found")
                 from app.study_admission import resolve_assignment
                 context = resolve_assignment(db, attempt_id=request.attempt_id, instrument='openmatb', participant_id=request.participant_id,
-                    visit_id=visit.id, purpose=request.execution_purpose, require_started=not request.preparation_only)
+                    visit_id=visit.id, purpose=request.execution_purpose, require_started=False)
                 if request.preparation_only:
                     from app.assessment_models import AssessmentAttempt
                     selected = db.get(AssessmentAttempt, request.attempt_id) if request.attempt_id else None
@@ -1050,7 +1051,7 @@ class OpenMatbManager:
         ):
             raise OpenMatbRuntimeError("openmatb_visual_profile_provenance_incomplete")
         controlled_root = self.artifact_root.resolve()
-        run_root = Path(row.artifact_root).resolve()
+        run_root = resolve_artifact(row.artifact_root).resolve()
         if run_root.parent != controlled_root or run_root.name != row.id:
             raise OpenMatbRuntimeError("openmatb_visual_profile_path_invalid")
         profile_path = (run_root / "visual-profile.json").resolve()
@@ -1087,7 +1088,8 @@ class OpenMatbManager:
                     raise OpenMatbRuntimeError("openmatb_station_not_ready")
                 self._validate_display(row.display_index)
                 from app.study_native import native_context, storage_key
-                assigned_context = native_context(db, row)
+                from app.study_admission import guard_source
+                assigned_context = guard_source(db, row)
                 if not preparation_only:
                     from app.study_preflight import require_held_launch
                     require_held_launch(assigned_context)
@@ -1104,8 +1106,8 @@ class OpenMatbManager:
                     raise OpenMatbRuntimeError("openmatb_suite_complete")
                 block = order[row.current_block_index]
                 instance_key = storage_key(db, row, block)
-                scenario = Path(json.loads(row.scenario_paths_json)[instance_key]).resolve()
-                if scenario.parent != Path(row.artifact_root).resolve() / "scenarios" or not scenario.is_file():
+                scenario = resolve_artifact(json.loads(row.scenario_paths_json)[instance_key]).resolve()
+                if scenario.parent != resolve_artifact(row.artifact_root).resolve() / "scenarios" or not scenario.is_file():
                     raise OpenMatbRuntimeError("openmatb_scenario_missing")
                 visual_profile_path = self._verified_session_visual_profile_path(row)
                 from app.station_resources import admit_source
@@ -1118,14 +1120,14 @@ class OpenMatbManager:
                 db.commit()
                 command = [
                     str(self.python_executable), str(self.openmatb_root / "main.py"), "--scenario", str(scenario),
-                    "--session-dir", str(Path(row.artifact_root) / "sessions" / instance_key), "--language", "en_EN" if row.locale == "en" else "es_CO",
+                    "--session-dir", str(resolve_artifact(row.artifact_root) / "sessions" / instance_key), "--language", "en_EN" if row.locale == "en" else "es_CO",
                 ]
                 if visual_profile_path is None:
                     command.extend(("--visual-theme", row.visual_theme))
                 else:
                     command.extend(("--theme-file", str(visual_profile_path)))
                 command.extend(("--display-index", str(row.display_index), "--control-stdio"))
-                session_path = Path(row.artifact_root) / "sessions" / instance_key
+                session_path = resolve_artifact(row.artifact_root) / "sessions" / instance_key
                 session_path.mkdir(parents=True, exist_ok=True)
                 kwargs: dict[str, Any] = {"cwd": str(self.openmatb_root), "stdin": asyncio.subprocess.PIPE, "stdout": asyncio.subprocess.PIPE, "stderr": asyncio.subprocess.PIPE}
                 visit = db.get(Visit, row.visit_id) if row.visit_id is not None else None
@@ -1708,7 +1710,7 @@ class OpenMatbManager:
 
     @staticmethod
     def _persist_scale_sidecar(row: OpenMatbSuiteSession, block: str, payload: object) -> None:
-        path = Path(row.artifact_root) / "scales" / f"{block}.json"
+        path = resolve_artifact(row.artifact_root) / "scales" / f"{block}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(_canonical(payload) + "\n", encoding="utf-8", newline="\n")
 
@@ -1718,8 +1720,8 @@ class OpenMatbManager:
             return 'inapplicable_assigned_occasion', None
         if not row.active_session_csv:
             return "missing", "session_csv_missing"
-        csv_path = Path(row.active_session_csv).resolve()
-        session_root = (Path(row.artifact_root) / "sessions").resolve()
+        csv_path = resolve_artifact(row.active_session_csv).resolve()
+        session_root = (resolve_artifact(row.artifact_root) / "sessions").resolve()
         if session_root not in csv_path.parents or not csv_path.is_file():
             row.last_error = "session_csv_outside_artifact_root"
             return "failed", row.last_error
@@ -1747,7 +1749,7 @@ class OpenMatbManager:
         existing = db.exec(select(Block).where(Block.visit_id == row.visit_id, Block.workload_level == block)).first()
         if existing and existing.source_csv_sha256 == hashlib.sha256(merged).hexdigest():
             return "saved", None
-        manifest_path = Path(json.loads(row.scenario_paths_json)[block] + ".manifest.json")
+        manifest_path = resolve_artifact(json.loads(row.scenario_paths_json)[block] + ".manifest.json")
         try:
             ingest_csv(
                 db, content=merged, filename=csv_path.name, participant_id=row.participant_id,

@@ -13,6 +13,7 @@ import json
 import io
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import datetime
+from app.artifact_paths import resolve_artifact
 from pathlib import Path
 from typing import Any, TypeVar
 from uuid import UUID
@@ -627,7 +628,7 @@ def _session_run_dir(session_id: str, manager: SimulationManager, db: Session) -
         if isinstance(row, TechnicalSimulationSession)
         else manager.artifact_root.resolve()
     )
-    path = Path(row.artifact_root)
+    path = resolve_artifact(row.artifact_root)
     if not path.is_absolute():
         path = configured_root / path
     try:

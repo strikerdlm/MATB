@@ -14,6 +14,7 @@ from collections import deque
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from app.artifact_paths import resolve_artifact
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -974,6 +975,11 @@ class SimulationManager:
         confirm_process_restart: bool = False,
     ) -> RecoveryView:
         """Restore one exact checkpoint and return a paused, deviated view."""
+        from app.artifact_paths import require_new_acquisition
+        if getattr(self.persistence, 'engine', None) is not None:
+            with Session(self.persistence.engine) as db:
+                for table in ('simulation_session', 'technical_simulation_session'):
+                    require_new_acquisition(db, table, session_id)
 
         async with self._lock:
             if self._handle is None:
@@ -1075,7 +1081,7 @@ class SimulationManager:
             if technical
             else self.artifact_root.resolve()
         )
-        run_dir = Path(row.artifact_root)
+        run_dir = resolve_artifact(row.artifact_root)
         if not run_dir.is_absolute():
             run_dir = configured_root / run_dir
         run_dir = run_dir.resolve()

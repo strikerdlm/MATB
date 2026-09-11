@@ -1,5 +1,5 @@
-fastapi==0.110.3
-starlette==0.37.2
+fastapi==0.116.2
+starlette==0.48.0
 anyio==4.3.0
 sqlmodel>=0.0.16
 uvicorn[standard]>=0.29

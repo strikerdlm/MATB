@@ -40,7 +40,11 @@
     "scripts/export_public_core.py",
     "scripts/verify_documentation.py",
     "tests",
-    "webui"
+    "webui",
+    "tools/study_workspace.py",
+    "tools/verify_study_descriptive.py",
+    "tools/prepare_study_wheels.py",
+    "tools/station_load_matrix.py"
   ],
   "exclude": [
     "webui/frontend/scripts/benchmark-operational-scene.mjs",

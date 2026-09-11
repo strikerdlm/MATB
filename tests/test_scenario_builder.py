@@ -1,11 +1,8 @@
 """
 Unit + regression tests for matb_integration.scenario_builder.
 
-Sync-guard tests (test_openmatb_sync_*) assert that local constants still
-mirror OpenMATB v1.4.5 defaults. They require:
-  - A running X display (DISPLAY env var) or xvfb-run
-  - OpenMATB installed at /root/repos/openmatb
-These tests are skipped automatically when OpenMATB is not importable.
+Native sync guards inspect the bundled Sysmon constructor with the existing
+native unit harness; UI/driver singletons are mocked without requiring DISPLAY.
 """
 
 from __future__ import annotations
@@ -374,97 +371,29 @@ def test_isa_interval_decreasing():
             > ISA_PROBE_INTERVAL_SEC[WorkloadLevel.HIGH])
 
 
-# ── Sync-guard (requires OpenMATB + DISPLAY) ──────────────────────────────────
-
-_OPENMATB_PATH = Path("/root/repos/openmatb")
-_HAS_DISPLAY = bool(os.environ.get("DISPLAY"))
-
-
-def _is_accessible_directory(path: Path) -> bool:
-    try:
-        return path.is_dir()
-    except OSError:
-        return False
-
-
-_HAS_OPENMATB = _is_accessible_directory(_OPENMATB_PATH)
-
-_sync_skip = pytest.mark.skipif(
-    not (_HAS_DISPLAY and _HAS_OPENMATB),
-    reason="Requires DISPLAY env var and /root/repos/openmatb",
-)
-
-
-def test_inaccessible_openmatb_sync_path_is_treated_as_unavailable(monkeypatch):
-    def deny_access(_path: Path) -> bool:
-        raise PermissionError("inaccessible optional checkout")
-
-    monkeypatch.setattr(Path, "is_dir", deny_access)
-    assert _is_accessible_directory(_OPENMATB_PATH) is False
-
-
-@_sync_skip
-def test_openmatb_sync_alerttimeout():
-    """Fail loudly if OpenMATB changes its sysmon alerttimeout default."""
-    import gettext
-    import builtins
-    _orig = getattr(builtins, "_", None)
-    builtins._ = lambda s: s  # noqa: E731  — stub gettext before import
-    try:
-        sys.path.insert(0, str(_OPENMATB_PATH))
-        from plugins.sysmon import Sysmon  # type: ignore[import]
-        actual = Sysmon().parameters["alerttimeout"]
-        assert actual == OPENMATB_ALERTTIMEOUT_MS, (
-            f"OpenMATB alerttimeout changed to {actual} — update "
-            "OPENMATB_ALERTTIMEOUT_MS in scenario_builder.py"
-        )
-    finally:
-        if _orig is None:
-            delattr(builtins, "_")
-        else:
-            builtins._ = _orig
-
-
-@_sync_skip
-def test_openmatb_sync_lights():
-    """Fail loudly if OpenMATB changes its sysmon light keys."""
-    import builtins
-    _orig = getattr(builtins, "_", None)
-    builtins._ = lambda s: s  # noqa: E731
-    try:
-        sys.path.insert(0, str(_OPENMATB_PATH))
-        from plugins.sysmon import Sysmon  # type: ignore[import]
-        actual = tuple(Sysmon().parameters["lights"].keys())
-        assert actual == OPENMATB_SYSMON_LIGHTS, (
-            f"OpenMATB sysmon lights changed to {actual} — update "
-            "OPENMATB_SYSMON_LIGHTS in scenario_builder.py"
-        )
-    finally:
-        if _orig is None:
-            delattr(builtins, "_")
-        else:
-            builtins._ = _orig
-
-
-@_sync_skip
-def test_openmatb_sync_scales():
-    """Fail loudly if OpenMATB changes its sysmon scale keys."""
-    import builtins
-    _orig = getattr(builtins, "_", None)
-    builtins._ = lambda s: s  # noqa: E731
-    try:
-        sys.path.insert(0, str(_OPENMATB_PATH))
-        from plugins.sysmon import Sysmon  # type: ignore[import]
-        actual = tuple(Sysmon().parameters["scales"].keys())
-        assert actual == OPENMATB_SYSMON_SCALES, (
-            f"OpenMATB sysmon scales changed to {actual} — update "
-            "OPENMATB_SYSMON_SCALES in scenario_builder.py"
-        )
-    finally:
-        if _orig is None:
-            delattr(builtins, "_")
-        else:
-            builtins._ = _orig
+# Native defaults are inspected in a child interpreter using the native unit
+# harness. Only UI/driver singletons are mocked; Sysmon's constructor is real.
+@pytest.mark.parametrize('field,expected', [
+    ('alerttimeout', OPENMATB_ALERTTIMEOUT_MS),
+    ('lights', OPENMATB_SYSMON_LIGHTS),
+    ('scales', OPENMATB_SYSMON_SCALES),
+])
+def test_bundled_openmatb_sysmon_defaults_remain_in_sync(field, expected):
+    import json
+    import subprocess
+    native = Path(__file__).resolve().parents[1] / 'openmatb'
+    script = """import json, runpy, sys
+from pathlib import Path
+native=Path(sys.argv[1]); sys.path.insert(0,str(native))
+runpy.run_path(str(native/'tests/conftest.py'))
+from plugins.sysmon import Sysmon
+value=Sysmon().parameters[sys.argv[2]]
+print(json.dumps(list(value) if isinstance(value,dict) else value))
+"""
+    result = subprocess.run([sys.executable, '-c', script, str(native), field],
+                            cwd=native, check=True, capture_output=True, text=True)
+    actual = json.loads(result.stdout.strip().splitlines()[-1])
+    assert actual == (list(expected) if isinstance(expected, tuple) else expected)
 
 
 def test_build_block_scenario_with_sagat_emits_two_lines_per_freeze(tmp_path):

@@ -87,3 +87,27 @@ def artifact(identity: str,db: Session=Depends(get_session)):
 @router.get('/events')
 def events(db: Session=Depends(get_session)):
     return db.exec(select(service.StationEvent).order_by(service.StationEvent.created_at.desc()).limit(100)).all()
+
+
+@router.post('/backups')
+def create_backup(body: Attestation, db: Session = Depends(get_session)):
+    """A bounded control request; SQLite holds exclusion while streaming files to disk."""
+    from pathlib import Path
+    import tempfile
+    from starlette.background import BackgroundTask
+    from app.study_backup import backup
+    database = db.get_bind().url.database
+    if not database or database == ':memory:':
+        raise HTTPException(409, 'Whole-study backup requires a file-backed workspace')
+    row = service.lock(db)
+    service.attest(db, 'backup_requested', body.actor, body.reason, row)
+    db.commit()
+    folder = tempfile.TemporaryDirectory(prefix='matb-study-backup-')
+    target = Path(folder.name) / 'study.zip'
+    try:
+        backup(database, target)
+    except (ValueError, OSError) as exc:
+        folder.cleanup()
+        raise HTTPException(409, str(exc)) from exc
+    return FileResponse(target, filename='matb-whole-study.zip', media_type='application/zip',
+                        background=BackgroundTask(folder.cleanup))

@@ -1,4 +1,5 @@
 """Native single-occasion execution and exact child-source associations."""
+from app.artifact_paths import resolve_artifact
 import json
 from fastapi import HTTPException
 from sqlmodel import select
@@ -152,7 +153,7 @@ def submit_assigned_ratings(db, suite, block, request):
     scores = json.loads(suite.scores_json)
     first = context['occasion_id'] not in scores
     scores[context['occasion_id'] if first else rating.id] = score
-    directory = Path(suite.artifact_root) / 'scales'
+    directory = resolve_artifact(suite.artifact_root) / 'scales'
     (directory / 'ratings').mkdir(parents=True, exist_ok=True)
     _write_rating_artifact(directory / 'ratings' / f'{rating.id}.json', canonical(score) + '\n')
     if first:

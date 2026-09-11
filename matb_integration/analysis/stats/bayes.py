@@ -19,7 +19,7 @@ from . import gates
 from .data import (CONFIRMATORY_METRICS, confirmatory_eligibility_summary,
                    fingerprint, fits_frame, metrics_frame)
 
-BAYES_VERSION = "2.2.0"
+BAYES_VERSION = "2.2.1"
 SPEC = "docs/research/scientific-foundation-v2.md"
 DEFAULT_SEED = 20260604
 RHAT_MAX = 1.01
@@ -57,7 +57,9 @@ def _fit_one(df: pd.DataFrame, *, include_levels: bool, seed: int, draws: int,
     sd_y = float(np.std(y)) or 1.0
     var_names = ["b0", "b_visit"]
     with pm.Model():
-        b0 = pm.Normal("b0", 0.0, 2.5 * sd_y)
+        # Initialize the intercept at observed location without changing its prior.
+        # Jitter of order one is unstable for narrow-scale outcomes far from zero.
+        b0 = pm.Normal("b0", 0.0, 2.5 * sd_y, initval=float(np.mean(y)))
         b_visit = pm.Normal("b_visit", 0.0, 2.5 * sd_y)
         mu = b0 + b_visit * x
         if include_levels:
@@ -73,7 +75,7 @@ def _fit_one(df: pd.DataFrame, *, include_levels: bool, seed: int, draws: int,
         pm.Normal("y", mu + u[pid_codes], sigma_e, observed=y)
         idata = pm.sample(draws=draws, tune=tune, chains=chains, cores=1,
                           random_seed=seed, progressbar=False,
-                          compute_convergence_checks=False)
+                          compute_convergence_checks=False, init="adapt_diag")
     var_names += ["sigma_u", "sigma_e"]
     # Participant effects are not scientific coefficients exposed by this
     # artifact, but they are sampled parameters and must participate in the
@@ -167,6 +169,7 @@ def run_bayes(metrics_rows: list[dict[str, Any]], fits_rows: list[dict[str, Any]
         "bayes_version": BAYES_VERSION, "spec": SPEC,
         "sampler": {"seed": seed, "chains": chains, "draws": draws, "tune": tune,
                     "nuts": "pymc", "cores": 1, "interval": "95% ETI",
+                    "initialization": "adapt_diag; b0=observed_mean; remaining prior defaults",
                     "priors": dict(PRIORS)},
         "provenance": {
             "fingerprint": fingerprint(metrics_rows, fits_rows),

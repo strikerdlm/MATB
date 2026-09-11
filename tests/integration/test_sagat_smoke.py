@@ -6,11 +6,9 @@ Covers the pieces we can fully automate without a human-in-the-loop session:
   3. The block manifest JSON is written with the expected schema.
   4. The scenario .txt contains the expected sagat;filename; / sagat;start pairs.
 
-The actual OpenMATB-runtime portion (Xvfb headless + key-injection driving
-the Sagat plugin through a full freeze) is marked skip until we have a
-recorded fixture session to replay. OpenMATB's replay mode is session-replay
-(load a CSV, replay it), not live-key-injection — so the runtime test needs
-a previously-recorded participant CSV that doesn't yet exist.
+The bundled checkout has no SAGAT runtime plugin. Native CSV/replay timing is
+verified with synthetic data; actual SAGAT UI execution remains a separate,
+explicit missing-capability exclusion, not evidence of participant validation.
 """
 
 from __future__ import annotations
@@ -126,24 +124,42 @@ def test_scenario_emission_es_bank(tmp_path: Path) -> None:
             assert "Unknown" not in p.options
 
 
-@pytest.mark.skip(
-    reason=(
-        "Full Xvfb + OpenMATB replay run requires a recorded fixture session. "
-        "OpenMATB replay mode is session-replay (loads a previous CSV), not "
-        "live-key-injection. Record a real SAGAT session first, save it under "
-        "tests/integration/fixtures/, then unskip this test and adapt it to "
-        "drive ReplayScheduler against that fixture."
-    )
-)
-def test_sagat_headless_runtime_smoke(tmp_path: Path) -> None:
-    """Placeholder for the runtime SAGAT smoke test.
+@pytest.mark.skip(reason="SAGAT runtime plugin is not shipped in the bundled OpenMATB; scenario/probe generation and synthetic native replay are covered separately")
+def test_sagat_native_plugin_execution():
+    """Requires a separately supplied/qualified SAGAT native plugin, not a local CSV."""
 
-    TODO: when a recorded SAGAT session CSV exists at
-    tests/integration/fixtures/sagat_session_smoke.csv:
-      1. Invoke openmatb under xvfb-run with --replay <session_id>
-      2. Wait for the run to complete
-      3. Parse the resulting session.csv
-      4. Assert at least 1 sagat;start and 1 sagat;is_correct row appear
-      5. Run log_converter._sagat_metric on the parsed rows
-      6. Assert n_freezes_executed >= 1 and overall_pct is computed
-    """
+
+def test_synthetic_freeze_csv_drives_native_replay_timing(tmp_path):
+    """The actual LogReader/ReplayScheduler map a frozen segment without a GUI."""
+    import subprocess
+    csv = tmp_path / 'synthetic replay ñ.csv'
+    csv.write_text('logtime,scenario_time,type,module,address,value\n'
+                   '100,0,event,sysmon,start,\n'
+                   '101,1,event,sysmon,stop,\n'
+                   '102,1,input,keyboard,key,SPACE\n'
+                   '104,1,input,keyboard,key,SPACE\n'
+                   '105,2,event,sysmon,start,\n', encoding='utf-8')
+    native = REPO_ROOT / 'openmatb'
+    code = """import runpy, sys
+from pathlib import Path
+native=Path(sys.argv[1]);sys.path.insert(0,str(native))
+runpy.run_path(str(native/'tests/conftest.py'))
+from core.logreader import LogReader
+from core.replayscheduler import ReplayScheduler
+reader=LogReader(session_path=sys.argv[2])
+assert len(reader.keyboard_inputs)==2
+assert len(reader.contents)==2
+assert reader.session_duration==5
+replay=object.__new__(ReplayScheduler)
+replay.logreader=reader
+replay.replay_time=3
+replay.update_timers(0.1)
+assert replay.scenario_time==1
+replay.replay_time=5
+replay.update_timers(0.1)
+assert replay.scenario_time==2
+print('synthetic native replay timing passed; no SAGAT plugin or human capture')
+"""
+    result = subprocess.run([sys.executable, '-c', code, str(native), str(csv)],
+                            cwd=native, capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr

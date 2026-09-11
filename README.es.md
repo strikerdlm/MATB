@@ -1436,3 +1436,5 @@ y los [avisos de terceros](THIRD_PARTY_NOTICES.md); se aplica el aviso más espe
 no certifican la aptitud para uso clínico, de vuelo, defensa, crítico para la seguridad operacional ni
 operacional, y no sustituyen la legislación aplicable, la gobernanza institucional, la revisión ética,
 la revisión independiente de licencias ni la aceptación humana.
+
+Operación del estudio, restauración en carpeta vacía y reproducción offline: [guía de restauración](docs/research/repeatable-study-restoration.md#operación-y-restauración-del-estudio).

@@ -100,7 +100,14 @@ def _parse_api_token(raw: str | None) -> str | None:
 
 _FRONTEND_ORIGINS = _parse_frontend_origins(os.getenv("MATB_FRONTEND_ORIGINS"))
 _ALLOWED_HOSTS = _parse_allowed_hosts(os.getenv("MATB_ALLOWED_HOSTS"))
-_API_TOKEN = _parse_api_token(os.getenv("MATB_API_TOKEN"))
+def _configured_api_token():
+    from pathlib import Path
+    token_file = os.getenv("MATB_API_TOKEN_FILE")
+    # A restored workspace has new local authority; do not inherit the old token.
+    return Path(token_file).read_text(encoding="utf-8").strip() if token_file else os.getenv("MATB_API_TOKEN")
+
+
+_API_TOKEN = _parse_api_token(_configured_api_token())
 _COMPONENT_REGISTRY, _COMPONENT_PROVIDERS = configure_components()
 
 

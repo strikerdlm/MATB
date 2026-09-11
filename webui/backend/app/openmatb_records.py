@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from app.artifact_paths import resolve_artifact
 from pathlib import Path
 from uuid import uuid4
 
@@ -91,7 +92,7 @@ class OpenMatbRecords:
         root = (self.artifact_root / suite.id / "sessions" / instance_key).resolve()
         if self.artifact_root not in root.parents:
             raise ValueError("native_artifacts_outside_session")
-        csv = Path(attempt.session_csv or "").resolve()
+        csv = resolve_artifact(attempt.session_csv or "").resolve()
         if root not in csv.parents or not csv.is_file():
             raise ValueError("native_artifacts_outside_session")
         return csv

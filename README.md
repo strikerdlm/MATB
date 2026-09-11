@@ -1418,3 +1418,5 @@ the most specific notice applies. These licenses do not certify fitness for
 clinical, flight, defense, safety-critical, or operational use and do not
 replace applicable law, institutional governance, ethics review, independent
 licensing review, or human acceptance.
+
+Whole-study operation, safe empty restoration and offline replay: [restoration guide](docs/research/repeatable-study-restoration.md).

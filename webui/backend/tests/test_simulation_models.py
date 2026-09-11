@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.models import Participant, Visit
 from app.simulation_models import (
@@ -43,7 +43,7 @@ def seed_participant_and_visit(engine) -> None:
 def seed_simulation_session(engine) -> None:
     seed_participant_and_visit(engine)
     with Session(engine) as db:
-        visit = db.query(Visit).first()
+        visit = db.exec(select(Visit)).first()
         db.add(
             SimulationSession(
                 id="sim-001",
@@ -166,7 +166,7 @@ def test_protocol_deviation_round_trip(engine) -> None:
             )
         )
         db.commit()
-        deviation = db.query(ProtocolDeviation).one()
+        deviation = db.exec(select(ProtocolDeviation)).one()
         assert deviation.disposition == "unreviewed"
 
 

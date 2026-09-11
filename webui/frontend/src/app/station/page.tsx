@@ -183,6 +183,12 @@ export default function StationPage() {
             : copy("Iniciar mantenimiento", "Begin maintenance")}
         </Button>
       </div>
+      <Link className="underline" href="/study/restore">
+        {copy(
+          "Copia y restauración del estudio",
+          "Study backup and restoration",
+        )}
+      </Link>
       <h2>
         {copy("Cola durable", "Durable queue")} · {state?.queue_limit}
       </h2>

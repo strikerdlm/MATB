@@ -46,12 +46,16 @@ def test_research_context_includes_liftoff_three_visit_grid(client, engine):
 
 
 def test_liftoff_analysis_endpoint_runs_and_caches(client, engine):
-    for index in range(3):
+    import numpy as np
+    rng = np.random.default_rng(9317)
+    participants = tuple(f"P{index + 1:02d}" for index in range(12))
+    intercepts = dict(zip(participants, rng.normal(0, 4, len(participants))))
+    for index in range(12):
         participant_id = f"P{index + 1:02d}"
         client.post("/participants", json={"id": participant_id, "enrollment_date": "2026-08-18"})
     with Session(engine) as session:
         visits = session.exec(select(Visit).order_by(Visit.participant_id, Visit.visit_ordinal)).all()
-        for index, participant_id in enumerate(("P01", "P02", "P03")):
+        for index, participant_id in enumerate(participants):
             session.add(StudyParticipantContext(
                 participant_id=participant_id,
                 protocol_id="astra-2026",
@@ -83,7 +87,7 @@ def test_liftoff_analysis_endpoint_runs_and_caches(client, engine):
                 metrics_json=json.dumps({
                     "metrics_version": "liftoff-metrics-v1",
                     "primary": {
-                        "median_lap_time_s": 65.0 - visit.visit_ordinal + int(visit.participant_id[-1]),
+                        "median_lap_time_s": 65.0 - visit.visit_ordinal + intercepts[visit.participant_id] + rng.normal(0, 1.5),
                         "valid_laps": 8 + visit.visit_ordinal,
                     },
                     "telemetry": {},

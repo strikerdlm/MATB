@@ -38,6 +38,12 @@ def is_heavy(method,path):
 
 def artifact_root(engine):
     path=Path(engine.url.database or '.')
+    # Restored job response files live in the recorded relocation inventory.
+    if (path.parent / 'relocation.json').is_file():
+        import json
+        mappings=json.loads((path.parent / 'relocation.json').read_text(encoding='utf-8'))
+        match=next((r for r in mappings['roots'] if r['original'].replace('\\','/').endswith('/station-job-artifacts')),None)
+        if match: return path.parent / match['logical']
     return path.parent / 'station-job-artifacts'
 
 

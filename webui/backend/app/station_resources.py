@@ -135,6 +135,8 @@ def admit_attempt(db, attempt, *, source=None, held=False, pid=None, initializin
 
 
 def admit_source(db, source, *, held=False, pid=None, initializing=False):
+    from app.artifact_paths import require_new_acquisition
+    require_new_acquisition(db, source.__tablename__, source.id)
     from .assessment_adapters import source_attempt
     attempt = source_attempt(db, source.__tablename__, source.id)
     admit_attempt(db,attempt,source=source.__tablename__+':'+str(source.id),held=held,pid=pid,initializing=initializing)

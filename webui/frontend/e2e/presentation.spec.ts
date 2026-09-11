@@ -75,23 +75,36 @@ for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
       await expect(
         page.getByTestId("mission-three-view").locator("canvas"),
       ).toBeVisible();
+      // Exercise live controls before visual capture: software rasterizers can
+      // starve input while full-page captures resize/repaint the WebGL surface.
+      if (process.env.MATB_E2E_TRAFFIC_FIXTURE === "1") {
+        await expect(
+          page.getByRole("region", { name: "Observed traffic" }),
+        ).toContainText("FIXTURE01");
+        const traffic = page.getByRole("button", { name: /FIXTURE01/ });
+        await traffic.click();
+        await expect(traffic).toHaveAttribute("aria-pressed", "true");
+        await expect(
+          page.getByRole("region", { name: "Observed traffic" }),
+        ).toContainText("a12345");
+      }
       await page.screenshot({
         path: testInfo.outputPath(`${block}-overview.png`),
-        fullPage: true,
+        fullPage: false,
       });
       await page
         .getByRole("combobox", { name: "Camera", exact: true })
         .selectOption("follow");
       await page.screenshot({
         path: testInfo.outputPath(`${block}-follow.png`),
-        fullPage: true,
+        fullPage: false,
       });
       await page
         .getByRole("combobox", { name: "Camera", exact: true })
         .selectOption("drone");
       await page.screenshot({
         path: testInfo.outputPath(`${block}-drone.png`),
-        fullPage: true,
+        fullPage: false,
       });
       await page
         .getByRole("combobox", { name: "Camera", exact: true })
@@ -102,15 +115,6 @@ for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
       expect(Object.keys(state.aircraft)).toHaveLength(
         { LOW: 2, MEDIUM: 4, HIGH: 8 }[block],
       );
-      if (process.env.MATB_E2E_TRAFFIC_FIXTURE === "1") {
-        await expect(
-          page.getByRole("region", { name: "Observed traffic" }),
-        ).toContainText("FIXTURE01");
-        await page.getByRole("button", { name: /FIXTURE01/ }).click();
-        await expect(
-          page.getByRole("region", { name: "Observed traffic" }),
-        ).toContainText("a12345");
-      }
       await page.waitForTimeout(5000); // Intentional bounded render sampling, after initial shader warmup.
       const metrics = await page.evaluate(() =>
         Reflect.get(window, "__matbPresentationMetrics")?.(),
@@ -196,7 +200,7 @@ test("corrupt offline imagery cannot satisfy readiness", async ({
   const prepared = await (
     await request.post(`${api}/simulation/technical-sessions`, {
       data: {
-      execution_purpose: "practice",
+        execution_purpose: "practice",
         scenario_id: "presentation_area_search",
         block_id: "LOW",
         locale: "en",
@@ -243,142 +247,149 @@ test("corrupt offline imagery cannot satisfy readiness", async ({
 });
 
 for (const version of [1, 2] as const)
-test(`3D SAGAT concealment and sealed public replay v${version}`, async ({
-  page,
-  request,
-}, testInfo) => {
-  const { visibleProbe, resolveVisibleProbe } = await import("./fixtures");
-  const acceptedCommands: string[] = [];
-  page.on("response", (response) => {
-    if (response.url().endsWith("/commands") && response.status() === 200) {
-      acceptedCommands.push(response.request().postDataJSON()?.kind);
-    }
-  });
-  const scene = (
-    await (await request.get(`${api}/simulation/scenes`)).json()
-  )[0];
-  const response = await request.post(`${api}/simulation/technical-sessions`, {
-    data: {
-      execution_purpose: "practice",
-      scenario_id: "e2e_area_search",
-      block_id: "LOW",
-      locale: "en",
-      presentation: {
-        version,
-        controls: { smooth_camera: version === 2, contact_cycling: version === 2, adjustable_layers: version === 2 },
-        blocks: { LOW: "3d" },
-        scene_id: scene.id,
-        scene_sha256: scene.sha256,
-        camera: "overview",
-        ...(process.env.MATB_E2E_TRAFFIC_FIXTURE === "1"
-          ? { traffic: { mode: "live", provider: "adsb.lol" } }
-          : {}),
-      },
-    },
-  });
-  expect(response.status()).toBe(201);
-  const prepared = await response.json();
-  const headers = { "X-Simulation-Controller": prepared.controller_lease };
-  try {
-    await page.addInitScript(
-      ({ id, lease }) =>
-        sessionStorage.setItem(`matb.simulation.${id}.lease`, lease),
-      { id: prepared.id, lease: prepared.controller_lease },
-    );
-    const ready = page.waitForResponse(
-      (response) =>
-        response.url().endsWith("/presentation") &&
-        response.request().postDataJSON()?.kind === "ready" &&
-        response.status() === 204,
-    );
-    await page.goto(`/mission?session=${prepared.id}`);
-    await ready;
-    await page.getByRole("button", { name: /start block/i }).click();
-    let sawSagat = false,
-      completed = false;
-    const deadline = Date.now() + 90000;
-    while (Date.now() < deadline) {
-      const probe = await visibleProbe(page);
-      if (probe === "SAGAT") {
-        sawSagat = true;
-        await expect(page.getByTestId("mission-three-view")).toHaveCount(0);
-        await expect(
-          page.getByRole("button", { name: /assign sector/i }),
-        ).toHaveCount(0);
+  test(`3D SAGAT concealment and sealed public replay v${version}`, async ({
+    page,
+    request,
+  }, testInfo) => {
+    const { visibleProbe, resolveVisibleProbe } = await import("./fixtures");
+    const acceptedCommands: string[] = [];
+    page.on("response", (response) => {
+      if (response.url().endsWith("/commands") && response.status() === 200) {
+        acceptedCommands.push(response.request().postDataJSON()?.kind);
       }
-      if (probe) {
-        const resolved = await resolveVisibleProbe(page);
-        if (resolved === "SAGAT") sawSagat = true;
-        if (resolved === "POST_BLOCK") {
-          completed = true;
-          break;
-        }
-      } else await page.waitForTimeout(100);
-    }
-    if (!sawSagat) {
-      const protocol = await (
-        await request.get(`${api}/simulation/sessions/${prepared.id}`)
-      ).json();
-      await testInfo.attach("protocol-state", {
-        body: JSON.stringify(protocol),
-        contentType: "application/json",
-      });
-    }
-    expect(sawSagat).toBe(true);
-    expect(acceptedCommands).toContain("SUBMIT_SAGAT");
-    expect(completed).toBe(true);
-    const finished = await request.post(
-      `${api}/simulation/sessions/${prepared.id}/finish`,
-      { headers, data: { disposition: "complete" } },
-    );
-    expect(finished.status()).toBe(200);
-    const debrief = await (
-      await request.get(`${api}/simulation/sessions/${prepared.id}/debrief`)
-    ).json();
-    expect(debrief.deterministic_replay_verified).toBe(true);
-    expect(debrief.frames.length).toBeGreaterThan(5);
-    expect(debrief.presentation.scene_sha256).toBe(scene.sha256);
-    if (process.env.MATB_E2E_TRAFFIC_FIXTURE === "1") {
-      expect(debrief.traffic_frames.length).toBeGreaterThan(1);
-      expect(
-        (
-          await request.post(`${api}/geography/captures/${prepared.id}`, {
-            headers: { "X-Simulation-Controller": "wrong" },
-            data: { title: "Denied" },
-          })
-        ).status(),
-      ).toBe(403);
-      const captured = await request.post(
-        `${api}/geography/captures/${prepared.id}`,
-        { headers, data: { title: "Synthetic acceptance fixture" } },
-      );
-      expect(captured.status()).toBe(201);
-      const recording = await captured.json();
-      expect(recording.sha256).toMatch(/^[a-f0-9]{64}$/);
-      expect(
-        (await (await request.get(`${api}/geography/recordings`)).json()).some(
-          (r: { id: string }) => r.id === recording.id,
-        ),
-      ).toBe(true);
-    }
-    await page.goto(`/mission/debrief?session=${prepared.id}`);
-    const slider = page.getByRole("slider", { name: /replay time/i });
-    await expect(slider).toBeVisible();
-    await slider.focus();
-    await slider.press("End");
-    await expect(
-      page.getByTestId("mission-three-view").locator("canvas"),
-    ).toBeVisible();
-    await page.screenshot({
-      path: testInfo.outputPath("3d-replay.png"),
-      fullPage: true,
     });
-  } finally {
-    await request
-      .post(`${api}/simulation/sessions/${prepared.id}/finish`, {
-        headers,
-        data: { disposition: "abort" },
-      })
-      .catch(() => {});
-  }
-});
+    const scene = (
+      await (await request.get(`${api}/simulation/scenes`)).json()
+    )[0];
+    const response = await request.post(
+      `${api}/simulation/technical-sessions`,
+      {
+        data: {
+          execution_purpose: "practice",
+          scenario_id: "e2e_area_search",
+          block_id: "LOW",
+          locale: "en",
+          presentation: {
+            version,
+            controls: {
+              smooth_camera: version === 2,
+              contact_cycling: version === 2,
+              adjustable_layers: version === 2,
+            },
+            blocks: { LOW: "3d" },
+            scene_id: scene.id,
+            scene_sha256: scene.sha256,
+            camera: "overview",
+            ...(process.env.MATB_E2E_TRAFFIC_FIXTURE === "1"
+              ? { traffic: { mode: "live", provider: "adsb.lol" } }
+              : {}),
+          },
+        },
+      },
+    );
+    expect(response.status()).toBe(201);
+    const prepared = await response.json();
+    const headers = { "X-Simulation-Controller": prepared.controller_lease };
+    try {
+      await page.addInitScript(
+        ({ id, lease }) =>
+          sessionStorage.setItem(`matb.simulation.${id}.lease`, lease),
+        { id: prepared.id, lease: prepared.controller_lease },
+      );
+      const ready = page.waitForResponse(
+        (response) =>
+          response.url().endsWith("/presentation") &&
+          response.request().postDataJSON()?.kind === "ready" &&
+          response.status() === 204,
+      );
+      await page.goto(`/mission?session=${prepared.id}`);
+      await ready;
+      await page.getByRole("button", { name: /start block/i }).click();
+      let sawSagat = false,
+        completed = false;
+      const deadline = Date.now() + 90000;
+      while (Date.now() < deadline) {
+        const probe = await visibleProbe(page);
+        if (probe === "SAGAT") {
+          sawSagat = true;
+          await expect(page.getByTestId("mission-three-view")).toHaveCount(0);
+          await expect(
+            page.getByRole("button", { name: /assign sector/i }),
+          ).toHaveCount(0);
+        }
+        if (probe) {
+          const resolved = await resolveVisibleProbe(page);
+          if (resolved === "SAGAT") sawSagat = true;
+          if (resolved === "POST_BLOCK") {
+            completed = true;
+            break;
+          }
+        } else await page.waitForTimeout(100);
+      }
+      if (!sawSagat) {
+        const protocol = await (
+          await request.get(`${api}/simulation/sessions/${prepared.id}`)
+        ).json();
+        await testInfo.attach("protocol-state", {
+          body: JSON.stringify(protocol),
+          contentType: "application/json",
+        });
+      }
+      expect(sawSagat).toBe(true);
+      expect(acceptedCommands).toContain("SUBMIT_SAGAT");
+      expect(completed).toBe(true);
+      const finished = await request.post(
+        `${api}/simulation/sessions/${prepared.id}/finish`,
+        { headers, data: { disposition: "complete" } },
+      );
+      expect(finished.status()).toBe(200);
+      const debrief = await (
+        await request.get(`${api}/simulation/sessions/${prepared.id}/debrief`)
+      ).json();
+      expect(debrief.deterministic_replay_verified).toBe(true);
+      expect(debrief.frames.length).toBeGreaterThan(5);
+      expect(debrief.presentation.scene_sha256).toBe(scene.sha256);
+      if (process.env.MATB_E2E_TRAFFIC_FIXTURE === "1") {
+        expect(debrief.traffic_frames.length).toBeGreaterThan(1);
+        expect(
+          (
+            await request.post(`${api}/geography/captures/${prepared.id}`, {
+              headers: { "X-Simulation-Controller": "wrong" },
+              data: { title: "Denied" },
+            })
+          ).status(),
+        ).toBe(403);
+        const captured = await request.post(
+          `${api}/geography/captures/${prepared.id}`,
+          { headers, data: { title: "Synthetic acceptance fixture" } },
+        );
+        expect(captured.status()).toBe(201);
+        const recording = await captured.json();
+        expect(recording.sha256).toMatch(/^[a-f0-9]{64}$/);
+        expect(
+          (
+            await (await request.get(`${api}/geography/recordings`)).json()
+          ).some((r: { id: string }) => r.id === recording.id),
+        ).toBe(true);
+      }
+      await page.goto(`/mission/debrief?session=${prepared.id}`);
+      const slider = page.getByRole("slider", { name: /replay time/i });
+      await expect(slider).toBeVisible();
+      await slider.focus();
+      await slider.press("End");
+      await expect(
+        page.getByTestId("mission-three-view").locator("canvas"),
+      ).toBeVisible();
+      await page.screenshot({
+        path: testInfo.outputPath("3d-replay.png"),
+        fullPage: true,
+      });
+    } finally {
+      await request
+        .post(`${api}/simulation/sessions/${prepared.id}/finish`, {
+          headers,
+          data: { disposition: "abort" },
+        })
+        .catch(() => {});
+    }
+  });

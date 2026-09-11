@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import hashlib
 import hmac
 import json
+from app.artifact_paths import resolve_artifact
 from pathlib import Path
 import secrets
 import os
@@ -569,7 +570,7 @@ class LiftoffManager:
         row = self.persistence.load_session(session_id)
         if row is None:
             raise LiftoffRuntimeError("liftoff_session_not_found")
-        root = Path(row.artifact_root)
+        root = resolve_artifact(row.artifact_root)
         quality_path = root / "telemetry-quality.json"
         metrics_path = root / "metrics.json"
         if not quality_path.is_file() or not metrics_path.is_file():
@@ -606,7 +607,7 @@ class LiftoffManager:
         artifacts = tuple(self.artifact_views(session_id))
         if not artifacts:
             raise LiftoffRuntimeError("liftoff_bundle_unavailable")
-        return Path(row.artifact_root), artifacts
+        return resolve_artifact(row.artifact_root), artifacts
 
     def _require_controller(self, session_id: str, lease: str) -> _ActiveLiftoffSession:
         active = self._active.get(session_id)

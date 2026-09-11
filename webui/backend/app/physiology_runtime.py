@@ -12,6 +12,7 @@ import hashlib
 import hmac
 import json
 import math
+from app.artifact_paths import resolve_artifact
 from pathlib import Path
 import secrets
 import time
@@ -806,7 +807,7 @@ class PolarCaptureManager:
         manifest = PolarArtifactManifestV1.model_validate_json(row.manifest_json) if row.manifest_json else None
         partials: list[str] = []
         if row.artifact_root:
-            root = Path(row.artifact_root).resolve()
+            root = resolve_artifact(row.artifact_root).resolve()
             if root.parent == self.artifact_root and root.exists():
                 partials = [path.name for path in sorted(root.glob("*.partial"))]
         return row, manifest, partials
@@ -815,7 +816,7 @@ class PolarCaptureManager:
         row, manifest, partials = self.inventory(capture_id, lease)
         if manifest is None or partials or row.artifact_state not in {"finalized", "incomplete"}:
             raise PolarRuntimeError("polar_artifacts_not_finalized")
-        root = Path(row.artifact_root or "").resolve()
+        root = resolve_artifact(row.artifact_root or "").resolve()
         if root.parent != self.artifact_root:
             raise PolarRuntimeError("polar_artifact_path_invalid")
         target = root / f"{capture_id}.zip"
@@ -834,7 +835,7 @@ class PolarCaptureManager:
         row, manifest, partials = self.inventory(capture_id, lease)
         if manifest is None or partials:
             raise PolarRuntimeError("polar_artifacts_not_finalized")
-        root = Path(row.artifact_root or "").resolve()
+        root = resolve_artifact(row.artifact_root or "").resolve()
         if root.parent != self.artifact_root:
             raise PolarRuntimeError("polar_artifact_path_invalid")
         import pyarrow.parquet as pq

@@ -7,6 +7,7 @@ from app.purpose_service import declare_acquisition
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 import json
+from app.artifact_paths import resolve_artifact
 from pathlib import Path
 from typing import Any
 
@@ -240,7 +241,7 @@ class SQLModelLiftoffPersistence:
         session = self.load_session(session_id)
         if session is None:
             raise KeyError(session_id)
-        root = Path(session.artifact_root).resolve()
+        root = resolve_artifact(session.artifact_root).resolve()
         rows: list[LiftoffArtifact] = []
         for artifact in artifacts:
             try:
