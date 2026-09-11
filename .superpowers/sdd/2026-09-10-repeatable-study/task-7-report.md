@@ -482,3 +482,52 @@ zoom spec hash from inventory 6; all other 51 source/docs fingerprints are exact
 Production is unchanged; no broad local suite or re-review was performed. Parent
 holds push pending completion of the current Windows CI job, then owns the fresh
 full both-OS verification of the exact final commit.
+
+### Actual Windows HIGH traffic click completion correction
+
+The remaining f264d9f Windows console job passed core 352 / 36 skips, full backend
+484 / 1 skip, frontend 279, lint/types/build and core browser verification without
+test warnings, then correctly failed geography for one flaky HIGH presentation
+case (13 passed / 1 flaky / 1 online opt-in skip). The FIXTURE01 click exhausted
+its 8-second action timeout. The original failure snapshot explicitly shows the
+button active/pressed and the selected Identifier a12345, so the handler did run;
+its assertions were never reached because the click promise timed out. No failed
+attempt is accepted as passing evidence.
+
+The retained retry trace separates the successful click: 764 ms total, roughly
+30 ms locator/actionability, 254 ms scrolling, 463 ms before dispatch, 9 ms dispatch,
+and 0.8 ms navigation barrier. Its renderer metrics identify SwiftShader, 95 draw
+calls and 40,428 triangles. The original failure had no trace, so neither an actual
+navigation nor a precise GPU cause is proven by its generic final call-log line.
+Earlier retained diagnostics independently found software rendering/input delays.
+
+The test now scrolls the real traffic button into the viewport and waits two
+animation frames before beginning its single real click. Only this action gets a
+15-second completion budget, matching the existing assertion deadline; the global
+8-second and total 90-second limits remain. The real click still must complete,
+then exact aria-pressed=true and a12345 detail assertions must pass. No force,
+noWaitAfter, synthetic event dispatch, retry, or exception swallowing was added.
+Per-case traffic-selection-timing.json records scroll, click, assertion and total
+durations, the phase on failure, and physicalTimingQualified=false. Production
+geometry, scene update behavior, stimuli and physical/display qualification remain
+unchanged. The correction is bounded functional coverage for software-rendered CI.
+
+Final focused verification passed 9 / 4.1 min: all LOW/MEDIUM/HIGH presentation
+scenarios repeated three times with --retries=0 and --fail-on-flaky-tests. Log and
+per-case timing/renderer/screenshot evidence are traffic-click-settlement-1.log
+and traffic-click-settlement-1/. The consolidated summary is
+traffic-click-settlement-1-summary.json. Every selection completed: scroll
+272–4,686 ms, click 103–2,721 ms, assertions 27–942 ms; total 797–8,126 ms. The
+8,126 ms total includes 718 ms of subsequent assertions: scroll plus click was
+7,407 ms, leaving only 593 ms of headroom under the previous 8-second combined
+action budget. This shows narrow headroom, not an exact local reproduction of the
+Windows click timeout or proof of its missing trace's root cause. TypeScript and strict zero-warning
+lint passed in traffic-click-types-1.log / traffic-click-lint-1.log.
+
+Command from frontend:
+`MATB_PYTHON=/root/repos/MATB/.venv/bin/python PYTHONPATH=/tmp/matb-task7-webdeps:/tmp/matb-predictability-testdeps MATB_COMPONENTS=auto MATB_E2E_TRAFFIC_FIXTURE=1 PW_TEST_MATCH='**/presentation.spec.ts' npm run test:e2e -- --grep 'offline 3D' --repeat-each=3 --retries=0 --fail-on-flaky-tests --output=../../.test-tmp/repeatable-study/task7/traffic-click-settlement-1`.
+All services stopped; production source unchanged throughout. Inventory 8 changes
+only presentation.spec.ts from inventory 7, with the other 51 source/docs hashes
+exact. No broad test/re-review loop or additional scientific qualification. Parent
+owns the immediate combined push (including zoom commit 561c916) and fresh final
+both-OS CI; all previous workflow jobs have finished.

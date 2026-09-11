@@ -82,11 +82,61 @@ for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
           page.getByRole("region", { name: "Observed traffic" }),
         ).toContainText("FIXTURE01");
         const traffic = page.getByRole("button", { name: /FIXTURE01/ });
-        await traffic.click();
-        await expect(traffic).toHaveAttribute("aria-pressed", "true");
-        await expect(
-          page.getByRole("region", { name: "Observed traffic" }),
-        ).toContainText("a12345");
+        const selectionStarted = Date.now();
+        let phaseStarted = selectionStarted;
+        const selectionTiming = {
+          phase: "scroll",
+          scrollMs: 0,
+          clickMs: 0,
+          assertionMs: 0,
+          completed: false,
+        };
+        try {
+          // Scrolling can resize/repaint the software-rendered WebGL surface.
+          // Settle it before spending the click's input/completion budget.
+          await traffic.scrollIntoViewIfNeeded();
+          await expect(traffic).toBeInViewport();
+          await page.evaluate(
+            () =>
+              new Promise<void>((resolve) => {
+                requestAnimationFrame(() =>
+                  requestAnimationFrame(() => resolve()),
+                );
+              }),
+          );
+          selectionTiming.scrollMs = Date.now() - phaseStarted;
+          selectionTiming.phase = "click";
+          phaseStarted = Date.now();
+          // Windows CI selected the track but exhausted the 8 s click promise.
+          // This single action uses the existing 15 s assertion budget; it is
+          // functional software coverage, not a physical response-time claim.
+          await traffic.click({ timeout: 15000 });
+          selectionTiming.clickMs = Date.now() - phaseStarted;
+          selectionTiming.phase = "assertions";
+          phaseStarted = Date.now();
+          await expect(traffic).toHaveAttribute("aria-pressed", "true");
+          await expect(
+            page.getByRole("region", { name: "Observed traffic" }),
+          ).toContainText("a12345");
+          selectionTiming.assertionMs = Date.now() - phaseStarted;
+          selectionTiming.completed = true;
+        } finally {
+          writeFileSync(
+            testInfo.outputPath("traffic-selection-timing.json"),
+            JSON.stringify(
+              {
+                block,
+                ...selectionTiming,
+                phaseElapsedMs: Date.now() - phaseStarted,
+                totalMs: Date.now() - selectionStarted,
+                clickTimeoutMs: 15000,
+                physicalTimingQualified: false,
+              },
+              null,
+              2,
+            ),
+          );
+        }
       }
       await page.screenshot({
         path: testInfo.outputPath(`${block}-overview.png`),
