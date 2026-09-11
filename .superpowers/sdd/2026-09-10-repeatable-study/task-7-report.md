@@ -349,3 +349,28 @@ unchanged. Retained official metadata and validation are in
 `final-source-inventory-4.json` records only the workflow hash delta from inventory
 3. No production changes or local scientific/browser suite reruns. Parent owns
 push and the fresh full GitHub verification; no re-review was performed.
+
+### Windows JSONL reader correction — test only
+
+Actual Windows contracts job 103113281099 in workflow 34550840968 failed the
+newly unskipped CSV/JSONL round trip (597 passed, 1 failed, 1 skipped). Diagnosis:
+`convert_to_jsonl` already writes UTF-8 explicitly with ensure_ascii=False;
+the test used Path.read_text() without an encoding, so the Windows locale decoder
+changed the non-ASCII csv_path. Production serialization/scoring is unchanged.
+
+The reader now explicitly uses UTF-8. The same complete-object equality remains,
+with additional owned `captura ñ/航空.csv` source path and `carga_baja_ñ` metadata
+assertions and exact UTF-8 line-byte verification. Parameterized wrappers simulate
+both UTF-8 and cp1252 default text opens, including Path's `locale` sentinel, on
+producer and reader while preserving explicit encodings and binary reads. This
+exposes the Windows boundary on Linux without global UTF-8 environment coercion.
+
+`jsonl-encoding-red-2.log`: the cp1252 case reproduced the exact path/data corruption
+(1 failed, 1 passed). After the explicit reader fix, the complete focused converter
+suite passed 67 / 0.26 s / zero warnings: `jsonl-encoding-final-1.log/xml`, unique
+basetemp /tmp/matb-task7-jsonl-encoding-final-1. Command:
+`PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/tmp/matb-predictability-testdeps /root/repos/MATB/.venv/bin/python -B -m pytest tests/test_log_converter.py -q -p no:cacheprovider --basetemp=... --junitxml=...`.
+No broad suites/re-review or production mutation. Inventory 5 records only the
+converter test hash delta from inventory 4; the expected contracts pass count is
+now 599 plus the explicit missing-SAGAT-plugin skip. Parent holds the push while
+remaining current CI jobs finish, so any additional actual failures can be batched.
