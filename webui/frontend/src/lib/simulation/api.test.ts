@@ -42,6 +42,7 @@ describe("simulation API adapter", () => {
   it("prepares a session and sends the controller header only on mutations", async () => {
     global.fetch = mockFetch(201, prepared);
     const result = await createSimulationSession({
+        execution_purpose: "study",
       participant_id: "P01", visit_ordinal: 1,
       scenario_id: "reference_area_search", locale: "es-CO",
     });
@@ -58,6 +59,7 @@ describe("simulation API adapter", () => {
   it("prepares a segregated technical session through its dedicated endpoint", async () => {
     global.fetch = mockFetch(201, prepared);
     await createTechnicalSimulationSession({
+        execution_purpose: "practice",
       scenario_id: "reference_area_search",
       block_id: "HIGH",
       locale: "es-CO",
@@ -65,6 +67,7 @@ describe("simulation API adapter", () => {
     const [url, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(url).toContain("/simulation/technical-sessions");
     expect(JSON.parse(init.body as string)).toEqual({
+      execution_purpose: "practice",
       scenario_id: "reference_area_search",
       block_id: "HIGH",
       locale: "es-CO",

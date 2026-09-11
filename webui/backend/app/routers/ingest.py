@@ -15,7 +15,7 @@ async def _read_bounded(upload: UploadFile, *, limit: int, code: str) -> bytes:
     content = await upload.read(limit + 1)
     if len(content) > limit:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail={
                 "code": code,
                 "message": f"uploaded file exceeds {limit} bytes",

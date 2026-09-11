@@ -1,0 +1,8 @@
+logtime,scenario_time,type,module,address,value
+0,0,event,sysmon,start,
+10,10,performance,sysmon,signal_detection,MISS
+20,20,performance,sysmon,signal_detection,MISS
+30,30,performance,sysmon,signal_detection,MISS
+85.4,85.4,performance,communications,sdt_value,MISS
+90,90,event,scales,start,
+90.05,90.05,event,sysmon,stop,

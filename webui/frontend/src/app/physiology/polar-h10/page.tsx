@@ -4,6 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Activity, Battery, Bluetooth, Download, Play, Radio, Square, WifiOff } from "lucide-react";
 
+import {useAssignedAttempt} from '@/lib/assigned-attempt';
+import {useAssessmentAdmission} from '@/lib/assessment-admission';
+import {assignmentDetail} from '@/lib/study';
 import { experimentErrorMessage } from "@/lib/experiment-errors";
 import { ExperimentGuide } from "@/components/experiments/ExperimentGuide";
 import { useExecutionPurpose, withExecutionPurpose } from "@/lib/execution-purpose";
@@ -71,7 +74,11 @@ function AccTrace({ values }: { values: number[] }) {
 }
 
 export default function PolarH10Page() {
-  const { locale, copy } = useAppLocale();
+  const preferred = useAppLocale();
+  const assigned = useAssignedAttempt();
+  const locale = assigned.context?.locale ?? preferred.locale;
+  const copy = useCallback((es:string,en:string) => locale === 'en' ? en : es, [locale]);
+  const [companionSources,setCompanionSources]=useState<{table:string;id:string}[]>([]);
   const purpose = useExecutionPurpose();
   const [connection, setConnection] = useState<PolarConnection>({ connected: false, device_alias: null, capabilities: null });
   const [devices, setDevices] = useState<PolarDevice[]>([]);
@@ -92,6 +99,8 @@ export default function PolarH10Page() {
   const [acc, setAcc] = useState<number[]>([]);
   const [gaps, setGaps] = useState(0);
   const [lastMarker, setLastMarker] = useState<string | null>(null);
+  const admission = useAssessmentAdmission(assigned.attempt && assigned.context ? {attemptId:assigned.attempt.id, participantId:assigned.context.participant_id, visitId:assigned.context.visit_id, purpose:'study', locale:assigned.context.locale} : null, {runtime:true});
+  useEffect(()=>{let active=true; const bound=assigned.context;if(bound){setParticipant(bound.participant_id);const settings=bound.config.settings as {acc_sample_rate_hz:AccRate;acc_range_g:AccRange};setAccRate(settings.acc_sample_rate_hz);setAccRange(settings.acc_range_g);if(!bound.accompanying_key){setSessionKind('generic');setSessionId(bound.occasion_id);}else void assignmentDetail(bound.assignment_id).then(detail=>{if(active)setCompanionSources((detail.attempts[bound.accompanying_key!]??[]).flatMap(a=>a.sources.filter(s=>['openmatb_suite_session','liftoff_session','simulation_session'].includes(s.source_table)).map(s=>({table:s.source_table,id:s.source_id}))));});}return()=>{active=false;};},[assigned.context]);
   const [analysis, setAnalysis] = useState<PolarAnalysis | null>(null);
   const lastSequence = useRef(0);
   const captureId = capture?.capture_id;
@@ -167,7 +176,9 @@ export default function PolarH10Page() {
   async function prepare() {
     if (!purpose) return;
     await run(async () => {
-      const prepared = await createPolarCapture({
+      const admitted = purpose === 'study' ? await admission.admit() : null;
+      if(purpose === 'study' && !admitted) throw new Error('Select an assigned assessment at /study/assignments');
+      const prepared = await createPolarCapture({ attempt_id:admitted?.attemptId,
         execution_purpose: purpose,
         participant_pseudonym: participant,
         matb_session_kind: purpose === "practice" ? "generic" : sessionKind,
@@ -210,6 +221,7 @@ export default function PolarH10Page() {
   const settings = capture?.resolved_settings ?? capture?.requested_settings;
 
   return <div className="space-y-6">
+    {purpose==='study'&&<Link className="underline" href="/study/assignments">{copy("Seleccionar evaluación asignada","Select assigned assessment")}</Link>}
     <ExperimentGuide id="physiology" />
     <PageHeader
       kicker={copy("Fisiología experimental", "Experimental physiology")}
@@ -277,6 +289,7 @@ export default function PolarH10Page() {
             <div className="space-y-2"><Label htmlFor="polar-acc-range">ACC ±G</Label><select id="polar-acc-range" className="native-select w-full" value={accRange} onChange={(event) => setAccRange(Number(event.target.value) as AccRange)} disabled={Boolean(capture)}>{[2, 4, 8].map((value) => <option key={value}>{value}</option>)}</select></div>
           </div>
           <div className="flex flex-wrap gap-2">
+            {assigned.context?.accompanying_key && !capture && <label>{copy('Sesión acompañada exacta','Exact accompanying session')}<select className="native-select block" value={sessionId} onChange={e=>{const source=companionSources.find(s=>s.id===e.target.value);setSessionId(e.target.value);setSessionKind(source?.table==='openmatb_suite_session'?'openmatb':source?.table==='liftoff_session'?'liftoff':'suas');}}><option value="">—</option>{companionSources.map(s=><option key={s.id} value={s.id}>{s.table} · {s.id}</option>)}</select></label>}
             {!capture && <Button disabled={!purpose || busy || !connection.connected || !sessionId || !participant} onClick={() => void prepare()}>{copy("Preparar", "Prepare")}</Button>}
             {capture?.lifecycle === "created" && <Button disabled={busy} onClick={() => void start()}><Play className="mr-2 h-4 w-4" />{copy("Iniciar línea base", "Start baseline")}</Button>}
             {capturing && <Button variant="destructive" disabled={busy} onClick={() => void stop()}><Square className="mr-2 h-4 w-4" />{copy("Detener y finalizar", "Stop and finalize")}</Button>}

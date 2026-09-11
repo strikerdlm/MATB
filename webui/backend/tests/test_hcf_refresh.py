@@ -2,6 +2,8 @@
 must pick up the screen HCF; /fits curves switch to Eq. 5.1."""
 from __future__ import annotations
 
+from tests.study_fixtures import study_post
+
 from sqlmodel import Session, select
 
 from app.models import DepdfFit
@@ -24,27 +26,48 @@ def _fill_visit(client, sample_csv_bytes, pid, visit=1):
         assert r.status_code == 201, r.text
 
 
-def test_existing_fits_refresh_when_cohort_gate_crossed(client, engine,
+def test_existing_fits_remain_immutable_when_cohort_gate_crossed(client, engine,
                                                         sample_csv_bytes):
     _fill_visit(client, sample_csv_bytes, "P01")
     with Session(engine) as s:
         fit = s.exec(select(DepdfFit)).one()
         assert fit.hcf_source == "F0_default" and fit.hcf_value == 1.0
-    # screens for P01..P03 crosses the >=3 gate; P01 is fastest -> F > 1
+    # Historical legacy refresh remains exploratory; new assigned acquisition does
+    # not mutate old fits. Task5 will execute frozen HCF plans independently.
+    import json
+    from app.models import ScreenResult
+    from app.hcf_refresh import refresh_fit_hcf
+    from matb_integration.screen.scoring import score_screen
     for pid, simple in (("P01", 260.0), ("P02", 320.0), ("P03", 380.0)):
         _enroll(client, pid)
-        client.post("/screen", json={"participant_id": pid,
-                                     "payload": _payload(simple=simple)})
+        payload = _payload(simple=simple)
+        with Session(engine) as db:
+            db.add(ScreenResult(participant_id=pid, administered_at=payload['administered_at'], screen_version=2,
+                raw_trials_json=json.dumps(payload), scores_json=json.dumps(score_screen(payload))))
+            db.commit()
+            refresh_fit_hcf(db)
     with Session(engine) as s:
         fit = s.exec(select(DepdfFit)).one()
-        assert fit.hcf_source == "screen" and fit.hcf_value > 1.0
+        assert fit.hcf_source == "F0_default" and fit.hcf_value == 1.0
+        from app.study_analysis_models import HcfDerivation, HcfExploratoryPointer
+        pointer=s.get(HcfExploratoryPointer,'legacy-unambiguous')
+        derivation=s.get(HcfDerivation,pointer.derivation_id)
+        assert json.loads(derivation.snapshot_json)['values']['P01']['value']>1.0
+        from app.routers.fits import collect_full_fit_rows
+        frozen=collect_full_fit_rows(s)[0]
+        compared=collect_full_fit_rows(s,hcf_derivation_id=derivation.id)[0]
+        assert frozen['curve']==compared['curve']
+        assert compared['exploratory_derivation']['curve']!=frozen['curve']
 
 
 def test_new_fit_uses_screen_hcf(client, engine, sample_csv_bytes):
     for pid, simple in (("P01", 260.0), ("P02", 320.0), ("P03", 380.0)):
         _enroll(client, pid)
-        client.post("/screen", json={"participant_id": pid,
+        response = study_post(client, "/screen", json={"execution_purpose": "study", "participant_id": pid,
                                      "payload": _payload(simple=simple)})
+        assert response.status_code == 201, response.text
+        closed = client.post('/station/close', json={'actor': 'Dr Fixture', 'reason': 'Completed this participant visit before the next collection'})
+        assert closed.status_code == 200, closed.text
     _fill_visit(client, sample_csv_bytes, "P03")
     with Session(engine) as s:
         fit = s.exec(select(DepdfFit)).one()
@@ -54,8 +77,11 @@ def test_new_fit_uses_screen_hcf(client, engine, sample_csv_bytes):
 def test_fits_endpoint_curve_uses_f(client, sample_csv_bytes):
     for pid, simple in (("P01", 260.0), ("P02", 320.0), ("P03", 380.0)):
         _enroll(client, pid)
-        client.post("/screen", json={"participant_id": pid,
+        response = study_post(client, "/screen", json={"execution_purpose": "study", "participant_id": pid,
                                      "payload": _payload(simple=simple)})
+        assert response.status_code == 201, response.text
+        closed = client.post('/station/close', json={'actor': 'Dr Fixture', 'reason': 'Completed this participant visit before the next collection'})
+        assert closed.status_code == 200, closed.text
     _fill_visit(client, sample_csv_bytes, "P01")
     fit = client.get("/fits").json()[0]
     assert fit["hcf_source"] == "screen"
@@ -66,3 +92,4 @@ def test_fits_endpoint_curve_uses_f(client, sample_csv_bytes):
     ordinary_at_3 = p0 * math.exp((1 - 9) * 1.0)
     assert fit["curve"][-1]["p"] > ordinary_at_3
     assert "hcf_value" in fit
+    assert fit["hcf_reference_cohort"] != "unknown_unrecoverable_legacy_reference_cohort"

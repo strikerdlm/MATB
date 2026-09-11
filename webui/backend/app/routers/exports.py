@@ -86,6 +86,8 @@ class ResearchFigureV1(BaseModel):
 class ResearchBundleRequestV1(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
+    hcf_derivation_id: str | None = None
+
     figures: list[ResearchFigureV1] = Field(
         default_factory=list,
         max_length=MAX_BUNDLE_FIGURES,
@@ -243,7 +245,7 @@ def _liftoff_provenance(session: Session) -> list[dict[str, Any]]:
     return liftoff_provenance(session)
 
 
-def build_research_context(session: Session) -> dict[str, Any]:
+def build_research_context(session: Session, hcf_derivation_id: str | None = None) -> dict[str, Any]:
     from matb_integration.analysis.stats import fingerprint
 
     participants = _participants(session)
@@ -251,7 +253,7 @@ def build_research_context(session: Session) -> dict[str, Any]:
     metrics = collect_metric_rows(session)
     analysis_fit_rows = collect_fit_rows(session)
     current_data_fingerprint = fingerprint(metrics, analysis_fit_rows)
-    fits = collect_full_fit_rows(session)
+    fits = collect_full_fit_rows(session, hcf_derivation_id=hcf_derivation_id)
     analysis, analysis_status = _latest_analysis(session, current_data_fingerprint)
     bayes, bayes_status = _latest_bayes(session, current_data_fingerprint)
     provenance = _block_provenance(session)
@@ -265,6 +267,9 @@ def build_research_context(session: Session) -> dict[str, Any]:
         status = row["validation_status"]
         status_counts[status] = status_counts.get(status, 0) + 1
     return {
+        "scope": "legacy_block_visit_grid_and_inferential_snapshots",
+        "planned_analysis_endpoint": "/study/analyses",
+        "full_study_restoration": False,
         "bundle_version": BUNDLE_VERSION,
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "current_data_fingerprint": current_data_fingerprint,
@@ -343,8 +348,8 @@ def _bundle_manifest(
 
 
 @router.get("/research-context")
-def research_context(session: Session = Depends(get_session)) -> dict[str, Any]:
-    return build_research_context(session)
+def research_context(session: Session = Depends(get_session), hcf_derivation_id: str | None = None) -> dict[str, Any]:
+    return build_research_context(session, hcf_derivation_id=hcf_derivation_id)
 
 
 @router.post("/research-bundle")
@@ -353,7 +358,7 @@ def research_bundle(
     session: Session = Depends(get_session),
 ) -> Response:
     figures = [] if payload is None else payload.figures
-    context = build_research_context(session)
+    context = build_research_context(session, hcf_derivation_id=payload.hcf_derivation_id if payload else None)
     buf = SpooledTemporaryFile(max_size=8 * 1024 * 1024, mode="w+b")
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("manifest.json", _dumps(_bundle_manifest(context, figures)))

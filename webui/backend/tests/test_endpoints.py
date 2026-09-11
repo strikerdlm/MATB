@@ -224,8 +224,8 @@ def test_research_bundle_rejects_nonfinite_or_oversized_figure_options(client):
 
     assert nonfinite.status_code == 422
     assert nonfinite.json()["detail"]["code"] == "invalid_request"
-    assert oversized.status_code == 422
-    assert oversized.json()["detail"]["code"] == "invalid_request"
+    assert oversized.status_code == 413
+    assert oversized.json()["detail"]["code"] == "station_queue_payload_too_large"
 
 
 def test_research_exports_omit_stale_inference_after_new_ingest(client, sample_csv_bytes):

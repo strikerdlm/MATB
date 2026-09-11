@@ -11,13 +11,14 @@ import httpx
 from sqlmodel import Session
 
 from app.models import Participant, Visit
+from tests.study_fixtures import native_request
 from app.openmatb_models import OpenMatbSuiteSession
 from app.openmatb_runtime import OpenMatbManager, OpenMatbRuntimeError
 from app.openmatb_schemas import CreateOpenMatbSession, WorkloadScaleRequest
 
 
 @pytest.fixture
-def controlled(engine, tmp_path):
+def controlled(engine, tmp_path, request):
     with Session(engine) as db:
         db.add(Participant(id="P01", enrollment_date=date(2026, 6, 1)))
         db.add(Visit(participant_id="P01", visit_ordinal=1, scheduled_day=0))
@@ -26,7 +27,15 @@ def controlled(engine, tmp_path):
                              artifact_root=tmp_path / "controlled", python_executable=Path(__file__))
     manager.displays = lambda: [{"index": 0, "label": "Display 1", "width": 1920, "height": 1080, "x": 0, "y": 0},
                                 {"index": 1, "label": "Display 2", "width": 1920, "height": 1080, "x": 1920, "y": 0}]
-    prepared = asyncio.run(manager.create_session(CreateOpenMatbSession(participant_id="P01", visit_ordinal=1)))
+    # Practice evidence regressions retain actual practice sources. Study rating
+    # regressions use a real frozen assignment; historical receipt cases below
+    # seed old associations directly and only exercise readers.
+    practice_tests = {'test_repeated_practice_uses_different_attempt_ids', 'test_evidence_waits_until_suite_ends_and_preserves_original_bytes', 'test_failed_derivation_retry_reuses_capture_and_creates_new_processing_attempt', 'test_partial_artifacts_are_not_reported_as_saved', 'test_restart_recovers_attempt_without_claiming_completion', 'test_retry_requires_matching_controller_and_attempt', 'test_native_launch_injects_durable_identity_and_finishes_practice_without_ratings', 'test_later_launch_failure_still_processes_prior_sealed_blocks', 'test_restart_does_not_process_while_a_previous_native_process_survives', 'test_shared_native_practice_and_rating_target_keep_actual_purpose'}
+    if request.node.originalname in practice_tests:
+        payload=CreateOpenMatbSession(execution_purpose='practice',participant_id='P01',visit_ordinal=1)
+    else:
+        payload=native_request(engine,execution_purpose='study',participant_id='P01',visit_ordinal=1)
+    prepared = asyncio.run(manager.create_session(payload))
     return manager, prepared
 
 
@@ -34,14 +43,15 @@ def awaiting_scale(manager, prepared, engine):
     with Session(engine) as db:
         row = db.get(OpenMatbSuiteSession, prepared.session.id)
         order = json.loads(row.block_order_json)
-        row.current_block_index = 1
-        attempt = manager.records.begin(db, row, order[1])
-        attempt.task_status = "completed"
+        row.current_block_index = 0
+        attempt = manager.records.begin(db, row, order[0])
+        manager.records.finish(db, row, outcome="completed", csv=None)
         row.lifecycle = "AWAITING_SCALE"
         db.add(attempt)
         db.add(row)
         db.commit()
-        return attempt.id, order[1]
+        from app.study_native import storage_key
+        return attempt.id, storage_key(db, row, order[0])
 
 
 def ratings(block_id=None, value=50):
@@ -78,13 +88,13 @@ def test_duplicate_scale_save_is_idempotent_and_never_moves_next_block(controlle
     request = ratings(attempt_id)
     first, changed = manager.submit_scale_once(prepared.session.id, prepared.participant_token, request)
     assert changed is True
-    assert first.current_block_index == 2
+    assert first.current_block_index == 1
     assert first.scores[block]["rtlx_mean_0_100"] == 50
     assert first.scores[block]["block_instance_id"] == attempt_id
     second, changed = manager.submit_scale_once(prepared.session.id, prepared.participant_token, request)
     assert changed is False
     assert second.scores == first.scores
-    assert second.current_block_index == 2
+    assert second.current_block_index == 1
     with pytest.raises(OpenMatbRuntimeError, match="scale_already_saved"):
         manager.submit_scale(prepared.session.id, prepared.participant_token, ratings(attempt_id, 55))
 
@@ -96,7 +106,7 @@ def test_saved_ratings_do_not_claim_missing_task_artifacts_or_qualification(cont
     receipt = manager.receipt(prepared.session.id)
     attempt = receipt["attempts"][0]
     assert attempt["ratings_status"] == "saved"
-    assert attempt["legacy_import_status"] == "missing"
+    assert attempt["legacy_import_status"] == "inapplicable_assigned_occasion"
     assert attempt["capture_id"] is None
     assert attempt["qualification"] is None
     assert attempt["artifact_status"] != "saved"
@@ -130,20 +140,22 @@ def test_display_disappearing_blocks_preparation(controlled):
     asyncio.run(manager.abort(prepared.session.id, prepared.controller_lease, "test_abort"))
     manager.displays = lambda: [{"index": 0, "label": "Display 1", "width": 1920, "height": 1080, "x": 0, "y": 0}]
     with pytest.raises(OpenMatbRuntimeError, match="display_unavailable"):
-        asyncio.run(manager.create_session(CreateOpenMatbSession(participant_id="P01", visit_ordinal=1, display_index=1)))
+        asyncio.run(manager.create_session(CreateOpenMatbSession(execution_purpose="study", participant_id="P01", visit_ordinal=1, display_index=1)))
 
 
-def sealed_attempt(controlled, engine, *, terminal=True):
+def sealed_attempt(controlled, engine, *, terminal=True, profile="PRACTICE", purpose="practice"):
     from hashlib import sha256
     from matb_integration.evidence.writer import EvidenceWriter
     from matb_integration.evidence.contracts import canonical_bytes
     manager, prepared = controlled
     with Session(engine) as db:
         suite = db.get(OpenMatbSuiteSession, prepared.session.id)
-        attempt = manager.records.begin(db, suite, "PRACTICE")
+        attempt = manager.records.begin(db, suite, profile)
         aid = attempt.id
+        from app.study_native import storage_key
+        instance_key = storage_key(db, suite, profile)
         db.commit()
-    root = manager.artifact_root / prepared.session.id / "sessions" / "PRACTICE"
+    root = manager.artifact_root / prepared.session.id / "sessions" / instance_key
     root.mkdir(parents=True, exist_ok=True)
     csv = root / f"{aid}.csv"
     csv.write_text("logtime,scenario_time,type,module,address,value\n", encoding="utf-8")
@@ -153,7 +165,7 @@ def sealed_attempt(controlled, engine, *, terminal=True):
     context = {"scenario_sha256": "a" * 64, "profile_id": "synthetic-records-test",
         "source_commit": "b" * 40, "source_dirty": False, "component_version": "synthetic-test-1", "scenario_manifest_status": "verified"}
     writer = EvidenceWriter(csv, str(uuid4()), context, {"parent_session_id": prepared.session.id,
-        "block_instance_id": aid, "participant_id": "P01", "visit_ordinal": 1, "condition": "PRACTICE", "execution_purpose": "practice"})
+        "block_instance_id": aid, "participant_id": "P01", "visit_ordinal": 1, "condition": profile, "execution_purpose": purpose})
     writer.lifecycle("started", 0, 1000)
     writer.record({"type": "scenario_manifest_evidence", "module": "", "address": "", "scenario_time": 0,
         "value": canonical_bytes({"status": "verified", "scenario_manifest_sha256": sha256(scenario.read_bytes()).hexdigest()}).decode()}, {"recorded_monotonic_ns": 1100})
@@ -276,19 +288,21 @@ def test_concurrent_duplicate_scale_requests_only_import_once(controlled, engine
     import time
     manager, prepared = controlled
     aid, _ = awaiting_scale(manager, prepared, engine)
-    imports = []
-    def slow_import(*args):
-        time.sleep(0.05)
-        imports.append(True)
-        return "saved", None
-    monkeypatch.setattr(manager, "_ingest_completed_block", slow_import)
     def submit():
         return manager.submit_scale_once(prepared.session.id, prepared.participant_token, ratings(aid))[1]
     with ThreadPoolExecutor(max_workers=2) as pool:
         outcomes = list(pool.map(lambda _: submit(), range(2)))
     assert sorted(outcomes) == [False, True]
-    assert len(imports) == 1
-    assert manager.session_view(prepared.session.id).current_block_index == 2
+    from app.study_registry_models import StudyNativeRating
+    from sqlmodel import select
+    with Session(engine) as db:
+        saved = db.exec(select(StudyNativeRating)).all()
+        assert len(saved) == 1 and saved[0].block_instance_id == aid
+        before = saved[0].payload_json
+    with pytest.raises(OpenMatbRuntimeError, match="scale_already_saved"):
+        manager.submit_scale_once(prepared.session.id, prepared.participant_token, ratings(aid,55))
+    with Session(engine) as db: assert db.exec(select(StudyNativeRating)).one().payload_json == before
+    assert manager.session_view(prepared.session.id).current_block_index == 1
 
 
 @pytest.mark.anyio
@@ -319,28 +333,26 @@ async def test_scale_endpoint_emits_one_marker_and_receipt_keeps_saved_block(con
     assert receipt["attempts"][0]["ratings_status"] == "saved"
 
 
-def test_legacy_import_rollback_cannot_discard_confirmed_ratings(controlled, engine, monkeypatch):
-    manager, prepared = controlled
-    aid, block = awaiting_scale(manager, prepared, engine)
-    def rolled_back_import(db, *_args):
-        db.rollback()
-        return "failed", "automatic_ingest_failed"
-    monkeypatch.setattr(manager, "_ingest_completed_block", rolled_back_import)
-    result, changed = manager.submit_scale_once(prepared.session.id, prepared.participant_token, ratings(aid))
-    assert changed is True
-    assert result.scores[block]["block_instance_id"] == aid
-    assert manager.receipt(prepared.session.id)["attempts"][0]["legacy_import_status"] == "failed"
+def test_legacy_import_rollback_cannot_discard_confirmed_ratings(engine, sample_csv_bytes, monkeypatch):
+    from app.ingestion import ingest_csv
+    from app.openmatb_models import OpenMatbBlockAttempt
+    native_id = legacy_rating_source(engine)
+    with Session(engine) as db:
+        native = db.get(OpenMatbBlockAttempt, native_id)
+        native.ratings_json = '{"bedford":4}'; db.add(native); db.commit()
+        before = native.ratings_json
+        original_flush = db.flush
+        def failed_flush(*args, **kwargs): raise RuntimeError('Legacy projection persistence failure')
+        monkeypatch.setattr(db, 'flush', failed_flush)
+        with pytest.raises(RuntimeError, match='Legacy projection'):
+            ingest_csv(db, content=sample_csv_bytes(), filename='historical.csv', participant_id='P01', visit_ordinal=1, workload_level='HIGH')
+        monkeypatch.setattr(db, 'flush', original_flush)
+        assert db.get(OpenMatbBlockAttempt, native_id).ratings_json == before
 
 
 def test_native_launch_injects_durable_identity_and_finishes_practice_without_ratings(controlled, engine, monkeypatch):
     from types import SimpleNamespace
     manager, prepared = controlled
-    with Session(engine) as db:
-        suite = db.get(OpenMatbSuiteSession, prepared.session.id)
-        suite.execution_purpose = "practice"
-        suite.block_order_json = '["PRACTICE"]'
-        db.add(suite)
-        db.commit()
     monkeypatch.setattr(manager, "readiness", lambda: SimpleNamespace(ready=True))
     captured = {}
     class CompletedProcess:
@@ -384,7 +396,7 @@ def test_later_launch_failure_still_processes_prior_sealed_blocks(controlled, en
     aid, cid, _ = sealed_attempt(controlled, engine, terminal=False)
     with Session(engine) as db:
         suite = db.get(OpenMatbSuiteSession, prepared.session.id)
-        suite.current_block_index = 1
+        suite.current_block_index = 0
         suite.execution_purpose = "practice"
         db.add(suite)
         db.commit()
@@ -430,3 +442,81 @@ def test_restart_does_not_process_while_a_previous_native_process_survives(contr
     asyncio.run(second._process_evidence())
     with Session(engine) as db:
         assert db.get(EvidenceCapture, cid) is not None
+
+
+def test_shared_native_practice_and_rating_target_keep_actual_purpose(controlled, engine):
+    from app.assessment_models import AssessmentSourceLink, AssessmentAttempt
+    from app.purpose_service import provenance_view
+    from sqlmodel import select
+    manager, prepared = controlled
+    with Session(engine) as db:
+        suite = db.get(OpenMatbSuiteSession, prepared.session.id)
+        native = manager.records.begin(db, suite, 'PRACTICE')
+        db.commit()
+        links = db.exec(select(AssessmentSourceLink).where(AssessmentSourceLink.source_table == 'openmatb_block_attempt', AssessmentSourceLink.source_id == native.id)).all()
+        assert {link.role for link in links} == {'acquisition', 'ratings'}
+        task = db.get(AssessmentAttempt, next(link.attempt_id for link in links if link.role == 'acquisition'))
+        rating = db.get(AssessmentAttempt, next(link.attempt_id for link in links if link.role == 'ratings'))
+        assert task.execution_purpose == rating.execution_purpose == 'practice'
+        assert rating.target_attempt_id == task.id
+        assert task.purpose_provenance_id != suite.purpose_provenance_id
+        assert provenance_view(db, task.purpose_provenance_id)['current']['classification'] == 'explicit'
+
+
+@pytest.mark.parametrize('has_ratings,artifact_status', [(False, 'saved'), (True, 'saved'), (True, 'missing')])
+def test_questionnaire_receipt_uses_its_own_evidence(controlled, engine, has_ratings, artifact_status):
+    from app.assessment_adapters import source_attempt
+    from app.assessment_service import attempt_view
+    from app.openmatb_models import OpenMatbBlockAttempt
+    manager, prepared = controlled
+    native_id, _ = awaiting_scale(manager, prepared, engine)
+    if has_ratings: manager.submit_scale(prepared.session.id, prepared.participant_token, ratings(native_id))
+    with Session(engine) as db:
+        native = db.get(OpenMatbBlockAttempt, native_id)
+        native.artifact_status = artifact_status
+        native.task_status = 'completed'
+        native.evidence_status = 'failed' if artifact_status == 'missing' else 'processed'
+        db.add(native); db.commit()
+        questionnaire = source_attempt(db, 'openmatb_block_attempt', native_id, 'ratings')
+        receipt = attempt_view(db, questionnaire)['receipt']
+        assert receipt['raw_saving'] == ('saved' if has_ratings else 'unknown')
+        assert receipt['acquisition'] == ('finished' if has_ratings else 'created')
+        assert receipt['ratings'] == ('saved' if has_ratings else 'unknown')
+        assert receipt['processing'] == 'unknown'
+        task = attempt_view(db, source_attempt(db, 'openmatb_block_attempt', native_id))['receipt']
+        assert task['raw_saving'] == artifact_status
+        assert task['acquisition'] == 'completed'
+
+
+def test_legacy_questionnaire_receipt_keeps_unknown_without_rating_time(engine):
+    from app.assessment_adapters import source_attempt
+    from app.assessment_service import attempt_view
+    from app.openmatb_models import OpenMatbBlockAttempt
+    native_id = legacy_rating_source(engine)
+    with Session(engine) as db:
+        questionnaire = source_attempt(db, 'openmatb_block_attempt', native_id, 'ratings')
+        questionnaire.acquisition_state = 'unknown'
+        native = db.get(OpenMatbBlockAttempt, native_id)
+        native.artifact_status = 'saved'
+        native.task_status = 'completed'
+        db.add(questionnaire); db.add(native); db.commit()
+        assert attempt_view(db, questionnaire)['receipt'] == {'raw_saving': 'unknown', 'acquisition': 'unknown', 'ratings': 'unknown', 'processing': 'unknown', 'preparation': 'unknown', 'plan_eligibility': 'pending'}
+        native.ratings_json = '{"bedford":4}'
+        db.add(native); db.commit()
+        assert native.ratings_saved_at is None
+        assert attempt_view(db, questionnaire)['receipt'] == {'raw_saving': 'saved', 'acquisition': 'unknown', 'ratings': 'saved', 'processing': 'unknown', 'preparation': 'unknown', 'plan_eligibility': 'pending'}
+
+
+def legacy_rating_source(engine):
+    """Genuine historical rows: no prospective request, assignment or declaration."""
+    from app.openmatb_models import OpenMatbBlockAttempt
+    from app.assessment_adapters import attach_source
+    with Session(engine) as db:
+        db.add(Participant(id='P01', enrollment_date=date(2026,6,1))); db.flush()
+        visit=Visit(participant_id='P01',visit_ordinal=1,scheduled_day=0);db.add(visit);db.flush()
+        suite=OpenMatbSuiteSession(id=str(uuid4()),participant_id='P01',visit_id=visit.id,visit_ordinal=1,
+            preset_id='historical',preset_version='unknown',preset_sha256='unknown',instruction_protocol_id='historical',instruction_version='unknown',instruction_sha256='unknown',block_order_json='["HIGH"]',scenario_paths_json='{}',controller_lease_hash='historical',participant_token_hash='historical',artifact_root='historical')
+        db.add(suite);db.flush()
+        native=OpenMatbBlockAttempt(id=str(uuid4()),session_id=suite.id,block_index=0,profile='HIGH');db.add(native);db.flush()
+        attach_source(db,'openmatb_block_attempt',native.model_dump(),historical=True);db.commit()
+        return native.id

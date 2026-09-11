@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from importlib import import_module
 from pathlib import Path
 
+from app import station_resources  # register durable resource tables
 from sqlalchemy import event, inspect, text
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -83,6 +84,11 @@ def init_db(*, component_model_modules: tuple[str, ...] = ()) -> None:
     from app import (
         models,  # noqa: F401
         study_models,  # noqa: F401
+        station_resources,  # noqa: F401
+        study_registry_models,  # noqa: F401
+        study_analysis_models,  # noqa: F401
+        purpose_models,
+        assessment_models,
         evidence_models,  # noqa: F401
     )
 
@@ -90,17 +96,27 @@ def init_db(*, component_model_modules: tuple[str, ...] = ()) -> None:
         import_module(module_name)
 
     SQLModel.metadata.create_all(_engine)
+    from app.study_registry import install_registry_guards
+    install_registry_guards(_engine)
     _migrate_openmatb_visual_theme_v1(_engine)
     _migrate_openmatb_visual_profile_v1(_engine)
     _migrate_analysisresult_v2(_engine)
     _migrate_bayesresult_v3(_engine)
     _migrate_experiment_execution_v1(_engine)
+    from app.purpose_service import migrate_purpose_provenance
+    migrate_purpose_provenance(_engine)
+    from app.assessment_migration import migrate_assessments
+    migrate_assessments(_engine)
     _migrate_openmatb_receipts_v1(_engine)
     _migrate_evidence_parent_v1(_engine)
     _audit_sqlite_foreign_keys(_engine)
     from app.hcf_refresh import refresh_fit_hcf
     with Session(_engine) as session:
-        refresh_fit_hcf(session)
+        from app.station_resources import snapshot, enqueue
+        if snapshot(session)["reservation"]:
+            enqueue(session,"hcf_refresh",{});session.commit()
+        else:
+            refresh_fit_hcf(session)
 
 
 def _migrate_evidence_parent_v1(engine) -> None:
@@ -158,13 +174,6 @@ def _migrate_experiment_execution_v1(engine) -> None:
             for name, definition in definitions.items():
                 if name not in columns:
                     connection.execute(text(f'ALTER TABLE "{table}" ADD COLUMN "{name}" {definition}'))
-        # Existing fast screens are retained but removed from the study cohort.
-        if "screenresult" in tables:
-            connection.execute(text("UPDATE screenresult SET execution_purpose='practice' "
-                                    "WHERE json_valid(raw_trials_json) AND json_extract(raw_trials_json, '$.fast_mode')=1"))
-        if "pvt_assessment" in tables:
-            connection.execute(text("UPDATE pvt_assessment SET execution_purpose='practice' "
-                                    "WHERE pvt_version=1 AND protocol_valid=0"))
         connection.execute(text("CREATE TABLE IF NOT EXISTS matb_schema_migration (version VARCHAR PRIMARY KEY, applied_at DATETIME NOT NULL)"))
         connection.execute(text("INSERT OR IGNORE INTO matb_schema_migration (version, applied_at) VALUES ('experiment-execution-v1', CURRENT_TIMESTAMP)"))
 

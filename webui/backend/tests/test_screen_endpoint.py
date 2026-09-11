@@ -1,6 +1,8 @@
 """POST /screen scoring+storage+guards; GET /screen summary with gate status."""
 from __future__ import annotations
 
+from tests.study_fixtures import study_post
+
 
 def _payload(simple=300.0):
     return {
@@ -22,7 +24,7 @@ def _enroll(client, pid):
 
 def test_screen_post_scores_and_stores(client):
     _enroll(client, "P01")
-    r = client.post("/screen", json={"participant_id": "P01", "payload": _payload()})
+    r = study_post(client, "/screen", json={"execution_purpose": "study", "participant_id": "P01", "payload": _payload()})
     assert r.status_code == 201, r.text
     body = r.json()
     assert body["scores"]["simple_rt"]["median_ms"] == 300.0
@@ -31,36 +33,43 @@ def test_screen_post_scores_and_stores(client):
 
 
 def test_screen_unknown_participant_404(client):
-    r = client.post("/screen", json={"participant_id": "P99", "payload": _payload()})
+    r = study_post(client, "/screen", json={"execution_purpose": "study", "participant_id": "P99", "payload": _payload()})
     assert r.status_code == 404
 
 
-def test_screen_duplicate_guard_and_overwrite(client):
+def test_screen_duplicate_guard_refuses_destructive_overwrite(client):
     _enroll(client, "P01")
-    assert client.post("/screen", json={"participant_id": "P01",
+    assert study_post(client, "/screen", json={"execution_purpose": "study", "participant_id": "P01",
                                         "payload": _payload()}).status_code == 201
-    r = client.post("/screen", json={"participant_id": "P01", "payload": _payload()})
+    r = study_post(client, "/screen", json={"execution_purpose": "study", "participant_id": "P01", "payload": _payload()})
     assert r.status_code == 201
-    assert client.post("/screen", json={"participant_id": "P01", "payload": _payload(simple=270)}).status_code == 409
-    r = client.post("/screen", json={"participant_id": "P01",
+    assert study_post(client, "/screen", json={"execution_purpose": "study", "participant_id": "P01", "payload": _payload(simple=270)}).status_code == 409
+    r = study_post(client, "/screen", json={"execution_purpose": "study", "participant_id": "P01",
                                      "payload": _payload(simple=280.0),
                                      "overwrite": True})
-    assert r.status_code == 201
-    assert r.json()["scores"]["simple_rt"]["median_ms"] == 280.0
+    assert r.status_code == 409
+    assert r.json()["detail"]["code"] == "final_payload_conflict"
+    closed = client.post('/station/close', json={'actor': 'Dr Fixture', 'reason': 'Collection complete before cohort calculation'})
+    assert closed.status_code == 200, closed.text
+    assert client.get("/screen").json()["screens"][0]["scores"]["simple_rt"]["median_ms"] == 300.0
 
 
 def test_screen_summary_gate_status(client):
     for i, pid in enumerate(("P01", "P02"), start=1):
         _enroll(client, pid)
-        client.post("/screen", json={"participant_id": pid,
+        study_post(client, "/screen", json={"execution_purpose": "study", "participant_id": pid,
                                      "payload": _payload(simple=280.0 + i * 20)})
+        closed = client.post('/station/close', json={'actor': 'Dr Fixture', 'reason': 'Participant visit complete'})
+        assert closed.status_code == 200, closed.text
     s = client.get("/screen").json()
     assert s["n_screened"] == 2 and s["hcf_active"] is False  # < MIN_COHORT
     assert {e["participant_id"] for e in s["screens"]} == {"P01", "P02"}
     assert all(e["hcf_value"] is None for e in s["screens"])
     _enroll(client, "P03")
-    client.post("/screen", json={"participant_id": "P03",
+    study_post(client, "/screen", json={"execution_purpose": "study", "participant_id": "P03",
                                  "payload": _payload(simple=360.0)})
+    closed = client.post('/station/close', json={'actor': 'Dr Fixture', 'reason': 'Participant visit complete'})
+    assert closed.status_code == 200, closed.text
     s = client.get("/screen").json()
     assert s["n_screened"] == 3 and s["hcf_active"] is True
     by_pid = {e["participant_id"]: e for e in s["screens"]}
@@ -71,10 +80,10 @@ def test_screen_malformed_payload_422_not_500(client):
     _enroll(client, "P01")
     bad = _payload()
     bad["nback"]["trials"] = [{"responded": True}]   # missing is_target
-    r = client.post("/screen", json={"participant_id": "P01", "payload": bad})
+    r = study_post(client, "/screen", json={"execution_purpose": "study", "participant_id": "P01", "payload": bad})
     assert r.status_code == 422
     assert "malformed" in r.json()["detail"]
     bad2 = _payload()
     bad2["simple_rt"] = {"trials": None}             # trials not a list
-    r2 = client.post("/screen", json={"participant_id": "P01", "payload": bad2})
+    r2 = study_post(client, "/screen", json={"execution_purpose": "study", "participant_id": "P01", "payload": bad2})
     assert r2.status_code == 422

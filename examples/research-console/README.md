@@ -123,3 +123,9 @@ Use `GET /health` (or the first walkthrough request) to check the API. Stop
 native development with `Ctrl-C` in each terminal. To reset this example, stop
 the services and delete only the selected example data directory or its
 dedicated SQLite file—never a shared study database.
+
+New acquisition requests must explicitly include `execution_purpose` (`study` or
+`practice`). Fast screen/PVT requests require `practice`. Record views return a
+`purpose_provenance_id`; the protected local purpose API retains immutable
+classification history, including unknown historical intent. See the
+[backend contract](../../webui/backend/README.md#acquisition-purpose-and-historical-provenance).

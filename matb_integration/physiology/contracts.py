@@ -48,6 +48,7 @@ class PolarCaptureV1(_StrictContract):
     SCHEMA_VERSION: ClassVar[str] = "1.0"
     schema_version: Literal["1.0"] = "1.0"
     capture_id: str
+    purpose_provenance_id: str | None = None
     execution_purpose: Literal["practice", "study"] = "study"
     participant_pseudonym: str
     matb_session_kind: str

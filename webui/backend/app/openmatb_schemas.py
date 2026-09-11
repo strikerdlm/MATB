@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from app.participant_ids import PARTICIPANT_ID_PATTERN
 
 Lifecycle = Literal[
-    "INSTRUCTIONS", "READY", "STARTING", "RUNNING", "PAUSED",
+    "INSTRUCTIONS", "READY", "PREFLIGHT_READY", "PREFLIGHT_STARTING", "PREFLIGHT_HELD", "STARTING", "RUNNING", "PAUSED",
     "AWAITING_SCALE", "BETWEEN_BLOCKS", "COMPLETE", "ABORTED", "FAILED", "INTERRUPTED",
 ]
 Profile = Literal["PRACTICE", "LOW", "MEDIUM", "HIGH"]
@@ -335,8 +335,10 @@ class OpenMatbReadiness(BaseModel):
 
 
 class CreateOpenMatbSession(BaseModel):
+    preparation_only: bool = False
+    attempt_id: str | None = None
     model_config = ConfigDict(extra="forbid")
-    execution_purpose: Literal["practice", "study"] = "study"
+    execution_purpose: Literal["practice", "study"]
     participant_id: str = Field(pattern=PARTICIPANT_ID_PATTERN)
     visit_ordinal: int = Field(ge=1, le=16)
     preset_id: str = "matb-fac-standard"
@@ -367,6 +369,13 @@ class PreparedOpenMatbSession(BaseModel):
 
 
 class OpenMatbSessionView(BaseModel):
+    study_assignment_id: str | None = None
+    preflight_prepared_at: datetime | None = None
+    preflight_released_at: datetime | None = None
+    preflight_wall_duration_seconds: float | None = None
+    preparation_assignment_id: str | None = None
+    preparation_id: str | None = None
+    purpose_provenance_id: str | None = None
     model_config = ConfigDict(extra="forbid")
     execution_purpose: Literal["practice", "study"] = "study"
     locale: str = "es-419"
@@ -411,6 +420,7 @@ class AbortRequest(BaseModel):
 
 
 class WorkloadScaleRequest(BaseModel):
+    questionnaire_attempt_id: str | None = None
     model_config = ConfigDict(extra="forbid")
     # Optional only for historical sessions created before attempt binding.
     block_instance_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")

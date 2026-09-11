@@ -1,3 +1,4 @@
+import { stationFetch } from "@/lib/station-fetch";
 import { getApiBase } from "@/lib/runtime-config";
 import type {
   ArtifactView,
@@ -31,7 +32,7 @@ export class SimulationApiError extends Error {
 
 async function simulationRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const apiBase = await getApiBase();
-  const response = await fetch(`${apiBase}${path}`, init);
+  const response = await stationFetch(`${apiBase}${path}`, init);
   if (!response.ok) {
     const body: unknown = await response.json().catch(() => ({}));
     const detail = body && typeof body === "object" && "detail" in body
@@ -141,7 +142,7 @@ export async function listSimulationArtifacts(id: string): Promise<ArtifactView[
 
 export async function downloadSimulationBundle(id: string): Promise<Blob> {
   const apiBase = await getApiBase();
-  const response = await fetch(`${apiBase}/simulation/sessions/${encodeURIComponent(id)}/bundle`, { method: "GET" });
+  const response = await stationFetch(`${apiBase}/simulation/sessions/${encodeURIComponent(id)}/bundle`, { method: "GET" });
   if (!response.ok) {
     const body: unknown = await response.json().catch(() => ({}));
     const detail = body && typeof body === "object" && "detail" in body

@@ -10,7 +10,7 @@
     "dev": "next dev --port 3100",
     "build": "next build && node scripts/write-build-root.mjs",
     "start": "next start --port 3100",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "node scripts/run-e2e.mjs playwright.config.ts",

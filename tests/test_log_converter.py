@@ -7,11 +7,12 @@ Covers:
 - ISA metrics: probes list, mean, sd
 - NASA-TLX metrics: subscales, raw_tlx
 - COMM metrics: sdt_value→ n_hits/FA/CR, d'
-- convert_session on the real smoke-test CSV (regression guard)
+- convert_session on the synthetic smoke-test CSV (regression guard)
 """
 
 from __future__ import annotations
 
+import builtins
 import csv
 import io
 import json
@@ -41,9 +42,7 @@ from matb_integration.log_converter import (
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
-SMOKE_CSV = Path(__file__).resolve().parents[1] / (
-    "openmatb/sessions/2026-05-03/27_260503_174528.csv"
-)
+SMOKE_CSV = Path(__file__).resolve().parent / 'fixtures' / 'synthetic_legacy_smoke.csv'
 
 
 def _csv_rows(text: str) -> list[dict[str, str]]:
@@ -1138,9 +1137,8 @@ def test_extra_metadata_cannot_overwrite_scientific_contract_fields(tmp_path: Pa
         )
 
 
-@pytest.mark.skipif(not SMOKE_CSV.exists(), reason="Smoke-test CSV not present")
 def test_smoke_csv_sysmon_counts():
-    """Session 27: 3 MISSes confirmed during smoke test, no HITs or FAs."""
+    """Synthetic legacy fixture: 3 MISSes confirmed during smoke test, no HITs or FAs."""
     result = convert_session(
         SMOKE_CSV,
         participant_id="SMOKE",
@@ -1155,9 +1153,8 @@ def test_smoke_csv_sysmon_counts():
     assert s["hit_rate_legacy_v1"] == pytest.approx(0.0)  # 0 / (0+3) = 0.0
 
 
-@pytest.mark.skipif(not SMOKE_CSV.exists(), reason="Smoke-test CSV not present")
 def test_smoke_csv_comm_miss():
-    """Session 27: 1 COMM MISS at t=85.4s (own callsign, no response)."""
+    """Synthetic legacy fixture: 1 COMM MISS at t=85.4s (own callsign, no response)."""
     result = convert_session(SMOKE_CSV)
     c = result["comm"]
     assert c["n_misses"] == 0
@@ -1166,29 +1163,43 @@ def test_smoke_csv_comm_miss():
     assert c["observed_opportunity_status"] == "unavailable"
 
 
-@pytest.mark.skipif(not SMOKE_CSV.exists(), reason="Smoke-test CSV not present")
 def test_smoke_csv_isa_no_completed():
-    """Session 27: ISA probe fired at t=90s but session ended at t=90.05s (no response)."""
+    """Synthetic legacy fixture: ISA probe fired at t=90s but session ended at t=90.05s (no response)."""
     result = convert_session(SMOKE_CSV)
     assert result["isa"]["n_probes_completed"] == 0
 
 
-@pytest.mark.skipif(not SMOKE_CSV.exists(), reason="Smoke-test CSV not present")
 def test_smoke_csv_nasatlx_empty():
-    """Session 27: no NASA-TLX (90s run, end of block at 900s not reached)."""
+    """Synthetic legacy fixture: no NASA-TLX (90s run, end of block at 900s not reached)."""
     result = convert_session(SMOKE_CSV)
     assert result["nasatlx"]["n_subscales_completed"] == 0
 
 
-@pytest.mark.skipif(not SMOKE_CSV.exists(), reason="Smoke-test CSV not present")
-def test_smoke_csv_jsonl_roundtrip(tmp_path):
-    """JSONL output must be valid JSON with expected top-level keys."""
-    out = tmp_path / "output.jsonl"
+@pytest.mark.parametrize("default_encoding", ["utf-8", "cp1252"])
+def test_smoke_csv_jsonl_roundtrip(tmp_path, monkeypatch, default_encoding):
+    """UTF-8 JSONL preserves source paths/data independently of text defaults."""
+    source = tmp_path / "captura ñ" / "航空.csv"
+    source.parent.mkdir()
+    source.write_bytes(SMOKE_CSV.read_bytes())
+    out = tmp_path / "resultado ñ.jsonl"
+
+    def with_default_encoding(original):
+        def open_file(file, mode="r", buffering=-1, encoding=None, errors=None,
+                      newline=None, closefd=True, opener=None):
+            if "b" not in mode and encoding in (None, "locale"):
+                encoding = default_encoding
+            return original(file, mode, buffering, encoding, errors, newline, closefd, opener)
+        return open_file
+
+    # Simulate the Windows text default even on UTF-8 Linux. Explicit encodings
+    # and binary reads retain their real behavior on both producer and reader.
+    monkeypatch.setattr(builtins, "open", with_default_encoding(builtins.open))
+    monkeypatch.setattr(io, "open", with_default_encoding(io.open))
     line = convert_to_jsonl(
-        SMOKE_CSV,
+        source,
         output_path=out,
         participant_id="P00",
-        block_name="low_workload",
+        block_name="carga_baja_ñ",
         workload_level="LOW",
     )
     data = json.loads(line)
@@ -1200,8 +1211,12 @@ def test_smoke_csv_jsonl_roundtrip(tmp_path):
     assert data["workload_level"] == "LOW"
     assert "sysmon" in data and "isa" in data and "nasatlx" in data and "comm" in data
 
+    assert data["csv_path"] == str(source)
+    assert data["block_name"] == "carga_baja_ñ"
+    assert out.read_bytes().splitlines() == [line.encode("utf-8")]
+
     # Also verify the written file
-    written = out.read_text().strip()
+    written = out.read_text(encoding="utf-8").strip()
     assert json.loads(written) == data
 
 

@@ -69,8 +69,8 @@ def test_execution_migration_preserves_schedule_and_raw_observations(tmp_path, d
     _migrate_experiment_execution_v1(engine)
     with engine.begin() as connection:
         assert tuple(connection.execute(text("SELECT scheduled_day FROM visit ORDER BY id")).scalars()) == days
-        assert tuple(connection.execute(text("SELECT raw_trials_json, scores_json, execution_purpose FROM screenresult")).one()) == (raw, '{"legacy":12}', "practice")
-        assert list(connection.execute(text("SELECT protocol_valid, execution_purpose FROM pvt_assessment ORDER BY id"))) == [(1, "study"), (0, "practice")]
+        assert tuple(connection.execute(text("SELECT raw_trials_json, scores_json, execution_purpose FROM screenresult")).one()) == (raw, '{"legacy":12}', "study")
+        assert list(connection.execute(text("SELECT protocol_valid, execution_purpose FROM pvt_assessment ORDER BY id"))) == [(1, "study"), (0, "study")]
         assert connection.execute(text("SELECT COUNT(*) FROM matb_schema_migration WHERE version='experiment-execution-v1'")).scalar_one() == 1
 
 

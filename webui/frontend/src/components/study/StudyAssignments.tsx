@@ -1,0 +1,469 @@
+"use client";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { useAppLocale } from "@/lib/i18n";
+import { listParticipants, listVisits } from "@/lib/api";
+import {
+  studyCall,
+  studyVersions,
+  studyAssignments,
+  assignmentDetail,
+  type Assignment,
+  type AssignmentDetail,
+  type StudyVersion,
+} from "@/lib/study";
+import { createAttempt, repeatAttempt } from "@/lib/assessments";
+import type { Participant, Visit } from "@/types";
+const routes: Record<string, string> = {
+  pvt: "/pvt",
+  screen: "/screen",
+  openmatb: "/openmatb/setup",
+  liftoff: "/liftoff/setup",
+  physiology: "/physiology/polar-h10",
+  suas: "/mission/setup",
+};
+export function StudyAssignments() {
+  const router = useRouter();
+  const { copy } = useAppLocale();
+  const [versions, setVersions] = useState<StudyVersion[]>([]);
+  const [version, setVersion] = useState("");
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [participant, setParticipant] = useState("");
+  const [visits, setVisits] = useState<Visit[]>([]);
+  const [visit, setVisit] = useState("");
+  const [arm, setArm] = useState("");
+  const [actor, setActor] = useState("");
+  const [reason, setReason] = useState("");
+  const [rows, setRows] = useState<Assignment[]>([]);
+  const [detail, setDetail] = useState<AssignmentDetail | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [selections, setSelections] = useState<Record<string, string>>({});
+  const [repeatReasons, setRepeatReasons] = useState<Record<string, string>>(
+    {},
+  );
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function refresh() {
+    setRows(await studyAssignments());
+  }
+  useEffect(() => {
+    void studyVersions()
+      .then((v) => {
+        setVersions(v.versions);
+        setVersion(v.active_version_id ?? "");
+      })
+      .catch((e) => setError(String(e)));
+    void listParticipants()
+      .then(setParticipants)
+      .catch((e) => setError(String(e)));
+    void refresh().catch((e) => setError(String(e)));
+  }, []);
+  useEffect(() => {
+    let active = true;
+    setVisit("");
+    if (participant)
+      void listVisits(participant).then((v) => {
+        if (active) setVisits(v);
+      });
+    return () => {
+      active = false;
+    };
+  }, [participant]);
+  async function run(action: () => Promise<void>) {
+    setBusy(true);
+    setError("");
+    try {
+      await action();
+      await refresh();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  const frozen = versions.find((v) => v.id === version);
+  return (
+    <div className="space-y-5">
+      <h1 className="text-2xl font-semibold">
+        {copy("Asignaciones del estudio", "Study assignments")}
+      </h1>
+      <Link className="underline" href="/study">
+        {copy(
+          "Autoría y versiones del estudio",
+          "Study authoring and versions",
+        )}
+      </Link>
+      <p>
+        {copy(
+          "Seleccione una asignación activa. Las visitas iniciadas conservan su versión.",
+          "Select an active assignment. Started visits retain their version.",
+        )}
+      </p>
+      <fieldset disabled={busy} className="grid gap-3 sm:grid-cols-2">
+        <label>
+          {copy("Versión congelada", "Frozen version")}
+          <select
+            className="native-select block w-full"
+            value={version}
+            onChange={(e) => {
+              setVersion(e.target.value);
+              setArm("");
+            }}
+          >
+            <option value="">—</option>
+            {versions.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.study.title} · {v.id}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          {copy("Investigador responsable", "Named researcher")}
+          <input
+            className="native-input block"
+            value={actor}
+            onChange={(e) => setActor(e.target.value)}
+          />
+        </label>
+        <label>
+          {copy("Participante", "Participant")}
+          <select
+            className="native-select block"
+            value={participant}
+            onChange={(e) => setParticipant(e.target.value)}
+          >
+            <option value="">—</option>
+            {participants.map((p) => (
+              <option key={p.id}>{p.id}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          {copy("Visita", "Visit")}
+          <select
+            className="native-select block"
+            value={visit}
+            onChange={(e) => setVisit(e.target.value)}
+          >
+            <option value="">—</option>
+            {visits.map((v) => (
+              <option key={v.id} value={v.id}>
+                V{v.visit_ordinal} · {v.scheduled_day}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          {copy("Brazo asignado", "Assigned arm")}
+          <select
+            className="native-select block"
+            value={arm}
+            onChange={(e) => setArm(e.target.value)}
+          >
+            <option value="">—</option>
+            {frozen?.study.arms.map((a) => (
+              <option key={a}>{a}</option>
+            ))}
+          </select>
+        </label>
+        <Button
+          disabled={!version || !actor || !participant || !visit || !arm}
+          onClick={() =>
+            void run(async () => {
+              await studyCall(`/versions/${version}/assign`, {
+                participant_id: participant,
+                visit_id: Number(visit),
+                arm,
+                actor,
+              });
+            })
+          }
+        >
+          {copy("Asignar visita", "Assign visit")}
+        </Button>
+      </fieldset>
+      <div className="space-y-3">
+        {rows.map((a) => (
+          <div
+            key={a.id}
+            className="flex flex-wrap items-center gap-3 rounded border p-3"
+          >
+            <input
+              aria-label={`${copy("Enmendar", "Amend")} ${a.id}`}
+              type="checkbox"
+              disabled={busy || !a.current || a.started}
+              checked={selected.includes(a.id)}
+              onChange={(e) =>
+                setSelected(
+                  e.target.checked
+                    ? [...selected, a.id]
+                    : selected.filter((id) => id !== a.id),
+                )
+              }
+            />
+            <span>
+              {a.participant_id} · {copy("Visita", "Visit")} {a.visit_id} ·{" "}
+              {a.arm} ·{" "}
+              {a.current
+                ? copy("Actual", "Current")
+                : copy("Enmendada", "Amended")}{" "}
+              ·{" "}
+              {a.started
+                ? copy("Iniciada", "Started")
+                : copy("Sin iniciar", "Unstarted")}
+            </span>
+            <Button
+              onClick={() =>
+                void run(async () => {
+                  setDetail(await assignmentDetail(a.id));
+                  setSelections({});
+                })
+              }
+            >
+              {copy("Abrir asignación", "Open assignment")}
+            </Button>
+            <Link
+              href={`/study#version-${a.version_id}`}
+              className="underline text-xs"
+            >
+              {a.version_id}
+            </Link>
+          </div>
+        ))}
+      </div>
+      <fieldset disabled={busy} className="space-y-3">
+        <label>
+          {copy(
+            "Motivo de enmienda para las asignaciones seleccionadas",
+            "Amendment reason for selected assignments",
+          )}
+          <textarea
+            className="native-input block w-full"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+        </label>
+        <Button
+          disabled={!selected.length || !actor || !reason || !version}
+          onClick={() =>
+            void run(async () => {
+              await studyCall(`/versions/${version}/amend`, {
+                assignment_ids: selected,
+                actor,
+                reason,
+              });
+              setSelected([]);
+              setDetail(null);
+            })
+          }
+        >
+          {copy("Aplicar enmienda explícita", "Apply explicit amendment")}
+        </Button>
+      </fieldset>
+      {detail && (
+        <section className="space-y-4 rounded border p-4">
+          <h2 className="font-semibold">
+            {detail.assignment.participant_id} · {detail.assignment.version_id}
+          </h2>
+          <Link className="block underline" href={`/study/participant?assignment=${detail.assignment.id}`}>{copy('Preparación y siguiente acción del participante', 'Participant preparation and next action')}</Link>
+          <Link className="block underline" href={`/study/history?participant=${detail.assignment.participant_id}`}>{copy('Exposición y clasificación histórica', 'Exposure and historical classification')}</Link>
+          {detail.version.study.occasions
+            .filter((o) => detail.occasions[o.key])
+            .sort((a, b) => a.order - b.order)
+            .map((o) => (
+              <div key={o.key} className="space-y-2 border-t pt-3">
+                <p>
+                  {o.order}. {o.phase} · {o.instrument} ·{" "}
+                  {o.condition_by_arm[detail.assignment.arm]} · {o.locale}
+                </p>
+                <p className="text-sm">
+                  {detail.version.study.rules.preparation}
+                </p>
+                {(o.instrument === "questionnaire"
+                  ? []
+                  : o.prerequisite_keys
+                ).map((key) => (
+                  <label className="block" key={key}>
+                    {copy(
+                      "Intento previo seleccionado",
+                      "Selected prerequisite attempt",
+                    )}
+                    : {key}
+                    <select
+                      className="native-select block"
+                      value={selections[key] ?? ""}
+                      onChange={(e) =>
+                        setSelections({ ...selections, [key]: e.target.value })
+                      }
+                    >
+                      <option value="">—</option>
+                      {detail.attempts[key]
+                        ?.filter((a) => a.acquisition_state === "finished")
+                        .map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.ordinal} · {a.id}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                ))}
+                {routes[o.instrument] &&
+                  detail.attempts[o.key]?.some((a) =>
+                    ["finished", "interrupted"].includes(a.acquisition_state),
+                  ) && (
+                    <label>
+                      {copy(
+                        "Motivo de repetición explícita",
+                        "Explicit repeat reason",
+                      )}
+                      <input
+                        className="native-input block"
+                        value={repeatReasons[o.key] ?? ""}
+                        onChange={(e) =>
+                          setRepeatReasons({
+                            ...repeatReasons,
+                            [o.key]: e.target.value,
+                          })
+                        }
+                      />
+                    </label>
+                  )}
+                {routes[o.instrument] && detail.current && (
+                  <Button
+                    disabled={
+                      busy || o.prerequisite_keys.some((k) => !selections[k])
+                    }
+                    onClick={() =>
+                      void run(async () => {
+                        const prior = detail.attempts[o.key]?.toSorted(
+                          (a, b) => b.ordinal - a.ordinal,
+                        )[0];
+                        const existing = detail.attempts[o.key]?.find((a) =>
+                          ["created", "started"].includes(a.acquisition_state),
+                        );
+                        if (!existing && prior && !repeatReasons[o.key]?.trim())
+                          throw new Error(
+                            copy(
+                              "Indique el motivo de repetición.",
+                              "Enter an explicit repeat reason.",
+                            ),
+                          );
+                        const attempt =
+                          existing ??
+                          (prior
+                            ? await repeatAttempt(
+                                prior.id,
+                                "study",
+                                repeatReasons[o.key],
+                              )
+                            : await createAttempt(
+                                detail.occasions[o.key],
+                                "study",
+                              ));
+                        if (
+                          o.prerequisite_keys.length &&
+                          attempt.acquisition_state === "created"
+                        )
+                          await studyCall(
+                            `/attempts/${attempt.id}/prerequisites`,
+                            {
+                              selections: Object.fromEntries(
+                                o.prerequisite_keys.map((k) => [
+                                  k,
+                                  selections[k],
+                                ]),
+                              ),
+                            },
+                          );
+                        router.push(
+                          `${routes[o.instrument]}?purpose=study&attempt=${encodeURIComponent(attempt.id)}&participant=${encodeURIComponent(detail.assignment.participant_id)}&visit=${detail.assignment.visit_id}`,
+                        );
+                      })
+                    }
+                  >
+                    {copy(
+                      "Preparar evaluación asignada",
+                      "Prepare assigned assessment",
+                    )}
+                  </Button>
+                )}
+                {o.instrument === "questionnaire" && (
+                  <p>
+                    {copy(
+                      "Se selecciona y guarda en la pantalla nativa de la tarea destinataria exacta; ese mismo intento satisface el requisito previo prescrito.",
+                      "Select and save it on the native display for the exact target task; that same attempt supplies its prescribed prerequisite.",
+                    )}
+                  </p>
+                )}
+                {detail.attempts[o.key]?.map((a) => (
+                  <p key={a.id} className="text-xs">
+                    {a.id} · {a.acquisition_state} · {a.receipt.raw_saving}
+                  </p>
+                ))}
+              </div>
+            ))}
+          {detail.version.study.recovery_intervals.map((interval) => (
+            <div key={interval.key} className="space-y-2 border-t pt-3">
+              <p>
+                {interval.key}: {interval.anchor_key} → {interval.before_key} ·{" "}
+                {interval.duration_seconds}s
+              </p>
+              <label>
+                {copy("Intento de anclaje", "Anchor attempt")}
+                <select
+                  className="native-select block"
+                  value={selections[interval.key] ?? ""}
+                  onChange={(e) =>
+                    setSelections({
+                      ...selections,
+                      [interval.key]: e.target.value,
+                    })
+                  }
+                >
+                  <option value="">—</option>
+                  {detail.attempts[interval.anchor_key]
+                    ?.filter((a) => a.acquisition_state === "finished")
+                    .map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.id}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <Button
+                disabled={!actor || !selections[interval.key] || busy}
+                onClick={() =>
+                  void run(async () => {
+                    await studyCall(
+                      `/assignments/${detail.assignment.id}/recovery/${interval.key}/start?anchor_attempt_id=${selections[interval.key]}`,
+                      { actor, reason: "Administrative recovery start" },
+                    );
+                  })
+                }
+              >
+                {copy("Iniciar intervalo", "Start interval")}
+              </Button>
+              <Button
+                disabled={!actor || busy}
+                onClick={() =>
+                  void run(async () => {
+                    await studyCall(
+                      `/assignments/${detail.assignment.id}/recovery/${interval.key}/finish`,
+                      { actor, reason: "Administrative recovery end" },
+                    );
+                  })
+                }
+              >
+                {copy("Finalizar intervalo", "Finish interval")}
+              </Button>
+            </div>
+          ))}
+        </section>
+      )}
+      {error && <p role="alert">{error}</p>}
+    </div>
+  );
+}

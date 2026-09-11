@@ -40,10 +40,12 @@ def test_bayes_q2_recovers_known_effects(sim_fits):
     q4 = art["q4"]["g0"]
     assert q4["status"] == "ok"
     assert q4["coefs"]["b_visit"]["mean"] == pytest.approx(0.5, abs=0.15)
+    assert all(result["status"] == "ok" for result in art["q4"].values())
     # sampler config + provenance persisted (spec section 7)
     s = art["sampler"]
     assert s["seed"] == 20260604 and s["chains"] == 2 and s["draws"] == 300 and s["tune"] == 300
     assert s["interval"] == "95% ETI"
+    assert s["initialization"] == "adapt_diag; b0=observed_mean; remaining prior defaults"
     assert "Normal(0, 2.5*sd(y))" in s["priors"]["coefficients"]
     assert "HalfNormal(sd(y))" in s["priors"]["sds"]
     assert {"pymc", "arviz", "numpy", "pandas"} <= set(art["provenance"]["libraries"])

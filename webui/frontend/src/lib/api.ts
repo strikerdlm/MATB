@@ -1,3 +1,4 @@
+import { stationFetch } from "@/lib/station-fetch";
 import { sharedRead } from "@/lib/shared-request";
 import type {
   AnalysisArtifact,
@@ -72,7 +73,7 @@ async function detail(res: Response): Promise<string> {
 
 async function request(path: string, init: RequestInit): Promise<Response> {
   const apiBase = await getApiBase();
-  return fetch(`${apiBase}${path}`, init);
+  return stationFetch(`${apiBase}${path}`, init);
 }
 
 export async function getTracker(): Promise<TrackerCell[]> {
@@ -214,13 +215,14 @@ export async function getBayesStatus(jobId?: number): Promise<BayesJob | null> {
 
 export async function postScreen(
   participantId: string, payload: import("@/lib/screen").ScreenPayload,
-  overwrite = false,
-  executionPurpose: "practice" | "study" = "study",
+  overwrite: boolean,
+  executionPurpose: "practice" | "study",
+  attemptId?: string,
 ): Promise<ScreenIngestResult> {
   const res = await request("/screen", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ participant_id: participantId, payload, overwrite, execution_purpose: executionPurpose }),
+    body: JSON.stringify({ participant_id: participantId, payload, overwrite, execution_purpose: executionPurpose, ...(attemptId ? {attempt_id: attemptId} : {}) }),
   });
   if (!res.ok) throw new ApiError(res.status, await detail(res));
   return res.json();

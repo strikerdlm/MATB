@@ -82,7 +82,7 @@ def _translate(exc: LiftoffRuntimeError) -> HTTPException:
     }:
         return _error(status.HTTP_409_CONFLICT, code)
     if code in {"liftoff_visit_not_in_protocol", "liftoff_artifact_path"}:
-        return _error(status.HTTP_422_UNPROCESSABLE_ENTITY, code)
+        return _error(status.HTTP_422_UNPROCESSABLE_CONTENT, code)
     if code in {
         "liftoff_hrv_metadata_invalid",
         "liftoff_hrv_identity_mismatch",
@@ -90,7 +90,7 @@ def _translate(exc: LiftoffRuntimeError) -> HTTPException:
         "liftoff_hrv_contract_rejected",
         "liftoff_hrv_response_mismatch",
     }:
-        return _error(status.HTTP_422_UNPROCESSABLE_ENTITY, code)
+        return _error(status.HTTP_422_UNPROCESSABLE_CONTENT, code)
     if code in {"liftoff_hrv_pending_not_found"}:
         return _error(status.HTTP_404_NOT_FOUND, code)
     return _error(status.HTTP_500_INTERNAL_SERVER_ERROR, code)
@@ -218,16 +218,16 @@ async def submit_results(
     try:
         request = VisibleResultsRequest.model_validate_json(metadata)
     except ValidationError as exc:
-        raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "liftoff_results_invalid") from exc
+        raise _error(status.HTTP_422_UNPROCESSABLE_CONTENT, "liftoff_results_invalid") from exc
     image = await screenshot.read(_MAX_SCREENSHOT_BYTES + 1)
     if len(image) > _MAX_SCREENSHOT_BYTES:
         raise _error(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "liftoff_screenshot_too_large")
     is_png = image.startswith(b"\x89PNG\r\n\x1a\n")
     is_jpeg = image.startswith(b"\xff\xd8\xff")
     if screenshot.content_type not in {"image/png", "image/jpeg"} or not (is_png or is_jpeg):
-        raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "liftoff_screenshot_type")
+        raise _error(status.HTTP_422_UNPROCESSABLE_CONTENT, "liftoff_screenshot_type")
     if hashlib.sha256(image).hexdigest() != request.screenshot_sha256:
-        raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "liftoff_screenshot_hash")
+        raise _error(status.HTTP_422_UNPROCESSABLE_CONTENT, "liftoff_screenshot_hash")
     _managed(lambda: manager.submit_results(session_id, _lease(lease), request, image))
     return {"status": "recorded"}
 
@@ -261,7 +261,7 @@ async def attach_physiology(
         if not isinstance(metadata, dict):
             raise ValueError
     except (UnicodeDecodeError, ValueError, json.JSONDecodeError) as exc:
-        raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "liftoff_hrv_upload_invalid") from exc
+        raise _error(status.HTTP_422_UNPROCESSABLE_CONTENT, "liftoff_hrv_upload_invalid") from exc
     try:
         view = await manager.analyze_physiology(
             session_id,

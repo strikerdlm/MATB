@@ -1,3 +1,5 @@
+
+from tests.study_fixtures import study_post
 """Regression tests for experiment access and practice/study isolation."""
 import pytest
 import json
@@ -7,7 +9,7 @@ from app.routers.pvt import PvtAssessmentIn, PvtTrialIn
 
 
 def full_pvt(**overrides):
-    body = dict(participant_id="P01", visit_ordinal=1, kss_score=3,
+    body = dict(execution_purpose="study", participant_id="P01", visit_ordinal=1, kss_score=3,
                 administered_at="2026-09-04T12:00:00Z", duration_ms=600000,
                 timing_version=2, max_frame_gap_ms=17, terminal_phase="waiting",
                 trials=[dict(index=i, wait_ms=2000, stimulus_at_ms=2000 + i * 2200,
@@ -18,7 +20,7 @@ def full_pvt(**overrides):
 
 def test_full_pvt_independent_reference_and_quality_gates(client):
     client.post("/participants", json={"id": "P01", "enrollment_date": "2026-06-01"})
-    result = client.post("/pvt", json=full_pvt())
+    result = study_post(client, "/pvt", json=full_pvt())
     assert result.status_code == 201, result.text
     assert result.json()["protocol_valid"] is True
     assert result.json()["metrics"]["median_rt_ms"] == 200
@@ -37,17 +39,21 @@ def test_pvt_exact_protocol_boundaries(rt, outcome):
                       response_at_ms=2000 + rt, rt_ms=rt, outcome=outcome).outcome == outcome
 
 
-def test_practice_cannot_overwrite_study_and_retakes_are_archived(client, engine):
+def test_practice_cannot_overwrite_study_and_explicit_retakes_preserve_original(client, engine):
     from app.models import ArchivedAssessment, PracticeResult
     client.post("/participants", json={"id": "P01", "enrollment_date": "2026-06-01"})
-    study = client.post("/pvt", json=full_pvt()).json()
-    practice = client.post("/pvt", json=full_pvt(execution_purpose="practice", overwrite=True, kss_score=9))
+    study = study_post(client, "/pvt", json=full_pvt()).json()
+    practice = study_post(client, "/pvt", json=full_pvt(execution_purpose="practice", overwrite=True, kss_score=9))
     assert practice.status_code == 201
     assert client.get("/pvt").json()["assessments"][0] == study
-    assert client.post("/pvt", json=full_pvt(overwrite=True, kss_score=5)).status_code == 201
+    assert study_post(client, "/pvt", json=full_pvt(overwrite=True, kss_score=5)).status_code == 409
+    from tests.test_assessments import occasion, attempt
+    next_attempt = attempt(client, occasion(client))
+    assert study_post(client, "/pvt", json=full_pvt(attempt_id=next_attempt['id'], kss_score=5)).status_code == 201
+    from app.models import PvtAssessment
     with Session(engine) as db:
-        archive = db.exec(select(ArchivedAssessment)).one()
-        assert json.loads(archive.snapshot_json)["kss_score"] == 3
+        assert db.get(PvtAssessment, study['id']).kss_score == 3
+        assert len(db.exec(select(PvtAssessment)).all()) == 2
         assert len(db.exec(select(PracticeResult)).all()) == 1
 
 
@@ -82,7 +88,7 @@ def test_pvt_rejects_inconsistent_false_start():
 
 def test_pvt_rejects_events_after_session_end():
     with pytest.raises(ValueError):
-        PvtAssessmentIn(participant_id="P01", visit_ordinal=1, kss_score=3,
+        PvtAssessmentIn(execution_purpose="study", participant_id="P01", visit_ordinal=1, kss_score=3,
                         administered_at="2026-09-04T12:00:00Z", duration_ms=600000,
                         trials=[dict(index=0, wait_ms=2000, stimulus_at_ms=900000,
                                      response_at_ms=900200, rt_ms=200, outcome="response")])
@@ -98,7 +104,7 @@ def test_catalog_includes_all_families(client):
 
 def test_practice_pvt_does_not_complete_or_replace_study_visit(client):
     client.post("/participants", json={"id": "P01", "enrollment_date": "2026-06-01"})
-    response = client.post("/pvt", json={
+    response = study_post(client, "/pvt", json={
         "participant_id": "P01", "visit_ordinal": 1, "kss_score": 3,
         "administered_at": "2026-09-04T12:00:00Z", "duration_ms": 12000,
         "fast_mode": True, "execution_purpose": "practice",

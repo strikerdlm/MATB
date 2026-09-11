@@ -23,7 +23,7 @@ fi
 curl --fail-with-body "$base_url/simulation/scenarios"
 prepared_json="$(curl --silent --show-error --fail-with-body -H 'Content-Type: application/json' \
   -H "$authorization_header" \
-  -d '{"participant_id":"P01","visit_ordinal":1,"scenario_id":"reference_area_search","locale":"en"}' \
+  -d '{"execution_purpose":"study","participant_id":"P01","visit_ordinal":1,"scenario_id":"reference_area_search","locale":"en"}' \
   "$base_url/simulation/sessions")"
 read -r session_id controller_lease_value < <(
   printf '%s' "$prepared_json" | python3 -c 'import json, sys; value=json.load(sys.stdin); print(value["id"], value["controller_lease"])'

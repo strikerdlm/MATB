@@ -218,7 +218,7 @@ def test_candidate_backend_runs_without_optional_product_components(tmp_path: Pa
     destination = tmp_path / "candidate"
     export_candidate(destination, candidate=True)
     environment = dict(os.environ)
-    environment["PYTHONPATH"] = str(destination)
+    environment["PYTHONPATH"] = os.pathsep.join([str(destination), *[part for part in os.environ.get("PYTHONPATH", "").split(os.pathsep) if part and not Path(part).resolve().is_relative_to(ROOT)]])
     environment["MATB_COMPONENTS"] = "core"
     environment["MATB_DB_PATH"] = str(tmp_path / "candidate.sqlite")
     script = """
@@ -245,7 +245,75 @@ async def verify():
     assert '/simulation/sessions' not in routes
     assert '/liftoff/sessions' not in routes
 
+
+# Exercise real startup/migrations in the physically stripped tree, then restore
+# its historical native evidence association and immutable bytes in a new DB.
+from datetime import date
+from pathlib import Path
+import json, sqlite3, os, subprocess, sys
+from sqlmodel import Session, select
+from app.db import get_engine
+from app.models import Participant, Visit
+from app.evidence_models import EvidenceArtifact
+from app.evidence_service import ingest_evidence
+from app.assessment_models import AssessmentSourceLink
+from app.study_registry_models import StudyWorkspace
+from app.study_protocol import selected_protocol
+from app import station_resources
+from app.study_backup import backup, restore
+from matb_integration.evidence.reference import synthetic_capture
+
+async def restoration():
+    database = Path(os.environ['MATB_DB_PATH'])
+    original = database.parent / 'legacy native source ñ'
+    async with app.router.lifespan_context(app):
+        with Session(get_engine()) as db:
+            db.add(Participant(id='P01', enrollment_date=date(2026,9,10))); db.flush()
+            db.add(Visit(participant_id='P01', visit_ordinal=1, scheduled_day=0)); db.commit()
+            artifacts = synthetic_capture(original, identity='core-restoration')
+            capture_id, _ = ingest_evidence(db, artifacts)
+            protocol = selected_protocol()
+            db.add(StudyWorkspace(study_id='core-restore', template_family='pre-post-recovery',
+                deployment_protocol_id=protocol.protocol_id, deployment_schedule_sha256=protocol.schedule_sha256))
+            station_resources.maintenance(db, True, actor='Dr Synthetic', reason='Core restore')
+            db.commit()
+    # Recreate the pre-parent-index evidence schema using only this owned DB.
+    # Startup must migrate it, retaining unknown historical parentage and bytes.
+    get_engine().dispose()
+    from contextlib import closing
+    with closing(sqlite3.connect(database)) as legacy:
+        legacy.execute('DROP INDEX IF EXISTS ix_evidence_capture_parent_session_id')
+        legacy.execute('ALTER TABLE evidence_capture DROP COLUMN parent_session_id')
+        legacy.commit()
+    async with app.router.lifespan_context(app):
+        with Session(get_engine()) as db:
+            links = db.exec(select(AssessmentSourceLink).where(AssessmentSourceLink.source_table=='evidence_capture', AssessmentSourceLink.source_id==capture_id)).all()
+            assert len(links)==1
+            attempt_id = links[0].attempt_id
+            stored = {r.role:r.content for r in db.exec(select(EvidenceArtifact).where(EvidenceArtifact.capture_id==capture_id))}
+            assert stored==artifacts
+    archive = database.parent / 'core-study.zip'
+    backup(database, archive)
+    original.rename(database.parent / 'original-native-unavailable')
+    restored = database.parent / 'restored core ñ'
+    report = restore(archive, restored, expected_study_id='core-restore', available_components=set())
+    get_engine().dispose()
+    import app.db as database_module
+    from sqlmodel import create_engine
+    database_module._engine = create_engine('sqlite:///' + str(restored/'study.sqlite3'))
+    async with app.router.lifespan_context(app):
+        with Session(get_engine()) as db:
+            links = db.exec(select(AssessmentSourceLink).where(AssessmentSourceLink.source_table=='evidence_capture', AssessmentSourceLink.source_id==capture_id)).all()
+            assert len(links)==1 and links[0].attempt_id==attempt_id
+            assert {r.role:r.content for r in db.exec(select(EvidenceArtifact).where(EvidenceArtifact.capture_id==capture_id))}==artifacts
+    assert report['status']=='restored_in_maintenance'
+    for name in ('study_workspace.py','verify_study_descriptive.py','prepare_study_wheels.py','station_load_matrix.py'):
+        assert (Path.cwd().parents[1]/'tools'/name).is_file()
+    assert not (Path.cwd().parents[1]/'matb_integration/liftoff').exists()
+    assert not (Path.cwd().parents[1]/'matb_integration/suas').exists()
+
 asyncio.run(verify())
+asyncio.run(restoration())
 """
     completed = subprocess.run(
         [sys.executable, "-c", script],
@@ -254,7 +322,7 @@ asyncio.run(verify())
         text=True,
         capture_output=True,
         check=False,
-        timeout=30,
+        timeout=60,
     )
 
     assert completed.returncode == 0, completed.stdout + completed.stderr

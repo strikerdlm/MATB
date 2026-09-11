@@ -232,7 +232,7 @@ describe("api client", () => {
       simple_rt: { trials: [] }, choice_rt: { trials: [] },
       nback: { trials: [], soa_ms: 2500 },
       tracking: { samples: [], n_expected_samples: 0, path_amplitude_px: 0 } } as any;
-    await postScreen("P01", payload, true);
+    await postScreen("P01", payload, true, "study");
     const [url, init] = (global.fetch as any).mock.calls[0];
     expect(url).toContain("/screen");
     expect(init.method).toBe("POST");

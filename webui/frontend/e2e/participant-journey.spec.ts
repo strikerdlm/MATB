@@ -17,15 +17,18 @@ test("participant follows KSS before the bilingual fast-check PVT", async ({ pag
   await page.locator("#app-language").selectOption("en");
   await expect(page.getByRole("heading", { name: /choose your experiment/i })).toBeVisible();
   const sequence = page.getByRole("list", { name: /experiment steps/i }).locator("li");
-  await expect(sequence).toHaveCount(5);
+  await expect(sequence).toHaveCount(4);
+  for (const [index,label] of ['Prepare','Instructions','Run activity','Complete'].entries()) await expect(sequence.nth(index)).toContainText(label);
   const accessibility = await new AxeBuilder({ page: page as never }).analyze();
   expect(accessibility.violations.filter((item) => ["serious", "critical"].includes(item.impact ?? ""))).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath("participant-start-desktop.png"), fullPage: true, animations: "disabled" });
 
-  await page.goto("/pvt?fast=1#kss");
+  await page.goto("/pvt?purpose=practice&fast=1#kss");
   await page.locator("#pvt-participant").selectOption(participant);
   await expect(page.locator("#pvt-visit")).toBeEnabled();
   await expect(page.locator("#pvt-visit")).not.toHaveValue("");
+  await page.getByLabel("Phase", {exact:true}).fill("standalone-practice");
+  await page.getByRole("button", {name: "Prepare occasion",exact:true}).click();
   await page.getByRole("button", { name: /continue to KSS/i }).click();
   await expect(page.getByRole("heading", { name: /Karolinska Sleepiness Scale/i })).toBeVisible();
   await expect(page.getByRole("heading", { name: /PVT instructions/i })).toHaveCount(0);
@@ -49,7 +52,7 @@ test("Spanish participant sequence remains usable on a mobile viewport", async (
   await expect(page.getByRole("heading", { name: /elija su experimento/i })).toBeVisible();
   await page.getByText("Menú de experimentos", { exact: true }).click();
   const sequence = page.getByRole("list", { name: /pasos del experimento/i }).locator("li");
-  await expect(sequence).toHaveCount(5);
+  await expect(sequence).toHaveCount(4);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("participant-start-mobile-es.png"), fullPage: true, animations: "disabled" });
 });

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from app.purpose_service import declare_acquisition
+
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 import json
+from app.artifact_paths import resolve_artifact
 from pathlib import Path
 from typing import Any
 
@@ -38,9 +41,9 @@ class SQLModelLiftoffPersistence:
     def __init__(self, engine: Any) -> None:
         self.engine = engine
 
-    def insert_session(self, row: LiftoffSession) -> LiftoffSession:
+    def insert_session(self, row: LiftoffSession, *, attempt_id: str | None = None) -> LiftoffSession:
         with Session(self.engine) as db:
-            db.add(row)
+            declare_acquisition(db, row, purpose=row.execution_purpose, attempt_id=attempt_id)
             db.commit()
             db.refresh(row)
             db.expunge(row)
@@ -123,10 +126,20 @@ class SQLModelLiftoffPersistence:
         attempts = self.list_attempts(participant_id, visit_id)
         return (attempts[-1].attempt_number + 1) if attempts else 1
 
-    def require_study_order(self, participant_id: str, visit_id: int) -> None:
+    def require_study_order(self, participant_id: str, visit_id: int, *, attempt_id: str | None = None) -> None:
         from app.experiment_catalog import require_task_order
         with Session(self.engine) as db:
-            require_task_order(db, participant_id, visit_id, "liftoff", require_context=True)
+            from .study_registry_models import StudyAttemptSelection
+            from .assessment_models import AssessmentSourceLink
+            selection = db.get(StudyAttemptSelection, attempt_id) if attempt_id else None
+            selected = []
+            for identity in json.loads(selection.selections_json).values() if selection else []:
+                selected.extend(db.exec(select(AssessmentSourceLink).where(AssessmentSourceLink.attempt_id == identity, AssessmentSourceLink.source_table == 'openmatb_suite_session')).all())
+            if attempt_id:
+                for source in selected:
+                    require_task_order(db, participant_id, visit_id, 'liftoff', source_session_id=source.source_id)
+            else:
+                require_task_order(db, participant_id, visit_id, 'liftoff', require_context=True)
 
     def require_retake_allowed(self, participant_id: str, visit_id: int) -> None:
         attempts = [row for row in self.list_attempts(participant_id, visit_id) if row.execution_purpose == "study"]
@@ -145,6 +158,11 @@ class SQLModelLiftoffPersistence:
                 raise KeyError(session_id)
             for key, value in fields.items():
                 setattr(row, key, value)
+            from app.study_admission import sync_runtime_attempt
+            status = fields.get('status')
+            if status in {'BASELINE', 'TASK', 'RECOVERY'}: sync_runtime_attempt(db, row, state='started')
+            elif status == 'FINISHED': sync_runtime_attempt(db, row, state='finished')
+            elif status in {'INTERRUPTED', 'ABORTED'}: sync_runtime_attempt(db, row, state='interrupted')
             db.add(row)
             db.commit()
 
@@ -157,6 +175,8 @@ class SQLModelLiftoffPersistence:
             for row in rows:
                 row.status = "INTERRUPTED"
                 row.interrupted_at = datetime.now(timezone.utc)
+                from app.study_admission import sync_runtime_attempt
+                sync_runtime_attempt(db, row, state='interrupted')
                 db.add(row)
                 changed += 1
             if changed:
@@ -221,7 +241,7 @@ class SQLModelLiftoffPersistence:
         session = self.load_session(session_id)
         if session is None:
             raise KeyError(session_id)
-        root = Path(session.artifact_root).resolve()
+        root = resolve_artifact(session.artifact_root).resolve()
         rows: list[LiftoffArtifact] = []
         for artifact in artifacts:
             try:
@@ -247,5 +267,18 @@ class SQLModelLiftoffPersistence:
                 db.add(row)
             db.commit()
 
+    def admit_request(self, request, visit):
+        from app.study_admission import resolve_assignment
+        with Session(self.engine) as db:
+            context = resolve_assignment(db, attempt_id=request.attempt_id, instrument='liftoff', participant_id=request.participant_id,
+                visit_id=visit.id, purpose=request.execution_purpose, require_started=False,
+                config=dict(binding_id='liftoff-telemetry-all-v1', input_mapping='liftoff-telemetry-all-v1', configuration=request.configuration.model_dump(), scoring='liftoff-current'))
+            if context and context['locale'] != request.locale:
+                from fastapi import HTTPException
+                raise HTTPException(422, 'Liftoff locale differs from the frozen assignment.')
+            return context
 
-__all__ = ["SQLModelLiftoffPersistence"]
+    def guard_acquisition(self, session_id):
+        from app.study_admission import guard_source
+        with Session(self.engine) as db:
+            guard_source(db, db.get(LiftoffSession, session_id))

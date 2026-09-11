@@ -1,3 +1,4 @@
+import { stationFetch } from "@/lib/station-fetch";
 import { getApiBase } from "@/lib/runtime-config";
 
 export interface EvidenceMetric {
@@ -48,7 +49,7 @@ export interface EvidenceCaptureSummary {
 }
 
 export async function evidenceRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${await getApiBase()}${path}`, { ...init, cache: "no-store" });
+  const response = await stationFetch(`${await getApiBase()}${path}`, { ...init, cache: "no-store" });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
     throw new Error(body?.detail?.message || body?.detail?.code || body?.detail || `HTTP ${response.status}`);
@@ -57,7 +58,7 @@ export async function evidenceRequest<T>(path: string, init: RequestInit = {}): 
 }
 
 export async function downloadEvidence(captureId: string): Promise<void> {
-  const response = await fetch(`${await getApiBase()}/evidence/captures/${encodeURIComponent(captureId)}/export`);
+  const response = await stationFetch(`${await getApiBase()}/evidence/captures/${encodeURIComponent(captureId)}/export`);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const url = URL.createObjectURL(await response.blob());
   const anchor = document.createElement("a"); anchor.href = url; anchor.download = `evidence-${captureId}.zip`;

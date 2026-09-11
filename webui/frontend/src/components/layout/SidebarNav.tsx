@@ -47,6 +47,7 @@ export function SidebarNav() {
     </details>
     <details open={role === "researcher" || researcherActive} className="mt-4 border-t border-white/10 pt-4">
       <summary className="cursor-pointer text-sm font-medium">{copy("Herramientas del investigador", "Researcher tools")}</summary>
+      <Link href="/station" className="block px-3 py-2 text-sm">{copy("Estación y cola", "Station and queue")}</Link>
       <div className="mt-3 grid gap-1">{researcher.map(([href, label]) => {
         const active = isRouteActive(path, href);
         return <Link key={href} href={href} aria-current={active ? "page" : undefined} className={cn("rounded px-3 py-2 text-sm hover:bg-white/5 hover:text-foreground", active ? "bg-white/10 text-foreground" : "text-muted-foreground")}>{label}</Link>;

@@ -172,8 +172,11 @@ describe("OpenMATB participant page", () => {
       current_block_index: 2,
       scores: { LOW: { block_instance_id: blockId } },
     });
-    mockGetSession.mockResolvedValueOnce(waiting).mockResolvedValue(accepted);
-    mockSubmit.mockResolvedValue(accepted);
+    mockGetSession.mockResolvedValue(waiting);
+    mockSubmit.mockImplementation(async () => {
+      mockGetSession.mockResolvedValue(accepted);
+      return accepted;
+    });
     const originalRemoveItem = Storage.prototype.removeItem;
     vi.spyOn(Storage.prototype, "removeItem").mockImplementation(function (this: Storage, key) {
       if (key.startsWith("openmatb.workload-draft.")) throw new DOMException("blocked", "SecurityError");

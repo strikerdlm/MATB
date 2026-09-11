@@ -1,6 +1,6 @@
 export type OpenMatbProfile = "PRACTICE" | "LOW" | "MEDIUM" | "HIGH";
 export type OpenMatbVisualTheme = "classic" | "cockpit" | "fac_modern";
-export type OpenMatbLifecycle = "INSTRUCTIONS" | "READY" | "STARTING" | "RUNNING" | "PAUSED" | "AWAITING_SCALE" | "BETWEEN_BLOCKS" | "COMPLETE" | "ABORTED" | "FAILED" | "INTERRUPTED";
+export type OpenMatbLifecycle = "INSTRUCTIONS" | "READY" | "PREFLIGHT_READY" | "PREFLIGHT_STARTING" | "PREFLIGHT_HELD" | "STARTING" | "RUNNING" | "PAUSED" | "AWAITING_SCALE" | "BETWEEN_BLOCKS" | "COMPLETE" | "ABORTED" | "FAILED" | "INTERRUPTED";
 
 export interface OpenMatbProfileSettings {
   duration_seconds: number;
@@ -185,6 +185,13 @@ export interface OpenMatbVisualPreview {
 }
 
 export interface OpenMatbSession {
+  study_assignment_id?: string | null;
+  preflight_prepared_at?: string | null;
+  preflight_released_at?: string | null;
+  preflight_wall_duration_seconds?: number | null;
+  preparation_assignment_id?: string | null;
+  preparation_id?: string | null;
+  purpose_provenance_id?: string | null;
   execution_purpose: "practice" | "study";
   locale: "es-419" | "en";
   id: string;
@@ -225,6 +232,7 @@ export interface PreparedOpenMatbSession {
 }
 
 export interface WorkloadScaleSubmission {
+  questionnaire_attempt_id?: string;
   block_instance_id?: string; // Required for sessions with durable block identities.
   nasa_tlx: Record<"mental_demand" | "physical_demand" | "temporal_demand" | "performance" | "effort" | "frustration", number>;
   bedford: number;

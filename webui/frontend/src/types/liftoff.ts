@@ -25,8 +25,9 @@ export interface LiftoffConfiguration {
 }
 
 export interface CreateLiftoffSession {
+  attempt_id?: string;
   locale?: "es-419" | "en";
-  execution_purpose?: "practice" | "study";
+  execution_purpose: "practice" | "study";
   participant_id: string;
   visit_ordinal: number;
   configuration: LiftoffConfiguration;
@@ -35,6 +36,7 @@ export interface CreateLiftoffSession {
 }
 
 export interface LiftoffSessionView {
+  purpose_provenance_id?: string | null;
   execution_purpose: "practice" | "study";
   id: string;
   participant_id: string;

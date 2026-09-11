@@ -6,11 +6,13 @@ import json
 import zipfile
 
 import pytest
+from tests.study_fixtures import liftoff_payload
 
 
 def create_payload(*, polar_recording_confirmed: bool = True) -> dict[str, object]:
     return {
         "participant_id": "P01",
+        "execution_purpose": "study",
         "visit_ordinal": 1,
         "configuration": {
             "liftoff_build": "1.6.0-test",
@@ -37,7 +39,7 @@ def create_payload(*, polar_recording_confirmed: bool = True) -> dict[str, objec
 async def prepared_session(liftoff_client):
     client, manager = liftoff_client
     manager.receiver.inject_valid_packets(20)
-    response = await client.post("/liftoff/sessions", json=create_payload())
+    response = await client.post("/liftoff/sessions", json=liftoff_payload(manager, create_payload()))
     assert response.status_code == 201, response.text
     return response.json(), response.json()["controller_lease"]
 
@@ -131,7 +133,7 @@ async def test_create_session_returns_one_time_lease(liftoff_client):
     client, manager = liftoff_client
     manager.receiver.inject_valid_packets(20)
 
-    response = await client.post("/liftoff/sessions", json=create_payload())
+    response = await client.post("/liftoff/sessions", json=liftoff_payload(manager, create_payload()))
 
     assert response.status_code == 201
     body = response.json()
@@ -214,6 +216,8 @@ async def test_prepare_through_seal_exposes_verified_artifacts_and_bundle(liftof
         headers=headers,
     )
     assert questionnaires.status_code == 201, questionnaires.text
+    closed = await client.post("/station/close",json={"actor":"Dr Fixture","reason":"All assigned phases and ratings complete"})
+    assert closed.status_code == 200, closed.text
     sealed = await client.post(
         f"/liftoff/sessions/{session['id']}/seal",
         json={},
@@ -240,6 +244,8 @@ async def test_hrv_link_persists_authoritative_response(liftoff_client):
     client, manager = liftoff_client
     session, lease = await prepared_session(liftoff_client)
     await finish_phases(client, session["id"], lease)
+    closed = await client.post("/station/close",json={"actor":"Dr Fixture","reason":"Assigned collection complete; physiology import is post-visit work"})
+    assert closed.status_code == 200, closed.text
     rr_content = "\n".join(["800"] * 1900)
     manager.hrv_client = FakeHrvClient(valid_hrv_response(session["id"]))
 

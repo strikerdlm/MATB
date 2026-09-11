@@ -44,6 +44,8 @@ class Scheduler:
         self.scenario_time: float = 0
         self.scenario_path: Path | None = scenario_path
         self.control_bridge = control_bridge
+        self.preflight_held = os.environ.get("MATB_PREPARATION_HOLD") == "1" and control_bridge is not None
+        self.preflight_snapshot = None
 
         # Create the event loop
         self.clock.schedule(self.update)
@@ -53,12 +55,18 @@ class Scheduler:
         self.set_scenario()
 
         if self.control_bridge is not None:
+            from core.preflight import snapshot
+            self.preflight_snapshot = snapshot(self)
+        if self.preflight_held:
+            Window.MainWindow.set_visible(False)
+        if self.control_bridge is not None:
             self.control_bridge.start()
             self.clock.schedule(self._poll_control_bridge)
             self.control_bridge.emit(
                 "ready",
                 scenario=str(self.scenario_path) if self.scenario_path is not None else None,
                 session_csv=str(get_logger().path),
+                preflight=self.preflight_snapshot,
                 visual_theme=VISUAL_THEME.name,
                 visual_profile_id=VISUAL_THEME.profile_id,
                 visual_profile_version=VISUAL_THEME.version,
@@ -81,6 +89,20 @@ class Scheduler:
                     scenario_time_seconds=round(self.scenario_time, 3),
                     active_plugins=[plugin.alias for plugin in self.get_active_plugins()],
                 )
+            elif command == "release_preflight":
+                if (not getattr(self, "preflight_held", False) or self.preflight_snapshot is None
+                        or self.preflight_snapshot['issues'] or message.get('snapshot_sha256') != self.preflight_snapshot['sha256']):
+                    self.control_bridge.emit("command_rejected", command=command, reason="preflight_snapshot_mismatch")
+                    continue
+                from core.preflight import snapshot
+                if snapshot(self)['sha256'] != self.preflight_snapshot['sha256']:
+                    self.control_bridge.emit("command_rejected", command=command, reason="preflight_mapping_changed")
+                    continue
+                get_logger().admit_preflight()
+                self.preflight_held = False
+                self.pause_scenario_time = False
+                Window.MainWindow.set_visible(True)
+                self.control_bridge.emit("preflight_released", snapshot_sha256=self.preflight_snapshot['sha256'])
             elif command == "pause":
                 self._operator_pause()
             elif command == "resume":
@@ -100,6 +122,9 @@ class Scheduler:
         self.control_bridge.emit("paused", scenario_time_seconds=round(self.scenario_time, 3))
 
     def _operator_resume(self) -> None:
+        if getattr(self, "preflight_held", False):
+            self.control_bridge.emit("command_rejected", command="resume", reason="preflight_admission_required")
+            return
         if self.control_bridge is None:
             return
         if self.get_active_blocking_plugin() is not None or Window.MainWindow.modal_dialog is not None:
@@ -130,6 +155,7 @@ class Scheduler:
             component_version=getattr(self, "runtime_version", "unavailable"),
             scenario_manifest_evidence=bound_manifest.evidence,
             source_dirty=self._source_dirty_from_environment(),
+            preparation_hold=getattr(self, "preflight_held", False),
         )
         # Bootstrap facts become authoritative records only after the immutable
         # scenario/runtime/source context is installed. This prevents a clean
@@ -186,6 +212,8 @@ class Scheduler:
         return None
 
     def update(self, dt: float) -> None:
+        if getattr(self, "preflight_held", False):
+            return
         # A failed scenario command invalidates the complete session. Hosts that
         # catch the propagated exception must not advance clocks/plugins or
         # accidentally retry/continue the experimental timeline.
@@ -256,6 +284,8 @@ class Scheduler:
             )[:4096]
 
     def update_timers(self, dt: float) -> None:
+        if getattr(self, "preflight_held", False):
+            return
         if isinstance(dt, bool) or not isinstance(dt, (int, float)) or not isfinite(dt):
             exc = ValueError("scheduler dt must be a finite non-negative number")
             self._terminalize_scenario_clock_failure(exc)
@@ -351,6 +381,8 @@ class Scheduler:
             self.exit(completion="window_closed")
 
     def execute_events(self) -> None:
+        if getattr(self, "preflight_held", False):
+            return
         if getattr(self, "_dispatch_failed", False):
             return
         # Detect a potential blocking plugin
@@ -392,6 +424,8 @@ class Scheduler:
         return self.is_scenario_time_paused()
 
     def resume_scenario(self) -> bool:
+        if getattr(self, "preflight_held", False):
+            return True
         self.pause_scenario_time = False
         return self.is_scenario_time_paused()
 
@@ -423,6 +457,8 @@ class Scheduler:
         return self.get_plugins_by_states([("alive", True)])
 
     def execute_one_event(self, event: Event) -> None:
+        if getattr(self, "preflight_held", False):
+            return
         experiment_clock = getattr(self, "experiment_clock", None)
         if experiment_clock is None:
             experiment_clock = ExperimentClock(monotonic_ns=lambda: perf_counter_ns())
@@ -559,6 +595,8 @@ class Scheduler:
             methods = [methods]
 
         for m in methods:
+            if getattr(self, "preflight_held", False) and m not in {"stop", "hide", "pause"}:
+                continue
             for p in plugins:
                 # self.execute_one_event(Event(0, 0, p.alias, m)) DO NOT create new events
                 getattr(p, m)()

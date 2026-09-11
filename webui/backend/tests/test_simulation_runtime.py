@@ -13,6 +13,7 @@ from app.models import Participant, PvtAssessment, Visit
 from app.simulation_persistence import InMemorySimulationPersistence
 from app.simulation_runtime import InvalidLease, SimulationConflict, SimulationManager
 from app.simulation_schemas import CommandRequest, CreateSimulationSession
+from tests.study_fixtures import mission_request
 
 
 @pytest.fixture
@@ -42,14 +43,14 @@ def manager(tmp_path: Path):
     )
 
 
-def request() -> CreateSimulationSession:
-    return CreateSimulationSession(participant_id="P01", visit_ordinal=1, scenario_id="reference_area_search", locale="en")
+def request(engine, **changes) -> CreateSimulationSession:
+    return mission_request(engine, execution_purpose="study", participant_id="P01", visit_ordinal=1, scenario_id="reference_area_search", locale="en", **changes)
 
 
 @pytest.mark.anyio
 async def test_prepare_start_tick_snapshot_and_lease(manager, runtime_db):
     with Session(runtime_db) as db:
-        prepared = await manager.prepare(request(), db)
+        prepared = await manager.prepare(request(runtime_db), db)
     assert prepared.controller_lease
     assert prepared.lifecycle == "PREPARED"
     with pytest.raises(InvalidLease):
@@ -68,16 +69,16 @@ async def test_prepare_start_tick_snapshot_and_lease(manager, runtime_db):
 @pytest.mark.anyio
 async def test_only_one_active_session(manager, runtime_db):
     with Session(runtime_db) as db:
-        first = await manager.prepare(request(), db)
+        first = await manager.prepare(request(runtime_db), db)
         with pytest.raises(SimulationConflict):
-            await manager.prepare(request(), db)
+            await manager.prepare(request(runtime_db), db)
     await manager.shutdown()
 
 
 @pytest.mark.anyio
 async def test_submit_is_queued_until_tick(manager, runtime_db):
     with Session(runtime_db) as db:
-        prepared = await manager.prepare(request(), db)
+        prepared = await manager.prepare(request(runtime_db), db)
     await manager.start(prepared.id, "PRACTICE", prepared.controller_lease)
     task = asyncio.create_task(manager.submit(prepared.id, prepared.controller_lease, CommandRequest(
         command_id="11111111-1111-1111-1111-111111111111", expected_state_version=0,
@@ -93,7 +94,7 @@ async def test_submit_is_queued_until_tick(manager, runtime_db):
 @pytest.mark.anyio
 async def test_stale_controller_disconnect_does_not_pause_replacement_stream(manager, runtime_db):
     with Session(runtime_db) as db:
-        prepared = await manager.prepare(request(), db)
+        prepared = await manager.prepare(request(runtime_db), db)
     await manager.start(prepared.id, "PRACTICE", prepared.controller_lease)
 
     replacement = await manager.hub.subscribe(prepared.id, role="controller")
@@ -110,7 +111,7 @@ async def test_stale_controller_disconnect_does_not_pause_replacement_stream(man
 @pytest.mark.anyio
 async def test_pending_controller_handoff_defers_disconnect_pause(manager, runtime_db):
     with Session(runtime_db) as db:
-        prepared = await manager.prepare(request(), db)
+        prepared = await manager.prepare(request(runtime_db), db)
     await manager.start(prepared.id, "PRACTICE", prepared.controller_lease)
 
     await manager.controller_connected(prepared.id, prepared.controller_lease)
@@ -126,7 +127,7 @@ async def test_pending_controller_handoff_defers_disconnect_pause(manager, runti
 @pytest.mark.anyio
 async def test_protocol_probe_pauses_and_redacts_operational_state(manager, runtime_db):
     with Session(runtime_db) as db:
-        prepared = await manager.prepare(request(), db)
+        prepared = await manager.prepare(request(runtime_db), db)
     await manager.start(prepared.id, "PRACTICE", prepared.controller_lease)
 
     # Practice ISA is scheduled at 150 s. One-shot ticks keep the test fully
@@ -177,7 +178,7 @@ async def test_repeated_pause_reconnect_and_checkpoint_recovery_cycles(manager, 
     """Repeated operator/controller failures do not leak tasks or state."""
 
     with Session(runtime_db) as db:
-        prepared = await manager.prepare(request(), db)
+        prepared = await manager.prepare(request(runtime_db), db)
     await manager.start(prepared.id, "PRACTICE", prepared.controller_lease)
 
     for _ in range(25):
@@ -218,7 +219,7 @@ async def test_presentation_readiness_failure_and_authoritative_state(manager, r
     scene = catalog()[0]
     config = PresentationConfig(blocks={"PRACTICE": "3d"}, scene_id=scene["id"], scene_sha256=scene["sha256"])
     with Session(runtime_db) as db:
-        prepared = await manager.prepare(request().model_copy(update={"presentation": config}), db)
+        prepared = await manager.prepare(request(runtime_db, presentation=config.model_dump(mode="json")), db)
     assert prepared.presentation == config
     with pytest.raises(InvalidTransition, match="presentation_not_ready"):
         await manager.start(prepared.id, "PRACTICE", prepared.controller_lease)
@@ -246,6 +247,8 @@ async def test_presentation_readiness_failure_and_authoritative_state(manager, r
     await manager.resume(prepared.id, prepared.controller_lease)
     assert manager.active.engine.state_hash == baseline.state_hash
     await manager.finish(prepared.id, prepared.controller_lease, "abort")
+    from tests.station_fixtures import close_and_drain
+    await close_and_drain(runtime_db)
     assert "presentation.jsonl" in (manager.active.recorder.run_dir / "checksums.sha256").read_text()
     with pytest.raises(InvalidTransition, match="sealed"):
         await manager.presentation_event(prepared.id, prepared.controller_lease, failure)
@@ -278,14 +281,17 @@ async def test_traffic_research_rejects_live_and_recording_requires_duration(man
     import app.traffic_service as service
     scene=catalog()[0]
     config=PresentationConfig(scene_id=scene['id'],scene_sha256=scene['sha256'],traffic=TrafficConfig(mode='live'))
-    with Session(runtime_db) as db:
-        with pytest.raises(ValueError,match='recorded traffic'):
-            await manager.prepare(request().model_copy(update={'presentation':config}),db)
+    # Pure binding contract: authoring and launch use the same validator.
+    # Invalid presentation overrides cannot be passed through a frozen assignment.
+    from app.simulation_presentation_bindings import bind_presentation
+    from matb_integration.suas.scenarios.loader import load_scenario
+    loaded=load_scenario(manager.scenario_root/'reference_area_search.yaml')
+    with pytest.raises(ValueError,match='recorded traffic'):
+        bind_presentation({},config,loaded)
     config.traffic=TrafficConfig(mode='recorded',recording_id='short',recording_sha256='a'*64)
     monkeypatch.setattr(service,'load_recording',lambda *args:{'scene_id':scene['id'],'scene_sha256':scene['sha256'],'duration_ms':10,'provider':'adsb.lol'})
-    with Session(runtime_db) as db:
-        with pytest.raises(ValueError,match='shorter'):
-            await manager.prepare(request().model_copy(update={'presentation':config}),db)
+    with pytest.raises(ValueError,match='shorter'):
+        bind_presentation({},config,loaded)
 
 @pytest.mark.anyio
 async def test_live_traffic_is_separate_paused_concealed_and_sealed(manager,runtime_db,monkeypatch):
@@ -299,7 +305,7 @@ async def test_live_traffic_is_separate_paused_concealed_and_sealed(manager,runt
     monkeypatch.setattr(service.traffic_service,'snapshot',snapshot)
     config=PresentationConfig(scene_id=scene['id'],scene_sha256=scene['sha256'],traffic=TrafficConfig(mode='live'))
     with Session(runtime_db) as db:
-        prepared=await manager.prepare_technical(CreateTechnicalSimulationSession(scenario_id='reference_area_search',block_id='LOW',locale='en',presentation=config),db)
+        prepared=await manager.prepare_technical(CreateTechnicalSimulationSession(execution_purpose="practice", scenario_id='reference_area_search',block_id='LOW',locale='en',presentation=config),db)
     await manager.start(prepared.id,'LOW',prepared.controller_lease)
     before=manager.active.engine.state_hash
     await manager.traffic_once()
@@ -338,7 +344,7 @@ async def test_recorded_traffic_uses_simulation_time_and_embedded_source(manager
     source=tmp_path/'capture.json';raw=json.dumps({'version':1,'id':'test','title':'Test','scene_id':scene['id'],'scene_sha256':scene['sha256'],'duration_ms':600000,'provider':'adsb.lol','frames':[{**base,'simulation_time_ms':0},{**base,'simulation_time_ms':200,'tracks':[]}]}).encode();source.write_bytes(raw)
     monkeypatch.setattr(service,'recording_path',lambda identifier:source)
     config=PresentationConfig(scene_id=scene['id'],scene_sha256=scene['sha256'],traffic=TrafficConfig(mode='recorded',recording_id='test',recording_sha256=hashlib.sha256(raw).hexdigest()))
-    with Session(runtime_db) as db:prepared=await manager.prepare_technical(CreateTechnicalSimulationSession(scenario_id='reference_area_search',block_id='LOW',locale='en',presentation=config),db)
+    with Session(runtime_db) as db:prepared=await manager.prepare_technical(CreateTechnicalSimulationSession(execution_purpose="practice", scenario_id='reference_area_search',block_id='LOW',locale='en',presentation=config),db)
     source.unlink() # The active run owns its verified immutable source.
     await manager.start(prepared.id,'LOW',prepared.controller_lease);await manager.traffic_once()
     assert len(manager.active.traffic_frame['tracks'])==1
@@ -372,7 +378,7 @@ async def test_v2_exposure_permissions_ordering_and_engine_equivalence(manager, 
     scene = catalog()[0]
     config = PresentationConfig(version=2, blocks={"PRACTICE": "3d"}, scene_id=scene["id"], scene_sha256=scene["sha256"])
     with Session(runtime_db) as db:
-        prepared = await manager.prepare(request().model_copy(update={"presentation": config}), db)
+        prepared = await manager.prepare(request(runtime_db, presentation=config.model_dump(mode="json")), db)
     lease = prepared.controller_lease
     ready = v2_exposure(scene).model_copy(update={"kind": "ready"})
     await manager.presentation_event(prepared.id, lease, ready)
@@ -429,9 +435,9 @@ async def test_console_profile_frozen_without_optional_scene(manager, runtime_db
     from app.simulation_schemas import CreateTechnicalSimulationSession
 
     with Session(runtime_db) as db:
-        prepared = (await manager.prepare_technical(CreateTechnicalSimulationSession(
+        prepared = (await manager.prepare_technical(CreateTechnicalSimulationSession(execution_purpose="practice",
             scenario_id="reference_area_search", block_id="LOW", locale="en"), db)
-            if technical else await manager.prepare(request(), db))
+            if technical else await manager.prepare(request(runtime_db), db))
     expected = current_console_profile()
     assert prepared.console_profile.model_dump() == expected
     assert prepared.presentation is None
@@ -460,3 +466,20 @@ def test_console_profile_frontend_matches_frozen_definition():
     assert f'id: "{expected["id"]}"' in frontend
     assert f'version: {expected["version"]}' in frontend
     assert f'sha256: "{expected["sha256"]}"' in frontend
+
+
+@pytest.mark.anyio
+async def test_mission_block_sources_keep_practice_separate(manager, runtime_db):
+    from app.assessment_models import AssessmentAttempt, AssessmentSourceLink
+    from app.simulation_models import SimulationBlock
+    from sqlmodel import select
+    with Session(runtime_db) as db:
+        prepared = await manager.prepare(request(runtime_db), db)
+        blocks = db.exec(select(SimulationBlock).where(SimulationBlock.session_id == prepared.id)).all()
+        assert len(blocks) == 4
+        for block in blocks:
+            link = db.exec(select(AssessmentSourceLink).where(AssessmentSourceLink.source_table == 'simulation_block', AssessmentSourceLink.source_id == str(block.id))).one()
+            attempt = db.get(AssessmentAttempt, link.attempt_id)
+            assert attempt.execution_purpose == ('practice' if block.profile == 'PRACTICE' else 'study')
+            assert attempt.purpose_provenance_id is not None
+    await manager.shutdown()

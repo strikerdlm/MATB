@@ -33,6 +33,7 @@ describe("Polar H10 API", () => {
       .mockResolvedValueOnce(response(201, { capture: { capture_id: "capture-1" }, controller_lease: "lease" }))
       .mockResolvedValueOnce(response(200, { capture_id: "capture-1", lifecycle: "capturing" }));
     await createPolarCapture({
+      execution_purpose: "study",
       participant_pseudonym: "P01", matb_session_kind: "generic", matb_session_id: "session-1",
       settings: { ecg_sample_rate_hz: 130, ecg_resolution_bits: 14, acc_sample_rate_hz: 200, acc_resolution_bits: 16, acc_range_g: 8 },
     });

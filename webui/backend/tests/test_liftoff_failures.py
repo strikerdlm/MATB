@@ -5,6 +5,8 @@ import json
 
 import pytest
 
+from tests.study_fixtures import liftoff_payload
+
 from app.hrv_task_client import HrvTaskTemporaryError
 from tests.test_liftoff_endpoints import (
     FakeHrvClient,
@@ -20,7 +22,7 @@ from tests.test_liftoff_endpoints import (
 async def test_create_requires_telemetry_readiness(liftoff_client):
     client, _manager = liftoff_client
 
-    response = await client.post("/liftoff/sessions", json=create_payload())
+    response = await client.post("/liftoff/sessions", json=liftoff_payload(_manager, create_payload()))
 
     assert response.status_code == 409
     assert response.json()["detail"]["code"] == "liftoff_telemetry_not_ready"
@@ -84,6 +86,8 @@ async def test_hrv_outage_leaves_retryable_pending_link(liftoff_client):
     client, manager = liftoff_client
     session, lease = await prepared_session(liftoff_client)
     await finish_phases(client, session["id"], lease)
+    closed = await client.post('/station/close', json={'actor': 'Dr Fixture', 'reason': 'All assigned collection and ratings complete; import post-visit physiology'})
+    assert closed.status_code == 200, closed.text
     rr_content = "\n".join(["800"] * 1900)
     manager.hrv_client = FakeHrvClient(error=HrvTaskTemporaryError("hrv_unavailable"))
     files = {

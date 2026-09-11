@@ -56,7 +56,7 @@ def _translate(exc: PolarRuntimeError) -> HTTPException:
     }:
         code = status.HTTP_503_SERVICE_UNAVAILABLE
     elif exc.code in {"exact_stream_settings_unavailable", "mandatory_stream_unavailable"}:
-        code = status.HTTP_422_UNPROCESSABLE_ENTITY
+        code = status.HTTP_422_UNPROCESSABLE_CONTENT
     else:
         code = status.HTTP_409_CONFLICT
     return HTTPException(
@@ -132,6 +132,7 @@ def create_capture(body: CreateCaptureRequest, runtime: PolarCaptureManager = De
         session_id=body.matb_session_id,
         settings=body.settings.model_dump(),
         execution_purpose=body.execution_purpose,
+        attempt_id=body.attempt_id,
     ))
     return PreparedCapture(capture=capture, controller_lease=lease)
 

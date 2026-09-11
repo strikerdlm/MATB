@@ -86,6 +86,8 @@ def ingest_evidence(db: Session, artifacts: dict[str, bytes]) -> tuple[str, bool
                 if ordinal % 500 == 499:
                     db.flush()
         db.add(EvidenceRun(id=pending_run_id, capture_id=capture.id, version=DERIVATION_VERSION))
+        from app.assessment_adapters import attach_source
+        attach_source(db, "evidence_capture", capture.model_dump(mode="json"), historical=True)
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -110,7 +112,7 @@ def run_derivation(db: Session, capture_id: str, pending_run_id: str | None = No
         db.add(run)
         db.commit()
         try:
-            result = reconcile(source_artifacts(db, capture_id))
+            result = reconcile(source_artifacts(db, capture_id), derivation_version=run.version)
             for metric in result["metrics"]:
                 details = {k: v for k, v in metric.items() if k not in {"source_event_ids", "source_observation_ids"}}
                 metric_row = EvidenceMetric(id=str(uuid4()), run_id=run.id, capture_id=capture_id,

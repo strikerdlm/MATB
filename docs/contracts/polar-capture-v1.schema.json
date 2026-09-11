@@ -12,6 +12,18 @@
       "title": "Capture Id",
       "type": "string"
     },
+    "purpose_provenance_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Purpose Provenance Id"
+    },
     "execution_purpose": {
       "default": "study",
       "enum": [

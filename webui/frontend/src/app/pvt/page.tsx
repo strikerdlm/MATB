@@ -1,9 +1,14 @@
 "use client";
+import {StudyReturn} from "@/components/study/StudyReturn";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import {useSearchParams} from "next/navigation";
 import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, MoonStar } from "lucide-react";
 
+import { AssessmentPicker } from "@/components/assessments/AssessmentPicker";
+import { type Attempt } from "@/lib/assessments";
+import { useAssessmentAdmission } from "@/lib/assessment-admission";
 import { InstructionAudio } from "@/components/instructions/InstructionAudio";
 import { ExecutionPurposeBadge, ExperimentGuide } from "@/components/experiments/ExperimentGuide";
 import { useExecutionPurpose } from "@/lib/execution-purpose";
@@ -15,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { getPvtSummary, listParticipants, listVisits, postPvt } from "@/lib/api";
-import { useAppLocale } from "@/lib/i18n";
+import { FixedLocaleProvider, useAppLocale } from "@/lib/i18n";
 import { PVT_PROTOCOL_DURATION_MS, type PvtRunResult } from "@/lib/pvt";
 import type { Participant, PvtAssessment, PvtSummary, Visit } from "@/types";
 
@@ -46,7 +51,12 @@ const KSS_ES = [
 type Stage = "select" | "kss" | "instructions" | "pvt" | "saving" | "save_error" | "complete";
 
 export default function PvtPage() {
-  const { locale, copy } = useAppLocale();
+  const query = useSearchParams();
+  const requestedIdentity = query.get("attempt");
+  const requestedParticipant = query.get("participant") ?? "";
+  const requestedVisit = query.get("visit");
+  const lastIdentity = useRef(requestedIdentity);
+  const preferred = useAppLocale();
   const purpose = useExecutionPurpose();
   const { catalog } = useConsole();
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -60,9 +70,22 @@ export default function PvtPage() {
   const [error, setError] = useState<string | null>(null);
   const [pendingRun, setPendingRun] = useState<PvtRunResult | null>(null);
   const [fastMode, setFastMode] = useState(false);
+  const [selectedAttempt, setSelectedAttempt] = useState<Attempt | null>(null);
+  const locale = selectedAttempt?.assignment_context?.locale ?? selectedAttempt?.preparation_context?.locale ?? preferred.locale;
+  const copy = useCallback((es: string, en: string) => locale === 'en' ? en : es, [locale]);
   const [pvtStarted, setPvtStarted] = useState(false);
 
   useEffect(() => {
+    if (lastIdentity.current === requestedIdentity || !['select','complete'].includes(stage)) return;
+    lastIdentity.current = requestedIdentity;
+    setStage('select'); setResult(null); setSelectedAttempt(null);
+    setParticipantId(requestedParticipant);
+    const requested = visits.find(row => row.id === Number(requestedVisit));
+    setVisitOrdinal(requested ? String(requested.visit_ordinal) : '');
+  }, [requestedIdentity, requestedParticipant, requestedVisit, stage, visits]);
+
+  useEffect(() => {
+    setParticipantId(new URLSearchParams(window.location.search).get('participant') ?? '');
     setFastMode(new URLSearchParams(window.location.search).get("fast") === "1");
     Promise.all([listParticipants(), getPvtSummary()])
       .then(([participantRows, pvtRows]) => {
@@ -75,7 +98,7 @@ export default function PvtPage() {
   useEffect(() => {
     const nextHash = stage === "kss" || stage === "select" ? "#kss" : "#pvt";
     if (window.location.hash !== nextHash) {
-      window.history.replaceState(null, "", nextHash);
+      window.history.replaceState(null, "", window.location.pathname + window.location.search + nextHash);
       window.dispatchEvent(new HashChangeEvent("hashchange"));
     }
   }, [stage]);
@@ -89,10 +112,8 @@ export default function PvtPage() {
       .then((rows) => {
         if (!active) return;
         setVisits(rows);
-        const completedVisitIds = new Set(
-          summary?.assessments.filter((row) => row.participant_id === participantId && row.protocol_valid && row.pvt_version >= 2).map((row) => row.visit_id) ?? [],
-        );
-        const next = rows.find((visit) => !completedVisitIds.has(visit.id)) ?? rows[0];
+        const requestedVisit = Number(new URLSearchParams(window.location.search).get('visit'));
+        const next = rows.find(row => row.id === requestedVisit) ?? rows[0];
         if (next) setVisitOrdinal(String(next.visit_ordinal));
       })
       .catch((reason) => setError(reason instanceof Error ? reason.message : String(reason)));
@@ -103,16 +124,17 @@ export default function PvtPage() {
     () => visits.find((row) => row.visit_ordinal === Number(visitOrdinal)) ?? null,
     [visitOrdinal, visits],
   );
-  const alreadyRecorded = Boolean(
-    purpose === "study" && visit && summary?.assessments.some((row) => row.visit_id === visit.id && row.protocol_valid && row.pvt_version >= 2),
-  );
+  const admission = useAssessmentAdmission(selectedAttempt && purpose && participantId && visit
+    ? {attemptId: selectedAttempt.id, participantId, visitId: visit.id, visitOrdinal: visit.visit_ordinal, purpose, locale, fastMode: purpose === 'study' ? false : fastMode}
+    : null);
   useReportExperimentFlow("pvt", flowStageForPvt(stage, pvtStarted));
   const kssLabels = locale === "en" ? KSS_EN : KSS_ES;
-  const durationMs = fastMode ? 12_000 : purpose === "practice" ? 60_000 : PVT_PROTOCOL_DURATION_MS;
+  const durationMs = (admission.admitted?.fastMode ?? fastMode) ? 12_000 : (admission.admitted?.purpose ?? purpose) === "practice" ? 60_000 : PVT_PROTOCOL_DURATION_MS;
   const audioLocale = locale === "en" ? "en" : "es";
 
-  function beginKss() {
-    if (!purpose || !participantId || !visitOrdinal || alreadyRecorded) return;
+  async function beginKss() {
+    if (!purpose || !participantId || !visitOrdinal || !selectedAttempt) return;
+    try { if (!await admission.admit()) return; } catch (e) {setError(String(e)); return;}
     setError(null);
     setKssScore(null);
     setPvtStarted(false);
@@ -120,26 +142,27 @@ export default function PvtPage() {
   }
 
   async function completePvt(run: PvtRunResult) {
-    if (!purpose || kssScore === null) return;
+    const acquired = admission.admitted;
+    if (!acquired || kssScore === null) return;
     setPendingRun(run);
     setError(null);
     setStage("saving");
     try {
       const saved = await postPvt({
-        participant_id: participantId,
-        visit_ordinal: Number(visitOrdinal),
+        attempt_id: acquired.attemptId,
+        participant_id: acquired.participantId,
+        visit_ordinal: acquired.visitOrdinal,
         kss_score: kssScore,
         administered_at: run.administeredAt,
         duration_ms: run.durationMs,
-        execution_purpose: purpose,
-        locale,
+        execution_purpose: acquired.purpose,
+        locale: acquired.locale,
         timing_version: 2,
         interruption_count: run.interruptionCount,
         max_frame_gap_ms: run.maxFrameGapMs,
         terminal_phase: run.terminalPhase,
         terminal_stimulus_at_ms: run.terminalStimulusAtMs,
-        overwrite: purpose === "study" && Boolean(visit && summary?.assessments.some((row) => row.visit_id === visit.id && (!row.protocol_valid || row.pvt_version < 2))),
-        fast_mode: fastMode,
+        fast_mode: acquired.fastMode,
         trials: run.trials,
       });
       setResult(saved);
@@ -187,21 +210,21 @@ export default function PvtPage() {
             <div className="grid gap-5 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="pvt-participant">{copy("Participante", "Participant")}</Label>
-                <select id="pvt-participant" className="native-select w-full" value={participantId} onChange={(event) => setParticipantId(event.target.value)}>
+                <select id="pvt-participant" disabled={admission.pending} className="native-select w-full" value={participantId} onChange={(event) => setParticipantId(event.target.value)}>
                   <option value="">—</option>
                   {participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.id}</option>)}
                 </select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="pvt-visit">{copy("Visita", "Visit")}</Label>
-                <select id="pvt-visit" className="native-select w-full" value={visitOrdinal} onChange={(event) => setVisitOrdinal(event.target.value)} disabled={!participantId}>
+                <select id="pvt-visit" className="native-select w-full" value={visitOrdinal} onChange={(event) => setVisitOrdinal(event.target.value)} disabled={admission.pending || !participantId}>
                   <option value="">—</option>
                   {visits.map((row) => <option key={row.id} value={row.visit_ordinal}>{copy("Día", "Day")} {row.scheduled_day} · V{row.visit_ordinal}</option>)}
                 </select>
               </div>
             </div>
-            {alreadyRecorded && <p className="text-sm text-warning">{copy("Esta visita ya tiene una PVT registrada.", "This visit already has a recorded PVT.")}</p>}
-            <Button type="button" onClick={beginKss} disabled={!purpose || !participantId || !visitOrdinal || alreadyRecorded}>
+            <AssessmentPicker participantId={participantId} visitId={visit?.id ?? null} instrument="pvt" purpose={purpose} onSelect={setSelectedAttempt} disabled={admission.pending} />
+            <Button type="button" onClick={beginKss} disabled={admission.pending || !purpose || !participantId || !visitOrdinal || !selectedAttempt}>
               {copy("Continuar a KSS", "Continue to KSS")}<ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </CardContent>
@@ -264,13 +287,14 @@ export default function PvtPage() {
         </Card>
       )}
 
-      {stage === "pvt" && <PvtRunner durationMs={durationMs} onStart={() => setPvtStarted(true)} onComplete={(value) => void completePvt(value)} />}
+      {stage === "pvt" && <FixedLocaleProvider locale={locale}><PvtRunner durationMs={durationMs} onStart={() => setPvtStarted(true)} onComplete={(value) => void completePvt(value)} /></FixedLocaleProvider>}
       {stage === "saving" && <div role="status" className="grid min-h-[50vh] place-items-center text-center"><div><Clock3 className="mx-auto mb-4 h-10 w-10 animate-pulse text-info" /><p>{copy("Guardando la PVT…", "Saving PVT…")}</p></div></div>}
       {stage === "complete" && result && (
         <Card className="border-success/40 bg-success/5">
           <CardHeader>
             <CheckCircle2 className="mb-3 h-10 w-10 text-success" />
             <CardTitle>{copy("KSS y PVT completadas", "KSS and PVT complete")}</CardTitle>
+            <StudyReturn attempt={selectedAttempt}/>
             <CardDescription>{copy("Sus respuestas están guardadas. Revise el estado de calidad antes de continuar.", "Your responses are saved. Review the quality status before continuing.")}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-4">
@@ -281,7 +305,7 @@ export default function PvtPage() {
             <div className="sm:col-span-4 space-y-3">
               <p role="status" className={result.protocol_valid ? "text-success" : "text-warning"}>{result.protocol_valid ? copy("Registro válido para continuar el estudio.", "Valid recording to continue the study.") : purpose === "practice" ? copy("Práctica guardada por separado.", "Practice saved separately.") : copy("Registro no válido para el protocolo: revise interrupciones, duración y continuidad. Puede repetir la prueba.", "Recording not valid for the protocol: review interruptions, duration, and continuity. You may repeat the test.")}</p>
               <div className="flex flex-wrap gap-3"><Button asChild><Link href={`/start?purpose=${purpose}`}>{copy("Volver a los experimentos", "Return to experiments")}</Link></Button>
-              {result.protocol_valid && catalog.some((item) => item.id === "suas" && item.component_available) && <Button asChild variant="outline"><Link href="/mission/setup?purpose=study">{copy("Continuar a la misión sUAS", "Continue to the sUAS mission")}</Link></Button>}</div>
+              {result.protocol_valid && catalog.some((item) => item.id === "suas" && item.component_available) && <Button asChild variant="outline"><Link href="/study/assignments">{copy("Continuar a la misión sUAS", "Continue to the sUAS mission")}</Link></Button>}</div>
             </div>
           </CardContent>
         </Card>

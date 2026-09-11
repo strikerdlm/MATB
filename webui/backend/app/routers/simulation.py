@@ -13,6 +13,7 @@ import json
 import io
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import datetime
+from app.artifact_paths import resolve_artifact
 from pathlib import Path
 from typing import Any, TypeVar
 from uuid import UUID
@@ -164,7 +165,7 @@ def _translate(exc: BaseException) -> HTTPException:
     elif isinstance(exc, RecordingError):
         status_code = status.HTTP_507_INSUFFICIENT_STORAGE
     elif isinstance(exc, (ValueError, UnicodeDecodeError, yaml.YAMLError)):
-        status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+        status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     else:
         status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     message = str(exc) or code.replace("_", " ")
@@ -262,32 +263,32 @@ async def validate_scenario(request: Request) -> ScenarioValidationView:
     try:
         form = await request.form()
     except Exception as exc:  # noqa: BLE001
-        raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "scenario_read_error", "scenario upload could not be read") from exc
+        raise _error(status.HTTP_422_UNPROCESSABLE_CONTENT, "scenario_read_error", "scenario upload could not be read") from exc
     uploads = [
         value for _, value in form.multi_items()
         if hasattr(value, "filename") and hasattr(value, "read")
     ]
     if len(uploads) != 1:
-        raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "scenario_file_required", "exactly one scenario file is required")
+        raise _error(status.HTTP_422_UNPROCESSABLE_CONTENT, "scenario_file_required", "exactly one scenario file is required")
     file = uploads[0]
     try:
         payload = await file.read(MAX_YAML_BYTES + 1)
     except Exception as exc:  # noqa: BLE001
-        raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "scenario_read_error", "scenario upload could not be read") from exc
+        raise _error(status.HTTP_422_UNPROCESSABLE_CONTENT, "scenario_read_error", "scenario upload could not be read") from exc
     if len(payload) > MAX_YAML_BYTES:
         raise _error(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             "scenario_too_large",
             f"scenario exceeds {MAX_YAML_BYTES} UTF-8 bytes",
         )
     try:
         text = payload.decode("utf-8")
     except UnicodeDecodeError as exc:
-        raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "scenario_not_utf8", "scenario must be UTF-8") from exc
+        raise _error(status.HTTP_422_UNPROCESSABLE_CONTENT, "scenario_not_utf8", "scenario must be UTF-8") from exc
     try:
         loaded = load_scenario_text(text, source_name=file.filename or "<upload>")
     except (TypeError, ValueError, yaml.YAMLError) as exc:
-        raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "scenario_invalid", str(exc)) from exc
+        raise _error(status.HTTP_422_UNPROCESSABLE_CONTENT, "scenario_invalid", str(exc)) from exc
     summary = _scenario_summary(loaded)
     return ScenarioValidationView(
         valid=True,
@@ -364,6 +365,7 @@ def _session_view_from_row(row: SessionMetadataRow, db: Session) -> SessionView:
         active_block_id=row.active_block_id,
         validity=row.validity,
         execution_purpose="practice" if technical else "study",
+        purpose_provenance_id=row.purpose_provenance_id,
         session_mode="interactive_technical" if technical else "research",
         record_class="technical_only" if technical else "research",
         selected_block_id=selected_block_id,
@@ -401,7 +403,7 @@ async def start_session(
 ) -> SessionView:
     controller_lease = _lease_or_error(lease)
     if body.block_id is None:
-        raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "block_required", "block_id is required to start a block")
+        raise _error(status.HTTP_422_UNPROCESSABLE_CONTENT, "block_required", "block_id is required to start a block")
     return await _managed(manager.start(session_id, body.block_id, controller_lease))
 
 
@@ -626,7 +628,7 @@ def _session_run_dir(session_id: str, manager: SimulationManager, db: Session) -
         if isinstance(row, TechnicalSimulationSession)
         else manager.artifact_root.resolve()
     )
-    path = Path(row.artifact_root)
+    path = resolve_artifact(row.artifact_root)
     if not path.is_absolute():
         path = configured_root / path
     try:

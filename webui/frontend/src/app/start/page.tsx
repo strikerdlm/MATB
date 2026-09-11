@@ -42,7 +42,7 @@ function Catalog() {
       nextPurpose,
     ));
   }
-  const destination = selected === "suas" && purpose === "practice" ? "/mission/test" : info?.route;
+  const destination = purpose === "study" ? "/study/assignments" : selected === "suas" && purpose === "practice" ? "/mission/test" : info?.route;
   return <div className="space-y-7">
     <PageHeader kicker={copy("Comenzar aquí", "Start here")} title={copy("Elija su experimento", "Choose your experiment")}
       description={copy("Explore una actividad, conozca sus pasos y elija práctica o una sesión de su estudio.", "Explore an activity, learn its steps, and choose practice or a session in your study.")} />

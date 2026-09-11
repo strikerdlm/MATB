@@ -123,3 +123,32 @@ def test_manifest_binding_and_orphan_observation_cannot_confer_eligibility(tmp_p
         kind="software_receipt", clock_id="python.perf_counter", value=1, unit="ns", evidence_source="software", method="software_clock")
     result = reconcile(replace_stream(bundle, "timing", [*timing, orphan.to_record()]))
     assert "orphan_timing_observation" in {i["code"] for i in result["issues"]}
+
+
+def test_prepared_metadata_precedes_admission_without_false_gaps(tmp_path, monkeypatch):
+    from matb_integration.evidence.writer import EvidenceWriter
+    original = EvidenceWriter.lifecycle
+    def lifecycle(writer, phase, scenario_time, observed_ns, completion=None):
+        if phase == 'started':
+            original(writer, 'prepared', 0, 1)
+            writer.record({'type':'manual','module':'','address':'','value':'preflight metadata','scenario_time':0},
+                {'recorded_monotonic_ns':2})
+        original(writer,phase,scenario_time,observed_ns,completion)
+    monkeypatch.setattr(EvidenceWriter,'lifecycle',lifecycle)
+    result = reconcile(synthetic_capture(tmp_path))
+    assert result['issues']==[]
+    assert next(m for m in result['metrics'] if m['metric']=='sysmon_hit_rate')['value']==1
+
+
+@pytest.mark.parametrize('record_type,module',[('input','sysmon'),('performance','track'),('unknown_observation','')])
+def test_prepared_prefix_rejects_task_or_unknown_observations(tmp_path,monkeypatch,record_type,module):
+    from matb_integration.evidence.writer import EvidenceWriter
+    original=EvidenceWriter.lifecycle
+    def lifecycle(writer,phase,scenario_time,observed_ns,completion=None):
+        if phase=='started':
+            original(writer,'prepared',0,1)
+            writer.record({'type':record_type,'module':module,'address':'unexpected','value':1,'scenario_time':0}, {'recorded_monotonic_ns':2})
+        original(writer,phase,scenario_time,observed_ns,completion)
+    monkeypatch.setattr(EvidenceWriter,'lifecycle',lifecycle)
+    result=reconcile(synthetic_capture(tmp_path))
+    assert 'task_observation_before_admission' in {issue['code'] for issue in result['issues']}

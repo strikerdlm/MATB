@@ -13,21 +13,19 @@ from app.simulation_models import SimulationSession, TechnicalSimulationSession
 
 
 async def _prepare(client, *, scenario_id: str = "reference_area_search"):
+    from tests.study_fixtures import mission_request
+    manager=client._transport.app.state.simulation_manager
+    request=mission_request(manager.persistence.engine,participant_id='P01',visit_ordinal=1,scenario_id='reference_area_search',locale='es-CO')
     return await client.post(
         "/simulation/sessions",
-        json={
-            "participant_id": "P01",
-            "visit_ordinal": 1,
-            "scenario_id": scenario_id,
-            "locale": "en",
-        },
+        json={**request.model_dump(mode='json'),'scenario_id':scenario_id},
     )
 
 
 async def _prepare_technical(client, *, block_id: str = "LOW"):
     return await client.post(
         "/simulation/technical-sessions",
-        json={
+        json={"execution_purpose": "practice",
             "scenario_id": "reference_area_search",
             "block_id": block_id,
             "locale": "es-CO",
@@ -79,6 +77,10 @@ async def test_technical_session_launches_selected_profile_without_research_iden
     )
     assert finished.status_code == 200, finished.text
     debrief = await client.get(f"/simulation/sessions/{body['id']}/debrief")
+    if debrief.status_code == 202:
+        closed=await client.post("/station/close",json={"actor":"Dr Fixture","reason":"Assigned mission finished; inspect derived artifacts"})
+        assert closed.status_code == 200, closed.text
+        debrief=await client.get(f"/simulation/sessions/{session_id}/debrief")
     assert debrief.status_code == 200, debrief.text
     assert debrief.json()["record_class"] == "technical_only"
     assert debrief.json()["console_profile"] == body["console_profile"]
@@ -95,7 +97,7 @@ async def test_technical_session_rejects_research_fields_and_other_profile(simul
     client, _manager = simulation_client
     contaminated = await client.post(
         "/simulation/technical-sessions",
-        json={
+        json={"execution_purpose": "practice",
             "scenario_id": "reference_area_search",
             "block_id": "LOW",
             "locale": "es-CO",
@@ -145,7 +147,7 @@ async def test_prepare_unknown_identity_and_path_safe_scenario(simulation_client
     client, _manager = simulation_client
     unknown_participant = await client.post(
         "/simulation/sessions",
-        json={"participant_id": "P02", "visit_ordinal": 1, "scenario_id": "reference_area_search", "locale": "en"},
+        json={"execution_purpose": "study", "participant_id": "P02", "visit_ordinal": 1, "scenario_id": "reference_area_search", "locale": "en"},
     )
     assert unknown_participant.status_code == 404
     assert unknown_participant.json()["detail"]["code"] == "participant_not_found"
@@ -167,7 +169,7 @@ async def test_prepare_transport_allows_legacy_ordinal_but_runtime_requires_visi
 
     legacy_ordinal = await client.post(
         "/simulation/sessions",
-        json={
+        json={"execution_purpose": "study",
             "participant_id": "P01",
             "visit_ordinal": 16,
             "scenario_id": "reference_area_search",
@@ -176,7 +178,7 @@ async def test_prepare_transport_allows_legacy_ordinal_but_runtime_requires_visi
     )
     outside_transport_bound = await client.post(
         "/simulation/sessions",
-        json={
+        json={"execution_purpose": "study",
             "participant_id": "P01",
             "visit_ordinal": 17,
             "scenario_id": "reference_area_search",
@@ -319,6 +321,8 @@ async def test_lifecycle_conflicts_and_terminal_artifacts(simulation_client, see
     )
     assert finished.status_code == 200, finished.text
     assert finished.json()["lifecycle"] == "FINISHED"
+    from tests.station_fixtures import close_and_drain
+    await close_and_drain(manager.persistence.engine)
 
     artifacts = await client.get(f"/simulation/sessions/{session_id}/artifacts")
     assert artifacts.status_code == 200
@@ -327,6 +331,10 @@ async def test_lifecycle_conflicts_and_terminal_artifacts(simulation_client, see
     assert all(not item.startswith("/") for item in artifact_paths)
 
     debrief = await client.get(f"/simulation/sessions/{session_id}/debrief")
+    if debrief.status_code == 202:
+        closed=await client.post("/station/close",json={"actor":"Dr Fixture","reason":"Assigned mission finished; inspect derived artifacts"})
+        assert closed.status_code == 200, closed.text
+        debrief=await client.get(f"/simulation/sessions/{session_id}/debrief")
     assert debrief.status_code == 200
     assert debrief.json()["timeline"] == []
     assert "/" not in debrief.text
@@ -353,7 +361,13 @@ async def test_public_bundle_excludes_private_run_files(simulation_client, seede
         headers=headers,
     )
     assert finished.status_code == 200
+    from tests.station_fixtures import close_and_drain
+    await close_and_drain(manager.persistence.engine)
     debrief = await client.get(f"/simulation/sessions/{session_id}/debrief")
+    if debrief.status_code == 202:
+        closed=await client.post("/station/close",json={"actor":"Dr Fixture","reason":"Assigned mission finished; inspect derived artifacts"})
+        assert closed.status_code == 200, closed.text
+        debrief=await client.get(f"/simulation/sessions/{session_id}/debrief")
     assert debrief.status_code == 200
     assert debrief.json()["session_id"] == session_id
     bundle = await client.get(f"/simulation/sessions/{session_id}/bundle")
@@ -389,7 +403,7 @@ async def test_recovery_requires_lease_while_runtime_exists(simulation_client, s
 @pytest.mark.anyio
 async def test_request_validation_uses_stable_error_shape(simulation_client, seeded_participant) -> None:
     client, _manager = simulation_client
-    invalid = await client.post("/simulation/sessions", json={})
+    invalid = await client.post("/simulation/sessions", json={"execution_purpose": "study", })
     assert invalid.status_code == 422
     detail = invalid.json()["detail"]
     assert detail["code"] == "invalid_request"

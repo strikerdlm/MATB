@@ -46,10 +46,18 @@ def test_polar_http_workflow_uses_tokens_leases_and_no_address(tmp_path, purpose
                     "/physiology/polar-h10/v1/connect", json={"device_token": token}
                 )
                 assert connected.status_code == 200
+                arguments = {}
+                session_context = 'api-test'
+                if purpose == 'study':
+                    from tests.study_fixtures import h10_arguments
+                    from app.physiology_schemas import CaptureSettings
+                    selected = h10_arguments(engine, participant_id='P01', session_kind='generic', session_id='api-test', settings=CaptureSettings().model_dump())
+                    arguments = {'attempt_id': selected['attempt_id']}
+                    session_context = selected['session_id']
                 prepared = await client.post("/physiology/polar-h10/v1/captures", json={
-                    "execution_purpose": purpose,
+                    **arguments, "execution_purpose": purpose,
                     "participant_pseudonym": "P01", "matb_session_kind": "generic",
-                    "matb_session_id": "api-test", "settings": {
+                    "matb_session_id": session_context, "settings": {
                         "ecg_sample_rate_hz": 130, "ecg_resolution_bits": 14,
                         "acc_sample_rate_hz": 50, "acc_resolution_bits": 16,
                         "acc_range_g": 2,

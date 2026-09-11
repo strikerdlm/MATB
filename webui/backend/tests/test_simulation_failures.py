@@ -9,6 +9,8 @@ from uuid import uuid4
 import pytest
 from sqlmodel import Session
 
+from tests.study_fixtures import mission_request
+
 from app.models import Participant, PvtAssessment, Visit
 from app.simulation_persistence import InMemorySimulationPersistence, SQLModelSimulationPersistence
 from app.simulation_runtime import SimulationManager
@@ -26,7 +28,7 @@ async def _running(manager: SimulationManager, engine) -> tuple[object, str]:
             protocol_valid=True, raw_trials_json="[]", metrics_json="{}"))
         db.commit()
         prepared = await manager.prepare(
-            CreateSimulationSession(
+            mission_request(engine, execution_purpose="study",
                 participant_id="P01", visit_ordinal=1,
                 scenario_id="reference_area_search", locale="en",
             ),
@@ -135,7 +137,7 @@ async def test_process_restart_recovery_preserves_technical_classification(engin
     )
     with Session(engine) as db:
         prepared = await original.prepare_technical(
-            CreateTechnicalSimulationSession(
+            CreateTechnicalSimulationSession(execution_purpose="practice",
                 scenario_id="reference_area_search",
                 block_id="HIGH",
                 locale="en",

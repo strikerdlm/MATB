@@ -38,3 +38,12 @@ def test_configuration_cannot_claim_unexecuted_interpolation(tmp_path):
     execution["analysis_configuration"]["missing_sample_interpolation"] = True
     with pytest.raises(ValueError, match="unsupported analysis configuration"):
         reconcile(synthetic_capture(tmp_path), execution=execution)
+
+
+def test_frozen_previous_derivation_version_stays_replayable(tmp_path):
+    bundle = synthetic_capture(tmp_path)
+    old = reconcile(bundle, derivation_version='classic-evidence-1.1')
+    replay = reconcile(bundle, derivation_version='classic-evidence-1.1', execution=old['analysis_execution'])
+    assert replay['fingerprint'] == old['fingerprint']
+    assert replay['derivation_version'] == 'classic-evidence-1.1'
+    assert replay['metrics'] == old['metrics']

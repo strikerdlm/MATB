@@ -316,3 +316,8 @@ async def submit_scales(session_id: str, body: WorkloadScaleRequest, request: Re
             {"completed_block_index": max(0, result.current_block_index - 1), "automatic": True},
         )
     return result
+
+
+@router.post('/sessions/{session_id}/preflight', response_model=OpenMatbSessionView)
+async def preflight(session_id: str, body: EmptyRequest, lease: str | None = Header(default=None, alias=_CONTROLLER), runtime: OpenMatbManager = Depends(manager)):
+    return await _managed_async(lambda: runtime.start_block(session_id, _required(lease, 'openmatb_controller_required'), preparation_only=True))

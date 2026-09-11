@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from app.artifact_paths import resolve_artifact
 from pathlib import Path
 from uuid import uuid4
 
@@ -23,8 +24,8 @@ class OpenMatbRecords:
         self.engine = engine
         self.artifact_root = artifact_root.resolve()
 
-    def begin(self, db: Session, suite: OpenMatbSuiteSession, profile: str) -> OpenMatbBlockAttempt:
-        attempt = OpenMatbBlockAttempt(id=str(uuid4()), session_id=suite.id,
+    def begin(self, db: Session, suite: OpenMatbSuiteSession, profile: str, *, block_instance_id: str | None = None) -> OpenMatbBlockAttempt:
+        attempt = OpenMatbBlockAttempt(id=block_instance_id or str(uuid4()), session_id=suite.id,
             block_index=suite.current_block_index, profile=profile,
             legacy_import_status="not_required" if profile == "PRACTICE" or suite.execution_purpose == "practice" else "pending")
         suite.active_block_instance_id = attempt.id
@@ -32,9 +33,13 @@ class OpenMatbRecords:
         db.add(attempt)
         db.add(suite)
         db.flush()
+        from app.assessment_adapters import attach_source
+        from app.study_native import bind_block
+        if not bind_block(db, suite, attempt):
+            attach_source(db, "openmatb_block_attempt", attempt.model_dump(mode="json"), historical=False)
         return attempt
 
-    def finish(self, db: Session, suite: OpenMatbSuiteSession, *, outcome: str, csv: Path | None) -> None:
+    def finish(self, db: Session, suite: OpenMatbSuiteSession, *, outcome: str, csv: Path | None, cause: str = "unknown") -> None:
         attempt = db.get(OpenMatbBlockAttempt, suite.active_block_instance_id) if suite.active_block_instance_id else None
         if attempt is None:
             return
@@ -60,6 +65,8 @@ class OpenMatbRecords:
                 attempt.artifact_status = "invalid"
                 attempt.artifact_error = "native_artifacts_outside_session"
                 attempt.evidence_status = "unavailable"
+        from app.study_native import finish_block
+        finish_block(db, attempt, outcome, cause=cause)
         db.add(attempt)
 
     def recover(self) -> None:
@@ -70,6 +77,8 @@ class OpenMatbRecords:
                     attempt.finished_at = attempt.finished_at or datetime.now(timezone.utc)
                     attempt.evidence_status = "queued" if attempt.session_csv else "unavailable"
                     attempt.artifact_status = "unknown"
+                    from app.study_native import finish_block
+                    finish_block(db, attempt, "interrupted")
                 if attempt.evidence_status == "processing":
                     attempt.evidence_status = "failed"
                     attempt.evidence_error = "interrupted_processing"
@@ -77,10 +86,13 @@ class OpenMatbRecords:
             db.commit()
 
     def _controlled_csv(self, suite: OpenMatbSuiteSession, attempt: OpenMatbBlockAttempt) -> Path:
-        root = (self.artifact_root / suite.id / "sessions" / attempt.profile).resolve()
+        with Session(self.engine) as db:
+            from app.study_native import storage_key
+            instance_key = storage_key(db, suite, attempt.profile)
+        root = (self.artifact_root / suite.id / "sessions" / instance_key).resolve()
         if self.artifact_root not in root.parents:
             raise ValueError("native_artifacts_outside_session")
-        csv = Path(attempt.session_csv or "").resolve()
+        csv = resolve_artifact(attempt.session_csv or "").resolve()
         if root not in csv.parents or not csv.is_file():
             raise ValueError("native_artifacts_outside_session")
         return csv
@@ -158,13 +170,16 @@ class OpenMatbRecords:
     def receipt(self, db: Session, suite: OpenMatbSuiteSession) -> dict:
         from app.evidence_models import EvidenceCapture
         from app.evidence_discovery import review_summary
+        from app.assessment_adapters import source_identity
         rows = list(db.exec(select(OpenMatbBlockAttempt).where(OpenMatbBlockAttempt.session_id == suite.id)
                             .order_by(OpenMatbBlockAttempt.started_at, OpenMatbBlockAttempt.id)))
         attempts = []
         for attempt in rows:
             capture = db.get(EvidenceCapture, attempt.capture_id) if attempt.capture_id else None
             summary = review_summary(db, capture.id) if capture else None
-            attempts.append({"block_instance_id": attempt.id, "block_index": attempt.block_index,
+            attempts.append({**source_identity(db, "openmatb_block_attempt", attempt.id),
+                "rating_attempt_id": source_identity(db, "openmatb_block_attempt", attempt.id, "ratings")["assessment_attempt_id"],
+                "block_instance_id": attempt.id, "block_index": attempt.block_index,
                 "profile": attempt.profile, "task_status": attempt.task_status,
                 "execution_purpose": "practice" if attempt.profile == "PRACTICE" else suite.execution_purpose,
                 "started_at": attempt.started_at, "finished_at": attempt.finished_at,
@@ -175,7 +190,7 @@ class OpenMatbRecords:
                 "evidence_status": attempt.evidence_status, "evidence_error": attempt.evidence_error,
                 "capture_id": attempt.capture_id, "capture_status": summary["capture_status"] if summary else None,
                 "qualification": summary["qualification"] if summary else None})
-        return {"session_id": suite.id, "participant_id": suite.participant_id,
+        return {**source_identity(db, "openmatb_suite_session", suite.id), "session_id": suite.id, "participant_id": suite.participant_id,
                 "visit_ordinal": suite.visit_ordinal, "execution_purpose": suite.execution_purpose,
                 "lifecycle": suite.lifecycle, "historical": suite.receipt_version == 0,
                 "block_order": json.loads(suite.block_order_json), "attempts": attempts}
