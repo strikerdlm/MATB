@@ -24,6 +24,16 @@ async function activateInteractiveButton({
   completed: () => Promise<boolean>;
   timeout?: number;
 }) {
+  const completedSoon = async (waitMs = 2000) => {
+    try {
+      await expect.poll(completed, { timeout: Math.min(timeout, waitMs) }).toBe(
+        true,
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  };
   await settleInteractiveButton(page, button);
   try {
     await button.click({ timeout });
@@ -34,7 +44,7 @@ async function activateInteractiveButton({
   if (await completed()) return;
   await button.focus();
   await button.press("Space");
-  if (await completed()) return;
+  if (await completedSoon()) return;
   await button.press("Enter");
   await expect.poll(completed, { timeout }).toBe(true);
 }
