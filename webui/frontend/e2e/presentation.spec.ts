@@ -54,8 +54,6 @@ async function activateInteractiveButton({
   await settleInteractiveButton(page, button);
   await button.focus();
   await button.press("Space", { timeout: remainingTimeout() });
-  if (await completedSoon()) return;
-  await button.press("Enter", { timeout: remainingTimeout() });
   await expect.poll(completed, { timeout: remainingTimeout() }).toBe(true);
 }
 for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
