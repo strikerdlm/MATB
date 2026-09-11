@@ -216,6 +216,8 @@ async def test_prepare_through_seal_exposes_verified_artifacts_and_bundle(liftof
         headers=headers,
     )
     assert questionnaires.status_code == 201, questionnaires.text
+    closed = await client.post("/station/close",json={"actor":"Dr Fixture","reason":"All assigned phases and ratings complete"})
+    assert closed.status_code == 200, closed.text
     sealed = await client.post(
         f"/liftoff/sessions/{session['id']}/seal",
         json={},
@@ -242,6 +244,8 @@ async def test_hrv_link_persists_authoritative_response(liftoff_client):
     client, manager = liftoff_client
     session, lease = await prepared_session(liftoff_client)
     await finish_phases(client, session["id"], lease)
+    closed = await client.post("/station/close",json={"actor":"Dr Fixture","reason":"Assigned collection complete; physiology import is post-visit work"})
+    assert closed.status_code == 200, closed.text
     rr_content = "\n".join(["800"] * 1900)
     manager.hrv_client = FakeHrvClient(valid_hrv_response(session["id"]))
 

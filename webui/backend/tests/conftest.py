@@ -77,7 +77,7 @@ def build_test_manager(*, engine, artifact_root: Path):
 
 
 @pytest.fixture(name="engine")
-def engine_fixture():
+def engine_fixture(monkeypatch, tmp_path):
     # In-memory DB shared across the test's connections.
     engine = create_engine(
         "sqlite://",
@@ -93,6 +93,9 @@ def engine_fixture():
         if find_spec(optional_models) is not None:
             import_module(optional_models)
     SQLModel.metadata.create_all(engine)
+    monkeypatch.setattr(db_module, "_engine", engine)
+    from app import station_http
+    monkeypatch.setattr(station_http,"artifact_root",lambda _engine: tmp_path / "station-job-artifacts")
     yield engine
 
 

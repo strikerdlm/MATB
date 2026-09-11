@@ -99,7 +99,7 @@ export default function PolarH10Page() {
   const [acc, setAcc] = useState<number[]>([]);
   const [gaps, setGaps] = useState(0);
   const [lastMarker, setLastMarker] = useState<string | null>(null);
-  const admission = useAssessmentAdmission(assigned.attempt && assigned.context ? {attemptId:assigned.attempt.id, participantId:assigned.context.participant_id, visitId:assigned.context.visit_id, purpose:'study', locale:assigned.context.locale} : null);
+  const admission = useAssessmentAdmission(assigned.attempt && assigned.context ? {attemptId:assigned.attempt.id, participantId:assigned.context.participant_id, visitId:assigned.context.visit_id, purpose:'study', locale:assigned.context.locale} : null, {runtime:true});
   useEffect(()=>{let active=true; const bound=assigned.context;if(bound){setParticipant(bound.participant_id);const settings=bound.config.settings as {acc_sample_rate_hz:AccRate;acc_range_g:AccRange};setAccRate(settings.acc_sample_rate_hz);setAccRange(settings.acc_range_g);if(!bound.accompanying_key){setSessionKind('generic');setSessionId(bound.occasion_id);}else void assignmentDetail(bound.assignment_id).then(detail=>{if(active)setCompanionSources((detail.attempts[bound.accompanying_key!]??[]).flatMap(a=>a.sources.filter(s=>['openmatb_suite_session','liftoff_session','simulation_session'].includes(s.source_table)).map(s=>({table:s.source_table,id:s.source_id}))));});}return()=>{active=false;};},[assigned.context]);
   const [analysis, setAnalysis] = useState<PolarAnalysis | null>(null);
   const lastSequence = useRef(0);

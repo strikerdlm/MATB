@@ -52,7 +52,7 @@ export function LiftoffSetupForm({
       .catch((reason: unknown) => setError(experimentErrorMessage(reason, copyRef.current)));
   }, []);
 
-  const admission=useAssessmentAdmission(assigned.attempt&&assigned.context?{attemptId:assigned.attempt.id,participantId,visitId:assigned.context.visit_id,purpose:'study',locale}:null);
+  const admission=useAssessmentAdmission(assigned.attempt&&assigned.context?{attemptId:assigned.attempt.id,participantId,visitId:assigned.context.visit_id,purpose:'study',locale}:null, {runtime:true});
   useEffect(() => {
     const bound = assigned.context;
     if (!bound) return;

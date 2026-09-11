@@ -199,7 +199,7 @@ class SimulationManager:
                 raise SimulationNotFound("visit not found")
             from app.study_admission import resolve_assignment
             assigned = resolve_assignment(db, attempt_id=request.attempt_id, instrument='suas', participant_id=request.participant_id,
-                visit_id=visit.id, purpose=request.execution_purpose, require_started=True)
+                visit_id=visit.id, purpose=request.execution_purpose, require_started=False)
             from app.study_registry_models import StudyAttemptSelection
             from app.assessment_models import AssessmentAttempt, AssessmentOccasion
             selection = db.get(StudyAttemptSelection, request.attempt_id)
@@ -332,6 +332,7 @@ class SimulationManager:
                 session_id=session_id,
                 participant_id=None,
                 visit_id=None,
+                admission_engine=db.get_bind(),
                 locale=request.locale,
                 scenario=loaded,
                 manifest=manifest,
@@ -540,6 +541,13 @@ class SimulationManager:
             if block_id != expected:
                 raise InvalidTransition("block_order_violation")
             self._require_presentation_ready(handle, block_id)
+            from app.station_resources import admit_source, admit
+            with Session(handle.admission_engine or self.persistence.engine) as db:
+                if handle.participant_id:
+                    admit_source(db, db.get(SimulationSession, session_id))
+                else:
+                    admit(db, 'simulation:'+session_id, instrument='suas', owner='standalone:'+session_id)
+                db.commit()
             if handle.protocol is not None:
                 try:
                     handle.protocol.start_block(block_id)
@@ -619,47 +627,31 @@ class SimulationManager:
             self._cancel_tasks(handle)
             handle.recorder.close()
             if value == "abort":
-                self.persistence.add_deviation(
-                    handle.session_id, handle.active_block_id, "aborted", "warning", now,
-                    {"reason": "aborted"},
-                )
-                artifacts = handle.recorder.seal_partial(reason="aborted")
-                self.persistence.replace_artifacts(handle.session_id, artifacts)
-            else:
-                replay = ReplayVerifier().verify(handle.recorder.run_dir)
-                if replay.status.value == "match":
-                    records = _read_records(handle.recorder.run_dir / "events.jsonl")
-                    debrief, questionnaires = build_public_debrief(
-                        handle.recorder.run_dir,
-                        handle.manifest,
-                        replay,
-                        records,
-                        validity=handle.validity,
-                        live_frames=(handle.engine.snapshot(),) if handle.engine is not None else (),
-                    )
-                    metrics = debrief.get("metrics", {})
-                    metrics_mapping = metrics if isinstance(metrics, Mapping) else {}
-                    artifacts = handle.recorder.seal(
-                        questionnaires=questionnaires,
-                        metrics=metrics_mapping,
-                        debrief=debrief,
-                        replay=replay,
-                    )
-                    self.persistence.replace_artifacts(handle.session_id, artifacts)
-                    effective = tuple(effective_records(records))
-                    for block_id in sorted({record.block_id for record in effective}):
-                        block_records = tuple(record for record in effective if record.block_id == block_id)
-                        block_metrics = {**block_metric_summary(block_records, handle.manifest),
-                                         **derive_research_metrics(block_records).to_dict(),
-                                         "calculation_version": "suas-debrief-v2"}
-                        self.persistence.update_block(
-                            handle.session_id,
-                            block_id,
-                            metrics_json=canonical_json(block_metrics),
-                        )
+                self.persistence.add_deviation(handle.session_id,handle.active_block_id,"aborted","warning",now,{"reason":"aborted"})
+            # Raw recording is now closed. Replay, checksums and optional debrief work
+            # must wait through the remainder of the protected study visit.
+            finalization = dict(session_id=session_id,run_dir=str(handle.recorder.run_dir),
+                disposition=value,validity=handle.validity,
+                live_frames=[handle.engine.snapshot()] if handle.engine is not None else [])
             self.persistence.update_session(session_id, lifecycle=handle.lifecycle, finished_at=_utcnow(), active_block_id=handle.active_block_id)
             if handle.active_block_id:
                 self.persistence.update_block(session_id, handle.active_block_id, lifecycle=handle.lifecycle, simulation_finished_ms=now, finished_at=_utcnow())
+            with Session(handle.admission_engine or self.persistence.engine) as db:
+                from app.station_resources import finish
+                finish(db, 'simulation_session:'+session_id)
+                finish(db, 'simulation:'+session_id)
+                from app.station_resources import enqueue_source,claim_job
+                from app.station_mission import MANAGERS
+                MANAGERS[str(db.get_bind().url)]=self
+                job=enqueue_source(db,'mission_finalize',finalization)
+                queued_id=job.id
+                claimed=claim_job(db,queued_id)
+                payload=claimed.model_dump() if claimed else None
+                db.commit()
+            if payload:
+                from app.station_worker import execute_internal
+                from app.station_resources import StationJob
+                await execute_internal(handle.admission_engine or self.persistence.engine,StationJob(**payload))
             return self._view(handle)
 
     async def submit(self, session_id: str, lease: str, request: CommandRequest) -> CommandResult:

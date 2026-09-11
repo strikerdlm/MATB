@@ -49,6 +49,8 @@ def test_screen_duplicate_guard_refuses_destructive_overwrite(client):
                                      "overwrite": True})
     assert r.status_code == 409
     assert r.json()["detail"]["code"] == "final_payload_conflict"
+    closed = client.post('/station/close', json={'actor': 'Dr Fixture', 'reason': 'Collection complete before cohort calculation'})
+    assert closed.status_code == 200, closed.text
     assert client.get("/screen").json()["screens"][0]["scores"]["simple_rt"]["median_ms"] == 300.0
 
 
@@ -57,6 +59,8 @@ def test_screen_summary_gate_status(client):
         _enroll(client, pid)
         study_post(client, "/screen", json={"execution_purpose": "study", "participant_id": pid,
                                      "payload": _payload(simple=280.0 + i * 20)})
+        closed = client.post('/station/close', json={'actor': 'Dr Fixture', 'reason': 'Participant visit complete'})
+        assert closed.status_code == 200, closed.text
     s = client.get("/screen").json()
     assert s["n_screened"] == 2 and s["hcf_active"] is False  # < MIN_COHORT
     assert {e["participant_id"] for e in s["screens"]} == {"P01", "P02"}
@@ -64,6 +68,8 @@ def test_screen_summary_gate_status(client):
     _enroll(client, "P03")
     study_post(client, "/screen", json={"execution_purpose": "study", "participant_id": "P03",
                                  "payload": _payload(simple=360.0)})
+    closed = client.post('/station/close', json={'actor': 'Dr Fixture', 'reason': 'Participant visit complete'})
+    assert closed.status_code == 200, closed.text
     s = client.get("/screen").json()
     assert s["n_screened"] == 3 and s["hcf_active"] is True
     by_pid = {e["participant_id"]: e for e in s["screens"]}

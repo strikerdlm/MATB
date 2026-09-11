@@ -11,6 +11,7 @@ type Criterion = {
   required: boolean;
   reason: string;
   evidence?: unknown;
+  href?: string;
 };
 type Row = {
   occasion_id: string;
@@ -36,7 +37,13 @@ type Result = {
   plan_sha256: string;
   snapshot: Snapshot;
   result: unknown;
-  current_applicability: { changed: boolean };
+  current_applicability: {
+    changed: boolean | null;
+    status?: string;
+    snapshot?: Snapshot;
+    error?: unknown;
+    current_preparation_readiness?: unknown;
+  };
 };
 export function StudyAnalysis() {
   const { copy } = useAppLocale();
@@ -65,6 +72,7 @@ export function StudyAnalysis() {
   const [reopen, setReopen] = useState(""),
     [compareId, setCompareId] = useState(""),
     [api, setApi] = useState("");
+  const [queued, setQueued] = useState("");
   const epoch = useRef(0);
   useEffect(() => {
     let active = true;
@@ -142,6 +150,25 @@ export function StudyAnalysis() {
       qualification_ids: qualification,
     };
   }
+  async function exportResult(identity: string) {
+    try {
+      const response = await fetch(`${api}/study/analyses/${identity}/export`);
+      const queuedId = response.headers.get("X-MATB-Station-Job");
+      if (queuedId) {
+        setQueued(queuedId);
+        return;
+      }
+      if (!response.ok) throw new Error(`Export: HTTP ${response.status}`);
+      const url = URL.createObjectURL(await response.blob());
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `study-analysis-${identity}.zip`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
   function startNewAnalysis() {
     epoch.current++;
     setSavedView(false);
@@ -162,6 +189,10 @@ export function StudyAnalysis() {
     try {
       if (action === "preview") {
         const value = await studyCall<Snapshot>("/analyses/preview", request());
+        if ("job_id" in value) {
+          setQueued(String(value.job_id));
+          return;
+        }
         if (generation === epoch.current) setPreview(value);
       } else {
         const value =
@@ -170,6 +201,10 @@ export function StudyAnalysis() {
             : await studyCall<Result>(
                 `/analyses/${encodeURIComponent(action === "open" ? reopen : compareId)}`,
               );
+        if ("job_id" in value) {
+          setQueued(String(value.job_id));
+          return;
+        }
         if (generation === epoch.current) {
           if (action === "compare") {
             setComparison(value);
@@ -194,6 +229,17 @@ export function StudyAnalysis() {
   }
   return (
     <div className="mx-auto max-w-6xl space-y-5 p-6">
+      {queued && (
+        <p role="status">
+          {copy("Trabajo en cola", "Work queued")}: {queued} ·{" "}
+          <Link href="/station">
+            {copy(
+              "Ver estado y siguiente acción",
+              "View status and next action",
+            )}
+          </Link>
+        </p>
+      )}
       <h1 className="text-2xl font-semibold">
         {copy("Análisis descriptivo del plan", "Plan descriptive analysis")}
       </h1>
@@ -400,7 +446,11 @@ export function StudyAnalysis() {
                     </summary>
                     <p>{c.reason}</p>
                     <a
-                      href={`${api}/assessments/attempts/${row.attempt_id ?? ""}/raw`}
+                      href={
+                        c.href === "/evidence"
+                          ? "/evidence"
+                          : `${api}${c.href ?? `/assessments/occasions/${row.occasion_id}`}`
+                      }
                       target="_blank"
                       rel="noreferrer"
                     >
@@ -473,20 +523,62 @@ export function StudyAnalysis() {
           <section key={r.id} className="rounded border p-3">
             <h2>{r.id}</h2>
             <p>
-              {r.current_applicability.changed
+              {r.current_applicability.status === "pending"
                 ? copy(
-                    "La aplicabilidad actual cambió; el resultado congelado se conserva.",
-                    "Current applicability changed; the frozen result is preserved.",
+                    "Aplicabilidad actual pendiente; se muestra la evidencia congelada.",
+                    "Current applicability pending; frozen evidence is shown.",
                   )
-                : copy(
-                    "Sin cambios de aplicabilidad detectados.",
-                    "No applicability changes detected.",
-                  )}
+                : r.current_applicability.changed
+                  ? copy(
+                      "La aplicabilidad actual cambió; el resultado congelado se conserva.",
+                      "Current applicability changed; the frozen result is preserved.",
+                    )
+                  : copy(
+                      "Sin cambios de aplicabilidad detectados.",
+                      "No applicability changes detected.",
+                    )}
             </p>
+            <Button
+              disabled={busy}
+              onClick={() =>
+                void studyCall<Result | { job_id: string }>(
+                  `/analyses/${r.id}/refresh`,
+                  {},
+                )
+                  .then((value) => {
+                    if ("job_id" in value) setQueued(value.job_id);
+                    else if (r.id === result?.id) setResult(value);
+                    else setComparison(value);
+                  })
+                  .catch((e) => setError(String(e)))
+              }
+            >
+              {copy(
+                "Actualizar aplicabilidad actual",
+                "Refresh current applicability",
+              )}
+            </Button>
+            <details>
+              <summary>
+                {copy(
+                  "Criterios y preparación actuales",
+                  "Current criteria and preparation",
+                )}
+              </summary>
+              <pre className="overflow-auto whitespace-pre-wrap text-xs">
+                {JSON.stringify(r.current_applicability, null, 2)}
+              </pre>
+            </details>
             <p className="break-all">
               {r.data_sha256} · {r.plan_sha256}
             </p>
-            <a href={`${api}/study/analyses/${r.id}/export`}>
+            <a
+              href={`${api}/study/analyses/${r.id}/export`}
+              onClick={(event) => {
+                event.preventDefault();
+                void exportResult(r.id);
+              }}
+            >
               {copy(
                 "Exportar datos, código y reproducción sin conexión",
                 "Export data, code and offline replay",

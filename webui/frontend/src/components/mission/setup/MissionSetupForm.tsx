@@ -149,7 +149,7 @@ export function MissionSetupForm({
     };
   }, [initialVisits, participantId, visitsLoader]);
 
-  const admission=useAssessmentAdmission(assigned.attempt&&assigned.context?{attemptId:assigned.attempt.id,participantId,visitId:assigned.context.visit_id,purpose:'study',locale:assigned.context.locale}:null);
+  const admission=useAssessmentAdmission(assigned.attempt&&assigned.context?{attemptId:assigned.attempt.id,participantId,visitId:assigned.context.visit_id,purpose:'study',locale:assigned.context.locale}:null, {runtime:true});
   useEffect(()=>{let active=true;const bound=assigned.context;if(bound){setParticipantId(bound.participant_id);setScenarioId((bound.config.scenario as {id:string}).id);setPresentation((bound.config.presentation??undefined) as PresentationConfig|undefined);void visitsLoader(bound.participant_id).then(rows=>{if(active)setVisitOrdinal(String(rows.find(v=>v.id===bound.visit_id)?.visit_ordinal??''));});}return()=>{active=false;};},[assigned.context,visitsLoader]);
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();

@@ -160,7 +160,11 @@ def test_polar_compatibility_flag_cannot_override_an_assigned_visit(client, engi
     from app.purpose_service import declare_acquisition
     _enroll(client)
     visit2 = client.get('/participants/P01/visits').json()[1]['id']
-    selected = attempt(client, occasion(client, 'physiology', visit_id=visit2))
+    selected_occasion = occasion(client, 'physiology', visit_id=visit2)
+    response = client.post(f"/assessments/occasions/{selected_occasion['id']}/attempts", json={'execution_purpose': 'study'})
+    assert response.status_code == 201, response.text
+    selected = response.json()
+    assert client.post(f"/assessments/attempts/{selected['id']}/start").status_code == 409
     with Session(engine) as db:
         source = PolarCaptureRecord(id='assigned-other-visit', participant_id='P01',
             matb_session_kind='generic', matb_session_id='baseline:P01:V1', device_alias='H10',

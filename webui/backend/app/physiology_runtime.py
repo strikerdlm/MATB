@@ -242,7 +242,7 @@ class PolarCaptureManager:
                 raise PolarRuntimeError("invalid_execution_purpose")
             from app.study_admission import resolve_assignment
             context = resolve_assignment(db, attempt_id=attempt_id, instrument='physiology', participant_id=participant_id,
-                purpose=execution_purpose, require_started=True,
+                purpose=execution_purpose, require_started=False,
                 config=dict(binding_id='polar-h10-pmd-v1', input_mapping='rr-ecg-acc', settings=settings, scoring='raw-streams'))
             if context:
                 self._validate_settings(settings)
@@ -253,7 +253,7 @@ class PolarCaptureManager:
                     table = {'openmatb': 'openmatb_suite_session', 'liftoff': 'liftoff_session', 'suas': 'simulation_session'}.get(session_kind)
                     if not table: raise PolarRuntimeError('polar_assigned_accompaniment_required')
                     linked_attempt = source_attempt(db, table, session_id)
-                    resolve_assignment(db, attempt_id=linked_attempt.id, instrument=session_kind, participant_id=participant_id, visit_id=context['visit_id'], purpose='study', require_started=True)
+                    resolve_assignment(db, attempt_id=linked_attempt.id, instrument=session_kind, participant_id=participant_id, visit_id=context['visit_id'], purpose='study', require_started=False)
                     if linked_attempt.occasion_id != json.loads(assigned.occasions_json)[context['accompanying_key']]:
                         raise PolarRuntimeError('polar_assigned_accompaniment_mismatch')
                 elif session_kind != 'generic' or session_id != context['occasion_id']:
@@ -362,10 +362,13 @@ class PolarCaptureManager:
                     linked = db.get(OpenMatbSuiteSession, row.matb_session_id)
                     if linked is None:
                         raise PolarRuntimeError("openmatb_session_not_found")
-                    if linked.lifecycle != "READY":
+                    if linked.lifecycle not in {"READY", "PREFLIGHT_HELD", "STARTING", "RUNNING", "PAUSED"}:
                         raise PolarRuntimeError("physiology_requires_openmatb_ready")
             requested = json.loads(row.requested_settings_json)
             self._validate_settings(requested)
+            with Session(self.engine) as db:
+                from app.station_resources import admit_source
+                admit_source(db, row);db.commit()
             self._loop = asyncio.get_running_loop()
             try:
                 writer = ParquetCaptureWriter(self.artifact_root, capture_id)

@@ -1,3 +1,4 @@
+import { stationFetch } from "@/lib/station-fetch";
 import { sharedRead } from "@/lib/shared-request";
 import type {
   AnalysisArtifact,
@@ -72,7 +73,7 @@ async function detail(res: Response): Promise<string> {
 
 async function request(path: string, init: RequestInit): Promise<Response> {
   const apiBase = await getApiBase();
-  return fetch(`${apiBase}${path}`, init);
+  return stationFetch(`${apiBase}${path}`, init);
 }
 
 export async function getTracker(): Promise<TrackerCell[]> {

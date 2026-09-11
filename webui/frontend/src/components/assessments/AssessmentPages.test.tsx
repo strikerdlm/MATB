@@ -121,7 +121,7 @@ vi.mock("next/dynamic", () => ({
       );
     },
 }));
-vi.mock("@/lib/assessments", () => ({ startAttempt: vi.fn() }));
+vi.mock("@/lib/assessments", () => ({ startAttempt: vi.fn(), interruptAttempt: vi.fn().mockResolvedValue({}) }));
 vi.mock("@/lib/api", () => ({
   listParticipants: async () => [{ id: "P01" }, { id: "P02" }],
   listVisits: async (participant: string) => [

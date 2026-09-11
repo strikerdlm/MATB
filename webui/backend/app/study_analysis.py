@@ -1,6 +1,6 @@
 """Explicit frozen-plan descriptive execution. No legacy inferential entry points."""
 import json
-from datetime import timezone
+from datetime import datetime, timezone
 from uuid import uuid4
 from fastapi import HTTPException
 from sqlmodel import select
@@ -70,16 +70,29 @@ def _contexts(db, v, study):
     return contexts
 
 
+def deferred_selection(db, request):
+    """Metadata-only selection at queue acceptance; raw decoding waits for station idle."""
+    v, study, plan = version(db, request['version_id'])
+    contexts = _contexts(db, v, study)
+    attempts = {}
+    for context in contexts:
+        candidates = [a.model_dump(mode='json') for a in db.exec(select(AssessmentAttempt).where(AssessmentAttempt.occasion_id == context['occasion_id']).order_by(AssessmentAttempt.ordinal))]
+        attempts[context['occasion_id']] = candidates
+    return dict(at=datetime.now(timezone.utc).isoformat(), contexts=contexts, attempts=attempts,
+                semantics='Occasion/attempt set frozen on acceptance; eligibility and source availability observed when exclusive execution begins.')
+
+
 def preview(db, request):
     v,study,plan=version(db,request['version_id']); policy=plan['eligibility_policy']
     specs={o['key']:o for o in study['occasions']}; rows=[]
-    contexts=_contexts(db,v,study)
+    cutoff=request.get("_selection_cutoff")
+    contexts=cutoff["contexts"] if cutoff else _contexts(db,v,study)
     context_ids={c['occasion_id'] for c in contexts}
     if set(request.get('attempts',{}))-context_ids: raise HTTPException(422,'Attempt selection references an occasion outside this plan.')
     for context in contexts:
         occasion=db.get(AssessmentOccasion,context['occasion_id']); spec=specs[context['occasion_key']]
         attempts=list(db.exec(select(AssessmentAttempt).where(AssessmentAttempt.occasion_id==occasion.id).order_by(AssessmentAttempt.ordinal)))
-        all_attempts=[a.model_dump(mode='json') for a in attempts]
+        all_attempts=cutoff["attempts"][occasion.id] if cutoff else [a.model_dump(mode='json') for a in attempts]
         try: selected=select_attempt(all_attempts,policy['repeat_selection'],request.get('attempts',{}).get(occasion.id))
         except ValueError as exc: raise HTTPException(422,str(exc)) from exc
         attempt=next((a for a in attempts if selected and a.id==selected['id']),None)
@@ -245,7 +258,8 @@ def read(db,identity,*,current=True):
     result.pop('snapshot_json'); result.pop('result_json')
     if current:
         try:
-            present=preview(db,json.loads(row.request_json)); old=result['snapshot']
+            current_request=json.loads(row.request_json);current_request.pop('_selection_cutoff',None)
+            present=preview(db,current_request); old=result['snapshot']
             def comparable(value):
                 value=json.loads(canonical({k:v for k,v in value.items() if k not in {'hcf','hcf_comparison','implementation','frozen_input_id'}}))
                 for item in value['rows']: item.pop('values',None)

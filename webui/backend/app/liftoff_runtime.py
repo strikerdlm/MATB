@@ -14,6 +14,7 @@ import os
 from typing import Any
 from uuid import uuid4
 
+from sqlmodel import Session
 from app.liftoff_models import LiftoffSession
 from app.liftoff_persistence import SQLModelLiftoffPersistence
 from app.liftoff_schemas import (
@@ -278,6 +279,11 @@ class LiftoffManager:
             timeout_seconds=2.0,
         ):
             raise LiftoffRuntimeError("liftoff_telemetry_not_ready")
+        if action == "baseline/start":
+            with Session(self.persistence.engine) as db:
+                from app.station_resources import admit_source
+                from app.liftoff_models import LiftoffSession
+                admit_source(db, db.get(LiftoffSession, session_id));db.commit()
         try:
             active.recorder.mark(_ACTION_MARKER[action])
             if action == "recovery/finish":

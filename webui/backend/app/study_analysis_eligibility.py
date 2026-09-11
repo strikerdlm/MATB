@@ -69,5 +69,13 @@ def evaluate(db, attempt, *, source, results, policy, historical_allowed, assign
         if policy[field]==permission: required.add(key)
     for key,c in criteria.items():
         c['required']=key in required
-        c['href']=f'/assessments/attempts/{attempt.id}' if key not in {'physical','human'} else '/evidence/qualifications'
+        c['href']=f'/assessments/attempts/{attempt.id}'
+        if key == 'purpose' and attempt.purpose_provenance_id:
+            c['href']=f'/purpose-provenance/{attempt.purpose_provenance_id}'
+        elif key == 'preparation' and assignment_id:
+            c['href']=f'/study/assignments/{assignment_id}/preparation'
+        elif key in {'physical','human'}:
+            record=c.get('evidence') or {}
+            identity=record.get('record',{}).get('id') if isinstance(record,dict) else None
+            c['href']=f'/evidence/qualifications/{identity}' if identity else f'/evidence/captures/{source["capture"]["id"]}/qualifications' if source and source.get('capture') else '/evidence'
     return criteria, all(c['passed'] for c in criteria.values() if c['required'])

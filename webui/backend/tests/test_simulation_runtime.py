@@ -247,6 +247,8 @@ async def test_presentation_readiness_failure_and_authoritative_state(manager, r
     await manager.resume(prepared.id, prepared.controller_lease)
     assert manager.active.engine.state_hash == baseline.state_hash
     await manager.finish(prepared.id, prepared.controller_lease, "abort")
+    from tests.station_fixtures import close_and_drain
+    await close_and_drain(runtime_db)
     assert "presentation.jsonl" in (manager.active.recorder.run_dir / "checksums.sha256").read_text()
     with pytest.raises(InvalidTransition, match="sealed"):
         await manager.presentation_event(prepared.id, prepared.controller_lease, failure)

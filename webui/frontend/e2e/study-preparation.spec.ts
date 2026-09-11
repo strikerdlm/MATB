@@ -361,6 +361,24 @@ for (const locale of ["en", "es-419"] as const) {
         exact: true,
       }),
     ).toBeVisible();
+    // This fixture intentionally stops after opening measurement KSS. Leaving the
+    // page is uncertain acquisition, so a named researcher must verify idle.
+    await page.goto("/station");
+    await expect
+      .poll(
+        async () =>
+          (await (await request.get(base + "/station")).json()).reservation
+            ?.uncertain,
+      )
+      .toBe(true);
+    await post(request, "/station/recover-idle", {
+      actor: "Dr Preparation Fixture",
+      reason:
+        "Test browser left measurement; no participant task or native recording remains",
+    });
+    expect(
+      (await (await request.get(base + "/station")).json()).reservation,
+    ).toBeNull();
   });
 }
 

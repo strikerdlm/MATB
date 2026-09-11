@@ -1,3 +1,4 @@
+import { stationFetch } from "@/lib/station-fetch";
 import { getApiBase } from "@/lib/runtime-config";
 import type {
   PolarCapabilities,
@@ -20,7 +21,7 @@ export class PolarApiError extends Error {
 
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   const base = await getApiBase();
-  const response = await fetch(`${base}${PREFIX}${path}`, init);
+  const response = await stationFetch(`${base}${PREFIX}${path}`, init);
   if (!response.ok) {
     let code = "polar_request_failed";
     let message = response.statusText;
@@ -79,7 +80,7 @@ export const getPolarAnalysis = (id: string, lease: string) =>
 
 export async function downloadPolarBundle(id: string, lease: string): Promise<void> {
   const base = await getApiBase();
-  const response = await fetch(`${base}${PREFIX}/captures/${encodeURIComponent(id)}/bundle`, {
+  const response = await stationFetch(`${base}${PREFIX}/captures/${encodeURIComponent(id)}/bundle`, {
     headers: { "X-Polar-Controller": lease },
   });
   if (!response.ok) throw new PolarApiError(response.status, "polar_bundle_failed", response.statusText);

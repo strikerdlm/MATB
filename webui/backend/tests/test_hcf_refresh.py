@@ -66,6 +66,8 @@ def test_new_fit_uses_screen_hcf(client, engine, sample_csv_bytes):
         response = study_post(client, "/screen", json={"execution_purpose": "study", "participant_id": pid,
                                      "payload": _payload(simple=simple)})
         assert response.status_code == 201, response.text
+        closed = client.post('/station/close', json={'actor': 'Dr Fixture', 'reason': 'Completed this participant visit before the next collection'})
+        assert closed.status_code == 200, closed.text
     _fill_visit(client, sample_csv_bytes, "P03")
     with Session(engine) as s:
         fit = s.exec(select(DepdfFit)).one()
@@ -78,6 +80,8 @@ def test_fits_endpoint_curve_uses_f(client, sample_csv_bytes):
         response = study_post(client, "/screen", json={"execution_purpose": "study", "participant_id": pid,
                                      "payload": _payload(simple=simple)})
         assert response.status_code == 201, response.text
+        closed = client.post('/station/close', json={'actor': 'Dr Fixture', 'reason': 'Completed this participant visit before the next collection'})
+        assert closed.status_code == 200, closed.text
     _fill_visit(client, sample_csv_bytes, "P01")
     fit = client.get("/fits").json()[0]
     assert fit["hcf_source"] == "screen"

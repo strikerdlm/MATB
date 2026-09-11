@@ -62,7 +62,7 @@ function SetupContent() {
   const [stationError, setStationError] = useState<string | null>(null);
 
   useEffect(() => {if(assigned.context) setParticipantId(assigned.context.participant_id);}, [assigned.context]);
-  const admission = useAssessmentAdmission(assigned.attempt && assigned.context ? {attemptId:assigned.attempt.id, participantId:assigned.context.participant_id, visitId:assigned.context.visit_id, purpose:assigned.attempt.execution_purpose, locale:assigned.context.locale} : null);
+  const admission = useAssessmentAdmission(assigned.attempt && assigned.context ? {attemptId:assigned.attempt.id, participantId:assigned.context.participant_id, visitId:assigned.context.visit_id, purpose:assigned.attempt.execution_purpose, locale:assigned.context.locale} : null, {runtime:true});
   const frozen = assigned.context?.config as {preset?:{id:string;version:string};instructions?:{id:string;version:string};visual?:{id:string;version:string}} | undefined;
   const checkStation = useCallback(async () => {
     const revision = ++stationRequest.current;

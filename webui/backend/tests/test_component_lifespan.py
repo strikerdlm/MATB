@@ -35,6 +35,14 @@ class Provider:
 
 
 def _disable_database_startup(monkeypatch: pytest.MonkeyPatch) -> None:
+    # This fixture isolates provider unwinding; station lifecycle is verified with
+    # a real engine by test_station_resources.
+    from app import station_resources, station_worker
+    monkeypatch.setattr(station_resources, "recover", lambda _engine: None)
+    monkeypatch.setattr(station_worker.StationWorker, "start", lambda _self: None)
+    async def stop_station(_self):
+        pass
+    monkeypatch.setattr(station_worker.StationWorker, "shutdown", stop_station)
     monkeypatch.setattr(main_module, "init_db", lambda **_kwargs: None)
     monkeypatch.setattr(main_module, "get_engine", lambda: object())
     monkeypatch.setattr(main_module, "selected_protocol", lambda: SimpleNamespace())

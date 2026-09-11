@@ -77,6 +77,10 @@ async def test_technical_session_launches_selected_profile_without_research_iden
     )
     assert finished.status_code == 200, finished.text
     debrief = await client.get(f"/simulation/sessions/{body['id']}/debrief")
+    if debrief.status_code == 202:
+        closed=await client.post("/station/close",json={"actor":"Dr Fixture","reason":"Assigned mission finished; inspect derived artifacts"})
+        assert closed.status_code == 200, closed.text
+        debrief=await client.get(f"/simulation/sessions/{session_id}/debrief")
     assert debrief.status_code == 200, debrief.text
     assert debrief.json()["record_class"] == "technical_only"
     assert debrief.json()["console_profile"] == body["console_profile"]
@@ -317,6 +321,8 @@ async def test_lifecycle_conflicts_and_terminal_artifacts(simulation_client, see
     )
     assert finished.status_code == 200, finished.text
     assert finished.json()["lifecycle"] == "FINISHED"
+    from tests.station_fixtures import close_and_drain
+    await close_and_drain(manager.persistence.engine)
 
     artifacts = await client.get(f"/simulation/sessions/{session_id}/artifacts")
     assert artifacts.status_code == 200
@@ -325,6 +331,10 @@ async def test_lifecycle_conflicts_and_terminal_artifacts(simulation_client, see
     assert all(not item.startswith("/") for item in artifact_paths)
 
     debrief = await client.get(f"/simulation/sessions/{session_id}/debrief")
+    if debrief.status_code == 202:
+        closed=await client.post("/station/close",json={"actor":"Dr Fixture","reason":"Assigned mission finished; inspect derived artifacts"})
+        assert closed.status_code == 200, closed.text
+        debrief=await client.get(f"/simulation/sessions/{session_id}/debrief")
     assert debrief.status_code == 200
     assert debrief.json()["timeline"] == []
     assert "/" not in debrief.text
@@ -351,7 +361,13 @@ async def test_public_bundle_excludes_private_run_files(simulation_client, seede
         headers=headers,
     )
     assert finished.status_code == 200
+    from tests.station_fixtures import close_and_drain
+    await close_and_drain(manager.persistence.engine)
     debrief = await client.get(f"/simulation/sessions/{session_id}/debrief")
+    if debrief.status_code == 202:
+        closed=await client.post("/station/close",json={"actor":"Dr Fixture","reason":"Assigned mission finished; inspect derived artifacts"})
+        assert closed.status_code == 200, closed.text
+        debrief=await client.get(f"/simulation/sessions/{session_id}/debrief")
     assert debrief.status_code == 200
     assert debrief.json()["session_id"] == session_id
     bundle = await client.get(f"/simulation/sessions/{session_id}/bundle")

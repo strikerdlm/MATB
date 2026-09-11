@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from importlib import import_module
 from pathlib import Path
 
+from app import station_resources  # register durable resource tables
 from sqlalchemy import event, inspect, text
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -83,6 +84,7 @@ def init_db(*, component_model_modules: tuple[str, ...] = ()) -> None:
     from app import (
         models,  # noqa: F401
         study_models,  # noqa: F401
+        station_resources,  # noqa: F401
         study_registry_models,  # noqa: F401
         study_analysis_models,  # noqa: F401
         purpose_models,
@@ -110,7 +112,11 @@ def init_db(*, component_model_modules: tuple[str, ...] = ()) -> None:
     _audit_sqlite_foreign_keys(_engine)
     from app.hcf_refresh import refresh_fit_hcf
     with Session(_engine) as session:
-        refresh_fit_hcf(session)
+        from app.station_resources import snapshot, enqueue
+        if snapshot(session)["reservation"]:
+            enqueue(session,"hcf_refresh",{});session.commit()
+        else:
+            refresh_fit_hcf(session)
 
 
 def _migrate_evidence_parent_v1(engine) -> None:

@@ -270,7 +270,7 @@ class SQLModelLiftoffPersistence:
         from app.study_admission import resolve_assignment
         with Session(self.engine) as db:
             context = resolve_assignment(db, attempt_id=request.attempt_id, instrument='liftoff', participant_id=request.participant_id,
-                visit_id=visit.id, purpose=request.execution_purpose, require_started=True,
+                visit_id=visit.id, purpose=request.execution_purpose, require_started=False,
                 config=dict(binding_id='liftoff-telemetry-all-v1', input_mapping='liftoff-telemetry-all-v1', configuration=request.configuration.model_dump(), scoring='liftoff-current'))
             if context and context['locale'] != request.locale:
                 from fastapi import HTTPException

@@ -1,3 +1,4 @@
+import { stationFetch } from "@/lib/station-fetch";
 import { getApiBase } from "@/lib/runtime-config";
 import type {
   CreateLiftoffSession,
@@ -20,7 +21,7 @@ export class LiftoffApiError extends Error {
 
 async function request(path: string, init: RequestInit): Promise<Response> {
   const base = await getApiBase();
-  return fetch(`${base}${path}`, init);
+  return stationFetch(`${base}${path}`, init);
 }
 
 async function checked<T>(response: Response): Promise<T> {

@@ -62,6 +62,8 @@ async def test_full_liftoff_collection_round_trip(liftoff_client):
         },
         headers={"X-Liftoff-Controller": lease},
     )).status_code == 201
+    closed = await client.post('/station/close', json={'actor': 'Dr Fixture', 'reason': 'All assigned collection and ratings complete; import post-visit physiology'})
+    assert closed.status_code == 200, closed.text
     rr_content = "\n".join(["800"] * 1900)
     manager.hrv_client = FakeHrvClient(valid_hrv_response(session["id"], session["id"]))
     assert (await client.post(

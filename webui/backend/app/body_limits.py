@@ -66,6 +66,14 @@ class ScientificRequestBodyLimitMiddleware:
             limit = 128 * 1024
             too_large_code = "evidence_selection_too_large"
             noun = "evidence analysis selection"
+        elif route[1].startswith('/liftoff/sessions/') and route[1].endswith(('/results','/physiology-link')):
+            limit = 6 * 1024 * 1024
+            too_large_code = 'liftoff_upload_too_large'
+            noun = 'Liftoff source upload'
+        elif route[1] in {'/pvt','/screen'}:
+            limit = 8 * 1024 * 1024
+            too_large_code = 'assessment_body_too_large'
+            noun = 'bounded raw assessment'
         elif route == ("POST", "/exports/research-bundle"):
             limit = MAX_RESEARCH_BUNDLE_BODY_BYTES
             too_large_code = "research_bundle_request_too_large"

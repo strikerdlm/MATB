@@ -276,6 +276,8 @@ class OpenMatbManager:
         self.records = OpenMatbRecords(engine, self.artifact_root)
         self._evidence_task: asyncio.Task[None] | None = None
         self._processing_evidence = False
+        from app.station_worker import MANAGERS
+        MANAGERS[str(engine.url)] = self
         self._closing = False
         self._seed_defaults()
         self._seed_english_instructions()
@@ -443,16 +445,20 @@ class OpenMatbManager:
             await self._process_evidence()
 
     async def _process_evidence(self) -> None:
+        from app.station_resources import enqueue_source, claim_job
+        from app.station_worker import execute_internal
         while not self._closing:
             async with self._lock:
-                if self._handles or self._preview.handle is not None or self._native_recovery_required():
-                    return
+                if self._handles or self._preview.handle is not None or self._native_recovery_required(): return
                 pending = self.records.pending()
-                if not pending:
-                    return
+                if not pending: return
+                with Session(self.engine, expire_on_commit=False) as db:
+                    jobs = [enqueue_source(db, 'native_evidence', {'attempt_id': identity}) for identity in pending[:32]]
+                    job = claim_job(db, jobs[0].id);db.commit()
+                if job is None: return
                 self._processing_evidence = True
             try:
-                await asyncio.to_thread(self.records.process, pending[0])
+                await execute_internal(self.engine, job)
             finally:
                 self._processing_evidence = False
 
@@ -1102,6 +1108,8 @@ class OpenMatbManager:
                 if scenario.parent != Path(row.artifact_root).resolve() / "scenarios" or not scenario.is_file():
                     raise OpenMatbRuntimeError("openmatb_scenario_missing")
                 visual_profile_path = self._verified_session_visual_profile_path(row)
+                from app.station_resources import admit_source
+                admit_source(db, row, held=preparation_only, initializing=preparation_only)
                 if preparation_only:
                     from types import SimpleNamespace
                     attempt = SimpleNamespace(id=str(uuid4()))
@@ -1138,6 +1146,8 @@ class OpenMatbManager:
                 try:
                     process = await asyncio.create_subprocess_exec(*command, **kwargs)
                 except OSError as exc:
+                    from app.station_resources import finish
+                    finish(db,"openmatb_suite_session:"+session_id)
                     row.lifecycle = "FAILED"; row.active_pid = None; row.last_error = "openmatb_launch_failed"
                     row.finished_at = _utcnow()
                     self.records.finish(db, row, outcome="failed", csv=None)
@@ -1149,6 +1159,8 @@ class OpenMatbManager:
                 except OSError as exc:
                     process.terminate()
                     await process.wait()
+                    from app.station_resources import finish
+                    finish(db,"openmatb_suite_session:"+session_id)
                     row.lifecycle = "FAILED"; row.active_pid = None; row.last_error = "openmatb_job_assignment_failed"
                     row.finished_at = _utcnow()
                     self.records.finish(db, row, outcome="failed", csv=None)
@@ -1159,6 +1171,8 @@ class OpenMatbManager:
                 self._handles[session_id] = handle
                 row.lifecycle = "PREFLIGHT_STARTING" if preparation_only else "STARTING"
                 row.active_pid = process.pid
+                from app.station_resources import admit_source
+                admit_source(db, row, held=preparation_only, pid=process.pid, initializing=preparation_only)
                 if not preparation_only: row.started_at = row.started_at or _utcnow()
                 row.last_error = None
                 db.add(row); db.commit()
@@ -1196,6 +1210,8 @@ class OpenMatbManager:
                         self._set_failure(session_id, 'openmatb_preflight_snapshot_missing')
                         raise OpenMatbRuntimeError('openmatb_preflight_snapshot_missing')
                     retain_snapshot(db, row, handle)
+                    from app.station_resources import admit_source
+                    admit_source(db,row,held=True,pid=handle.process.pid)
                     row.lifecycle = "PREFLIGHT_HELD"
                     db.add(row); db.commit(); db.refresh(row)
                 else:
@@ -1223,6 +1239,8 @@ class OpenMatbManager:
             raise OpenMatbRuntimeError('openmatb_preflight_closed')
         validate_release(db, row, handle)
         task = source_attempt(db, 'openmatb_suite_session', row.id)
+        from app.station_resources import admit_source
+        admit_source(db, row, pid=handle.process.pid)
         transition(db, task.id, 'started', native_session_id=row.id)
         block = json.loads(row.block_order_json)[row.current_block_index]
         record = self.records.begin(db, row, block, block_instance_id=handle.block_instance_id)
@@ -1270,6 +1288,9 @@ class OpenMatbManager:
             with Session(self.engine) as db:
                 profile = self._visual_profile_row(db, profile_id, version)
                 payload = self._validated_visual_profile_payload(profile)
+            with Session(self.engine) as db:
+                from app.station_resources import admit
+                admit(db,"native-preview",instrument="openmatb",owner="standalone:native-preview");db.commit()
             preview_id = str(uuid4())
             preview_root = (self.preview_root / preview_id).resolve()
             if preview_root.parent != self.preview_root.resolve():
@@ -1320,6 +1341,9 @@ class OpenMatbManager:
             try:
                 process = await asyncio.create_subprocess_exec(*command, **kwargs)
             except OSError as exc:
+                with Session(self.engine) as db:
+                    from app.station_resources import finish
+                    finish(db,"native-preview");db.commit()
                 self._preview = _PreviewState(
                     lifecycle="FAILED",
                     profile_id=profile_id,
@@ -1334,6 +1358,9 @@ class OpenMatbManager:
             except OSError as exc:
                 process.terminate()
                 await process.wait()
+                with Session(self.engine) as db:
+                    from app.station_resources import finish
+                    finish(db,"native-preview");db.commit()
                 self._preview = _PreviewState(
                     lifecycle="FAILED",
                     profile_id=profile_id,
@@ -1343,6 +1370,9 @@ class OpenMatbManager:
                     last_error="openmatb_job_assignment_failed",
                 )
                 raise OpenMatbRuntimeError("openmatb_job_assignment_failed") from exc
+            with Session(self.engine) as db:
+                from app.station_resources import admit
+                admit(db,"native-preview",instrument="openmatb",owner="standalone:native-preview",pid=process.pid);db.commit()
             handle = _ProcessHandle(
                 session_id=f"preview-{preview_id}",
                 block="PREVIEW",
@@ -1410,6 +1440,9 @@ class OpenMatbManager:
             if handle.windows_job is not None:
                 handle.windows_job.close()
         async with self._lock:
+            with Session(self.engine) as db:
+                from app.station_resources import finish
+                finish(db,"native-preview");db.commit()
             if self._preview.handle is not handle:
                 return
             self._preview.handle = None
@@ -1429,6 +1462,9 @@ class OpenMatbManager:
             self._preview.handle = None
             self._preview.lifecycle = "IDLE"
             self._preview.last_error = None
+            with Session(self.engine) as db:
+                from app.station_resources import finish
+                finish(db,"native-preview");db.commit()
             self.schedule_evidence_processing()
             return self._preview_view()
 
@@ -1476,6 +1512,8 @@ class OpenMatbManager:
                 handle.windows_job.close()
         async with self._lock:
             with Session(self.engine) as db:
+                from app.station_resources import finish
+                finish(db,"openmatb_suite_session:"+handle.session_id);db.commit()
                 row = db.get(OpenMatbSuiteSession, handle.session_id)
                 if row is None or row.lifecycle in {"ABORTED", "FAILED", "INTERRUPTED"}:
                     self._handles.pop(handle.session_id, None)
@@ -1772,4 +1810,7 @@ class OpenMatbManager:
             self._handles.clear()
         # Do not cancel a to_thread import: its DB work would outlive the gate.
         if self._evidence_task is not None:
-            await self._evidence_task
+            done, _ = await asyncio.wait({self._evidence_task}, timeout=30)
+            if not done:
+                raise RuntimeError("Native evidence worker still active; backend ownership must be retained.")
+            self._evidence_task.result()

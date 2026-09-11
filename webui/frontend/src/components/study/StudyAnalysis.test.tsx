@@ -66,6 +66,9 @@ describe("StudyAnalysis", () => {
     );
     expect(screen.getByText(/Included in denominator/)).toBeInTheDocument();
     expect(
+      screen.getByRole("link", { name: "Original evidence" }),
+    ).toHaveAttribute("href", "/api/assessments/occasions/o1");
+    expect(
       call.mock.calls.filter((c) => c[0] === "/analyses" && c[1] !== undefined),
     ).toHaveLength(0);
   });

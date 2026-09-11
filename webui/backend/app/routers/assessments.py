@@ -69,6 +69,17 @@ def repeat(identity: str, body: RepeatIn, db: Session = Depends(get_session)):
 
 @router.post('/attempts/{identity}/start')
 def start(identity: str, db: Session = Depends(get_session)):
+    attempt = service.get_attempt(db, identity)
+    occasion = db.get(AssessmentOccasion, attempt.occasion_id)
+    if occasion.instrument not in {'pvt', 'screen', 'questionnaire'}:
+        raise HTTPException(409, {'code':'runtime_start_required','message':'Start this attempt through its instrument controller.'})
+    from app.station_resources import admit_attempt, lock
+    import json
+    station = lock(db)
+    if identity in json.loads(station.lanes_json):
+        raise HTTPException(409, {"code":"browser_already_acquiring","message":"This attempt already owns a browser acquisition. Close it and recover explicitly if ownership was lost."})
+    if occasion.instrument != "questionnaire":
+        admit_attempt(db, attempt)
     row = service.transition(db, identity, 'started')
     db.commit()
     return service.attempt_view(db, row)
@@ -76,6 +87,10 @@ def start(identity: str, db: Session = Depends(get_session)):
 
 @router.post('/attempts/{identity}/finish')
 def finish(identity: str, db: Session = Depends(get_session)):
+    attempt = service.get_attempt(db, identity)
+    occasion = db.get(AssessmentOccasion, attempt.occasion_id)
+    if occasion.instrument not in {'pvt', 'screen', 'questionnaire'}:
+        raise HTTPException(409, 'Stop this acquisition through its instrument controller.')
     row = service.transition(db, identity, 'finished')
     db.commit()
     return service.attempt_view(db, row)
@@ -83,6 +98,10 @@ def finish(identity: str, db: Session = Depends(get_session)):
 
 @router.post('/attempts/{identity}/interrupt')
 def interrupt(identity: str, body: InterruptIn, db: Session = Depends(get_session)):
+    attempt = service.get_attempt(db, identity)
+    occasion = db.get(AssessmentOccasion, attempt.occasion_id)
+    if occasion.instrument not in {'pvt', 'screen', 'questionnaire'}:
+        raise HTTPException(409, 'Stop this acquisition through its instrument controller.')
     row = service.transition(db, identity, 'interrupted', body.category)
     db.commit()
     return service.attempt_view(db, row)

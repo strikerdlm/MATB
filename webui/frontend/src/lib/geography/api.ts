@@ -1,3 +1,4 @@
+import { stationFetch } from "@/lib/station-fetch";
 import { getApiBase } from "@/lib/runtime-config";
 import type { SceneManifest } from "@/lib/simulation/presentation/contracts";
 import type {
@@ -16,7 +17,7 @@ export async function geographyRequest<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
-  const response = await fetch(`${await getApiBase()}/geography${path}`, init);
+  const response = await stationFetch(`${await getApiBase()}/geography${path}`, init);
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(

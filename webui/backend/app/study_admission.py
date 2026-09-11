@@ -31,7 +31,7 @@ def for_occasion(db, occasion_id):
                 occasion_key=key, occasion_id=occasion_id, **spec, rules=study['rules'],
                 study_id=study['study_id'], assigned_visit=next(v for v in study['visits'] if v['ordinal'] == spec['visit_ordinal']),
                 schedule_sha256=__import__('hashlib').sha256(canonical(study['visits']).encode()).hexdigest(),
-                recovery_intervals=study['recovery_intervals'], preparation_policy=[p for p in study['preparation_policy'] if p['occasion_key'] in json.loads(assignment.occasions_json)], repeat_policy=study['repeat_policy'], interruption_policy=study['interruption_policy'], analysis_gate='explicit_frozen_descriptive' , preparation_gate='measured', resource_gate='not_implemented')
+                recovery_intervals=study['recovery_intervals'], preparation_policy=[p for p in study['preparation_policy'] if p['occasion_key'] in json.loads(assignment.occasions_json)], repeat_policy=study['repeat_policy'], interruption_policy=study['interruption_policy'], analysis_gate='explicit_frozen_descriptive' , preparation_gate='measured', resource_gate='station_whole_visit_v1')
     _required()
 
 
@@ -99,7 +99,7 @@ def require_prerequisites(db, attempt_id, context):
         if not recorded or not recorded.ended_at: _required('Complete the authored recovery interval before this assessment.')
 
 
-def guard_source(db, row, *, require_started=True):
+def guard_source(db, row, *, require_started=False):
     """Gate resume/start of pre-existing runtime sources too; legacy study is read-only."""
     from .assessment_adapters import source_attempt, SOURCE_INSTRUMENTS
     if getattr(row, 'execution_purpose', 'study') != 'study': return None
@@ -113,9 +113,12 @@ def sync_runtime_attempt(db, source, *, state, cause='unknown'):
     """Only assigned sources receive known live transitions; legacy timestamps stay unknown."""
     from .assessment_adapters import source_attempt
     from .assessment_service import transition
+    if state in {'finished', 'interrupted'}:
+        from .station_resources import finish
+        finish(db, source.__tablename__+':'+str(source.id))
     try:
         attempt = source_attempt(db, source.__tablename__, str(source.id))
-        for_occasion(db, attempt.occasion_id)
+        if attempt.execution_purpose == "study": for_occasion(db, attempt.occasion_id)
     except HTTPException: return
     if attempt.acquisition_state in {'finished', 'interrupted'}: return
     if state == 'started' and attempt.acquisition_state == 'created': transition(db, attempt.id, state)

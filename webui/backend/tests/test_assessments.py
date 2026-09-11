@@ -63,6 +63,7 @@ def test_repeated_screen_is_one_battery_and_legacy_cohort_refuses_ambiguity(clie
         r = study_post(client, '/screen', json={'participant_id': 'P01', 'execution_purpose': 'study', 'attempt_id': a['id'], 'payload': screen_payload(300 + i)})
         assert r.status_code == 201, r.text
         assert client.get(f"/assessments/attempts/{a['id']}/raw").json()['record']['raw_trials_json']
+    assert client.post('/station/close',json={'actor':'Dr Fixture','reason':'Collection finished; inspect exploratory cohort'}).status_code == 200
     assert client.get('/screen').status_code == 409
 
 
@@ -165,6 +166,7 @@ def test_known_practice_classification_excluded_from_legacy_screen_cohort(client
     _enroll(client)
     row = study_post(client, '/screen', json={'participant_id': 'P01', 'execution_purpose': 'study', 'payload': screen_payload()}).json()
     assert client.post(f"/purpose-provenance/{row['purpose_provenance_id']}/classifications", json={'purpose': 'practice', 'reviewer': 'Researcher', 'reason': 'practice confirmed'}).status_code == 201
+    assert client.post('/station/close',json={'actor':'Dr Fixture','reason':'Collection finished; inspect classification'}).status_code == 200
     assert client.get('/screen').json()['screens'] == []
 
 
@@ -211,7 +213,11 @@ def test_optional_source_binds_predeclared_attempt_without_redeclaring_purpose(c
     from app.purpose_service import declare_acquisition, provenance_view
     from sqlmodel import Session
     _enroll(client)
-    a = attempt(client, occasion(client, 'physiology', collection_group_id='collection-A'))
+    occ = occasion(client, 'physiology', collection_group_id='collection-A')
+    response=client.post(f"/assessments/occasions/{occ['id']}/attempts",json={'execution_purpose':'study'})
+    assert response.status_code == 201
+    a=response.json()
+    assert client.post(f"/assessments/attempts/{a['id']}/start").status_code == 409  # Actual H10 controller owns timed admission.
     with Session(engine) as db:
         source = PolarCaptureRecord(id='capture-A', participant_id='P01', matb_session_kind='generic', matb_session_id='generic-A', device_alias='H10', lifecycle='prepared', execution_purpose='study', requested_settings_json='{}', controller_lease_hash='secret-hash')
         identity = declare_acquisition(db, source, purpose='study', attempt_id=a['id'])

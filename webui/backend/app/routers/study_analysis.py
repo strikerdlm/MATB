@@ -1,7 +1,7 @@
 """Researcher-triggered descriptive executions and immutable offline export."""
 import io
 import zipfile
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Response, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import Session, select
 from app.db import get_session
@@ -32,15 +32,15 @@ def catalog():
 
 
 @router.post('/preview')
-def preview(body: ExecutionRequest,db: Session=Depends(get_session)):
-    return service.preview(db,body.model_dump())
+def preview(body: ExecutionRequest,request: Request,db: Session=Depends(get_session)):
+    return service.preview(db,{**body.model_dump(), **({"_selection_cutoff": request.scope["station_selection_cutoff"]} if request.scope.get("station_selection_cutoff") else {})})
 
 
 @router.post('',status_code=201)
-def execute(body: ExecutionRequest,db: Session=Depends(get_session)):
+def execute(body: ExecutionRequest,request: Request,db: Session=Depends(get_session)):
     from app.study_registry import lock_registry
     lock_registry(db)
-    row=service.execute(db,body.model_dump()); db.commit()
+    row=service.execute(db,{**body.model_dump(), **({"_selection_cutoff": request.scope["station_selection_cutoff"]} if request.scope.get("station_selection_cutoff") else {})}); db.commit()
     return service.read(db,row.id)
 
 
@@ -56,9 +56,9 @@ def hcf(db: Session=Depends(get_session)):
 
 
 @router.post('/inputs',status_code=201)
-def freeze_input(body: ExecutionRequest,db: Session=Depends(get_session)):
+def freeze_input(body: ExecutionRequest,request: Request,db: Session=Depends(get_session)):
     from app.study_registry import lock_registry
-    lock_registry(db); row=service.freeze_input(db,body.model_dump());db.commit()
+    lock_registry(db); row=service.freeze_input(db,{**body.model_dump(), **({"_selection_cutoff": request.scope["station_selection_cutoff"]} if request.scope.get("station_selection_cutoff") else {})});db.commit()
     return row
 
 
@@ -70,7 +70,15 @@ def execute_input(input_id: str,db: Session=Depends(get_session)):
 
 
 @router.get('/{identity}')
-def read(identity: str,db: Session=Depends(get_session)): return service.read(db,identity)
+def read(identity: str,db: Session=Depends(get_session)):
+    result=service.read(db,identity,current=False)
+    result['current_applicability']=dict(status='pending',changed=None,message='Frozen saved evidence. Request current applicability refresh when the station is idle.')
+    return result
+
+
+@router.post('/{identity}/refresh')
+def refresh(identity: str,db: Session=Depends(get_session)):
+    return service.read(db,identity)
 
 
 @router.get('/{identity}/export')

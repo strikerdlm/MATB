@@ -86,6 +86,8 @@ async def test_hrv_outage_leaves_retryable_pending_link(liftoff_client):
     client, manager = liftoff_client
     session, lease = await prepared_session(liftoff_client)
     await finish_phases(client, session["id"], lease)
+    closed = await client.post('/station/close', json={'actor': 'Dr Fixture', 'reason': 'All assigned collection and ratings complete; import post-visit physiology'})
+    assert closed.status_code == 200, closed.text
     rr_content = "\n".join(["800"] * 1900)
     manager.hrv_client = FakeHrvClient(error=HrvTaskTemporaryError("hrv_unavailable"))
     files = {

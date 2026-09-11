@@ -111,7 +111,6 @@ async def lifespan(app: FastAPI):
         for provider in _COMPONENT_PROVIDERS
         for module in provider.model_modules
     )
-    init_db(component_model_modules=model_modules)
     from app.routers.analysis import (
         acquire_backend_instance_lease,
         reconcile_interrupted_bayes_jobs,
@@ -123,6 +122,9 @@ async def lifespan(app: FastAPI):
     acquire_backend_instance_lease(engine)
     release_lease = True
     try:
+        init_db(component_model_modules=model_modules)
+        from app.station_resources import recover
+        recover(engine)
         ensure_study_binding(engine, selected_protocol())
         reconcile_interrupted_bayes_jobs(engine)
         from app.evidence_service import recover_evidence_runs
@@ -135,9 +137,15 @@ async def lifespan(app: FastAPI):
                     # all callbacks if an earlier shutdown raises.
                     cleanup.push_async_callback(provider.shutdown, app)
                     await provider.startup(app)
+                from app.station_worker import StationWorker
+                worker = StationWorker(engine, app.router, application=app)
+                app.state.station_worker = worker
+                worker.start()
                 yield
         finally:
             try:
+                if hasattr(app.state, "station_worker"):
+                    await app.state.station_worker.shutdown()
                 shutdown_bayes_jobs(engine)
             except BaseException:
                 # A live compute thread can still write through this process.
@@ -185,12 +193,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+from app.station_http import StationWorkMiddleware
 app.add_middleware(ScientificRequestBodyLimitMiddleware)
+app.add_middleware(StationWorkMiddleware)
 app.add_middleware(LoopbackRequestSecurityMiddleware, settings=app.state)
 
 
 _CORE_ROUTER_MODULES = (
     "app.routers.analysis",
+    "app.routers.station",
     "app.routers.assessments",
     "app.routers.experiments",
     "app.routers.exports",

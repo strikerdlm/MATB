@@ -106,6 +106,9 @@ def transition(db, identity, state, category=None, *, native_session_id=None):
                     raise HTTPException(409, 'Native release must bind this exact attempt.')
         from .study_preparation import freeze_preparation_admission
         freeze_preparation_admission(db, row, context)
+    if state in {'finished', 'interrupted'}:
+        from .station_resources import finish
+        finish(db, row.id, uncertain=state == 'interrupted' and category == 'unknown')
     row.acquisition_state = state
     if state == 'started':
         row.started_at = now()

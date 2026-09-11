@@ -120,7 +120,7 @@ export interface AssignmentContext extends StudyOccasion {
   occasion_id: string;
   rules: StudyPayload["study"]["rules"];
   preparation_gate: "measured";
-  resource_gate: "not_implemented";
+  resource_gate: "station_whole_visit_v1" | "not_implemented";
 }
 export async function studyCall<T>(
   path: string,
