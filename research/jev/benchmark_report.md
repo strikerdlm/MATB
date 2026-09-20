@@ -10,3 +10,7 @@ time and all comparative performance estimates are **not available**. Consequent
 there is no evidence-based keep decision yet; the component remains experimental
 and default-off. A future negative or null result is an acceptable outcome and
 must be reported under the frozen evaluation protocol.
+
+20 September follow-up: offline lexical and evaluation tooling is implemented
+and tested using synthetic arithmetic/edge cases. See `evaluation_tooling.md`.
+This changes software availability only; the empirical status above is unchanged.

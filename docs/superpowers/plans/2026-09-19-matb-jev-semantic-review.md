@@ -49,5 +49,9 @@ Future causal-time prediction and shadow-policy work require separate gates.
 
 ## Verification status
 
-Implementation in progress. No provider smoke test, physical timing measurement,
-participant validation or release qualification has been performed.
+The initial synthetic-only implementation was merged in PR #72. The remaining
+software workflow and offline evaluation tooling are completed in the
+[20 September follow-up](2026-09-20-jev-review-completion.md); see its
+[verification report](../../reports/2026-09-20-jev-review-completion.md).
+No authenticated provider smoke test, physical timing measurement, participant
+validation or participant-enabled release qualification has been performed.
