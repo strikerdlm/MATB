@@ -12,6 +12,7 @@ from app.db import get_engine
 
 # Explicit workload inventory; read-only metadata, markers, stop and raw closure stay available.
 HEAVY = [
+    ('GET',r'/inference/runs/[^/]+/export'),
     ('POST',r'/ingest(?:/evidence)?'),
     ('POST',r'/analysis/(?:run|bayes/run|liftoff/run)'),
     ('POST',r'/evidence/captures/[^/]+/reconcile'),
