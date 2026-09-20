@@ -154,3 +154,7 @@ are described in the [follow-up implementation](evidence-review-qualification-pe
 
 See the [original dated local verification report](../reports/classic-evidence-verification-2026-09-09.md)
 for observed test results, the browser evidence and remaining release gates.
+
+## Optional experimental semantic review
+
+See [semantic review](semantic-review.md) for the separate default-off inference ledger. Its assessments are excluded from scientific metrics and frozen metric selection.
