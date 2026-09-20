@@ -1,0 +1,11 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "title":"MATB debrief independent semantic labels v1",
+  "type":"object","additionalProperties":false,
+  "required":["reported_task_tradeoff","automation_belief","reported_instruction_difficulty"],
+  "properties":{
+    "reported_task_tradeoff":{"enum":["present","explicit_absence","unmentioned","insufficient_evidence"]},
+    "automation_belief":{"enum":["expected_active","expected_inactive","conflicting","not_stated","insufficient_evidence"]},
+    "reported_instruction_difficulty":{"enum":["present","explicit_absence","unmentioned","insufficient_evidence"]}
+  }
+}
