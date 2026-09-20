@@ -66,6 +66,8 @@ def test_model_exposure_prevents_later_blinded_label(engine):
     app.dependency_overrides[get_session]=session
     async def check():
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://testserver') as client:
+            empty=await client.post('/inference/runs/r2/reviews',json={'reviewer':'fresh-rater','activity':'blinded_reference','labels_json':'{}'})
+            assert empty.status_code==422
             hidden=(await client.get('/inference/runs/r')).json()
             assert hidden.get('result_json') is None
             shown=await client.get('/inference/runs/r?reviewer=rater&include_answers=true')
