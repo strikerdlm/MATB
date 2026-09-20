@@ -8,7 +8,14 @@ from app import station_resources as resources
 async def execute_internal(engine,job):
     payload=json.loads(job.payload_json)
     try:
-        if job.kind=='native_evidence':
+        if job.kind=='semantic_review':
+            from app.inference_service import execute_semantic_job, fail_semantic_job
+            try:
+                await execute_semantic_job(engine,job)
+            except Exception:
+                fail_semantic_job(engine,job)
+                raise RuntimeError('semantic_review_failed') from None
+        elif job.kind=='native_evidence':
             # Manager provides its existing source authority; durable attempt remains queued on restart.
             from app.station_worker import MANAGERS
             manager=MANAGERS.get(str(engine.url))

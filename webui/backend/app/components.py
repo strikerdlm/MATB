@@ -27,6 +27,7 @@ class ConsoleComponentProvider(Protocol):
 
 
 _OPTIONAL_ENTRYPOINTS = {
+    "matb-semantic-review": "app.inference_component:provider",
     "matb-liftoff": "app.liftoff_component:provider",
     "matb-openmatb": "app.openmatb_component:provider",
     "matb-physiology": "app.physiology_component:provider",
@@ -121,8 +122,11 @@ def _selected_optional_components(raw: str | None) -> tuple[tuple[str, str], ...
     if selection == "core":
         return ()
     if selection == "auto":
-        return tuple(sorted(_OPTIONAL_ENTRYPOINTS.items()))
+        return tuple(sorted((key, value) for key, value in _OPTIONAL_ENTRYPOINTS.items()
+            if key != 'matb-semantic-review' or os.getenv('MATB_ENABLE_SEMANTIC_REVIEW') == '1'))
     requested = tuple(part.strip() for part in selection.split(","))
+    if 'matb-semantic-review' in requested and os.getenv('MATB_ENABLE_SEMANTIC_REVIEW') != '1':
+        raise ValueError('MATB_ENABLE_SEMANTIC_REVIEW=1 is required')
     if any(not part for part in requested):
         raise ValueError("MATB_COMPONENTS must not contain empty component IDs")
     unknown = sorted(set(requested) - set(_OPTIONAL_ENTRYPOINTS))
