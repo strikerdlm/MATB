@@ -68,8 +68,13 @@ def test_model_exposure_prevents_later_blinded_label(engine):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://testserver') as client:
             empty=await client.post('/inference/runs/r2/reviews',json={'reviewer':'fresh-rater','activity':'blinded_reference','labels_json':'{}'})
             assert empty.status_code==422
-            valid=await client.post('/inference/runs/r2/reviews',json={'reviewer':'fresh-rater','activity':'blinded_reference','labels_json':'{"reported_task_tradeoff":"present","automation_belief":"not_stated","reported_instruction_difficulty":"unmentioned"}'})
+            valid=await client.post('/inference/runs/r2/reviews',json={'reviewer':'fresh-rater','activity':'blinded_reference','elapsed_seconds':12.5,'labels_json':'{"reported_task_tradeoff":"present","automation_belief":"not_stated","reported_instruction_difficulty":"unmentioned"}'})
             assert valid.status_code==201
+            with Session(engine) as db:
+                from app.inference_models import InferenceReview
+                from sqlmodel import select
+                timing=db.exec(select(InferenceReview).where(InferenceReview.activity=='coding_timing')).one()
+                assert '12.5' in timing.content_json
             hidden=(await client.get('/inference/runs/r')).json()
             assert hidden.get('result_json') is None
             shown=await client.get('/inference/runs/r?reviewer=rater&include_answers=true')

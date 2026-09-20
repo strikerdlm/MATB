@@ -113,6 +113,7 @@ async def execute_semantic_job(engine, job):
     from matb_integration.inference.response_validation import validate_response
     payload = json.loads(job.payload_json)
     with Session(engine) as db:
+        resources.lock(db)  # Serialize the approval check with local revocation.
         owner = db.get(resources.StationJob, job.id)
         state = db.get(resources.StationState, 1)
         if owner is None or owner.status != 'running' or state is None or state.maintenance or json.loads(state.reservation_json) or json.loads(state.lanes_json):
@@ -212,6 +213,29 @@ def export_bundle(db, identity):
     if row is None or sha256(row.content)!=row.sha256:
         raise InferenceError('attempt_unavailable')
     attempt=ProviderAttempt.model_validate_json(row.content)
-    reviews=[r.model_dump() for r in db.exec(select(InferenceReview).where(InferenceReview.owner_id==identity,
-        InferenceReview.activity.in_(['blinded_reference','adjudication','status']))).all()]
-    return build_bundle(value,attempt,reviews,disposition=run.status)
+    chain=[]
+    annotation_id=value.annotation_id
+    while annotation_id:
+        if len(chain)>=100 or any(n['annotation_id']==annotation_id for n in chain):
+            raise InferenceError('annotation_chain_invalid')
+        note=db.get(InferenceAnnotation,annotation_id)
+        if note is None:
+            raise InferenceError('annotation_unavailable')
+        parsed=ReviewAnnotationV1.model_validate_json(note.content_json)
+        if sha256(parsed)!=note.content_hash or parsed.capture_id!=value.capture_id:
+            raise InferenceError('annotation_integrity')
+        chain.append(parsed.model_dump(mode='json'))
+        annotation_id=parsed.supersedes_annotation_id
+    approval=read_artifact(db,run.authorization_id,'authorization')
+    siblings=db.exec(select(InferenceRun).where(InferenceRun.input_identity==run.input_identity)).all()
+    owners=[r.id for r in siblings]+[r.authorization_id for r in siblings]
+    history=db.exec(select(InferenceReview).where(InferenceReview.owner_id.in_(owners))
+        .order_by(InferenceReview.created_at_ns,InferenceReview.id).limit(2001)).all()
+    if len(history)>2000:
+        raise InferenceError('audit_export_limit')
+    audit_rows=[r.model_dump() for r in history]
+    reviews=[r for r in audit_rows if r['activity'] in {'blinded_reference','adjudication','status'}]
+    provenance={'annotations':chain,'approval':json.loads(approval.content),'approval_json':approval.content.decode('utf-8'),
+        'approval_hash':approval.sha256,'approval_id':approval.id,'run_id':run.id,
+        'input_identity':run.input_identity,'audit':audit_rows}
+    return build_bundle(value,attempt,reviews,disposition=run.status,provenance=provenance)
