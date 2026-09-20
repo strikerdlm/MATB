@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { EventReview } from "./EventReview";
+import { SemanticReviewPanel } from "./SemanticReviewPanel";
 import { metricDisplay, exclusionText } from "@/lib/evidence-display";
 import { Button } from "@/components/ui/button";
 import { useAppLocale } from "@/lib/i18n";
@@ -141,5 +142,6 @@ export function EvidenceInspector({ capture }: { capture: EvidenceCapture }) {
         </>}
       </div>
     </div>
+    <SemanticReviewPanel capture={capture} />
   </section>;
 }
