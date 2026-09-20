@@ -21,7 +21,8 @@ class JevProvider:
         if (os.getenv('MATB_JEV_PROVIDER','jev_ai_pro')!='jev_ai_pro' or
                 os.getenv('MATB_JEV_MODEL','jev-1.13.0')!='jev-1.13.0' or payload.get('model')!='jev-1.13.0'):
             return result('not_sent',error_code='disabled')
-        key = os.getenv('JEV_AI_API_KEY')
+        from matb_integration.local_credentials import get_api_key
+        key = get_api_key('jev')
         if not key:
             return result('not_sent', error_code='missing_key')
         raw = canonical_bytes(payload)

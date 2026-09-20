@@ -11,8 +11,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import shutil
+import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,7 +20,6 @@ from pathlib import Path
 from openai import OpenAI
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-LOCAL_ENV_PATH = REPOSITORY_ROOT / ".env.local"
 OUTPUT_ROOT = REPOSITORY_ROOT / "webui" / "frontend" / "public" / "audio" / "instructions"
 MANIFEST_PATH = OUTPUT_ROOT / "manifest.json"
 MODEL = "tts-1-hd"
@@ -135,25 +134,11 @@ SCRIPTS = {
 }
 
 
-def _read_env_value(path: Path, name: str) -> str | None:
-    if not path.is_file():
-        return None
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        if key.strip() != name:
-            continue
-        value = value.strip()
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
-            value = value[1:-1]
-        return value or None
-    return None
-
-
 def load_api_key() -> str:
-    key = os.environ.get("OPENAI_API_KEY") or _read_env_value(LOCAL_ENV_PATH, "OPENAI_API_KEY")
+    if str(REPOSITORY_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPOSITORY_ROOT))
+    from matb_integration.local_credentials import get_api_key
+    key = get_api_key('openai', repository_root=REPOSITORY_ROOT)
     if not key:
         raise RuntimeError("OPENAI_API_KEY is unavailable; use the secure key setup flow")
     return key
