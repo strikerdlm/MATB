@@ -16,18 +16,20 @@ test('synthetic semantic workflow preserves blind labels and exact outbound prev
     if(url.pathname==='/capabilities')body={components:[{component_id:'matb-semantic-review'}]};
     else if(url.pathname==='/evidence/captures')body={total:0,items:[],offset:0,limit:25};
     else if(url.pathname==='/evidence/captures/c')body=capture;
-    else if(url.pathname==='/inference/annotations')body={id:'n'};
+    else if(url.pathname==='/inference/annotations')body=route.request().method()==='POST'?{id:'n'}:{items:[],next_offset:null};
     else if(url.pathname==='/inference/previews')body={id:'p',status:'queued'};
     else if(url.pathname==='/inference/previews/p')body={id:'p',status:'ready',preview_hash:'d'.repeat(64),payload,
       lineage:{payload_hash:'e'.repeat(64),exclusions_json:'[]',evidence_run_id:'er'}};
     else if(url.pathname==='/inference/runs' && route.request().method()==='POST'){
       submissions++;body={id:'r',job_id:'j',status:'queued',result_json:null};
-    }else if(url.pathname==='/inference/runs/r/reviews'){
-      labelsSubmitted=true;body={id:'review',activity:'blinded_reference'};
+    }else if(url.pathname==='/inference/runs')body={items:submissions?[{id:'r',status:'valid',preview_id:'p'}]:[],next_offset:null};
+    else if(url.pathname==='/inference/runs/r/reviews'){
+      if(route.request().method()==='POST'){expect(route.request().postDataJSON().elapsed_seconds).toBeGreaterThanOrEqual(0);labelsSubmitted=true;body={id:'review',activity:'blinded_reference'};}
+      else body={items:[{id:'review',reviewer:'synthetic-rater',activity:'blinded_reference',created_at_ns:'9007199254740993',content_json:'{"automation_belief":"not_stated"}'}],next_offset:null};
     }else if(url.pathname==='/inference/runs/r'){
       if(url.searchParams.get('include_answers')==='true')expect(labelsSubmitted).toBe(true);
-      body={id:'r',job_id:'j',status:'valid',result_json:url.searchParams.get('include_answers')==='true'
-        ?JSON.stringify({answers_json:'{"reported_task_tradeoff":{"type":"noul","noul":0.8}}',requested_model:'jev-1.13.0',resolved_model:'jev-1.13.0',raw_response_hash:'f'.repeat(64)}):null};
+      body={id:'r',job_id:'j',preview_id:'p',status:'valid',result_json:url.searchParams.get('include_answers')==='true'
+        ?JSON.stringify({answers_json:JSON.stringify({reported_task_tradeoff:{type:'noul',noul:0.8},automation_belief:{type:'choice',choice:'not_stated',confidence:0.8,probabilities:{expected_active:0.1,expected_inactive:0.1,conflicting:0,not_stated:0.8}}}),latency_ms:50,requested_model:'jev-1.13.0',resolved_model:'jev-1.13.0',raw_response_hash:'f'.repeat(64)}):null};
     }else if(url.pathname.startsWith('/station'))body={reservation:null,acquisitions:{},jobs:[],maintenance:false};
     await route.fulfill({json:body});
   });
@@ -44,6 +46,7 @@ test('synthetic semantic workflow preserves blind labels and exact outbound prev
   await panel.getByRole('button',{name:/Authorize and queue|Autorizar y poner en cola/}).click();
   const show=panel.getByRole('button',{name:/Show assessment|Mostrar evaluación/});
   await expect(show).toBeDisabled();
+  await panel.getByRole('button',{name:/Start coding timer|Iniciar cronómetro de codificación/}).click();
   await expect(panel.getByRole('button',{name:/Save labels|Guardar etiquetas/})).toBeDisabled();
   await panel.getByLabel(/Reported task tradeoff|Priorización declarada/).selectOption('present');
   await panel.getByLabel(/Automation belief|Expectativa de automatización/).selectOption('not_stated');
@@ -51,10 +54,19 @@ test('synthetic semantic workflow preserves blind labels and exact outbound prev
   await panel.getByRole('button',{name:/Save labels|Guardar etiquetas/}).click();
   await show.click();
   await expect(panel.getByText(/reported_task_tradeoff/)).toBeVisible();
+  await expect(panel.getByRole('table',{name:/Complete distribution|Distribución completa/})).toBeVisible();
+  await panel.getByRole('button',{name:/View label and disagreement history|Ver historial de etiquetas/}).click();
+  await expect(panel.getByText(/9007199254740993/)).toBeVisible();
   expect(submissions).toBe(1);
   await page.setViewportSize({width:390,height:844});
   await expect(panel).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   const accessibility=await new AxeBuilder({page}).include('section[aria-label="Experimental semantic review"], section[aria-label="Revisión semántica experimental"]').withTags(['wcag2a','wcag2aa']).analyze();
   expect(accessibility.violations).toEqual([]);
+  await page.reload();
+  await panel.getByRole('button',{name:/Load saved reviews|Cargar revisiones guardadas/}).click();
+  await panel.getByRole('button',{name:/Open attempt r|Abrir intento r/}).click();
+  await expect(panel.getByText(payload,{exact:true})).toBeVisible();
+  await expect(panel.getByRole('table')).toHaveCount(0);
+  await expect(panel.getByRole('button',{name:/Show assessment|Mostrar evaluación/})).toBeDisabled();
 });

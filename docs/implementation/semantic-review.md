@@ -45,6 +45,40 @@ configuration, URLs, jobs, logs or exports.
 python -m matb_integration.inference verify inference.zip
 ```
 
+Use **Load saved reviews** to retrieve capture-scoped annotation versions and
+attempts, with bounded pagination. Opening an attempt retrieves its immutable
+preview and note; answers remain hidden. Selecting/editing a note creates a linked
+version without changing the original. Observation interval fields accept decimal
+nanosecond strings and are never converted through JavaScript floating point.
+
+The optional coding timer starts only on explicit action and records elapsed
+browser time in a separate audit record when labels are saved. It includes idle
+time and is not a qualified physical timing measurement. Untimed work is missing.
+
+Use **Revoke approval** with a named reviewer and reason to append a revocation.
+Queued dispatch is blocked and its station job cancelled. Once dispatch has
+started, the UI explicitly reports that delivery may already have occurred;
+revocation cannot recall remote bytes. Retrying requires a fresh exact-payload
+approval and obeys existing retry limits. Reviewer changes clear displayed model
+answers and reference history, and are disabled during pending requests.
+
+Bundle schema 1.1 adds the original annotation chain, exact stored approval JSON
+and its hash, plus audit history across attempts of the same input. Source and
+approval identities are checked on replay. Schema 1.0 bundles remain readable;
+they do not retroactively gain missing provenance. Checksums establish internal
+consistency, not an external signature or authenticated human identity.
+
+Additional optional endpoints are bounded `GET /inference/annotations`,
+`GET /inference/annotations/{id}`, `GET /inference/runs`,
+`GET /inference/runs/{id}/reviews`, and `POST /inference/runs/{id}/revoke`.
+History pagination uses `offset` and `limit` (maximum 100). Reading reference
+history records exposure before disclosure and prevents a later independent
+label under that reviewer name for the same input, including replicated attempts.
+
+See [offline evaluation tooling](../../research/jev/evaluation_tooling.md) for
+local lexical comparisons, participant-clustered intervals, calibration, rater
+agreement and correction-time analysis. These tools do not perform provider calls.
+
 The API supports explicit retries with fresh authorization; a retry creates a new
 attempt and must obey all previous attempts' outstanding retry limits. An unknown
 delivery outcome is never retried automatically. Cancelled/late results remain

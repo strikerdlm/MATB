@@ -61,6 +61,10 @@ def test_note_preview_infer_export_preserves_evidence(engine,monkeypatch,tmp_pat
                 'source_event_ids':[],'language':'en','author_role':'researcher','source_kind':'synthetic',
                 'original_text':'The panel was visible.','created_at_ns':'9007199254740993'})
             assert response.status_code==201,response.text
+            notes=await client.get('/inference/annotations?capture_id=c')
+            assert notes.status_code==200
+            assert notes.json()['items'][0]['annotation_id']=='n'
+            assert (await client.get('/inference/annotations?capture_id=other')).json()['items']==[]
             queued=(await client.post('/inference/previews',json={'capture_id':'c','evidence_run_id':'er','annotation_id':'n'})).json()
             await process(queued['job_id'])
             preview=(await client.get('/inference/previews/'+queued['id'])).json()
@@ -76,10 +80,32 @@ def test_note_preview_infer_export_preserves_evidence(engine,monkeypatch,tmp_pat
             await process(queued['job_id'])
             viewed=(await client.get('/inference/runs/'+queued['id']+'?reviewer=rater&include_answers=true')).json()
             assert viewed['status']=='valid',viewed
+            history=(await client.get('/inference/runs?capture_id=c&limit=1')).json()
+            assert history['items'][0]['id']==queued['id']
+            assert history['items'][0]['result_json'] is None
+            assert (await client.get('/inference/runs?capture_id=other')).json()['items']==[]
+            assert (await client.get('/inference/runs?capture_id=c&limit=101')).status_code==422
+            review_url='/inference/runs/'+queued['id']+'/reviews'
+            assert (await client.get(review_url)).status_code==422
+            assert (await client.get(review_url+'?reviewer=reader')).status_code==200
+            contaminated=await client.post(review_url,json={'reviewer':'reader','activity':'blinded_reference',
+                'labels_json':'{"reported_task_tradeoff":"unmentioned","automation_belief":"not_stated","reported_instruction_difficulty":"unmentioned"}'})
+            assert contaminated.status_code==409
             exported=await client.get('/inference/runs/'+queued['id']+'/export?reviewer=rater')
             assert exported.status_code==200,exported.text if exported.status_code!=200 else ''
             path=tmp_path/'inference.zip';path.write_bytes(exported.content)
-            assert verify_inference_bundle(str(path))['result']['outcome']=='valid'
+            replayed=verify_inference_bundle(str(path))
+            assert replayed['result']['outcome']=='valid'
+            assert replayed['provenance']['annotations'][0]['annotation_id']=='n'
+            assert replayed['provenance']['approval']['payload_hash']==request['authorization']['payload_hash']
+            assert any(r['activity']=='export_exposure' for r in replayed['provenance']['audit'])
+            retry=(await client.post('/inference/runs/'+queued['id']+'/retry',json=request)).json()
+            revoked=await client.post('/inference/runs/'+retry['id']+'/revoke',json={'reviewer':'rater','reason':'withdraw synthetic approval'})
+            assert revoked.status_code==200,revoked.text
+            assert revoked.json()['prevented_dispatch'] is True
+            assert (await client.get('/inference/runs/'+retry['id'])).json()['status']=='blocked'
+            with Session(engine,expire_on_commit=False) as db:
+                assert station_resources.claim_job(db,retry['job_id']) is None
     asyncio.run(flow())
     assert len(calls)==1
     assert scientific_snapshot()==before
