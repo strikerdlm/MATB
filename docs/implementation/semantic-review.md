@@ -25,6 +25,21 @@ synthetic provider testing, use `post_session_remote` and configure
 settings block requests; there is no fallback provider. Never put keys in browser
 configuration, URLs, jobs, logs or exports.
 
+Credentials may also remain in the ignored repository-root `.env.local` file.
+JEV accepts `JEV_AI_API_KEY` or `JEV_API_KEY` (including `jev_api_key`);
+the existing OpenAI instruction-audio generator accepts `OPENAI_API_KEY`
+(including `openai_api_key`). Process credentials take precedence. The shared
+server-side resolver reads only those keys, without changing the environment,
+expanding variables, or loading activation flags from the file.
+
+In a linked Git worktree, its own `.env.local` takes precedence; otherwise the
+resolver uses the main checkout's file via Git metadata. Thus this checkout can
+use `E:\Downloads\MATB\.env.local` without copying credentials into the worktree.
+For another deployment, `MATB_LOCAL_ENV_FILE` can select an explicit server-local
+file; a missing explicit file does not silently fall back to another file.
+JEV reads credentials only after the explicit enable/mode/model gates pass.
+The OpenAI key is not a JEV fallback and does not add an OpenAI inference provider.
+
 ## Researcher workflow
 
 1. Finish recording and close the protected station visit and held runtime.
