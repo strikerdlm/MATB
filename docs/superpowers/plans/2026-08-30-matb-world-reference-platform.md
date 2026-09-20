@@ -128,3 +128,7 @@ ingestion paths, analysis, and fail-closed gates without fabricating their resul
 - Runtime records support distinct clock domains and deterministic event identity.
 - SYSMON opportunity denominators are explicitly observable.
 - Existing scientific and runtime suites remain green, and new behavior has tests that were observed failing before implementation.
+
+## Experimental semantic-review subproject
+
+The [19 September semantic-review plan](2026-09-19-matb-jev-semantic-review.md) adds optional post-session narrative coding. It does not satisfy physical timing, human validation, automation or participant-intervention gates in this roadmap.
