@@ -1,0 +1,2 @@
+# Optional semantic provider transport. No dependency added to core installation.
+httpx==0.27.0
