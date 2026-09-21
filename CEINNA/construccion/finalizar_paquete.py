@@ -101,7 +101,7 @@ with (ROOT / 'guion/mapa_diapositivas.csv').open('w', encoding='utf-8-sig', newl
 text_md = '# Texto final de diapositivas\n\nExportado del PPTX mediante PowerPoint; tiempos de exposición planificados.\n\n'
 for s in slides:
     text_md += f"## {s['slide']}. {s['title']}\n\nTiempo: {s['seconds']} s. Plantilla base: {s['template_slide']}.\n\n{s['text']}\n\n"
-(ROOT / 'guion/diapositivas.md').write_text(text_md, encoding='utf-8')
+(ROOT / 'guion/diapositivas.md').write_text(text_md.rstrip() + '\n', encoding='utf-8')
 
 with (ROOT / 'visuales/registro_activos.csv').open('w', encoding='utf-8-sig', newline='') as handle:
     writer = csv.writer(handle)
@@ -120,7 +120,8 @@ summary = {
     'notas_embebidas': 16, 'exposicion_programada_segundos': 690,
     'limite_exposicion_segundos': 720, 'preguntas_comentarios_segundos': 180,
     'referencias_2020_2025': 6, 'desbordamientos_detectados': 0,
-    'relaciones_internas_rotas': 0, 'copias_originales_sha256': '3 coinciden',
+    'relaciones_internas_rotas': 0, 'copias_originales_sha256': f"{len(read_json(ROOT / 'fuentes/manifest.json'))} coinciden",
+    'palabras_guion_oral': word_count,
     'voz_lectura_sintetica': speech_rows[0]['voice'],
     'lectura_sintetica_sin_pausas_segundos': round(sum(r['measured_seconds'] for r in speech_rows), 2),
     'lecturas_sinteticas_dentro_de_ventana': len(speech_rows),

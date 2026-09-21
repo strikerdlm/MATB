@@ -1,5 +1,7 @@
 # Plan de presentación científica: ASTRA y MATB para el III CEINNA
 
+> Ampliación implementada el 21-09-2026: lectura de dos resúmenes adicionales y tres artículos centrales; rediseño de las láminas 3, 4, 9, 12 y 13. El mapa y los tiempos vigentes están en guion/mapa_diapositivas.csv; exposición de 690 segundos.
+
 **Versión:** 1.2 · **Fecha:** 2026-09-21 · **Estado:** implementado; PPTX, PDF y paquete de apoyo entregados.
 
 Este documento conserva el diseño de trabajo y sus criterios originales. El estado comprobado de ejecución consta en [Informe de verificación](entregables/Informe_de_verificacion.md); las listas de control siguientes son especificaciones del plan, no un registro actualizado de pendientes.  

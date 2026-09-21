@@ -1,5 +1,7 @@
 # Revisión científica independiente — A6
 
+> Registro de la primera versión. La ampliación posterior se documenta en revision_ampliacion_cientifica.md, revision_visual_ampliada.md y verificacion_final.json. Las cifras de guion y tiempos de esta revisión inicial se conservan como historial.
+
 Fecha: 21-09-2026. Objeto revisado: texto visible y duraciones definidos en `construccion/build_presentation.ps1`; contraste con `evidencia/contexto_astra.md`, `evidencia/matriz_afirmaciones.csv`, `evidencia/auditoria_matb.md` y artefactos técnicos. Esta revisión evalúa contenido científico; la inspección visual y la comprobación de notas corresponden a controles diferenciados.
 
 ## Dictamen sobre el guion visible

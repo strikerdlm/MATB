@@ -23,37 +23,39 @@ Subdirección Científica Aeroespacial – DIMAE
 III CEINNA · 13–14 de octubre de 2026
 2
 
-## 3. Contenido
+## 3. Aportes de la familia MATB
 
-Tiempo: 10 s. Plantilla base: 3.
+Tiempo: 55 s. Plantilla base: 3.
 
 “Del conocimiento a la capacidad estratégica”
-Contenido
-01
-Pregunta y contexto ASTRA
-02
-Diseño longitudinal y mediciones
-03
-Implementación y trazabilidad
-04
-Análisis e interpretación
-Pregunta → diseño → evidencia → interpretación
+Aportes de la familia MATB
+NASA MATB-II · 2011
+Tareas de referencia y configuración experimental
+USAF AF-MATB · 2014
+Generación de guiones y sincronización externa
+OpenMATB · 2020
+Personalización, código abierto y replicabilidad
+USAARL MATB · 2024
+Transiciones de demanda y automatización adaptativa
+Integración FAC para ASTRA
+Escenario reproducible → registro trazable → seguimiento longitudinal
+[1,5] Cegarra et al., 2020; Vogl et al., 2024 (§1.2). Aportes complementarios.
 3
 
-## 4. Pregunta de investigación
+## 4. De la literatura al diseño ASTRA
 
 Tiempo: 50 s. Plantilla base: 4.
 
 “Del conocimiento a la capacidad estratégica”
-Pregunta de investigación
-¿Cómo varían el desempeño multitarea y la carga mental percibida entre condiciones de demanda y a lo largo de ASTRA?
-Demanda de tarea
-Condiciones LOW / MEDIUM / HIGH
-Desempeño
-Respuestas en cuatro tareas
-Carga percibida
-Autoevaluación después del bloque
-[1–3] Cegarra et al., 2020; Pontiggia et al., 2024 (revisión y experimento).
+De la literatura al diseño ASTRA
+7 / 19
+Configuración suficiente para replicación o revisión
+Decisión metodológica
+Documentar parámetros y versión.
+Separar demanda y respuesta.
+Conservar contexto y secuencia.
+¿Cómo varían el desempeño y la carga percibida entre condiciones de demanda y a lo largo de ASTRA?
+[2] Pontiggia et al., 2024, §3. Revisión de 19 estudios; heterogeneidad sin metaanálisis.
 4
 
 ## 5. ASTRA: contexto del estudio
@@ -73,7 +75,7 @@ Manual ASTRA v2.5 y cronograma, 11-09-2026. Diseño previsto.
 
 ## 6. Ocho visitas por participante
 
-Tiempo: 75 s. Plantilla base: 4.
+Tiempo: 65 s. Plantilla base: 4.
 
 “Del conocimiento a la capacidad estratégica”
 Ocho visitas por participante
@@ -121,7 +123,7 @@ Captura documental de OpenMATB (interfaz original en francés).
 
 ## 8. Estructura de una visita
 
-Tiempo: 60 s. Plantilla base: 4.
+Tiempo: 55 s. Plantilla base: 4.
 
 “Del conocimiento a la capacidad estratégica”
 Estructura de una visita
@@ -143,12 +145,12 @@ Carga percibida
 Manual §4.7; [6] Laverde-López et al., 2022. Preparación, reposo y pausas en la reserva.
 8
 
-## 9. Del escenario al análisis
+## 9. Del escenario a una métrica interpretable
 
-Tiempo: 70 s. Plantilla base: 4.
+Tiempo: 65 s. Plantilla base: 4.
 
 “Del conocimiento a la capacidad estratégica”
-Del escenario al análisis
+Del escenario a una métrica interpretable
 Escenario
 Parámetros
 Semilla
@@ -168,13 +170,15 @@ Análisis
 Calidad
 Elegibilidad
 Trazabilidad
-Cada resultado conserva su vínculo con la condición experimental y el registro de origen.
-[1,5] Cegarra et al., 2020; Vogl et al., 2024. Contratos y manifiestos de MATB.
+Ejemplo: carga percibida con RTLX
+6 respuestas completas (0–10) → media × 10 → índice 0–100
+Cada resultado conserva versión, unidad, regla de cálculo y procedencia.
+[1,5] Replicabilidad y registro. Ejemplo local: metrics_spec.json y log_converter.py.
 9
 
 ## 10. Resultados de desarrollo
 
-Tiempo: 75 s. Plantilla base: 5.
+Tiempo: 65 s. Plantilla base: 5.
 
 “Del conocimiento a la capacidad estratégica”
 Resultados de desarrollo
@@ -207,34 +211,38 @@ Días desde V0
 [3,4] Pontiggia et al., 2024 (experimento); Tortello et al., 2020. Manual §4.7.
 11
 
-## 12. Alcance e interpretación
+## 12. Marco de calificación científica
 
-Tiempo: 60 s. Plantilla base: 4.
+Tiempo: 55 s. Plantilla base: 4.
 
 “Del conocimiento a la capacidad estratégica”
-Alcance e interpretación
-Medición
-Desempeño, carga percibida y fisiología se analizan por separado.
-Diseño
-Se consideran aprendizaje, horario y distancia entre visitas.
-Interpretación
-Las trayectorias se describen con magnitud e incertidumbre.
-Corte científico de la ponencia: protocolo y desarrollo documentado.
-[2–4] Literatura de demanda multitarea y seguimiento longitudinal; cronograma ASTRA.
+Marco de calificación científica
+Reproducción
+¿Se repite el escenario programado?
+Fidelidad temporal
+¿Cuándo se presenta el estímulo físico?
+Respuesta humana
+¿Cómo se relacionan demanda y respuesta?
+Estabilidad
+¿Qué variación aparece al repetir la medición?
+Comparabilidad
+¿Qué se conserva entre implementaciones?
+Cada pregunta se vincula con su procedimiento y evidencia específicos.
+Marco del proyecto: resúmenes CEINNA y contratos locales; contexto metodológico [1,2,5].
 12
 
 ## 13. Conclusiones y recomendaciones
 
-Tiempo: 75 s. Plantilla base: 6.
+Tiempo: 65 s. Plantilla base: 6.
 
 “Del conocimiento a la capacidad estratégica”
 Conclusiones y recomendaciones
 1
-ASTRA estructura la observación longitudinal del desempeño multitarea.
+Describir la demanda hace interpretable la comparación entre condiciones.
 2
-MATB vincula condiciones de demanda, eventos y métricas reproducibles.
+La trazabilidad vincula escenario, evento y métrica en cada visita.
 3
-El análisis integra trayectorias individuales, contexto y calidad del registro.
+ASTRA sitúa la respuesta multitarea en la trayectoria de cada persona.
 Siguiente etapa: ejecución protocolizada y análisis de las visitas.
 Síntesis del diseño ASTRA y de la verificación técnica de MATB.
 13

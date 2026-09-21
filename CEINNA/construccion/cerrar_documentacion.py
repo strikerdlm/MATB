@@ -24,9 +24,9 @@ Subdirección Científica Aeroespacial – DIMAE
 
 La presentación contiene 16 diapositivas, incluidas las láminas institucionales de apertura y cierre. Conserva la plantilla suministrada, su formato 16:9, tipografía Bell MT, emblemas, franja y lema. El contenido desarrolla la pregunta, el diseño longitudinal, las mediciones, la trazabilidad, los resultados técnicos y la interpretación científica.
 
-El guion programa **11:30 de exposición**, deja **0:30 de margen** dentro del límite de 12 minutos y reserva **3:00 para preguntas**. Las notas contienen 1229 palabras de exposición. Una lectura sintética local duró 9:41 sin pausas añadidas; las 14 láminas con discurso caben individualmente en su ventana. No se realizó un ensayo humano cronometrado.
+El guion programa **11:30 de exposición**, deja **0:30 de margen** dentro del límite de 12 minutos y reserva **3:00 para preguntas**. Las notas contienen 1270 palabras de exposición. Una lectura sintética local duró 10:00 aproximadamente sin pausas añadidas; las 14 láminas con discurso caben individualmente en su ventana. No se realizó un ensayo humano cronometrado.
 
-Se leyeron íntegramente los dos Markdown adjuntos y se auditó el repositorio. Scite y las fuentes primarias respaldan seis referencias de 2020–2025. La figura de hábitat creada con imagegen está identificada como ilustración conceptual; la captura de OpenMATB procede de la documentación del repositorio. Los resultados presentados son comprobaciones técnicas de generación, reproducción y conversión de archivos sintéticos. ASTRA se describe conforme a su programación; el paquete no contiene resultados humanos de las misiones.
+Se leyeron íntegramente el manual, el cronograma y los dos resúmenes aportados, y se auditó el repositorio. Scite y las fuentes primarias respaldan seis referencias de 2020–2025. La figura de hábitat creada con imagegen está identificada como ilustración conceptual; la captura de OpenMATB procede de la documentación del repositorio. Los resultados presentados son comprobaciones técnicas de generación, reproducción y conversión de archivos sintéticos. ASTRA se describe conforme a su programación; el paquete no contiene resultados humanos de las misiones.
 
 ## Evidencia y revisión
 
@@ -36,7 +36,7 @@ Se leyeron íntegramente los dos Markdown adjuntos y se auditó el repositorio. 
 - [Verificación final](revision/verificacion_final.json) y [correcciones](revision/registro_correcciones.md).
 - [Plan implementado](PLAN_DE_PRESENTACION.md) y [encargos ejecutados](ENCARGOS_PARA_AGENTES.md).
 
-Las tres copias de los adjuntos conservan sus SHA-256 originales, registrados en [fuentes/manifest.json](fuentes/manifest.json). La revisión final comprobó 16 páginas PDF, 16 diapositivas con notas, cero relaciones internas rotas y cero desbordamientos detectados. Se inspeccionaron visualmente todas las láminas.
+Las cinco copias de los adjuntos conservan sus SHA-256 originales, registrados en [fuentes/manifest.json](fuentes/manifest.json). La revisión final comprobó 16 páginas PDF, 16 diapositivas con notas, cero relaciones internas rotas y cero desbordamientos detectados. Se inspeccionaron visualmente todas las láminas.
 
 ## Reproducción local
 
@@ -92,7 +92,7 @@ Fecha: 21 de septiembre de 2026.
 | Bibliografía | Verificar autores de KSS y DOI; precisar alcance de las seis fuentes | Revisión bibliográfica independiente |
 | Ritmo | Acortar transición oral de lámina 15 | Las 14 lecturas sintéticas caben en sus ventanas |
 
-Se revisaron las 16 diapositivas individualmente y se reinspeccionaron las láminas 6, 8, 9 y 10 después de sus últimos ajustes. Las notas integradas corresponden al guion final. La comprobación estructural detectó cero relaciones rotas; las tres copias originales conservaron sus hashes. La lectura sintética es un control de ritmo y no un ensayo humano.
+Se revisaron las 16 diapositivas individualmente y se reinspeccionaron las láminas 6, 8, 9 y 10 después de sus últimos ajustes. Las notas integradas corresponden al guion final. La comprobación estructural detectó cero relaciones rotas; las cinco copias originales conservaron sus hashes. La lectura sintética es un control de ritmo y no un ensayo humano.
 ''')
 
 write('entregables/Informe_de_verificacion.md', '''# Informe de verificación — ASTRA/MATB, III CEINNA 2026
@@ -103,9 +103,9 @@ write('entregables/Informe_de_verificacion.md', '''# Informe de verificación �
 
 ## Producto y formato
 
-Se entregan PowerPoint editable, PDF, notas del ponente, banco de diez preguntas con respuestas, glosario y referencias APA. La presentación utiliza la plantilla adjunta mediante duplicación de sus láminas; conserva formato 16:9, Bell MT, emblemas, franja y lema. Contiene 16 diapositivas y 16 páginas PDF, con notas integradas en el PowerPoint. Los diagramas de diseño y trazabilidad son editables.
+Se entregan PowerPoint editable, PDF, notas del ponente, banco de trece preguntas con respuestas, glosario y referencias APA. La presentación utiliza la plantilla adjunta mediante duplicación de sus láminas; conserva formato 16:9, Bell MT, emblemas, franja y lema. Contiene 16 diapositivas y 16 páginas PDF, con notas integradas en el PowerPoint. Los diagramas de diseño y trazabilidad son editables.
 
-Se leyeron íntegramente el manual y el cronograma adjuntos, se auditó el repositorio en `fd5e1318dc6f036b538dd36ed3c5fe42ad8be7d0` y se documentaron 17 asuntos de conciliación. Los tres originales permanecen sin cambios, con SHA-256 coincidentes. La [conciliación documental](../evidencia/conciliacion_documental.md) establece las decisiones de alcance.
+Se leyeron íntegramente el manual y el cronograma adjuntos, se auditó el repositorio en `fd5e1318dc6f036b538dd36ed3c5fe42ad8be7d0` y se documentaron 17 asuntos de conciliación. Los cinco originales permanecen sin cambios, con SHA-256 coincidentes. La [conciliación documental](../evidencia/conciliacion_documental.md) establece las decisiones de alcance.
 
 ## Ciencia y evidencia
 
@@ -122,10 +122,10 @@ La ilustración del hábitat se produjo con imagegen y está rotulada como conce
 - Exposición programada: **690 segundos = 11:30**.
 - Margen hasta el límite oficial de 12 minutos: **30 segundos**.
 - Preguntas y comentarios: **180 segundos**, separados de la exposición.
-- Guion oral: **1229 palabras**.
-- Lectura sintética local: **581,35 segundos = 9:41,35**, sin pausas añadidas; las 14 láminas con discurso caben en sus ventanas individuales.
+- Guion oral: **1270 palabras**.
+- Lectura sintética local: **599,81 segundos = 9:59,81**, sin pausas añadidas; las 14 láminas con discurso caben en sus ventanas individuales.
 
-La lectura sintética no sustituye el ensayo humano del ponente; no se realizó un ensayo oral humano cronometrado. El banco de diez preguntas prepara alternativas de respuesta, no una secuencia que deba contestarse completa en tres minutos. La documentación de revisión relaciona el discurso y las respuestas con los cinco criterios oficiales del Congreso.
+La lectura sintética no sustituye el ensayo humano del ponente; no se realizó un ensayo oral humano cronometrado. El banco de trece preguntas prepara alternativas de respuesta, no una secuencia que deba contestarse completa en tres minutos. La documentación de revisión relaciona el discurso y las respuestas con los cinco criterios oficiales del Congreso.
 
 ## Controles finales
 
@@ -136,9 +136,9 @@ La lectura sintética no sustituye el ensayo humano del ponente; no se realizó 
 | Relaciones internas rotas | 0 |
 | Desbordamientos geométricos detectados | 0 |
 | Referencias de 2020–2025 | 6 |
-| SHA-256 de adjuntos conservados | 3 de 3 |
+| SHA-256 de adjuntos conservados | 5 de 5 |
 | Identificación del ponente y metadatos | Comprobados |
-| Revisión visual independiente | 16 láminas; revisión posterior de 6, 8, 9 y 10 |
+| Revisión visual independiente | 16 láminas; revisión ampliada de 3, 4, 9, 12 y 13 |
 | Revisión científica y bibliográfica | Hallazgos tratados y documentados |
 
 La verificación automática es complementaria a la inspección visual. Consultar [verificacion_final.json](../revision/verificacion_final.json), [revisión científica](../revision/revision_cientifica.md), [revisión visual](../revision/revision_visual.md) y [registro de correcciones](../revision/registro_correcciones.md).

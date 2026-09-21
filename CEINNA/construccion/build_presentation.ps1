@@ -89,8 +89,8 @@ function Citation($s,[string]$value,[int]$n) {
 }
 
 $map=@(1,2,3,4,4,4,4,4,4,5,4,4,6,7,7,8)
-$times=@(0,20,10,50,50,75,60,60,70,75,65,60,75,10,10,0)
-$titles=@('III CEINNA','Carga mental y desempeño multitarea en ASTRA','Contenido','Pregunta de investigación','ASTRA: contexto del estudio','Ocho visitas por participante','Cuatro tareas simultáneas','Estructura de una visita','Del escenario al análisis','Resultados de desarrollo','Análisis de medidas repetidas','Alcance e interpretación','Conclusiones y recomendaciones','Bibliografía I','Bibliografía II','Cierre institucional')
+$times=@(0,20,55,50,50,65,60,55,65,65,65,55,65,10,10,0)
+$titles=@('III CEINNA','Carga mental y desempeño multitarea en ASTRA','Aportes de la familia MATB','De la literatura al diseño ASTRA','ASTRA: contexto del estudio','Ocho visitas por participante','Cuatro tareas simultáneas','Estructura de una visita','Del escenario a una métrica interpretable','Resultados de desarrollo','Análisis de medidas repetidas','Marco de calificación científica','Conclusiones y recomendaciones','Bibliografía I','Bibliografía II','Cierre institucional')
 $refsPath=Join-Path $Root 'construccion\referencias_slide.json'
 $refs=@(); if(Test-Path $refsPath){$refs=@(Get-Content $refsPath -Raw -Encoding UTF8 | ConvertFrom-Json)}
 $notesPath=Join-Path $Root 'guion\notas_data.json'
@@ -116,25 +116,27 @@ try {
     $null=Text $s 165 406 670 38 'Subdirección Científica Aeroespacial – DIMAE' 24 $false $ink 2
     Citation $s 'III CEINNA · 13–14 de octubre de 2026' 2
 
-    $s=$deck.Slides.Item(3); Header $s 'Contenido'
-    $agenda=@('Pregunta y contexto ASTRA','Diseño longitudinal y mediciones','Implementación y trazabilidad','Análisis e interpretación')
+    $s=$deck.Slides.Item(3); Header $s 'Aportes de la familia MATB'
+    $heritage=@(@('NASA MATB-II · 2011','Tareas de referencia y configuración experimental'),@('USAF AF-MATB · 2014','Generación de guiones y sincronización externa'),@('OpenMATB · 2020','Personalización, código abierto y replicabilidad'),@('USAARL MATB · 2024','Transiciones de demanda y automatización adaptativa'))
     for($k=0;$k -lt 4;$k++){
-        $y=153+$k*72
-        $null=Text $s 164 $y 55 43 ('0'+($k+1)) 30 $true $navy
-        $null=Text $s 237 $y 611 48 $agenda[$k] 29
+        $x=132+($k%2)*386; $y=142+[math]::Floor($k/2)*118
+        $null=Box $s $x $y 363 102
+        $null=Text $s ($x+15) ($y+12) 333 32 $heritage[$k][0] 25 $true $navy
+        $null=Text $s ($x+15) ($y+49) 333 49 $heritage[$k][1] 21
     }
-    Citation $s 'Pregunta → diseño → evidencia → interpretación' 3
+    $null=Box $s 132 390 749 70 $navy
+    $null=Text $s 149 400 715 27 'Integración FAC para ASTRA' 24 $true $white
+    $null=Text $s 149 430 715 25 'Escenario reproducible → registro trazable → seguimiento longitudinal' 20 $false $white
+    Citation $s '[1,5] Cegarra et al., 2020; Vogl et al., 2024 (§1.2). Aportes complementarios.' 3
 
-    $s=$deck.Slides.Item(4); Header $s 'Pregunta de investigación'
-    $null=Text $s 133 137 735 110 '¿Cómo varían el desempeño multitarea y la carga mental percibida entre condiciones de demanda y a lo largo de ASTRA?' 29 $false $ink
-    $constructs=@(@('Demanda de tarea','Condiciones LOW / MEDIUM / HIGH'),@('Desempeño','Respuestas en cuatro tareas'),@('Carga percibida','Autoevaluación después del bloque'))
-    for($k=0;$k -lt 3;$k++){
-        $x=132+$k*255
-        $null=Box $s $x 285 233 135
-        $null=Text $s ($x+15) 300 205 37 $constructs[$k][0] 25 $true $navy
-        $null=Text $s ($x+15) 346 205 66 $constructs[$k][1] 22
-    }
-    Citation $s '[1–3] Cegarra et al., 2020; Pontiggia et al., 2024 (revisión y experimento).' 4
+    $s=$deck.Slides.Item(4); Header $s 'De la literatura al diseño ASTRA' 37
+    $null=Box $s 132 143 280 180
+    $null=Text $s 148 149 248 70 '7 / 19' 55 $true $navy 2
+    $null=Text $s 148 228 248 84 'Configuración suficiente para replicación o revisión' 20 $false $ink 2
+    $null=Text $s 440 143 438 36 'Decisión metodológica' 27 $true $navy
+    $null=Text $s 440 190 438 120 "Documentar parámetros y versión.`nSeparar demanda y respuesta.`nConservar contexto y secuencia." 24
+    $null=Text $s 132 344 749 103 '¿Cómo varían el desempeño y la carga percibida entre condiciones de demanda y a lo largo de ASTRA?' 30 $true $navy
+    Citation $s '[2] Pontiggia et al., 2024, §3. Revisión de 19 estudios; heterogeneidad sin metaanálisis.' 4
 
     $s=$deck.Slides.Item(5); Header $s 'ASTRA: contexto del estudio'
     $null=Text $s 130 145 335 56 'Aerospace Simulation Training Research Analogs' 23 $true $navy
@@ -198,17 +200,19 @@ try {
     }
     Citation $s 'Manual §4.7; [6] Laverde-López et al., 2022. Preparación, reposo y pausas en la reserva.' 8
 
-    $s=$deck.Slides.Item(9); Header $s 'Del escenario al análisis'
+    $s=$deck.Slides.Item(9); Header $s 'Del escenario a una métrica interpretable' 33
     $flow=@(@('Escenario',"Parámetros`nSemilla`nOrden"),@('Registro',"Identidad`nVisita`nEventos"),@('Métricas',"Definición`nUnidades`nVersión"),@('Análisis',"Calidad`nElegibilidad`nTrazabilidad"))
     for($k=0;$k -lt 4;$k++){
         $x=132+$k*193
-        $null=Box $s $x 204 170 161
-        $null=Text $s ($x+12) 218 148 39 $flow[$k][0] 26 $true $navy 2
-        $null=Text $s ($x+12) 268 148 89 $flow[$k][1] 22 $false $ink 2
-        if($k -lt 3){$null=Text $s ($x+173) 268 25 37 '→' 24 $false $navy 2}
+        $null=Box $s $x 156 170 156
+        $null=Text $s ($x+12) 170 148 39 $flow[$k][0] 26 $true $navy 2
+        $null=Text $s ($x+12) 218 148 89 $flow[$k][1] 22 $false $ink 2
+        if($k -lt 3){$null=Text $s ($x+173) 220 25 37 '→' 24 $false $navy 2}
     }
-    $null=Text $s 131 396 750 64 'Cada resultado conserva su vínculo con la condición experimental y el registro de origen.' 25
-    Citation $s '[1,5] Cegarra et al., 2020; Vogl et al., 2024. Contratos y manifiestos de MATB.' 9
+    $null=Text $s 132 338 749 33 'Ejemplo: carga percibida con RTLX' 26 $true $navy
+    $null=Text $s 132 383 749 33 '6 respuestas completas (0–10) → media × 10 → índice 0–100' 24
+    $null=Text $s 132 431 749 26 'Cada resultado conserva versión, unidad, regla de cálculo y procedencia.' 21 $false $muted
+    Citation $s '[1,5] Replicabilidad y registro. Ejemplo local: metrics_spec.json y log_converter.py.' 9
 
     $s=$deck.Slides.Item(10); Header $s 'Resultados de desarrollo'
     $null=Text $s 131 135 750 43 'Demostración técnica con datos sintéticos' 26 $true $navy
@@ -230,18 +234,19 @@ try {
     $null=Text $s 614 261 265 178 "Orden de bloques`nHora y estación`nSueño previo`nDías desde V0" 24
     Citation $s '[3,4] Pontiggia et al., 2024 (experimento); Tortello et al., 2020. Manual §4.7.' 11
 
-    $s=$deck.Slides.Item(12); Header $s 'Alcance e interpretación'
-    $scope=@(@('Medición','Desempeño, carga percibida y fisiología se analizan por separado.'),@('Diseño','Se consideran aprendizaje, horario y distancia entre visitas.'),@('Interpretación','Las trayectorias se describen con magnitud e incertidumbre.'))
-    for($k=0;$k -lt 3;$k++){
-        $x=132+$k*255
-        $null=Text $s $x 177 233 42 $scope[$k][0] 28 $true $navy
-        $null=Text $s $x 242 230 146 $scope[$k][1] 25
+    $s=$deck.Slides.Item(12); Header $s 'Marco de calificación científica' 37
+    $scope=@(@('Reproducción','¿Se repite el escenario programado?'),@('Fidelidad temporal','¿Cuándo se presenta el estímulo físico?'),@('Respuesta humana','¿Cómo se relacionan demanda y respuesta?'),@('Estabilidad','¿Qué variación aparece al repetir la medición?'),@('Comparabilidad','¿Qué se conserva entre implementaciones?'))
+    for($k=0;$k -lt 5;$k++){
+        $y=141+$k*55
+        $null=Box $s 132 $y 749 46 $(if($k%2 -eq 0){$pale}else{$white})
+        $null=Text $s 145 ($y+8) 224 34 $scope[$k][0] 23 $true $navy
+        $null=Text $s 387 ($y+8) 481 34 $scope[$k][1] 22
     }
-    $null=Text $s 131 420 750 36 'Corte científico de la ponencia: protocolo y desarrollo documentado.' 22 $false $muted
-    Citation $s '[2–4] Literatura de demanda multitarea y seguimiento longitudinal; cronograma ASTRA.' 12
+    $null=Text $s 132 433 749 30 'Cada pregunta se vincula con su procedimiento y evidencia específicos.' 22 $true $navy
+    Citation $s 'Marco del proyecto: resúmenes CEINNA y contratos locales; contexto metodológico [1,2,5].' 12
 
     $s=$deck.Slides.Item(13); Header $s 'Conclusiones y recomendaciones' 36
-    $conclusions=@('ASTRA estructura la observación longitudinal del desempeño multitarea.','MATB vincula condiciones de demanda, eventos y métricas reproducibles.','El análisis integra trayectorias individuales, contexto y calidad del registro.')
+    $conclusions=@('Describir la demanda hace interpretable la comparación entre condiciones.','La trazabilidad vincula escenario, evento y métrica en cada visita.','ASTRA sitúa la respuesta multitarea en la trayectoria de cada persona.')
     for($k=0;$k -lt 3;$k++){
         $y=143+$k*92
         $null=Text $s 133 $y 47 42 ([string]($k+1)) 31 $true $navy

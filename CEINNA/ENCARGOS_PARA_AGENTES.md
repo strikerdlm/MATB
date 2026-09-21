@@ -1,5 +1,7 @@
 # Encargos de producción para agentes — ASTRA/MATB, III CEINNA
 
+> Ampliación implementada el 21-09-2026: lectura de dos resúmenes adicionales y tres artículos centrales; rediseño de las láminas 3, 4, 9, 12 y 13. El mapa y los tiempos vigentes están en guion/mapa_diapositivas.csv; exposición de 690 segundos.
+
 **Estado:** encargos ejecutados: contexto, auditoría técnica, bibliografía, guion, construcción, ilustración y revisiones independientes completados. A0 integró los entregables; los agentes de contexto, auditoría y evidencia asumieron también las revisiones asignadas.  
 **Entrada principal:** [PLAN_DE_PRESENTACION.md](PLAN_DE_PRESENTACION.md).
 

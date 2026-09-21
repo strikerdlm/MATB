@@ -12,9 +12,9 @@
     "slide": 3,
     "voice": "Microsoft Sabina Desktop - Spanish (Mexico)",
     "rate": 0,
-    "allocated_seconds": 10,
+    "allocated_seconds": 55,
     "path": "E:\\Downloads\\MATB\\CEINNA\\revision\\lectura_sintetica\\slide_03.wav",
-    "measured_seconds": 8.17,
+    "measured_seconds": 52.01,
     "fits_allocated": true
   },
   {
@@ -23,7 +23,7 @@
     "rate": 0,
     "allocated_seconds": 50,
     "path": "E:\\Downloads\\MATB\\CEINNA\\revision\\lectura_sintetica\\slide_04.wav",
-    "measured_seconds": 42.47,
+    "measured_seconds": 42.28,
     "fits_allocated": true
   },
   {
@@ -39,7 +39,7 @@
     "slide": 6,
     "voice": "Microsoft Sabina Desktop - Spanish (Mexico)",
     "rate": 0,
-    "allocated_seconds": 75,
+    "allocated_seconds": 65,
     "path": "E:\\Downloads\\MATB\\CEINNA\\revision\\lectura_sintetica\\slide_06.wav",
     "measured_seconds": 54.84,
     "fits_allocated": true
@@ -57,7 +57,7 @@
     "slide": 8,
     "voice": "Microsoft Sabina Desktop - Spanish (Mexico)",
     "rate": 0,
-    "allocated_seconds": 60,
+    "allocated_seconds": 55,
     "path": "E:\\Downloads\\MATB\\CEINNA\\revision\\lectura_sintetica\\slide_08.wav",
     "measured_seconds": 51.97,
     "fits_allocated": true
@@ -66,16 +66,16 @@
     "slide": 9,
     "voice": "Microsoft Sabina Desktop - Spanish (Mexico)",
     "rate": 0,
-    "allocated_seconds": 70,
+    "allocated_seconds": 65,
     "path": "E:\\Downloads\\MATB\\CEINNA\\revision\\lectura_sintetica\\slide_09.wav",
-    "measured_seconds": 54.61,
+    "measured_seconds": 47.64,
     "fits_allocated": true
   },
   {
     "slide": 10,
     "voice": "Microsoft Sabina Desktop - Spanish (Mexico)",
     "rate": 0,
-    "allocated_seconds": 75,
+    "allocated_seconds": 65,
     "path": "E:\\Downloads\\MATB\\CEINNA\\revision\\lectura_sintetica\\slide_10.wav",
     "measured_seconds": 57.47,
     "fits_allocated": true
@@ -93,18 +93,18 @@
     "slide": 12,
     "voice": "Microsoft Sabina Desktop - Spanish (Mexico)",
     "rate": 0,
-    "allocated_seconds": 60,
+    "allocated_seconds": 55,
     "path": "E:\\Downloads\\MATB\\CEINNA\\revision\\lectura_sintetica\\slide_12.wav",
-    "measured_seconds": 58.39,
+    "measured_seconds": 47.23,
     "fits_allocated": true
   },
   {
     "slide": 13,
     "voice": "Microsoft Sabina Desktop - Spanish (Mexico)",
     "rate": 0,
-    "allocated_seconds": 75,
+    "allocated_seconds": 65,
     "path": "E:\\Downloads\\MATB\\CEINNA\\revision\\lectura_sintetica\\slide_13.wav",
-    "measured_seconds": 57.53,
+    "measured_seconds": 50.47,
     "fits_allocated": true
   },
   {

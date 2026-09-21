@@ -62,6 +62,24 @@ Preparación para **3 minutos de preguntas y comentarios**, separados de los 12 
 
 **Ampliación:** [5] describe USAARL MATB y [1] OpenMATB; su parentesco conceptual no acredita equivalencia de funciones. Replicar archivos no equivale a replicar efectos humanos. **Fuentes:** [1,2,5]; auditoría A2 y manifiestos. **Respaldo:** láminas 9, 10 y 13.
 
+## 11. ¿Qué significa el dato de siete de diecinueve estudios?
+
+**Respuesta breve, 25–30 s.** Es un resultado de la revisión de Pontiggia: de diecinueve publicaciones incluidas, siete describían su configuración con suficiente detalle para replicación o revisión. Se refiere a la documentación metodológica, no al éxito de repetir un efecto. En ASTRA lo traducimos en una decisión concreta: conservar parámetros, versiones y secuencia experimental.
+
+**Ampliación:** el conjunto se seleccionó para comparar niveles de demanda; no representa toda la literatura MATB. La heterogeneidad impidió metaanálisis. **Fuente:** [2], §3 y §3.3. **Respaldo:** lámina 4.
+
+## 12. ¿Qué distingue la integración local de otras implementaciones MATB?
+
+**Respuesta breve, 25–35 s.** Las implementaciones aportan funciones complementarias. OpenMATB proporciona la base abierta; el trabajo local vincula escenarios deterministas, registros y métricas versionadas con un seguimiento longitudinal en ASTRA. El aporte presentado es la trazabilidad de esa conexión. La comparación entre programas se formula mediante preguntas y evidencia específicas, sin inferir superioridad en desempeño humano.
+
+**Ampliación:** NASA/AF se describen según la historia de Vogl; las funciones de USAARL no se atribuyen al código local. **Fuentes:** [1,5] y auditoría MATB. **Respaldo:** láminas 3, 9, 10 y 12.
+
+## 13. ¿RTLX y NASA-TLX ponderado son la misma medida?
+
+**Respuesta breve, 25–35 s.** Comparten seis dimensiones, pero su agregación difiere. El contrato local del ejemplo calcula RTLX como la media no ponderada de seis respuestas completas de cero a diez y la multiplica por diez. NASA-TLX ponderado requiere además comparaciones pareadas. El registro conserva qué versión se calculó y sus reglas; si faltan respuestas, se mantiene el motivo de ausencia del compuesto.
+
+**Ampliación:** la regla de transformación no constituye una validación psicométrica de una traducción local. **Fuentes:** `metrics_spec.json`, `log_converter.py` y auditoría MATB. **Respaldo:** lámina 9.
+
 ## Distribución de un simulacro de 3 minutos
 
 Ensayo propuesto: 0:00–0:15 pregunta; 0:15–0:50 respuesta; 0:50–1:05 repregunta; 1:05–1:40 respuesta; 1:40–1:55 tercera pregunta; 1:55–2:30 respuesta; 2:30–3:00 comentarios del comité/cierre. Esta es una pauta temporal, no constancia de ensayo oral humano realizado.

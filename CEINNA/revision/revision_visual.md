@@ -1,5 +1,7 @@
 # Revisión visual independiente
 Fecha: 2026-09-21. Agente A7, distinto del agente que compuso el archivo. Guía aplicada: skill pptx, apartado QA.
+> Registro de la primera versión. La ampliación posterior se documenta en revision_ampliacion_cientifica.md, revision_visual_ampliada.md y verificacion_final.json. Las cifras de guion y tiempos de esta revisión inicial se conservan como historial.
+
 
 ## Alcance ejecutado
 Se abrieron individualmente con view_image los 16 PNG de revision/diapositivas/Slide1.PNG a Slide16.PNG, a 1600 × 900 píxeles. Se compararon con los ocho PNG originales de auditoria/plantilla_render/. Se leyó construccion/diapositivas_texto.json, incluidas notas y bibliografía. La evaluación es de los renders y del texto extraído, no una observación de proyección física en el auditorio.

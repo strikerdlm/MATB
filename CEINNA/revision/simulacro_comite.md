@@ -1,5 +1,7 @@
 # Simulacro documental del comité — III CEINNA
 
+> Registro de la primera versión. La ampliación posterior se documenta en revision_ampliacion_cientifica.md, revision_visual_ampliada.md y verificacion_final.json. Las cifras de guion y tiempos de esta revisión inicial se conservan como historial.
+
 Fecha: 21-09-2026. Método: lectura crítica independiente de las diez respuestas de `guion/preguntas_comite.md`, contraste con evidencia y estimación de duración por conteo de palabras. **No se realizó un ensayo oral humano ni se midió una actuación del ponente.** Los tiempos son presupuestos de preparación para los tres minutos oficiales.
 
 ## Evaluación de diez respuestas

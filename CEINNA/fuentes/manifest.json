@@ -19,5 +19,19 @@
     "sha256": "67a4d18a7a4082f63ad03e3502b3055831c4913c261ac4b91df2de8c1a55465c",
     "bytes": 43299,
     "fecha_copia": "2026-09-21"
+  },
+  {
+    "original": "C:\\Users\\User\\.codex\\codex-remote-attachments\\01a0c441-4746-7961-a417-1afb9434a5b8\\81CE19FE-6B03-4FB5-89F0-2325A4D0CA15\\1-Abstract-ceinna.md",
+    "copia": "fuentes/Abstract_ceinna_aportado.md",
+    "sha256": "ed77468bcc9376702a737bfd18fc2ce6e3fbdc9fef9367f0043af4d98d09ad51",
+    "bytes": 6713,
+    "fecha_copia": "2026-09-21"
+  },
+  {
+    "original": "C:\\Users\\User\\.codex\\codex-remote-attachments\\01a0c441-4746-7961-a417-1afb9434a5b8\\81CE19FE-6B03-4FB5-89F0-2325A4D0CA15\\2-CEINNA.md",
+    "copia": "fuentes/CEINNA_aportado.md",
+    "sha256": "343045b7a5775cee5db426bf0f87d3198b7f206b8ed1c55df44b48c58198a60d",
+    "bytes": 7024,
+    "fecha_copia": "2026-09-21"
   }
 ]

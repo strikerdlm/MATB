@@ -17,9 +17,9 @@ Subdirección Científica Aeroespacial – DIMAE
 
 La presentación contiene 16 diapositivas, incluidas las láminas institucionales de apertura y cierre. Conserva la plantilla suministrada, su formato 16:9, tipografía Bell MT, emblemas, franja y lema. El contenido desarrolla la pregunta, el diseño longitudinal, las mediciones, la trazabilidad, los resultados técnicos y la interpretación científica.
 
-El guion programa **11:30 de exposición**, deja **0:30 de margen** dentro del límite de 12 minutos y reserva **3:00 para preguntas**. Las notas contienen 1229 palabras de exposición. Una lectura sintética local duró 9:41 sin pausas añadidas; las 14 láminas con discurso caben individualmente en su ventana. No se realizó un ensayo humano cronometrado.
+El guion programa **11:30 de exposición**, deja **0:30 de margen** dentro del límite de 12 minutos y reserva **3:00 para preguntas**. Las notas contienen 1270 palabras de exposición. Una lectura sintética local duró 10:00 aproximadamente sin pausas añadidas; las 14 láminas con discurso caben individualmente en su ventana. No se realizó un ensayo humano cronometrado.
 
-Se leyeron íntegramente los dos Markdown adjuntos y se auditó el repositorio. Scite y las fuentes primarias respaldan seis referencias de 2020–2025. La figura de hábitat creada con imagegen está identificada como ilustración conceptual; la captura de OpenMATB procede de la documentación del repositorio. Los resultados presentados son comprobaciones técnicas de generación, reproducción y conversión de archivos sintéticos. ASTRA se describe conforme a su programación; el paquete no contiene resultados humanos de las misiones.
+Se leyeron íntegramente el manual, el cronograma y los dos resúmenes aportados, y se auditó el repositorio. Scite y las fuentes primarias respaldan seis referencias de 2020–2025. La figura de hábitat creada con imagegen está identificada como ilustración conceptual; la captura de OpenMATB procede de la documentación del repositorio. Los resultados presentados son comprobaciones técnicas de generación, reproducción y conversión de archivos sintéticos. ASTRA se describe conforme a su programación; el paquete no contiene resultados humanos de las misiones.
 
 ## Evidencia y revisión
 
@@ -29,7 +29,7 @@ Se leyeron íntegramente los dos Markdown adjuntos y se auditó el repositorio. 
 - [Verificación final](revision/verificacion_final.json) y [correcciones](revision/registro_correcciones.md).
 - [Plan implementado](PLAN_DE_PRESENTACION.md) y [encargos ejecutados](ENCARGOS_PARA_AGENTES.md).
 
-Las tres copias de los adjuntos conservan sus SHA-256 originales, registrados en [fuentes/manifest.json](fuentes/manifest.json). La revisión final comprobó 16 páginas PDF, 16 diapositivas con notas, cero relaciones internas rotas y cero desbordamientos detectados. Se inspeccionaron visualmente todas las láminas.
+Las cinco copias de los adjuntos conservan sus SHA-256 originales, registrados en [fuentes/manifest.json](fuentes/manifest.json). La revisión final comprobó 16 páginas PDF, 16 diapositivas con notas, cero relaciones internas rotas y cero desbordamientos detectados. Se inspeccionaron visualmente todas las láminas.
 
 ## Reproducción local
 
@@ -43,3 +43,11 @@ python .\CEINNA\construccion\finalizar_paquete.py
 ```
 
 La entrega Git se limita a CEINNA en el repositorio privado strikerdlm/MATB, por solicitud del investigador. No se ha enviado material al Congreso. Los audios WAV regenerables y la copia intermedia del PowerPoint se excluyen mediante .gitignore; se conservan sus informes. La ejecución no modificó el software MATB.
+
+## Ampliación científica con los nuevos documentos
+
+Se incorporaron los dos resúmenes aportados y una nueva lectura de Cegarra (2020), Pontiggia (2024, revisión) y Vogl (2024). La secuencia ahora conecta los aportes de las implementaciones MATB, el hallazgo de siete de diecinueve configuraciones suficientemente descritas, un ejemplo de RTLX y las preguntas del marco de calificación. Las conclusiones articulan demanda, trazabilidad y trayectoria individual. Se preservan seis referencias, 16 láminas y 690 segundos.
+
+La lectura completa de los tres artículos centrales se verificó mediante Scite. NASA NTRS aportó metadatos y DTIC no devolvió texto legible; la caracterización histórica NASA/AF se atribuye a Vogl. No se trasladaron conteos históricos de pruebas como resultados actuales. Las copias de los cinco adjuntos conservan sus SHA-256 originales.
+
+Consultar [lectura y decisiones](evidencia/lectura_comparativa_y_aportes.md), [revisión científica ampliada](revision/revision_ampliacion_cientifica.md) y [revisión visual ampliada](revision/revision_visual_ampliada.md). La última lectura sintética duró 599,81 segundos; no constituye ensayo humano.

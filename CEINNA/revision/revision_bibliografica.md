@@ -1,5 +1,7 @@
 # Revisión bibliográfica
 Fecha: 2026-09-21. Responsable A3. Revisión focal, no revisión sistemática.
+> Registro de la primera versión. La ampliación posterior se documenta en revision_ampliacion_cientifica.md, revision_visual_ampliada.md y verificacion_final.json. Las cifras de guion y tiempos de esta revisión inicial se conservan como historial.
+
 
 ## Verificaciones realizadas
 - Cinco referencias centrales de 2020–2025 y una complementaria; DOI, títulos, autores y año contrastados con registros recuperados.

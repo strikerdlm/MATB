@@ -21,6 +21,11 @@
 | D−6 / D−23 | Distancia prevista desde V0 hasta ingreso para ASTRA 1 / ASTRA 2. |
 | D+1 | Día posterior al egreso. |
 | DIMAE | Dirección de Medicina Aeroespacial. |
+| FAC | Fuerza Aeroespacial Colombiana. |
+| USAF / AF-MATB | United States Air Force; implementación de MATB de la Fuerza Aérea de Estados Unidos. |
+| USAARL | U.S. Army Aeromedical Research Laboratory; laboratorio de investigación aeromédica del Ejército de Estados Unidos. |
+| Replicabilidad del procedimiento | Posibilidad de reconstruir configuración, secuencia y reglas de análisis; distinta de reproducir un efecto humano. |
+| Test–retest | Evaluación de estabilidad y variación entre mediciones repetidas, considerando aprendizaje y condiciones. |
 | MCC | Mission Control Center; Centro de Control de Misión. |
 | CSV | Comma-separated values; formato tabular de registros. |
 | SHA-256 | Función de resumen criptográfico; permite contrastar integridad de archivos. |
