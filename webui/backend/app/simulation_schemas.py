@@ -65,7 +65,7 @@ class PresentationControls(BaseModel):
 
 class PresentationConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    version: Literal[1, 2] = 1
+    version: Literal[1, 2, 3] = 1
     interpolation_policy: Literal["linear-320-v1", "none-v1"] = "linear-320-v1"
     controls: PresentationControls = Field(default_factory=PresentationControls)
     layers: list[Literal["roads", "rivers", "settlements", "boundaries", "airports"]] = Field(default_factory=lambda: ["roads", "rivers", "settlements", "boundaries", "airports"])
@@ -73,10 +73,12 @@ class PresentationConfig(BaseModel):
     blocks: dict[WorkloadProfile, Literal["2d", "3d"]] = Field(default_factory=dict)
     scene_id: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
     scene_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
-    camera: Literal["overview", "follow", "drone"] = "overview"
+    camera: Literal["overview", "follow", "drone", "swarm"] = "overview"
 
     @model_validator(mode="after")
     def require_scene(self):
+        if self.camera == "swarm" and self.version != 3:
+            raise ValueError("swarm camera requires v3")
         if self.traffic.mode != "off" and not self.scene_id:
             raise ValueError("traffic requires a georeferenced scene")
         if "3d" in self.blocks.values() and (not self.scene_id or not self.scene_sha256):
@@ -137,9 +139,11 @@ class PresentationViewport(BaseModel):
 
 class ResolvedPresentation(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
-    version: Literal[2]
+    version: Literal[2, 3]
+    group_id: str | None = Field(default=None, max_length=64)
+    inset: bool | None = None
     condition: Literal["2d", "3d"]
-    camera: Literal["overview", "follow", "drone"]
+    camera: Literal["overview", "follow", "drone", "swarm"]
     focus: PresentationEntity | None
     aircraft_id: str | None = Field(max_length=64)
     contact_id: str | None = Field(max_length=64)
@@ -155,7 +159,7 @@ class ResolvedPresentation(BaseModel):
     interpolation_policy: Literal["linear-320-v1", "none-v1"] | None = None
     interpolation_ms: Literal[0, 320] | None = None
     visual_profile: Literal["standard-v1"]
-    model_version: Literal["schematic-drone-v1-scale12"]
+    model_version: Literal["schematic-drone-v1-scale12", "racing-quad-v1-scale80"]
     scene_sha256: str | None = Field(pattern=r"^[a-f0-9]{64}$")
     capture_sha256: str | None = Field(pattern=r"^[a-f0-9]{64}$")
 
@@ -164,14 +168,14 @@ class PresentationEvent(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     event_id: UUID
     block_id: WorkloadProfile
-    version: Literal[1, 2] = 1
+    version: Literal[1, 2, 3] = 1
     kind: Literal["ready", "camera", "render", "failure", "fallback", "selection", "navigate", "navigation_filter", "layers", "geography", "resolved", "transition_start", "transition_end", "transition_cancel", "visibility", "resize", "map_view"]
     sequence: int | None = Field(default=None, ge=0)
     client_time_ms: float | None = Field(default=None, ge=0)
     resolved: ResolvedPresentation | None = None
     state_version: int = Field(default=0, ge=0)
     simulation_time_ms: int = Field(default=0, ge=0)
-    camera: Literal["overview", "follow", "drone"] = "overview"
+    camera: Literal["overview", "follow", "drone", "swarm"] = "overview"
     traffic_frame_id: str | None = Field(default=None, max_length=80)
     layers: list[str] | None = Field(default=None, max_length=16)
     aircraft_id: str | None = Field(default=None, max_length=64)
@@ -182,8 +186,16 @@ class PresentationEvent(BaseModel):
 
     @model_validator(mode="after")
     def versioned_exposure(self):
-        if self.version == 2 and (self.resolved is None or self.sequence is None or self.client_time_ms is None):
+        if self.version in (2, 3) and (self.resolved is None or self.sequence is None or self.client_time_ms is None):
             raise ValueError("v2 requires resolved exposure and ordering metadata")
+        if self.resolved:
+            if self.resolved.version != self.version:
+                raise ValueError("presentation version mismatch")
+            racing = self.resolved.model_version == "racing-quad-v1-scale80"
+            if (self.version == 3) != racing or (self.version < 3 and (self.resolved.camera == "swarm" or self.resolved.group_id is not None or self.resolved.inset is not None)):
+                raise ValueError("model and swarm controls must match presentation version")
+            if self.version == 3 and self.resolved.inset is not True:
+                raise ValueError("swarm overview inset is pinned on")
         if self.version == 1 and (self.resolved is not None or self.kind not in {"ready", "camera", "render", "failure", "fallback"}):
             raise ValueError("v1 presentation semantics cannot be extended")
         return self
@@ -301,6 +313,7 @@ class CommandRequest(BaseModel):
     command_id: UUID
     expected_state_version: int = Field(ge=0)
     kind: Literal[
+        "SWARM_TASK", "SWARM_WAYPOINT", "SWARM_MEMBERSHIP",
         "ASSIGN_SECTOR",
         "SET_WAYPOINT",
         "HOLD",

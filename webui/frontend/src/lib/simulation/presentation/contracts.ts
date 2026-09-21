@@ -9,9 +9,9 @@ export interface CameraPose {
   aspect?: number;
   controls_target?: [number, number, number];
 }
-export type CameraMode = "overview" | "follow" | "drone";
+export type CameraMode = "overview" | "follow" | "drone" | "swarm";
 export interface PresentationConfig {
-  version: 1 | 2;
+  version: 1 | 2 | 3;
   interpolation_policy?: "linear-320-v1" | "none-v1";
   controls?: { smooth_camera: boolean; contact_cycling: boolean; adjustable_layers: boolean };
   layers?: GeographyLayer[];

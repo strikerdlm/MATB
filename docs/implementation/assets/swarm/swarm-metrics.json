@@ -1,0 +1,33 @@
+{
+  "browser": "151.0.7922.34",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "metrics": {
+    "sampling": "render submissions; includes stalls, excludes frozen/hidden periods",
+    "frameIntervalMedianMs": 16.69999998807907,
+    "frameIntervalP95Ms": 20.700000017881393,
+    "frameSamples": 598,
+    "calls": 88,
+    "triangles": 49728,
+    "memory": {
+      "geometries": 91,
+      "textures": 2
+    },
+    "renderCount": 816,
+    "objectLifecycle": {
+      "aircraftCreated": 8,
+      "aircraftDisposed": 0,
+      "contactsCreated": 0,
+      "contactsDisposed": 0,
+      "boundaryRebuilds": 1,
+      "coverageRebuilds": 1
+    },
+    "gpuCompletionMs": null,
+    "physicalDisplayOnsetMs": null,
+    "device": "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "dpr": 1,
+    "cpuRenderP95Ms": 11.199999988079071
+  }
+}

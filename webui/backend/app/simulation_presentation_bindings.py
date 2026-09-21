@@ -3,6 +3,10 @@ from matb_integration.suas.presentation.packages import read_package
 
 
 def bind_presentation(manifest, config, loaded, *, technical_block=None):
+    if loaded.definition.swarm:
+        if technical_block is None and (config is None or config.version != 3):
+            raise ValueError("swarm research requires an explicit v3 presentation condition")
+        manifest["swarm"] = {"algorithm": loaded.definition.swarm["algorithm"], "spacing_mm": loaded.definition.swarm["spacing_mm"], "metrics": "swarm-descriptive-v1"}
     if config is None:
         return
     if config.scene_id:

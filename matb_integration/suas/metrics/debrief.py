@@ -82,6 +82,38 @@ def block_metric_summary(records: Sequence[SessionRecord], manifest: Mapping[str
     return reduced
 
 
+def swarm_metric_summary(frames: Sequence[Mapping[str, object]]) -> dict[str, object] | None:
+    """Descriptive observations from reconstructed replay frames, never event payloads."""
+    grouped = defaultdict(list)
+    for frame in frames:
+        snapshot = frame.get("snapshot", frame)
+        if isinstance(snapshot, Mapping) and snapshot.get("swarms"):
+            grouped[frame.get("block_id", snapshot.get("block_id"))].append(snapshot)
+    blocks = []
+    for block_id, samples in sorted(grouped.items()):
+        samples.sort(key=lambda frame: (frame["simulation_time_ms"], frame["state_version"]))
+        groups = {}
+        for gid, group in samples[-1]["swarms"].items():
+            errors = [frame["swarms"][gid].get("formation_error_mm") for frame in samples if gid in frame["swarms"]]
+            errors = [value for value in errors if isinstance(value, int)]
+            faults = [frame for frame in samples if frame["swarms"].get(gid, {}).get("fault_at_ms") is not None]
+            recovery = None
+            if faults:
+                first = faults[0]
+                def count_cells(frame):
+                    return sum(len(v.get("covered_cells", [])) for v in frame.get("coverage", {}).get("sectors", {}).values())
+                baseline = count_cells(first)
+                recovered = next((frame for frame in samples if frame["simulation_time_ms"] > first["simulation_time_ms"] and count_cells(frame) > baseline), None)
+                if recovered:
+                    recovery = recovered["simulation_time_ms"] - first["simulation_time_ms"]
+            groups[gid] = {"group_command_count": group["command_count"],
+                           "last_fault_response_ms": group["last_response_ms"],
+                           "sampled_mean_formation_error_mm": sum(errors) // len(errors) if errors else None,
+                           "first_new_coverage_after_observed_fault_ms": recovery}
+        blocks.append({"block_id": block_id, "groups": groups})
+    return {"version": "swarm-descriptive-v1", "sampling": "reconstructed public frames", "blocks": blocks} if blocks else None
+
+
 def _timeline(records: Iterable[SessionRecord]) -> list[dict[str, object]]:
     output: list[dict[str, object]] = []
     for record in records:
@@ -217,6 +249,9 @@ def build_public_debrief(
             continue
         seen.add(key)
         unique_frames.append(frame)
+    swarm = swarm_metric_summary(unique_frames)
+    if swarm is not None:
+        metrics["swarm"] = swarm
     replay_public = _public(replay)
     public = {
         "calculation_version": "suas-debrief-v2",

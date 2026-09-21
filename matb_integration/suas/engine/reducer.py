@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from dataclasses import replace
 
 from matb_integration.suas.domain.commands import (
+    SwarmTask, SwarmWaypoint, SwarmMembership,
     AcknowledgeAlert, AssignSector, ClassifyContact, CommandEnvelope,
     CommandResult, CommandStatus, Hold, InspectContact, OperatorCommand,
     ReportContact, ResumeMission, ReturnToBase, SetContactPriority, SetWaypoint,
@@ -84,6 +85,7 @@ class CommandReducer:
             return self._reject(envelope.command_id, "stale_state_version", state), ()
         command = envelope.command
         if not isinstance(command, (
+            SwarmTask, SwarmWaypoint, SwarmMembership,
             AssignSector, SetWaypoint, Hold, ResumeMission, ReturnToBase,
             AcknowledgeAlert, InspectContact, ClassifyContact, SetContactPriority, ReportContact,
         )):
@@ -107,7 +109,12 @@ class CommandReducer:
             state_version=state.version,
         ), events
 
-    def _mutate(self, state: WorldState, command: OperatorCommand) -> tuple[DomainEvent, ...]:
+    def _mutate(self, state: WorldState, command: OperatorCommand, *, grouped: bool = False) -> tuple[DomainEvent, ...]:
+        from .swarm import apply_group, member_group
+        if isinstance(command, (SwarmTask, SwarmWaypoint, SwarmMembership)):
+            return apply_group(self, state, command)
+        if not grouped and isinstance(command, _AIRCRAFT_COMMANDS) and member_group(state, command.aircraft_id):
+            raise _Rejected("detach_member_before_individual_command")
         if isinstance(command, AssignSector):
             aircraft = self._aircraft(state, command.aircraft_id)
             self._validate_aircraft_control(aircraft)

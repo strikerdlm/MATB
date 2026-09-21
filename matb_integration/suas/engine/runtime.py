@@ -24,6 +24,8 @@ from matb_integration.suas.engine.separation import SeparationMonitor
 from matb_integration.suas.engine.sensors import SensorSystem, public_snapshot as public_contacts
 
 
+from .swarm import engine_version, initialize_groups, public_groups, restore_groups, update_groups
+
 ENGINE_VERSION = "1.0.0"
 TICK_MS = 100
 SNAPSHOT_INTERVAL_MS = 250
@@ -203,6 +205,7 @@ class SimulationEngine:
         self._clock = SimulationClock(tick_ms=TICK_MS)
         self._backend = SyntheticVehicleBackend()
         self._state = self._backend.initialize(scenario, block)
+        self._state.swarms = initialize_groups(scenario, self._state.aircraft)
         self._sensors = SensorSystem(scenario)
         self._reducer = CommandReducer(scenario, self._sensors)
         self._links = LinkSystem(scenario)
@@ -230,8 +233,9 @@ class SimulationEngine:
         # and coverage remain one ordered atomic subsystem batch.
         coverage_events: tuple[DomainEvent, ...] = ()
         separation_events = self._run_discrete(self._separation.step, self._state)
+        swarm_events = update_groups(self._state)
         events = self._sequence(
-            command_events + link_events + conflict_events + vehicle_events
+            swarm_events + command_events + link_events + conflict_events + vehicle_events
             + sensor_events + coverage_events + separation_events,
         )
         return StepResult(self.snapshot(), events, results)
@@ -307,6 +311,7 @@ class SimulationEngine:
                 for code, labels in sorted(self._scenario.report_note_codes.items())
             },
             "aircraft": aircraft,
+            **({"swarms": public_groups(self._state)} if self._state.swarms is not None else {}),
             **public_contacts(self._state, scenario=self._scenario),
             "alerts": {key: canonical_data(value) for key, value in sorted(self._state.alerts.items())},
             "coverage": self._coverage.public_snapshot(self._state),
@@ -322,7 +327,7 @@ class SimulationEngine:
             for key, stream in sorted(self._sensors._streams.items())
         }
         return {
-            "engine_version": ENGINE_VERSION,
+            "engine_version": engine_version(self._scenario),
             "scenario_id": self._scenario.scenario_id,
             "scenario_sha256": self._scenario.scenario_sha256,
             "block_id": self._block_id,
@@ -363,7 +368,7 @@ class SimulationEngine:
         }
         if set(raw) != required:
             raise ValueError("checkpoint has an invalid private shape")
-        if raw["engine_version"] != ENGINE_VERSION:
+        if raw["engine_version"] != engine_version(self._scenario):
             raise ValueError("checkpoint engine version does not match")
         if raw["scenario_id"] != self._scenario.scenario_id or raw["scenario_sha256"] != self._scenario.scenario_sha256:
             raise ValueError("checkpoint scenario does not match")
@@ -714,6 +719,8 @@ def _ceil_div(numerator: int, denominator: int) -> int:
 
 def _world(raw: dict, scenario: ScenarioDefinition, block_id: str) -> WorldState:
     expected = {"block_id", "tick", "simulation_time_ms", "version", "aircraft", "contacts", "alerts", "coverage_cells", "event_sequence", "scenario_sha256"}
+    if scenario.swarm:
+        expected.add("swarms")
     if set(raw) != expected or raw["block_id"] != block_id or raw["scenario_sha256"] != scenario.scenario_sha256:
         raise ValueError("invalid checkpoint world")
     air_raw, contacts_raw, alerts_raw = _mapping(raw["aircraft"], "aircraft"), _mapping(raw["contacts"], "contacts"), _mapping(raw["alerts"], "alerts")
@@ -737,6 +744,7 @@ def _world(raw: dict, scenario: ScenarioDefinition, block_id: str) -> WorldState
         block_id=block_id, tick=_nonnegative(raw["tick"], "world tick"),
         simulation_time_ms=_nonnegative(raw["simulation_time_ms"], "world time"),
         version=_nonnegative(raw["version"], "world version"), aircraft=aircraft, contacts=contacts,
+        swarms=restore_groups(raw.get("swarms"), scenario, aircraft),
         alerts=alerts, coverage_cells=coverage, event_sequence=_nonnegative(raw["event_sequence"], "event sequence"),
         scenario_sha256=scenario.scenario_sha256,
     )

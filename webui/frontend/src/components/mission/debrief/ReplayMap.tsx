@@ -50,7 +50,7 @@ export function ReplayMap({
   const data =
     event && typeof event === "object" && !Array.isArray(event) ? event : {};
   const camera = (data.camera ?? "overview") as CameraMode;
-  const exposures = (events as unknown as ExposureEvent[]).filter(e => e && e.version === 2);
+  const exposures = (events as unknown as ExposureEvent[]).filter(e => e && (e.version === 2 || e.version === 3));
   const resolved = resolveExposure(exposures, snapshot.block_id, frame.simulation_time_ms, exposureSequence === Infinity ? Number(frame.presentation_sequence ?? Infinity) : exposureSequence);
   const atTime = exposures.filter(e => e.block_id === frame.block_id && e.simulation_time_ms === frame.simulation_time_ms);
   const config = debrief.presentation as unknown as PresentationConfig | null;
@@ -84,7 +84,7 @@ export function ReplayMap({
         />
         {locale === "es-CO" ? "Cámara registrada" : "Recorded camera mode"}
       </label>
-      {config?.version !== 2 && <p>{locale === "es-CO" ? "Registro v1: capas operativas y selección observada desconocidas." : "V1 recording: operational layers and observed selection are unknown."}</p>}
+      {(config?.version ?? 1) < 2 && <p>{locale === "es-CO" ? "Registro v1: capas operativas y selección observada desconocidas." : "V1 recording: operational layers and observed selection are unknown."}</p>}
       {!recorded && <p>{locale === "es-CO" ? "Exploración de reproducción; no representa la vista registrada." : "Replay exploration; this is not the recorded participant view."}</p>}
       {atTime.length > 1 && <select aria-label={locale === "es-CO" ? "Cambio de presentación" : "Presentation change"} value={exposureSequence} onChange={e => setExposureSequence(Number(e.target.value))}>
         <option value={Infinity}>{locale === "es-CO" ? "Último cambio" : "Latest change"}</option>

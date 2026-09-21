@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Mapping
 
 from .enums import (
@@ -195,6 +195,7 @@ class ScenarioDefinition:
     report_note_codes: Mapping[str, Mapping[Locale, str]]
     metric_thresholds: MetricThresholdDefinition
     termination: TerminationDefinition
+    swarm: Mapping[str, object] | None = field(default=None, metadata={"omit_none": True})
 
 
 @dataclass(slots=True)
@@ -210,3 +211,4 @@ class WorldState:
     event_sequence: int
     # Checkpoint-safe scenario identity; defaults for legacy/manual world builders.
     scenario_sha256: str = ""
+    swarms: dict[str, dict] | None = field(default=None, metadata={"omit_none": True})

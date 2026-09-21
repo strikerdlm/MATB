@@ -119,10 +119,15 @@ class SyntheticVehicleBackend:
             if aircraft.mode == AircraftMode.RETURN_TO_BASE
             else definition.speed_mm_per_s
         )
+        group = next((g for g in (state.swarms or {}).values() if aircraft.aircraft_id in g["members"] and g["task"] == "TRANSIT"), None)
+        if group and aircraft.mode == AircraftMode.TRANSIT:
+            speed = min(self._aircraft_definitions[a].speed_mm_per_s for a in group["members"])
         numerator = speed * tick_ms + aircraft.movement_remainder
         remaining = numerator // 1_000
         aircraft.movement_remainder = numerator % 1_000
         while remaining > 0 and aircraft.route_leg < len(aircraft.route.waypoints):
+            if group and group["phase"] == "ASSEMBLE" and aircraft.route_leg >= 1:
+                break  # Barrier release is evaluated once after all aircraft advance.
             target = aircraft.route.waypoints[aircraft.route_leg]
             if aircraft.route_leg_target != target or aircraft.route_leg_start is None:
                 aircraft.route_leg_start = aircraft.position

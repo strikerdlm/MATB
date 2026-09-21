@@ -23,7 +23,7 @@ export function framesFrom(debrief: DebriefView): ReplayFrame[] {
   const exposures = Array.isArray(debrief.presentation_events) ? debrief.presentation_events : [];
   const frames = [...authoritative];
   for (const event of exposures) {
-    if (!event || typeof event !== "object" || Array.isArray(event) || event.version !== 2 ||
+    if (!event || typeof event !== "object" || Array.isArray(event) || (event.version !== 2 && event.version !== 3) ||
         typeof event.simulation_time_ms !== "number" || typeof event.sequence !== "number") continue;
     const base = authoritative.filter(frame => frame.block_id === event.block_id && frame.simulation_time_ms <= (event.simulation_time_ms as number))
       .sort((a, b) => a.simulation_time_ms - b.simulation_time_ms).at(-1);

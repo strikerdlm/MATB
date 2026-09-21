@@ -35,6 +35,7 @@ export type AlertKind =
   | "SEPARATION_CRITICAL"
   | "RUNTIME_FAILURE";
 export type CommandKind =
+  | "SWARM_TASK" | "SWARM_WAYPOINT" | "SWARM_MEMBERSHIP"
   | "ASSIGN_SECTOR"
   | "SET_WAYPOINT"
   | "HOLD"
@@ -133,7 +134,15 @@ export interface InitialViewSnapshot {
   height_mm: number;
 }
 
+export interface SwarmSnapshot {
+  activity?: string;
+  members: string[]; formation: "line" | "wedge"; task: string; target_id: string;
+  trails: Record<string, (PointMM & { time_ms: number })[]>;
+  slots: Record<string, PointMM>; command_count: number; fault_at_ms: number | null;
+  last_response_ms: number | null; status: "EMPTY" | "DEGRADED" | "NOMINAL"; formation_error_mm: number | null;
+}
 export interface WorldSnapshot {
+  swarms?: Record<string, SwarmSnapshot>;
   scenario_id: string;
   scenario_sha256: string;
   block_id: string;

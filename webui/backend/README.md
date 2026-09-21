@@ -169,3 +169,25 @@ unsupported historical prospective intent `unknown`, including historical practi
 rows, and records legacy fast-mode inference as a system retrospective event at
 migration time. A classification is evidence for subsequent plan-based selection,
 not automatic scientific eligibility or approval.
+
+## Versioned swarm sessions
+
+`swarm_supervision` uses schema v2 and engine `2.0.0-swarm.1`. The existing command
+route accepts `SWARM_TASK`, `SWARM_WAYPOINT` and `SWARM_MEMBERSHIP` through the same
+controller lease, Origin, optimistic state version and idempotency checks as
+individual commands. Group updates validate all affected members before commit;
+individual flight commands require explicit detachment. JOIN requires held
+members and a subsequent new group task. RETURN can be held/resumed and still
+terminates in recovery.
+
+Public state adds `swarms`; checkpoints and sealed replay retain membership,
+formation, bounded trails and fault-response state. Swarm research requires an
+explicit presentation v3 configuration. Exposure records must match the configured
+version and pin `racing-quad-v1-scale80` with the north-up inset enabled. Old
+scenario hashes/world shapes and old presentation readers remain supported.
+`metrics.swarm` contains descriptive group summaries, with null for unavailable
+observations; the mission composite is unchanged. The coverage observation is
+mission-wide and is not proof that the affected group recovered its own task.
+
+[Payloads and operator behavior](../../docs/implementation/suas-swarm-supervision.md)
+· [Deployment and release verification](../../docs/implementation/suas-swarm-release.md).

@@ -877,6 +877,37 @@ tráfico grabado con sumas de comprobación, conservando la puntuación determin
 Los datos geográficos conservan sus condiciones de origen; consulte los
 [avisos de terceros](THIRD_PARTY_NOTICES.md).
 
+### Supervisión de enjambres y visualización 3D en tercera persona
+
+El escenario `swarm_supervision` incorpora **2 / 4 / 6 / 8 aeronaves** en PRACTICE /
+LOW / MEDIUM / HIGH. Permite órdenes atómicas de tránsito en formación, búsqueda
+cooperativa, mantener, reanudar y regresar; también separar e incorporar miembros
+para intervención individual. Los cuadricópteros de carreras se generan con geometría
+procedimental y conservan el modelo sintético de movimiento. La vista del enjambre,
+el seguimiento en tercera persona, las trayectorias registradas, los marcadores de
+formación y el mapa con norte arriba permiten inspección colectiva e individual.
+
+Con la consola instalada y en ejecución, abra `/mission/test`, seleccione
+**Supervisión de enjambres**, elija una escena local, habilite la vista de enjambre
+con cuadricópteros y configure **3D** para el bloque. Espere la verificación del
+renderizador antes de iniciar. Para participantes, use el flujo de estudio y
+asignación con una condición explícita e inmutable de **presentación v3**. La prueba
+técnica no se convierte en registro de participante. Ante la pérdida de un miembro,
+las rutas restantes solo se redistribuyen por orden explícita.
+
+El informe conserva las identidades de escenario, motor y consola, la cámara y
+las capas registradas y la reproducción determinista. Las medidas descriptivas del
+enjambre no modifican la puntuación compuesta. Se conserva la compatibilidad con
+escenarios anteriores y vistas v1/v2.
+
+Consulte la [guía de operación e implementación](docs/implementation/suas-swarm-supervision.md)
+y el [procedimiento de publicación local](docs/implementation/suas-swarm-release.md)
+para compilar, iniciar, respaldar, revertir y verificar el rendimiento del equipo.
+Tras compilar el frontend, `test:e2e:swarm` ejecuta las pruebas de navegador
+con servicios aislados. El equipo previsto debe superar la verificación de
+rendimiento antes del despliegue; las pruebas de software no validan el tiempo
+físico de presentación ni el desempeño humano.
+
 <a id="quick-start-sms"></a>
 ## 8. Inicio rápido del SMS FAC ISR
 

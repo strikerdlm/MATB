@@ -483,3 +483,91 @@ async def test_mission_block_sources_keep_practice_separate(manager, runtime_db)
             assert attempt.execution_purpose == ('practice' if block.profile == 'PRACTICE' else 'study')
             assert attempt.purpose_provenance_id is not None
     await manager.shutdown()
+
+
+@pytest.mark.anyio
+async def test_swarm_v3_recording_group_commands_and_sealed_replay(manager, runtime_db):
+    from app.simulation_schemas import CreateTechnicalSimulationSession, PresentationConfig, PresentationEvent
+    from matb_integration.suas.presentation.packages import catalog
+    from matb_integration.suas.recording.replay import ReplayVerifier
+    scene = catalog()[0]
+    config = PresentationConfig(version=3, blocks={"LOW": "3d"}, scene_id=scene["id"], scene_sha256=scene["sha256"], camera="swarm")
+    with Session(runtime_db) as db:
+        prepared = await manager.prepare_technical(CreateTechnicalSimulationSession(execution_purpose="practice", scenario_id="swarm_supervision", block_id="LOW", locale="en", presentation=config), db)
+    lease = prepared.controller_lease
+    base = v2_exposure(scene).model_dump(mode="json")
+    base.update(version=3, kind="ready", block_id="LOW", camera="swarm")
+    base["resolved"].update(version=3, camera="swarm", model_version="racing-quad-v1-scale80", group_id=None, inset=True)
+    await manager.presentation_event(prepared.id, lease, PresentationEvent.model_validate(base))
+    await manager.start(prepared.id, "LOW", lease)
+    state = await manager.state(prepared.id)
+    task = asyncio.create_task(manager.submit(prepared.id, lease, CommandRequest(command_id=uuid4(),expected_state_version=state["state_version"],kind="SWARM_TASK",payload={"group_id":"ALPHA","action":"SEARCH","target_id":"sector_alpha"})))
+    await asyncio.sleep(0)
+    await manager.tick_once()
+    result = await task
+    assert result.code == "accepted"
+    for _ in range(5): await manager.tick_once()
+    await manager.snapshot_once()
+    assert manager.active.engine.snapshot()["swarms"]["ALPHA"]["command_count"] == 1
+    await manager.finish(prepared.id,lease,"complete")
+    replay=ReplayVerifier().verify(manager.active.recorder.run_dir)
+    assert replay.status == "match", replay
+    assert manager.active.manifest["engine_version"] == "2.0.0-swarm.1"
+
+
+def test_v3_rejects_model_version_downgrade_and_missing_inset():
+    from app.simulation_schemas import PresentationEvent
+    from pydantic import ValidationError
+    base=v2_exposure({"sha256":"a"*64}).model_dump(mode="json")
+    base["resolved"]["model_version"]="racing-quad-v1-scale80"
+    with pytest.raises(ValidationError): PresentationEvent.model_validate(base)
+    base.update(version=3)
+    base["resolved"].update(version=3,group_id=None,inset=False)
+    with pytest.raises(ValidationError): PresentationEvent.model_validate(base)
+
+
+def test_swarm_research_condition_is_explicit_and_versioned():
+    from app.simulation_presentation_bindings import bind_presentation
+    from app.simulation_schemas import PresentationConfig
+    from matb_integration.suas.scenarios.loader import load_scenario
+    root = Path(__file__).resolve().parents[3]
+    loaded = load_scenario(root / "scenarios/suas/swarm_supervision.yaml")
+    for config in (None, PresentationConfig(version=2)):
+        with pytest.raises(ValueError, match="explicit v3"):
+            bind_presentation({}, config, loaded)
+    manifest = {}
+    bind_presentation(manifest, PresentationConfig(version=3, camera="swarm"), loaded)
+    assert manifest["presentation"]["version"] == 3
+    assert manifest["swarm"] == {"algorithm": "fixed-slot-v1", "spacing_mm": 60000, "metrics": "swarm-descriptive-v1"}
+
+
+@pytest.mark.anyio
+async def test_swarm_research_webgl_failure_requires_requalification(manager, runtime_db):
+    from app.simulation_schemas import PresentationConfig, PresentationEvent
+    from app.simulation_runtime import InvalidTransition
+    from matb_integration.suas.presentation.packages import catalog
+    scene=catalog()[0]
+    config=PresentationConfig(version=3,blocks={"PRACTICE":"3d"},scene_id=scene["id"],scene_sha256=scene["sha256"],camera="swarm")
+    authored=mission_request(runtime_db,execution_purpose="study",participant_id="P01",visit_ordinal=1,scenario_id="swarm_supervision",locale="en",presentation=config.model_dump(mode="json"))
+    with Session(runtime_db) as db: prepared=await manager.prepare(authored,db)
+    lease=prepared.controller_lease
+    base=v2_exposure(scene).model_dump(mode="json")
+    base.update(version=3,kind="ready",block_id="PRACTICE",camera="swarm")
+    base["resolved"].update(version=3,camera="swarm",model_version="racing-quad-v1-scale80",group_id=None,inset=True)
+    await manager.presentation_event(prepared.id,lease,PresentationEvent.model_validate(base))
+    await manager.start(prepared.id,"PRACTICE",lease)
+    state=await manager.state(prepared.id)
+    with pytest.raises(InvalidLease):
+        await manager.submit(prepared.id,"observer",CommandRequest(command_id=uuid4(),expected_state_version=state["state_version"],kind="SWARM_TASK",payload={"group_id":"ALPHA","action":"HOLD","target_id":""}))
+    base.update(event_id=str(uuid4()),sequence=base["sequence"]+1,kind="failure")
+    base["resolved"]["visibility"]="unavailable"
+    await manager.presentation_event(prepared.id,lease,PresentationEvent.model_validate(base))
+    assert manager.active.lifecycle == "PAUSED"
+    with pytest.raises(InvalidTransition,match="presentation_not_ready"):
+        await manager.resume(prepared.id,lease)
+    base.update(event_id=str(uuid4()),sequence=base["sequence"]+1,kind="ready")
+    base["resolved"]["visibility"]="visible"
+    await manager.presentation_event(prepared.id,lease,PresentationEvent.model_validate(base))
+    await manager.resume(prepared.id,lease)
+    assert manager.active.lifecycle == "RUNNING"
+    await manager.shutdown()

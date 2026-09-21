@@ -142,3 +142,34 @@ theme tokens, dark-mode, lucide-react icons, zustand state. Pure logic lives in
 
 Spec: `docs/superpowers/specs/2026-06-03-webui-phase1b-frontend-design.md`
 Plan: `docs/superpowers/plans/2026-06-03-webui-phase1b-frontend.md`
+
+## Swarm presentation and release gate
+
+Presentation v3 adds procedural racing quadcopters, swarm framing, third-person
+chase, trails, planned formation markers and a persistent north-up inset. Visual
+focus is separate from group command selection. Recorded replay locks visual
+controls and restores the captured v3 state. WebGL loss is reported to the session
+controller; all operational views are concealed during SAGAT.
+
+```bash
+npm ci
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npx playwright install chromium
+npm run test:e2e:swarm
+```
+
+Set `MATB_PYTHON` to the installed backend Python. This dedicated gate owns ports
+8186/3186, synthetic data under `.test-tmp`, and browser artifacts under
+`.next/swarm-acceptance`. Set `MATB_SWARM_API_PORT` / `MATB_SWARM_UI_PORT` to other
+unused ports if needed. It never reuses an existing service. For an isolated build,
+set the same `MATB_NEXT_DIST_DIR` at build and start/test time.
+
+Use `?metrics=1` for read-only rendering diagnostics. Workstation qualification
+uses `MATB_SWARM_REQUIRE_PERFORMANCE=1`; software-renderer identities, fewer than
+120 warm samples, or p95 intervals >=33.3 ms fail that gate. On Windows,
+`MATB_SWARM_GPU=1` requests ANGLE D3D11; the returned renderer identity must still
+be checked. CI functional success alone does not satisfy this workstation gate.
+See the [release runbook](../../docs/implementation/suas-swarm-release.md).
