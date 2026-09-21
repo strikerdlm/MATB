@@ -34,7 +34,7 @@ PAIR_DIRS = ("openmatb-research", "research-console", "sms-platform", "legacy-mo
 MARKDOWN_EXCLUDED_DIRS = frozenset({
     ".git", ".worktrees", ".superpowers", "node_modules", "dist", "build", ".next",
     "coverage", ".pytest_cache", "__pycache__", ".venv", "venv", "site-packages", "vendor",
-    ".tmp", ".venv-geography", ".matb-managed-e2e", "test-results", "playwright-report",
+    ".tmp", ".test-tmp", ".venv-geography", ".matb-managed-e2e", "test-results", "playwright-report",
 })
 LINK_RE = re.compile(r"(?<!!)\[[^]]*]\(([^)]+)\)")
 ANCHOR_RE = re.compile(r'<a\s+id=["\']([^"\']+)["\']\s*></a>', re.IGNORECASE)

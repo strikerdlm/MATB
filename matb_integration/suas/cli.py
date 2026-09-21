@@ -9,7 +9,8 @@ import sys
 from pathlib import Path
 
 from matb_integration.suas.domain.serialization import canonical_json
-from matb_integration.suas.engine.runtime import CHECKPOINT_INTERVAL_MS, ENGINE_VERSION, SimulationEngine
+from matb_integration.suas.engine.runtime import CHECKPOINT_INTERVAL_MS, SimulationEngine
+from matb_integration.suas.engine.swarm import engine_version
 from matb_integration.suas.metrics.mission import derive_block_metrics
 from matb_integration.suas.recording.artifacts import verify_checksum_file
 from matb_integration.suas.recording.recorder import RecordingError, SessionRecord, SessionRecorder
@@ -70,7 +71,7 @@ def main(argv: list[str] | None = None) -> int:
             event_count += len(engine.step().events)
         snapshot = engine.snapshot()
         print(canonical_json({
-            "engine_version": ENGINE_VERSION,
+            "engine_version": engine_version(loaded.definition),
             "ticks": args.ticks,
             "simulation_time_ms": snapshot["simulation_time_ms"],
             "event_count": event_count,
@@ -106,7 +107,7 @@ def _record(
     thresholds = definition.metric_thresholds
     manifest = {
         "manifest_version": 1,
-        "engine_version": ENGINE_VERSION,
+        "engine_version": engine_version(loaded.definition),
         "scenario_id": definition.scenario_id,
         "scenario_sha256": loaded.sha256,
         "session_id": session_id,

@@ -83,7 +83,29 @@ class SubmitPostBlockScale:
     answers: Mapping[str, int]
 
 
+@dataclass(frozen=True, slots=True)
+class SwarmTask:
+    group_id: str
+    action: str
+    target_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class SwarmWaypoint:
+    group_id: str
+    waypoint: PointMM
+    formation: str
+
+
+@dataclass(frozen=True, slots=True)
+class SwarmMembership:
+    group_id: str
+    aircraft_id: str
+    action: str
+
+
 OperatorCommand = (
+    SwarmTask | SwarmWaypoint | SwarmMembership |
     AssignSector | SetWaypoint | Hold | ResumeMission | ReturnToBase |
     AcknowledgeAlert | InspectContact | ClassifyContact |
     SetContactPriority | ReportContact | SubmitIsa | SubmitSagat |

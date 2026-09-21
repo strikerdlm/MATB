@@ -27,7 +27,8 @@ def canonical_data(value: Any) -> Any:
             raise ValueError("canonical JSON does not support non-finite floats")
         return value
     if is_dataclass(value) and not isinstance(value, type):
-        return {field.name: canonical_data(getattr(value, field.name)) for field in fields(value)}
+        return {field.name: canonical_data(getattr(value, field.name)) for field in fields(value)
+                if not (field.metadata.get("omit_none") and getattr(value, field.name) is None)}
     if isinstance(value, Mapping):
         converted: dict[str, Any] = {}
         for key, item in value.items():

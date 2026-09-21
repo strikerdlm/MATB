@@ -30,9 +30,9 @@ export function usePresentation(context: Context) {
     const c = current.current;
     const live = useSimulationStore.getState().session;
     if (live?.id === c.sessionId && ["FINISHED", "ABORTED", "INTERRUPTED"].includes(live.lifecycle)) return;
-    if (c.replay || !c.lease || !c.active || c.config?.version !== 2) return;
+    if (c.replay || !c.lease || !c.active || (c.config?.version ?? 1) < 2) return;
     const makeEvent = (eventKind: string): RecordEvent => ({
-      version: 2, event_id: crypto.randomUUID(), kind: eventKind, block_id: c.block,
+      version: c.config?.version, event_id: crypto.randomUUID(), kind: eventKind, block_id: c.block,
       sequence: sequence = Math.max(sequence + 1, Math.floor((performance.timeOrigin + performance.now()) * 1000)),
       client_time_ms: performance.timeOrigin + performance.now(), simulation_time_ms: c.time,
       state_version: c.stateVersion, traffic_frame_id: c.trafficFrame ?? null,

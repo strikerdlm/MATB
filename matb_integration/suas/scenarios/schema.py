@@ -133,9 +133,23 @@ class MetricThresholdSpec(BaseModel):
     timeliness_target: Decimal = Field(gt=0, le=1)
 
 
+class SwarmGroupSpec(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    group_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+    aircraft_ids: list[str] = Field(min_length=1, max_length=8)
+
+
+class SwarmSpec(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    algorithm: Literal["fixed-slot-v1"] = "fixed-slot-v1"
+    spacing_m: Decimal = Field(gt=0)
+    groups: list[SwarmGroupSpec] = Field(min_length=1, max_length=8)
+
+
 class ScenarioSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    schema_version: Literal[1]
+    schema_version: Literal[1, 2]
+    swarm: SwarmSpec | None = None
     scenario_id: str
     title: LocalizedText
     author: str

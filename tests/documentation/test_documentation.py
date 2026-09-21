@@ -38,7 +38,7 @@ def repo_root() -> Path:
 def test_generated_geography_and_browser_trees_are_not_documentation(tmp_path: Path) -> None:
     source = tmp_path / "README.md"
     source.write_text("# Source\n", encoding="utf-8")
-    for name in (".tmp", ".venv-geography", ".matb-managed-e2e", "test-results"):
+    for name in (".tmp", ".test-tmp", ".venv-geography", ".matb-managed-e2e", "test-results"):
         generated = tmp_path / name / "README.md"
         generated.parent.mkdir()
         generated.write_text("[broken](absent.md)\n", encoding="utf-8")

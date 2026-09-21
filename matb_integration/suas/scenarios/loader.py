@@ -137,6 +137,12 @@ def canonicalize_spec_document(spec: ScenarioSpec) -> dict[str, Any]:
     """Return schema-reloadable, order-normalized document data for hashing."""
 
     document = spec.model_dump(by_alias=True)
+    if spec.schema_version == 1:
+        document.pop("swarm", None)
+    elif spec.swarm:
+        document["swarm"]["groups"].sort(key=lambda group: group["group_id"])
+        for group in document["swarm"]["groups"]:
+            group["aircraft_ids"].sort()
     for key, id_key in (
         ("aircraft", "aircraft_id"), ("contacts", "contact_id"),
         ("sectors", "polygon_id"), ("restricted_zones", "polygon_id"),
@@ -213,6 +219,11 @@ def normalize_scenario(spec: ScenarioSpec, *, scenario_sha256: str) -> ScenarioD
         convergence_in_ms=_scaled(item.convergence_in_s, 1_000),
     ) for item in sorted(spec.conflict_events, key=lambda value: value.event_id))
     return ScenarioDefinition(
+        swarm=None if spec.swarm is None else {
+            "algorithm": spec.swarm.algorithm,
+            "spacing_mm": _scaled(spec.swarm.spacing_m, 1000),
+            "groups": {g.group_id: tuple(sorted(g.aircraft_ids)) for g in spec.swarm.groups},
+        },
         schema_version=spec.schema_version,
         scenario_id=spec.scenario_id,
         scenario_sha256=scenario_sha256,
@@ -253,6 +264,16 @@ def normalize_scenario(spec: ScenarioSpec, *, scenario_sha256: str) -> ScenarioD
 
 
 def _validate_semantics(spec: ScenarioSpec, *, source_name: str) -> None:
+    if (spec.schema_version == 2) != (spec.swarm is not None):
+        raise ValueError("swarm definitions require schema version 2")
+    if spec.swarm:
+        _require_unique((g.group_id for g in spec.swarm.groups), "swarm group")
+        members = [a for g in spec.swarm.groups for a in g.aircraft_ids]
+        _require_unique(members, "swarm membership")
+        if set(members) != {a.aircraft_id for a in spec.aircraft}:
+            raise ValueError("swarm groups must partition the scenario aircraft")
+        if spec.swarm.spacing_m <= spec.advisory_separation_m:
+            raise ValueError("formation spacing must exceed advisory separation")
     terrain = _polygon(spec.terrain)
     if spec.critical_separation_m >= spec.advisory_separation_m:
         raise ValueError(f"{source_name}: critical separation must be less than advisory separation")

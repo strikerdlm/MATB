@@ -22,7 +22,8 @@ interface CommandBarProps {
 
 export function CommandBar({ snapshot, selectedAircraft, selectedContact, locale, readOnly = false, pending = false, waypointMode = false, onWaypointMode, onCommand }: CommandBarProps) {
   const [confirmReturn, setConfirmReturn] = useState(false);
-  const aircraftKinds = validCommandsFor(selectedAircraft);
+  const grouped = selectedAircraft && Object.values(snapshot?.swarms ?? {}).some(g => g.members.includes(selectedAircraft.aircraft_id));
+  const aircraftKinds = grouped ? [] : validCommandsFor(selectedAircraft);
   const contactKinds = validCommandsFor(selectedContact);
   const disabled = readOnly || pending;
   const es = locale === "es-CO";
@@ -36,6 +37,7 @@ export function CommandBar({ snapshot, selectedAircraft, selectedContact, locale
     <footer className="mission-panel rounded-none border-x-0 border-b-0 px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="page-kicker mr-2">{t(locale, "command.label")}</span>
+        {grouped && <span className="text-xs">{es ? "Separe el miembro en Control del enjambre para mando individual." : "Detach this member in Swarm control for individual commands."}</span>}
         {selectedAircraft ? (
           <>
             <span className="mr-1 rounded border border-success/30 bg-success/5 px-2 py-1 font-mono text-xs text-success">{selectedAircraft.aircraft_id}</span>

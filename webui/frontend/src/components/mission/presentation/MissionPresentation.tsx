@@ -112,12 +112,12 @@ function MissionPresentationBlock({
     time: map.snapshot.simulation_time_ms, stateVersion: map.snapshot.state_version,
     trafficFrame: traffic?.frame_id, active: ["PREPARED", "RUNNING", "PAUSED"].includes(session.lifecycle) });
   const resolved = replayState ?? view.state;
-  const controls = config?.version === 2 ? config.controls ?? DEFAULT_CONTROLS : { ...DEFAULT_CONTROLS, adjustable_layers: true };
-  const locked = frozen || !!view.error || !!replayState || (replay && replayCamera !== undefined) || (!replay && config?.version === 2 && !lease);
+  const controls = (config?.version ?? 1) >= 2 ? config?.controls ?? DEFAULT_CONTROLS : { ...DEFAULT_CONTROLS, adjustable_layers: true };
+  const locked = frozen || !!view.error || !!replayState || (replay && replayCamera !== undefined) || (!replay && (config?.version ?? 1) >= 2 && !lease);
   const selectEntity = (entity: Entity, navigation = false) => {
     if (locked) return;
     view.dispatch({ type: "selection", entity }, navigation ? "navigate" : "selection");
-    if (entity.category === "aircraft") map.onSelectAircraft?.(entity.id);
+    if (entity.category === "aircraft" && config?.version !== 3) map.onSelectAircraft?.(entity.id);
     if (entity.category === "contact") map.onSelectContact?.(entity.id);
 
   };
@@ -143,11 +143,11 @@ function MissionPresentationBlock({
   }, [traffic, elapsed, map.snapshot, replay, frozen]);
   useEffect(() => {
     const view = viewRef.current;
-    if (replayState) return;
+    if (replayState || config?.version === 3) return;
     const aircraft_id = map.selectedAircraftId ?? null, contact_id = map.selectedContactId ?? null;
     if (aircraft_id !== view.latest.current.aircraft_id || contact_id !== view.latest.current.contact_id)
       view.dispatch({ type: "resolved", patch: { aircraft_id, contact_id } }, "selection");
-  }, [map.selectedAircraftId, map.selectedContactId, replayState]);
+  }, [map.selectedAircraftId, map.selectedContactId, replayState, config?.version]);
   const trafficProps = {
     traffic,
     trafficElapsedMs: elapsed,
@@ -164,7 +164,7 @@ function MissionPresentationBlock({
     elapsed?: number,
     pose?: CameraPose,
   ) => {
-    if (config?.version === 2) {
+    if ((config?.version ?? 1) >= 2) {
       if (pose) view.dispatch({ type: "resolved", patch: { pose } }, kind);
       else if (kind === "failure") view.dispatch({ type: "resolved", patch: { visibility: "unavailable" } }, kind);
       else view.record(kind);
@@ -247,7 +247,7 @@ function MissionPresentationBlock({
           key={`${config.scene_sha256}:${block}`}
           {...map}
           {...trafficProps}
-          selectedAircraftId={replayState ? replayState.aircraft_id : map.selectedAircraftId}
+          selectedAircraftId={replayState ? replayState.aircraft_id : config?.version === 3 ? resolved.aircraft_id : map.selectedAircraftId}
           selectedContactId={replayState ? replayState.contact_id : map.selectedContactId}
           config={config}
           frozen={locked}
@@ -263,7 +263,7 @@ function MissionPresentationBlock({
         <InterpolatedMissionMap
           {...map}
           {...trafficProps}
-          selectedAircraftId={replayState ? replayState.aircraft_id : map.selectedAircraftId}
+          selectedAircraftId={replayState ? replayState.aircraft_id : config?.version === 3 ? resolved.aircraft_id : map.selectedAircraftId}
           selectedContactId={replayState ? replayState.contact_id : map.selectedContactId}
           viewState={resolved}
           onViewAction={view.dispatch}

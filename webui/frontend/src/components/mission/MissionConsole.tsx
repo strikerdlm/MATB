@@ -9,6 +9,7 @@ import { consoleProfileStatus } from "@/lib/simulation/console-profile";
 import { AlertQueue } from "@/components/mission/AlertQueue";
 import { ContactQueue } from "@/components/mission/ContactQueue";
 import { CommandBar } from "@/components/mission/CommandBar";
+import { SwarmPanel } from "./SwarmPanel";
 import { FleetPanel } from "@/components/mission/FleetPanel";
 import { MissionTopBar } from "@/components/mission/MissionTopBar";
 import { MissionInstructionPanel } from "@/components/mission/MissionInstructionPanel";
@@ -203,8 +204,9 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
       {concealOperationalState ? probeOverlay : !currentSnapshot?.aircraft ? (
         <main className="grid flex-1 place-items-center p-8">{currentSession.presentation?.blocks[(currentSession.next_block_id ?? "PRACTICE") as "PRACTICE" | "LOW" | "MEDIUM" | "HIGH"] === "3d" ? <MissionPresentation session={currentSession} lease={canControl ? lease : null} readOnly snapshot={preflightSnapshot(currentSession.next_block_id ?? "PRACTICE")} locale={locale}/> : <div className="mission-panel max-w-lg p-8 text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-info" aria-hidden="true" /><h1 className={`mt-4 font-display text-2xl ${modern ? "" : "uppercase"}`}>{t(locale, "mission.telemetry_standing_by")}</h1><p className="mt-2 text-sm text-muted-foreground">{t(locale, "mission.start_for_telemetry")}</p></div>}</main>
       ) : <main className="grid min-h-0 flex-1 gap-3 p-3 xl:grid-cols-[14rem_minmax(32rem,1fr)_21rem] xl:p-4" aria-label={t(locale, "mission.operations")}>
-        <div className="grid min-h-0 gap-3 md:grid-cols-2 xl:grid-cols-1 xl:grid-rows-[auto_minmax(15rem,1fr)]">
-          <MissionJourneyRail session={currentSession} locale={locale} steps={journeySteps} />
+        <div className={currentSnapshot.swarms ? "flex min-h-0 flex-col gap-3" : "grid min-h-0 gap-3 md:grid-cols-2 xl:grid-cols-1 xl:grid-rows-[auto_minmax(15rem,1fr)]"}>
+          {currentSnapshot.swarms ? <details className="mission-panel p-2"><summary className="cursor-pointer text-xs">{locale === "en" ? "Visit sequence" : "Secuencia de visita"}</summary><MissionJourneyRail session={currentSession} locale={locale} steps={journeySteps} /></details> : <MissionJourneyRail session={currentSession} locale={locale} steps={journeySteps} />}
+          {currentSnapshot.swarms && <SwarmPanel snapshot={currentSnapshot} locale={locale} disabled={!canControl || busy || pendingCommandIds.length > 0} onCommand={(kind,payload)=>{void issueCommand(kind,payload);}} />}
           <FleetPanel snapshot={currentSnapshot} locale={locale} selectedAircraftId={selectedAircraftId} onSelect={selectAircraft} />
         </div>
         <MissionPresentation session={currentSession} lease={canControl ? lease : null} readOnly={!canControl} frozen={busy || concealOperationalState || currentSession.lifecycle === "PAUSED" && currentSession.protocol_phase !== "READY_FOR_BLOCK" || currentSession.lifecycle === "RUNNING" && connection !== "live"} snapshot={currentSnapshot} previousSnapshot={previousSnapshot} interpolate={currentSession.lifecycle === "RUNNING" && connection === "live" && !concealOperationalState} locale={locale} selectedAircraftId={selectedAircraftId} selectedContactId={selectedContactId} onSelectAircraft={(aircraftId) => { setWaypointMode(false); selectAircraft(aircraftId); }} onSelectContact={(contactId) => { setWaypointMode(false); selectContact(contactId); }} waypointAircraftId={waypointMode ? selectedAircraftId : null} onSetWaypoint={(aircraftId, waypoint) => { setWaypointMode(false); void issueCommand("SET_WAYPOINT", { aircraft_id: aircraftId, waypoint }); }} />

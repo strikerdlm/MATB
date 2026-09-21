@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from "three";
 import type { CameraPose } from "./contracts";
 
-export type CameraOwner = "manual" | "transition" | "follow" | "drone" | "replay";
+export type CameraOwner = "manual" | "transition" | "follow" | "drone" | "replay" | "swarm";
 export function interpolatePose(from: CameraPose, to: CameraPose, fraction: number): CameraPose {
   const t = Math.min(1, Math.max(0, fraction));
   const eased = t * t * (3 - 2 * t);

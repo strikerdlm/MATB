@@ -41,3 +41,16 @@ recovery, and sealed debrief artifacts. The browser implementation and
 headless test commands are in [`frontend/README.md`](frontend/README.md).
 
 See `docs/superpowers/specs/2026-06-03-webui-phase1-data-tracker-design.md`.
+
+## Swarm supervision
+
+The native mission console includes the `swarm_supervision` scenario: 2, 4, 6 or
+8 aircraft, atomic group tasking, procedural racing quadcopters and third-person
+presentation v3. Technical sessions start at `/mission/test`; research sessions
+require an explicitly frozen v3 study condition. The same renderer supports
+recorded replay and conceals all operational swarm views during SAGAT.
+
+See the [swarm guide](../docs/implementation/suas-swarm-supervision.md) and
+[release runbook](../docs/implementation/suas-swarm-release.md). The 2D/CLI service
+can run without a GPU; fluid 3D presentation requires a qualified graphics-enabled
+browser on the operator workstation. Use production builds for deployment.

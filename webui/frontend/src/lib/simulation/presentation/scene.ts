@@ -1,3 +1,5 @@
+import { racingDrone, poseRacingDrone } from "./racing-drone";
+import { swarmOverlays } from "./swarm-overlays";
 import { operationalObjects } from "./operational-objects";
 import { renderScheduler } from "./render-scheduler";
 import { CameraController } from "./camera-controller";
@@ -72,6 +74,8 @@ export interface SceneOptions extends MissionMapProps {
   selectedTrafficId?: string | null;
   onSelectTraffic?: (id: string) => void;
   geographicLayers?: GeographyLayer[];
+  modelVersion?: string;
+  groupId?: string | null;
   cameraMode: CameraMode;
   transitionMs?: number;
   focus?: Entity | null;
@@ -184,7 +188,8 @@ export async function createMissionScene(
   const labels = new Map<string, HTMLButtonElement>();
   const renderTimes: number[] = [];
   const submission = renderScheduler(submitFrame);
-  let renderCount = 0;
+  let renderCount = 0, lastFrameAt = 0;
+  const frameIntervals: number[] = [];
   const gl = renderer.getContext(),
     debug = gl.getExtension("WEBGL_debug_renderer_info");
   const device = debug
@@ -206,10 +211,11 @@ export async function createMissionScene(
     options.onCameraEvent?.("camera", pose(), initial.cameraMode);
   }
   const operational = operationalObjects(dynamic, staticLayer,
-    (point, height) => missionToWorld(point, elevationAt(grid, point) + height), drone, disposeTree);
+    (point, height) => missionToWorld(point, elevationAt(grid, point) + height), initial.modelVersion === "racing-quad-v1-scale80" ? racingDrone : drone, disposeTree);
+  const swarmVisuals = swarmOverlays(staticLayer, (point, height) => missionToWorld(point, elevationAt(grid, point) + height));
   const hiddenAircraft = () => options.cameraMode === "drone"
     ? options.selectedAircraftId ?? Object.keys(options.snapshot.aircraft)[0] : null;
-  function rebuild() { operational.update(options.snapshot, options.layers, hiddenAircraft()); }
+  function rebuild() { operational.update(options.snapshot, options.layers, hiddenAircraft()); swarmVisuals.update(options.snapshot, options.layers?.routes !== false); }
   function updateLabels() {
     const ids = new Set<string>();
     Object.values(options.snapshot.aircraft).forEach((aircraft, index) => {
@@ -240,7 +246,7 @@ export async function createMissionScene(
       label.style.top = `${((1 - projected.y) / 2) * host.clientHeight - 8 - (index % 4) * 19}px`;
       label.style.borderColor =
         id === options.selectedAircraftId ? "#ffdd66" : "#71e2ed";
-      label.disabled = options.frozen;
+      label.disabled = options.frozen || !!options.replayPose;
       label.setAttribute(
         "aria-pressed",
         String(id === options.selectedAircraftId),
@@ -256,6 +262,12 @@ export async function createMissionScene(
   function submitFrame() {
     if (disposed) return;
     const started = performance.now();
+    if (lastFrameAt && !options.frozen && !document.hidden) { frameIntervals.push(started-lastFrameAt); if(frameIntervals.length>2048) frameIntervals.shift(); }
+    lastFrameAt = options.frozen || document.hidden ? 0 : started;
+    for (const [id, object] of operational.aircraft.objects) {
+      const aircraft = options.snapshot.aircraft[id];
+      poseRacingDrone(object, options.snapshot.simulation_time_ms, camera.position.distanceTo(object.position), !!aircraft && !["RECOVERED", "MISSION_FAILED"].includes(aircraft.mode));
+    }
     renderer.render(scene, camera);
     updateLabels();
     renderCount++;
@@ -269,6 +281,18 @@ export async function createMissionScene(
     });
   }
   function follow() {
+    if (options.cameraMode === "swarm") {
+      const groups = options.snapshot.swarms ?? {};
+      const group = options.groupId ? groups[options.groupId] : Object.values(groups)[0];
+      const ids = group?.members ?? Object.keys(options.snapshot.aircraft);
+      const box = new THREE.Box3();
+      for (const id of ids) { const object=operational.aircraft.objects.get(id); if(object) box.expandByPoint(object.position); }
+      if(box.isEmpty()) { reset(); return; }
+      const target=box.getCenter(new THREE.Vector3()), radius=Math.max(120,box.getSize(new THREE.Vector3()).length()/2);
+      const range=radius/Math.sin(THREE.MathUtils.degToRad(camera.fov/2))*1.35/Math.min(1,camera.aspect);
+      camera.position.copy(target).add(new THREE.Vector3(0.4,0.8,1).normalize().multiplyScalar(range));
+      camera.lookAt(target); controls.target.copy(target); return;
+    }
     if (options.cameraMode === "overview") return;
     if (options.focus?.category === "observed") {
       const marker = observed.root.children.find(child => child.userData.trafficId === options.focus?.id);
@@ -306,8 +330,8 @@ export async function createMissionScene(
     } else {
       camera.position
         .copy(target)
-        .addScaledVector(direction, -500)
-        .add(new THREE.Vector3(0, 350, 0));
+        .addScaledVector(direction, options.modelVersion === "racing-quad-v1-scale80" ? -80 : -500)
+        .add(new THREE.Vector3(0, options.modelVersion === "racing-quad-v1-scale80" ? 45 : 350, 0));
       camera.lookAt(target);
     }
   }
@@ -323,8 +347,9 @@ export async function createMissionScene(
     else options.onCameraEvent?.("transition_end", pose(), options.cameraMode);
   }
   function update(next: SceneOptions) {
-    const changed = options.cameraMode !== next.cameraMode || (next.cameraMode !== "overview" && JSON.stringify(options.focus) !== JSON.stringify(next.focus));
+    const changed = options.cameraMode !== next.cameraMode || options.groupId !== next.groupId || (next.cameraMode !== "overview" && JSON.stringify(options.focus) !== JSON.stringify(next.focus));
     const from = pose();
+    if (options.frozen !== next.frozen) lastFrameAt = 0;
     options = next;
     controls.enabled = !options.frozen && !options.replayPose;
     rebuild();
@@ -370,7 +395,7 @@ export async function createMissionScene(
     if (
       !down ||
       Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5 ||
-      options.frozen
+      options.frozen || options.replayPose
     )
       return;
     const rect = renderer.domElement.getBoundingClientRect();
@@ -462,6 +487,8 @@ export async function createMissionScene(
     options.onViewport?.({ width, height, dpr: renderer.getPixelRatio() });
     render();
   });
+  const resetFrameTiming = () => { lastFrameAt = 0; };
+  document.addEventListener("visibilitychange", resetFrameTiming);
   resize.observe(host);
   controls.addEventListener("change", render);
   controls.addEventListener("end", manualEnd);
@@ -491,6 +518,10 @@ export async function createMissionScene(
       manualEnd();
     },
     metrics: () => ({
+      sampling: "render submissions; includes stalls, excludes frozen/hidden periods",
+      frameIntervalMedianMs: [...frameIntervals].sort((a,b)=>a-b)[Math.floor(frameIntervals.length*.5)] ?? null,
+      frameIntervalP95Ms: [...frameIntervals].sort((a,b)=>a-b)[Math.floor(frameIntervals.length*.95)] ?? null,
+      frameSamples: frameIntervals.length,
       calls: renderer.info.render.calls,
       triangles: renderer.info.render.triangles,
       memory: { ...renderer.info.memory },
@@ -505,11 +536,13 @@ export async function createMissionScene(
           Math.floor(renderTimes.length * 0.95)
         ] ?? 0,
     }),
+    resetMetrics: () => { frameIntervals.length = 0; renderTimes.length = 0; lastFrameAt = 0; },
     dispose: () => {
       stopMotion();
       disposed = true;
       submission.dispose();
       resize.disconnect();
+      document.removeEventListener("visibilitychange", resetFrameTiming);
       controls.removeEventListener("change", render);
       controls.removeEventListener("end", manualEnd);
       renderer.domElement.removeEventListener("wheel", manual, { capture: true });
@@ -520,6 +553,7 @@ export async function createMissionScene(
       renderer.domElement.removeEventListener("webglcontextlost", lost);
       labels.forEach((label) => label.remove());
       labels.clear();
+      swarmVisuals.dispose();
       disposeTree(scene);
       bitmap.close();
       texture.dispose();

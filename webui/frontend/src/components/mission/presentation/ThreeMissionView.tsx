@@ -1,4 +1,5 @@
 "use client";
+import { SwarmInset } from "./SwarmInset";
 import { DEFAULT_CONTROLS, type ResolvedPresentation, type PresentationAction } from "@/lib/simulation/presentation/state";
 import { animateSnapshot } from "@/lib/simulation/presentation/interpolation-controller";
 import React, { useEffect, useRef, useState } from "react";
@@ -45,7 +46,7 @@ export default function ThreeMissionView(props: ThreeMissionViewProps) {
     contacts: true,
   });
   const layers = props.viewState?.operational_layers ?? localLayers;
-  const allowed = props.config.version === 2 ? props.config.controls ?? DEFAULT_CONTROLS : { ...DEFAULT_CONTROLS, adjustable_layers: true };
+  const allowed = props.config.version >= 2 ? props.config.controls ?? DEFAULT_CONTROLS : { ...DEFAULT_CONTROLS, adjustable_layers: true };
   const lastLog = useRef(-Infinity),
     revision = useRef(0);
   const es = props.locale === "es-CO";
@@ -60,6 +61,8 @@ export default function ThreeMissionView(props: ThreeMissionViewProps) {
   const options = useRef<SceneOptions>({
     ...props,
     cameraMode: activeCamera,
+    modelVersion: props.viewState?.model_version,
+    groupId: props.viewState?.group_id,
     frozen: props.frozen,
     layers,
     geographicLayers: props.viewState?.geographic_layers ?? props.config.layers ?? [
@@ -79,6 +82,8 @@ export default function ThreeMissionView(props: ThreeMissionViewProps) {
   options.current = {
     ...props,
     cameraMode: activeCamera,
+    modelVersion: props.viewState?.model_version,
+    groupId: props.viewState?.group_id,
     layers,
     geographicLayers: props.viewState?.geographic_layers ?? props.config.layers ?? [
       "roads",
@@ -132,7 +137,7 @@ export default function ThreeMissionView(props: ThreeMissionViewProps) {
         }
         controller.current = scene;
         if (new URLSearchParams(window.location.search).get("metrics") === "1")
-          Object.assign(window, { __matbPresentationMetrics: scene.metrics });
+          Object.assign(window, { __matbPresentationMetrics: scene.metrics, __matbResetPresentationMetrics: scene.resetMetrics });
         revision.current = performance.now();
         scene.update(options.current);
         setReady(true);
@@ -150,8 +155,9 @@ export default function ThreeMissionView(props: ThreeMissionViewProps) {
       controller.current?.dispose();
       controller.current = null;
       Reflect.deleteProperty(window, "__matbPresentationMetrics");
+      Reflect.deleteProperty(window, "__matbResetPresentationMetrics");
     };
-  }, [props.config.scene_id, props.config.scene_sha256]); // Scene ownership changes only with its immutable package.
+  }, [props.config.scene_id, props.config.scene_sha256, props.viewState?.model_version]); // Scene ownership changes only with its immutable package.
   useEffect(() => {
     revision.current = performance.now();
     try {
@@ -175,6 +181,7 @@ export default function ThreeMissionView(props: ThreeMissionViewProps) {
     activeCamera,
     layers,
     props.viewState?.focus,
+    props.viewState?.group_id,
     props.viewState?.geographic_layers,
   ]);
   useEffect(() => {
@@ -202,6 +209,7 @@ export default function ThreeMissionView(props: ThreeMissionViewProps) {
         <label>
           {es ? "Cámara" : "Camera"}{" "}
           <select
+            aria-label={es ? "Cámara" : "Camera"}
             value={activeCamera}
             disabled={
               props.frozen || !ready || props.replayCamera !== undefined
@@ -214,8 +222,9 @@ export default function ThreeMissionView(props: ThreeMissionViewProps) {
             }}
             className="bg-background p-2"
           >
-            <option value="overview">{es ? "General" : "Overview"}</option>
-            <option value="follow" disabled={props.viewState?.focus?.category === "contact"}>{es ? "Seguimiento" : "Follow"}</option>
+            <option value="overview">{es ? "Órbita libre" : "Free orbit"}</option>
+            {props.config.version === 3 && <option value="swarm">{es ? "Vista del enjambre" : "Swarm overview"}</option>}
+            <option value="follow" disabled={props.viewState?.focus?.category === "contact"}>{es ? "Seguimiento en tercera persona" : "Third-person chase"}</option>
             <option value="drone" disabled={!!props.viewState?.focus && props.viewState.focus.category !== "aircraft"}>
               {es ? "Cámara del dron" : "Drone camera"}
             </option>
@@ -273,6 +282,8 @@ export default function ThreeMissionView(props: ThreeMissionViewProps) {
           {error}
         </p>
       )}
+      {props.config.version === 3 && <label className="px-3">{es ? "Grupo observado" : "Observed group"} <select className="bg-background p-2" value={props.viewState?.group_id ?? ""} disabled={props.frozen || props.replayCamera !== undefined} onChange={event => props.onViewAction?.({ type: "resolved", patch: { group_id: event.target.value || null } }, "selection")}><option value="">{es ? "Primer grupo" : "First group"}</option>{Object.keys(props.snapshot.swarms ?? {}).map(id=><option key={id}>{id}</option>)}</select></label>}
+      <div className="relative">
       <div
         ref={host}
         className="relative min-h-[520px] flex-1 overflow-hidden"
@@ -284,6 +295,8 @@ export default function ThreeMissionView(props: ThreeMissionViewProps) {
         }}
         data-testid="mission-three-view"
       />
+      {props.viewState?.inset && ready && !error && <SwarmInset snapshot={props.snapshot} locale={props.locale} />}
+      </div>
       <p className="px-3 text-xs text-muted-foreground">
         {es
           ? "Imagen satelital de 10 m · Altura ilustrativa sobre terreno · Flechas: desplazar; +/−: zoom; 0: restablecer."

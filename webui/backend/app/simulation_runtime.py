@@ -21,7 +21,9 @@ from uuid import UUID
 
 from sqlmodel import Session, select
 
+from matb_integration.suas.engine.swarm import engine_version
 from matb_integration.suas.domain.commands import (
+    SwarmTask, SwarmWaypoint, SwarmMembership,
     AcknowledgeAlert, AssignSector, ClassifyContact, CommandEnvelope, CommandResult,
     CommandStatus,
     Hold, InspectContact, ReportContact, ResumeMission, ReturnToBase,
@@ -31,7 +33,7 @@ from matb_integration.suas.domain.enums import ContactClassification, ContactPri
 from matb_integration.suas.domain.geometry import PointMM
 from matb_integration.suas.domain.serialization import canonical_data, canonical_json
 from matb_integration.suas.engine.runtime import (
-    CHECKPOINT_INTERVAL_MS, ENGINE_VERSION, SNAPSHOT_INTERVAL_MS, TICK_MS, SimulationEngine,
+    CHECKPOINT_INTERVAL_MS, SNAPSHOT_INTERVAL_MS, TICK_MS, SimulationEngine,
 )
 from matb_integration.suas.metrics.debrief import build_public_debrief, block_metric_summary
 from matb_integration.suas.metrics.research import derive_research_metrics
@@ -232,13 +234,13 @@ class SimulationManager:
                 locale=request.locale,
                 block_order=order,
                 ui_version=self._ui_version,
-                engine_version=ENGINE_VERSION,
+                engine_version=engine_version(loaded.definition),
             )
             session_id = self._new_session_id()
             # Bind the immutable manifest to the durable session identity before
             # it is written into the append-only run directory.
             manifest["session_id"] = session_id
-            manifest["console_profile"] = current_console_profile()
+            manifest["console_profile"] = current_console_profile(swarm=loaded.definition.swarm is not None)
             self._bind_presentation(manifest, request, loaded)
             lease = secrets.token_urlsafe(32)
             run_dir = self.artifact_root / session_id
@@ -318,10 +320,10 @@ class SimulationManager:
                 block_id=request.block_id,
                 locale=request.locale,
                 ui_version=self._ui_version,
-                engine_version=ENGINE_VERSION,
+                engine_version=engine_version(loaded.definition),
             )
             manifest["session_id"] = session_id
-            manifest["console_profile"] = current_console_profile()
+            manifest["console_profile"] = current_console_profile(swarm=loaded.definition.swarm is not None)
             self._bind_presentation(manifest, request, loaded)
             lease = secrets.token_urlsafe(32)
             run_dir = self.artifact_root / "technical" / session_id
@@ -425,9 +427,9 @@ class SimulationManager:
                 await self._presentation_failed(handle, event.block_id)
                 raise ValueError("presentation event limit reached")
             config = handle.manifest.get("presentation") or {}
-            if config.get("version") == 2 and event.version != 2:
-                raise ValueError("v2 sessions require v2 exposure records")
-            if event.version == 2:
+            if config.get("version") in (2, 3) and event.version != config.get("version"):
+                raise ValueError(f"v{config.get('version')} sessions require v{config.get('version')} exposure records")
+            if event.version in (2, 3):
                 self._validate_exposure(handle, config, event)
             if event.kind == "ready":
                 if not config.get("scene_id") or event.scene_sha256 != config.get("scene_sha256"):
@@ -446,7 +448,7 @@ class SimulationManager:
                 await self._presentation_failed(handle, event.block_id)
                 raise
             handle.presentation_ids.add(event_id)
-            if event.version == 2:
+            if event.version in (2, 3):
                 handle.presentation_sequence = event.sequence
                 handle.presentation_states[event.block_id] = event.resolved.model_dump(mode="json")
             if event.kind == "ready":
@@ -477,8 +479,8 @@ class SimulationManager:
 
     def _validate_exposure(self, handle, config, event):
         state = event.resolved
-        if config.get("version") != 2:
-            raise ValueError("v2 exposure requires v2 configuration")
+        if config.get("version") not in (2, 3):
+            raise ValueError("resolved exposure requires a v2 or v3 configuration")
         if event.sequence <= handle.presentation_sequence:
             raise ValueError("presentation sequence must increase")
         if state.scene_sha256 != config.get("scene_sha256") or state.capture_sha256 != config.get("traffic", {}).get("recording_sha256"):
@@ -505,6 +507,8 @@ class SimulationManager:
             raise ValueError("task contacts support inspection only")
         previous = handle.presentation_states.get(event.block_id, {})
         snapshot = handle.engine.snapshot() if handle.engine else {}
+        if state.group_id and state.group_id not in snapshot.get("swarms", {}) and state.group_id != previous.get("group_id"):
+            raise ValueError("unknown public swarm")
         # Validate newly selected entities against public engine state. Existing selections
         # may outlive a snapshot while a delayed exposure record is in flight.
         for field, category in (("aircraft_id", "aircraft"), ("contact_id", "contacts"), ("observed_id", "observed")):
@@ -1133,7 +1137,7 @@ class SimulationManager:
             for line in presentation_path.read_text(encoding="utf-8").splitlines():
                 exposure = json.loads(line)
                 handle.presentation_ids.add(str(exposure["event_id"]))
-                if exposure.get("version") == 2:
+                if exposure.get("version") in (2, 3):
                     handle.presentation_sequence = max(handle.presentation_sequence, exposure["sequence"])
                     handle.presentation_states[exposure["block_id"]] = exposure["resolved"]
         previous_sequence = recorder._last_sequence
@@ -1650,6 +1654,9 @@ class SimulationManager:
 def _command_envelope(request: CommandRequest) -> CommandEnvelope:
     kind = request.kind
     names = {
+        "SWARM_TASK": (SwarmTask, {"group_id", "action", "target_id"}),
+        "SWARM_WAYPOINT": (SwarmWaypoint, {"group_id", "waypoint", "formation"}),
+        "SWARM_MEMBERSHIP": (SwarmMembership, {"group_id", "aircraft_id", "action"}),
         "ASSIGN_SECTOR": (AssignSector, {"aircraft_id", "sector_id"}),
         "SET_WAYPOINT": (SetWaypoint, {"aircraft_id", "waypoint"}),
         "HOLD": (Hold, {"aircraft_id"}), "RESUME_MISSION": (ResumeMission, {"aircraft_id"}),
@@ -1661,6 +1668,9 @@ def _command_envelope(request: CommandRequest) -> CommandEnvelope:
     payload = dict(request.payload)
     if set(payload) != fields:
         raise ValueError("invalid command payload")
+    if cls in (SwarmTask, SwarmWaypoint, SwarmMembership):
+        from matb_integration.suas.recording.replay import deserialize_command
+        return deserialize_command({"command_id": str(request.command_id), "expected_state_version": request.expected_state_version, "kind": cls.__name__, "payload": payload})
     if cls is SetWaypoint:
         waypoint = payload["waypoint"]
         if not isinstance(waypoint, Mapping) or set(waypoint) != {"x_mm", "y_mm"}:

@@ -98,7 +98,8 @@ export function PresentationSetup({
           ))}
         </select>
       </label>
-      {value?.version === 2 && <div className="flex flex-wrap gap-3">
+      {value && <label className="block"><input type="checkbox" checked={value.version === 3} onChange={event => onChange({ ...value, version: event.target.checked ? 3 : 2, camera: event.target.checked ? "swarm" : "overview" })} /> {es ? "Vista de enjambre: cuadricópteros de carreras y seguimiento" : "Swarm view: racing quadcopters and chase"}</label>}
+      {(value?.version ?? 1) >= 2 && value && <div className="flex flex-wrap gap-3">
         {(["smooth_camera", "contact_cycling", "adjustable_layers"] as const).map(name => <label key={name}>
           <input type="checkbox" checked={value.controls?.[name] ?? false} onChange={event => onChange({ ...value, controls: { smooth_camera: false, contact_cycling: false, adjustable_layers: false, ...value.controls, [name]: event.target.checked } })} />
           {es ? { smooth_camera: "Transiciones de cámara", contact_cycling: "Navegación de contactos", adjustable_layers: "Capas ajustables" }[name] : { smooth_camera: "Camera transitions", contact_cycling: "Contact navigation", adjustable_layers: "Adjustable layers" }[name]}

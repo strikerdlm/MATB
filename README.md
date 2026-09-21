@@ -856,6 +856,35 @@ recorded traffic with pinned checksums, preserving deterministic scoring.
 · [Verification and screenshots](docs/implementation/colombia-geography-verification.md).
 Scene datasets retain their source terms; see [third-party notices](THIRD_PARTY_NOTICES.md).
 
+### Swarm supervision and third-person 3D
+
+The `swarm_supervision` scenario adds **2 / 4 / 6 / 8 aircraft** in PRACTICE / LOW /
+MEDIUM / HIGH. Operators can send atomic group commands for formation transit,
+cooperative sector search, hold, resume and return, then detach/rejoin members
+for individual intervention. The procedural racing quadcopters use the existing
+synthetic movement model. Swarm overview, third-person chase, recorded trails,
+formation markers and a north-up inset support group and individual inspection.
+
+After installing and starting the Console, open `/mission/test`, select **Swarm
+supervision**, choose an installed offline scene, enable **Swarm view: racing
+quadcopters and chase**, and set the block to **3D**. Wait for renderer readiness,
+then start. For participant research, use the study/assignment workflow with an
+explicit frozen **presentation v3** condition. A technical test does not become a
+participant record. Group loss requires an explicit reassignment; survivors do
+not silently redistribute their routes.
+
+The debrief preserves the scenario, engine and console identities, recorded
+camera/layer state and deterministic replay. Swarm descriptive metrics do not
+change the mission composite. Legacy scenarios and v1/v2 views remain supported.
+
+Use the [operator and implementation guide](docs/implementation/suas-swarm-supervision.md)
+and [release runbook](docs/implementation/suas-swarm-release.md) for production
+build/start commands, data backup, rollback, workstation performance qualification
+and troubleshooting. `test:e2e:swarm` runs the isolated production browser
+gate after a frontend build. Hardware performance must pass on the intended
+workstation before deployment; a successful software test is not physical timing
+or human-factors validation.
+
 <a id="quick-start-sms"></a>
 ## 8. FAC ISR SMS quick start
 

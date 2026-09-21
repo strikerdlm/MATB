@@ -12,6 +12,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from matb_integration.suas.domain.commands import (
+    SwarmTask, SwarmWaypoint, SwarmMembership,
     AcknowledgeAlert, AssignSector, ClassifyContact, CommandEnvelope, Hold,
     InspectContact, ReportContact, ResumeMission, ReturnToBase, SetContactPriority,
     SetWaypoint,
@@ -20,6 +21,7 @@ from matb_integration.suas.domain.enums import ContactClassification, ContactPri
 from matb_integration.suas.domain.geometry import PointMM
 from matb_integration.suas.domain.serialization import canonical_data, canonical_json
 from matb_integration.suas.engine.runtime import ENGINE_VERSION, TICK_MS, SimulationEngine
+from matb_integration.suas.engine.swarm import SWARM_ENGINE_VERSION, engine_version
 from matb_integration.suas.recording.checkpoints import load_checkpoint
 from matb_integration.suas.recording.records import RecordKind, SessionRecord
 from matb_integration.suas.scenarios.loader import load_scenario_text
@@ -45,6 +47,9 @@ class ReplayResult:
 
 
 _COMMANDS = {
+    "SwarmTask": (SwarmTask, {"group_id", "action", "target_id"}),
+    "SwarmWaypoint": (SwarmWaypoint, {"group_id", "waypoint", "formation"}),
+    "SwarmMembership": (SwarmMembership, {"group_id", "aircraft_id", "action"}),
     "AssignSector": (AssignSector, {"aircraft_id", "sector_id"}),
     "SetWaypoint": (SetWaypoint, {"aircraft_id", "waypoint"}),
     "Hold": (Hold, {"aircraft_id"}),
@@ -83,9 +88,9 @@ def deserialize_command(data: Mapping[str, object]) -> CommandEnvelope:
     values = dict(payload)
     try:
         for field in fields - {"waypoint", "classification", "priority"}:
-            if not isinstance(values[field], str) or not values[field]:
+            if not isinstance(values[field], str) or (not values[field] and field != "target_id"):
                 raise ValueError("invalid_command_payload")
-        if command_type is SetWaypoint:
+        if command_type in (SetWaypoint, SwarmWaypoint):
             waypoint = values["waypoint"]
             if not isinstance(waypoint, Mapping) or set(waypoint) != {"x_mm", "y_mm"}:
                 raise ValueError("invalid_command_payload")
@@ -168,10 +173,12 @@ class ReplayVerifier:
         try:
             run_dir = Path(run_dir)
             manifest = self._load_manifest(run_dir)
-            if manifest.get("engine_version") != ENGINE_VERSION:
+            if manifest.get("engine_version") not in (ENGINE_VERSION, SWARM_ENGINE_VERSION):
                 return self._result(ReplayStatus.INCOMPATIBLE_ENGINE, records_read, ticks, "engine_version")
             block_order = self._manifest_block_order(manifest)
             scenario = load_scenario_text((run_dir / "scenario.yaml").read_text(encoding="utf-8"), source_name="frozen scenario")
+            if manifest.get("engine_version") != engine_version(scenario.definition):
+                return self._result(ReplayStatus.INCOMPATIBLE_ENGINE, records_read, ticks, "engine_version")
             if manifest.get("scenario_id") != scenario.definition.scenario_id or manifest.get("scenario_sha256") != scenario.sha256:
                 raise _InvalidRecord("scenario_sha256")
             # ``blocks`` is a mapping normalized by identifier.  Its keys are
