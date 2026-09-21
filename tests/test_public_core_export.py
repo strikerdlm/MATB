@@ -241,7 +241,8 @@ async def verify():
         'matb-research',
         'matb-runtime',
     ]
-    routes = {route.path for route in app.routes}
+    # Included routers are lazy in current FastAPI; inspect the public schema.
+    routes = set(app.openapi()['paths'])
     assert '/simulation/sessions' not in routes
     assert '/liftoff/sessions' not in routes
 

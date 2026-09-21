@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e:swarm": "playwright test --config=playwright.swarm.config.ts",
+    "test:e2e:production": "playwright test --config=playwright.production.config.ts",
     "test:e2e": "node scripts/run-e2e.mjs playwright.config.ts",
     "test:e2e:appearance": "node scripts/run-e2e.mjs playwright.appearance.config.ts",
     "test:e2e:core": "node scripts/run-e2e.mjs playwright.core.config.ts",

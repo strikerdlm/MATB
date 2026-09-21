@@ -53,3 +53,12 @@ def test_host_allowlist_blocks_dns_rebinding(client):
 
     assert response.status_code == 400
     assert response.json()["detail"]["code"] == "untrusted_host"
+
+
+def test_non_ascii_bearer_is_rejected_without_server_error(monkeypatch):
+    monkeypatch.setattr(app.state, "api_token", "x" * 32)
+    response = _raw_request(
+        "POST", "/token-probe", headers=[(b"Authorization", b"Bearer \xff" * 8)]
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "cli_authentication_required"

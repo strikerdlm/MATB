@@ -70,9 +70,15 @@ export function getApiBase(browserUrl?: URL): Promise<string> {
   // not model the browser bootstrap request.  Keep those callers deterministic
   // while explicit URL calls retain strict runtime-config validation.
   const isTest = process.env.NODE_ENV === "test";
-  const value = !browserUrl && isTest
+  const discovery = !browserUrl && isTest
     ? Promise.resolve(apiOrigin(location, DEFAULT_BACKEND_PORT))
     : fetchRuntimeConfig(location);
+  const value = discovery.catch((error: unknown) => {
+    // A transient bootstrap failure must be retryable. A stale request must
+    // not clear a newer origin's in-flight discovery (or a manually reset cache).
+    if (cached?.value === value) cached = null;
+    throw error;
+  });
 
   cached = { fetcher, browserOrigin, value };
   return value;

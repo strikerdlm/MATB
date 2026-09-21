@@ -16,6 +16,7 @@ from app.components import configure_components
 from app.body_limits import ScientificRequestBodyLimitMiddleware
 from app.db import get_engine, init_db
 from app.request_security import LoopbackRequestSecurityMiddleware
+from app.logging_security import configure_uvicorn_logging
 from app.study_models import ensure_study_binding
 from app.study_protocol import selected_protocol
 
@@ -108,6 +109,7 @@ def _configured_api_token():
 
 
 _API_TOKEN = _parse_api_token(_configured_api_token())
+configure_uvicorn_logging()
 _COMPONENT_REGISTRY, _COMPONENT_PROVIDERS = configure_components()
 
 
@@ -128,6 +130,17 @@ async def lifespan(app: FastAPI):
     engine = get_engine()
     acquire_backend_instance_lease(engine)
     release_lease = True
+
+    async def shutdown_provider(provider):
+        nonlocal release_lease
+        try:
+            await provider.shutdown(app)
+        except BaseException:
+            # A failed provider stop may leave a native process or DB writer
+            # alive. Continue unwinding, but retain ownership until PID exit.
+            release_lease = False
+            raise
+
     try:
         init_db(component_model_modules=model_modules)
         from app.station_resources import recover
@@ -142,7 +155,7 @@ async def lifespan(app: FastAPI):
                     # Register cleanup before startup so a partially initialized
                     # provider is still unwound. AsyncExitStack also continues through
                     # all callbacks if an earlier shutdown raises.
-                    cleanup.push_async_callback(provider.shutdown, app)
+                    cleanup.push_async_callback(shutdown_provider, provider)
                     await provider.startup(app)
                 from app.station_worker import StationWorker
                 worker = StationWorker(engine, app.router, application=app)
@@ -151,9 +164,12 @@ async def lifespan(app: FastAPI):
                 yield
         finally:
             try:
-                if hasattr(app.state, "station_worker"):
-                    await app.state.station_worker.shutdown()
-                shutdown_bayes_jobs(engine)
+                try:
+                    if hasattr(app.state, "station_worker"):
+                        await app.state.station_worker.shutdown()
+                finally:
+                    # A station failure must not skip the other compute owner.
+                    shutdown_bayes_jobs(engine)
             except BaseException:
                 # A live compute thread can still write through this process.
                 # Retain the durable lease until the PID exits so no second
@@ -193,6 +209,11 @@ async def request_validation_error(request: Request, exc: RequestValidationError
     )
 
 
+from app.station_http import StationWorkMiddleware
+app.add_middleware(ScientificRequestBodyLimitMiddleware)
+app.add_middleware(StationWorkMiddleware)
+# CORS must wrap admission and size guards so a permitted browser can read
+# their 4xx responses rather than reporting an opaque network failure.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=sorted(_FRONTEND_ORIGINS),
@@ -200,9 +221,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-from app.station_http import StationWorkMiddleware
-app.add_middleware(ScientificRequestBodyLimitMiddleware)
-app.add_middleware(StationWorkMiddleware)
 app.add_middleware(LoopbackRequestSecurityMiddleware, settings=app.state)
 
 
