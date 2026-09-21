@@ -1,0 +1,3 @@
+Written: CEINNA\evidencia\verificacion_tecnica\escenarios\low_workload.txt
+Written: CEINNA\evidencia\verificacion_tecnica\escenarios\medium_workload.txt
+Written: CEINNA\evidencia\verificacion_tecnica\escenarios\high_workload.txt

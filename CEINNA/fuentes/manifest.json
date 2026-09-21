@@ -1,0 +1,23 @@
+[
+  {
+    "original": "C:\\Users\\User\\.codex\\codex-remote-attachments\\01a0c441-4746-7961-a417-1afb9434a5b8\\04247A69-198A-4012-B005-94507B8B3712\\1-Formulario-3.-Presentación-Ponencias_Conferencias-III-CEINNA.pptx",
+    "copia": "fuentes/Plantilla_III_CEINNA.pptx",
+    "sha256": "705ef0c92cbace065c7873ca109c2f7079443431a63972a851e18c8ac61be14d",
+    "bytes": 4238217,
+    "fecha_copia": "2026-09-21"
+  },
+  {
+    "original": "C:\\Users\\User\\.codex\\codex-remote-attachments\\01a0c441-4746-7961-a417-1afb9434a5b8\\04247A69-198A-4012-B005-94507B8B3712\\2-Manual-de-Operaciones-ASTRA-2026.md",
+    "copia": "fuentes/Manual_de_Operaciones_ASTRA_2026.md",
+    "sha256": "574a31502b6d44303c32104c0d6a88f835437ca0447dd3cec7c6b086eab4edf6",
+    "bytes": 332121,
+    "fecha_copia": "2026-09-21"
+  },
+  {
+    "original": "C:\\Users\\User\\.codex\\codex-remote-attachments\\01a0c441-4746-7961-a417-1afb9434a5b8\\04247A69-198A-4012-B005-94507B8B3712\\3-Cronograma-consolidado-de-tripulaciones-ASTRA-1-y-2-2026.md",
+    "copia": "fuentes/Cronograma_ASTRA_1_y_2_2026.md",
+    "sha256": "67a4d18a7a4082f63ad03e3502b3055831c4913c261ac4b91df2de8c1a55465c",
+    "bytes": 43299,
+    "fecha_copia": "2026-09-21"
+  }
+]

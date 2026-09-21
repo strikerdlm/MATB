@@ -1,0 +1,127 @@
+# Notas del ponente — ASTRA y MATB, III CEINNA
+
+Ponente: SMSM DIEGO L MALPICA · Especialista en Medicina Aeroespacial · Subdirección Científica Aeroespacial – DIMAE.
+
+Exposición prevista: 11:30; margen dentro del máximo de 12:00: 0:30. Preguntas y comentarios: 3:00 independientes. Leer únicamente GUION ORAL; las aclaraciones y fuentes son apoyo. Corte documental: 21-09-2026.
+
+## Lámina 1 — 0 segundos
+
+Pantalla institucional de espera. No consume exposición programada. La transición se incorpora al ensayo. Fuente: Formulario 3 original.
+
+## Lámina 2 — 20 segundos
+
+GUION ORAL (único texto que se pronuncia):
+Soy Diego L. Malpica, especialista en Medicina Aeroespacial, de la Subdirección Científica Aeroespacial de la DIMAE. Presentaré el diseño longitudinal para estudiar carga mental y desempeño multitarea en ASTRA mediante MATB, la batería de tareas de atributos múltiples.
+
+NOTAS DE APOYO (no leer):
+Autoría de portada confirmada por el investigador: SMSM DIEGO L MALPICA; Especialista en Medicina Aeroespacial; Subdirección Científica Aeroespacial – DIMAE. MATB: Multi-Attribute Task Battery. DIMAE: Dirección de Medicina Aeroespacial. Fuente: confirmación del investigador; [1] Cegarra et al. (2020). Transición: recorrido de la exposición.
+
+## Lámina 3 — 10 segundos
+
+GUION ORAL (único texto que se pronuncia):
+El recorrido conecta una pregunta científica con el diseño de medición, la evidencia de implementación y el alcance del análisis.
+
+NOTAS DE APOYO (no leer):
+Se conservan cuatro componentes de la agenda. Fuente: plan CEINNA y mapa de diapositivas. Transición: formular la pregunta.
+
+## Lámina 4 — 50 segundos
+
+GUION ORAL (único texto que se pronuncia):
+La pregunta es cómo varían el desempeño multitarea y la carga mental percibida entre condiciones de demanda y a lo largo de ASTRA. Distinguimos tres componentes: los parámetros de la tarea, las respuestas del participante y su valoración subjetiva. Las condiciones LOW, MEDIUM y HIGH especifican la demanda experimental. El desempeño se observa en tareas concurrentes y la carga percibida se recoge mediante autoevaluación. La literatura sobre OpenMATB y la revisión de Pontiggia muestran por qué es necesario describir los parámetros de cada implementación. El estudio examinará la relación entre estos componentes y sus cambios dentro de cada persona.
+
+NOTAS DE APOYO (no leer):
+Fuentes: [1] Cegarra et al. (2020), Presentation of MATB y Task customization; [2] Pontiggia, Gomez-Mérino et al. (2024), revisión de 19 estudios heterogéneos; [3] Pontiggia, Fabries et al. (2024), experimento. Aclaración: LOW/MEDIUM/HIGH son condiciones parametrizadas, sin equivalencia universal entre versiones. El experimento [3] estudió 17 varones sanos bajo condiciones de sueño/hipoxia; aporta fundamento metodológico, no resultados ASTRA. Transición: contexto experimental previsto.
+
+## Lámina 5 — 50 segundos
+
+GUION ORAL (único texto que se pronuncia):
+ASTRA significa Aerospace Simulation Training Research Analogs. El protocolo contempla dos misiones secuenciales en el hábitat de la Fundación Cydonia, en Tocancipá. Cada misión prevé hasta seis participantes y quince jornadas inclusivas, con catorce noches dentro del hábitat. La evaluación se integra en una rutina de aislamiento y confinamiento, con horarios de sueño, alimentación, experimentos y actividades operativas. Este contexto permite seguir a cada persona en diferentes momentos del ciclo de misión. La ilustración representa conceptualmente una estación de evaluación y está identificada como generada con inteligencia artificial. La muestra final y las actividades realizadas se documentarán mediante los registros de ejecución.
+
+NOTAS DE APOYO (no leer):
+ASTRA: Aerospace Simulation Training Research Analogs. Fuente: Manual v2.5, §§1.1–1.2 y 3.2; cronograma §§1–2. Seis participantes por misión es meta condicionada a elegibilidad, máximo 12 en conjunto. Quince días significa fechas inclusivas; la duración analítica procede de horas reales de cierre/apertura. Hábitat terrestre de aproximadamente 120 m². La imagen no representa una fotografía documental ni una verificación del equipamiento desplegado. Transición: secuencia de visitas.
+
+## Lámina 6 — 75 segundos
+
+GUION ORAL (único texto que se pronuncia):
+Cada participante tiene ocho visitas. V cero corresponde a la evaluación premisión; después se programan seis visitas en los días dos, cuatro, siete, diez, trece y quince; V siete corresponde al día siguiente al egreso. Esta secuencia permite comparar condiciones dentro de una visita y seguir cambios entre visitas. Las evaluaciones basales se programan el veintinueve de septiembre para ASTRA uno y el veintiocho para ASTRA dos. Están, respectivamente, a seis y veintitrés días del ingreso. Conservaremos esas distancias y las fechas reales en el análisis. Además, la rotación distribuye a cada participante entre horarios y estaciones durante las visitas intramisión. El calendario del congreso coincide con los días nueve y diez de ASTRA uno; la ponencia se concentra en el protocolo y el desarrollo documentado.
+
+NOTAS DE APOYO (no leer):
+DM: día de misión; V: visita. Fuente: Manual §4.7.6.2–3; cronograma §§2, 4.1, 5.2 y 7; evidencia/cronologia_astra.csv. ASTRA1 ingreso 5oct, egreso 19oct y V7 20oct; ASTRA2 ingreso 21oct, egreso 4nov y V7 5nov. Intervalos intramisión: 2/3/3/3/2 días. CEINNA 13oct=DM9 y 14oct=DM10/V4 de A1; A2 en premisión. Disponibilidad futura de V4 depende de hora de ponencia, finalización y revisión. La rotación hora/estación es distinta del orden de niveles. Los códigos originales y el orden basal deben conservarse al vincular aspirante con misión. Transición: tareas que se repiten en cada visita.
+
+## Lámina 7 — 60 segundos
+
+GUION ORAL (único texto que se pronuncia):
+MATB presenta cuatro tareas simultáneas. SYSMON, supervisión de sistemas, exige detectar cambios en luces e indicadores. TRACK, seguimiento compensatorio, requiere mantener un cursor dentro de una zona objetivo. COMM, comunicaciones, exige reconocer el indicativo pertinente y responder mediante la radio correspondiente. RESMAN, gestión de recursos, requiere controlar bombas y niveles de depósitos. Cada tarea aporta medidas específicas: detecciones, omisiones y latencias; desviación del seguimiento; respuestas a comunicaciones; y desviación de los depósitos respecto al objetivo. La concurrencia exige distribuir la atención entre demandas diferentes. OpenMATB proporciona el entorno de tareas; la integración de este repositorio genera escenarios, organiza su procedencia y procesa los registros.
+
+NOTAS DE APOYO (no leer):
+Fuente: [1] Cegarra et al. (2020); auditoria_matb.md y openmatb/plugins/{sysmon,track,communications,resman}.py. SYSMON: system monitoring; TRACK: tracking; COMM: communications; RESMAN: resource management. Mantener en la imagen el rótulo de procedencia que incorpore el ensamblaje. Métricas vigentes: latencia en ms; TRACK en distancia normalizada; depósitos en unidades del escenario. Las proporciones calculadas por muestras no se describen como tiempo medido sin ponderación temporal. Transición: organización de los tres bloques y sus medidas subjetivas.
+
+## Lámina 8 — 60 segundos
+
+GUION ORAL (único texto que se pronuncia):
+Cada visita reserva noventa minutos. Incluye preparación, reposo, tres escenarios de quince minutos, pausas, cuestionarios y cierre. El orden de las tres condiciones se contrabalancea entre participantes. Antes de cada bloque se registra somnolencia con la escala de Karolinska, KSS. Durante la tarea, ISA recoge una autoevaluación instantánea. Después se administra NASA-TLX, el índice de carga de tarea de la NASA. Su versión cruda, RTLX, resume seis dimensiones mediante una media reescalada de cero a cien. Estas medidas conservan sus constructos específicos. Los cuestionarios pueden pausar el software, por lo que registramos tanto los novecientos segundos del escenario como la duración real de la sesión.
+
+NOTAS DE APOYO (no leer):
+NASA-TLX: NASA Task Load Index; RTLX: Raw Task Load Index, media no ponderada de seis ítems completos. ISA: Instantaneous Self-Assessment. KSS: Karolinska Sleepiness Scale. Fuentes: Manual §§4.7.2 y 4.7.6.2; contrato metrics_spec.json; auditoria_matb.md; [3] Pontiggia, Fabries et al. (2024). [6] Laverde-López et al. (2022) es referencia complementaria de KSS colombiana; su publicación no acredita equivalencia literal con la implementación local. RTLX incompleto=valor ausente con motivo; TLX ponderado exige comparaciones pareadas. La figura LOW/MEDIUM/HIGH identifica condiciones, no una secuencia fija para todos. Transición: conservación de la evidencia.
+
+## Lámina 9 — 70 segundos
+
+GUION ORAL (único texto que se pronuncia):
+La trazabilidad comienza antes de adquirir respuestas. El escenario conserva parámetros, semilla y orden; el registro vincula participante, visita y eventos; las métricas tienen definición, unidades y versión. Finalmente, la revisión de calidad y elegibilidad determina qué observaciones se incorporan a cada análisis. Esta cadena permite reconstruir de dónde proviene un resultado y con qué condición experimental se obtuvo. Conservamos también la distinción entre archivos CSV heredados y capturas de eventos reconciliadas. Un dato ausente mantiene su motivo, y un cuestionario incompleto conserva las respuestas disponibles. Los trabajos de Cegarra y de Vogl respaldan la importancia de documentar la implementación. En este proyecto, los contratos y manifiestos concretan esa documentación en archivos verificables.
+
+NOTAS DE APOYO (no leer):
+Fuentes: [1] Cegarra et al. (2020), Experiment replicability; [5] Vogl et al. (2024), descripción de USAARL MATB y comparación de versiones; auditoria_matb.md, scenario_manifest.py, contracts/events.py, evidence/reconcile.py y study_analysis_eligibility.py. Vogl describe otro software: no atribuir automatización USAARL a OpenMATB. SHA-256 es una huella criptográfica para comprobar integridad; no demuestra validez de respuesta humana ni temporización física. Identidad, propósito y elegibilidad son campos distintos de completitud de consola. Transición: resultados efectivamente producidos en la revisión local.
+
+## Lámina 10 — 75 segundos
+
+GUION ORAL (único texto que se pronuncia):
+Los resultados de desarrollo proceden de una demostración local con datos sintéticos. Se generaron tres escenarios, uno por condición, de novecientos segundos cada uno. Al repetir parámetros y semillas, los tres archivos resultaron idénticos. Sus huellas digitales coincidieron con las registradas en los manifiestos. Además, tres archivos CSV sintéticos se convirtieron en salidas de métricas versionadas. Estos resultados documentan reproducción e integridad, y comprueban por separado la generación de escenarios y la conversión de registros. La ejecución está fechada el veintiuno de septiembre y vinculada a una revisión del repositorio. Los artefactos conservan las entradas y los resultados de comprobación, de modo que otra revisión pueda repetir este procedimiento. La respuesta de los participantes constituye el objeto de la adquisición experimental prevista.
+
+NOTAS DE APOYO (no leer):
+Fuente primaria ejecutada: evidencia/verificacion_tecnica/resultado_verificacion.json; verificar_demo.py; escenarios, ejecucion_generador.txt y ejecucion_verificacion.txt. Commit fd5e1318dc6f036b538dd36ed3c5fe42ad8be7d0. Verificación: 3/3 hashes, 3/3 escenarios reproducidos idénticos y 3/3 CSV convertidos. No se presenta esta demostración como dato humano. La CLI auditada usó audio y cuestionarios ingleses; recursos españoles del repositorio se documentan separadamente. Se realizaron aserciones focales; no atribuir batería global de pruebas ni ajuste DEPDF al experimento. Transición: estructura de análisis de las futuras observaciones. Los CSV son fixtures sintéticos independientes; no son respuestas adquiridas durante la ejecución de los escenarios generados.
+
+## Lámina 11 — 65 segundos
+
+GUION ORAL (único texto que se pronuncia):
+La unidad de seguimiento es la persona. Los bloques están anidados en visitas y las visitas en participantes. El análisis comenzará con trayectorias individuales, contrastes entre condiciones y cambios entre visitas. Se conservarán orden, hora, estación, sueño previo y distancia desde la evaluación basal. El experimento de Pontiggia muestra la utilidad de considerar conjuntamente contexto de sueño y demanda multitarea; el seguimiento antártico de Tortello aporta un antecedente de evaluación temporal en aislamiento. Sus poblaciones y duraciones son diferentes de ASTRA. Para este estudio, los modelos se ajustarán a la información disponible y se acompañarán de magnitud e incertidumbre. La cantidad de bloques mejora la descripción longitudinal, mientras que el número de participantes define el alcance de la comparación entre personas.
+
+NOTAS DE APOYO (no leer):
+Fuentes: [3] Pontiggia, Fabries et al. (2024), medidas repetidas en hipoxia/sueño; [4] Tortello et al. (2020), 13 varones durante un año y tarea de producción temporal; Manual §4.7.4. Tortello no estudió MATB ni valida causalidad en ASTRA. Hasta 12 personas; máximo programado 96 sesiones y 288 bloques. Preespecificar resultado principal, secundarios, reglas de exclusión y multiplicidad. Modelo parsimonioso condicionado a estimabilidad; los bloques no son observaciones independientes. Transición: relación entre medición e interpretación.
+
+## Lámina 12 — 60 segundos
+
+GUION ORAL (único texto que se pronuncia):
+La interpretación mantiene separados desempeño, carga percibida y fisiología. Los intervalos cardíacos permiten estudiar variabilidad de la frecuencia cardíaca, VFC, también denominada HRV en inglés. Se compararán segmentos de duración y condiciones equivalentes, considerando calidad de señal y contexto. El diario y la actigrafía aportarán información de sueño cuando exista registro de la noche correspondiente. También se documentarán familiarización, horario y distancia entre visitas, y se considerará el aprendizaje. Con este diseño podremos describir trayectorias y asociaciones dentro de las personas, con su incertidumbre. La atribución causal al aislamiento requiere información adicional sobre factores concurrentes. El corte científico presentado hoy corresponde al protocolo y al desarrollo documentado, con un calendario explícito para las observaciones humanas.
+
+NOTAS DE APOYO (no leer):
+HRV: heart rate variability; VFC: variabilidad de la frecuencia cardíaca. Fuentes: Manual §§4.1, 4.7.3–4; contexto_astra.md; [2–4]. Los análisis fisiológicos pertenecen a su canal/protocolo externo; no se atribuyen al MATB local por existir referencias a strikerdlm/HRV. La referencia pre-tarea difiere del reposo principal basal. Basal único no estima variabilidad habitual individual. Polar H10 aporta RR; ActiGraph aporta actigrafía/movimiento; no adjudicar etapas de sueño ni aptitud. Transición: tres conclusiones derivadas del método y de la comprobación técnica.
+
+## Lámina 13 — 75 segundos
+
+GUION ORAL (único texto que se pronuncia):
+La primera conclusión es que ASTRA organiza una observación longitudinal del desempeño multitarea mediante ocho visitas por persona y un calendario documentado. La segunda es que la integración MATB permite vincular condiciones de demanda, registros y métricas con procedencia explícita; la demostración presentada reproduce escenarios y comprueba su integridad y conversión. La tercera es que el análisis adquiere sentido al conservar la trayectoria individual, el contexto y la calidad de cada registro. La siguiente etapa consiste en ejecutar las visitas conforme al protocolo y analizar las observaciones con reglas previamente definidas. Recomendamos conservar las versiones de escenarios, registrar fechas e incidencias y presentar los resultados por tarea junto con la carga percibida. Así, la contribución científica se centra en un procedimiento reproducible para examinar cambios humanos durante una misión análoga.
+
+NOTAS DE APOYO (no leer):
+Fuentes: síntesis de Manual §4.7, cronograma §§2/4/7 y verificación técnica A2; [1–5] como fundamento de implementación, medición y contexto. Son conclusiones metodológicas y de desarrollo, sin anticipar dirección del cambio humano, rendimiento predictivo ni beneficios operacionales. Resultado principal y modelo deben preespecificarse con el protocolo analítico. Transición: fuentes que sostienen la propuesta.
+
+## Lámina 14 — 10 segundos
+
+GUION ORAL (único texto que se pronuncia):
+Estas primeras referencias fundamentan las tareas MATB, la descripción de la demanda experimental y la complementariedad de las mediciones.
+
+NOTAS DE APOYO (no leer):
+Fuentes [1–3] completas en evidencia/referencias_apa.md. Las dos publicaciones Pontiggia son revisión y experimento, respectivamente, con coautorías diferentes. No leer autores completos ni DOI durante los diez segundos. Transición: antecedentes complementarios.
+
+## Lámina 15 — 10 segundos
+
+GUION ORAL (único texto que se pronuncia):
+Estas referencias completan el fundamento metodológico. Muchas gracias; quedo atento a sus preguntas y comentarios.
+
+NOTAS DE APOYO (no leer):
+Fuentes [4–5] completas en evidencia/referencias_apa.md; [6] KSS complementaria en notas/banco. Reservar íntegros tres minutos para preguntas y comentarios. Transición a cierre institucional.
+
+## Lámina 16 — 0 segundos
+
+Pantalla institucional de cierre y preguntas. Tres minutos separados de la exposición. Usar preguntas_comite.md para preparación; responder a las preguntas recibidas, sin imponer un listado al comité.
+
+Referencias completas: ../evidencia/referencias_apa.md. Las cinco fuentes principales se citan en el discurso y las notas; KSS es referencia complementaria con su alcance de versión.

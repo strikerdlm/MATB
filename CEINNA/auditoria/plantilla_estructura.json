@@ -1,0 +1,199 @@
+{
+  "tamano_emu": {
+    "cx": "12192000",
+    "cy": "6858000"
+  },
+  "diapositivas": [
+    {
+      "archivo": "ppt/slides/slide1.xml",
+      "textos": [
+        "III CEINNA",
+        "III Congreso Internacional de Estudios en Innovación y Nuevas ",
+        "Tecnologías para",
+        " la Seguridad y la Defensa",
+        "“Del conocimiento a la capacidad estratégica”"
+      ],
+      "fuentes_explicitas": [
+        "Bell MT"
+      ],
+      "colores_rgb_explicitos": [
+        "000F4D",
+        "002060",
+        "23B53B",
+        "242424",
+        "26B53B",
+        "D90000",
+        "FFFFFF"
+      ],
+      "tamanos_pt": [
+        18.0,
+        32.0,
+        138.0
+      ],
+      "imagenes": 10
+    },
+    {
+      "archivo": "ppt/slides/slide2.xml",
+      "textos": [
+        "Título ponencia o conferencia",
+        "Grado. Apellido y Nombre",
+        "Filiación Institucional (Grupo de Investigación, Entidad,) ",
+        "“Del conocimiento a la capacidad estratégica”"
+      ],
+      "fuentes_explicitas": [
+        "Bell MT"
+      ],
+      "colores_rgb_explicitos": [
+        "000F4D",
+        "002060",
+        "23B53B",
+        "242424",
+        "26B53B",
+        "D90000"
+      ],
+      "tamanos_pt": [
+        18.0,
+        24.0,
+        72.0
+      ],
+      "imagenes": 1
+    },
+    {
+      "archivo": "ppt/slides/slide3.xml",
+      "textos": [
+        "Tabla de Contenido",
+        "Listado de actividades o temas a abordar ",
+        "“Del conocimiento a la capacidad estratégica”"
+      ],
+      "fuentes_explicitas": [
+        "Bell MT"
+      ],
+      "colores_rgb_explicitos": [
+        "000F4D",
+        "002060",
+        "23B53B",
+        "242424",
+        "26B53B",
+        "D90000"
+      ],
+      "tamanos_pt": [
+        18.0,
+        24.0,
+        44.0
+      ],
+      "imagenes": 1
+    },
+    {
+      "archivo": "ppt/slides/slide4.xml",
+      "textos": [
+        "Desarrollo",
+        "Describa brevemente la información de su proyecto, recuerde que tiene 15 min para abordar y presentar sus resultados. ",
+        "“Del conocimiento a la capacidad estratégica”"
+      ],
+      "fuentes_explicitas": [
+        "Bell MT"
+      ],
+      "colores_rgb_explicitos": [
+        "000F4D",
+        "002060",
+        "23B53B",
+        "242424",
+        "26B53B",
+        "D90000"
+      ],
+      "tamanos_pt": [
+        18.0,
+        24.0,
+        44.0
+      ],
+      "imagenes": 1
+    },
+    {
+      "archivo": "ppt/slides/slide5.xml",
+      "textos": [
+        "Resultados",
+        "Describa brevemente los resultados más representativos",
+        "“Del conocimiento a la capacidad estratégica”"
+      ],
+      "fuentes_explicitas": [
+        "Bell MT"
+      ],
+      "colores_rgb_explicitos": [
+        "000F4D",
+        "23B53B",
+        "242424",
+        "26B53B",
+        "D90000"
+      ],
+      "tamanos_pt": [
+        18.0,
+        24.0,
+        44.0
+      ],
+      "imagenes": 1
+    },
+    {
+      "archivo": "ppt/slides/slide6.xml",
+      "textos": [
+        "Conclusiones y Recomendaciones",
+        "Describa por lo menos una conclusión y recomendación del trabajo presentado",
+        "“Del conocimiento a la capacidad estratégica”"
+      ],
+      "fuentes_explicitas": [
+        "Bell MT"
+      ],
+      "colores_rgb_explicitos": [
+        "000F4D",
+        "002060",
+        "23B53B",
+        "242424",
+        "26B53B",
+        "D90000"
+      ],
+      "tamanos_pt": [
+        18.0,
+        24.0,
+        44.0
+      ],
+      "imagenes": 1
+    },
+    {
+      "archivo": "ppt/slides/slide7.xml",
+      "textos": [
+        "Bibliografía",
+        "Listado de referencias, mínimo 5 referencias que se hayan empleado en la presentación (2020-2025)",
+        "“Del conocimiento a la capacidad estratégica”"
+      ],
+      "fuentes_explicitas": [
+        "Bell MT"
+      ],
+      "colores_rgb_explicitos": [
+        "000F4D",
+        "002060",
+        "23B53B",
+        "242424",
+        "26B53B",
+        "D90000"
+      ],
+      "tamanos_pt": [
+        18.0,
+        24.0,
+        44.0
+      ],
+      "imagenes": 1
+    },
+    {
+      "archivo": "ppt/slides/slide8.xml",
+      "textos": [],
+      "fuentes_explicitas": [],
+      "colores_rgb_explicitos": [
+        "000F4D",
+        "23B53B",
+        "26B53B",
+        "D90000"
+      ],
+      "tamanos_pt": [],
+      "imagenes": 1
+    }
+  ]
+}

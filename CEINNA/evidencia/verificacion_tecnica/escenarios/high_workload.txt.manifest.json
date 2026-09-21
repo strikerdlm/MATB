@@ -1,0 +1,100 @@
+{
+  "artifact_scope": "exploratory_template",
+  "block_duration_sec": 900,
+  "deprecations": {
+    "LATIN_SQUARE_3": "use COMPLETE_COUNTERBALANCE_3; six orders are complete permutation counterbalancing"
+  },
+  "expected": {
+    "comm_events": 16,
+    "concurrent_event_overlap_pairs": 84,
+    "counterbalancing_method": "complete_permutation_counterbalancing_3_conditions",
+    "event_rate_per_min": 8.733,
+    "expected_active_primary_tasks": 4,
+    "isa_probe_times_sec": [
+      45,
+      90,
+      135,
+      180,
+      225,
+      270,
+      315,
+      360,
+      405,
+      450,
+      495,
+      540,
+      585,
+      630,
+      675,
+      720,
+      765,
+      810,
+      855
+    ],
+    "overlap_definition": "pairwise overlap of task response-availability intervals",
+    "per_subtask_event_rate_per_min": {
+      "communications": 1.067,
+      "sysmon": 7.667
+    },
+    "sagat_freezes": 0,
+    "sysmon_light_events": 22,
+    "sysmon_nontarget_opportunities": 50,
+    "sysmon_scale_events": 43,
+    "sysmon_target_opportunities": 65,
+    "task_events_total": 131,
+    "task_events_within_5s_of_probe": 44,
+    "workload_label_status": "engineering_preset_pending_human_calibration"
+  },
+  "generated_by": {
+    "component": "matb_integration.scenario_builder",
+    "provenance_status": "provisional_dirty_source_tree",
+    "source_commit": "fd5e1318dc6f036b538dd36ed3c5fe42ad8be7d0",
+    "source_dirty": true,
+    "version": "3.0.0"
+  },
+  "manifest_version": 3,
+  "metrics_schema_version": "2.0",
+  "parameters": {
+    "communications_audio_inventory_sha256": "d44fa4acd68332f38e14e77868051b88af91dd1d035f389f1a41de06a30f79d9",
+    "communications_audio_profile_id": "openmatb-english-male-wav-v1",
+    "communications_minimum_onset_separation_sec": 45,
+    "communications_own_callsign_ratio": 0.5,
+    "communications_prompt_duration_sec": 24.0,
+    "communications_response_availability_sec": 44,
+    "communications_voice_gender": "male",
+    "communications_voice_idiom": "english",
+    "difficulty": 0.8,
+    "isa_probe_interval_sec": 45,
+    "openmatb_alerttimeout_ms": 10000,
+    "openmatb_comm_max_response_delay_ms": 20000,
+    "openmatb_nontarget_duration_ms": 2000,
+    "openmatb_sysmon_lights": [
+      "1",
+      "2"
+    ],
+    "openmatb_sysmon_scales": [
+      "1",
+      "2",
+      "3",
+      "4"
+    ],
+    "resman_loss_per_min": 1000,
+    "suite_profile_name": "HIGH",
+    "track_target_proportion": 0.2
+  },
+  "questionnaires": {
+    "bedford": "bedford_en.txt",
+    "include_bedford": false,
+    "include_nasatlx": true,
+    "isa": "isa_en.txt",
+    "nasatlx": "nasatlx_en.txt"
+  },
+  "scenario": {
+    "filename": "high_workload.txt",
+    "line_count": 204,
+    "sha256": "b668391a5ebfab0dfe2e58e168afe95fc036a58033c584e515f1a2358d9032cb"
+  },
+  "seed": 44,
+  "workload_label_status": "engineering_preset_pending_human_calibration",
+  "workload_level": "HIGH"
+}

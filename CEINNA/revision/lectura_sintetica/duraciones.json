@@ -1,0 +1,128 @@
+[
+  {
+    "slide": 2,
+    "voice": "Microsoft Sabina Desktop - Spanish (Mexico)",
+    "rate": 0,
+    "allocated_seconds": 20,
+    "path": "E:\\Downloads\\MATB\\CEINNA\\revision\\lectura_sintetica\\slide_02.wav",
+    "measured_seconds": 17.93,
+    "fits_allocated": true
+  },
+  {
+    "slide": 3,
+    "voice": "Microsoft Sabina Desktop - Spanish (Mexico)",
+    "rate": 0,
+    "allocated_seconds": 10,
+    "path": "E:\\Downloads\\MATB\\CEINNA\\revision\\lectura_sintetica\\slide_03.wav",
+    "measured_seconds": 8.17,
+    "fits_allocated": true
+  },
+  {
+    "slide": 4,
+    "voice": "Microsoft Sabina Desktop - Spanish (Mexico)",
+    "rate": 0,
+    "allocated_seconds": 50,
+    "path": "E:\\Downloads\\MATB\\CEINNA\\revision\\lectura_sintetica\\slide_04.wav",
+    "measured_seconds": 42.47,
+    "fits_allocated": true
+  },
+  {
+    "slide": 5,
+    "voice": "Microsoft Sabina Desktop - Spanish (Mexico)",
+    "rate": 0,
+    "allocated_seconds": 50,
+    "path": "E:\\Downloads\\MATB\\CEINNA\\revision\\lectura_sintetica\\slide_05.wav",
+    "measured_seconds": 48.56,
+    "fits_allocated": true
+  },
+  {
+    "slide": 6,
+    "voice": "Microsoft Sabina Desktop - Spanish (Mexico)",
+    "rate": 0,
+    "allocated_seconds": 75,
+    "path": "E:\\Downloads\\MATB\\CEINNA\\revision\\lectura_sintetica\\slide_06.wav",
+    "measured_seconds": 54.84,
+    "fits_allocated": true
+  },
+  {
+    "slide": 7,
+    "voice": "Microsoft Sabina Desktop - Spanish (Mexico)",
+    "rate": 0,
+    "allocated_seconds": 60,
+    "path": "E:\\Downloads\\MATB\\CEINNA\\revision\\lectura_sintetica\\slide_07.wav",
+    "measured_seconds": 57.53,
+    "fits_allocated": true
+  },
+  {
+    "slide": 8,
+    "voice": "Microsoft Sabina Desktop - Spanish (Mexico)",
+    "rate": 0,
+    "allocated_seconds": 60,
+    "path": "E:\\Downloads\\MATB\\CEINNA\\revision\\lectura_sintetica\\slide_08.wav",
+    "measured_seconds": 51.97,
+    "fits_allocated": true
+  },
+  {
+    "slide": 9,
+    "voice": "Microsoft Sabina Desktop - Spanish (Mexico)",
+    "rate": 0,
+    "allocated_seconds": 70,
+    "path": "E:\\Downloads\\MATB\\CEINNA\\revision\\lectura_sintetica\\slide_09.wav",
+    "measured_seconds": 54.61,
+    "fits_allocated": true
+  },
+  {
+    "slide": 10,
+    "voice": "Microsoft Sabina Desktop - Spanish (Mexico)",
+    "rate": 0,
+    "allocated_seconds": 75,
+    "path": "E:\\Downloads\\MATB\\CEINNA\\revision\\lectura_sintetica\\slide_10.wav",
+    "measured_seconds": 57.47,
+    "fits_allocated": true
+  },
+  {
+    "slide": 11,
+    "voice": "Microsoft Sabina Desktop - Spanish (Mexico)",
+    "rate": 0,
+    "allocated_seconds": 65,
+    "path": "E:\\Downloads\\MATB\\CEINNA\\revision\\lectura_sintetica\\slide_11.wav",
+    "measured_seconds": 54.72,
+    "fits_allocated": true
+  },
+  {
+    "slide": 12,
+    "voice": "Microsoft Sabina Desktop - Spanish (Mexico)",
+    "rate": 0,
+    "allocated_seconds": 60,
+    "path": "E:\\Downloads\\MATB\\CEINNA\\revision\\lectura_sintetica\\slide_12.wav",
+    "measured_seconds": 58.39,
+    "fits_allocated": true
+  },
+  {
+    "slide": 13,
+    "voice": "Microsoft Sabina Desktop - Spanish (Mexico)",
+    "rate": 0,
+    "allocated_seconds": 75,
+    "path": "E:\\Downloads\\MATB\\CEINNA\\revision\\lectura_sintetica\\slide_13.wav",
+    "measured_seconds": 57.53,
+    "fits_allocated": true
+  },
+  {
+    "slide": 14,
+    "voice": "Microsoft Sabina Desktop - Spanish (Mexico)",
+    "rate": 0,
+    "allocated_seconds": 10,
+    "path": "E:\\Downloads\\MATB\\CEINNA\\revision\\lectura_sintetica\\slide_14.wav",
+    "measured_seconds": 8.6,
+    "fits_allocated": true
+  },
+  {
+    "slide": 15,
+    "voice": "Microsoft Sabina Desktop - Spanish (Mexico)",
+    "rate": 0,
+    "allocated_seconds": 10,
+    "path": "E:\\Downloads\\MATB\\CEINNA\\revision\\lectura_sintetica\\slide_15.wav",
+    "measured_seconds": 8.56,
+    "fits_allocated": true
+  }
+]

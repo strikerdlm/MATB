@@ -1,0 +1,19 @@
+{
+  "fecha": "2026-09-21",
+  "diapositivas_pptx": 16,
+  "paginas_pdf": 16,
+  "notas_embebidas": 16,
+  "exposicion_programada_segundos": 690,
+  "limite_exposicion_segundos": 720,
+  "preguntas_comentarios_segundos": 180,
+  "referencias_2020_2025": 6,
+  "desbordamientos_detectados": 0,
+  "relaciones_internas_rotas": 0,
+  "copias_originales_sha256": "3 coinciden",
+  "voz_lectura_sintetica": "Microsoft Sabina Desktop - Spanish (Mexico)",
+  "lectura_sintetica_sin_pausas_segundos": 581.35,
+  "lecturas_sinteticas_dentro_de_ventana": 14,
+  "ensayo_humano_realizado": false,
+  "pptx_sha256": "deba9cf35688b7b030818aceed78f8ae757a205450675c9c2c337efd50c5202f",
+  "pdf_sha256": "d4b4d3968f9f0d81101f1ea58caa83db20aef1180205ac2598b284f3c7461591"
+}

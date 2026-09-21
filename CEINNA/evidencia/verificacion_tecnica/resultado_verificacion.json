@@ -1,0 +1,226 @@
+{
+  "fecha": "2026-09-21",
+  "commit": "fd5e1318dc6f036b538dd36ed3c5fe42ad8be7d0",
+  "python": "3.14.6 (tags/v3.14.6:c63aec6, Jun 10 2026, 10:26:10) [MSC v.1944 64 bit (AMD64)]",
+  "tipo": "Demostración técnica sintética; no datos humanos ni ejecución de la interfaz",
+  "escenarios": [
+    {
+      "condicion": "LOW",
+      "duracion_escenario_s": 900,
+      "semilla": 42,
+      "sha256": "8a9251dd22e0ccdff96ad2f1f574e0f29c43a984fe18c8fcf2c2b77dafde7802",
+      "hash_verificado": true,
+      "reproduccion_identica": true,
+      "parametros": {
+        "communications_audio_inventory_sha256": "d44fa4acd68332f38e14e77868051b88af91dd1d035f389f1a41de06a30f79d9",
+        "communications_audio_profile_id": "openmatb-english-male-wav-v1",
+        "communications_minimum_onset_separation_sec": 45,
+        "communications_own_callsign_ratio": 0.5,
+        "communications_prompt_duration_sec": 24.0,
+        "communications_response_availability_sec": 44,
+        "communications_voice_gender": "male",
+        "communications_voice_idiom": "english",
+        "difficulty": 0.2,
+        "isa_probe_interval_sec": 90,
+        "openmatb_alerttimeout_ms": 10000,
+        "openmatb_comm_max_response_delay_ms": 20000,
+        "openmatb_nontarget_duration_ms": 2000,
+        "openmatb_sysmon_lights": [
+          "1",
+          "2"
+        ],
+        "openmatb_sysmon_scales": [
+          "1",
+          "2",
+          "3",
+          "4"
+        ],
+        "resman_loss_per_min": 200,
+        "suite_profile_name": "LOW",
+        "track_target_proportion": 0.8
+      },
+      "eventos_previstos": {
+        "comm_events": 4,
+        "concurrent_event_overlap_pairs": 11,
+        "counterbalancing_method": "complete_permutation_counterbalancing_3_conditions",
+        "event_rate_per_min": 2.4,
+        "expected_active_primary_tasks": 4,
+        "isa_probe_times_sec": [
+          90,
+          180,
+          270,
+          360,
+          450,
+          540,
+          630,
+          720,
+          810
+        ],
+        "overlap_definition": "pairwise overlap of task response-availability intervals",
+        "per_subtask_event_rate_per_min": {
+          "communications": 0.267,
+          "sysmon": 2.133
+        },
+        "sagat_freezes": 0,
+        "sysmon_light_events": 5,
+        "sysmon_nontarget_opportunities": 16,
+        "sysmon_scale_events": 11,
+        "sysmon_target_opportunities": 16,
+        "task_events_total": 36,
+        "task_events_within_5s_of_probe": 6,
+        "workload_label_status": "engineering_preset_pending_human_calibration"
+      }
+    },
+    {
+      "condicion": "MEDIUM",
+      "duracion_escenario_s": 900,
+      "semilla": 43,
+      "sha256": "57bc925077d18a14654a24bd5246bc31105cc26331c7f81389654cc5e1bccdc8",
+      "hash_verificado": true,
+      "reproduccion_identica": true,
+      "parametros": {
+        "communications_audio_inventory_sha256": "d44fa4acd68332f38e14e77868051b88af91dd1d035f389f1a41de06a30f79d9",
+        "communications_audio_profile_id": "openmatb-english-male-wav-v1",
+        "communications_minimum_onset_separation_sec": 45,
+        "communications_own_callsign_ratio": 0.5,
+        "communications_prompt_duration_sec": 24.0,
+        "communications_response_availability_sec": 44,
+        "communications_voice_gender": "male",
+        "communications_voice_idiom": "english",
+        "difficulty": 0.5,
+        "isa_probe_interval_sec": 60,
+        "openmatb_alerttimeout_ms": 10000,
+        "openmatb_comm_max_response_delay_ms": 20000,
+        "openmatb_nontarget_duration_ms": 2000,
+        "openmatb_sysmon_lights": [
+          "1",
+          "2"
+        ],
+        "openmatb_sysmon_scales": [
+          "1",
+          "2",
+          "3",
+          "4"
+        ],
+        "resman_loss_per_min": 600,
+        "suite_profile_name": "MEDIUM",
+        "track_target_proportion": 0.5
+      },
+      "eventos_previstos": {
+        "comm_events": 10,
+        "concurrent_event_overlap_pairs": 44,
+        "counterbalancing_method": "complete_permutation_counterbalancing_3_conditions",
+        "event_rate_per_min": 6.0,
+        "expected_active_primary_tasks": 4,
+        "isa_probe_times_sec": [
+          60,
+          120,
+          180,
+          240,
+          300,
+          360,
+          420,
+          480,
+          540,
+          600,
+          660,
+          720,
+          780,
+          840
+        ],
+        "overlap_definition": "pairwise overlap of task response-availability intervals",
+        "per_subtask_event_rate_per_min": {
+          "communications": 0.667,
+          "sysmon": 5.333
+        },
+        "sagat_freezes": 0,
+        "sysmon_light_events": 14,
+        "sysmon_nontarget_opportunities": 40,
+        "sysmon_scale_events": 26,
+        "sysmon_target_opportunities": 40,
+        "task_events_total": 90,
+        "task_events_within_5s_of_probe": 19,
+        "workload_label_status": "engineering_preset_pending_human_calibration"
+      }
+    },
+    {
+      "condicion": "HIGH",
+      "duracion_escenario_s": 900,
+      "semilla": 44,
+      "sha256": "b668391a5ebfab0dfe2e58e168afe95fc036a58033c584e515f1a2358d9032cb",
+      "hash_verificado": true,
+      "reproduccion_identica": true,
+      "parametros": {
+        "communications_audio_inventory_sha256": "d44fa4acd68332f38e14e77868051b88af91dd1d035f389f1a41de06a30f79d9",
+        "communications_audio_profile_id": "openmatb-english-male-wav-v1",
+        "communications_minimum_onset_separation_sec": 45,
+        "communications_own_callsign_ratio": 0.5,
+        "communications_prompt_duration_sec": 24.0,
+        "communications_response_availability_sec": 44,
+        "communications_voice_gender": "male",
+        "communications_voice_idiom": "english",
+        "difficulty": 0.8,
+        "isa_probe_interval_sec": 45,
+        "openmatb_alerttimeout_ms": 10000,
+        "openmatb_comm_max_response_delay_ms": 20000,
+        "openmatb_nontarget_duration_ms": 2000,
+        "openmatb_sysmon_lights": [
+          "1",
+          "2"
+        ],
+        "openmatb_sysmon_scales": [
+          "1",
+          "2",
+          "3",
+          "4"
+        ],
+        "resman_loss_per_min": 1000,
+        "suite_profile_name": "HIGH",
+        "track_target_proportion": 0.2
+      },
+      "eventos_previstos": {
+        "comm_events": 16,
+        "concurrent_event_overlap_pairs": 84,
+        "counterbalancing_method": "complete_permutation_counterbalancing_3_conditions",
+        "event_rate_per_min": 8.733,
+        "expected_active_primary_tasks": 4,
+        "isa_probe_times_sec": [
+          45,
+          90,
+          135,
+          180,
+          225,
+          270,
+          315,
+          360,
+          405,
+          450,
+          495,
+          540,
+          585,
+          630,
+          675,
+          720,
+          765,
+          810,
+          855
+        ],
+        "overlap_definition": "pairwise overlap of task response-availability intervals",
+        "per_subtask_event_rate_per_min": {
+          "communications": 1.067,
+          "sysmon": 7.667
+        },
+        "sagat_freezes": 0,
+        "sysmon_light_events": 22,
+        "sysmon_nontarget_opportunities": 50,
+        "sysmon_scale_events": 43,
+        "sysmon_target_opportunities": 65,
+        "task_events_total": 131,
+        "task_events_within_5s_of_probe": 44,
+        "workload_label_status": "engineering_preset_pending_human_calibration"
+      }
+    }
+  ],
+  "archivos_convertidos": 3,
+  "limitacion": "La conversión de CSV y la generación de escenarios no demuestran adquisición ni elegibilidad confirmatoria."
+}
