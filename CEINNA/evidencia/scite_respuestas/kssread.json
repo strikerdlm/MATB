@@ -1,0 +1,9 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\n  \"doi\": \"10.5935/1984-0063.20220006\",\n  \"title\": \"Validation of the Colombian version of the Karolinska sleepiness scale\",\n  \"source\": \"abstract\",\n  \"text\": \"Introduction:Currently, daytime sleepiness is a prevalent condition worldwide. Locally validated instruments for measuring sleepiness are required. The objective of this study was to validate a version of the Karolinska sleepiness scale that was translated into the Spanish spoken in Colombia. Methods: Individuals who attended a sleep laboratory for a polysomnography study and people in the general population were included. The validation process was performed in 6 phases: translation and back translation of the original version of the scale (English), face validity (n=13), pilot test (n=20), criteria validity (n=139) by means of polysomnography and the Epworth sleepiness scale, reproducibility (n=34), and sensitivity to change (n=40). Results: Regarding its discriminant validity, the Colombian version of the Karolinska sleepiness scale is correlated with the Epworth sleepiness scale, provided that a Mann-Whitney z=2661 (p=0.0078) was obtained. The scale has an acceptable reproducibility, Spearman Rho=0.55 (p=0.0002), and sensitivity to change, as shown through a two-tailed t test (p=0.0000). Conclusions: The Karolinska Sleepiness Scale was successfully adapted to the Spanish variation spoken in Colombian and to the conditions of adult Colombians; thus, it constitutes a valid, reliable, and easy to use instrument for the assessment of patients with hypersomnia.\",\n  \"offset\": 0,\n  \"returnedChars\": 1382,\n  \"totalChars\": 1382,\n  \"hasMore\": false,\n  \"contentDenied\": true,\n  \"message\": \"Full text is access-restricted for this paper; showing the abstract instead.\"\n}"
+    }
+  ],
+  "isError": false
+}

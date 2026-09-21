@@ -1,0 +1,73 @@
+{
+  "recorded_cited": 5,
+  "recorded_excluded": 2,
+  "skipped": 0,
+  "mcp_session_id": "8e4e390b-9a39-4ec5-9909-c199cf24da18",
+  "cited": [
+    {
+      "source_ref": "10.3758/s13428-020-01364-w",
+      "decision": "cited",
+      "source": "scite_mcp",
+      "source_detail": null,
+      "reason_code": "supports",
+      "reason": "Personalización, extensibilidad y replicabilidad; texto completo leído.",
+      "stage": "full_text"
+    },
+    {
+      "source_ref": "10.3389/fphys.2024.1408242",
+      "decision": "cited",
+      "source": "scite_mcp",
+      "source_detail": null,
+      "reason_code": "supports",
+      "reason": "19 estudios y siete configuraciones suficientemente descritas; calidad del reporte, no éxito de réplica.",
+      "stage": "full_text"
+    },
+    {
+      "source_ref": "10.3389/fnrgo.2024.1435588",
+      "decision": "cited",
+      "source": "scite_mcp",
+      "source_detail": null,
+      "reason_code": "supports",
+      "reason": "Descripción USAARL e historia NASA/AF; comparación de aportes sin superioridad humana.",
+      "stage": "full_text"
+    },
+    {
+      "source_ref": "Abstract-ceinna.md (adjunto del investigador, 2026-09-21)",
+      "decision": "cited",
+      "source": "user_supplied",
+      "source_detail": null,
+      "reason_code": "relevant",
+      "reason": "Marco del proyecto, conservando alcance histórico y autoría vigente.",
+      "stage": "full_text"
+    },
+    {
+      "source_ref": "CEINNA.md (adjunto del investigador, 2026-09-21)",
+      "decision": "cited",
+      "source": "user_supplied",
+      "source_detail": null,
+      "reason_code": "relevant",
+      "reason": "Aportes comparativos y marco de evidencia, cifras históricas no trasladadas como actuales.",
+      "stage": "full_text"
+    }
+  ],
+  "excluded": [
+    {
+      "source_ref": "10.21236/ada611870",
+      "decision": "excluded",
+      "source": "scite_mcp",
+      "source_detail": null,
+      "reason_code": "out_of_scope",
+      "reason": "Identificado como antecedente, sin texto legible accesible; no usado como fuente directa de detalles, cubiertos por Vogl.",
+      "stage": "title_abstract"
+    },
+    {
+      "source_ref": "https://ntrs.nasa.gov/citations/20110014456",
+      "decision": "excluded",
+      "source": "web_search",
+      "source_detail": null,
+      "reason_code": "out_of_scope",
+      "reason": "Metadatos identificados, PDF403; no usado como fuente directa de detalles históricos, atribuidos a Vogl.",
+      "stage": "title_abstract"
+    }
+  ]
+}

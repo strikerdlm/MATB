@@ -1,0 +1,15 @@
+id,capacidad,estado,fuente,localizador,evidencia_actual,limite
+T01,Cuatro tareas clásicas,localizado en código,openmatb/plugins/,sysmon.py track.py communications.py resman.py,Inspección de plugins,No se ejecutó nueva sesión gráfica
+T02,Generación tres condiciones,verificado mediante ejecución,matb_integration/scenario_builder.py,build_block_scenario,verificacion_tecnica/resultado_verificacion.json,Demostración sintética
+T03,Integridad SHA-256,verificado mediante ejecución,matb_integration/scenario_manifest.py,build_scenario_manifest,3 hashes coincidentes,Integridad de archivos
+T04,Reproducibilidad con semilla,verificado mediante ejecución,matb_integration/scenario_builder.py,build_block_scenario,3 regeneraciones idénticas,Condiciones de software auditadas
+T05,Seis órdenes,localizado en código,matb_integration/scenario_builder.py,COMPLETE_COUNTERBALANCE_3,Seis permutaciones,Aplicación ASTRA según protocolo
+T06,Conversión CSV,verificado mediante ejecución,matb_integration/log_converter.py,convert_session,3 fixtures sintéticos convertidos,Separada de reconciliación eventos
+T07,RTLX seis ítems,localizado en código,matb_integration/metrics_spec.json,nasatlx.rtlx_mean_0_100,Media reescalada y null si incompleto,No equivale a TLX ponderado
+T08,dprime observado,localizado en código,matb_integration/metrics_spec.json,sysmon.dprime_observed_v2,Oportunidades objetivo y no objetivo únicas,Requiere evidencia completa
+T09,Captura eventos y timing,localizado en código,matb_integration/contracts/events.py,ScientificEventV3 y TimingObservationV1,Contratos inspeccionados,Temporización física es evidencia separada
+T10,Propósito de captura,localizado en código,matb_integration/evidence/contracts.py,CaptureManifestV1,study practice exploration,Propósito no concede elegibilidad
+T11,Elegibilidad por criterios,localizado en código,webui/backend/app/study_analysis_eligibility.py,evaluate,Criterios separados según política,No ejecutada integración consola
+T12,DEPDF,localizado en código,matb_integration/suhir/pipeline.py,fit_participant,Módulo localizado,Recorrido ampliado sin ejecutar por dependencia yaml
+T13,Resultados humanos ASTRA,requiere evidencia humana/física,CEINNA/PLAN_DE_PRESENTACION.md,Alcance,Diseño previsto,No datos humanos en demostración
+T14,Interfaz documental,documentado,openmatb/.img/capture.png,openmatb/README.es.md,Copia idéntica inspeccionada,Referencia histórica en francés

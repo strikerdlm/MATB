@@ -1,0 +1,4 @@
+PASS: 3 escenarios con hash SHA-256 correcto, regeneraci�n id�ntica y 3 CSV sint�ticos convertidos.
+LOW SYSMON objetivo 16 no objetivo 16 COMM 4
+MEDIUM SYSMON objetivo 40 no objetivo 40 COMM 10
+HIGH SYSMON objetivo 65 no objetivo 50 COMM 16

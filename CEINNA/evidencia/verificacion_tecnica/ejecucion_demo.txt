@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "E:\Downloads\MATB\examples\openmatb-research\run_example.py", line 17, in <module>
+    from matb_integration.suhir.pipeline import fit_participant
+  File "E:\Downloads\MATB\matb_integration\suhir\pipeline.py", line 13, in <module>
+    import yaml
+ModuleNotFoundError: No module named 'yaml'

@@ -1,0 +1,6 @@
+# Preserve evidence and attachment hashes across Windows and other checkouts.
+* -text whitespace=cr-at-eol
+# Markdown uses two trailing spaces for intentional line breaks.
+*.md whitespace=cr-at-eol,-blank-at-eol
+# Immutable supplied documents retain their original formatting.
+fuentes/** -whitespace
