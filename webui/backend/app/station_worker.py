@@ -41,6 +41,10 @@ MANAGERS={}
 class StationWorker:
     def __init__(self,engine,app,*,application=None):
         from app.station_http import StationWorkMiddleware
+        from fastapi.middleware.asyncexitstack import AsyncExitStackMiddleware
+        # Replay bypasses admission middleware, but still needs FastAPI's
+        # request file lifecycle just like a request dispatched by FastAPI.
+        app=AsyncExitStackMiddleware(app)
         if application is not None:
             from starlette.middleware.exceptions import ExceptionMiddleware
             app=ExceptionMiddleware(app,handlers=application.exception_handlers)

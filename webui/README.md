@@ -54,3 +54,7 @@ See the [swarm guide](../docs/implementation/suas-swarm-supervision.md) and
 [release runbook](../docs/implementation/suas-swarm-release.md). The 2D/CLI service
 can run without a GPU; fluid 3D presentation requires a qualified graphics-enabled
 browser on the operator workstation. Use production builds for deployment.
+
+The [2026-09-21 production review](../docs/implementation/production-readiness-2026-09-21.md)
+records the current hardening changes, verified Windows dependency lock, browser
+acceptance command and deployment limits.

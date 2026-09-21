@@ -109,7 +109,23 @@ class StationWorkMiddleware:
             with Session(engine, expire_on_commit=False) as db:
                 if scope['path'] in {'/study/analyses','/study/analyses/inputs','/study/analyses/preview'}:
                     from app.study_analysis import deferred_selection
-                    payload['selection_cutoff']=deferred_selection(db,json.loads(body))
+                    from app.routers.study_analysis import ExecutionRequest
+                    from pydantic import ValidationError
+                    try:
+                        selection = ExecutionRequest.model_validate_json(body)
+                    except ValidationError as exc:
+                        # This middleware runs before FastAPI validation. Apply
+                        # the same contract before freezing or queueing work,
+                        # without reflecting raw request data into the error.
+                        fields = [
+                            '.'.join(str(part) for part in ('body', *error.get('loc', ())))
+                            for error in exc.errors()
+                        ]
+                        raise HTTPException(422, dict(
+                            code='invalid_request', message='request validation failed',
+                            context=dict(fields=fields),
+                        )) from exc
+                    payload['selection_cutoff']=deferred_selection(db,selection.model_dump())
                 job=resources.enqueue(db,'http',payload)
                 identity=job.id
                 claimed=resources.claim_job(db,identity)

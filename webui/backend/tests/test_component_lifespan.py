@@ -134,6 +134,44 @@ def test_auto_component_discovery_ignores_only_an_absent_entrypoint(
     assert all(manifest.distribution == "core" for manifest in registry.manifests())
 
 
+def test_provider_shutdown_failure_retains_backend_database_lease(monkeypatch):
+    _disable_database_startup(monkeypatch)
+    events = []
+    monkeypatch.setattr(main_module, "_COMPONENT_PROVIDERS", (Provider("native", events, fail_stop=True),))
+    monkeypatch.setattr(analysis_module, "release_backend_instance_lease", lambda _engine: events.append("release"))
+
+    async def run():
+        with pytest.raises(RuntimeError, match="stop failed"):
+            async with main_module.lifespan(FastAPI()):
+                pass
+
+    asyncio.run(run())
+    assert events == ["start:native", "stop:native"]
+
+
+def test_station_shutdown_failure_still_drains_bayesian_workers(monkeypatch):
+    from app.station_worker import StationWorker
+
+    _disable_database_startup(monkeypatch)
+    monkeypatch.setattr(main_module, "_COMPONENT_PROVIDERS", ())
+    events = []
+
+    async def fail_station(_self):
+        raise RuntimeError("station worker still active")
+
+    monkeypatch.setattr(StationWorker, "shutdown", fail_station)
+    monkeypatch.setattr(analysis_module, "shutdown_bayes_jobs", lambda _engine: events.append("drain"))
+    monkeypatch.setattr(analysis_module, "release_backend_instance_lease", lambda _engine: events.append("release"))
+
+    async def run():
+        with pytest.raises(RuntimeError, match="station worker still active"):
+            async with main_module.lifespan(FastAPI()):
+                pass
+
+    asyncio.run(run())
+    assert events == ["drain"]
+
+
 def test_auto_component_discovery_surfaces_broken_transitive_dependency(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

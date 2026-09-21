@@ -177,12 +177,12 @@ jobs:
           PW_TEST_MATCH: "**/{geography,geography-assets,presentation}.spec.ts"
           PLAYWRIGHT_HTML_OUTPUT_DIR: "playwright-report/geography"
         run: npm run test:e2e -- --fail-on-flaky-tests --output=test-results/geography
-      - name: Swarm production browser verification
+      - name: Production browser and swarm verification
         working-directory: MATB relocation ñ/webui/frontend
         env:
           MATB_PYTHON: python
           MATB_COMPONENTS: auto
-        run: npm run test:e2e:swarm -- --fail-on-flaky-tests --output=test-results/swarm
+        run: npm run test:e2e:production -- --fail-on-flaky-tests --output=test-results/production
       - name: Scientific evidence browser verification
         working-directory: MATB relocation ñ/webui/frontend
         env:

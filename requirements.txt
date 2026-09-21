@@ -1,6 +1,7 @@
 # UAV & Fighter Aircraft Monitoring System
 # Visualization and UI
 rich>=13.7.0
+Pygments>=2.20.0
 
 # Type checking and validation
 pydantic>=2.5.0

@@ -278,7 +278,10 @@ async def test_all_public_heavy_surfaces_defer_through_whole_visit(engine, monke
     ]
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=application), base_url='http://testserver') as client:
         for method, path in routes:
-            response = await client.request(method, path, content=b'{}')
+            selection = dict(version_id='fixture', actor='Dr Test', reason='Admission fixture')
+            response = await client.request(method, path, json=selection if path in {
+                '/study/analyses', '/study/analyses/preview', '/study/analyses/inputs',
+            } else {})
             assert response.status_code == 202, (phase, path, response.text)
             with Session(engine) as db:
                 station.cancel_job(db, response.json()['job_id'])

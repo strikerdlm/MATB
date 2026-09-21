@@ -187,7 +187,7 @@ export function MissionSetupForm({
   const protocolReady = Boolean(identityReady && visitOrdinal && scenarioId);
 
   return (
-    <main className="min-h-screen bg-background px-4 py-8 text-foreground sm:px-6 lg:px-10">
+    <div className="min-h-screen bg-background px-4 py-8 text-foreground sm:px-6 lg:px-10">
       <div className="mx-auto max-w-6xl space-y-7"><p className="text-sm text-muted-foreground">{locale === "en" ? "Before this study mission, complete KSS and a valid 10-minute PVT for the same visit." : "Antes de esta misión de estudio, complete KSS y una PVT válida de 10 minutos para la misma visita."} <Link href="/study/assignments" className="underline">{copy("Seleccionar evaluación asignada","Select assigned assessment")}</Link></p>
         {!preparationEnabled && <p role="status" className="border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">{copy("Elija sesión de estudio arriba para preparar una misión. Para familiarización, use la prueba técnica desde el catálogo.", "Choose study session above to prepare a mission. For familiarization, use the technical test from the catalog.")}</p>}
         <fieldset disabled={Boolean(assigned.context)}><PresentationSetup locale={locale} value={presentation} onChange={setPresentation}/></fieldset>
@@ -398,6 +398,6 @@ export function MissionSetupForm({
           </Card>
         </form>
       </div>
-    </main>
+    </div>
   );
 }

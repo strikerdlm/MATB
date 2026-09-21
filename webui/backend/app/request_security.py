@@ -121,7 +121,9 @@ class LoopbackRequestSecurityMiddleware:
         if (
             expected_token is None
             or not supplied_token
-            or not secrets.compare_digest(supplied_token, expected_token)
+            or not secrets.compare_digest(
+                supplied_token.encode("utf-8"), expected_token.encode("utf-8")
+            )
         ):
             response = self._response(
                 403,

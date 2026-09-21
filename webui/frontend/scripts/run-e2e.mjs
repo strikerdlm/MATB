@@ -40,7 +40,7 @@ if (
 for (const required of [
   nextCli,
   playwrightCli,
-  path.join(frontendRoot, ".next", "BUILD_ID"),
+  path.resolve(frontendRoot, process.env.MATB_NEXT_DIST_DIR || ".next", "BUILD_ID"),
 ]) {
   if (!fs.existsSync(required))
     throw new Error(`missing E2E prerequisite: ${required}`);
