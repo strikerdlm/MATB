@@ -1,0 +1,506 @@
+[
+  {
+    "length": 2,
+    "start_ms": 99.45578231292517,
+    "position": 0,
+    "text": "La",
+    "sapi_audio_position_ms": 137.0625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 7,
+    "start_ms": 249.4331065759637,
+    "position": 3,
+    "text": "batería",
+    "sapi_audio_position_ms": 343.75,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 9,
+    "start_ms": 699.3197278911565,
+    "position": 11,
+    "text": "cognitiva",
+    "sapi_audio_position_ms": 963.75,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 7,
+    "start_ms": 1329.1609977324263,
+    "position": 21,
+    "text": "empieza",
+    "sapi_audio_position_ms": 1831.75,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 3,
+    "start_ms": 1764.0816326530612,
+    "position": 29,
+    "text": "con",
+    "sapi_audio_position_ms": 2431.125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 8,
+    "start_ms": 1954.0136054421769,
+    "position": 33,
+    "text": "reacción",
+    "sapi_audio_position_ms": 2692.875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 6,
+    "start_ms": 2463.9002267573696,
+    "position": 42,
+    "text": "simple",
+    "sapi_audio_position_ms": 3395.5625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 5,
+    "start_ms": 3273.7868480725624,
+    "position": 50,
+    "text": "pulse",
+    "sapi_audio_position_ms": 4511.6875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 3638.7301587301586,
+    "position": 56,
+    "text": "al",
+    "sapi_audio_position_ms": 5014.625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 3,
+    "start_ms": 3763.718820861678,
+    "position": 59,
+    "text": "ver",
+    "sapi_audio_position_ms": 5186.875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 3933.6507936507937,
+    "position": 63,
+    "text": "el",
+    "sapi_audio_position_ms": 5421.0625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 7,
+    "start_ms": 4043.6281179138323,
+    "position": 66,
+    "text": "círculo",
+    "sapi_audio_position_ms": 5572.625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 5,
+    "start_ms": 4558.503401360545,
+    "position": 74,
+    "text": "verde",
+    "sapi_audio_position_ms": 6282.1875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 7,
+    "start_ms": 5758.321995464853,
+    "position": 81,
+    "text": "Después",
+    "sapi_audio_position_ms": 7935.6875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 5,
+    "start_ms": 6188.253968253968,
+    "position": 89,
+    "text": "viene",
+    "sapi_audio_position_ms": 8528.1875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 8,
+    "start_ms": 6453.1519274376415,
+    "position": 95,
+    "text": "reacción",
+    "sapi_audio_position_ms": 8893.25,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 6947.981859410431,
+    "position": 104,
+    "text": "de",
+    "sapi_audio_position_ms": 9575.1875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 8,
+    "start_ms": 7037.913832199546,
+    "position": 107,
+    "text": "elección",
+    "sapi_audio_position_ms": 9699.125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 8,
+    "start_ms": 7927.800453514739,
+    "position": 117,
+    "text": "responda",
+    "sapi_audio_position_ms": 10925.5,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 3,
+    "start_ms": 8457.64172335601,
+    "position": 126,
+    "text": "con",
+    "sapi_audio_position_ms": 11655.6875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 8637.64172335601,
+    "position": 130,
+    "text": "la",
+    "sapi_audio_position_ms": 11903.75,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 6,
+    "start_ms": 8742.630385487528,
+    "position": 133,
+    "text": "flecha",
+    "sapi_audio_position_ms": 12048.4375,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 3,
+    "start_ms": 9147.573696145124,
+    "position": 140,
+    "text": "que",
+    "sapi_audio_position_ms": 12606.5,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 11,
+    "start_ms": 9297.551020408164,
+    "position": 144,
+    "text": "corresponde",
+    "sapi_audio_position_ms": 12813.1875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 1,
+    "start_ms": 9937.369614512472,
+    "position": 156,
+    "text": "a",
+    "sapi_audio_position_ms": 13694.9375,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 10002.35827664399,
+    "position": 158,
+    "text": "la",
+    "sapi_audio_position_ms": 13784.5,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 9,
+    "start_ms": 10122.35827664399,
+    "position": 161,
+    "text": "dirección",
+    "sapi_audio_position_ms": 13949.875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 8,
+    "start_ms": 10637.142857142857,
+    "position": 171,
+    "text": "mostrada",
+    "sapi_audio_position_ms": 14659.3125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 4,
+    "start_ms": 12047.02947845805,
+    "position": 181,
+    "text": "Cada",
+    "sapi_audio_position_ms": 16602.3125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 5,
+    "start_ms": 12286.938775510203,
+    "position": 186,
+    "text": "tarea",
+    "sapi_audio_position_ms": 16932.9375,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 7,
+    "start_ms": 12621.85941043084,
+    "position": 192,
+    "text": "incluye",
+    "sapi_audio_position_ms": 17394.5,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 3,
+    "start_ms": 13076.780045351474,
+    "position": 200,
+    "text": "sus",
+    "sapi_audio_position_ms": 18021.4375,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 13,
+    "start_ms": 13316.734693877552,
+    "position": 204,
+    "text": "instrucciones",
+    "sapi_audio_position_ms": 18352.125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 1,
+    "start_ms": 14116.507936507936,
+    "position": 218,
+    "text": "y",
+    "sapi_audio_position_ms": 19454.3125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 3,
+    "start_ms": 14196.507936507936,
+    "position": 220,
+    "text": "una",
+    "sapi_audio_position_ms": 19564.5625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 8,
+    "start_ms": 14406.485260770974,
+    "position": 224,
+    "text": "práctica",
+    "sapi_audio_position_ms": 19853.9375,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 6,
+    "start_ms": 14936.326530612245,
+    "position": 233,
+    "text": "previa",
+    "sapi_audio_position_ms": 20584.125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 16216.235827664399,
+    "position": 241,
+    "text": "En",
+    "sapi_audio_position_ms": 22348,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 4,
+    "start_ms": 16361.179138321995,
+    "position": 244,
+    "text": "este",
+    "sapi_audio_position_ms": 22547.75,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 9,
+    "start_ms": 16606.07709750567,
+    "position": 249,
+    "text": "recorrido",
+    "sapi_audio_position_ms": 22885.25,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 10,
+    "start_ms": 17135.918367346938,
+    "position": 259,
+    "text": "utilizamos",
+    "sapi_audio_position_ms": 23615.4375,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 4,
+    "start_ms": 17955.736961451246,
+    "position": 273,
+    "text": "modo",
+    "sapi_audio_position_ms": 24745.25,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 17850.748299319726,
+    "position": 270,
+    "text": "el",
+    "sapi_audio_position_ms": 24600.5625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 18245.62358276644,
+    "position": 278,
+    "text": "de",
+    "sapi_audio_position_ms": 25144.75,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 15,
+    "start_ms": 18350.566893424035,
+    "position": 281,
+    "text": "familiarización",
+    "sapi_audio_position_ms": 25289.375,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 9,
+    "start_ms": 19275.32879818594,
+    "position": 297,
+    "text": "abreviado",
+    "sapi_audio_position_ms": 26563.8125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 19770.20408163265,
+    "position": 307,
+    "text": "de",
+    "sapi_audio_position_ms": 27245.8125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 19870.15873015873,
+    "position": 310,
+    "text": "la",
+    "sapi_audio_position_ms": 27383.5625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 10,
+    "start_ms": 19975.147392290248,
+    "position": 313,
+    "text": "aplicación",
+    "sapi_audio_position_ms": 27528.25,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 3,
+    "start_ms": 21020,
+    "position": 325,
+    "text": "las",
+    "sapi_audio_position_ms": 28968.1875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 10,
+    "start_ms": 21224.98866213152,
+    "position": 329,
+    "text": "respuestas",
+    "sapi_audio_position_ms": 29250.6875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 9,
+    "start_ms": 21829.84126984127,
+    "position": 340,
+    "text": "mostradas",
+    "sapi_audio_position_ms": 30084.25,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 22409.750566893425,
+    "position": 350,
+    "text": "no",
+    "sapi_audio_position_ms": 30883.4375,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 9,
+    "start_ms": 22549.7052154195,
+    "position": 353,
+    "text": "describen",
+    "sapi_audio_position_ms": 31076.3125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 9,
+    "start_ms": 23089.52380952381,
+    "position": 363,
+    "text": "capacidad",
+    "sapi_audio_position_ms": 31820.25,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 6,
+    "start_ms": 23699.365079365078,
+    "position": 373,
+    "text": "humana",
+    "sapi_audio_position_ms": 32660.6875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  }
+]

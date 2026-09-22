@@ -1,0 +1,14 @@
+{
+  "three": "186",
+  "drawCalls": 104,
+  "triangles": 4116,
+  "frames": 1000,
+  "medianMs": 17.799999999999955,
+  "p95Ms": 18.69999999999891,
+  "dpr": 1,
+  "viewport": [
+    1344,
+    1080
+  ],
+  "renderer": "WebKit WebGL"
+}

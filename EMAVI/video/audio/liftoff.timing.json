@@ -1,0 +1,461 @@
+[
+  {
+    "length": 7,
+    "start_ms": 99.45578231292517,
+    "position": 0,
+    "text": "Liftoff",
+    "sapi_audio_position_ms": 137.0625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 7,
+    "start_ms": 569.342403628118,
+    "position": 8,
+    "text": "integra",
+    "sapi_audio_position_ms": 784.625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 3,
+    "start_ms": 994.2403628117913,
+    "position": 16,
+    "text": "una",
+    "sapi_audio_position_ms": 1370.1875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 6,
+    "start_ms": 1229.2063492063492,
+    "position": 20,
+    "text": "sesión",
+    "sapi_audio_position_ms": 1694,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 1644.0816326530612,
+    "position": 27,
+    "text": "de",
+    "sapi_audio_position_ms": 2265.75,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 5,
+    "start_ms": 1734.0136054421769,
+    "position": 30,
+    "text": "vuelo",
+    "sapi_audio_position_ms": 2389.6875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 8,
+    "start_ms": 2013.8775510204082,
+    "position": 36,
+    "text": "simulado",
+    "sapi_audio_position_ms": 2775.375,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 3,
+    "start_ms": 2533.6961451247166,
+    "position": 45,
+    "text": "con",
+    "sapi_audio_position_ms": 3491.75,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 11,
+    "start_ms": 2743.6281179138323,
+    "position": 49,
+    "text": "preparación",
+    "sapi_audio_position_ms": 3781.0625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 5,
+    "start_ms": 3778.4126984126983,
+    "position": 62,
+    "text": "línea",
+    "sapi_audio_position_ms": 5207.125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 5,
+    "start_ms": 4098.367346938776,
+    "position": 68,
+    "text": "basal",
+    "sapi_audio_position_ms": 5648.0625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 5,
+    "start_ms": 4838.27664399093,
+    "position": 75,
+    "text": "vuelo",
+    "sapi_audio_position_ms": 6667.75,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 1,
+    "start_ms": 5158.185941043083,
+    "position": 81,
+    "text": "y",
+    "sapi_audio_position_ms": 7108.625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 12,
+    "start_ms": 5263.174603174603,
+    "position": 83,
+    "text": "recuperación",
+    "sapi_audio_position_ms": 7253.3125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 6967.936507936508,
+    "position": 97,
+    "text": "Se",
+    "sapi_audio_position_ms": 9602.6875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 8,
+    "start_ms": 7142.902494331066,
+    "position": 100,
+    "text": "necesita",
+    "sapi_audio_position_ms": 9843.8125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 7727.7097505668935,
+    "position": 109,
+    "text": "el",
+    "sapi_audio_position_ms": 10649.75,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 9,
+    "start_ms": 7817.687074829932,
+    "position": 112,
+    "text": "simulador",
+    "sapi_audio_position_ms": 10773.75,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 9,
+    "start_ms": 8377.551020408164,
+    "position": 122,
+    "text": "instalado",
+    "sapi_audio_position_ms": 11545.3125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 9307.392290249432,
+    "position": 133,
+    "text": "un",
+    "sapi_audio_position_ms": 12826.75,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 11,
+    "start_ms": 9452.335600907028,
+    "position": 136,
+    "text": "controlador",
+    "sapi_audio_position_ms": 13026.5,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 11,
+    "start_ms": 10082.176870748299,
+    "position": 148,
+    "text": "configurado",
+    "sapi_audio_position_ms": 13894.5,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 1,
+    "start_ms": 10797.052154195011,
+    "position": 160,
+    "text": "y",
+    "sapi_audio_position_ms": 14879.6875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 10,
+    "start_ms": 10897.052154195011,
+    "position": 162,
+    "text": "telemetría",
+    "sapi_audio_position_ms": 15017.5,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 6,
+    "start_ms": 11536.87074829932,
+    "position": 173,
+    "text": "activa",
+    "sapi_audio_position_ms": 15899.25,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 12841.72335600907,
+    "position": 181,
+    "text": "La",
+    "sapi_audio_position_ms": 17697.5,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 7,
+    "start_ms": 12991.700680272108,
+    "position": 184,
+    "text": "consola",
+    "sapi_audio_position_ms": 17904.1875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 8,
+    "start_ms": 13486.57596371882,
+    "position": 192,
+    "text": "acompaña",
+    "sapi_audio_position_ms": 18586.1875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 14026.485260770974,
+    "position": 201,
+    "text": "el",
+    "sapi_audio_position_ms": 19330.25,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 13,
+    "start_ms": 14116.462585034013,
+    "position": 204,
+    "text": "procedimiento",
+    "sapi_audio_position_ms": 19454.25,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 1,
+    "start_ms": 14906.213151927437,
+    "position": 218,
+    "text": "y",
+    "sapi_audio_position_ms": 20542.625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 8,
+    "start_ms": 15011.201814058957,
+    "position": 220,
+    "text": "conserva",
+    "sapi_audio_position_ms": 20687.3125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 3,
+    "start_ms": 15536.054421768707,
+    "position": 229,
+    "text": "las",
+    "sapi_audio_position_ms": 21410.625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 7,
+    "start_ms": 15726.031746031746,
+    "position": 233,
+    "text": "medidas",
+    "sapi_audio_position_ms": 21672.4375,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 11,
+    "start_ms": 16145.9410430839,
+    "position": 241,
+    "text": "disponibles",
+    "sapi_audio_position_ms": 22251.125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 4,
+    "start_ms": 17795.646258503402,
+    "position": 254,
+    "text": "Esta",
+    "sapi_audio_position_ms": 24524.625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 9,
+    "start_ms": 18085.57823129252,
+    "position": 259,
+    "text": "grabación",
+    "sapi_audio_position_ms": 24924.1875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 7,
+    "start_ms": 18620.453514739227,
+    "position": 269,
+    "text": "muestra",
+    "sapi_audio_position_ms": 25661.3125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 19020.31746031746,
+    "position": 277,
+    "text": "la",
+    "sapi_audio_position_ms": 26212.375,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 11,
+    "start_ms": 19140.31746031746,
+    "position": 280,
+    "text": "preparación",
+    "sapi_audio_position_ms": 26377.75,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 20180.090702947844,
+    "position": 293,
+    "text": "no",
+    "sapi_audio_position_ms": 27810.6875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 20355.056689342404,
+    "position": 296,
+    "text": "se",
+    "sapi_audio_position_ms": 28051.8125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 7,
+    "start_ms": 20510.02267573696,
+    "position": 299,
+    "text": "conectó",
+    "sapi_audio_position_ms": 28265.375,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 20979.954648526076,
+    "position": 307,
+    "text": "un",
+    "sapi_audio_position_ms": 28913,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 9,
+    "start_ms": 21124.897959183672,
+    "position": 310,
+    "text": "simulador",
+    "sapi_audio_position_ms": 29112.75,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 21684.80725623583,
+    "position": 320,
+    "text": "de",
+    "sapi_audio_position_ms": 29884.375,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 5,
+    "start_ms": 21789.750566893425,
+    "position": 323,
+    "text": "vuelo",
+    "sapi_audio_position_ms": 30029,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 4,
+    "start_ms": 22074.603174603173,
+    "position": 329,
+    "text": "para",
+    "sapi_audio_position_ms": 30421.5625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 8,
+    "start_ms": 22309.52380952381,
+    "position": 334,
+    "text": "producir",
+    "sapi_audio_position_ms": 30745.3125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 10,
+    "start_ms": 22834.42176870748,
+    "position": 343,
+    "text": "resultados",
+    "sapi_audio_position_ms": 31468.6875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 6,
+    "start_ms": 23524.21768707483,
+    "position": 354,
+    "text": "nuevos",
+    "sapi_audio_position_ms": 32419.3125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  }
+]

@@ -1,0 +1,40 @@
+{
+  "chapterCount": 18,
+  "video": {
+    "duration": 465,
+    "width": 1920,
+    "height": 1080,
+    "tracks": 1
+  },
+  "geometry": {
+    "finite": true,
+    "reassemblyExact": true,
+    "parts": 6,
+    "metrics": {
+      "three": "186",
+      "drawCalls": 104,
+      "triangles": 4116,
+      "frames": 23,
+      "medianMs": 17.699999999999818,
+      "p95Ms": 18.100000000000136,
+      "dpr": 1,
+      "viewport": [
+        699,
+        468
+      ],
+      "renderer": "WebKit WebGL"
+    }
+  },
+  "chapterNavigation": "Primero: somnolencia percibida",
+  "repeatTime": 77.616666,
+  "checkpoint": true,
+  "answerFeedback": "Correcto. Se realizan las asignadas por el protocolo.",
+  "resumed": true,
+  "selection": "Sensor: requiere conexión física y revisión de calidad. No se adquirieron señales en este video.",
+  "presentationFullscreen": true,
+  "mobileNoOverflow": true,
+  "reducedMotion": "Iniciar movimiento",
+  "browser": "153.0.8010.52",
+  "consoleErrors": [],
+  "externalRequests": []
+}

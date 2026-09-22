@@ -1,0 +1,46 @@
+[
+  {
+    "name": "preparar",
+    "seconds": 3.214,
+    "url": "http://127.0.0.1:3118/screen?purpose=practice"
+  },
+  {
+    "name": "prueba-1",
+    "seconds": 4.331,
+    "url": "http://127.0.0.1:3118/screen?purpose=practice"
+  },
+  {
+    "name": "prueba-2",
+    "seconds": 27.062,
+    "url": "http://127.0.0.1:3118/screen?purpose=practice"
+  },
+  {
+    "name": "prueba-3",
+    "seconds": 38.565,
+    "url": "http://127.0.0.1:3118/screen?purpose=practice"
+  },
+  {
+    "name": "prueba-4",
+    "seconds": 60.509,
+    "url": "http://127.0.0.1:3118/screen?purpose=practice"
+  },
+  {
+    "name": "prueba-5",
+    "seconds": 74.75,
+    "url": "http://127.0.0.1:3118/screen?purpose=practice"
+  },
+  {
+    "name": "final",
+    "seconds": 77.003,
+    "url": "http://127.0.0.1:3118/screen?purpose=practice"
+  },
+  {
+    "name": "resultado",
+    "seconds": 77.183,
+    "url": "http://127.0.0.1:3118/screen?purpose=practice"
+  },
+  {
+    "name": "end",
+    "seconds": 83.533
+  }
+]

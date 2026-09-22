@@ -1,0 +1,497 @@
+[
+  {
+    "length": 2,
+    "start_ms": 99.45578231292517,
+    "position": 0,
+    "text": "La",
+    "sapi_audio_position_ms": 137.0625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 6,
+    "start_ms": 244.44444444444443,
+    "position": 3,
+    "text": "escala",
+    "sapi_audio_position_ms": 336.875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 654.3764172335601,
+    "position": 10,
+    "text": "de",
+    "sapi_audio_position_ms": 901.8125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 11,
+    "start_ms": 759.3197278911565,
+    "position": 13,
+    "text": "somnolencia",
+    "sapi_audio_position_ms": 1046.4375,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 1414.1496598639455,
+    "position": 25,
+    "text": "de",
+    "sapi_audio_position_ms": 1948.875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 10,
+    "start_ms": 1524.126984126984,
+    "position": 28,
+    "text": "Karolinska",
+    "sapi_audio_position_ms": 2100.4375,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 2303.9455782312925,
+    "position": 39,
+    "text": "se",
+    "sapi_audio_position_ms": 3175.125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 8,
+    "start_ms": 2458.91156462585,
+    "position": 42,
+    "text": "responde",
+    "sapi_audio_position_ms": 3388.6875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 5,
+    "start_ms": 2958.7301587301586,
+    "position": 51,
+    "text": "antes",
+    "sapi_audio_position_ms": 4077.5,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 3253.605442176871,
+    "position": 57,
+    "text": "de",
+    "sapi_audio_position_ms": 4483.875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 3338.548752834467,
+    "position": 60,
+    "text": "la",
+    "sapi_audio_position_ms": 4600.9375,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 6,
+    "start_ms": 3458.548752834467,
+    "position": 63,
+    "text": "prueba",
+    "sapi_audio_position_ms": 4766.3125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 3813.4240362811793,
+    "position": 70,
+    "text": "de",
+    "sapi_audio_position_ms": 5255.375,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 10,
+    "start_ms": 3923.401360544218,
+    "position": 73,
+    "text": "vigilancia",
+    "sapi_audio_position_ms": 5406.9375,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 3,
+    "start_ms": 5493.197278911564,
+    "position": 85,
+    "text": "Lea",
+    "sapi_audio_position_ms": 7570.3125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 3,
+    "start_ms": 5733.1519274376415,
+    "position": 89,
+    "text": "las",
+    "sapi_audio_position_ms": 7901,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 8,
+    "start_ms": 5933.106575963719,
+    "position": 93,
+    "text": "opciones",
+    "sapi_audio_position_ms": 8176.5625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 1,
+    "start_ms": 6477.913832199546,
+    "position": 102,
+    "text": "y",
+    "sapi_audio_position_ms": 8927.375,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 5,
+    "start_ms": 6557.913832199546,
+    "position": 104,
+    "text": "elija",
+    "sapi_audio_position_ms": 9037.625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 6927.845804988662,
+    "position": 110,
+    "text": "la",
+    "sapi_audio_position_ms": 9547.4375,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 3,
+    "start_ms": 7047.845804988662,
+    "position": 113,
+    "text": "que",
+    "sapi_audio_position_ms": 9712.8125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 10,
+    "start_ms": 7197.8231292517,
+    "position": 117,
+    "text": "representa",
+    "sapi_audio_position_ms": 9919.5,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 4,
+    "start_ms": 7847.664399092971,
+    "position": 128,
+    "text": "cómo",
+    "sapi_audio_position_ms": 10815.0625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 8162.630385487529,
+    "position": 133,
+    "text": "se",
+    "sapi_audio_position_ms": 11249.125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 6,
+    "start_ms": 8307.573696145124,
+    "position": 136,
+    "text": "siente",
+    "sapi_audio_position_ms": 11448.875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 8692.471655328798,
+    "position": 143,
+    "text": "en",
+    "sapi_audio_position_ms": 11979.3125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 4,
+    "start_ms": 8822.448979591836,
+    "position": 146,
+    "text": "este",
+    "sapi_audio_position_ms": 12158.4375,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 7,
+    "start_ms": 9057.369614512472,
+    "position": 151,
+    "text": "momento",
+    "sapi_audio_position_ms": 12482.1875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 7,
+    "start_ms": 10437.18820861678,
+    "position": 160,
+    "text": "También",
+    "sapi_audio_position_ms": 14383.75,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 5,
+    "start_ms": 10807.074829931973,
+    "position": 168,
+    "text": "puede",
+    "sapi_audio_position_ms": 14893.5,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 8,
+    "start_ms": 11066.984126984127,
+    "position": 174,
+    "text": "escuchar",
+    "sapi_audio_position_ms": 15251.6875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 3,
+    "start_ms": 11536.87074829932,
+    "position": 183,
+    "text": "las",
+    "sapi_audio_position_ms": 15899.25,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 13,
+    "start_ms": 11751.836734693878,
+    "position": 187,
+    "text": "instrucciones",
+    "sapi_audio_position_ms": 16195.5,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 8,
+    "start_ms": 13541.587301587302,
+    "position": 202,
+    "text": "Confirme",
+    "sapi_audio_position_ms": 18662,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 14056.462585034013,
+    "position": 211,
+    "text": "la",
+    "sapi_audio_position_ms": 19371.5625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 9,
+    "start_ms": 14171.42857142857,
+    "position": 214,
+    "text": "respuesta",
+    "sapi_audio_position_ms": 19530,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 4,
+    "start_ms": 14731.292517006803,
+    "position": 224,
+    "text": "para",
+    "sapi_audio_position_ms": 20301.5625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 5,
+    "start_ms": 14966.213151927437,
+    "position": 229,
+    "text": "pasar",
+    "sapi_audio_position_ms": 20625.3125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 1,
+    "start_ms": 15336.190476190475,
+    "position": 235,
+    "text": "a",
+    "sapi_audio_position_ms": 21135.1875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 15391.156462585033,
+    "position": 237,
+    "text": "la",
+    "sapi_audio_position_ms": 21210.9375,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 11,
+    "start_ms": 15501.133786848073,
+    "position": 240,
+    "text": "explicación",
+    "sapi_audio_position_ms": 21362.5,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 16260.861678004536,
+    "position": 252,
+    "text": "de",
+    "sapi_audio_position_ms": 22409.5,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 16345.804988662132,
+    "position": 255,
+    "text": "la",
+    "sapi_audio_position_ms": 22526.5625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 6,
+    "start_ms": 16465.80498866213,
+    "position": 258,
+    "text": "prueba",
+    "sapi_audio_position_ms": 22691.9375,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 17750.657596371882,
+    "position": 266,
+    "text": "La",
+    "sapi_audio_position_ms": 24462.625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 9,
+    "start_ms": 17900.63492063492,
+    "position": 269,
+    "text": "selección",
+    "sapi_audio_position_ms": 24669.3125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 3,
+    "start_ms": 18495.419501133787,
+    "position": 279,
+    "text": "que",
+    "sapi_audio_position_ms": 25489,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 2,
+    "start_ms": 18620.408163265307,
+    "position": 283,
+    "text": "ve",
+    "sapi_audio_position_ms": 25661.25,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 4,
+    "start_ms": 18720.362811791383,
+    "position": 286,
+    "text": "aquí",
+    "sapi_audio_position_ms": 25799,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 9,
+    "start_ms": 18955.32879818594,
+    "position": 291,
+    "text": "pertenece",
+    "sapi_audio_position_ms": 26122.8125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 9,
+    "start_ms": 19540.090702947844,
+    "position": 301,
+    "text": "solamente",
+    "sapi_audio_position_ms": 26928.6875,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 1,
+    "start_ms": 20169.97732426304,
+    "position": 311,
+    "text": "a",
+    "sapi_audio_position_ms": 27796.75,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 7,
+    "start_ms": 20234.965986394556,
+    "position": 313,
+    "text": "nuestra",
+    "sapi_audio_position_ms": 27886.3125,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 12,
+    "start_ms": 20624.85260770975,
+    "position": 321,
+    "text": "demostración",
+    "sapi_audio_position_ms": 28423.625,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  },
+  {
+    "length": 12,
+    "start_ms": 21334.603174603173,
+    "position": 334,
+    "text": "automatizada",
+    "sapi_audio_position_ms": 29401.75,
+    "event_clock_hz": 16000,
+    "wav_sample_rate": 22050
+  }
+]
