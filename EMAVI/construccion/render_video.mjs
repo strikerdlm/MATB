@@ -1,3 +1,4 @@
+import {buildSubtitles} from './build_subtitles.mjs';
 import fs from 'node:fs';import path from 'node:path';import{fileURLToPath}from'node:url';import{createRequire}from'node:module';import{spawnSync}from'node:child_process';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),req=createRequire(path.join(root,'webui/frontend/package.json'));const {chromium}=req('playwright');
 const base=path.join(root,'EMAVI/video'),caps=path.join(base,'capturas'),build=path.join(root,'EMAVI/construccion/runtime/render');fs.mkdirSync(build,{recursive:true});
@@ -6,12 +7,7 @@ function ff(args){const p=spawnSync('ffmpeg',['-hide_banner','-loglevel','error'
 const script=JSON.parse(fs.readFileSync(path.join(base,'guion.json'),'utf8'));let cursor=0;
 const chapters=script.map(c=>{const audio=path.join(base,'audio',c.id+'.wav'),duration=Math.ceil((probe(audio)+1.1)*30)/30;const item={...c,start:cursor,end:cursor+duration,duration,audio};cursor+=duration;return item;});
 fs.writeFileSync(path.join(base,'chapters.json'),JSON.stringify(chapters.map(({audio,...c})=>c),null,2));
-const timestamp=t=>{const ms=Math.round(t*1000);return `${String(Math.floor(ms/3600000)).padStart(2,'0')}:${String(Math.floor(ms/60000)%60).padStart(2,'0')}:${String(Math.floor(ms/1000)%60).padStart(2,'0')}.${String(ms%1000).padStart(3,'0')}`;};
-let vtt='WEBVTT\n\n',srt='',cue=0;
-for(const c of chapters){const f=path.join(base,'audio',c.id+'.timing.json');const words=JSON.parse(fs.readFileSync(f,'utf8').replace(/^\uFEFF/,''));let group=[];function flush(end){if(!group.length)return;const start=c.start+.35+group[0].start_ms/1000;const a=group[0].position,b=group.at(-1).position+group.at(-1).length;const text=c.text.slice(a,b).trim();cue++;const line=`${timestamp(start)} --> ${timestamp(c.start+.35+end/1000)}\n${text}\n\n`;vtt+=line;srt+=cue+'\n'+line.replace(/(\d{2}:\d{2}:\d{2})\.(\d{3})/g,'$1,$2');group=[];}
- for(let i=0;i<words.length;i++){group.push(words[i]);const a=group[0].position,b=words[i].position+words[i].length;if(b-a>60||i===words.length-1){flush(i+1<words.length?words[i+1].start_ms-35:(c.duration-.8)*1000);}}
-}
-fs.writeFileSync(path.join(base,'subtitulos.vtt'),vtt);fs.writeFileSync(path.join(base,'subtitulos.srt'),srt);
+buildSubtitles(base,chapters);
 const browser=await chromium.launch({channel:'chrome',headless:true}),page=await browser.newPage({viewport:{width:1920,height:1080},deviceScaleFactor:1});
 const esc=t=>t.replaceAll('&','&amp;').replaceAll('<','&lt;');
 for(let i=0;i<chapters.length;i++){
@@ -41,19 +37,19 @@ for(let i=0;i<chapters.length;i++){
   extra.push('-loop','1','-i',path.join(root,'EMAVI/capturas/07_evento_detalle.png'));
   filter=`[0:v]trim=duration=${available},setpts=PTS-STARTPTS,scale=1536:864:flags=lanczos,tpad=stop_mode=clone:stop_duration=${d},fps=30,setsar=1[screen];[1:v]fps=30[plate];[plate][screen]overlay=192:106[base];[3:v]scale=1536:864:force_original_aspect_ratio=decrease,pad=1536:864:(ow-iw)/2:(oh-ih)/2:color=0x07111f[event];[base][event]overlay=192:106:enable='gte(t,9)',fps=30:start_time=0,setpts=PTS-STARTPTS,fade=t=in:st=0:d=0.30,fade=t=out:st=${d-.35}:d=0.35[v]`;
  }
- const holdFile=c.source==='overview'?path.join(caps,'overview-'+c.marker+'.png'):c.id==='kss'?path.join(caps,'pvt-kss.png'):c.id==='operar'?path.join(root,'EMAVI/capturas/05_suas_detalle.png'):null;
+ const holdFile=c.source==='overview'?path.join(caps,'overview-'+c.marker+'.png'):c.id==='kss'?path.join(caps,'pvt-kss.png'):c.id==='operar'?path.join(root,'EMAVI/capturas/05_suas_detalle.png'):c.id==='carga'?path.join(caps,'mission-HIGH-escalas.png'):null;
  if(holdFile){
   const holdAt=c.id==='operar'?8:2;
   extra.push('-loop','1','-i',holdFile);
   filter=`[0:v]trim=duration=${Math.min(available,holdAt)},setpts=PTS-STARTPTS,scale=1536:864:flags=lanczos,tpad=stop_mode=clone:stop_duration=${d},fps=30,setsar=1[screen];[1:v]fps=30[plate];[plate][screen]overlay=192:106[base];[3:v]scale=1536:864:force_original_aspect_ratio=decrease,pad=1536:864:(ow-iw)/2:(oh-ih)/2:color=0x07111f[detail];[base][detail]overlay=192:106:enable='gte(t,${holdAt})',fps=30:start_time=0,setpts=PTS-STARTPTS,fade=t=in:st=0:d=0.30,fade=t=out:st=${d-.35}:d=0.35[v]`;
  }
- filter+=';[2:a]adelay=350|350,apad,alimiter=limit=0.95[a]';
+ filter+=';[2:a]loudnorm=I=-18:TP=-1.5:LRA=11,adelay=350|350,apad[a]';
  ff(['-ss',String(start),'-i',source,'-loop','1','-i',plate,'-i',c.audio,...extra,'-filter_complex_threads','2','-filter_complex',filter,'-map','[v]','-map','[a]','-t',String(d),'-frames:v',String(Math.round(d*30)),'-c:v','libx264','-threads','4','-preset','veryfast','-crf','20','-pix_fmt','yuv420p','-r','30','-video_track_timescale','90000','-c:a','aac','-b:a','160k','-ar','48000',output]);
  console.log(`${i+1}/${chapters.length} ${c.id} ${d.toFixed(1)}s`);
 }
 await browser.close();
 const list=path.join(build,'concat.txt');fs.writeFileSync(list,chapters.map(c=>`file '${path.join(build,c.id+'.mp4').replaceAll('\\','/')}'`).join('\n'));
-const metadata=path.join(build,'chapters.ffmeta');fs.writeFileSync(metadata,';FFMETADATA1\ntitle=EMAVI - Recorrido MATB y ASTRA\ncomment=Publico Clasificado. Datos de demostracion. Voz sintetica local.\n'+chapters.map(c=>`[CHAPTER]\nTIMEBASE=1/1000\nSTART=${Math.round(c.start*1000)}\nEND=${Math.round(c.end*1000)}\ntitle=${c.title}\n`).join(''));
+const metadata=path.join(build,'chapters.ffmeta');fs.writeFileSync(metadata,';FFMETADATA1\ntitle=EMAVI - Recorrido MATB y ASTRA\ncomment=Publico Clasificado. Datos de demostracion. Voz generada por OpenAI TTS HD, onyx.\n'+chapters.map(c=>`[CHAPTER]\nTIMEBASE=1/1000\nSTART=${Math.round(c.start*1000)}\nEND=${Math.round(c.end*1000)}\ntitle=${c.title}\n`).join(''));
 const final=path.join(root,'EMAVI/entregables/EMAVI_recorrido_es.mp4');
 ff(['-f','concat','-safe','0','-i',list,'-i',path.join(base,'subtitulos.srt'),'-i',metadata,'-map','0:v','-map','0:a','-map','1:0','-map_metadata','2','-c:v','copy','-c:a','copy','-c:s','mov_text','-metadata:s:s:0','language=spa','-metadata:s:a:0','language=spa','-movflags','+faststart',final]);
 console.log('FINAL '+final+' '+probe(final)+' seconds');

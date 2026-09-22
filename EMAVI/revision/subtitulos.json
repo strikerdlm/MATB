@@ -1,12 +1,7 @@
 {
-  "cues": 110,
+  "cues": 76,
   "nonOverlapping": true,
-  "lastEnd": 464.55,
-  "chapterEnd": 465,
-  "clockCheck": {
-    "test22kLastSeconds": 29.016125,
-    "test16kLastSeconds": 21.06,
-    "scale": 0.7256235827664399,
-    "normalized22kLastSeconds": 21.054784580498865
-  }
+  "lastEnd": 442.80299999999994,
+  "chapterEnd": 443.5666666666666,
+  "timingMethod": "Measured boundaries of individual OpenAI TTS HD sentence WAVs; 350 ms montage offset"
 }

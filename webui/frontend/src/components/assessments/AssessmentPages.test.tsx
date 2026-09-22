@@ -404,7 +404,7 @@ it.each([
     act(() => controls.select?.(selected));
     expect(
       screen.getByRole("heading", {
-        name: en ? "Cognitive battery" : "Batería cognitiva",
+        name: en ? "Tests" : "Pruebas",
       }),
     ).toBeInTheDocument();
     expect(

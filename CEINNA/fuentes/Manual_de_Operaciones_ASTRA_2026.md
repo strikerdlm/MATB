@@ -129,13 +129,13 @@ Fuente horaria: [[Research/ASTRA/Manual de Operaciones/Cronograma consolidado de
 
 Simular operaciones en un hábitat análogo lunar mediante **dos misiones secuenciales independientes** denominadas **ASTRA 1** y **ASTRA 2**, con una meta de hasta 12 tripulantes (seis por misión, condicionada a elegibilidad), para validar procedimientos, cronogramas y la coordinación tripulación–MCC en un entorno controlado bajo aislamiento y confinamiento.
 
-**Ejecutar Protocolo de Evaluación Multimodal de Adaptación Fisiológica, Psicológica y Neurocognitiva**
+**Ejecutar Protocolo de Evaluación Multimodal de Adaptación Fisiológica, Psicológica y de Desempeño**
 
 Llevar a cabo una evaluación integral integrando:
 
 - Monitoreo fisiológico multimodal con **ActiGraph wGT3X‑BT** (acelerometría triaxial, actigrafía sueño/vigilia, luz ambiental, orientación del dispositivo, pasos, MVPA y vector magnitude con algoritmos adecuados para muñeca) en muñeca no dominante y **Polar H10** como banda pectoral Bluetooth (intervalos RR con grado ECG, frecuencia cardíaca, HRV temporal/frecuencial/no lineal).
 
-- Batería psicológica y neurocognitiva: EEP‑10 (PSS‑10), ICSP‑VC (Pittsburgh), IDER, STAI, GHQ‑12, CAB (atención, memoria, funciones ejecutivas, coordinación), BPNSFS, EEC‑M y Screening Test de Trabajo en Equipo.
+- Batería psicológica y de desempeño: EEP‑10 (PSS‑10), ICSP‑VC (Pittsburgh), IDER, STAI, GHQ‑12, CAB (atención, memoria, funciones ejecutivas, coordinación), BPNSFS, EEC‑M y Screening Test de Trabajo en Equipo.
 
 **Asegurar Calidad Operativa del Monitoreo**
 
@@ -143,7 +143,7 @@ Mantener ≥ 90% de tiempo de actividad de dispositivos y validación diaria des
 
 **Caracterizar la Evolución Temporal de la Adaptación Psicofisiológica**
 
-Realizar mediciones fisiológicas en Pre‑misión, DM1, DM7, DM15 y Post‑misión, y psicológicas/neurocognitivas en Pre, DM1, DM8, DM15 y Post, estableciendo línea base y cambios intra‑sujeto mediante modelos mixtos y análisis multivariado con fechas reales por dominio. Enfatizar:
+Realizar mediciones fisiológicas en Pre‑misión, DM1, DM7, DM15 y Post‑misión, y psicológicas y de desempeño en Pre, DM1, DM8, DM15 y Post, estableciendo línea base y cambios intra‑sujeto mediante modelos mixtos y análisis multivariado con fechas reales por dominio. Enfatizar:
 
 - HRV (RMSSD, SDNN, HF, LF/HF), FC diurna/nocturna.
 
@@ -157,7 +157,7 @@ Realizar mediciones fisiológicas en Pre‑misión, DM1, DM7, DM15 y Post‑misi
 
 **Examinar Relaciones Interdominio entre Sistemas Fisiológicos**
 
-Investigar relaciones entre dominios fisiológico, del sueño, psicológico y cognitivo (por ejemplo, estrés–sueño–HRV–rendimiento), incluyendo correlaciones de medidas repetidas y efectos rezagados día a día, para identificar marcadores tempranos de riesgo operativo.
+Investigar relaciones entre dominios fisiológico, del sueño, psicológico y de desempeño (por ejemplo, estrés–sueño–HRV–rendimiento), incluyendo correlaciones de medidas repetidas y efectos rezagados día a día, para identificar marcadores tempranos de riesgo operativo.
 
 **Comparar Perfiles de Adaptación entre Misiones**
 
@@ -193,7 +193,7 @@ Se contemplan operaciones intrahábitat con cronograma controlado (sueño/vigili
 
 **Alcance Científico**
 
-Se implementa monitoreo fisiológico multimodal con **ActiGraph wGT3X‑BT** (acelerometría triaxial, actigrafía sueño/vigilia, luz ambiental, orientación del dispositivo, pasos, MVPA y vector magnitude con algoritmos adecuados para muñeca) y **Polar H10** como chest‑strap Bluetooth (intervalos RR con grado ECG, frecuencia cardíaca, HRV temporal/frecuencial/no lineal). Se administra una batería psicológica y neurocognitiva que incluye EEP‑10, ICSP‑VC, IDER, STAI, GHQ‑12, CAB, BPNSFS, EEC‑M y prueba de trabajo en equipo, en momentos de Pre, DM1, DM8, DM15 y Post. El objetivo de calidad es ≥ 90% de uptime de dispositivos y validación diaria desde MCC.
+Se implementa monitoreo fisiológico multimodal con **ActiGraph wGT3X‑BT** (acelerometría triaxial, actigrafía sueño/vigilia, luz ambiental, orientación del dispositivo, pasos, MVPA y vector magnitude con algoritmos adecuados para muñeca) y **Polar H10** como chest‑strap Bluetooth (intervalos RR con grado ECG, frecuencia cardíaca, HRV temporal/frecuencial/no lineal). Se administra una batería psicológica y de desempeño que incluye EEP‑10, ICSP‑VC, IDER, STAI, GHQ‑12, CAB, BPNSFS, EEC‑M y prueba de trabajo en equipo, en momentos de Pre, DM1, DM8, DM15 y Post. El objetivo de calidad es ≥ 90% de uptime de dispositivos y validación diaria desde MCC.
 
 **Entidades Organizadoras y Roles**
 
@@ -412,7 +412,7 @@ El equipo científico, aunque no está físicamente presente en el hábitat, cum
  El IP desarrolla y aprueba los protocolos científicos, asegurando que se ajusten a los objetivos de la misión y a los requerimientos éticos y operativos. Ante cambios o contingencias, adapta los procedimientos para mantener la validez científica.
 
 **Monitoreo Remoto de Datos**
- El equipo recibe y analiza en tiempo real o diferido los datos fisiológicos, cognitivos y ambientales enviados desde el hábitat. Especialistas en fisiología, neurociencia y psicología revisan los registros, detectan anomalías y proponen ajustes inmediatos si es necesario.
+ El equipo recibe y analiza en tiempo real o diferido los datos fisiológicos, de desempeño y ambientales enviados desde el hábitat. Especialistas en fisiología, neurociencia y psicología revisan los registros, detectan anomalías y proponen ajustes inmediatos si es necesario.
 
 **Comunicación con la Tripulación**
  La interacción con la tripulación se realiza a través del CAPCOM o mediante sesiones científicas programadas. El IP y su equipo pueden responder preguntas técnicas, aclarar procedimientos y recibir retroalimentación sobre la ejecución de los experimentos.
@@ -468,7 +468,7 @@ El soporte organizará abastecimiento, inspección de sistemas, inventario y ent
 
 Cuarentena D−14: **21 septiembre ASTRA 1; 7 octubre ASTRA 2**; DIMAE debe confirmar alojamiento, transporte e inicio efectivo. Desde la socialización común se propone vigilancia de síntomas y contactos. Si no es posible la cuarentena formal, se documentará el régimen reforzado de prevención de infección establecido por DIMAE, sin registrarlo como aislamiento ya cumplido. **Máximo 12 aspirantes**, selección el **1 octubre**, sin reservas adicionales presumidas. Cada participante tiene una única jornada basal: **29 septiembre ASTRA 1 (D−6)** y **28 septiembre ASTRA 2 (D−23)**, con códigos C01–C12 y vínculo de misión documentado.
 
-La visita incluye HRV de reposo (**30 min reservados/persona**, ≥5 min de adaptación y 10 min de R–R en dos segmentos de 5 min), MATB V0 **90 min**, psicología/neurocognición **120 min propuestos** y circuito autonómico/contextual **45 min**, total directo **4 h 45 min/persona**. Las condiciones clínicas y la suficiencia de las reservas deben verificarse.
+La visita incluye HRV de reposo (**30 min reservados/persona**, ≥5 min de adaptación y 10 min de R–R en dos segmentos de 5 min), MATB V0 **90 min**, psicología/pruebas **120 min propuestos** y circuito autonómico/contextual **45 min**, total directo **4 h 45 min/persona**. Las condiciones clínicas y la suficiencia de las reservas deben verificarse.
 
 El cronograma §2.3 y [[Research/ASTRA/Manual de Operaciones/Protocolo de línea de base única ASTRA 2026|Protocolo de línea de base única]] contienen la tabla sin solapamientos individuales, dos puestos MATB, capacidad psicológica suficiente, seis canales H10 y dos circuitos fisiológicos paralelos por comprobar. Las siete noches de actigrafía y 48 h de R–R se proponen en una ventana domiciliaria por persona, en dos grupos sucesivos que reutilizan seis ActiGraph; esta logística no está confirmada como ejecución. Preservar sueño y comidas exige resolver alojamiento/transporte para el reposo desde 06:30.
 
@@ -526,7 +526,7 @@ La salida final de cada ciclo de misión fue planeada también como un evento si
 
 #### 3.2.3 Soporte Médico y Psicológico durante la misión
 
-Se reserva una **conferencia médica privada de 30 min por persona en DM5** y una **conferencia psicológica privada de 30 min por persona en DM9**. En ambos días, las citas P01–P06 son 08:30–09:00, 09:05–09:35, 09:40–10:10, 10:15–10:45, 10:50–11:20 y 11:25–11:55. Se requieren consultorio privado, enlace seguro y profesional de cada disciplina. Las consultas adicionales desplazan tareas flexibles según necesidad. La batería psicológica/neurocognitiva de investigación es **DM8, 08:30–10:30** y no reemplaza las conferencias.
+Se reserva una **conferencia médica privada de 30 min por persona en DM5** y una **conferencia psicológica privada de 30 min por persona en DM9**. En ambos días, las citas P01–P06 son 08:30–09:00, 09:05–09:35, 09:40–10:10, 10:15–10:45, 10:50–11:20 y 11:25–11:55. Se requieren consultorio privado, enlace seguro y profesional de cada disciplina. Las consultas adicionales desplazan tareas flexibles según necesidad. La batería psicológica y de desempeño de investigación es **DM8, 08:30–10:30** y no reemplaza las conferencias.
 
 #### 3.2.4 Rutina protegida y bitácora personal
 
@@ -618,7 +618,7 @@ La comunicación pública se planificará después de confirmar el estado de la 
 
 ## 4. Experimentos Científicos de la Misión
 
-El foco científico de la misión es un protocolo integrado de investigación multimodal que comprende evaluación fisiológica, cronobiológica, psicológica y neurocognitiva. A continuación, se caracterizan los componentes del protocolo, sus objetivos y su ejecución funcional durante la misión.
+El foco científico de la misión es un protocolo integrado de investigación multimodal que comprende evaluación fisiológica, cronobiológica, psicológica y de desempeño. A continuación, se caracterizan los componentes del protocolo, sus objetivos y su ejecución funcional durante la misión.
 
 ### 4.1 Monitoreo Fisiológico Multimodal Continuo
 
@@ -974,9 +974,9 @@ La supervisión corresponde al Oficial Médico o a personal sanitario entrenado,
 
 **Alcance del hallazgo.** El estudio puede describir factibilidad, calidad de señal, abstención, repetibilidad aparente y acuerdo piloto del HRVT abierto en ASTRA. No valida el algoritmo comercial de Kubios, no convierte HRVT en VT medido, no demuestra exactitud individual y no autoriza decisiones clínicas u operacionales. En el hábitat, donde no existen canales respiratorios ni lactato, el hallazgo defendible es un **umbral de ejercicio derivado de HRV** y un intervalo contextual de transición; cuando la bicicleta no tiene potencia calibrada, las comparaciones se limitan a la misma persona, bicicleta y configuración.
 
-### 4.3 Batería Psicológica y Neurocognitiva Integral
+### 4.3 Batería Psicológica y de Desempeño Integral
 
-Objetivo: Realizar evaluación multidominio del bienestar psicológico, salud mental, necesidades psicológicas básicas, estrategias de afrontamiento, cohesión de equipo y desempeño neurocognitivo a lo largo de la misión.
+Objetivo: Realizar evaluación multidominio del bienestar psicológico, salud mental, necesidades psicológicas básicas, estrategias de afrontamiento, cohesión de equipo y desempeño en las pruebas a lo largo de la misión.
 
 **Instrumentos Psicológicos Administrados**
 
@@ -996,14 +996,14 @@ Objetivo: Realizar evaluación multidominio del bienestar psicológico, salud me
 
 8. Screening Test de Trabajo en Equipo: Evaluación de cohesión grupal, comunicación, liderazgo distribuido y gestión de conflictos.
 
-**Batería Neurocognitiva (CAB - Cognitive Assessment Battery)**
- Evaluación computarizada de dominios cognitivos críticos:
+**Pruebas de atención, memoria y coordinación (CAB)**
+ Evaluación computarizada de dominios de desempeño críticos:
 
 - Atención: Sostenida, selectiva y dividida.
 
 - Memoria: Trabajo, episódica, semántica.
 
-- Funciones ejecutivas: Flexibilidad cognitiva, inhibición, planificación.
+- Funciones ejecutivas: Flexibilidad mental, inhibición, planificación.
 
 - Coordinación: Visuomotora y tiempo de reacción.
 
@@ -1017,7 +1017,7 @@ Operación: Psicología administra la batería en Pre (29 septiembre ASTRA 1 / 2
 
 - Evaluar si estrategias de afrontamiento activas (vs. pasivas) predicen mejor adaptación.
 
-- Correlacionar desempeño cognitivo (especialmente funciones ejecutivas) con sueño y HRV.
+- Correlacionar desempeño en las pruebas (especialmente funciones ejecutivas) con sueño y HRV.
 
 - Examinar relaciones entre cohesión de equipo y salud mental individual.
 
@@ -1025,7 +1025,7 @@ Operación: Psicología administra la batería en Pre (29 septiembre ASTRA 1 / 2
 
 ### 4.4 Análisis de Relaciones Interdominio y Modelos Predictivos
 
-Objetivo: Investigar relaciones entre dominios fisiológico, del sueño, psicológico y cognitivo mediante análisis de correlaciones de medidas repetidas y efectos rezagados día a día, para identificar marcadores tempranos de riesgo operativo.
+Objetivo: Investigar relaciones entre dominios fisiológico, del sueño, psicológico y de desempeño mediante análisis de correlaciones de medidas repetidas y efectos rezagados día a día, para identificar marcadores tempranos de riesgo operativo.
 
 Descripción: Se implementará análisis estadístico mediante:
 
@@ -1033,7 +1033,7 @@ Descripción: Se implementará análisis estadístico mediante:
 
 - Análisis multivariado: Para identificar patrones conjuntos de cambio entre variables.
 
-- Análisis de series temporales: Para examinar si, por ejemplo, una noche de mal sueño predice menor HRV o peor desempeño cognitivo al día siguiente.
+- Análisis de series temporales: Para examinar si, por ejemplo, una noche de mal sueño predice menor HRV o peor desempeño en las pruebas al día siguiente.
 
 - Comparación entre misiones: Análisis de diferencias en perfiles de adaptación entre ASTRA 1 y ASTRA 2 (n=6 por misión).
 
@@ -1127,7 +1127,7 @@ Cada tripulante completa una sesión MATB en cada una de las ocho visitas V0–V
 **Reserva total:** 90 min en V0–V7, incluyendo preparación, reposo HRV, tareas, pausas, cuestionarios y cierre. Cada bloque es de **15 minutos exactos (900 s)**, calibrado según Pontiggia et al. (2024).
 
 1. **Fase 0 – Referencia contextual pre-tarea (5 min, todas las visitas)**
-   - Tripulante sentado, ojos abiertos, sin tarea cognitiva explícita.
+   - Tripulante sentado, ojos abiertos, sin prueba explícita.
    - Registro continuo de HRV mediante el chest‑strap **Polar H10** (LSL/Polar BLE → LSL → `physiomonitor` o pipeline equivalente en la Consola Mission Control – Flight Surgeon, v1.36.0; ver sección 4.1.1), siguiendo la sección 4.1 del manual:
      - HR, SDNN, RMSSD, pNN50.
      - LF, HF, LF/HF.
@@ -1168,7 +1168,7 @@ Cada tripulante completa una sesión MATB en cada una de las ocho visitas V0–V
      - `A1‑P05`, `A1‑P11`, ... → HIGH → LOW → MEDIUM
      - `A1‑P06`, `A1‑P12`, ... → HIGH → MEDIUM → LOW
 
-   - Entre bloques: **pausa de 2–3 min** (el tripulante permanece sentado, sin abandonar el puesto, sin iniciar tareas cognitivas). Se administra **KSS** (Karolinska Sleepiness Scale) antes de cada bloque para controlar somnolencia aguda.
+   - Entre bloques: **pausa de 2–3 min** (el tripulante permanece sentado, sin abandonar el puesto, sin iniciar tareas de alta demanda mental). Se administra **KSS** (Karolinska Sleepiness Scale) antes de cada bloque para controlar somnolencia aguda.
 
 4. **Fase 5 – Cierre y cuestionarios post‑sesión (5 min)**
    - Administración de un **cuestionario breve de auto‑reporte** (no más de 5 min) sobre estrategias de compensación, eventos críticos percibidos y comentarios libres.
@@ -1258,7 +1258,7 @@ Las métricas se calculan a partir de la salida CSV de OpenMATB y se agregan med
   - **Validación interna de la manipulación de carga:** test de Friedman + Kendall W sobre NASA‑TLX e ISA para confirmar que los 3 niveles producen una respuesta monotónica creciente (criterio de validez principal de la calibración Pontiggia).
   - Identificar patrones de adaptación o deterioro entre T0→T1→T2 bajo confinamiento (efecto principal del tiempo e interacciones Tiempo × Carga).
   - Estimar umbrales fisiológicos operativos (cambios de RMSSD/lnRMSSD y contexto respiratorio, sin percentiles habituales individuales estimados desde una mañana) asociados a aumento de errores críticos o degradación del multitasking.
-  - **Suhir DEPDF (misión‑outcome, opcional):** estimación de la probabilidad de no‑fallo humano (Suhir 2018, Eq. 5.1/5.16) y composición de outcome de misión a partir de las métricas MATB. Implementación en `matb_integration/suhir/` (Fase 1, F = F₀; el HCF requiere tamiz neurocognitivo externo).
+  - **Suhir DEPDF (misión‑outcome, opcional):** estimación de la probabilidad de no‑fallo humano (Suhir 2018, Eq. 5.1/5.16) y composición de outcome de misión a partir de las métricas MATB. Implementación en `matb_integration/suhir/` (Fase 1, F = F₀; el HCF requiere conjunto de pruebas externas).
 
 #### 4.7.5 Protocolo operativo paso a paso (para la persona que administra la prueba)
 
@@ -1326,14 +1326,14 @@ python -m matb_integration.analysis.descriptive output/ -o results.tsv
 
 **Objetivo de la subsección:** describir el procedimiento paso a paso que **cada tripulante** de ASTRA 1 y ASTRA 2 debe seguir para realizar las actividades de investigación con la **MATB Research Console** — la aplicación web en desarrollo dentro del repositorio `strikerdlm/MATB` (https://github.com/strikerdlm/MATB; Malpica, 2026b) — y el cálculo del tiempo y los horarios en que cada tripulante ejecuta el experimento a lo largo del ciclo de misión. Esta subsección es complementaria de la 4.7.5 (protocolo operativo para la persona que **administra** la prueba): aquí la perspectiva es la del **tripulante-operador** que interactúa con la app y el *task runner*.
 
-> **Nota de estado:** la MATB Research Console (`webui/`, PR #6) y el *baseline neurocognitive screen* (`/screen`, Fase 10 #20) están **en desarrollo activo** al 2026-08-19 (Malpica, 2026c). El procedimiento se define sobre la superficie de la app tal como está diseñada en el README del repositorio y `webui/README.md`: diseño de referencia del software de **12 participantes × 6 visitas × 3 niveles de carga**; el calendario operativo vigente es DM2/4/7/10/13/15, con intervalos no uniformes. Para ASTRA (n=6 por misión) esto se implementa como **6 visitas intra-misión + 2 visitas de bracket (pre y post)**, descritas en 4.7.6.2.
+> **Nota de estado:** la MATB Research Console (`webui/`, PR #6) y el *pruebas de línea basal* (`/screen`, Fase 10 #20) están **en desarrollo activo** al 2026-08-19 (Malpica, 2026c). El procedimiento se define sobre la superficie de la app tal como está diseñada en el README del repositorio y `webui/README.md`: diseño de referencia del software de **12 participantes × 6 visitas × 3 niveles de carga**; el calendario operativo vigente es DM2/4/7/10/13/15, con intervalos no uniformes. Para ASTRA (n=6 por misión) esto se implementa como **6 visitas intra-misión + 2 visitas de bracket (pre y post)**, descritas en 4.7.6.2.
 
 ##### 4.7.6.1 La app MATB Research Console (qué es, dónde corre, qué usa el tripulante)
 
 - **Arquitectura:** la app es una consola de investigación con *backend* FastAPI en `http://localhost:8000` y *frontend* Next.js en `http://localhost:3100`, ejecutándose en el **portátil del puesto de evaluación** del hábitat (sección 4.7.1) bajo un entorno `conda` Python 3.12 (`matb`). Requisitos de arranque: `python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000` (backend) y `npm run dev` con `NEXT_PUBLIC_API_URL=http://localhost:8000` (frontend); *health check* en `http://localhost:8000/health`.
 - **Páginas visibles para el tripulante:**
   - **Tracker** (`/tracker`): rejilla de completitud por participante × visita × nivel; el tripulante confirma al cierre que sus 3 celdas de la visita quedan en verde.
-  - **Screen** (`/screen`): *baseline neurocognitive screen*, batería de 4 subtests en es-CO español (~10-12 min) — *Simple RT* (30 ensayos), *Choice RT* (30 ensayos, flechas 2-opción), *2-back letters* (60 ensayos), *pursuit tracking* (90 s). Se administra **solo en V0 y V7** (brackets pre/post misión).
+  - **Screen** (`/screen`): *pruebas de línea basal*, batería de 4 subtests en es-CO español (~10-12 min) — *Simple RT* (30 ensayos), *Choice RT* (30 ensayos, flechas 2-opción), *2-back letters* (60 ensayos), *pursuit tracking* (90 s). Se administra **solo en V0 y V7** (brackets pre/post misión).
   - **Upload** (`/upload`): la ingesta del CSV de OpenMATB la realiza el **operario/admin** (4.7.5, paso 4), no el tripulante; el tripulante solo verifica el resultado en Tracker.
 - **Task runner:** los 3 bloques LOW/MEDIUM/HIGH de 15 min se ejecutan en el motor externo **OpenMATB** (v1.4.5+) cargando los escenarios `low_workload.txt`/`medium_workload.txt`/`high_workload.txt` (sección 4.7.5, paso 3). La app no lanza las tareas; las **recibe** vía ingesta de CSV y las procesa con `matb_integration.log_converter` → JSONL → ajuste DEPDF automático al completar los 3 niveles de una visita.
 - **Sincronía fisiológica:** el Polar H10 transmite intervalos R-R a la Consola Mission Control - Flight Surgeon (sección 4.1.1) durante toda la sesión; el `participant_id` y el *timestamp* Unix de inicio se anotan en ambos sistemas para la fusión posterior HRV+MATB (sección 4.7.5, paso 4).
@@ -1388,20 +1388,20 @@ Cada titular pasa una vez por cada combinación hora/puesto (dos veces por franj
 ##### 4.7.6.4 Procedimiento paso a paso del tripulante (por sesión)
 
 **A. Pre-sesión (5 min antes del slot)**
-1. Acudir al puesto de evaluación 5 min antes de su hora (cronograma 4.7.6.3). No realizar tareas cognitivas intensas en los 30 min previos.
+1. Acudir al puesto de evaluación 5 min antes de su hora (cronograma 4.7.6.3). No realizar tareas de alta demanda mental en los 30 min previos.
 2. **Humedecer los electrodos** y colocar el *chest-strap* **Polar H10** (sección 4.1.2.2): posición *just below the chest muscles*, logotipo Polar central y vertical, banda ajustada. El wGT3X-BT de muñeca no dominante permanece colocado (monitoreo continuo, 4.1.2.4).
 3. Sentarse frente al monitor del operador; ajustar teclado y *joystick* de OpenMATB a posición cómoda.
 
 **B. Login y verificación**
 4. El operario/admin confirma en la **Consola Mission Control - Flight Surgeon** (sección 4.1.1) que los intervalos R-R del H10 están llegando y **anota el *timestamp* Unix de inicio** (clave para la fusión HRV+MATB).
 5. En el navegador del puesto, abrir la **MATB Research Console**: `http://localhost:3100`.
-6. **Solo en V0 y V7:** navegar a `/screen`, seleccionar su `participant_id` y completar la **batería neurocognitiva *baseline*** (~12 min, 4 subtests en es-CO). La consola invalida ensayos anticipatorios (<150 ms) y exige ≥80 % de ensayos usables por subtest; si no se alcanza, repetir el subtest afectado.
+6. **Solo en V0 y V7:** navegar a `/screen`, seleccionar su `participant_id` y completar la **serie de pruebas de línea basal** (~12 min, 4 subtests en es-CO). La consola invalida ensayos anticipatorios (<150 ms) y exige ≥80 % de ensayos usables por subtest; si no se alcanza, repetir el subtest afectado.
 
 **C. Sesión MATB (3 bloques contrabalanceados)**
 7. El operario carga en OpenMATB el escenario correspondiente al **primer bloque** del orden contrabalanceado para su `participant_id` (cuadrado latino, sección 4.7.1).
 8. El tripulante ejecuta las **4 tareas primarias** — SYSMON, TRACK, COMM, RESMAN — durante **15 min exactos**. Responder a las **sondas ISA** cuando pausan automáticamente el escenario (1-3 s); **no intervenir** sobre el escenario salvo fallo técnico grave.
 9. Al cierre del bloque, OpenMATB administra automáticamente el **NASA-TLX** (`nasatlx_es.txt`); completarlo en pantalla.
-10. **Pausa de 2-3 min** sin levantarse ni iniciar otras tareas cognitivas; **KSS** pre-siguiente bloque.
+10. **Pausa de 2-3 min** sin levantarse ni iniciar otras tareas de alta demanda mental; **KSS** pre-siguiente bloque.
 11. Repetir los pasos 7-10 para el **bloque 2** y el **bloque 3** (nivel restante del cuadrado latino).
 12. **Cierre (5 min):** cuestionario breve post-sesión (estrategias de compensación, eventos críticos percibidos, comentarios libres).
 
@@ -1555,7 +1555,7 @@ El responsable institucional preparará una ficha común con propósito, partici
 
 La presentación de nombres, imágenes y perfiles de la tripulación se realizará después de la selección del **1 de octubre**, con autorización individual y comunicación institucional. Los recorridos del hábitat o demostraciones de sensores se programarán cuando la instalación y el soporte estén disponibles, sin desplazar los ensayos del **3/4 de octubre** ni interferir con las medidas de prevención de infección.
 
-Se podrán preparar materiales educativos sobre misiones análogas, sueño/vigilia, HRV, carga cognitiva, sistemas del hábitat y seguridad EVA. Toda demostración identificará las limitaciones de los instrumentos: ActiGraph estima sueño/vigilia y H10 registra señal cardíaca mediante una cadena verificada; estos equipos no adjudican por sí solos etapas de sueño ni diagnósticos.
+Se podrán preparar materiales educativos sobre misiones análogas, sueño/vigilia, HRV, carga mental, sistemas del hábitat y seguridad EVA. Toda demostración identificará las limitaciones de los instrumentos: ActiGraph estima sueño/vigilia y H10 registra señal cardíaca mediante una cadena verificada; estos equipos no adjudican por sí solos etapas de sueño ni diagnósticos.
 
 Las alianzas con instituciones educativas, medios o centros de investigación se registrarán cuando se confirmen. No se presumen convenios, cuentas oficiales, depósitos de protocolos, eventos o compromisos de publicación a partir de una propuesta de divulgación.
 
@@ -2637,7 +2637,7 @@ La valoración propuesta **4×2** del riesgo de equipo corresponde a **riesgo me
 
 **Modelo Conceptual: Funcionamiento del Equipo y Cohesión de Dos Factores**
 
-El funcionamiento del equipo (*team functioning*) integra: *trabajo en equipo* (actos interdependientes que convierten insumos en resultados), *cooperación* (actitudes, creencias y afectos que orientan el comportamiento), *coordinación* (procesos conductuales y cognitivos que transforman recursos en resultados), *cohesión de equipo* (operación unificada hacia un objetivo o satisfacción de necesidades psicosociales) y *adaptación psicosocial* (afrontamiento de estresores y balance entre necesidades individuales y de equipo).
+El funcionamiento del equipo (*team functioning*) integra: *trabajo en equipo* (actos interdependientes que convierten insumos en resultados), *cooperación* (actitudes, creencias y afectos que orientan el comportamiento), *coordinación* (procesos conductuales y de procesamiento de información que transforman recursos en resultados), *cohesión de equipo* (operación unificada hacia un objetivo o satisfacción de necesidades psicosociales) y *adaptación psicosocial* (afrontamiento de estresores y balance entre necesidades individuales y de equipo).
 
 La cohesión es una variable de dos factores (Roma & Bedwell, 2017):
 
@@ -2699,7 +2699,7 @@ La cohesión es una variable de dos factores (Roma & Bedwell, 2017):
 
 **Integración con Otros Riesgos (DAG del HSRB adaptado a ASTRA):**
 
-El *Riesgo de Equipo* opera aguas abajo de los riesgos individuales y está integrado con: **BMed** (Medicina Conductual — trastornos psiquiátricos/cognitivos individuales), **Sleep** (pérdida de sueño/desincronización circadiana/sobrecarga) y **HSIA** (Integración Humano-Sistema — diseño del hábitat, volumen habitable neto, privacidad/espacio de equipo). Las cadenas causales relevantes para ASTRA son:
+El *Riesgo de Equipo* opera aguas abajo de los riesgos individuales y está integrado con: **BMed** (Medicina Conductual — trastornos psiquiátricos individuales y alteraciones de atención o memoria), **Sleep** (pérdida de sueño/desincronización circadiana/sobrecarga) y **HSIA** (Integración Humano-Sistema — diseño del hábitat, volumen habitable neto, privacidad/espacio de equipo). Las cadenas causales relevantes para ASTRA son:
 
 - Aislamiento/confinamiento → relaciones interpersonales (vía monotonía/aburrimiento) → cohesión del equipo → funcionamiento del equipo → capacidad de la tripulación → pérdida de objetivos de misión.
 
@@ -2837,7 +2837,7 @@ Malpica, D. (2026a). *HRV: Mission Control Flight Surgeon* (Versión 1.36.0) [So
 
 Malpica, D. (2026b). *MATB: Military Aviation Research Platform* (Versión 0.3.0+) [Software]. GitHub. https://github.com/strikerdlm/MATB
 
-Malpica, D. (2026c). *MATB Research Console: Webui y baseline neurocognitive screen* [Documentación de software]. GitHub. https://github.com/strikerdlm/MATB/tree/main/webui
+Malpica, D. (2026c). *MATB Research Console: Webui y pruebas de línea basal* [Documentación de software]. GitHub. https://github.com/strikerdlm/MATB/tree/main/webui
 
 Malpica, D. (2026d). *SchedulingTool: Especificación del módulo de programación de tripulantes* [Documentación de software]. [[Research/HRV/repo-mirror/SchedulingTool|Copia documental de consulta]].
 
@@ -3009,7 +3009,7 @@ Incorporación del **procedimiento operativo paso a paso** para el instrumental 
 
 **Responsable consignado:** D. Malpica.
 
-Incorporación del **procedimiento operativo del tripulante en la MATB Research Console (app en desarrollo)** y del **cronograma calculado de sesiones** en la nueva subsección **4.7.6**. La app (FastAPI backend + Next.js frontend, `webui/` del repositorio `strikerdlm/MATB`) se describe como superficie de interacción del tripulante: páginas Tracker/Upload/Screen y *baseline neurocognitive screen* (~10–12 min, 4 subtests en es-CO). Se calcula el diseño longitudinal **8 sesiones por tripulante**: V0 pre‑misión (D‑3) + 6 visitas intra‑misión cada 3 días (DM1, DM4, DM7, DM10, DM13, DM15) + V7 post‑misión (D+2), cada una con 3 bloques LOW/MEDIUM/HIGH contrabalanceados; reconciliación con los puntos temporales T0/T1/T2 de 4.7 (V0=T0, V3 DM7=T1, V6 DM15=T2) y uso de las visitas intermedias para la trayectoria de deriva DEPDF (Q4). **Tiempo total por tripulante ≈ 7 h 44 min** (V0/V7 ≈ 67 min c/u; V1–V6 ≈ 55 min c/u); **≈ 46.4 h de puesto de evaluación por misión** (6 tripulantes × 8 sesiones = 48 sesiones). Cronograma con 6 *slots* diarios (09:00, 10:05, 14:00, 15:05, 16:10, 17:15) y rotación balanceada tipo Latin‑rotation para controlar confounding por hora del día; reglas de no‑conflicto con briefing 08:00, debriefing 19:00, sueño 22:30–06:30, comidas y EVAs. Adición de las referencias 36–37 (repositorio `strikerdlm/MATB` y MATB Research Console *webui*/*screen*).
+Incorporación del **procedimiento operativo del tripulante en la MATB Research Console (app en desarrollo)** y del **cronograma calculado de sesiones** en la nueva subsección **4.7.6**. La app (FastAPI backend + Next.js frontend, `webui/` del repositorio `strikerdlm/MATB`) se describe como superficie de interacción del tripulante: páginas Tracker/Upload/Screen y *pruebas de línea basal* (~10–12 min, 4 subtests en es-CO). Se calcula el diseño longitudinal **8 sesiones por tripulante**: V0 pre‑misión (D‑3) + 6 visitas intra‑misión cada 3 días (DM1, DM4, DM7, DM10, DM13, DM15) + V7 post‑misión (D+2), cada una con 3 bloques LOW/MEDIUM/HIGH contrabalanceados; reconciliación con los puntos temporales T0/T1/T2 de 4.7 (V0=T0, V3 DM7=T1, V6 DM15=T2) y uso de las visitas intermedias para la trayectoria de deriva DEPDF (Q4). **Tiempo total por tripulante ≈ 7 h 44 min** (V0/V7 ≈ 67 min c/u; V1–V6 ≈ 55 min c/u); **≈ 46.4 h de puesto de evaluación por misión** (6 tripulantes × 8 sesiones = 48 sesiones). Cronograma con 6 *slots* diarios (09:00, 10:05, 14:00, 15:05, 16:10, 17:15) y rotación balanceada tipo Latin‑rotation para controlar confounding por hora del día; reglas de no‑conflicto con briefing 08:00, debriefing 19:00, sueño 22:30–06:30, comidas y EVAs. Adición de las referencias 36–37 (repositorio `strikerdlm/MATB` y MATB Research Console *webui*/*screen*).
 
 ### v2.2 — 2026-08-19
 

@@ -17,8 +17,8 @@
     ],
     "correct": 0,
     "start": 0,
-    "end": 23.666666666666668,
-    "duration": 23.666666666666668
+    "end": 23.966666666666665,
+    "duration": 23.966666666666665
   },
   {
     "id": "catalogo",
@@ -26,15 +26,15 @@
     "stage": "01 · Preparación",
     "source": "overview",
     "marker": "catalogo",
-    "text": "El catálogo reúne seis familias de actividades: OpenMATB, supervisión de aeronaves no tripuladas, vuelo en Liftoff, batería cognitiva, somnolencia y vigilancia, y registro con Polar H diez. Al seleccionar una actividad aparecen sus pasos, duración y equipo. Primero se decide entre practicar y participar en un estudio. La práctica se guarda por separado.",
+    "text": "El catálogo reúne seis familias de actividades: OpenMATB, supervisión de aeronaves no tripuladas, vuelo en Liftoff, pruebas, somnolencia y vigilancia, y registro con Polar H diez. Al seleccionar una actividad aparecen sus pasos, duración y equipo. Primero se decide entre practicar y participar en un estudio. La práctica se guarda por separado.",
     "points": [
       "Seis familias de actividades",
       "Práctica o estudio",
       "Requisitos visibles"
     ],
-    "start": 23.666666666666668,
-    "end": 50.86666666666667,
-    "duration": 27.2
+    "start": 23.966666666666665,
+    "end": 47.93333333333333,
+    "duration": 23.966666666666665
   },
   {
     "id": "protocolo",
@@ -54,9 +54,9 @@
       "Sí, siempre todas"
     ],
     "correct": 0,
-    "start": 50.86666666666667,
-    "end": 77.56666666666666,
-    "duration": 26.7
+    "start": 47.93333333333333,
+    "end": 65.73333333333333,
+    "duration": 17.8
   },
   {
     "id": "kss",
@@ -70,9 +70,9 @@
       "Elegir una respuesta",
       "Confirmar antes de PVT"
     ],
-    "start": 77.56666666666666,
-    "end": 101.66666666666666,
-    "duration": 24.1
+    "start": 65.73333333333333,
+    "end": 90.3,
+    "duration": 24.566666666666666
   },
   {
     "id": "pvt",
@@ -92,9 +92,9 @@
       "Antes de que aparezca"
     ],
     "correct": 0,
-    "start": 101.66666666666666,
-    "end": 126.73333333333332,
-    "duration": 25.066666666666666
+    "start": 90.3,
+    "end": 114.19999999999999,
+    "duration": 23.9
   },
   {
     "id": "pvt-fin",
@@ -108,30 +108,30 @@
       "Calidad e interrupciones",
       "Práctica separada del estudio"
     ],
-    "start": 126.73333333333332,
-    "end": 152.03333333333333,
-    "duration": 25.3
+    "start": 114.19999999999999,
+    "end": 137.43333333333334,
+    "duration": 23.233333333333334
   },
   {
     "id": "cognitiva",
     "title": "Cuatro pruebas, paso a paso",
-    "stage": "04 · Batería cognitiva",
+    "stage": "04 · Pruebas",
     "source": "screen",
     "marker": "prueba-1",
-    "text": "La batería cognitiva empieza con reacción simple: pulse al ver el círculo verde. Después viene reacción de elección: responda con la flecha que corresponde a la dirección mostrada. Cada tarea incluye sus instrucciones y una práctica previa. En este recorrido utilizamos el modo de familiarización abreviado de la aplicación; las respuestas mostradas no describen capacidad humana.",
+    "text": "La serie de pruebas empieza con reacción simple: pulse al ver el círculo verde. Después viene reacción de elección: responda con la flecha que corresponde a la dirección mostrada. Cada tarea incluye sus instrucciones y una práctica previa. En este recorrido utilizamos el modo de familiarización abreviado de la aplicación; las respuestas mostradas no describen capacidad humana.",
     "points": [
       "Reacción simple",
       "Elección izquierda o derecha",
       "Instrucciones y práctica"
     ],
-    "start": 152.03333333333333,
-    "end": 178,
-    "duration": 25.966666666666665
+    "start": 137.43333333333334,
+    "end": 164.06666666666666,
+    "duration": 26.633333333333333
   },
   {
     "id": "memoria",
     "title": "Memoria y seguimiento",
-    "stage": "04 · Batería cognitiva",
+    "stage": "04 · Pruebas",
     "source": "screen",
     "marker": "prueba-3",
     "text": "En memoria de trabajo, responda si la letra actual coincide con la presentada dos posiciones atrás. En seguimiento, acerque el cursor al punto móvil hasta que termine el tiempo. Al completar las cuatro tareas, la aplicación guarda las respuestas y presenta medidas por tarea. Revise los avisos de calidad antes de interpretar cualquier valor.",
@@ -140,9 +140,9 @@
       "Seguimiento con el mouse",
       "Resultados por tarea"
     ],
-    "start": 178,
-    "end": 201.7,
-    "duration": 23.7
+    "start": 164.06666666666666,
+    "end": 187.83333333333331,
+    "duration": 23.766666666666666
   },
   {
     "id": "openmatb",
@@ -156,9 +156,9 @@
       "Comunicaciones y recursos",
       "Perfil y ejecución nativa"
     ],
-    "start": 201.7,
-    "end": 229.63333333333333,
-    "duration": 27.933333333333334
+    "start": 187.83333333333331,
+    "end": 213.99999999999997,
+    "duration": 26.166666666666668
   },
   {
     "id": "suas",
@@ -172,9 +172,9 @@
       "Práctica y tres bloques",
       "Escenario técnico sintético"
     ],
-    "start": 229.63333333333333,
-    "end": 255.2,
-    "duration": 25.566666666666666
+    "start": 213.99999999999997,
+    "end": 238.0333333333333,
+    "duration": 24.033333333333335
   },
   {
     "id": "operar",
@@ -188,9 +188,9 @@
       "Estado, alertas y contactos",
       "Preguntas durante el bloque"
     ],
-    "start": 255.2,
-    "end": 281.6333333333333,
-    "duration": 26.433333333333334
+    "start": 238.0333333333333,
+    "end": 263.99999999999994,
+    "duration": 25.966666666666665
   },
   {
     "id": "carga",
@@ -204,9 +204,9 @@
       "Completar los bloques",
       "Confirmar el cierre"
     ],
-    "start": 281.6333333333333,
-    "end": 305.96666666666664,
-    "duration": 24.333333333333332
+    "start": 263.99999999999994,
+    "end": 283.29999999999995,
+    "duration": 19.3
   },
   {
     "id": "debrief",
@@ -220,9 +220,9 @@
       "Reconstrucción de eventos",
       "Verificar actividades pendientes"
     ],
-    "start": 305.96666666666664,
-    "end": 331.9333333333333,
-    "duration": 25.966666666666665
+    "start": 283.29999999999995,
+    "end": 309.66666666666663,
+    "duration": 26.366666666666667
   },
   {
     "id": "liftoff",
@@ -236,9 +236,9 @@
       "Vuelo y recuperación",
       "Simulador y telemetría requeridos"
     ],
-    "start": 331.9333333333333,
-    "end": 357.83333333333326,
-    "duration": 25.9
+    "start": 309.66666666666663,
+    "end": 334.46666666666664,
+    "duration": 24.8
   },
   {
     "id": "polar",
@@ -252,9 +252,9 @@
       "Verificar calidad",
       "Guardar con procedencia"
     ],
-    "start": 357.83333333333326,
-    "end": 383.3666666666666,
-    "duration": 25.533333333333335
+    "start": 334.46666666666664,
+    "end": 360.4333333333333,
+    "duration": 25.966666666666665
   },
   {
     "id": "investigador",
@@ -268,9 +268,9 @@
       "Seleccionar intentos",
       "Conservar unidades y criterios"
     ],
-    "start": 383.3666666666666,
-    "end": 411.66666666666663,
-    "duration": 28.3
+    "start": 360.4333333333333,
+    "end": 388.69999999999993,
+    "duration": 28.266666666666666
   },
   {
     "id": "evidencia",
@@ -284,9 +284,9 @@
       "Tiempos y procedencia",
       "Exportación verificable"
     ],
-    "start": 411.66666666666663,
-    "end": 436.8333333333333,
-    "duration": 25.166666666666668
+    "start": 388.69999999999993,
+    "end": 414.0666666666666,
+    "duration": 25.366666666666667
   },
   {
     "id": "cierre",
@@ -305,8 +305,8 @@
       "Solamente cerrar la ventana"
     ],
     "correct": 0,
-    "start": 436.8333333333333,
-    "end": 465,
-    "duration": 28.166666666666668
+    "start": 414.0666666666666,
+    "end": 443.5666666666666,
+    "duration": 29.5
   }
 ]

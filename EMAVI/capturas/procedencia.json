@@ -4,10 +4,10 @@
       "id": "01_catalogo",
       "title": "Catálogo de actividades",
       "url": "http://127.0.0.1:3118/start",
-      "captured_utc": "2026-09-22T00:25:36.705236+00:00",
-      "source_commit": "24d37b52da7196e5c69f9a8cfc9481c04fd1221d",
+      "captured_utc": "2026-09-22T21:34:31.438331+00:00",
+      "source_commit": "e105a671f87861300cb78960b26fce8640f23a28",
       "data": "synthetic demonstration only",
-      "scope": "Se capturó el catálogo conectado, con las seis actividades visibles.",
+      "scope": "Catálogo conectado con seis actividades; etiqueta Pruebas actualizada por solicitud del usuario.",
       "composition": "Captura original de página + captura focal del elemento; esta última se presenta sin reescalado dentro de un margen transparente de 20 px capturado por Chromium. No se cambió el texto ni se redibujó la interfaz.",
       "dimensions": [
         776,
@@ -21,17 +21,19 @@
       "files": {
         "01_catalogo.png": {
           "path": "01_catalogo.png",
-          "sha256": "876b932a9c829759a9eb1bc2a93415b904fa4ad167b388852878f4f5944cb866"
+          "sha256": "2c36f9b8fa27a51f5daf57a11c9dcf1fe77dbd4c3c45256fae17413a327009ec"
         },
         "01_catalogo_detalle.png": {
           "path": "01_catalogo_detalle.png",
-          "sha256": "bd50d9026ec9ad67745ccd8b86d53e2a579d516b804ef1c4fef5a2179cedcccf"
+          "sha256": "30a5b2e9c3d456ae9285bb4190ce504e89b678ba769f14b0a58c370481fd14f4"
         },
         "01_catalogo_original.png": {
           "path": "01_catalogo_original.png",
-          "sha256": "4b8c12390f9bedd93b03f991588f95b1532551a2864252aa7f2e831dd38fcc72"
+          "sha256": "d8c101f5da8d41530f6262a3fb8dcebf8f00a09dffcc484f4d459eaee93fdf70"
         }
-      }
+      },
+      "source_dirty": true,
+      "source_patch": "../revision/frontend-capturado.patch"
     },
     {
       "id": "02_diseno",

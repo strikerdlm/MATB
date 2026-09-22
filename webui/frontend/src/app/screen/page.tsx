@@ -201,8 +201,8 @@ export default function ScreenPage() {
     <FixedLocaleProvider locale={locale}>
       <div className="space-y-6">
         <PageHeader
-          kicker={copy("Evaluación cognitiva", "Cognitive assessment")}
-          title={copy("Batería cognitiva", "Cognitive battery")}
+          kicker={copy("Evaluación", "Assessment")}
+          title={copy("Pruebas", "Tests")}
           description={copy(
             "Cuatro pruebas breves, con instrucciones y práctica antes de cada una.",
             "Four short tests, with instructions and practice before each one.",

@@ -63,11 +63,11 @@ test("cognitive battery is reachable and practice is preserved", async ({ page }
   await page.getByRole("radio", { name: /^Practice/ }).check();
   await page.getByRole("link", { name: "Prepare experiment" }).click();
   await expect(page).toHaveURL(/\/screen\?purpose=practice/);
-  await expect(page.getByRole("heading", { name: "Cognitive battery" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tests" })).toBeVisible();
   await expect(page.getByText("Practice", { exact: true })).toBeVisible();
   await expect(page.getByText("Practice is saved separately and does not complete a study visit.")).toBeVisible();
   await page.locator("#app-language").selectOption("es-419");
-  await expect(page.getByRole("heading", { name: "Batería cognitiva" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pruebas" })).toBeVisible();
 });
 
 test("OpenMATB language changes preserve setup choices", async ({ page, request }) => {

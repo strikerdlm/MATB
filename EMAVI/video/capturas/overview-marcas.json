@@ -1,66 +1,66 @@
 [
   {
     "name": "catalogo",
-    "seconds": 2.059,
+    "seconds": 1.809,
     "url": "http://127.0.0.1:3118/start"
   },
   {
     "name": "asignaciones",
-    "seconds": 10.551,
+    "seconds": 9.869,
     "url": "http://127.0.0.1:3118/study/assignments"
   },
   {
     "name": "participantes",
-    "seconds": 19.331,
+    "seconds": 17.889,
     "url": "http://127.0.0.1:3118/participants"
   },
   {
     "name": "estudios",
-    "seconds": 27.501,
+    "seconds": 25.902,
     "url": "http://127.0.0.1:3118/study"
   },
   {
     "name": "diseno",
-    "seconds": 35.708,
+    "seconds": 33.924,
     "url": "http://127.0.0.1:3118/experiments"
   },
   {
     "name": "openmatb",
-    "seconds": 44.409,
+    "seconds": 41.996,
     "url": "http://127.0.0.1:3118/openmatb/appearance"
   },
   {
     "name": "configuracion",
-    "seconds": 52.74,
+    "seconds": 50.035,
     "url": "http://127.0.0.1:3118/openmatb/settings"
   },
   {
     "name": "liftoff",
-    "seconds": 61.708,
+    "seconds": 58.054,
     "url": "http://127.0.0.1:3118/liftoff/setup?purpose=practice"
   },
   {
     "name": "polar",
-    "seconds": 71.072,
+    "seconds": 67.996,
     "url": "http://127.0.0.1:3118/physiology/polar-h10?purpose=practice"
   },
   {
     "name": "analisis",
-    "seconds": 80.438,
+    "seconds": 77.066,
     "url": "http://127.0.0.1:3118/analysis"
   },
   {
     "name": "evidencia",
-    "seconds": 89.437,
+    "seconds": 85.308,
     "url": "http://127.0.0.1:3118/evidence"
   },
   {
     "name": "estacion",
-    "seconds": 97.661,
+    "seconds": 93.983,
     "url": "http://127.0.0.1:3118/station"
   },
   {
     "name": "end",
-    "seconds": 104.377
+    "seconds": 101.258
   }
 ]

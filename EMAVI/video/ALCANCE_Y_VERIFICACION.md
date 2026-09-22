@@ -1,14 +1,15 @@
 # Demostración EMAVI — alcance y procedencia
 
-**Público Clasificado. Reproducción local; distribución en el repositorio privado MATB.** Voz sintética generada localmente con **Microsoft Sabina Desktop, es-MX**, mediante Windows Speech. No se utilizó un proveedor externo de voz.
+**Público Clasificado. Reproducción local; distribución en el repositorio privado MATB.** Narración generada con **OpenAI `tts-1-hd`, voz masculina `onyx`, velocidad 0.95**, por solicitud explícita del usuario. Se enviaron únicamente las frases del guion al servicio de voz; la clave se cargó de `.env.local` en memoria y no se incluyó en los entregables. El reproductor funciona sin conexión una vez descargados los archivos.
 
 ## Qué se entrega
 
 - `../entregables/EMAVI_recorrido_es.mp4`: montaje continuo, 1920 × 1080, 30 cuadros/s, H.264/AAC, subtítulos en español y capítulos incrustados.
 - `../entregables/Demostracion_interactiva.html`: el mismo video con navegación, repetición, cuatro comprobaciones de comprensión y una estación 3D manipulable. El MP4 es lineal; las interacciones pertenecen a este reproductor.
-- `guion.json`, `chapters.json`, `subtitulos.vtt`, `subtitulos.srt`, `audio/`: guion, tiempos, subtítulos y narración. Las marcas de palabras proceden del sintetizador; se añade el mismo desplazamiento de 350 ms al audio y al texto.
+- `guion.json`, `chapters.json`, `subtitulos.vtt`, `subtitulos.srt`, `audio/`: guion, tiempos, subtítulos y narración. Los límites de las frases proceden de la duración de los WAV; se añade el mismo desplazamiento de 350 ms al audio y al texto.
 
-En esta instalación, las marcas `SpeakProgress` utilizan un reloj de 16 kHz y el WAV se guarda a 22.05 kHz. Una prueba local con ambos formatos verificó la conversión `16000 / 22050`; se conserva el valor nativo junto al normalizado. `../revision/subtitulos.json` registra la comprobación y los 110 intervalos sin solapamiento. No se aceptan subtítulos cuyo final preceda su inicio.
+Los subtítulos usan los límites medidos de 76 frases de audio independientes y pausas de 180 ms entre frases. El montaje añade 350 ms antes de cada capítulo. Los WAV transmitidos por la API pueden tener un tamaño de cabecera indeterminado; se cuentan las muestras PCM realmente recibidas. `../revision/subtitulos.json` comprueba los intervalos sin solapamiento y `../revision/narracion-hd.json` identifica el modelo, la voz y los hashes. No se reutilizan las marcas de Windows Speech de la versión anterior.
+
 - `scene.ts` y `scene.js`: fuente editable y módulo de la escena. `vendor/` contiene Three.js 0.186.0, OrbitControls de la misma versión y su licencia MIT.
 
 Abra **`../Abrir_demostracion.cmd`** en Windows. Necesita Node.js y un navegador con soporte MP4. El lanzador sirve únicamente la carpeta EMAVI en `127.0.0.1:3128`. No necesita la aplicación MATB ni conexión a Internet para reproducir el material. Para iniciarlo manualmente desde la raíz del repositorio:
@@ -26,7 +27,7 @@ Para proyectar con preguntas, use **Pantalla completa** en la barra de la demost
 | Familia / función | Alcance de la grabación |
 |---|---|
 | KSS y PVT | Recorrido real de práctica: identificación, ocasión, KSS, instrucciones, un minuto de PVT, respuestas visibles automatizadas y confirmación de guardado. Los tiempos mostrados no describen a una persona. |
-| Batería cognitiva | Las cuatro tareas en modo de familiarización abreviado: reacción simple, elección, 2-back y seguimiento; práctica previa y guardado final. Respuestas automatizadas a los estímulos visibles. |
+| Pruebas | Las cuatro tareas en modo de familiarización abreviado: reacción simple, elección, 2-back y seguimiento; práctica previa y guardado final. Respuestas automatizadas a los estímulos visibles. |
 | sUAS | Práctica, LOW, MEDIUM y HIGH, preguntas ISA/SAGAT, escalas posteriores, finalización explícita e informe. Se utilizó `e2e_area_search`, escenario técnico corto del repositorio, en una base aislada. |
 | Contexto sUAS | El código P18 y su asignación son ficticios. Los prerrequisitos de estudio se prepararon con el helper de aceptación del repositorio, incluyendo un PVT sintético; no corresponden al minuto de práctica P02 mostrado en el capítulo PVT. La grabación explica esa diferencia y no presenta una visita humana real. |
 | OpenMATB | Vista previa web y configuración. No se grabó una adquisición nativa ni se ejecutó el perfil estándar de tres bloques de 15 minutos. |
@@ -35,7 +36,7 @@ Para proyectar con preguntas, use **Pantalla completa** en la barra de la demost
 | Investigador | Catálogo, asignaciones, participantes, estudio, diseñador, configuración y páginas de análisis. El video explica que la secuencia efectiva depende del protocolo asignado. |
 | Evidencia | Importación real de `synthetic_capture`, selección de una métrica y apertura del evento original. La exportación anterior recomputó 11 métricas; su huella de dependencias no coincidió con el lockfile. Véase `../revision/verificacion_exportacion.json`. |
 
-Las capturas proceden del checkout `24d37b52da7196e5c69f9a8cfc9481c04fd1221d`. Los scripts no modifican la aplicación ni inyectan resultados en sus pantallas. Los datos y la asignación de la misión son fixtures explícitos de una base de demostración. Los clips se recortan, se aceleran cuando exceden la narración y conservan la última imagen cuando el texto dura más. No se altera el texto o los valores visibles. La introducción y el cierre son esquemas ilustrativos, no capturas de MATB.
+Las capturas originales proceden del checkout `24d37b52da7196e5c69f9a8cfc9481c04fd1221d`. Las tomas del catálogo y de Pruebas se renovaron desde `e105a67` con el cambio de etiquetas de esta revisión; se conserva el parche de las fuentes en `../revision/frontend-capturado.patch`. Los scripts no modifican la aplicación ni inyectan resultados en sus pantallas. Los datos y la asignación de la misión son fixtures explícitos de una base de demostración. Los clips se recortan, se aceleran cuando exceden la narración y conservan la última imagen cuando el texto dura más. No se altera el texto o los valores visibles. La introducción y el cierre son esquemas ilustrativos, no capturas de MATB.
 
 El capítulo de evidencia incorpora, después del noveno segundo, la captura documental `../capturas/07_evento_detalle.png` para hacer legibles el evento original y sus tiempos. Su procedencia está conservada en `../capturas/procedencia.json`.
 
@@ -61,6 +62,10 @@ node EMAVI/construccion/check_video.mjs
 
 Los resultados medidos se guardan en `../revision/verificacion-video.json`, `../revision/metricas-3d.json` y `../revision/ffprobe-video.json`; las vistas de revisión se guardan junto a ellos. Las mediciones corresponden a Chrome automatizado en Windows y no garantizan rendimiento en cualquier equipo. La comprobación de integridad técnica no valida instrumentos, calibración humana ni uso clínico u operacional.
 
-Las recetas de grabación y montaje son `../construccion/record_walkthrough.mjs`, `generate_local_narration.ps1` y `render_video.mjs`. FFmpeg y Chrome deben estar instalados para reconstruir el MP4. Los videos fuente e intermediarios grandes permanecen locales y están excluidos por `.gitignore`; el video final y los elementos necesarios para reproducirlo están en el paquete.
+Las recetas de grabación y montaje son `../construccion/record_walkthrough.mjs`, `generate_hd_narration.ps1`, `assemble_hd_narration.py` y `render_video.mjs`. FFmpeg y Chrome deben estar instalados para reconstruir el MP4. Los videos fuente e intermediarios grandes permanecen locales y están excluidos por `.gitignore`; el video final y los elementos necesarios para reproducirlo están en el paquete.
 
 La exportación de la presentación FAC conserva su bloqueo independiente hasta la aprobación de la política de aviso y cierre. Este video se reproduce después de la presentación y no modifica el arte original FAC.
+
+Para regenerar la voz, ejecute `pwsh -File EMAVI/construccion/generate_hd_narration.ps1 -Force` desde la raíz. Requiere Python con el SDK OpenAI, la skill speech y la clave local; realiza solicitudes facturables a OpenAI. El script usa `tts-1-hd`, que no admite instrucciones de estilo. Después ejecute `node EMAVI/construccion/render_video.mjs` y `node EMAVI/construccion/finalize_video.mjs`. El generador local antiguo se conserva como receta histórica y sus marcas no son compatibles con este montaje HD.
+
+En la revisión HD, el capítulo de escalas mantiene la captura documental de las medidas posteriores al bloque tras la transición inicial, para acompañar su explicación sin avanzar visualmente al informe antes del capítulo siguiente. La normalización de audio del montaje usa -18 LUFS y un pico verdadero objetivo de -1.5 dBTP.
