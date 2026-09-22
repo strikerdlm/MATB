@@ -6,8 +6,8 @@
     "position": 0,
     "length": 58,
     "start_ms": 0.0,
-    "end_ms": 3815.7916666666665,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "end_ms": 4700.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "inicio",
@@ -15,9 +15,9 @@
     "text": "Seguiremos el recorrido de una persona desde la preparación hasta el cierre de las pruebas y la revisión de resultados.",
     "position": 59,
     "length": 119,
-    "start_ms": 3995.791666666667,
-    "end_ms": 12008.958333333334,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 4880.0,
+    "end_ms": 12130.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "inicio",
@@ -25,9 +25,9 @@
     "text": "Las pantallas son reales.",
     "position": 179,
     "length": 25,
-    "start_ms": 12188.958333333334,
-    "end_ms": 13767.916666666666,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 12310.0,
+    "end_ms": 14760.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "inicio",
@@ -35,9 +35,9 @@
     "text": "Los registros son de demostración y las respuestas están automatizadas.",
     "position": 205,
     "length": 71,
-    "start_ms": 13947.916666666666,
-    "end_ms": 18750.541666666668,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 14940.0,
+    "end_ms": 21240.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "inicio",
@@ -45,8 +45,8 @@
     "text": "La voz de esta guía se ha generado con inteligencia artificial.",
     "position": 277,
     "length": 63,
-    "start_ms": 18930.541666666668,
-    "end_ms": 22851.583333333336,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 21420.0,
+    "end_ms": 25970.0,
+    "timing_source": "OpenAI sentence audio duration"
   }
 ]

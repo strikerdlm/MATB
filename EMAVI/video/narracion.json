@@ -1,0 +1,8 @@
+{
+  "provider": "OpenAI",
+  "model": "gpt-4o-mini-tts-2025-12-15",
+  "voice": "cedar",
+  "speed": 1.0,
+  "instructions": "Habla en español latinoamericano neutro. Voz masculina adulta de instructor profesional: serena, natural y cercana. Ritmo moderado, articulación clara y pausas breves entre ideas. Explica sin tono publicitario ni teatral. Mantén una entonación conversacional estable. Pronuncia MATB como eme a te be y ASTRA como Astra. No añadas palabras al texto.",
+  "selection": "User selected Cedar after hearing the comparison samples"
+}

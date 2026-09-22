@@ -1,3 +1,4 @@
+import { createDrone } from './redline/drone.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 export const defaults = { deskWidth: 1.8, deskDepth: .82, monitorWidth: .76, droneSpan: .52 };
@@ -72,20 +73,9 @@ export function createStation(host, p = defaults) {
     box(sensor, .085, .03, .04, 0, .018, .079, mats.silver);
     box(sensor, .024, .008, .012, 0, .037, .079, mats.cyan);
     const drone = part('aircraft', .88, 1.32, -.2);
-    box(drone, .16, .055, .11, 0, 0, 0, mats.silver);
-    const rotors = [];
-    for (const x of [-1, 1])
-        for (const z of [-1, 1]) {
-            const a = box(drone, p.droneSpan * .63, .024, .024, x * p.droneSpan * .19, 0, z * p.droneSpan * .19, mats.dark);
-            a.rotation.y = -x * z * Math.PI / 4;
-            const px = x * p.droneSpan * .36, pz = z * p.droneSpan * .36;
-            cyl(drone, .026, .045, px, .028, pz, mats.gold);
-            const rotor = new THREE.Group();
-            rotor.position.set(px, .059, pz);
-            drone.add(rotor);
-            box(rotor, .20, .005, .016, 0, 0, 0, mats.cyan);
-            rotors.push(rotor);
-        }
+    const racingDrone = createDrone();
+    drone.add(racingDrone.root);
+    racingDrone.root.scale.setScalar(p.droneSpan / .285);
     const floor = new THREE.GridHelper(5, 30, 0x275768, 0x172c40);
     scene.add(floor);
     const ring = new THREE.Mesh(new THREE.TorusGeometry(1.2, .006, 8, 100), mats.gold);
@@ -101,8 +91,8 @@ export function createStation(host, p = defaults) {
             const offset = id === 'aircraft' ? new THREE.Vector3(.4, .15, 0) : new THREE.Vector3(g.position.x * .45, .3, g.position.z * .7);
             g.position.addScaledVector(offset, explode);
         }
-    } render(); }
-    function setTime(t) { time = t; rotors.forEach((r, i) => r.rotation.y = t * 9 * (i % 2 ? 1 : -1)); drone.position.y = assembled.get('aircraft').y + explode * .15 + Math.sin(t * .8) * .03; root.rotation.y = Math.sin(t * .13) * .10; render(); }
+    } racingDrone.setExplode(explode * .8); render(); }
+    function setTime(t) { time = t; racingDrone.setTime(t); drone.position.y = assembled.get('aircraft').y + explode * .15 + Math.sin(t * .8) * .03; root.rotation.y = Math.sin(t * .13) * .10; render(); }
     function render() { if (!disposed)
         renderer.render(scene, camera); }
     function resize() { const { width, height } = host.getBoundingClientRect(); renderer.setSize(width, height); camera.aspect = width / Math.max(height, 1); camera.updateProjectionMatrix(); render(); }
@@ -119,17 +109,21 @@ export function createStation(host, p = defaults) {
     function setPlaying(v) { playing = v; last = 0; cancelAnimationFrame(raf); raf = v && !document.hidden ? requestAnimationFrame(tick) : 0; }
     const visibility = () => setPlaying(playing);
     document.addEventListener('visibilitychange', visibility);
-    function reset() { setPlaying(false); time = 0; root.rotation.set(0, 0, 0); setExplode(0); setTime(0); camera.position.set(2.8, 2.25, 3.7); controls.target.set(0, .65, 0); controls.update(); render(); }
+    function reset() { controls.minDistance = 1.5; setPlaying(false); time = 0; root.rotation.set(0, 0, 0); setExplode(0); setTime(0); camera.position.set(2.8, 2.25, 3.7); controls.target.set(0, .65, 0); controls.update(); render(); }
     resize();
     setPlaying(playing);
-    return { setTime, setExplode, setPlaying, reset, parts,
+    return { setTime, setExplode, setPlaying, reset, parts, racingDrone,
         focus(id) { const g = parts.get(id); if (g) {
-            controls.target.copy(g.position);
+            controls.target.copy(g.getWorldPosition(new THREE.Vector3()));
+            if (id === 'aircraft') {
+                camera.position.copy(controls.target).add(new THREE.Vector3(.7, .55, .85));
+                controls.minDistance = .35;
+            }
             controls.update();
             render();
         } },
         metrics() { const sorted = [...intervals].sort((a, b) => a - b); return { three: THREE.REVISION, drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles, frames: sorted.length, medianMs: sorted[Math.floor(sorted.length * .5)], p95Ms: sorted[Math.floor(sorted.length * .95)], dpr: renderer.getPixelRatio(), viewport: [host.clientWidth, host.clientHeight], renderer: renderer.getContext().getParameter(renderer.getContext().RENDERER) }; },
-        dispose() { disposed = true; cancelAnimationFrame(raf); document.removeEventListener('visibilitychange', visibility); observer.disconnect(); controls.dispose(); const geometries = new Set(), materials = new Set(); scene.traverse(o => { if (o instanceof THREE.Mesh) {
+        dispose() { disposed = true; cancelAnimationFrame(raf); document.removeEventListener('visibilitychange', visibility); observer.disconnect(); controls.dispose(); racingDrone.dispose(); const geometries = new Set(), materials = new Set(); scene.traverse(o => { if (o instanceof THREE.Mesh) {
             geometries.add(o.geometry);
             for (const m of Array.isArray(o.material) ? o.material : [o.material])
                 materials.add(m);

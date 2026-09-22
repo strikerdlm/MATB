@@ -6,8 +6,8 @@
     "position": 0,
     "length": 91,
     "start_ms": 0.0,
-    "end_ms": 5802.625,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "end_ms": 7850.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "openmatb",
@@ -15,9 +15,9 @@
     "text": "La consola permite preparar el perfil y revisar su apariencia.",
     "position": 92,
     "length": 62,
-    "start_ms": 5982.625,
-    "end_ms": 10127.375,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 8029.999999999999,
+    "end_ms": 12030.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "openmatb",
@@ -25,9 +25,9 @@
     "text": "La ejecución se realiza en la aplicación nativa con el equipo configurado.",
     "position": 155,
     "length": 74,
-    "start_ms": 10307.375,
-    "end_ms": 15175.791666666668,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 12210.0,
+    "end_ms": 16960.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "openmatb",
@@ -35,9 +35,9 @@
     "text": "Aquí vemos su vista previa real: los bloques de práctica y carga se ejecutan después según el perfil.",
     "position": 230,
     "length": 101,
-    "start_ms": 15355.791666666666,
-    "end_ms": 21342.625,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 17140.0,
+    "end_ms": 25190.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "openmatb",
@@ -45,8 +45,8 @@
     "text": "Esta vista previa no es una adquisición nativa grabada.",
     "position": 332,
     "length": 55,
-    "start_ms": 21522.625,
-    "end_ms": 25062.083333333332,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 25370.0,
+    "end_ms": 29270.0,
+    "timing_source": "OpenAI sentence audio duration"
   }
 ]

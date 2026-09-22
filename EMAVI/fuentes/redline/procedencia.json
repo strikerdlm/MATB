@@ -1,0 +1,24 @@
+{
+  "repository": "https://github.com/strikerdlm/3d-physiology-webxr",
+  "path": "drone-racing-three",
+  "commit": "f8a22932544368475dda9dd05227f092dbde1893",
+  "authorization": "User explicitly requested reuse of these assets in EMAVI",
+  "native_source": "TypeScript procedural geometry; no CAD conversion or Blender remodel",
+  "source_three": "0.185.1",
+  "integration_three": "0.186.0",
+  "units": "metres",
+  "up": "+Y",
+  "front": "-Z",
+  "wheelbase_m": 0.235,
+  "dimensions": "Inferred visual defaults, not measured or manufacturing dimensions",
+  "files": [
+    {
+      "path": "drone.ts",
+      "sha256": "18378c0a83440660e1fed133e4b42452371fd34253b1a34ac6db3c8bee463cff"
+    },
+    {
+      "path": "model-geometry.ts",
+      "sha256": "572bd914968a42c18fdae56fb63aff74caa81a6aff236752ad0cdba2c59f55ee"
+    }
+  ]
+}

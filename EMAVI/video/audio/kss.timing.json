@@ -6,8 +6,8 @@
     "position": 0,
     "length": 84,
     "start_ms": 0.0,
-    "end_ms": 5592.125,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "end_ms": 6100.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "kss",
@@ -15,9 +15,9 @@
     "text": "Lea las opciones y elija la que representa cómo se siente en este momento.",
     "position": 85,
     "length": 74,
-    "start_ms": 5772.125,
-    "end_ms": 10745.791666666668,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 6280.0,
+    "end_ms": 11830.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "kss",
@@ -25,9 +25,9 @@
     "text": "También puede escuchar las instrucciones.",
     "position": 160,
     "length": 41,
-    "start_ms": 10925.791666666668,
-    "end_ms": 13399.458333333334,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 12010.0,
+    "end_ms": 15460.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "kss",
@@ -35,9 +35,9 @@
     "text": "Confirme la respuesta para pasar a la explicación de la prueba.",
     "position": 202,
     "length": 63,
-    "start_ms": 13579.458333333334,
-    "end_ms": 17776.833333333332,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 15640.0,
+    "end_ms": 19590.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "kss",
@@ -45,8 +45,8 @@
     "text": "La selección que ve aquí pertenece solamente a nuestra demostración automatizada.",
     "position": 266,
     "length": 81,
-    "start_ms": 17956.833333333332,
-    "end_ms": 23443.666666666664,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 19770.0,
+    "end_ms": 24770.0,
+    "timing_source": "OpenAI sentence audio duration"
   }
 ]

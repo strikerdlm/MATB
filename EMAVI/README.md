@@ -7,7 +7,7 @@ La clasificación fue declarada por el usuario como «Publica clasificada». El 
 ## Material preparado
 
 - **[Abrir demostración interactiva](Abrir_demostracion.cmd)**: video en español, capítulos, preguntas y estación 3D. Requiere Node.js; sirve el contenido localmente.
-- **[Video MP4](entregables/EMAVI_recorrido_es.mp4)**: 7:24 aproximadamente, Full HD, 30 fps, 18 capítulos y 76 subtítulos por frase en español; voz masculina OpenAI TTS HD (`onyx`). Versión continua para proyectar después de la presentación.
+- **[Video MP4](entregables/EMAVI_recorrido_es.mp4)**: 8:39 aproximadamente, Full HD, 30 fps, 18 capítulos y 76 subtítulos por frase en español; voz Cedar de OpenAI (`gpt-4o-mini-tts-2025-12-15`), seleccionada por el usuario. Versión continua para proyectar después de la presentación.
 - [Alcance de la grabación y verificación](video/ALCANCE_Y_VERIFICACION.md): identifica las pruebas ejecutadas, las vistas de preparación y los datos sintéticos.
 
 - [Contenido de las diapositivas](entregables/Contenido_diapositivas.md): 17 láminas de contenido; secuencia FAC prevista de 23 láminas.
@@ -25,7 +25,7 @@ Las capturas muestran catálogo, diseñador de experimentos, vista previa de Ope
 ## Estado de verificación
 
 - Video: decodificación completa de audio y video sin errores. El reproductor superó navegación, preguntas y reanudación, pantalla completa, vista móvil sin desbordamiento y movimiento reducido. Cero errores de consola y solicitudes externas. [Informe de entrega y hashes](revision/entrega-video.json) · [Revisión visual de los 18 capítulos](revision/storyboard-video.png).
-- Modelo 3D: TypeScript estricto sin errores, geometría finita y reensamblaje exacto después de diez ciclos. Seis componentes, 104 llamadas de dibujo y 4.116 triángulos. Mediciones de Chrome automatizado; no representan una validación en todos los dispositivos.
+- Modelo 3D: TypeScript estricto sin errores, geometría finita y reensamblaje exacto después de diez ciclos. Estación de seis componentes con el dron REDLINE importado: 17 conjuntos y cuatro rotores. La escena del dron registra 97 llamadas de dibujo y 129.996 triángulos; mediana de 16,8 ms y percentil 95 de 33,5 ms por cuadro. Mediciones de Chrome automatizado; no representan una validación en todos los dispositivos.
 
 - Compilación de producción y TypeScript del frontend completados con éxito en `.next/emavi-hd` para esta revisión.
 - Siete imágenes inspeccionadas, en PNG con margen alfa transparente; originales completos conservados. El margen se añadió mediante una composición de Chromium sin cambiar píxeles, texto o valores de la captura focal.

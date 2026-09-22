@@ -32,11 +32,11 @@
             "time_base": "1/90000",
             "start_pts": 1890,
             "start_time": "0.021000",
-            "duration_ts": 39918000,
-            "duration": "443.533333",
-            "bit_rate": "284467",
+            "duration_ts": 46692000,
+            "duration": "518.800000",
+            "bit_rate": "547575",
             "bits_per_raw_sample": "8",
-            "nb_frames": "13306",
+            "nb_frames": "15564",
             "extradata_size": 50,
             "disposition": {
                 "default": 1,
@@ -86,10 +86,10 @@
             "time_base": "1/48000",
             "start_pts": 0,
             "start_time": "0.000000",
-            "duration_ts": 21290400,
-            "duration": "443.550000",
-            "bit_rate": "133440",
-            "nb_frames": "20515",
+            "duration_ts": 24903264,
+            "duration": "518.818000",
+            "bit_rate": "158201",
+            "nb_frames": "24052",
             "extradata_size": 5,
             "disposition": {
                 "default": 1,
@@ -131,9 +131,9 @@
             "time_base": "1/1000000",
             "start_pts": 0,
             "start_time": "0.000000",
-            "duration_ts": 442803000,
-            "duration": "442.803000",
-            "bit_rate": "125",
+            "duration_ts": 518110000,
+            "duration": "518.110000",
+            "bit_rate": "107",
             "nb_frames": "153",
             "extradata_size": 68,
             "disposition": {
@@ -175,9 +175,9 @@
             "time_base": "1/1000",
             "start_pts": 0,
             "start_time": "0.000000",
-            "duration_ts": 443567,
-            "duration": "443.567000",
-            "bit_rate": "13",
+            "duration_ts": 518867,
+            "duration": "518.867000",
+            "bit_rate": "11",
             "nb_frames": "18",
             "extradata_size": 63,
             "disposition": {
@@ -213,8 +213,8 @@
             "time_base": "1/1000",
             "start": 0,
             "start_time": "0.000000",
-            "end": 23967,
-            "end_time": "23.967000",
+            "end": 27100,
+            "end_time": "27.100000",
             "tags": {
                 "title": "De la preparación a la evidencia"
             }
@@ -222,10 +222,10 @@
         {
             "id": 1,
             "time_base": "1/1000",
-            "start": 23967,
-            "start_time": "23.967000",
-            "end": 47933,
-            "end_time": "47.933000",
+            "start": 27100,
+            "start_time": "27.100000",
+            "end": 56767,
+            "end_time": "56.767000",
             "tags": {
                 "title": "Elija la actividad"
             }
@@ -233,10 +233,10 @@
         {
             "id": 2,
             "time_base": "1/1000",
-            "start": 47933,
-            "start_time": "47.933000",
-            "end": 65733,
-            "end_time": "65.733000",
+            "start": 56767,
+            "start_time": "56.767000",
+            "end": 87067,
+            "end_time": "87.067000",
             "tags": {
                 "title": "Siga la secuencia asignada"
             }
@@ -244,10 +244,10 @@
         {
             "id": 3,
             "time_base": "1/1000",
-            "start": 65733,
-            "start_time": "65.733000",
-            "end": 90300,
-            "end_time": "90.300000",
+            "start": 87067,
+            "start_time": "87.067000",
+            "end": 112967,
+            "end_time": "112.967000",
             "tags": {
                 "title": "Primero: somnolencia percibida"
             }
@@ -255,10 +255,10 @@
         {
             "id": 4,
             "time_base": "1/1000",
-            "start": 90300,
-            "start_time": "90.300000",
-            "end": 114200,
-            "end_time": "114.200000",
+            "start": 112967,
+            "start_time": "112.967000",
+            "end": 141500,
+            "end_time": "141.500000",
             "tags": {
                 "title": "Responda cuando aparece el contador"
             }
@@ -266,10 +266,10 @@
         {
             "id": 5,
             "time_base": "1/1000",
-            "start": 114200,
-            "start_time": "114.200000",
-            "end": 137433,
-            "end_time": "137.433000",
+            "start": 141500,
+            "start_time": "141.500000",
+            "end": 169500,
+            "end_time": "169.500000",
             "tags": {
                 "title": "Compruebe que terminó"
             }
@@ -277,10 +277,10 @@
         {
             "id": 6,
             "time_base": "1/1000",
-            "start": 137433,
-            "start_time": "137.433000",
-            "end": 164067,
-            "end_time": "164.067000",
+            "start": 169500,
+            "start_time": "169.500000",
+            "end": 198200,
+            "end_time": "198.200000",
             "tags": {
                 "title": "Cuatro pruebas, paso a paso"
             }
@@ -288,10 +288,10 @@
         {
             "id": 7,
             "time_base": "1/1000",
-            "start": 164067,
-            "start_time": "164.067000",
-            "end": 187833,
-            "end_time": "187.833000",
+            "start": 198200,
+            "start_time": "198.200000",
+            "end": 224500,
+            "end_time": "224.500000",
             "tags": {
                 "title": "Memoria y seguimiento"
             }
@@ -299,10 +299,10 @@
         {
             "id": 8,
             "time_base": "1/1000",
-            "start": 187833,
-            "start_time": "187.833000",
-            "end": 214000,
-            "end_time": "214.000000",
+            "start": 224500,
+            "start_time": "224.500000",
+            "end": 254900,
+            "end_time": "254.900000",
             "tags": {
                 "title": "Coordine cuatro tareas simultáneas"
             }
@@ -310,10 +310,10 @@
         {
             "id": 9,
             "time_base": "1/1000",
-            "start": 214000,
-            "start_time": "214.000000",
-            "end": 238033,
-            "end_time": "238.033000",
+            "start": 254900,
+            "start_time": "254.900000",
+            "end": 284333,
+            "end_time": "284.333000",
             "tags": {
                 "title": "Prepare la misión de supervisión"
             }
@@ -321,10 +321,10 @@
         {
             "id": 10,
             "time_base": "1/1000",
-            "start": 238033,
-            "start_time": "238.033000",
-            "end": 264000,
-            "end_time": "264.000000",
+            "start": 284333,
+            "start_time": "284.333000",
+            "end": 313933,
+            "end_time": "313.933000",
             "tags": {
                 "title": "Supervise, asigne y responda"
             }
@@ -332,10 +332,10 @@
         {
             "id": 11,
             "time_base": "1/1000",
-            "start": 264000,
-            "start_time": "264.000000",
-            "end": 283300,
-            "end_time": "283.300000",
+            "start": 313933,
+            "start_time": "313.933000",
+            "end": 340500,
+            "end_time": "340.500000",
             "tags": {
                 "title": "Responda las escalas y cierre"
             }
@@ -343,10 +343,10 @@
         {
             "id": 12,
             "time_base": "1/1000",
-            "start": 283300,
-            "start_time": "283.300000",
-            "end": 309667,
-            "end_time": "309.667000",
+            "start": 340500,
+            "start_time": "340.500000",
+            "end": 372000,
+            "end_time": "372.000000",
             "tags": {
                 "title": "Revise la misión completa"
             }
@@ -354,10 +354,10 @@
         {
             "id": 13,
             "time_base": "1/1000",
-            "start": 309667,
-            "start_time": "309.667000",
-            "end": 334467,
-            "end_time": "334.467000",
+            "start": 372000,
+            "start_time": "372.000000",
+            "end": 401167,
+            "end_time": "401.167000",
             "tags": {
                 "title": "Vuelo en primera persona"
             }
@@ -365,10 +365,10 @@
         {
             "id": 14,
             "time_base": "1/1000",
-            "start": 334467,
-            "start_time": "334.467000",
-            "end": 360433,
-            "end_time": "360.433000",
+            "start": 401167,
+            "start_time": "401.167000",
+            "end": 430133,
+            "end_time": "430.133000",
             "tags": {
                 "title": "Registro fisiológico y calidad"
             }
@@ -376,10 +376,10 @@
         {
             "id": 15,
             "time_base": "1/1000",
-            "start": 360433,
-            "start_time": "360.433000",
-            "end": 388700,
-            "end_time": "388.700000",
+            "start": 430133,
+            "start_time": "430.133000",
+            "end": 460833,
+            "end_time": "460.833000",
             "tags": {
                 "title": "Del diseño al análisis"
             }
@@ -387,10 +387,10 @@
         {
             "id": 16,
             "time_base": "1/1000",
-            "start": 388700,
-            "start_time": "388.700000",
-            "end": 414067,
-            "end_time": "414.067000",
+            "start": 460833,
+            "start_time": "460.833000",
+            "end": 487400,
+            "end_time": "487.400000",
             "tags": {
                 "title": "Del resultado al evento original"
             }
@@ -398,10 +398,10 @@
         {
             "id": 17,
             "time_base": "1/1000",
-            "start": 414067,
-            "start_time": "414.067000",
-            "end": 443567,
-            "end_time": "443.567000",
+            "start": 487400,
+            "start_time": "487.400000",
+            "end": 518867,
+            "end_time": "518.867000",
             "tags": {
                 "title": "La sesión termina con evidencia guardada"
             }
@@ -415,9 +415,9 @@
         "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
         "format_long_name": "QuickTime / MOV",
         "start_time": "0.000000",
-        "duration": "443.567000",
-        "size": "23668456",
-        "bit_rate": "426874",
+        "duration": "518.867000",
+        "size": "46351239",
+        "bit_rate": "714653",
         "probe_score": 100,
         "tags": {
             "major_brand": "isom",
@@ -425,7 +425,7 @@
             "compatible_brands": "isomiso2avc1mp41",
             "title": "EMAVI - Recorrido MATB y ASTRA",
             "encoder": "Lavf61.5.101",
-            "comment": "Publico Clasificado. Datos de demostracion. Voz generada por OpenAI TTS HD, onyx."
+            "comment": "Publico Clasificado. Datos de demostracion. Voz generada por OpenAI gpt-4o-mini-tts, cedar."
         }
     }
 }

@@ -17,8 +17,8 @@
     ],
     "correct": 0,
     "start": 0,
-    "end": 23.966666666666665,
-    "duration": 23.966666666666665
+    "end": 27.1,
+    "duration": 27.1
   },
   {
     "id": "catalogo",
@@ -32,9 +32,9 @@
       "Práctica o estudio",
       "Requisitos visibles"
     ],
-    "start": 23.966666666666665,
-    "end": 47.93333333333333,
-    "duration": 23.966666666666665
+    "start": 27.1,
+    "end": 56.766666666666666,
+    "duration": 29.666666666666668
   },
   {
     "id": "protocolo",
@@ -54,9 +54,9 @@
       "Sí, siempre todas"
     ],
     "correct": 0,
-    "start": 47.93333333333333,
-    "end": 65.73333333333333,
-    "duration": 17.8
+    "start": 56.766666666666666,
+    "end": 87.06666666666666,
+    "duration": 30.3
   },
   {
     "id": "kss",
@@ -70,9 +70,9 @@
       "Elegir una respuesta",
       "Confirmar antes de PVT"
     ],
-    "start": 65.73333333333333,
-    "end": 90.3,
-    "duration": 24.566666666666666
+    "start": 87.06666666666666,
+    "end": 112.96666666666667,
+    "duration": 25.9
   },
   {
     "id": "pvt",
@@ -92,9 +92,9 @@
       "Antes de que aparezca"
     ],
     "correct": 0,
-    "start": 90.3,
-    "end": 114.19999999999999,
-    "duration": 23.9
+    "start": 112.96666666666667,
+    "end": 141.5,
+    "duration": 28.533333333333335
   },
   {
     "id": "pvt-fin",
@@ -108,9 +108,9 @@
       "Calidad e interrupciones",
       "Práctica separada del estudio"
     ],
-    "start": 114.19999999999999,
-    "end": 137.43333333333334,
-    "duration": 23.233333333333334
+    "start": 141.5,
+    "end": 169.5,
+    "duration": 28
   },
   {
     "id": "cognitiva",
@@ -124,9 +124,9 @@
       "Elección izquierda o derecha",
       "Instrucciones y práctica"
     ],
-    "start": 137.43333333333334,
-    "end": 164.06666666666666,
-    "duration": 26.633333333333333
+    "start": 169.5,
+    "end": 198.2,
+    "duration": 28.7
   },
   {
     "id": "memoria",
@@ -140,9 +140,9 @@
       "Seguimiento con el mouse",
       "Resultados por tarea"
     ],
-    "start": 164.06666666666666,
-    "end": 187.83333333333331,
-    "duration": 23.766666666666666
+    "start": 198.2,
+    "end": 224.5,
+    "duration": 26.3
   },
   {
     "id": "openmatb",
@@ -156,9 +156,9 @@
       "Comunicaciones y recursos",
       "Perfil y ejecución nativa"
     ],
-    "start": 187.83333333333331,
-    "end": 213.99999999999997,
-    "duration": 26.166666666666668
+    "start": 224.5,
+    "end": 254.9,
+    "duration": 30.4
   },
   {
     "id": "suas",
@@ -172,9 +172,9 @@
       "Práctica y tres bloques",
       "Escenario técnico sintético"
     ],
-    "start": 213.99999999999997,
-    "end": 238.0333333333333,
-    "duration": 24.033333333333335
+    "start": 254.9,
+    "end": 284.3333333333333,
+    "duration": 29.433333333333334
   },
   {
     "id": "operar",
@@ -188,9 +188,9 @@
       "Estado, alertas y contactos",
       "Preguntas durante el bloque"
     ],
-    "start": 238.0333333333333,
-    "end": 263.99999999999994,
-    "duration": 25.966666666666665
+    "start": 284.3333333333333,
+    "end": 313.93333333333334,
+    "duration": 29.6
   },
   {
     "id": "carga",
@@ -204,9 +204,9 @@
       "Completar los bloques",
       "Confirmar el cierre"
     ],
-    "start": 263.99999999999994,
-    "end": 283.29999999999995,
-    "duration": 19.3
+    "start": 313.93333333333334,
+    "end": 340.5,
+    "duration": 26.566666666666666
   },
   {
     "id": "debrief",
@@ -220,9 +220,9 @@
       "Reconstrucción de eventos",
       "Verificar actividades pendientes"
     ],
-    "start": 283.29999999999995,
-    "end": 309.66666666666663,
-    "duration": 26.366666666666667
+    "start": 340.5,
+    "end": 372,
+    "duration": 31.5
   },
   {
     "id": "liftoff",
@@ -236,9 +236,9 @@
       "Vuelo y recuperación",
       "Simulador y telemetría requeridos"
     ],
-    "start": 309.66666666666663,
-    "end": 334.46666666666664,
-    "duration": 24.8
+    "start": 372,
+    "end": 401.1666666666667,
+    "duration": 29.166666666666668
   },
   {
     "id": "polar",
@@ -252,9 +252,9 @@
       "Verificar calidad",
       "Guardar con procedencia"
     ],
-    "start": 334.46666666666664,
-    "end": 360.4333333333333,
-    "duration": 25.966666666666665
+    "start": 401.1666666666667,
+    "end": 430.1333333333333,
+    "duration": 28.966666666666665
   },
   {
     "id": "investigador",
@@ -268,9 +268,9 @@
       "Seleccionar intentos",
       "Conservar unidades y criterios"
     ],
-    "start": 360.4333333333333,
-    "end": 388.69999999999993,
-    "duration": 28.266666666666666
+    "start": 430.1333333333333,
+    "end": 460.8333333333333,
+    "duration": 30.7
   },
   {
     "id": "evidencia",
@@ -284,9 +284,9 @@
       "Tiempos y procedencia",
       "Exportación verificable"
     ],
-    "start": 388.69999999999993,
-    "end": 414.0666666666666,
-    "duration": 25.366666666666667
+    "start": 460.8333333333333,
+    "end": 487.4,
+    "duration": 26.566666666666666
   },
   {
     "id": "cierre",
@@ -305,8 +305,8 @@
       "Solamente cerrar la ventana"
     ],
     "correct": 0,
-    "start": 414.0666666666666,
-    "end": 443.5666666666666,
-    "duration": 29.5
+    "start": 487.4,
+    "end": 518.8666666666667,
+    "duration": 31.466666666666665
   }
 ]

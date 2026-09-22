@@ -18,7 +18,7 @@ const hold=ms=>page.waitForTimeout(ms);
 async function go(url){await page.goto('http://127.0.0.1:3118'+url);await hold(1500);}
 async function prepare(instrument){await page.locator('#'+instrument+'-participant').selectOption('P02');await page.getByLabel('Phase',{exact:true}).fill('EMAVI-video-'+Date.now());await page.getByRole('button',{name:'Preparar ocasión',exact:true}).click();await hold(700);}
 try{
- await page.request.post('http://127.0.0.1:8018/participants',{data:{id:'P02',enrollment_date:'2026-09-21'}});
+ if(mode!=='scene')await page.request.post('http://127.0.0.1:8018/participants',{data:{id:'P02',enrollment_date:'2026-09-21'}});
  if(mode==='pvt'){
   await go('/pvt?purpose=practice');await mark('preparar');await prepare('pvt');await hold(1800);
   await page.getByRole('button',{name:'Continuar a KSS',exact:true}).click();await hold(1400);await mark('kss');

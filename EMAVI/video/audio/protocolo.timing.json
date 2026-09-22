@@ -6,8 +6,8 @@
     "position": 0,
     "length": 118,
     "start_ms": 0.0,
-    "end_ms": 40.0,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "end_ms": 8650.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "protocolo",
@@ -15,9 +15,9 @@
     "text": "La persona sigue las actividades pendientes en el orden indicado.",
     "position": 119,
     "length": 65,
-    "start_ms": 220.0,
-    "end_ms": 4298.958333333333,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 8830.0,
+    "end_ms": 13780.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "protocolo",
@@ -25,9 +25,9 @@
     "text": "No todos los protocolos incluyen las seis familias.",
     "position": 185,
     "length": 51,
-    "start_ms": 4478.958333333333,
-    "end_ms": 7873.708333333333,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 13960.0,
+    "end_ms": 17710.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "protocolo",
@@ -35,9 +35,9 @@
     "text": "Una repetición conserva su motivo y su intento anterior.",
     "position": 237,
     "length": 56,
-    "start_ms": 8053.708333333333,
-    "end_ms": 11093.166666666666,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 17890.0,
+    "end_ms": 23140.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "protocolo",
@@ -45,8 +45,8 @@
     "text": "Antes de empezar se revisan instrucciones, equipo y disponibilidad de la estación.",
     "position": 294,
     "length": 82,
-    "start_ms": 11273.166666666666,
-    "end_ms": 16667.916666666668,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 23320.0,
+    "end_ms": 29170.0,
+    "timing_source": "OpenAI sentence audio duration"
   }
 ]

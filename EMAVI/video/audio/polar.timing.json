@@ -6,8 +6,8 @@
     "position": 0,
     "length": 100,
     "start_ms": 0.0,
-    "end_ms": 6355.25,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "end_ms": 7750.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "polar",
@@ -15,9 +15,9 @@
     "text": "Una ventana basal requiere al menos cinco minutos de señal útil para el análisis previsto.",
     "position": 101,
     "length": 90,
-    "start_ms": 6535.25,
-    "end_ms": 12548.416666666666,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 7930.0,
+    "end_ms": 14980.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "polar",
@@ -25,9 +25,9 @@
     "text": "La aplicación conserva la calidad y explica las medidas no calculables.",
     "position": 192,
     "length": 71,
-    "start_ms": 12728.416666666666,
-    "end_ms": 17465.25,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 15160.0,
+    "end_ms": 20110.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "polar",
@@ -35,8 +35,8 @@
     "text": "Aquí mostramos la preparación; no se adquirieron señales fisiológicas de una persona ni se conectó un sensor.",
     "position": 264,
     "length": 109,
-    "start_ms": 17645.25,
-    "end_ms": 24855.791666666664,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 20290.0,
+    "end_ms": 27840.0,
+    "timing_source": "OpenAI sentence audio duration"
   }
 ]

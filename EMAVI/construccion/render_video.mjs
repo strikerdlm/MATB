@@ -49,7 +49,7 @@ for(let i=0;i<chapters.length;i++){
 }
 await browser.close();
 const list=path.join(build,'concat.txt');fs.writeFileSync(list,chapters.map(c=>`file '${path.join(build,c.id+'.mp4').replaceAll('\\','/')}'`).join('\n'));
-const metadata=path.join(build,'chapters.ffmeta');fs.writeFileSync(metadata,';FFMETADATA1\ntitle=EMAVI - Recorrido MATB y ASTRA\ncomment=Publico Clasificado. Datos de demostracion. Voz generada por OpenAI TTS HD, onyx.\n'+chapters.map(c=>`[CHAPTER]\nTIMEBASE=1/1000\nSTART=${Math.round(c.start*1000)}\nEND=${Math.round(c.end*1000)}\ntitle=${c.title}\n`).join(''));
+const metadata=path.join(build,'chapters.ffmeta');fs.writeFileSync(metadata,';FFMETADATA1\ntitle=EMAVI - Recorrido MATB y ASTRA\ncomment=Publico Clasificado. Datos de demostracion. Voz generada por OpenAI gpt-4o-mini-tts, cedar.\n'+chapters.map(c=>`[CHAPTER]\nTIMEBASE=1/1000\nSTART=${Math.round(c.start*1000)}\nEND=${Math.round(c.end*1000)}\ntitle=${c.title}\n`).join(''));
 const final=path.join(root,'EMAVI/entregables/EMAVI_recorrido_es.mp4');
 ff(['-f','concat','-safe','0','-i',list,'-i',path.join(base,'subtitulos.srt'),'-i',metadata,'-map','0:v','-map','0:a','-map','1:0','-map_metadata','2','-c:v','copy','-c:a','copy','-c:s','mov_text','-metadata:s:s:0','language=spa','-metadata:s:a:0','language=spa','-movflags','+faststart',final]);
 console.log('FINAL '+final+' '+probe(final)+' seconds');

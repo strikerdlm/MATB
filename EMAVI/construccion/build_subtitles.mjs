@@ -20,5 +20,5 @@ export function buildSubtitles(base, chapters) {
   for (let i = 1; i < cues.length; i++) if (cues[i].start < cues[i - 1].end) throw Error('Overlapping subtitles');
   fs.writeFileSync(path.join(base, 'subtitulos.vtt'), 'WEBVTT\n\n' + cues.map(c => `${stamp(c.start)} --> ${stamp(c.end)}\n${c.text}\n`).join('\n'));
   fs.writeFileSync(path.join(base, 'subtitulos.srt'), cues.map((c, i) => `${i + 1}\n${stamp(c.start).replace('.', ',')} --> ${stamp(c.end).replace('.', ',')}\n${c.text}\n`).join('\n'));
-  return {cues: cues.length, nonOverlapping: true, lastEnd: cues.at(-1).end, chapterEnd: chapters.at(-1).end, timingMethod: 'Measured boundaries of individual OpenAI TTS HD sentence WAVs; 350 ms montage offset'};
+  return {cues: cues.length, nonOverlapping: true, lastEnd: cues.at(-1).end, chapterEnd: chapters.at(-1).end, timingMethod: 'Measured boundaries of individual OpenAI sentence WAVs; 350 ms montage offset'};
 }

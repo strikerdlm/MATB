@@ -6,8 +6,8 @@
     "position": 0,
     "length": 99,
     "start_ms": 0.0,
-    "end_ms": 6381.583333333333,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "end_ms": 7050.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "memoria",
@@ -15,9 +15,9 @@
     "text": "En seguimiento, acerque el cursor al punto móvil hasta que termine el tiempo.",
     "position": 100,
     "length": 77,
-    "start_ms": 6561.583333333333,
-    "end_ms": 11535.25,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 7230.0,
+    "end_ms": 12880.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "memoria",
@@ -25,9 +25,9 @@
     "text": "Al completar las cuatro tareas, la aplicación guarda las respuestas y presenta medidas por tarea.",
     "position": 178,
     "length": 97,
-    "start_ms": 11715.25,
-    "end_ms": 18096.833333333332,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 13060.0,
+    "end_ms": 20110.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "memoria",
@@ -35,8 +35,8 @@
     "text": "Revise los avisos de calidad antes de interpretar cualquier valor.",
     "position": 276,
     "length": 66,
-    "start_ms": 18276.833333333332,
-    "end_ms": 22658.416666666668,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 20290.0,
+    "end_ms": 25190.0,
+    "timing_source": "OpenAI sentence audio duration"
   }
 ]
