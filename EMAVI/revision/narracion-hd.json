@@ -11,9 +11,9 @@
   "chapters": [
     {
       "id": "inicio",
-      "seconds": 25.97,
-      "sentences": 5,
-      "sha256": "3e1a4642bf622350ee48a1e133d45f824fee64f445c77354a1baad058eac3e68"
+      "seconds": 21.24,
+      "sentences": 4,
+      "sha256": "561fc8b7c34f36d8938a8f972f5c71178474aad0e8f6de4534f2fcf3c2280782"
     },
     {
       "id": "catalogo",

@@ -4,7 +4,7 @@
     "title": "De la preparación a la evidencia",
     "stage": "Orientación",
     "source": "scene",
-    "text": "Bienvenido a esta demostración de MATB y ASTRA para EMAVI. Seguiremos el recorrido de una persona desde la preparación hasta el cierre de las pruebas y la revisión de resultados. Las pantallas son reales. Los registros son de demostración y las respuestas están automatizadas. La voz de esta guía se ha generado con inteligencia artificial.",
+    "text": "Bienvenido a esta demostración de MATB y ASTRA para EMAVI. Seguiremos el recorrido de una persona desde la preparación hasta el cierre de las pruebas y la revisión de resultados. Las pantallas son reales. Los registros son de demostración y las respuestas están automatizadas.",
     "points": [
       "Preparar",
       "Completar",
@@ -17,8 +17,8 @@
     ],
     "correct": 0,
     "start": 0,
-    "end": 27.1,
-    "duration": 27.1
+    "end": 22.366666666666667,
+    "duration": 22.366666666666667
   },
   {
     "id": "catalogo",
@@ -32,8 +32,8 @@
       "Práctica o estudio",
       "Requisitos visibles"
     ],
-    "start": 27.1,
-    "end": 56.766666666666666,
+    "start": 22.366666666666667,
+    "end": 52.03333333333333,
     "duration": 29.666666666666668
   },
   {
@@ -54,8 +54,8 @@
       "Sí, siempre todas"
     ],
     "correct": 0,
-    "start": 56.766666666666666,
-    "end": 87.06666666666666,
+    "start": 52.03333333333333,
+    "end": 82.33333333333333,
     "duration": 30.3
   },
   {
@@ -70,8 +70,8 @@
       "Elegir una respuesta",
       "Confirmar antes de PVT"
     ],
-    "start": 87.06666666666666,
-    "end": 112.96666666666667,
+    "start": 82.33333333333333,
+    "end": 108.23333333333332,
     "duration": 25.9
   },
   {
@@ -92,8 +92,8 @@
       "Antes de que aparezca"
     ],
     "correct": 0,
-    "start": 112.96666666666667,
-    "end": 141.5,
+    "start": 108.23333333333332,
+    "end": 136.76666666666665,
     "duration": 28.533333333333335
   },
   {
@@ -108,8 +108,8 @@
       "Calidad e interrupciones",
       "Práctica separada del estudio"
     ],
-    "start": 141.5,
-    "end": 169.5,
+    "start": 136.76666666666665,
+    "end": 164.76666666666665,
     "duration": 28
   },
   {
@@ -124,8 +124,8 @@
       "Elección izquierda o derecha",
       "Instrucciones y práctica"
     ],
-    "start": 169.5,
-    "end": 198.2,
+    "start": 164.76666666666665,
+    "end": 193.46666666666664,
     "duration": 28.7
   },
   {
@@ -140,8 +140,8 @@
       "Seguimiento con el mouse",
       "Resultados por tarea"
     ],
-    "start": 198.2,
-    "end": 224.5,
+    "start": 193.46666666666664,
+    "end": 219.76666666666665,
     "duration": 26.3
   },
   {
@@ -156,8 +156,8 @@
       "Comunicaciones y recursos",
       "Perfil y ejecución nativa"
     ],
-    "start": 224.5,
-    "end": 254.9,
+    "start": 219.76666666666665,
+    "end": 250.16666666666666,
     "duration": 30.4
   },
   {
@@ -172,8 +172,8 @@
       "Práctica y tres bloques",
       "Escenario técnico sintético"
     ],
-    "start": 254.9,
-    "end": 284.3333333333333,
+    "start": 250.16666666666666,
+    "end": 279.59999999999997,
     "duration": 29.433333333333334
   },
   {
@@ -188,8 +188,8 @@
       "Estado, alertas y contactos",
       "Preguntas durante el bloque"
     ],
-    "start": 284.3333333333333,
-    "end": 313.93333333333334,
+    "start": 279.59999999999997,
+    "end": 309.2,
     "duration": 29.6
   },
   {
@@ -204,8 +204,8 @@
       "Completar los bloques",
       "Confirmar el cierre"
     ],
-    "start": 313.93333333333334,
-    "end": 340.5,
+    "start": 309.2,
+    "end": 335.76666666666665,
     "duration": 26.566666666666666
   },
   {
@@ -220,8 +220,8 @@
       "Reconstrucción de eventos",
       "Verificar actividades pendientes"
     ],
-    "start": 340.5,
-    "end": 372,
+    "start": 335.76666666666665,
+    "end": 367.26666666666665,
     "duration": 31.5
   },
   {
@@ -236,8 +236,8 @@
       "Vuelo y recuperación",
       "Simulador y telemetría requeridos"
     ],
-    "start": 372,
-    "end": 401.1666666666667,
+    "start": 367.26666666666665,
+    "end": 396.43333333333334,
     "duration": 29.166666666666668
   },
   {
@@ -252,8 +252,8 @@
       "Verificar calidad",
       "Guardar con procedencia"
     ],
-    "start": 401.1666666666667,
-    "end": 430.1333333333333,
+    "start": 396.43333333333334,
+    "end": 425.4,
     "duration": 28.966666666666665
   },
   {
@@ -268,8 +268,8 @@
       "Seleccionar intentos",
       "Conservar unidades y criterios"
     ],
-    "start": 430.1333333333333,
-    "end": 460.8333333333333,
+    "start": 425.4,
+    "end": 456.09999999999997,
     "duration": 30.7
   },
   {
@@ -284,8 +284,8 @@
       "Tiempos y procedencia",
       "Exportación verificable"
     ],
-    "start": 460.8333333333333,
-    "end": 487.4,
+    "start": 456.09999999999997,
+    "end": 482.66666666666663,
     "duration": 26.566666666666666
   },
   {
@@ -305,8 +305,8 @@
       "Solamente cerrar la ventana"
     ],
     "correct": 0,
-    "start": 487.4,
-    "end": 518.8666666666667,
+    "start": 482.66666666666663,
+    "end": 514.1333333333333,
     "duration": 31.466666666666665
   }
 ]

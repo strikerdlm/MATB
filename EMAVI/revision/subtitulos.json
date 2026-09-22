@@ -1,7 +1,7 @@
 {
-  "cues": 76,
+  "cues": 75,
   "nonOverlapping": true,
-  "lastEnd": 518.11,
-  "chapterEnd": 518.8666666666667,
+  "lastEnd": 513.3766666666667,
+  "chapterEnd": 514.1333333333333,
   "timingMethod": "Measured boundaries of individual OpenAI sentence WAVs; 350 ms montage offset"
 }

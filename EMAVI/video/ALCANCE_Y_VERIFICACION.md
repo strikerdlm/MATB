@@ -1,6 +1,6 @@
 # Demostración EMAVI — alcance y procedencia
 
-**Público Clasificado. Reproducción local; distribución en el repositorio privado MATB.** Narración generada con **OpenAI `gpt-4o-mini-tts-2025-12-15`, voz `cedar`, velocidad 1.0**, seleccionada por el usuario después de escuchar las muestras Cedar y Ash. Se enviaron únicamente las frases del guion al servicio de voz; la clave se cargó de `.env.local` en memoria y no se incluyó en los entregables. El reproductor funciona sin conexión una vez descargados los archivos.
+**Público Clasificado. Reproducción local; distribución en el repositorio privado MATB.** El reproductor funciona sin conexión una vez descargados los archivos.
 
 ## Qué se entrega
 
@@ -8,7 +8,7 @@
 - `../entregables/Demostracion_interactiva.html`: el mismo video con navegación, repetición, cuatro comprobaciones de comprensión y una estación 3D manipulable. El MP4 es lineal; las interacciones pertenecen a este reproductor.
 - `guion.json`, `chapters.json`, `subtitulos.vtt`, `subtitulos.srt`, `audio/`: guion, tiempos, subtítulos y narración. Los límites de las frases proceden de la duración de los WAV; se añade el mismo desplazamiento de 350 ms al audio y al texto.
 
-Los subtítulos usan los límites medidos de 76 frases de audio independientes y pausas de 180 ms entre frases. El montaje añade 350 ms antes de cada capítulo. Los WAV transmitidos por la API pueden tener un tamaño de cabecera indeterminado; se cuentan las muestras PCM realmente recibidas. `../revision/subtitulos.json` comprueba los intervalos sin solapamiento y `../revision/narracion-hd.json` identifica el modelo, la voz y los hashes. No se reutilizan las marcas de Windows Speech de la versión anterior.
+Los subtítulos usan los límites medidos de 75 frases de audio independientes y pausas de 180 ms entre frases. El montaje añade 350 ms antes de cada capítulo. Los WAV transmitidos por la API pueden tener un tamaño de cabecera indeterminado; se cuentan las muestras PCM realmente recibidas. `../revision/subtitulos.json` comprueba los intervalos sin solapamiento y `../revision/narracion-hd.json` identifica el modelo, la voz y los hashes. No se reutilizan las marcas de Windows Speech de la versión anterior.
 
 - `scene.ts` y `scene.js`: fuente editable y módulo de la escena. `vendor/` contiene Three.js 0.186.0, OrbitControls de la misma versión y su licencia MIT.
 

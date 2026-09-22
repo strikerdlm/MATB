@@ -1,27 +1,27 @@
 {
-  "created_utc": "2026-09-22T22:14:46.254556+00:00",
-  "source_commit": "cf76a44c8660ad61b0a0d0ca2e43bd59426a17f5",
+  "created_utc": "2026-09-22T23:20:47.393770+00:00",
+  "source_commit": "12214154e176a8fcdeb5446a20d90570bb335bdb",
   "classification": "Público Clasificado",
-  "duration_seconds": 518.867,
+  "duration_seconds": 514.133,
   "chapters": 18,
-  "subtitle_cues": 76,
+  "subtitle_cues": 75,
   "full_audio_video_decode": "PASS",
   "browser_checks": "PASS",
   "fullscreen": true,
   "external_browser_requests": 0,
-  "visual_review": "18 chapter storyboard, REDLINE assembled and exploded views inspected; browser controls and full decode passed",
+  "visual_review": "Only final introductory sentence removed; original PCM prefix retained. Existing remaining chapters reused. Full decode and browser checks passed.",
   "narration": "OpenAI / gpt-4o-mini-tts-2025-12-15 / cedar / speed 1.0 / Spanish",
   "presentation_policy_approved": false,
   "files": [
     {
       "path": "entregables/Demostracion_interactiva.html",
-      "bytes": 3902,
-      "sha256": "82e4341459c53478f8d32d729c2226445580d3a7ee5d7287017ef34aa1ff10dc"
+      "bytes": 3871,
+      "sha256": "da27ba86e228b8725f21274bd1046e947d715912853df10199de2fac37e3eeb9"
     },
     {
       "path": "entregables/EMAVI_recorrido_es.mp4",
-      "bytes": 46351239,
-      "sha256": "e0e3287495a8046d820046378d358949953797791539330b587ae214c022805f"
+      "bytes": 44374341,
+      "sha256": "b7a071d3cc8eb0ed01a6fb97ea1d01f099323505b4baca03ff90617bafb60cfc"
     },
     {
       "path": "entregables/voces/README.md",
@@ -71,7 +71,7 @@
     {
       "path": "revision/narracion-hd.json",
       "bytes": 3876,
-      "sha256": "03491ed79aa57bd8aaeb38ac32257608e9d896c7474b94f5e4f314f6e637db61"
+      "sha256": "58d939e64044c28230b0dd9461ccd4851b06423b2894c2c2a1c5b20dbb7e5eb7"
     },
     {
       "path": "revision/redline.json",
@@ -85,8 +85,8 @@
     },
     {
       "path": "revision/verificacion-video.json",
-      "bytes": 1249,
-      "sha256": "ee4d957888e512102112c5932d69d40e8fd4efd174cadc5709947abee5dc0b35"
+      "bytes": 1250,
+      "sha256": "543cd23a2a10394c7f0e799cd654f981c4f2444a4cc997f0c3076fb653418ef6"
     },
     {
       "path": "video/audio/carga.wav",
@@ -120,8 +120,8 @@
     },
     {
       "path": "video/audio/inicio.wav",
-      "bytes": 1246604,
-      "sha256": "3e1a4642bf622350ee48a1e133d45f824fee64f445c77354a1baad058eac3e68"
+      "bytes": 1019564,
+      "sha256": "561fc8b7c34f36d8938a8f972f5c71178474aad0e8f6de4534f2fcf3c2280782"
     },
     {
       "path": "video/audio/investigador.wav",
@@ -210,8 +210,8 @@
     },
     {
       "path": "video/chapters.json",
-      "bytes": 14044,
-      "sha256": "23a4b5f3b55aeac6c4f8ac4354ad20ff045aeee40295c0ab26a55e41177674a5"
+      "bytes": 14187,
+      "sha256": "9827e8336cb2144b35410cdbe78e2e1baf9791be91d40b63dacf1d223a4b5b3b"
     },
     {
       "path": "video/drone-viewer.js",
@@ -225,8 +225,8 @@
     },
     {
       "path": "video/guion.json",
-      "bytes": 12913,
-      "sha256": "a0100ff363d910577fd1d19197f15dc17a8ba1586d8d7ba4b9cd2f5ba0b1c26d"
+      "bytes": 12848,
+      "sha256": "9952ad3054062710bf8752829099a25e0bc6de83ec286b8dafb0bfe15f76ce43"
     },
     {
       "path": "video/narracion.json",
@@ -240,8 +240,8 @@
     },
     {
       "path": "video/player.js",
-      "bytes": 4167,
-      "sha256": "e6b1c333e71f0b3b0990cd606ea23be9adcf29de2306634520d42f1c62d24c39"
+      "bytes": 4148,
+      "sha256": "29c049b1a88e8b0246355e85269a4cd5bf8531ef3ba747afa44e2047ceae7ddb"
     },
     {
       "path": "video/redline/drone.js",
@@ -275,13 +275,13 @@
     },
     {
       "path": "video/subtitulos.srt",
-      "bytes": 9313,
-      "sha256": "da190bd55229ae3f22a70282ccb7f7ec9da3a0f3e7ee8fb55ddea55ca758f123"
+      "bytes": 9214,
+      "sha256": "993ee5682a64c1eb38a6f6345d595162db6cd6b9d22a7a9c1044e2ec64a8c60c"
     },
     {
       "path": "video/subtitulos.vtt",
-      "bytes": 9102,
-      "sha256": "4ac4ff87d3fe42b64430c160f2c0b294a5c11e728bf6994041370c4398d49b56"
+      "bytes": 9006,
+      "sha256": "87bc1a25a66ee2e618837b992cf3a6e9519f3c9d9fb8f6df42454e245ffdb76f"
     }
   ],
   "source_dirty": true,

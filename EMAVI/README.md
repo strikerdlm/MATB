@@ -7,7 +7,7 @@ La clasificación fue declarada por el usuario como «Publica clasificada». El 
 ## Material preparado
 
 - **[Abrir demostración interactiva](Abrir_demostracion.cmd)**: video en español, capítulos, preguntas y estación 3D. Requiere Node.js; sirve el contenido localmente.
-- **[Video MP4](entregables/EMAVI_recorrido_es.mp4)**: 8:39 aproximadamente, Full HD, 30 fps, 18 capítulos y 76 subtítulos por frase en español; voz Cedar de OpenAI (`gpt-4o-mini-tts-2025-12-15`), seleccionada por el usuario. Versión continua para proyectar después de la presentación.
+- **[Video MP4](entregables/EMAVI_recorrido_es.mp4)**: 8:34 aproximadamente, Full HD, 30 fps, 18 capítulos y 75 subtítulos por frase en español. Versión continua para proyectar después de la presentación.
 - [Alcance de la grabación y verificación](video/ALCANCE_Y_VERIFICACION.md): identifica las pruebas ejecutadas, las vistas de preparación y los datos sintéticos.
 
 - [Contenido de las diapositivas](entregables/Contenido_diapositivas.md): 17 láminas de contenido; secuencia FAC prevista de 23 láminas.

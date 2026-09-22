@@ -38,15 +38,5 @@
     "start_ms": 14940.0,
     "end_ms": 21240.0,
     "timing_source": "OpenAI sentence audio duration"
-  },
-  {
-    "chapter": "inicio",
-    "file": "inicio-04.wav",
-    "text": "La voz de esta guía se ha generado con inteligencia artificial.",
-    "position": 277,
-    "length": 63,
-    "start_ms": 21420.0,
-    "end_ms": 25970.0,
-    "timing_source": "OpenAI sentence audio duration"
   }
 ]
