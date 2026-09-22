@@ -1,7 +1,7 @@
 const data=await fetch('../video/chapters.json').then(r=>r.json());
 const $=s=>document.querySelector(s),video=$('#video');let current=0;const answered=new Set();
 const clock=s=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
-$('#duration').textContent=`${data.length} capítulos · ${clock(data.at(-1).end)} · OpenAI · Cedar`;
+$('#duration').textContent=`${data.length} capítulos · ${clock(data.at(-1).end)}`;
 function show(i){current=i;const c=data[i];$('#stage').textContent=c.stage;$('#currentTitle').textContent=c.title;$('#transcript').textContent=c.text;$('#points').replaceChildren(...c.points.map(t=>{const li=document.createElement('li');li.textContent=t;return li;}));document.querySelectorAll('#chapters button').forEach((b,n)=>b.setAttribute('aria-current',String(n===i)));}
 function jump(i){i=Math.max(0,Math.min(data.length-1,i));$('#checkpoint').hidden=true;video.currentTime=data[i].start+.05;show(i);video.play().catch(()=>{});}
 data.forEach((c,i)=>{const b=document.createElement('button');b.innerHTML=`<small>${clock(c.start)} · ${c.stage}</small>`;b.append(document.createTextNode(c.title));b.onclick=()=>jump(i);$('#chapters').append(b);});
