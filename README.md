@@ -17,8 +17,8 @@ Choose one workflow below; you do not need to install the others.
 
 The active Python research surface generates scenarios and provenance, converts
 OpenMATB CSV logs, computes descriptive/frequentist/Bayesian results, fits a
-within-participant Suhir DEPDF model, and supports an exploratory
-neurocognitive screen. The OpenMATB task runtime is tracked in `openmatb/` for
+within-participant Suhir DEPDF model, and supports exploratory
+tests. The OpenMATB task runtime is tracked in `openmatb/` for
 local development and task presentation; the asset installer also supports a
 separate compatible checkout when a study requires one.
 

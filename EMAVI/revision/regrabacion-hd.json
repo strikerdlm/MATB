@@ -1,0 +1,19 @@
+{
+  "source_commit": "e105a671f87861300cb78960b26fce8640f23a28",
+  "source_dirty": true,
+  "patch": "frontend-capturado.patch",
+  "ui_label": "Pruebas",
+  "screen_completed": true,
+  "completion_text": "Respuestas guardadas; Práctica completada",
+  "synthetic_participant": "P02",
+  "renewed_sources": [
+    "overview.webm",
+    "screen.webm",
+    "01_catalogo.png"
+  ],
+  "discarded_take": "Initial screen take was blocked by a stale uncertain station reservation; recovered through /station/recover-idle and rerecorded to completion",
+  "checks": {
+    "frontend_production_build": "PASS (.next/emavi-hd)",
+    "affected_component_tests": "12 passed across two files"
+  }
+}

@@ -1,7 +1,7 @@
 {
   "chapterCount": 18,
   "video": {
-    "duration": 465,
+    "duration": 443.567,
     "width": 1920,
     "height": 1080,
     "tracks": 1
@@ -14,9 +14,9 @@
       "three": "186",
       "drawCalls": 104,
       "triangles": 4116,
-      "frames": 23,
-      "medianMs": 17.699999999999818,
-      "p95Ms": 18.100000000000136,
+      "frames": 13,
+      "medianMs": 16.700000000000045,
+      "p95Ms": 117.04399999999998,
       "dpr": 1,
       "viewport": [
         699,
@@ -26,7 +26,7 @@
     }
   },
   "chapterNavigation": "Primero: somnolencia percibida",
-  "repeatTime": 77.616666,
+  "repeatTime": 65.786061,
   "checkpoint": true,
   "answerFeedback": "Correcto. Se realizan las asignadas por el protocolo.",
   "resumed": true,
@@ -34,7 +34,7 @@
   "presentationFullscreen": true,
   "mobileNoOverflow": true,
   "reducedMotion": "Iniciar movimiento",
-  "browser": "153.0.8010.52",
+  "browser": "153.0.8010.53",
   "consoleErrors": [],
   "externalRequests": []
 }

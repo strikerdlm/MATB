@@ -1,32 +1,32 @@
 {
-  "created_utc": "2026-09-22T02:17:06.359202+00:00",
-  "source_commit": "24d37b52da7196e5c69f9a8cfc9481c04fd1221d",
+  "created_utc": "2026-09-22T21:41:31.612889+00:00",
+  "source_commit": "e105a671f87861300cb78960b26fce8640f23a28",
   "classification": "Público Clasificado",
-  "duration_seconds": 465.0,
+  "duration_seconds": 443.567,
   "chapters": 18,
-  "subtitle_cues": 110,
+  "subtitle_cues": 76,
   "full_audio_video_decode": "PASS",
   "browser_checks": "PASS",
   "fullscreen": true,
   "external_browser_requests": 0,
-  "visual_review": "18 chapter storyboard inspected; matching app screens and documentary close-ups confirmed",
-  "narration": "Windows Speech / Microsoft Sabina Desktop / es-MX / local",
+  "visual_review": "18 chapter storyboard and full-size Pruebas frame inspected; UTF-8 labels corrected; post-block scale remains visible during its explanation",
+  "narration": "OpenAI / tts-1-hd / onyx / speed 0.95 / Spanish",
   "presentation_policy_approved": false,
   "files": [
     {
       "path": "entregables/EMAVI_recorrido_es.mp4",
-      "bytes": 24677233,
-      "sha256": "7156f08f448302a17c8250cdba677249834e8b803707606a592ca863224b93a0"
+      "bytes": 23668456,
+      "sha256": "af444e5d6f1264eb7d894542573b367712eede03b6558d3eaf041ddb98095846"
     },
     {
       "path": "entregables/Demostracion_interactiva.html",
-      "bytes": 3723,
-      "sha256": "c470b13f894987a0bff66121a913cf032ae34acb279f3284670028c4a8dda916"
+      "bytes": 3733,
+      "sha256": "487b37a84008efa777bb8389809cfe246a4b808b90f3bf3b02b89b6cc4e3709b"
     },
     {
       "path": "video/player.js",
-      "bytes": 4106,
-      "sha256": "059e714376aee0087167cc84f1cddab98d40e13b9a84f02929bc8639b1daea50"
+      "bytes": 4126,
+      "sha256": "1bf7d0d492f209f98ee96375b4120721b3d8e0f6d5dd425ca78c947c7874f77c"
     },
     {
       "path": "video/player.css",
@@ -45,28 +45,28 @@
     },
     {
       "path": "video/guion.json",
-      "bytes": 11258,
-      "sha256": "566cba9896678dd2a7b38cf455478f6155f7ba3e65154d188f5b604a3682f8cd"
+      "bytes": 12913,
+      "sha256": "a0100ff363d910577fd1d19197f15dc17a8ba1586d8d7ba4b9cd2f5ba0b1c26d"
     },
     {
       "path": "video/chapters.json",
-      "bytes": 14265,
-      "sha256": "2750378cf24d11ebc0278bf917515d6d8374038bcb82c5e67db0dfc86734c239"
+      "bytes": 14328,
+      "sha256": "481f740373a44405373feccf0a8e18918139bc6ee6d22670b5be2a82d69ff94d"
     },
     {
       "path": "video/subtitulos.vtt",
-      "bytes": 10145,
-      "sha256": "5f27075ed58af69eaa7409f072be8b8a49295fee7f21f4385ad30aa45798a096"
+      "bytes": 9102,
+      "sha256": "3186fa504e0d85136d0326b5f4bcbce040ba10cc3fe5179fc4304cbab74775c4"
     },
     {
       "path": "video/subtitulos.srt",
-      "bytes": 10469,
-      "sha256": "5e39af8b859764ec10823444e7220ffcced9cb0dda47524222a5c7f73af03feb"
+      "bytes": 9313,
+      "sha256": "e17d16aede8b35e378d7be1a0057497a4718d67d528cc56bdf20dc6c5ffc1a77"
     },
     {
       "path": "video/capturas/overview.webm",
-      "bytes": 10388428,
-      "sha256": "eec28446da80bbf097eadc9afc1da9c4b0574b184352384a942e549a3721c6f2"
+      "bytes": 10122368,
+      "sha256": "a29e9511b6ba8e59a9b534564534dc14f655ac94a5ac8b80b295a0907cbb8a87"
     },
     {
       "path": "video/capturas/pvt.webm",
@@ -75,8 +75,8 @@
     },
     {
       "path": "video/capturas/screen.webm",
-      "bytes": 4191745,
-      "sha256": "2894c2058cb11d1dadb48aaa66e9658e9b69a6c0a2a6d08b2d7afa55c6be468b"
+      "bytes": 3569622,
+      "sha256": "06b3895ab77066dd2a0ec56a4e9975f42fa6c8d9905e7da02b8a9fda25e77c2f"
     },
     {
       "path": "video/capturas/mission.webm",
@@ -92,6 +92,113 @@
       "path": "video/capturas/scene.webm",
       "bytes": 4001003,
       "sha256": "972b376a1842790600395aabb5f531eda4f8f4c92bfe1743a562ebdab2286629"
+    },
+    {
+      "path": "revision/narracion-hd.json",
+      "bytes": 3585,
+      "sha256": "7460addcfc361e52b325895ab87794fd4cd7ba5c2cb48b5389d77482f0f3dab8"
+    },
+    {
+      "path": "revision/regrabacion-hd.json",
+      "bytes": 696,
+      "sha256": "c197a9b705ec336c969648528c82b401c08737c1107f8f0feb7034bcf925ca8e"
+    },
+    {
+      "path": "revision/frontend-capturado.patch",
+      "bytes": 2658,
+      "sha256": "5904a57b97fe4c923c80282849d8b91dce9f3b740b3f58cf8e02984f99a768e3"
+    },
+    {
+      "path": "video/audio/carga.wav",
+      "bytes": 872054,
+      "sha256": "eed9887fdb7bb6a1c0073c8afd8244a6f9b13a81bbec2f89078414c0f43d87dc"
+    },
+    {
+      "path": "video/audio/catalogo.wav",
+      "bytes": 1097122,
+      "sha256": "ba7d76329e6c9d30ac0ea146b2a16b79ff7b1645fa456d8c458e2764a22d59de"
+    },
+    {
+      "path": "video/audio/cierre.wav",
+      "bytes": 1362588,
+      "sha256": "4d6f90d9b1b75d516ef4e40e32df1d583e95056ed84b44f7f2fc0c76ac3587a2"
+    },
+    {
+      "path": "video/audio/cognitiva.wav",
+      "bytes": 1224702,
+      "sha256": "148a5a5ea78f28b5131b9f8e2ff46057833e49d5e66daebfbe7128b6493fb136"
+    },
+    {
+      "path": "video/audio/debrief.wav",
+      "bytes": 1212072,
+      "sha256": "6269192140619219e8cc1c8bbd1f75943f8a9428b745502149a84ffc19a79efb"
+    },
+    {
+      "path": "video/audio/evidencia.wav",
+      "bytes": 1163438,
+      "sha256": "4cbb5330b1c81e4f402ed0d2ead6cae80389f19248db923b201063c9d145a4ea"
+    },
+    {
+      "path": "video/audio/inicio.wav",
+      "bytes": 1096920,
+      "sha256": "b51aab40424c7c3b6c22488a749714bc1282bc227e2b2028f895e47062f2df1d"
+    },
+    {
+      "path": "video/audio/investigador.wav",
+      "bytes": 1303016,
+      "sha256": "45527519b9f5ae5e24e39076d1088533f126002e9979ce8c7c4253ffa69d821e"
+    },
+    {
+      "path": "video/audio/kss.wav",
+      "bytes": 1125340,
+      "sha256": "976263b7dc15b074d119ffed862fe9e5ba542ed1f8b5fe40ae96356b3a2552ac"
+    },
+    {
+      "path": "video/audio/liftoff.wav",
+      "bytes": 1136278,
+      "sha256": "98aa2cc95e20af4888d8b95db8230954aed93045241dd914150dcc8a65197888"
+    },
+    {
+      "path": "video/audio/memoria.wav",
+      "bytes": 1087648,
+      "sha256": "b674a56ee9d653c8d271f300c752b3ddf1d54a555a1c0c8fb27c2f29d7dc3468"
+    },
+    {
+      "path": "video/audio/openmatb.wav",
+      "bytes": 1203024,
+      "sha256": "e087bea032149539ae3a8bd502fdc4ee21e9144a85170adc120fca34306c2da5"
+    },
+    {
+      "path": "video/audio/operar.wav",
+      "bytes": 1192918,
+      "sha256": "5e960950e55ca1bdd103b5faeb6e0418dc0af1cc4a4cadf6a66436e2138fa354"
+    },
+    {
+      "path": "video/audio/polar.wav",
+      "bytes": 1193122,
+      "sha256": "f16313b5bf95b936833d3a420c9442352e416c71f9815911adc78fc7a0ca6f88"
+    },
+    {
+      "path": "video/audio/protocolo.wav",
+      "bytes": 800104,
+      "sha256": "35bf7b8894f2975aac0dc8e25f70fcfd3bb12894e99e8e75960a583053abe8b7"
+    },
+    {
+      "path": "video/audio/pvt-fin.wav",
+      "bytes": 1061754,
+      "sha256": "1edb6999a2cc41b2bcc6f3fc899599e3840f2730401d363b83d3fce43a176ed5"
+    },
+    {
+      "path": "video/audio/pvt.wav",
+      "bytes": 1094394,
+      "sha256": "0185749377243e8ab2bfcfecfbef4219b3ad91ff7d637acf71f6bf8f01a43c01"
+    },
+    {
+      "path": "video/audio/suas.wav",
+      "bytes": 1100482,
+      "sha256": "6f0d07343b57428752a653524230e3a83870276d62f81452a62244441119ec5c"
     }
-  ]
+  ],
+  "source_dirty": true,
+  "source_patch": "revision/frontend-capturado.patch"
 }

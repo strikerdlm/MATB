@@ -82,6 +82,7 @@ try{
   await go('/screen?purpose=practice');await prepare('screen');await mark('preparar');
   console.log((await page.locator('main').innerText()).slice(-1600));
   const begin=page.getByRole('button',{name:'Ver instrucciones y comenzar',exact:true});await begin.click();
+  await page.locator('h3').first().waitFor({timeout:15000});
   let lastTitle='',lastLetter='',letters=[],lastResponse=0;
   const until=Date.now()+210000;
   while(Date.now()<until){
@@ -103,6 +104,7 @@ try{
    if(await dot.isVisible().catch(()=>false)){const b=await dot.boundingBox();if(b)await page.mouse.move(b.x+8,b.y+8,{steps:2});}
    await hold(80);
   }
+  await page.getByText('Respuestas guardadas',{exact:true}).waitFor({timeout:15000});
   await mark('resultado');console.log((await page.locator('main').innerText()).slice(-1400));await hold(6000);
  }
 }catch(e){await page.screenshot({path:path.join(out,mode+'-error.png')});fs.writeFileSync(path.join(out,mode+'-error.txt'),await page.locator('body').innerText());console.error(e);process.exitCode=1;}

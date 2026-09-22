@@ -24,7 +24,7 @@ export const EXPERIMENTS: readonly ExperimentInfo[] = [
     duration: ["Según el protocolo y circuito seleccionados, con línea basal y recuperación.", "According to the selected protocol and course, including baseline and recovery."],
     equipment: ["Liftoff instalado, controlador configurado y telemetría activa. Polar H10 es opcional cuando se declara desempeño sin fisiología.", "Installed Liftoff, configured controller, and active telemetry. Polar H10 is optional when performance-only collection is declared."],
     results: ["Tiempos de vuelta, vueltas completadas y medidas de telemetría con sus unidades disponibles.", "Lap times, completed laps, and telemetry measures with their available units."] },
-  { id: "screen", route: "/screen", title: ["Batería cognitiva · Cuatro pruebas", "Cognitive battery · Four tests"],
+  { id: "screen", route: "/screen", title: ["Pruebas", "Tests"],
     summary: ["Reacción simple, elección de respuesta, memoria de trabajo y seguimiento.", "Simple reaction, response choice, working memory, and tracking."],
     actions: ["Pulse al ver un círculo, elija la dirección de una flecha, detecte letras repetidas dos posiciones atrás y siga un punto con el mouse. Cada prueba incluye instrucciones y práctica.", "Respond to a circle, choose an arrow’s direction, detect letters repeated two positions earlier, and follow a point with the mouse. Each test includes instructions and practice."],
     duration: ["Aproximadamente 6–8 min; depende del ritmo de respuesta y lectura.", "Approximately 6–8 minutes, depending on response and reading time."],

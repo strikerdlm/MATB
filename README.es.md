@@ -17,7 +17,7 @@ conservada de monitor de aeronaves en terminal. Elija un flujo a continuación; 
 
 La superficie activa de investigación en Python genera escenarios y procedencia, convierte registros
 CSV de OpenMATB, calcula resultados descriptivos, frecuentistas y bayesianos, ajusta un modelo DEPDF
-de Suhir intraparticipante y admite una evaluación neurocognitiva exploratoria. El entorno de tareas
+de Suhir intraparticipante y admite pruebas exploratorias. El entorno de tareas
 OpenMATB está versionado en `openmatb/` para desarrollo local y presentación de tareas; el instalador
 de recursos también admite un checkout compatible independiente cuando un estudio lo requiera.
 

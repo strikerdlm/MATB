@@ -1,46 +1,46 @@
 [
   {
     "name": "preparar",
-    "seconds": 3.214,
+    "seconds": 2.539,
     "url": "http://127.0.0.1:3118/screen?purpose=practice"
   },
   {
     "name": "prueba-1",
-    "seconds": 4.331,
+    "seconds": 3.638,
     "url": "http://127.0.0.1:3118/screen?purpose=practice"
   },
   {
     "name": "prueba-2",
-    "seconds": 27.062,
+    "seconds": 25.35,
     "url": "http://127.0.0.1:3118/screen?purpose=practice"
   },
   {
     "name": "prueba-3",
-    "seconds": 38.565,
+    "seconds": 36.397,
     "url": "http://127.0.0.1:3118/screen?purpose=practice"
   },
   {
     "name": "prueba-4",
-    "seconds": 60.509,
+    "seconds": 58.162,
     "url": "http://127.0.0.1:3118/screen?purpose=practice"
   },
   {
     "name": "prueba-5",
-    "seconds": 74.75,
+    "seconds": 71.667,
     "url": "http://127.0.0.1:3118/screen?purpose=practice"
   },
   {
     "name": "final",
-    "seconds": 77.003,
+    "seconds": 73.782,
     "url": "http://127.0.0.1:3118/screen?purpose=practice"
   },
   {
     "name": "resultado",
-    "seconds": 77.183,
+    "seconds": 73.87,
     "url": "http://127.0.0.1:3118/screen?purpose=practice"
   },
   {
     "name": "end",
-    "seconds": 83.533
+    "seconds": 79.969
   }
 ]

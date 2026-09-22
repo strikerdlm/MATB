@@ -1,0 +1,119 @@
+{
+  "provider": "OpenAI",
+  "model": "tts-1-hd",
+  "voice": "onyx",
+  "speed": 0.95,
+  "ai_generated": true,
+  "timing_method": "exact sentence WAV boundaries; 180 ms inter-sentence silence",
+  "authorization": "Explicit user request to send the narration to OpenAI TTS HD",
+  "chapters": [
+    {
+      "id": "inicio",
+      "seconds": 22.851583333333334,
+      "sentences": 5,
+      "sha256": "b51aab40424c7c3b6c22488a749714bc1282bc227e2b2028f895e47062f2df1d"
+    },
+    {
+      "id": "catalogo",
+      "seconds": 22.855791666666665,
+      "sentences": 4,
+      "sha256": "ba7d76329e6c9d30ac0ea146b2a16b79ff7b1645fa456d8c458e2764a22d59de"
+    },
+    {
+      "id": "protocolo",
+      "seconds": 16.667916666666667,
+      "sentences": 5,
+      "sha256": "35bf7b8894f2975aac0dc8e25f70fcfd3bb12894e99e8e75960a583053abe8b7"
+    },
+    {
+      "id": "kss",
+      "seconds": 23.443666666666665,
+      "sentences": 5,
+      "sha256": "976263b7dc15b074d119ffed862fe9e5ba542ed1f8b5fe40ae96356b3a2552ac"
+    },
+    {
+      "id": "pvt",
+      "seconds": 22.798958333333335,
+      "sentences": 5,
+      "sha256": "0185749377243e8ab2bfcfecfbef4219b3ad91ff7d637acf71f6bf8f01a43c01"
+    },
+    {
+      "id": "pvt-fin",
+      "seconds": 22.11895833333333,
+      "sentences": 4,
+      "sha256": "1edb6999a2cc41b2bcc6f3fc899599e3840f2730401d363b83d3fce43a176ed5"
+    },
+    {
+      "id": "cognitiva",
+      "seconds": 25.513708333333334,
+      "sentences": 4,
+      "sha256": "148a5a5ea78f28b5131b9f8e2ff46057833e49d5e66daebfbe7128b6493fb136"
+    },
+    {
+      "id": "memoria",
+      "seconds": 22.658416666666668,
+      "sentences": 4,
+      "sha256": "b674a56ee9d653c8d271f300c752b3ddf1d54a555a1c0c8fb27c2f29d7dc3468"
+    },
+    {
+      "id": "openmatb",
+      "seconds": 25.062083333333334,
+      "sentences": 5,
+      "sha256": "e087bea032149539ae3a8bd502fdc4ee21e9144a85170adc120fca34306c2da5"
+    },
+    {
+      "id": "suas",
+      "seconds": 22.925791666666665,
+      "sentences": 3,
+      "sha256": "6f0d07343b57428752a653524230e3a83870276d62f81452a62244441119ec5c"
+    },
+    {
+      "id": "operar",
+      "seconds": 24.851541666666666,
+      "sentences": 5,
+      "sha256": "5e960950e55ca1bdd103b5faeb6e0418dc0af1cc4a4cadf6a66436e2138fa354"
+    },
+    {
+      "id": "carga",
+      "seconds": 18.166875,
+      "sentences": 4,
+      "sha256": "eed9887fdb7bb6a1c0073c8afd8244a6f9b13a81bbec2f89078414c0f43d87dc"
+    },
+    {
+      "id": "debrief",
+      "seconds": 25.250583333333335,
+      "sentences": 4,
+      "sha256": "6269192140619219e8cc1c8bbd1f75943f8a9428b745502149a84ffc19a79efb"
+    },
+    {
+      "id": "liftoff",
+      "seconds": 23.671541666666666,
+      "sentences": 4,
+      "sha256": "98aa2cc95e20af4888d8b95db8230954aed93045241dd914150dcc8a65197888"
+    },
+    {
+      "id": "polar",
+      "seconds": 24.855791666666665,
+      "sentences": 4,
+      "sha256": "f16313b5bf95b936833d3a420c9442352e416c71f9815911adc78fc7a0ca6f88"
+    },
+    {
+      "id": "investigador",
+      "seconds": 27.14525,
+      "sentences": 4,
+      "sha256": "45527519b9f5ae5e24e39076d1088533f126002e9979ce8c7c4253ffa69d821e"
+    },
+    {
+      "id": "evidencia",
+      "seconds": 24.237375,
+      "sentences": 4,
+      "sha256": "4cbb5330b1c81e4f402ed0d2ead6cae80389f19248db923b201063c9d145a4ea"
+    },
+    {
+      "id": "cierre",
+      "seconds": 28.386333333333333,
+      "sentences": 3,
+      "sha256": "4d6f90d9b1b75d516ef4e40e32df1d583e95056ed84b44f7f2fc0c76ac3587a2"
+    }
+  ]
+}
