@@ -1,0 +1,235 @@
+{
+  "assets": [
+    {
+      "id": "01_catalogo",
+      "title": "Catálogo de actividades",
+      "url": "http://127.0.0.1:3118/start",
+      "captured_utc": "2026-09-22T00:25:36.705236+00:00",
+      "source_commit": "24d37b52da7196e5c69f9a8cfc9481c04fd1221d",
+      "data": "synthetic demonstration only",
+      "scope": "Se capturó el catálogo conectado, con las seis actividades visibles.",
+      "composition": "Captura original de página + captura focal del elemento; esta última se presenta sin reescalado dentro de un margen transparente de 20 px capturado por Chromium. No se cambió el texto ni se redibujó la interfaz.",
+      "dimensions": [
+        776,
+        1000
+      ],
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "reviewed": true,
+      "files": {
+        "01_catalogo.png": {
+          "path": "01_catalogo.png",
+          "sha256": "876b932a9c829759a9eb1bc2a93415b904fa4ad167b388852878f4f5944cb866"
+        },
+        "01_catalogo_detalle.png": {
+          "path": "01_catalogo_detalle.png",
+          "sha256": "bd50d9026ec9ad67745ccd8b86d53e2a579d516b804ef1c4fef5a2179cedcccf"
+        },
+        "01_catalogo_original.png": {
+          "path": "01_catalogo_original.png",
+          "sha256": "4b8c12390f9bedd93b03f991588f95b1532551a2864252aa7f2e831dd38fcc72"
+        }
+      }
+    },
+    {
+      "id": "02_diseno",
+      "title": "Línea temporal del escenario",
+      "url": "http://127.0.0.1:3118/experiments",
+      "captured_utc": "2026-09-22T00:44:36.140973+00:00",
+      "source_commit": "24d37b52da7196e5c69f9a8cfc9481c04fd1221d",
+      "data": "synthetic demonstration only",
+      "scope": "Se compiló el escenario de ejemplo. El detalle conserva la visualización del editor, incluidos los rótulos abreviados por la propia interfaz.",
+      "composition": "Captura original de página + captura focal del elemento; esta última se presenta sin reescalado dentro de un margen transparente de 20 px capturado por Chromium. No se cambió el texto ni se redibujó la interfaz.",
+      "dimensions": [
+        1168,
+        579
+      ],
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "reviewed": true,
+      "files": {
+        "02_diseno.png": {
+          "path": "02_diseno.png",
+          "sha256": "a30d96aa9ecf256d87edbee8a720777c985ae97eba1b216e67df8e07eca8f441"
+        },
+        "02_diseno_detalle.png": {
+          "path": "02_diseno_detalle.png",
+          "sha256": "d567bb5eb25939c35d8264b4f0c57b9524ffa5ed7283661c77efaae6670a6520"
+        },
+        "02_diseno_original.png": {
+          "path": "02_diseno_original.png",
+          "sha256": "529400004d969d64ebe1ec43dcbfdb0b448459fb605b57ddf771c798bf9e11c1"
+        }
+      }
+    },
+    {
+      "id": "03_openmatb",
+      "title": "Vista previa de apariencia OpenMATB",
+      "url": "http://127.0.0.1:3118/openmatb/appearance",
+      "captured_utc": "2026-09-22T00:27:51.442233+00:00",
+      "source_commit": "24d37b52da7196e5c69f9a8cfc9481c04fd1221d",
+      "data": "synthetic demonstration only",
+      "scope": "Panel de apariencia web. No representa una sesión de adquisición en el entorno nativo.",
+      "composition": "Captura original de página + captura focal del elemento; esta última se presenta sin reescalado dentro de un margen transparente de 20 px capturado por Chromium. No se cambió el texto ni se redibujó la interfaz.",
+      "dimensions": [
+        686,
+        835
+      ],
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "reviewed": true,
+      "files": {
+        "03_openmatb.png": {
+          "path": "03_openmatb.png",
+          "sha256": "93eee6f05805251687d9eba20b2f9ca8a5c08b7933dc351e6cff29ac558318c0"
+        },
+        "03_openmatb_detalle.png": {
+          "path": "03_openmatb_detalle.png",
+          "sha256": "fb3f2adc2e3133bc01179ece353adfcb1cae7c8f442a32378e929f4ad9e67881"
+        },
+        "03_openmatb_original.png": {
+          "path": "03_openmatb_original.png",
+          "sha256": "e450dfd4ca037a439a96688438e6cf198187cf906241f7298ddf82708b1afcad"
+        }
+      }
+    },
+    {
+      "id": "04_kss",
+      "title": "Preparación KSS/PVT",
+      "url": "http://127.0.0.1:3118/pvt?purpose=practice&fast=1#kss",
+      "captured_utc": "2026-09-22T00:30:20.218267+00:00",
+      "source_commit": "24d37b52da7196e5c69f9a8cfc9481c04fd1221d",
+      "data": "synthetic demonstration only",
+      "scope": "P01 fue creado exclusivamente en la base sintética. Captura previa a responder KSS; no se obtuvo un PVT humano.",
+      "composition": "Captura original de página + captura focal del elemento; esta última se presenta sin reescalado dentro de un margen transparente de 20 px capturado por Chromium. No se cambió el texto ni se redibujó la interfaz.",
+      "dimensions": [
+        712,
+        881
+      ],
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "reviewed": true,
+      "files": {
+        "04_kss.png": {
+          "path": "04_kss.png",
+          "sha256": "9fcf3088a353ea5656179f3a887777d07e7191df40de36f70ee56c081ce565ba"
+        },
+        "04_kss_detalle.png": {
+          "path": "04_kss_detalle.png",
+          "sha256": "11a93ee528633e7f9838a162cc9593776c5c12824fc875d9b0ff5e103753169c"
+        },
+        "04_kss_original.png": {
+          "path": "04_kss_original.png",
+          "sha256": "c3edfbaa91c46fb019bc403567979a01a15040347ce544bc5d2b960daf54bfae"
+        }
+      }
+    },
+    {
+      "id": "05_suas",
+      "title": "Mapa sintético sUAS",
+      "url": "http://127.0.0.1:3118/mission?session=sim-20260922T003838-4e537726",
+      "captured_utc": "2026-09-22T00:42:37.208094+00:00",
+      "source_commit": "24d37b52da7196e5c69f9a8cfc9481c04fd1221d",
+      "data": "synthetic demonstration only",
+      "scope": "Sesión interactive_technical, HIGH. Mapa al final del bloque en estado pausado. La sesión se abortó al terminar las capturas.",
+      "composition": "Captura original de página + captura focal del elemento; esta última se presenta sin reescalado dentro de un margen transparente de 20 px capturado por Chromium. No se cambió el texto ni se redibujó la interfaz.",
+      "dimensions": [
+        864,
+        914
+      ],
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "reviewed": true,
+      "files": {
+        "05_suas.png": {
+          "path": "05_suas.png",
+          "sha256": "e47a3ec64b0a8850214767c2e72ad895127012b32660c6877ae1d05a53d93247"
+        },
+        "05_suas_detalle.png": {
+          "path": "05_suas_detalle.png",
+          "sha256": "db98dc762a88e45892bb230e988498d3656ca9552977c1e826c5567e74c57517"
+        },
+        "05_suas_original.png": {
+          "path": "05_suas_original.png",
+          "sha256": "b7340087a1d811c53a47cace17a96a24b9d7e6397097d8501d2702c467f7ec36"
+        }
+      }
+    },
+    {
+      "id": "06_evidencia",
+      "title": "Inspector de evidencia",
+      "url": "http://127.0.0.1:3118/upload",
+      "captured_utc": "2026-09-22T00:37:31.588378+00:00",
+      "source_commit": "24d37b52da7196e5c69f9a8cfc9481c04fd1221d",
+      "data": "synthetic demonstration only",
+      "scope": "Importación del generador synthetic_capture, identidad emavi-demonstration. El fixture declara synthetic_reference_only. Sus campos source_commit bbbb y scenario_sha256 aaaa son constantes del fixture, no identifican el checkout.",
+      "composition": "Captura original de página + captura focal del elemento; esta última se presenta sin reescalado dentro de un margen transparente de 20 px capturado por Chromium. No se cambió el texto ni se redibujó la interfaz.",
+      "dimensions": [
+        1128,
+        1010
+      ],
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "reviewed": true,
+      "files": {
+        "06_evidencia.png": {
+          "path": "06_evidencia.png",
+          "sha256": "60eee168bf174b86fb88f64fd2cf6313592266336efec939367a2895f63c02e2"
+        },
+        "06_evidencia_detalle.png": {
+          "path": "06_evidencia_detalle.png",
+          "sha256": "3a8f955f65b1ed85457f1d2cc2b189b5b805177ae5a07e0efab0406c42fa5196"
+        },
+        "06_evidencia_original.png": {
+          "path": "06_evidencia_original.png",
+          "sha256": "8ab0a47b35ce60c86175f5eb3374209e8e0424bd7c64083fd7034542b19e28e3"
+        }
+      }
+    },
+    {
+      "id": "07_evento",
+      "title": "Revisión de evento",
+      "url": "http://127.0.0.1:3118/upload",
+      "captured_utc": "2026-09-22T00:38:04.608883+00:00",
+      "source_commit": "24d37b52da7196e5c69f9a8cfc9481c04fd1221d",
+      "data": "synthetic demonstration only",
+      "scope": "Evento track.sample de la misma captura sintética. Paquete exportado y recomputado localmente; ver revision/verificacion_exportacion.json.",
+      "composition": "Captura original de página + captura focal del elemento; esta última se presenta sin reescalado dentro de un margen transparente de 20 px capturado por Chromium. No se cambió el texto ni se redibujó la interfaz.",
+      "dimensions": [
+        766,
+        495
+      ],
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "reviewed": true,
+      "files": {
+        "07_evento.png": {
+          "path": "07_evento.png",
+          "sha256": "82ce9e3ec205e739e57168bb350f5259aee4c80a91f1952ead552792ea34d436"
+        },
+        "07_evento_detalle.png": {
+          "path": "07_evento_detalle.png",
+          "sha256": "477f36e8be198accaa0486fe032cd9f744b9ce070dd0928caf6f85ef3b5f17dc"
+        },
+        "07_evento_original.png": {
+          "path": "07_evento_original.png",
+          "sha256": "da32e3def5594721452bdccbc69d324f939db593788325cc60fb13645f5dc675"
+        }
+      }
+    }
+  ]
+}

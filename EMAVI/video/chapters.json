@@ -1,0 +1,312 @@
+[
+  {
+    "id": "inicio",
+    "title": "De la preparación a la evidencia",
+    "stage": "Orientación",
+    "source": "scene",
+    "text": "Bienvenido a esta demostración de MATB y ASTRA para EMAVI. Seguiremos el recorrido de una persona desde la preparación hasta el cierre de las pruebas y la revisión de resultados. Las pantallas son reales. Los registros son de demostración y las respuestas están automatizadas. La voz de esta guía se ha generado con inteligencia artificial.",
+    "points": [
+      "Preparar",
+      "Completar",
+      "Revisar"
+    ],
+    "question": "¿Qué presenta esta guía?",
+    "answers": [
+      "Un recorrido con datos de demostración",
+      "Resultados de participantes reales"
+    ],
+    "correct": 0,
+    "start": 0,
+    "end": 23.666666666666668,
+    "duration": 23.666666666666668
+  },
+  {
+    "id": "catalogo",
+    "title": "Elija la actividad",
+    "stage": "01 · Preparación",
+    "source": "overview",
+    "marker": "catalogo",
+    "text": "El catálogo reúne seis familias de actividades: OpenMATB, supervisión de aeronaves no tripuladas, vuelo en Liftoff, batería cognitiva, somnolencia y vigilancia, y registro con Polar H diez. Al seleccionar una actividad aparecen sus pasos, duración y equipo. Primero se decide entre practicar y participar en un estudio. La práctica se guarda por separado.",
+    "points": [
+      "Seis familias de actividades",
+      "Práctica o estudio",
+      "Requisitos visibles"
+    ],
+    "start": 23.666666666666668,
+    "end": 50.86666666666667,
+    "duration": 27.2
+  },
+  {
+    "id": "protocolo",
+    "title": "Siga la secuencia asignada",
+    "stage": "01 · Preparación",
+    "source": "overview",
+    "marker": "asignaciones",
+    "text": "En un estudio, el investigador define el protocolo y asigna las evaluaciones a un código de participante y una visita. La persona sigue las actividades pendientes en el orden indicado. No todos los protocolos incluyen las seis familias. Una repetición conserva su motivo y su intento anterior. Antes de empezar se revisan instrucciones, equipo y disponibilidad de la estación.",
+    "points": [
+      "Código y visita",
+      "Orden del protocolo",
+      "Repeticiones trazables"
+    ],
+    "question": "¿Se deben hacer siempre las seis familias?",
+    "answers": [
+      "Se realizan las asignadas por el protocolo",
+      "Sí, siempre todas"
+    ],
+    "correct": 0,
+    "start": 50.86666666666667,
+    "end": 77.56666666666666,
+    "duration": 26.7
+  },
+  {
+    "id": "kss",
+    "title": "Primero: somnolencia percibida",
+    "stage": "02 · KSS",
+    "source": "pvt",
+    "marker": "kss",
+    "text": "La escala de somnolencia de Karolinska se responde antes de la prueba de vigilancia. Lea las opciones y elija la que representa cómo se siente en este momento. También puede escuchar las instrucciones. Confirme la respuesta para pasar a la explicación de la prueba. La selección que ve aquí pertenece solamente a nuestra demostración automatizada.",
+    "points": [
+      "Leer o escuchar",
+      "Elegir una respuesta",
+      "Confirmar antes de PVT"
+    ],
+    "start": 77.56666666666666,
+    "end": 101.66666666666666,
+    "duration": 24.1
+  },
+  {
+    "id": "pvt",
+    "title": "Responda cuando aparece el contador",
+    "stage": "03 · Vigilancia",
+    "source": "pvt",
+    "marker": "prueba",
+    "text": "En la prueba de vigilancia psicomotora, espere a que aparezca el contador y pulse la barra espaciadora. Mantenga el navegador en primer plano y evite anticiparse. La práctica dura un minuto y el protocolo de estudio utiliza diez minutos. Este montaje resume la espera, pero conserva la secuencia real. Al terminar, espere la confirmación de guardado.",
+    "points": [
+      "Esperar la señal",
+      "Responder sin anticiparse",
+      "Esperar el guardado"
+    ],
+    "question": "¿Cuándo se pulsa la barra espaciadora?",
+    "answers": [
+      "Cuando aparece el contador",
+      "Antes de que aparezca"
+    ],
+    "correct": 0,
+    "start": 101.66666666666666,
+    "end": 126.73333333333332,
+    "duration": 25.066666666666666
+  },
+  {
+    "id": "pvt-fin",
+    "title": "Compruebe que terminó",
+    "stage": "03 · Resultado",
+    "source": "pvt",
+    "marker": "completadas",
+    "text": "La pantalla de cierre confirma que KSS y PVT se completaron. El resultado describe tiempos de reacción, lapsos, anticipaciones y posibles interrupciones. Un guardado de práctica no completa una evaluación asignada de estudio. Si ocurre un problema, se conserva la evidencia disponible y se registra la causa antes de decidir una repetición.",
+    "points": [
+      "Confirmación de guardado",
+      "Calidad e interrupciones",
+      "Práctica separada del estudio"
+    ],
+    "start": 126.73333333333332,
+    "end": 152.03333333333333,
+    "duration": 25.3
+  },
+  {
+    "id": "cognitiva",
+    "title": "Cuatro pruebas, paso a paso",
+    "stage": "04 · Batería cognitiva",
+    "source": "screen",
+    "marker": "prueba-1",
+    "text": "La batería cognitiva empieza con reacción simple: pulse al ver el círculo verde. Después viene reacción de elección: responda con la flecha que corresponde a la dirección mostrada. Cada tarea incluye sus instrucciones y una práctica previa. En este recorrido utilizamos el modo de familiarización abreviado de la aplicación; las respuestas mostradas no describen capacidad humana.",
+    "points": [
+      "Reacción simple",
+      "Elección izquierda o derecha",
+      "Instrucciones y práctica"
+    ],
+    "start": 152.03333333333333,
+    "end": 178,
+    "duration": 25.966666666666665
+  },
+  {
+    "id": "memoria",
+    "title": "Memoria y seguimiento",
+    "stage": "04 · Batería cognitiva",
+    "source": "screen",
+    "marker": "prueba-3",
+    "text": "En memoria de trabajo, responda si la letra actual coincide con la presentada dos posiciones atrás. En seguimiento, acerque el cursor al punto móvil hasta que termine el tiempo. Al completar las cuatro tareas, la aplicación guarda las respuestas y presenta medidas por tarea. Revise los avisos de calidad antes de interpretar cualquier valor.",
+    "points": [
+      "Memoria de trabajo: dos atrás",
+      "Seguimiento con el mouse",
+      "Resultados por tarea"
+    ],
+    "start": 178,
+    "end": 201.7,
+    "duration": 23.7
+  },
+  {
+    "id": "openmatb",
+    "title": "Coordine cuatro tareas simultáneas",
+    "stage": "05 · OpenMATB",
+    "source": "overview",
+    "marker": "openmatb",
+    "text": "OpenMATB combina seguimiento, vigilancia de sistemas, comunicaciones y gestión de recursos. La consola permite preparar el perfil y revisar su apariencia. La ejecución se realiza en la aplicación nativa con el equipo configurado. Aquí vemos su vista previa real: los bloques de práctica y carga se ejecutan después según el perfil. Esta vista previa no es una adquisición nativa grabada.",
+    "points": [
+      "Seguimiento y sistemas",
+      "Comunicaciones y recursos",
+      "Perfil y ejecución nativa"
+    ],
+    "start": 201.7,
+    "end": 229.63333333333333,
+    "duration": 27.933333333333334
+  },
+  {
+    "id": "suas",
+    "title": "Prepare la misión de supervisión",
+    "stage": "06 · sUAS",
+    "source": "mission",
+    "marker": "preparar",
+    "text": "En la misión de supervisión se revisan participante, visita, escenario y requisitos previos. El recorrido de estudio utiliza KSS y PVT antes de la misión, seguidos de práctica y bloques de carga baja, media y alta en el orden asignado. Para grabar esta secuencia utilizamos un escenario técnico sintético de duración reducida y un contexto de prueba aislado.",
+    "points": [
+      "Revisar requisitos",
+      "Práctica y tres bloques",
+      "Escenario técnico sintético"
+    ],
+    "start": 229.63333333333333,
+    "end": 255.2,
+    "duration": 25.566666666666666
+  },
+  {
+    "id": "operar",
+    "title": "Supervise, asigne y responda",
+    "stage": "06 · Misión en curso",
+    "source": "mission",
+    "marker": "LOW",
+    "text": "Seleccione una aeronave de la flota y asigne un sector. Siga su estado en el mapa, revise alertas y contactos y responda mediante los controles disponibles. Durante el bloque pueden aparecer preguntas de conciencia situacional. Cuando la pantalla queda oculta para una pregunta, responda a partir de lo que observó antes de la pausa. El sistema registra eventos y tiempos.",
+    "points": [
+      "Aeronave y sector",
+      "Estado, alertas y contactos",
+      "Preguntas durante el bloque"
+    ],
+    "start": 255.2,
+    "end": 281.6333333333333,
+    "duration": 26.433333333333334
+  },
+  {
+    "id": "carga",
+    "title": "Responda las escalas y cierre",
+    "stage": "07 · Finalización",
+    "source": "mission",
+    "marker": "HIGH",
+    "text": "Después de cada bloque se completan las dimensiones de carga y la escala de Bedford. Responda cada control: dejar una posición inicial sin confirmar no equivale a contestar. Tras completar todos los bloques, el cierre de la sesión es una acción explícita. Confirme la finalización y espere a que se preparen los resultados y la reconstrucción de la misión.",
+    "points": [
+      "Responder cada escala",
+      "Completar los bloques",
+      "Confirmar el cierre"
+    ],
+    "start": 281.6333333333333,
+    "end": 305.96666666666664,
+    "duration": 24.333333333333332
+  },
+  {
+    "id": "debrief",
+    "title": "Revise la misión completa",
+    "stage": "07 · Resultados",
+    "source": "mission",
+    "marker": "debrief",
+    "text": "El resumen de misión reúne desempeño y medidas del protocolo. La reconstrucción permite revisar la secuencia conservada. Un cierre técnico satisfactorio describe la integridad de ese recorrido; los valores de esta demostración siguen siendo sintéticos. Para el participante, el siguiente paso es volver a su secuencia y comprobar si quedan evaluaciones asignadas antes de retirarse.",
+    "points": [
+      "Resumen por bloque",
+      "Reconstrucción de eventos",
+      "Verificar actividades pendientes"
+    ],
+    "start": 305.96666666666664,
+    "end": 331.9333333333333,
+    "duration": 25.966666666666665
+  },
+  {
+    "id": "liftoff",
+    "title": "Vuelo en primera persona",
+    "stage": "08 · Módulo complementario",
+    "source": "overview",
+    "marker": "liftoff",
+    "text": "Liftoff integra una sesión de vuelo simulado con preparación, línea basal, vuelo y recuperación. Se necesita el simulador instalado, un controlador configurado y telemetría activa. La consola acompaña el procedimiento y conserva las medidas disponibles. Esta grabación muestra la preparación; no se conectó un simulador de vuelo para producir resultados nuevos.",
+    "points": [
+      "Preparación y línea basal",
+      "Vuelo y recuperación",
+      "Simulador y telemetría requeridos"
+    ],
+    "start": 331.9333333333333,
+    "end": 357.83333333333326,
+    "duration": 25.9
+  },
+  {
+    "id": "polar",
+    "title": "Registro fisiológico y calidad",
+    "stage": "08 · Módulo complementario",
+    "source": "overview",
+    "marker": "polar",
+    "text": "Con Polar H diez se coloca la banda, se conecta el sensor y se verifica la señal antes de registrar. Una ventana basal requiere al menos cinco minutos de señal útil para el análisis previsto. La aplicación conserva la calidad y explica las medidas no calculables. Aquí mostramos la preparación; no se adquirieron señales fisiológicas de una persona ni se conectó un sensor.",
+    "points": [
+      "Colocar y conectar",
+      "Verificar calidad",
+      "Guardar con procedencia"
+    ],
+    "start": 357.83333333333326,
+    "end": 383.3666666666666,
+    "duration": 25.533333333333335
+  },
+  {
+    "id": "investigador",
+    "title": "Del diseño al análisis",
+    "stage": "09 · Investigador",
+    "source": "overview",
+    "marker": "diseno",
+    "text": "El espacio del investigador permite diseñar escenarios, organizar participantes y visitas, revisar sesiones y configurar el estudio. El análisis debe respetar la versión del protocolo, los intentos seleccionados y los criterios de elegibilidad. Las familias de tareas conservan sus unidades y significados. Una pantalla con datos no convierte automáticamente una comparación en un resultado científico válido.",
+    "points": [
+      "Diseñar y organizar",
+      "Seleccionar intentos",
+      "Conservar unidades y criterios"
+    ],
+    "start": 383.3666666666666,
+    "end": 411.66666666666663,
+    "duration": 28.3
+  },
+  {
+    "id": "evidencia",
+    "title": "Del resultado al evento original",
+    "stage": "09 · Trazabilidad",
+    "source": "evidence",
+    "marker": "metricas",
+    "text": "El inspector enlaza una métrica con los eventos que la sustentan. Puede revisar el registro original, el tiempo y su procedencia, y exportar un paquete verificable. La demostración utiliza un conjunto sintético con once métricas recomputadas. La verificación de datos se distingue de la calificación física del equipo y de la validación del instrumento en personas.",
+    "points": [
+      "Métrica y eventos enlazados",
+      "Tiempos y procedencia",
+      "Exportación verificable"
+    ],
+    "start": 411.66666666666663,
+    "end": 436.8333333333333,
+    "duration": 25.166666666666668
+  },
+  {
+    "id": "cierre",
+    "title": "La sesión termina con evidencia guardada",
+    "stage": "Cierre del recorrido",
+    "source": "scene",
+    "text": "El recorrido termina cuando las evaluaciones asignadas están completas, las respuestas quedaron guardadas y se revisaron las incidencias. En la versión interactiva puede volver a cualquier capítulo, comprobar lo aprendido y explorar el esquema tridimensional de la estación. Preparar, seguir las instrucciones, completar y verificar: esa es la secuencia que conecta la experiencia del participante con la revisión del investigador.",
+    "points": [
+      "Actividades completas",
+      "Respuestas guardadas",
+      "Incidencias revisadas"
+    ],
+    "question": "¿Qué confirma el cierre del recorrido?",
+    "answers": [
+      "Guardado y revisión de las evaluaciones asignadas",
+      "Solamente cerrar la ventana"
+    ],
+    "correct": 0,
+    "start": 436.8333333333333,
+    "end": 465,
+    "duration": 28.166666666666668
+  }
+]

@@ -1,0 +1,439 @@
+1
+00:00:00,449 --> 00:00:05,113
+Bienvenido a esta demostración de MATB y ASTRA para EMAVI. Seguiremos
+
+2
+00:00:05,148 --> 00:00:08,292
+el recorrido de una persona desde la preparación hasta el cierre
+
+3
+00:00:08,327 --> 00:00:12,427
+de las pruebas y la revisión de resultados. Las pantallas son
+
+4
+00:00:12,462 --> 00:00:16,841
+reales. Los registros son de demostración y las respuestas están
+
+5
+00:00:16,876 --> 00:00:21,370
+automatizadas. La voz de esta guía se ha generado con inteligencia
+
+6
+00:00:21,405 --> 00:00:23,217
+artificial
+
+7
+00:00:24,116 --> 00:00:29,230
+El catálogo reúne seis familias de actividades: OpenMATB, supervisión
+
+8
+00:00:29,265 --> 00:00:33,799
+de aeronaves no tripuladas, vuelo en Liftoff, batería cognitiva
+
+9
+00:00:33,834 --> 00:00:39,108
+somnolencia y vigilancia, y registro con Polar H diez. Al seleccionar
+
+10
+00:00:39,143 --> 00:00:43,792
+una actividad aparecen sus pasos, duración y equipo. Primero se
+
+11
+00:00:43,827 --> 00:00:47,386
+decide entre practicar y participar en un estudio. La práctica
+
+12
+00:00:47,421 --> 00:00:50,417
+La práctica se guarda por separado
+
+13
+00:00:51,316 --> 00:00:55,070
+En un estudio, el investigador define el protocolo y asigna las
+
+14
+00:00:55,105 --> 00:00:59,709
+evaluaciones a un código de participante y una visita. La persona
+
+15
+00:00:59,744 --> 00:01:03,913
+sigue las actividades pendientes en el orden indicado. No todos
+
+16
+00:01:03,948 --> 00:01:08,532
+los protocolos incluyen las seis familias. Una repetición conserva
+
+17
+00:01:08,567 --> 00:01:13,836
+su motivo y su intento anterior. Antes de empezar se revisan instrucciones
+
+18
+00:01:13,871 --> 00:01:17,117
+equipo y disponibilidad de la estación
+
+19
+00:01:18,016 --> 00:01:21,340
+La escala de somnolencia de Karolinska se responde antes de la
+
+20
+00:01:21,375 --> 00:01:25,729
+prueba de vigilancia. Lea las opciones y elija la que representa
+
+21
+00:01:25,764 --> 00:01:31,423
+cómo se siente en este momento. También puede escuchar las instrucciones
+
+22
+00:01:31,458 --> 00:01:35,632
+Confirme la respuesta para pasar a la explicación de la prueba
+
+23
+00:01:35,667 --> 00:01:39,216
+La selección que ve aquí pertenece solamente a nuestra demostración
+
+24
+00:01:39,251 --> 00:01:41,217
+automatizada
+
+25
+00:01:42,116 --> 00:01:45,540
+En la prueba de vigilancia psicomotora, espere a que aparezca
+
+26
+00:01:45,575 --> 00:01:49,674
+el contador y pulse la barra espaciadora. Mantenga el navegador
+
+27
+00:01:49,709 --> 00:01:54,118
+en primer plano y evite anticiparse. La práctica dura un minuto
+
+28
+00:01:54,153 --> 00:01:58,822
+y el protocolo de estudio utiliza diez minutos. Este montaje resume
+
+29
+00:01:58,857 --> 00:02:03,741
+la espera, pero conserva la secuencia real. Al terminar, espere
+
+30
+00:02:03,776 --> 00:02:06,283
+la confirmación de guardado
+
+31
+00:02:07,183 --> 00:02:12,282
+La pantalla de cierre confirma que KSS y PVT se completaron. El
+
+32
+00:02:12,317 --> 00:02:16,621
+resultado describe tiempos de reacción, lapsos, anticipaciones
+
+33
+00:02:16,656 --> 00:02:21,015
+y posibles interrupciones. Un guardado de práctica no completa
+
+34
+00:02:21,050 --> 00:02:25,559
+una evaluación asignada de estudio. Si ocurre un problema, se
+
+35
+00:02:25,594 --> 00:02:28,998
+conserva la evidencia disponible y se registra la causa antes
+
+36
+00:02:29,033 --> 00:02:31,583
+de decidir una repetición
+
+37
+00:02:32,483 --> 00:02:36,282
+La batería cognitiva empieza con reacción simple: pulse al ver
+
+38
+00:02:36,317 --> 00:02:40,806
+el círculo verde. Después viene reacción de elección: responda
+
+39
+00:02:40,841 --> 00:02:44,970
+con la flecha que corresponde a la dirección mostrada. Cada tarea
+
+40
+00:02:45,005 --> 00:02:49,484
+incluye sus instrucciones y una práctica previa. En este recorrido
+
+41
+00:02:49,519 --> 00:02:53,368
+utilizamos el modo de familiarización abreviado de la aplicación
+
+42
+00:02:53,403 --> 00:02:57,550
+las respuestas mostradas no describen capacidad humana
+
+43
+00:02:58,449 --> 00:03:02,154
+En memoria de trabajo, responda si la letra actual coincide con
+
+44
+00:03:02,189 --> 00:03:06,838
+la presentada dos posiciones atrás. En seguimiento, acerque el
+
+45
+00:03:06,873 --> 00:03:10,987
+cursor al punto móvil hasta que termine el tiempo. Al completar
+
+46
+00:03:11,022 --> 00:03:14,851
+las cuatro tareas, la aplicación guarda las respuestas y presenta
+
+47
+00:03:14,886 --> 00:03:19,315
+medidas por tarea. Revise los avisos de calidad antes de interpretar
+
+48
+00:03:19,350 --> 00:03:21,250
+cualquier valor
+
+49
+00:03:22,149 --> 00:03:27,133
+OpenMATB combina seguimiento, vigilancia de sistemas, comunicaciones
+
+50
+00:03:27,168 --> 00:03:31,432
+y gestión de recursos. La consola permite preparar el perfil y
+
+51
+00:03:31,467 --> 00:03:35,801
+revisar su apariencia. La ejecución se realiza en la aplicación
+
+52
+00:03:35,836 --> 00:03:40,501
+nativa con el equipo configurado. Aquí vemos su vista previa real
+
+53
+00:03:40,536 --> 00:03:45,099
+los bloques de práctica y carga se ejecutan después según el perfil
+
+54
+00:03:45,134 --> 00:03:49,183
+Esta vista previa no es una adquisición nativa grabada
+
+55
+00:03:50,083 --> 00:03:54,697
+En la misión de supervisión se revisan participante, visita, escenario
+
+56
+00:03:54,732 --> 00:04:00,006
+y requisitos previos. El recorrido de estudio utiliza KSS y PVT
+
+57
+00:04:00,041 --> 00:04:04,085
+antes de la misión, seguidos de práctica y bloques de carga baja
+
+58
+00:04:04,120 --> 00:04:08,219
+media y alta en el orden asignado. Para grabar esta secuencia
+
+59
+00:04:08,254 --> 00:04:11,838
+utilizamos un escenario técnico sintético de duración reducida
+
+60
+00:04:11,873 --> 00:04:14,750
+y un contexto de prueba aislado
+
+61
+00:04:15,649 --> 00:04:20,144
+Seleccione una aeronave de la flota y asigne un sector. Siga su
+
+62
+00:04:20,179 --> 00:04:24,218
+estado en el mapa, revise alertas y contactos y responda mediante
+
+63
+00:04:24,253 --> 00:04:28,827
+los controles disponibles. Durante el bloque pueden aparecer preguntas
+
+64
+00:04:28,862 --> 00:04:33,011
+de conciencia situacional. Cuando la pantalla queda oculta para
+
+65
+00:04:33,046 --> 00:04:36,470
+una pregunta, responda a partir de lo que observó antes de la
+
+66
+00:04:36,505 --> 00:04:41,183
+pausa. El sistema registra eventos y tiempos
+
+67
+00:04:42,083 --> 00:04:45,297
+Después de cada bloque se completan las dimensiones de carga y
+
+68
+00:04:45,332 --> 00:04:50,101
+la escala de Bedford. Responda cada control: dejar una posición
+
+69
+00:04:50,136 --> 00:04:54,355
+inicial sin confirmar no equivale a contestar. Tras completar
+
+70
+00:04:54,390 --> 00:04:59,124
+todos los bloques, el cierre de la sesión es una acción explícita
+
+71
+00:04:59,159 --> 00:05:02,688
+Confirme la finalización y espere a que se preparen los resultados
+
+72
+00:05:02,723 --> 00:05:05,517
+y la reconstrucción de la misión
+
+73
+00:05:06,416 --> 00:05:10,790
+El resumen de misión reúne desempeño y medidas del protocolo. La
+
+74
+00:05:10,825 --> 00:05:15,209
+reconstrucción permite revisar la secuencia conservada. Un cierre
+
+75
+00:05:15,244 --> 00:05:18,933
+técnico satisfactorio describe la integridad de ese recorrido
+
+76
+00:05:18,968 --> 00:05:23,252
+los valores de esta demostración siguen siendo sintéticos. Para
+
+77
+00:05:23,287 --> 00:05:26,926
+el participante, el siguiente paso es volver a su secuencia y
+
+78
+00:05:26,961 --> 00:05:31,483
+comprobar si quedan evaluaciones asignadas antes de retirarse
+
+79
+00:05:32,383 --> 00:05:36,347
+Liftoff integra una sesión de vuelo simulado con preparación, línea
+
+80
+00:05:36,382 --> 00:05:41,556
+basal, vuelo y recuperación. Se necesita el simulador instalado
+
+81
+00:05:41,591 --> 00:05:46,275
+un controlador configurado y telemetría activa. La consola acompaña
+
+82
+00:05:46,310 --> 00:05:50,869
+el procedimiento y conserva las medidas disponibles. Esta grabación
+
+83
+00:05:50,904 --> 00:05:54,558
+muestra la preparación; no se conectó un simulador de vuelo para
+
+84
+00:05:54,593 --> 00:05:57,383
+producir resultados nuevos
+
+85
+00:05:58,283 --> 00:06:01,952
+Con Polar H diez se coloca la banda, se conecta el sensor y se
+
+86
+00:06:01,987 --> 00:06:06,276
+verifica la señal antes de registrar. Una ventana basal requiere
+
+87
+00:06:06,311 --> 00:06:10,490
+al menos cinco minutos de señal útil para el análisis previsto
+
+88
+00:06:10,525 --> 00:06:15,434
+La aplicación conserva la calidad y explica las medidas no calculables
+
+89
+00:06:15,469 --> 00:06:19,508
+Aquí mostramos la preparación; no se adquirieron señales fisiológicas
+
+90
+00:06:19,543 --> 00:06:22,917
+de una persona ni se conectó un sensor
+
+91
+00:06:23,816 --> 00:06:27,705
+El espacio del investigador permite diseñar escenarios, organizar
+
+92
+00:06:27,740 --> 00:06:32,844
+participantes y visitas, revisar sesiones y configurar el estudio
+
+93
+00:06:32,879 --> 00:06:36,618
+El análisis debe respetar la versión del protocolo, los intentos
+
+94
+00:06:36,653 --> 00:06:40,742
+seleccionados y los criterios de elegibilidad. Las familias de
+
+95
+00:06:40,777 --> 00:06:45,286
+tareas conservan sus unidades y significados. Una pantalla con
+
+96
+00:06:45,321 --> 00:06:48,995
+datos no convierte automáticamente una comparación en un resultado
+
+97
+00:06:49,030 --> 00:06:51,217
+científico válido
+
+98
+00:06:52,116 --> 00:06:56,435
+El inspector enlaza una métrica con los eventos que la sustentan
+
+99
+00:06:56,470 --> 00:07:00,479
+Puede revisar el registro original, el tiempo y su procedencia
+
+100
+00:07:00,514 --> 00:07:04,809
+y exportar un paquete verificable. La demostración utiliza un
+
+101
+00:07:04,844 --> 00:07:09,603
+conjunto sintético con once métricas recomputadas. La verificación
+
+102
+00:07:09,638 --> 00:07:12,952
+de datos se distingue de la calificación física del equipo y de
+
+103
+00:07:12,987 --> 00:07:16,383
+la validación del instrumento en personas
+
+104
+00:07:17,283 --> 00:07:21,527
+El recorrido termina cuando las evaluaciones asignadas están completas
+
+105
+00:07:21,562 --> 00:07:25,946
+las respuestas quedaron guardadas y se revisaron las incidencias
+
+106
+00:07:25,981 --> 00:07:29,850
+En la versión interactiva puede volver a cualquier capítulo, comprobar
+
+107
+00:07:29,885 --> 00:07:34,164
+lo aprendido y explorar el esquema tridimensional de la estación
+
+108
+00:07:34,199 --> 00:07:38,613
+Preparar, seguir las instrucciones, completar y verificar: esa
+
+109
+00:07:38,648 --> 00:07:41,957
+es la secuencia que conecta la experiencia del participante con
+
+110
+00:07:41,992 --> 00:07:44,550
+la revisión del investigador

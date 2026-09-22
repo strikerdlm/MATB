@@ -1,0 +1,12 @@
+{
+  "cues": 110,
+  "nonOverlapping": true,
+  "lastEnd": 464.55,
+  "chapterEnd": 465,
+  "clockCheck": {
+    "test22kLastSeconds": 29.016125,
+    "test16kLastSeconds": 21.06,
+    "scale": 0.7256235827664399,
+    "normalized22kLastSeconds": 21.054784580498865
+  }
+}

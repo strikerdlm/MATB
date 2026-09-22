@@ -1,0 +1,31 @@
+[
+  {
+    "name": "preparar",
+    "seconds": 1.697,
+    "url": "http://127.0.0.1:3118/pvt?purpose=practice#kss"
+  },
+  {
+    "name": "kss",
+    "seconds": 6.025,
+    "url": "http://127.0.0.1:3118/pvt?purpose=practice#kss"
+  },
+  {
+    "name": "instrucciones",
+    "seconds": 10.461,
+    "url": "http://127.0.0.1:3118/pvt?purpose=practice#pvt"
+  },
+  {
+    "name": "prueba",
+    "seconds": 12.133,
+    "url": "http://127.0.0.1:3118/pvt?purpose=practice#pvt"
+  },
+  {
+    "name": "completadas",
+    "seconds": 72.251,
+    "url": "http://127.0.0.1:3118/pvt?purpose=practice#pvt"
+  },
+  {
+    "name": "end",
+    "seconds": 78.388
+  }
+]

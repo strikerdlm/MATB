@@ -1,0 +1,56 @@
+[
+  {
+    "name": "preparar",
+    "seconds": 5.922,
+    "url": "http://127.0.0.1:3118/mission/setup?purpose=study&attempt=79285aca-ddb4-4d06-acea-5745e79d8f42"
+  },
+  {
+    "name": "PRACTICE",
+    "seconds": 12.774,
+    "url": "http://127.0.0.1:3118/mission?session=sim-20260922T013830-a9b6cb86"
+  },
+  {
+    "name": "PRACTICE-escalas",
+    "seconds": 29.958,
+    "url": "http://127.0.0.1:3118/mission?session=sim-20260922T013830-a9b6cb86"
+  },
+  {
+    "name": "LOW",
+    "seconds": 33.162,
+    "url": "http://127.0.0.1:3118/mission?session=sim-20260922T013830-a9b6cb86"
+  },
+  {
+    "name": "LOW-escalas",
+    "seconds": 49.657,
+    "url": "http://127.0.0.1:3118/mission?session=sim-20260922T013830-a9b6cb86"
+  },
+  {
+    "name": "MEDIUM",
+    "seconds": 52.142,
+    "url": "http://127.0.0.1:3118/mission?session=sim-20260922T013830-a9b6cb86"
+  },
+  {
+    "name": "MEDIUM-escalas",
+    "seconds": 72.539,
+    "url": "http://127.0.0.1:3118/mission?session=sim-20260922T013830-a9b6cb86"
+  },
+  {
+    "name": "HIGH",
+    "seconds": 75.487,
+    "url": "http://127.0.0.1:3118/mission?session=sim-20260922T013830-a9b6cb86"
+  },
+  {
+    "name": "HIGH-escalas",
+    "seconds": 93.924,
+    "url": "http://127.0.0.1:3118/mission?session=sim-20260922T013830-a9b6cb86"
+  },
+  {
+    "name": "debrief",
+    "seconds": 102.064,
+    "url": "http://127.0.0.1:3118/mission/debrief?session=sim-20260922T013830-a9b6cb86"
+  },
+  {
+    "name": "end",
+    "seconds": 111.783
+  }
+]

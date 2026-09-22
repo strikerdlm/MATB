@@ -1,0 +1,16 @@
+[
+  {
+    "name": "metricas",
+    "seconds": 2.186,
+    "url": "http://127.0.0.1:3118/upload"
+  },
+  {
+    "name": "evento",
+    "seconds": 9.66,
+    "url": "http://127.0.0.1:3118/upload"
+  },
+  {
+    "name": "end",
+    "seconds": 14.233
+  }
+]

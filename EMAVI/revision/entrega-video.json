@@ -1,0 +1,97 @@
+{
+  "created_utc": "2026-09-22T02:17:06.359202+00:00",
+  "source_commit": "24d37b52da7196e5c69f9a8cfc9481c04fd1221d",
+  "classification": "Público Clasificado",
+  "duration_seconds": 465.0,
+  "chapters": 18,
+  "subtitle_cues": 110,
+  "full_audio_video_decode": "PASS",
+  "browser_checks": "PASS",
+  "fullscreen": true,
+  "external_browser_requests": 0,
+  "visual_review": "18 chapter storyboard inspected; matching app screens and documentary close-ups confirmed",
+  "narration": "Windows Speech / Microsoft Sabina Desktop / es-MX / local",
+  "presentation_policy_approved": false,
+  "files": [
+    {
+      "path": "entregables/EMAVI_recorrido_es.mp4",
+      "bytes": 24677233,
+      "sha256": "7156f08f448302a17c8250cdba677249834e8b803707606a592ca863224b93a0"
+    },
+    {
+      "path": "entregables/Demostracion_interactiva.html",
+      "bytes": 3723,
+      "sha256": "c470b13f894987a0bff66121a913cf032ae34acb279f3284670028c4a8dda916"
+    },
+    {
+      "path": "video/player.js",
+      "bytes": 4106,
+      "sha256": "059e714376aee0087167cc84f1cddab98d40e13b9a84f02929bc8639b1daea50"
+    },
+    {
+      "path": "video/player.css",
+      "bytes": 3471,
+      "sha256": "fff41b59ebce2e0214c993fac59645e68e63856276079f4a9aae61ea1c46b645"
+    },
+    {
+      "path": "video/scene.ts",
+      "bytes": 7890,
+      "sha256": "0643119b91a5a90eb68c1ffc33db5f53cea5af67f334ff4cff907bdfb120f806"
+    },
+    {
+      "path": "video/scene.js",
+      "bytes": 9121,
+      "sha256": "1a0684cde390e7ccdc7d08fd596cbf89bb592a165fd5b52088969969ef590e6d"
+    },
+    {
+      "path": "video/guion.json",
+      "bytes": 11258,
+      "sha256": "566cba9896678dd2a7b38cf455478f6155f7ba3e65154d188f5b604a3682f8cd"
+    },
+    {
+      "path": "video/chapters.json",
+      "bytes": 14265,
+      "sha256": "2750378cf24d11ebc0278bf917515d6d8374038bcb82c5e67db0dfc86734c239"
+    },
+    {
+      "path": "video/subtitulos.vtt",
+      "bytes": 10145,
+      "sha256": "5f27075ed58af69eaa7409f072be8b8a49295fee7f21f4385ad30aa45798a096"
+    },
+    {
+      "path": "video/subtitulos.srt",
+      "bytes": 10469,
+      "sha256": "5e39af8b859764ec10823444e7220ffcced9cb0dda47524222a5c7f73af03feb"
+    },
+    {
+      "path": "video/capturas/overview.webm",
+      "bytes": 10388428,
+      "sha256": "eec28446da80bbf097eadc9afc1da9c4b0574b184352384a942e549a3721c6f2"
+    },
+    {
+      "path": "video/capturas/pvt.webm",
+      "bytes": 4542410,
+      "sha256": "c641aa2acd64a01640bb3dc734589e4add5d0ed713fe171eb7d562aaf56d4730"
+    },
+    {
+      "path": "video/capturas/screen.webm",
+      "bytes": 4191745,
+      "sha256": "2894c2058cb11d1dadb48aaa66e9658e9b69a6c0a2a6d08b2d7afa55c6be468b"
+    },
+    {
+      "path": "video/capturas/mission.webm",
+      "bytes": 11154061,
+      "sha256": "3ce9e9b0dde708a59af724057b8f4cbbf337a768e070149a63cf16cec793a601"
+    },
+    {
+      "path": "video/capturas/evidence.webm",
+      "bytes": 1210803,
+      "sha256": "f6636cc7230915fccc8a4541e2f415aa95cf46e374120e6cc4798c6bf4281acb"
+    },
+    {
+      "path": "video/capturas/scene.webm",
+      "bytes": 4001003,
+      "sha256": "972b376a1842790600395aabb5f531eda4f8f4c92bfe1743a562ebdab2286629"
+    }
+  ]
+}

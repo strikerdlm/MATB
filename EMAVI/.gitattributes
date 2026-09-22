@@ -1,0 +1,4 @@
+# Preserve the exact bytes recorded in the delivery and provenance manifests.
+* -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+# Keep the bundled upstream distribution unchanged.
+video/vendor/* -whitespace
