@@ -6,8 +6,8 @@
     "position": 0,
     "length": 79,
     "start_ms": 0.0,
-    "end_ms": 5065.791666666667,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "end_ms": 6150.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "cognitiva",
@@ -15,9 +15,9 @@
     "text": "Después viene reacción de elección: responda con la flecha que corresponde a la dirección mostrada.",
     "position": 80,
     "length": 99,
-    "start_ms": 5245.791666666666,
-    "end_ms": 11956.333333333334,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 6330.0,
+    "end_ms": 13630.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "cognitiva",
@@ -25,9 +25,9 @@
     "text": "Cada tarea incluye sus instrucciones y una práctica previa.",
     "position": 180,
     "length": 59,
-    "start_ms": 12136.333333333332,
-    "end_ms": 16017.916666666668,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 13810.0,
+    "end_ms": 17960.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "cognitiva",
@@ -35,8 +35,8 @@
     "text": "En este recorrido utilizamos el modo de familiarización abreviado de la aplicación; las respuestas mostradas no describen capacidad humana.",
     "position": 240,
     "length": 139,
-    "start_ms": 16197.916666666668,
-    "end_ms": 25513.708333333332,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 18140.0,
+    "end_ms": 27590.0,
+    "timing_source": "OpenAI sentence audio duration"
   }
 ]

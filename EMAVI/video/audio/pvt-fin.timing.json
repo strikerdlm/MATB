@@ -6,8 +6,8 @@
     "position": 0,
     "length": 60,
     "start_ms": 0.0,
-    "end_ms": 3960.541666666667,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "end_ms": 5150.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "pvt-fin",
@@ -15,9 +15,9 @@
     "text": "El resultado describe tiempos de reacción, lapsos, anticipaciones y posibles interrupciones.",
     "position": 61,
     "length": 92,
-    "start_ms": 4140.541666666667,
-    "end_ms": 10087.916666666666,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 5330.0,
+    "end_ms": 13180.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "pvt-fin",
@@ -25,9 +25,9 @@
     "text": "Un guardado de práctica no completa una evaluación asignada de estudio.",
     "position": 154,
     "length": 71,
-    "start_ms": 10267.916666666666,
-    "end_ms": 14715.291666666668,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 13360.0,
+    "end_ms": 18710.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "pvt-fin",
@@ -35,8 +35,8 @@
     "text": "Si ocurre un problema, se conserva la evidencia disponible y se registra la causa antes de decidir una repetición.",
     "position": 226,
     "length": 114,
-    "start_ms": 14895.291666666668,
-    "end_ms": 22118.958333333332,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 18890.0,
+    "end_ms": 26890.0,
+    "timing_source": "OpenAI sentence audio duration"
   }
 ]

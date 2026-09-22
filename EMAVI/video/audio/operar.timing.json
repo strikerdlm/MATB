@@ -6,8 +6,8 @@
     "position": 0,
     "length": 55,
     "start_ms": 0.0,
-    "end_ms": 3578.9583333333335,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "end_ms": 3800.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "operar",
@@ -15,9 +15,9 @@
     "text": "Siga su estado en el mapa, revise alertas y contactos y responda mediante los controles disponibles.",
     "position": 56,
     "length": 100,
-    "start_ms": 3758.958333333333,
-    "end_ms": 10364.208333333334,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 3980.0,
+    "end_ms": 11230.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "operar",
@@ -25,9 +25,9 @@
     "text": "Durante el bloque pueden aparecer preguntas de conciencia situacional.",
     "position": 157,
     "length": 70,
-    "start_ms": 10544.208333333334,
-    "end_ms": 15162.625,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 11410.0,
+    "end_ms": 16309.999999999998,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "operar",
@@ -35,9 +35,9 @@
     "text": "Cuando la pantalla queda oculta para una pregunta, responda a partir de lo que observó antes de la pausa.",
     "position": 228,
     "length": 105,
-    "start_ms": 15342.625,
-    "end_ms": 22197.875,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 16490.0,
+    "end_ms": 24640.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "operar",
@@ -45,8 +45,8 @@
     "text": "El sistema registra eventos y tiempos.",
     "position": 334,
     "length": 38,
-    "start_ms": 22377.875,
-    "end_ms": 24851.541666666664,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 24820.0,
+    "end_ms": 28470.0,
+    "timing_source": "OpenAI sentence audio duration"
   }
 ]

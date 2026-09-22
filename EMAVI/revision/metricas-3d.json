@@ -1,14 +1,15 @@
 {
   "three": "186",
-  "drawCalls": 104,
-  "triangles": 4116,
+  "assemblies": 17,
+  "rotors": 4,
+  "drawCalls": 97,
+  "triangles": 129996,
   "frames": 1000,
-  "medianMs": 17.799999999999955,
-  "p95Ms": 18.69999999999891,
+  "medianMs": 16.799999999999272,
+  "p95Ms": 33.5,
   "dpr": 1,
   "viewport": [
     1344,
     1080
-  ],
-  "renderer": "WebKit WebGL"
+  ]
 }

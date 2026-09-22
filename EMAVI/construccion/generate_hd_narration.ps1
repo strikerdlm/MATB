@@ -13,14 +13,20 @@ try {
   $env:OPENAI_API_KEY = (($keyLine -split '=', 2)[1]).Trim().Trim('"').Trim("'")
   python "$PSScriptRoot/assemble_hd_narration.py" --prepare
   if ($LASTEXITCODE -ne 0) { throw 'Could not prepare narration.' }
-  $arguments = @($SpeechCli, 'speak-batch', '--input', "$PSScriptRoot/runtime/tts-hd/jobs.jsonl", '--out-dir', "$PSScriptRoot/runtime/tts-hd/sentences", '--model', 'tts-1-hd', '--voice', 'onyx', '--speed', '0.95', '--response-format', 'wav', '--rpm', '40', '--attempts', '1')
+  $settings = Get-Content -LiteralPath "$repo/EMAVI/video/narracion.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+  $instructionsFile = "$PSScriptRoot/runtime/tts-hd/instructions.txt"
+  [IO.File]::WriteAllText($instructionsFile, $settings.instructions, [Text.UTF8Encoding]::new($false))
+  $arguments = @($SpeechCli, 'speak-batch', '--input', "$PSScriptRoot/runtime/tts-hd/jobs.jsonl", '--out-dir', "$PSScriptRoot/runtime/tts-hd/sentences", '--model', $settings.model, '--voice', $settings.voice, '--speed', [string]$settings.speed, '--instructions-file', $instructionsFile, '--response-format', 'wav', '--rpm', '40', '--attempts', '1')
   if ($Force) { $arguments += '--force' }
   & python @arguments
-  if ($LASTEXITCODE -ne 0) { throw 'OpenAI TTS HD generation failed.' }
+  if ($LASTEXITCODE -ne 0) { throw 'OpenAI narration generation failed.' }
   python "$PSScriptRoot/assemble_hd_narration.py"
   if ($LASTEXITCODE -ne 0) { throw 'Audio assembly failed.' }
 } finally {
   $env:OPENAI_API_KEY = $previousKey
   $batchFile = Join-Path $PSScriptRoot 'runtime/tts-hd/jobs.jsonl'
-  if (Test-Path -LiteralPath $batchFile) { Remove-Item -LiteralPath $batchFile }
+  if (Test-Path -LiteralPath $batchFile) {
+    try { Remove-Item -LiteralPath $batchFile -ErrorAction Stop }
+    catch { Write-Warning 'Narration batch remains in ignored runtime directory; no credentials are stored in it.' }
+  }
 }

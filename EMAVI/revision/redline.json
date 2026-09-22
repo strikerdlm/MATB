@@ -1,0 +1,14 @@
+{
+  "finite": true,
+  "reassemblyExact": true,
+  "deterministic": true,
+  "boundsMetres": [
+    0.2992622362699192,
+    0.13780000363476574,
+    0.32184834331796797
+  ],
+  "assemblies": 17,
+  "rotors": 4,
+  "consoleErrors": [],
+  "browser": "153.0.8010.53"
+}

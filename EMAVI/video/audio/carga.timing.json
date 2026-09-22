@@ -6,8 +6,8 @@
     "position": 0,
     "length": 84,
     "start_ms": 0.0,
-    "end_ms": 640.0,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "end_ms": 5800.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "carga",
@@ -15,9 +15,9 @@
     "text": "Responda cada control: dejar una posición inicial sin confirmar no equivale a contestar.",
     "position": 85,
     "length": 88,
-    "start_ms": 820.0,
-    "end_ms": 6464.75,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 5980.0,
+    "end_ms": 12380.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "carga",
@@ -25,9 +25,9 @@
     "text": "Tras completar todos los bloques, el cierre de la sesión es una acción explícita.",
     "position": 174,
     "length": 81,
-    "start_ms": 6644.75,
-    "end_ms": 11736.875,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 12560.0,
+    "end_ms": 19110.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "carga",
@@ -35,8 +35,8 @@
     "text": "Confirme la finalización y espere a que se preparen los resultados y la reconstrucción de la misión.",
     "position": 256,
     "length": 100,
-    "start_ms": 11916.875,
-    "end_ms": 18166.875,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 19290.0,
+    "end_ms": 25440.0,
+    "timing_source": "OpenAI sentence audio duration"
   }
 ]

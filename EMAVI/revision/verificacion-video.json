@@ -1,7 +1,7 @@
 {
   "chapterCount": 18,
   "video": {
-    "duration": 443.567,
+    "duration": 518.867,
     "width": 1920,
     "height": 1080,
     "tracks": 1
@@ -12,11 +12,11 @@
     "parts": 6,
     "metrics": {
       "three": "186",
-      "drawCalls": 104,
-      "triangles": 4116,
-      "frames": 13,
-      "medianMs": 16.700000000000045,
-      "p95Ms": 117.04399999999998,
+      "drawCalls": 186,
+      "triangles": 131572,
+      "frames": 29,
+      "medianMs": 16.699999999999818,
+      "p95Ms": 16.90000000000009,
       "dpr": 1,
       "viewport": [
         699,
@@ -26,11 +26,17 @@
     }
   },
   "chapterNavigation": "Primero: somnolencia percibida",
-  "repeatTime": 65.786061,
+  "repeatTime": 87.116666,
   "checkpoint": true,
   "answerFeedback": "Correcto. Se realizan las asignadas por el protocolo.",
   "resumed": true,
   "selection": "Sensor: requiere conexión física y revisión de calidad. No se adquirieron señales en este video.",
+  "droneSelection": "Dron REDLINE: modelo del repositorio con 17 conjuntos y cuatro hélices. Dimensiones ilustrativas; sin conexión a aeronaves reales.",
+  "drone": {
+    "assemblies": 17,
+    "rotors": 4
+  },
+  "durationMatchesChapters": true,
   "presentationFullscreen": true,
   "mobileNoOverflow": true,
   "reducedMotion": "Iniciar movimiento",

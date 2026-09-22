@@ -6,8 +6,8 @@
     "position": 0,
     "length": 132,
     "start_ms": 0.0,
-    "end_ms": 8276.333333333334,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "end_ms": 9550.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "investigador",
@@ -15,9 +15,9 @@
     "text": "El análisis debe respetar la versión del protocolo, los intentos seleccionados y los criterios de elegibilidad.",
     "position": 133,
     "length": 111,
-    "start_ms": 8456.333333333334,
-    "end_ms": 15890.541666666668,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 9730.0,
+    "end_ms": 17430.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "investigador",
@@ -25,9 +25,9 @@
     "text": "Las familias de tareas conservan sus unidades y significados.",
     "position": 245,
     "length": 61,
-    "start_ms": 16070.541666666668,
-    "end_ms": 20110.0,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 17610.0,
+    "end_ms": 21860.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "investigador",
@@ -35,8 +35,8 @@
     "text": "Una pantalla con datos no convierte automáticamente una comparación en un resultado científico válido.",
     "position": 307,
     "length": 102,
-    "start_ms": 20290.0,
-    "end_ms": 27145.25,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 22040.0,
+    "end_ms": 29590.0,
+    "timing_source": "OpenAI sentence audio duration"
   }
 ]

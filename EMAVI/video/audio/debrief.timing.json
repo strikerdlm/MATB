@@ -6,8 +6,8 @@
     "position": 0,
     "length": 61,
     "start_ms": 0.0,
-    "end_ms": 4078.9583333333335,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "end_ms": 6450.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "debrief",
@@ -15,9 +15,9 @@
     "text": "La reconstrucción permite revisar la secuencia conservada.",
     "position": 62,
     "length": 58,
-    "start_ms": 4258.958333333333,
-    "end_ms": 7851.083333333333,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 6630.0,
+    "end_ms": 10880.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "debrief",
@@ -25,9 +25,9 @@
     "text": "Un cierre técnico satisfactorio describe la integridad de ese recorrido; los valores de esta demostración siguen siendo sintéticos.",
     "position": 121,
     "length": 131,
-    "start_ms": 8031.083333333333,
-    "end_ms": 16623.208333333336,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 11060.0,
+    "end_ms": 20310.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "debrief",
@@ -35,8 +35,8 @@
     "text": "Para el participante, el siguiente paso es volver a su secuencia y comprobar si quedan evaluaciones asignadas antes de retirarse.",
     "position": 253,
     "length": 129,
-    "start_ms": 16803.208333333336,
-    "end_ms": 25250.583333333336,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 20490.0,
+    "end_ms": 30390.0,
+    "timing_source": "OpenAI sentence audio duration"
   }
 ]

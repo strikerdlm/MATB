@@ -6,8 +6,8 @@
     "position": 0,
     "length": 137,
     "start_ms": 0.0,
-    "end_ms": 9118.416666666666,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "end_ms": 10200.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "cierre",
@@ -15,9 +15,9 @@
     "text": "En la versión interactiva puede volver a cualquier capítulo, comprobar lo aprendido y explorar el esquema tridimensional de la estación.",
     "position": 138,
     "length": 136,
-    "start_ms": 9298.416666666666,
-    "end_ms": 18074.75,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 10380.0,
+    "end_ms": 19380.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "cierre",
@@ -25,8 +25,8 @@
     "text": "Preparar, seguir las instrucciones, completar y verificar: esa es la secuencia que conecta la experiencia del participante con la revisión del investigador.",
     "position": 275,
     "length": 156,
-    "start_ms": 18254.75,
-    "end_ms": 28386.333333333332,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 19560.0,
+    "end_ms": 30360.0,
+    "timing_source": "OpenAI sentence audio duration"
   }
 ]

@@ -1,6 +1,6 @@
 # Demostración EMAVI — alcance y procedencia
 
-**Público Clasificado. Reproducción local; distribución en el repositorio privado MATB.** Narración generada con **OpenAI `tts-1-hd`, voz masculina `onyx`, velocidad 0.95**, por solicitud explícita del usuario. Se enviaron únicamente las frases del guion al servicio de voz; la clave se cargó de `.env.local` en memoria y no se incluyó en los entregables. El reproductor funciona sin conexión una vez descargados los archivos.
+**Público Clasificado. Reproducción local; distribución en el repositorio privado MATB.** Narración generada con **OpenAI `gpt-4o-mini-tts-2025-12-15`, voz `cedar`, velocidad 1.0**, seleccionada por el usuario después de escuchar las muestras Cedar y Ash. Se enviaron únicamente las frases del guion al servicio de voz; la clave se cargó de `.env.local` en memoria y no se incluyó en los entregables. El reproductor funciona sin conexión una vez descargados los archivos.
 
 ## Qué se entrega
 
@@ -46,7 +46,7 @@ Dos tomas iniciales de misión no se utilizaron en el montaje: una agotó el sel
 
 ## Modelo 3D
 
-Geometría procedural en TypeScript, sin modelos, texturas, tipografías o servicios externos. Unidades: metros; eje vertical +Y. Dimensiones ilustrativas: mesa 1.80 × 0.82 m, ancho de pantalla 0.76 m, escala de aeronave 0.52 m. Las dimensiones y el sensor esquemático no constituyen réplicas de productos. No hay simulación fisiológica o de vuelo en este modelo.
+Geometría procedural en TypeScript. Se reutilizan las fuentes originales REDLINE de `strikerdlm/3d-physiology-webxr/drone-racing-three`, verificadas contra el commit `f8a22932544368475dda9dd05227f092dbde1893`. Las copias originales, dimensiones y hashes están en `../fuentes/redline/`; la copia ejecutable conserva 17 conjuntos, cuatro rotores y texturas procedurales. No se carga ningún recurso remoto durante la reproducción. Unidades: metros; eje vertical +Y. Dimensiones ilustrativas: mesa 1.80 × 0.82 m, ancho de pantalla 0.76 m, escala de aeronave 0.52 m. Las dimensiones y el sensor esquemático no constituyen réplicas de productos. No hay simulación fisiológica o de vuelo en este modelo.
 
 Controles: órbita, acercamiento, enfoque de componentes, separación reversible, pausa y reinicio. El modo de movimiento reducido comienza en pausa. Se conserva la geometría durante la animación y se liberan geometrías, materiales, controles y renderer al salir.
 
@@ -66,6 +66,8 @@ Las recetas de grabación y montaje son `../construccion/record_walkthrough.mjs`
 
 La exportación de la presentación FAC conserva su bloqueo independiente hasta la aprobación de la política de aviso y cierre. Este video se reproduce después de la presentación y no modifica el arte original FAC.
 
-Para regenerar la voz, ejecute `pwsh -File EMAVI/construccion/generate_hd_narration.ps1 -Force` desde la raíz. Requiere Python con el SDK OpenAI, la skill speech y la clave local; realiza solicitudes facturables a OpenAI. El script usa `tts-1-hd`, que no admite instrucciones de estilo. Después ejecute `node EMAVI/construccion/render_video.mjs` y `node EMAVI/construccion/finalize_video.mjs`. El generador local antiguo se conserva como receta histórica y sus marcas no son compatibles con este montaje HD.
+Para regenerar la voz, ejecute `pwsh -File EMAVI/construccion/generate_hd_narration.ps1 -Force` desde la raíz. Requiere Python con el SDK OpenAI, la skill speech y la clave local; realiza solicitudes facturables a OpenAI. El script lee modelo, voz, velocidad e instrucciones de instructor en `narracion.json`. Los nombres históricos de los scripts y del informe `narracion-hd.json` se conservan por compatibilidad; el campo `model` identifica la generación actual. Después ejecute `node EMAVI/construccion/render_video.mjs` y `node EMAVI/construccion/finalize_video.mjs`. El generador local antiguo se conserva como receta histórica y sus marcas no son compatibles con este montaje.
 
-En la revisión HD, el capítulo de escalas mantiene la captura documental de las medidas posteriores al bloque tras la transición inicial, para acompañar su explicación sin avanzar visualmente al informe antes del capítulo siguiente. La normalización de audio del montaje usa -18 LUFS y un pico verdadero objetivo de -1.5 dBTP.
+En el montaje, el capítulo de escalas mantiene la captura documental de las medidas posteriores al bloque tras la transición inicial, para acompañar su explicación sin avanzar visualmente al informe antes del capítulo siguiente. La normalización de audio del montaje usa -18 LUFS y un pico verdadero objetivo de -1.5 dBTP.
+
+La introducción y el cierre muestran el dron REDLINE con hélices giratorias, movimiento de cámara y separación/reensamblaje de sus conjuntos. Es una visualización ilustrativa; no reutiliza ni representa una prueba de vuelo del simulador. `drone-viewer.ts` conserva la escala original en metros; la estación amplía el dron para su lectura. `../revision/redline.json` comprueba geometría finita, 17 conjuntos, cuatro rotores, tiempo determinista y diez ciclos de reensamblaje.

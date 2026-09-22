@@ -6,8 +6,8 @@
     "position": 0,
     "length": 179,
     "start_ms": 0.0,
-    "end_ms": 11631.583333333334,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "end_ms": 14500.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "catalogo",
@@ -15,9 +15,9 @@
     "text": "Al seleccionar una actividad aparecen sus pasos, duración y equipo.",
     "position": 180,
     "length": 67,
-    "start_ms": 11811.583333333334,
-    "end_ms": 16180.0,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 14680.0,
+    "end_ms": 20930.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "catalogo",
@@ -25,9 +25,9 @@
     "text": "Primero se decide entre practicar y participar en un estudio.",
     "position": 248,
     "length": 61,
-    "start_ms": 16360.0,
-    "end_ms": 20386.333333333332,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 21110.0,
+    "end_ms": 25710.0,
+    "timing_source": "OpenAI sentence audio duration"
   },
   {
     "chapter": "catalogo",
@@ -35,8 +35,8 @@
     "text": "La práctica se guarda por separado.",
     "position": 310,
     "length": 35,
-    "start_ms": 20566.333333333332,
-    "end_ms": 22855.791666666664,
-    "timing_source": "OpenAI TTS HD sentence audio duration"
+    "start_ms": 25890.0,
+    "end_ms": 28540.0,
+    "timing_source": "OpenAI sentence audio duration"
   }
 ]

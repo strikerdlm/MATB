@@ -32,10 +32,10 @@ def prepare():
 def main():
     segments = json.loads((SOURCE / 'segments.json').read_text(encoding='utf-8'))
     script = json.loads((BASE / 'video/guion.json').read_text(encoding='utf-8'))
-    report = {'provider': 'OpenAI', 'model': 'tts-1-hd', 'voice': 'onyx',
-              'speed': 0.95, 'ai_generated': True,
+    settings = json.loads((BASE / 'video/narracion.json').read_text(encoding='utf-8'))
+    report = {**settings, 'ai_generated': True,
               'timing_method': 'exact sentence WAV boundaries; 180 ms inter-sentence silence',
-              'authorization': 'Explicit user request to send the narration to OpenAI TTS HD',
+              'authorization': 'User selected Cedar for the complete narration; local API key reuse already authorized',
               'chapters': []}
     for chapter in script:
         selected = [s for s in segments if s['chapter'] == chapter['id']]
@@ -56,7 +56,7 @@ def main():
             channels, width, rate = params
             timings.append({**segment, 'start_ms': frames / rate * 1000,
                             'end_ms': (frames + count) / rate * 1000,
-                            'timing_source': 'OpenAI TTS HD sentence audio duration'})
+                            'timing_source': 'OpenAI sentence audio duration'})
             data.append(audio)
             frames += count
             if i < len(selected) - 1:
