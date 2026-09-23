@@ -1,0 +1,522 @@
+{
+  "source_sha256": "F417CE73DBFF8F12901D8CB071AB5306ECEEAF44245FA7B6FBDE6A692717C5FD",
+  "source_unchanged": true,
+  "slides": 1,
+  "width_cm": 80.00118055555555,
+  "height_cm": 120.00177083333334,
+  "text_checks": [
+    {
+      "name": "Titulo",
+      "font_pt": 43.0,
+      "width": 1984.252,
+      "height": 113.385826,
+      "bound_width": 1051.42,
+      "bound_height": 107.2,
+      "overflow": false
+    },
+    {
+      "name": "Autor",
+      "font_pt": 31.0,
+      "width": 1814.1732,
+      "height": 39.68504,
+      "bound_width": 436.12503,
+      "bound_height": 37.2,
+      "overflow": false
+    },
+    {
+      "name": "Contacto",
+      "font_pt": 25.0,
+      "width": 1814.1732,
+      "height": 34.015747,
+      "bound_width": 670.0,
+      "bound_height": 30.0,
+      "overflow": false
+    },
+    {
+      "name": "Afiliacion",
+      "font_pt": 24.0,
+      "width": 1984.252,
+      "height": 34.015747,
+      "bound_width": 974.975,
+      "bound_height": 28.8,
+      "overflow": false
+    },
+    {
+      "name": "Resumen-heading",
+      "font_pt": 36.0,
+      "width": 405.35434,
+      "height": 42.519684,
+      "bound_width": 190.0,
+      "bound_height": 43.2,
+      "overflow": false
+    },
+    {
+      "name": "Resumen bilingue",
+      "font_pt": 24.0,
+      "width": 1916.2205,
+      "height": 223.93701,
+      "bound_width": 1874.4901,
+      "bound_height": 213.6,
+      "overflow": false
+    },
+    {
+      "name": "Introduccion-heading",
+      "font_pt": 36.0,
+      "width": 462.04724,
+      "height": 42.519684,
+      "bound_width": 290.0,
+      "bound_height": 43.2,
+      "overflow": false
+    },
+    {
+      "name": "Introduccion texto",
+      "font_pt": 27.0,
+      "width": 895.74805,
+      "height": 229.6063,
+      "bound_width": 888.0,
+      "bound_height": 162.0,
+      "overflow": false
+    },
+    {
+      "name": "Dominio-titulo-0",
+      "font_pt": 23.0,
+      "width": 252.28346,
+      "height": 51.02362,
+      "bound_width": 153.5,
+      "bound_height": 27.6,
+      "overflow": false
+    },
+    {
+      "name": "Dominio-detalle-0",
+      "font_pt": 22.0,
+      "width": 252.28346,
+      "height": 36.850395,
+      "bound_width": 203.25,
+      "bound_height": 26.4,
+      "overflow": false
+    },
+    {
+      "name": "Dominio-titulo-1",
+      "font_pt": 23.0,
+      "width": 252.28346,
+      "height": 51.02362,
+      "bound_width": 222.89496,
+      "bound_height": 27.6,
+      "overflow": false
+    },
+    {
+      "name": "Dominio-detalle-1",
+      "font_pt": 22.0,
+      "width": 252.28346,
+      "height": 36.850395,
+      "bound_width": 122.5,
+      "bound_height": 26.4,
+      "overflow": false
+    },
+    {
+      "name": "Dominio-titulo-2",
+      "font_pt": 23.0,
+      "width": 252.28346,
+      "height": 51.02362,
+      "bound_width": 139.12505,
+      "bound_height": 27.6,
+      "overflow": false
+    },
+    {
+      "name": "Dominio-detalle-2",
+      "font_pt": 22.0,
+      "width": 252.28346,
+      "height": 36.850395,
+      "bound_width": 200.75,
+      "bound_height": 26.4,
+      "overflow": false
+    },
+    {
+      "name": "Separacion de constructos",
+      "font_pt": 25.0,
+      "width": 878.7402,
+      "height": 48.188976,
+      "bound_width": 596.0,
+      "bound_height": 30.0,
+      "overflow": false
+    },
+    {
+      "name": "Metodologia-heading",
+      "font_pt": 36.0,
+      "width": 462.04724,
+      "height": 42.519684,
+      "bound_width": 281.35,
+      "bound_height": 43.2,
+      "overflow": false
+    },
+    {
+      "name": "Metodologia texto",
+      "font_pt": 26.0,
+      "width": 895.74805,
+      "height": 161.5748,
+      "bound_width": 888.75,
+      "bound_height": 124.8,
+      "overflow": false
+    },
+    {
+      "name": "Paso-numero-0",
+      "font_pt": 32.0,
+      "width": 56.692913,
+      "height": 51.02362,
+      "bound_width": 26.62496,
+      "bound_height": 38.4,
+      "overflow": false
+    },
+    {
+      "name": "Paso-titulo-0",
+      "font_pt": 24.0,
+      "width": 737.0079,
+      "height": 28.346457,
+      "bound_width": 149.37505,
+      "bound_height": 28.8,
+      "overflow": false
+    },
+    {
+      "name": "Paso-texto-0",
+      "font_pt": 23.0,
+      "width": 737.0079,
+      "height": 28.346457,
+      "bound_width": 364.82504,
+      "bound_height": 27.6,
+      "overflow": false
+    },
+    {
+      "name": "Paso-numero-1",
+      "font_pt": 32.0,
+      "width": 56.692913,
+      "height": 51.02362,
+      "bound_width": 26.62496,
+      "bound_height": 38.4,
+      "overflow": false
+    },
+    {
+      "name": "Paso-titulo-1",
+      "font_pt": 24.0,
+      "width": 737.0079,
+      "height": 28.346457,
+      "bound_width": 124.12504,
+      "bound_height": 28.8,
+      "overflow": false
+    },
+    {
+      "name": "Paso-texto-1",
+      "font_pt": 23.0,
+      "width": 737.0079,
+      "height": 28.346457,
+      "bound_width": 410.87503,
+      "bound_height": 27.6,
+      "overflow": false
+    },
+    {
+      "name": "Paso-numero-2",
+      "font_pt": 32.0,
+      "width": 56.692913,
+      "height": 51.02362,
+      "bound_width": 26.62496,
+      "bound_height": 38.4,
+      "overflow": false
+    },
+    {
+      "name": "Paso-titulo-2",
+      "font_pt": 24.0,
+      "width": 737.0079,
+      "height": 28.346457,
+      "bound_width": 114.75,
+      "bound_height": 28.8,
+      "overflow": false
+    },
+    {
+      "name": "Paso-texto-2",
+      "font_pt": 23.0,
+      "width": 737.0079,
+      "height": 28.346457,
+      "bound_width": 390.37503,
+      "bound_height": 27.6,
+      "overflow": false
+    },
+    {
+      "name": "Paso-numero-3",
+      "font_pt": 32.0,
+      "width": 56.692913,
+      "height": 51.02362,
+      "bound_width": 26.62496,
+      "bound_height": 38.4,
+      "overflow": false
+    },
+    {
+      "name": "Paso-titulo-3",
+      "font_pt": 24.0,
+      "width": 737.0079,
+      "height": 28.346457,
+      "bound_width": 132.0,
+      "bound_height": 28.8,
+      "overflow": false
+    },
+    {
+      "name": "Paso-texto-3",
+      "font_pt": 23.0,
+      "width": 737.0079,
+      "height": 28.346457,
+      "bound_width": 417.25,
+      "bound_height": 27.6,
+      "overflow": false
+    },
+    {
+      "name": "Paso-numero-4",
+      "font_pt": 32.0,
+      "width": 56.692913,
+      "height": 51.02362,
+      "bound_width": 26.62496,
+      "bound_height": 38.4,
+      "overflow": false
+    },
+    {
+      "name": "Paso-titulo-4",
+      "font_pt": 24.0,
+      "width": 737.0079,
+      "height": 28.346457,
+      "bound_width": 306.5,
+      "bound_height": 28.8,
+      "overflow": false
+    },
+    {
+      "name": "Paso-texto-4",
+      "font_pt": 23.0,
+      "width": 737.0079,
+      "height": 28.346457,
+      "bound_width": 359.87503,
+      "bound_height": 27.6,
+      "overflow": false
+    },
+    {
+      "name": "Resultados-heading",
+      "font_pt": 36.0,
+      "width": 405.35434,
+      "height": 42.519684,
+      "bound_width": 252.66,
+      "bound_height": 43.2,
+      "overflow": false
+    },
+    {
+      "name": "Resultados tipo",
+      "font_pt": 25.0,
+      "width": 878.7402,
+      "height": 31.181103,
+      "bound_width": 448.54,
+      "bound_height": 30.0,
+      "overflow": false
+    },
+    {
+      "name": "Capacidades",
+      "font_pt": 26.0,
+      "width": 878.7402,
+      "height": 272.12598,
+      "bound_width": 875.75,
+      "bound_height": 164.0,
+      "overflow": false
+    },
+    {
+      "name": "Once",
+      "font_pt": 64.0,
+      "width": 161.5748,
+      "height": 85.03937,
+      "bound_width": 85.47,
+      "bound_height": 76.8,
+      "overflow": false
+    },
+    {
+      "name": "Once descripcion",
+      "font_pt": 25.0,
+      "width": 623.6221,
+      "height": 107.71654,
+      "bound_width": 375.12,
+      "bound_height": 98.0,
+      "overflow": false
+    },
+    {
+      "name": "Limitacion entorno",
+      "font_pt": 23.0,
+      "width": 822.04724,
+      "height": 93.543304,
+      "bound_width": 502.5,
+      "bound_height": 90.8,
+      "overflow": false
+    },
+    {
+      "name": "Discusion-heading",
+      "font_pt": 36.0,
+      "width": 490.3937,
+      "height": 42.519684,
+      "bound_width": 210.0,
+      "bound_height": 43.2,
+      "overflow": false
+    },
+    {
+      "name": "Discusion texto",
+      "font_pt": 27.0,
+      "width": 878.7402,
+      "height": 158.74016,
+      "bound_width": 834.0,
+      "bound_height": 97.2,
+      "overflow": false
+    },
+    {
+      "name": "Discusion pregunta",
+      "font_pt": 27.0,
+      "width": 850.3937,
+      "height": 39.68504,
+      "bound_width": 498.0,
+      "bound_height": 32.4,
+      "overflow": false
+    },
+    {
+      "name": "Nivel-titulo-0",
+      "font_pt": 25.0,
+      "width": 810.7087,
+      "height": 34.015747,
+      "bound_width": 376.12,
+      "bound_height": 30.0,
+      "overflow": false
+    },
+    {
+      "name": "Nivel-texto-0",
+      "font_pt": 22.0,
+      "width": 810.7087,
+      "height": 31.181103,
+      "bound_width": 421.0,
+      "bound_height": 26.4,
+      "overflow": false
+    },
+    {
+      "name": "Nivel-titulo-1",
+      "font_pt": 25.0,
+      "width": 810.7087,
+      "height": 34.015747,
+      "bound_width": 193.25,
+      "bound_height": 30.0,
+      "overflow": false
+    },
+    {
+      "name": "Nivel-texto-1",
+      "font_pt": 22.0,
+      "width": 810.7087,
+      "height": 31.181103,
+      "bound_width": 434.5,
+      "bound_height": 26.4,
+      "overflow": false
+    },
+    {
+      "name": "Nivel-titulo-2",
+      "font_pt": 25.0,
+      "width": 810.7087,
+      "height": 34.015747,
+      "bound_width": 299.62503,
+      "bound_height": 30.0,
+      "overflow": false
+    },
+    {
+      "name": "Nivel-texto-2",
+      "font_pt": 22.0,
+      "width": 810.7087,
+      "height": 31.181103,
+      "bound_width": 478.75,
+      "bound_height": 26.4,
+      "overflow": false
+    },
+    {
+      "name": "Nivel-titulo-3",
+      "font_pt": 25.0,
+      "width": 810.7087,
+      "height": 34.015747,
+      "bound_width": 338.62,
+      "bound_height": 30.0,
+      "overflow": false
+    },
+    {
+      "name": "Nivel-texto-3",
+      "font_pt": 22.0,
+      "width": 810.7087,
+      "height": 31.181103,
+      "bound_width": 389.25,
+      "bound_height": 26.4,
+      "overflow": false
+    },
+    {
+      "name": "Nivel-titulo-4",
+      "font_pt": 25.0,
+      "width": 810.7087,
+      "height": 34.015747,
+      "bound_width": 345.57,
+      "bound_height": 30.0,
+      "overflow": false
+    },
+    {
+      "name": "Nivel-texto-4",
+      "font_pt": 22.0,
+      "width": 810.7087,
+      "height": 31.181103,
+      "bound_width": 421.12503,
+      "bound_height": 26.4,
+      "overflow": false
+    },
+    {
+      "name": "Limite inferencial",
+      "font_pt": 24.0,
+      "width": 850.3937,
+      "height": 48.188976,
+      "bound_width": 729.75006,
+      "bound_height": 28.8,
+      "overflow": false
+    },
+    {
+      "name": "Conclusiones-heading",
+      "font_pt": 36.0,
+      "width": 490.3937,
+      "height": 42.519684,
+      "bound_width": 300.0,
+      "bound_height": 43.2,
+      "overflow": false
+    },
+    {
+      "name": "Conclusiones texto",
+      "font_pt": 27.0,
+      "width": 878.7402,
+      "height": 221.10236,
+      "bound_width": 846.0,
+      "bound_height": 202.4,
+      "overflow": false
+    },
+    {
+      "name": "Referencias-heading",
+      "font_pt": 36.0,
+      "width": 405.35434,
+      "height": 42.519684,
+      "bound_width": 268.0,
+      "bound_height": 43.2,
+      "overflow": false
+    },
+    {
+      "name": "Referencias texto",
+      "font_pt": 21.0,
+      "width": 1913.3859,
+      "height": 155.90552,
+      "bound_width": 1320.7751,
+      "bound_height": 142.0,
+      "overflow": false
+    },
+    {
+      "name": "Siglas adicionales",
+      "font_pt": 20.0,
+      "width": 1913.3859,
+      "height": 25.51181,
+      "bound_width": 1064.26,
+      "bound_height": 24.0,
+      "overflow": false
+    }
+  ]
+}
