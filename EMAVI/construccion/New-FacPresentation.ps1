@@ -119,6 +119,11 @@ $templateFullPath = (Resolve-Path -LiteralPath $TemplatePath -ErrorAction Stop).
 if ((Get-FileHash -LiteralPath $templateFullPath -Algorithm SHA256).Hash -ne $ExpectedTemplateSha256) { Fail 'SHA-256 de la plantilla no coincide con el valor aprobado.' }
 $manifest = Get-Content -LiteralPath $manifestFullPath -Raw | ConvertFrom-Json
 Assert-Manifest $manifest
+foreach ($item in @($manifest.content | Where-Object { $_.type -eq 'image_text' })) {
+    if (-not [System.IO.Path]::IsPathRooted([string]$item.image.path)) {
+        $item.image.path = [System.IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $manifestFullPath) ([string]$item.image.path)))
+    }
+}
 $outputFullPath = [System.IO.Path]::GetFullPath($OutputPath); [System.IO.Directory]::CreateDirectory((Split-Path -Parent $outputFullPath)) | Out-Null
 Copy-Item -LiteralPath $templateFullPath -Destination $outputFullPath -Force
 

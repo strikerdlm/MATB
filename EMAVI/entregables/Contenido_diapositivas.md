@@ -4,9 +4,13 @@ Pública clasificada. Texto condensado para los cuadros de la plantilla FAC. Los
 
 ## 5. Pregunta y diseño de investigación
 
-- Desempeño y carga percibida entre condiciones y visitas.
-- Seguimiento intrapersonal en ASTRA.
-- Demanda, desempeño y percepción registrados por separado.
+Demanda programada; desempeño y carga percibida por separado.
+
+Seguimiento de cada persona entre visitas.
+
+![Operadora en estación de investigación multitarea; ilustración conceptual](../visuales/imagegen/operador_atencion_conceptual.png)
+
+Ilustración conceptual generada con IA; sin datos ni captura de MATB.
 
 ## 6. Fundamento y reproducibilidad
 
@@ -28,10 +32,22 @@ Pública clasificada. Texto condensado para los cuadros de la plantilla FAC. Los
 - COMM y RESMAN: respuestas y regulación.
 - KSS antes; ISA durante; NASA-TLX después.
 
-## 9. Demostración
+## 9. Fisiología: adquisición y calidad
+
+Polar H10: intervalos R–R, si la ruta se verifica.
+
+ActiGraph: movimiento. HRV: descriptor derivado.
+
+Sin señales humanas adquiridas en la demostración.
+
+![Banda pectoral y monitor de muñeca; ilustración conceptual](../visuales/imagegen/sensores_fisiologia_conceptual-v2.png)
+
+Ilustración conceptual generada con IA; equipos no conectados.
+
+## 10. Demostración
 
 
-## 10. Elegir una actividad
+## 11. Elegir una actividad
 
 El catálogo presenta las tareas y sus requisitos.
 
@@ -41,7 +57,7 @@ Captura local de demostración.
 
 ![Elegir una actividad](../capturas/01_catalogo.png)
 
-## 11. Diseñar el escenario
+## 12. Diseñar el escenario
 
 La línea temporal organiza tareas y eventos.
 
@@ -51,7 +67,7 @@ La compilación materializa su procedencia.
 
 ![Diseñar el escenario](../capturas/02_diseno.png)
 
-## 12. Preparar OpenMATB
+## 13. Preparar OpenMATB
 
 La consola configura el entorno de cuatro tareas.
 
@@ -61,7 +77,7 @@ El entorno de tareas se ejecuta en OpenMATB.
 
 ![Preparar OpenMATB](../capturas/03_openmatb.png)
 
-## 13. Somnolencia y vigilancia
+## 14. Somnolencia y vigilancia
 
 KSS precede a las instrucciones del PVT.
 
@@ -71,7 +87,7 @@ Participante de demostración; sin datos humanos.
 
 ![Somnolencia y vigilancia](../capturas/04_kss.png)
 
-## 14. Supervisar una misión
+## 15. Supervisar una misión
 
 El módulo sUAS integra mapa, flota, alertas y controles.
 
@@ -81,7 +97,7 @@ El registro conserva eventos para revisión posterior.
 
 ![Supervisar una misión](../capturas/05_suas.png)
 
-## 15. Revisar la evidencia
+## 16. Revisar la evidencia
 
 La carga pareada reúne manifiestos, eventos y observaciones temporales.
 
@@ -91,7 +107,7 @@ Ejemplo sintético de referencia.
 
 ![Revisar la evidencia](../capturas/06_evidencia.png)
 
-## 16. Del evento al resultado
+## 17. Del evento al resultado
 
 La revisión conserva el evento y su base temporal.
 
@@ -101,34 +117,34 @@ La evidencia puede exportarse para recomputación.
 
 ![Del evento al resultado](../capturas/07_evento.png)
 
-## 17. Del registro al análisis longitudinal
+## 18. Del registro al análisis longitudinal
 
 - Escenario → eventos → métricas versionadas.
 - Persona → visita → bloque → condición.
 - RTLX: media de 6 respuestas (0–10) × 10.
 - Revisar calidad antes de comparar trayectorias.
 
-## 18. Estado de la evidencia y siguiente etapa
+## 19. Estado de la evidencia y siguiente etapa
 
 - CEINNA: verificaciones con datos sintéticos.
 - EMAVI: recorrido de interfaces reales.
 - Calificar tiempo físico y respuesta humana.
 - Siguiente etapa: ejecutar y analizar visitas.
 
-## 19. Conclusiones
+## 20. Conclusiones
 
 - Documentar la demanda experimental.
 - Vincular configuración, evento y métrica.
 - Revisar calidad y procedencia del registro.
 - Seguir la trayectoria de cada persona.
 
-## 20. Referencias I
+## 21. Referencias I
 
 - [1] Cegarra et al. (2020). OpenMATB.
 - [2] Pontiggia, Gomez-Mérino et al. (2024). MATB y niveles de carga mental.
 - [3] Pontiggia, Fabries et al. (2024). Hipoxia, restricción de sueño y carga.
 
-## 21. Referencias II
+## 22. Referencias II
 
 - [4] Tortello et al. (2020). Estimación temporal en la Antártida.
 - [5] Vogl et al. (2024). USAARL MATB.

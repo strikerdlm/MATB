@@ -43,6 +43,11 @@ if (-not $DeckPath) {
 $deckFull=(Resolve-Path -LiteralPath $DeckPath).Path
 if (-not $ManifestPath) { Fail 'ManifestPath es obligatorio cuando se valida un deck existente.' }
 $manifest=Get-Content -LiteralPath (Resolve-Path -LiteralPath $ManifestPath) -Raw | ConvertFrom-Json
+foreach($item in @($manifest.content | Where-Object { $_.type -eq 'image_text' })) {
+    if(-not [System.IO.Path]::IsPathRooted([string]$item.image.path)) {
+        $item.image.path=[System.IO.Path]::GetFullPath((Join-Path (Split-Path -Parent (Resolve-Path -LiteralPath $ManifestPath).Path) ([string]$item.image.path)))
+    }
+}
 if ($manifest.privacy.branch -ne 'qualified' -or $manifest.privacy.value -ne 'Público Clasificado') { Fail 'Rama EMAVI incorrecta.' }
 $app=$null;$deck=$null;$template=$null
 try {

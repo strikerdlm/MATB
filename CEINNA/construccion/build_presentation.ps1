@@ -1,4 +1,4 @@
-param([string]$Root = 'E:\Downloads\MATB\CEINNA')
+param([string]$Root = (Split-Path -Parent $PSScriptRoot))
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $Root
 $out = Join-Path $Root 'entregables'
@@ -88,9 +88,9 @@ function Citation($s,[string]$value,[int]$n) {
     $null=Text $s 869 475 23 18 ([string]$n) 12 $false $muted 3
 }
 
-$map=@(1,2,3,4,4,4,4,4,4,5,4,4,6,7,7,8)
-$times=@(0,20,55,50,50,65,60,55,65,65,65,55,65,10,10,0)
-$titles=@('III CEINNA','Carga mental y desempeño multitarea en ASTRA','Aportes de la familia MATB','De la literatura al diseño ASTRA','ASTRA: contexto del estudio','Ocho visitas por participante','Cuatro tareas simultáneas','Estructura de una visita','Del escenario a una métrica interpretable','Resultados de desarrollo','Análisis de medidas repetidas','Marco de calificación científica','Conclusiones y recomendaciones','Bibliografía I','Bibliografía II','Cierre institucional')
+$map=@(1,2,3,4,4,4,4,4,4,4,5,4,4,6,7,7,8)
+$times=@(0,20,55,50,50,65,60,55,30,65,65,65,55,65,10,10,0)
+$titles=@('III CEINNA','Carga mental y desempeño multitarea en ASTRA','Aportes de la familia MATB','De la literatura al diseño ASTRA','ASTRA: contexto del estudio','Ocho visitas por participante','Cuatro tareas simultáneas','Estructura de una visita','Fisiología: adquisición separada','Del escenario a una métrica interpretable','Resultados de desarrollo','Análisis de medidas repetidas','Marco de calificación científica','Conclusiones y recomendaciones','Bibliografía I','Bibliografía II','Cierre institucional')
 $refsPath=Join-Path $Root 'construccion\referencias_slide.json'
 $refs=@(); if(Test-Path $refsPath){$refs=@(Get-Content $refsPath -Raw -Encoding UTF8 | ConvertFrom-Json)}
 $notesPath=Join-Path $Root 'guion\notas_data.json'
@@ -106,7 +106,7 @@ try {
         $dup.MoveTo($deck.Slides.Count)
     }
     foreach($id in $originalIds){$deck.Slides.FindBySlideID($id).Delete()}
-    for($i=2;$i -le 15;$i++){Clear-Content $deck.Slides.Item($i)}
+    for($i=2;$i -le 16;$i++){Clear-Content $deck.Slides.Item($i)}
 
     $s=$deck.Slides.Item(2)
     $null=Text $s 157 147 685 111 "Carga mental y desempeño`nmultitarea en ASTRA" 43 $true $navy 2
@@ -143,7 +143,7 @@ try {
     $null=Text $s 130 222 330 49 '2 misiones · 15 días' 31 $true $navy
     $null=Text $s 130 283 335 64 'Hasta 6 participantes previstos por misión' 25
     $null=Text $s 130 356 338 72 "Aislamiento y confinamiento`nEvaluación intrapersonal" 24
-    $null=Picture $s 'visuales\imagegen\habitat_estacion_conceptual.png' 486 141 397 304
+    $null=Picture $s 'visuales\imagegen\habitat_estacion_conceptual-v2.png' 486 141 397 304
     $null=Text $s 487 449 394 17 'Ilustración conceptual generada con IA; no fotografía de ASTRA.' 11.5 $false $muted
     Citation $s 'Manual ASTRA v2.5 y cronograma, 11-09-2026. Diseño previsto.' 5
 
@@ -183,24 +183,27 @@ try {
     Citation $s '[1] Cegarra et al., 2020; plugins del repositorio MATB, revisión fd5e1318.' 7
 
     $s=$deck.Slides.Item(8); Header $s 'Estructura de una visita'
-    $null=Text $s 131 138 750 43 '90 min de reserva · 3 × 900 s de escenario' 28 $true $navy
-    $levels=@('LOW','MEDIUM','HIGH')
-    for($k=0;$k -lt 3;$k++){
-        $x=132+$k*255
-        $null=Box $s $x 202 233 104
-        $null=Text $s ($x+12) 216 209 40 $levels[$k] 28 $true $navy 2
-        $null=Text $s ($x+12) 260 209 31 '15 min de escenario' 22 $false $ink 2
-    }
-    $null=Text $s 131 316 750 33 'Tres condiciones de demanda · orden contrabalanceado' 23 $false $navy 2
-    $stages=@(@('Antes de cada bloque','Somnolencia (KSS)'),@('Durante la tarea','Autoevaluación (ISA)'),@('Después del bloque',"Carga percibida`n(NASA‑TLX)"))
-    for($k=0;$k -lt 3;$k++){
-        $x=132+$k*255
-        $null=Text $s $x 366 234 29 $stages[$k][0] 22 $true $navy
-        $null=Text $s $x 404 234 53 $stages[$k][1] 21
-    }
+    $null=Text $s 132 143 337 42 '90 min de reserva' 29 $true $navy
+    $null=Text $s 132 196 337 39 '3 × 900 s de escenario' 25 $true $navy
+    $null=Text $s 132 253 337 36 'LOW · MEDIUM · HIGH' 24 $true $navy
+    $null=Text $s 132 299 337 31 'Orden contrabalanceado' 21
+    $null=Text $s 132 357 337 32 'KSS → ISA → NASA-TLX' 22 $true $navy
+    $null=Text $s 132 398 337 48 'Antes · durante · después' 20
+    $null=Picture $s 'visuales\imagegen\operador_multitarea_conceptual.png' 489 151 392 270
+    $null=Text $s 490 429 391 21 'Ilustración conceptual generada con IA.' 11.5 $false $muted
     Citation $s 'Manual §4.7; [6] Laverde-López et al., 2022. Preparación, reposo y pausas en la reserva.' 8
 
-    $s=$deck.Slides.Item(9); Header $s 'Del escenario a una métrica interpretable' 33
+    $s=$deck.Slides.Item(9); Header $s 'Fisiología: adquisición separada' 36
+    $null=Picture $s 'visuales\imagegen\sensores_fisiologia_conceptual-v2.png' 130 145 426 283
+    $null=Text $s 132 433 420 20 'Ilustración conceptual generada con IA; equipos no conectados.' 11.5 $false $muted
+    $null=Text $s 586 151 293 35 'Polar H10' 27 $true $navy
+    $null=Text $s 586 193 292 56 'Intervalos R–R si se verifica la ruta de captura' 20
+    $null=Text $s 586 269 293 35 'ActiGraph' 27 $true $navy
+    $null=Text $s 586 311 292 50 'Movimiento y actividad' 20
+    $null=Text $s 586 382 293 58 'HRV: descriptor derivado, sujeto a calidad de señal.' 20 $true $navy
+    Citation $s 'Manual ASTRA §§4.2.3, 4.7 y fisiología; adquisición distinta de las tareas MATB.' 9
+
+    $s=$deck.Slides.Item(10); Header $s 'Del escenario a una métrica interpretable' 33
     $flow=@(@('Escenario',"Parámetros`nSemilla`nOrden"),@('Registro',"Identidad`nVisita`nEventos"),@('Métricas',"Definición`nUnidades`nVersión"),@('Análisis',"Calidad`nElegibilidad`nTrazabilidad"))
     for($k=0;$k -lt 4;$k++){
         $x=132+$k*193
@@ -212,9 +215,9 @@ try {
     $null=Text $s 132 338 749 33 'Ejemplo: carga percibida con RTLX' 26 $true $navy
     $null=Text $s 132 383 749 33 '6 respuestas completas (0–10) → media × 10 → índice 0–100' 24
     $null=Text $s 132 431 749 26 'Cada resultado conserva versión, unidad, regla de cálculo y procedencia.' 21 $false $muted
-    Citation $s '[1,5] Replicabilidad y registro. Ejemplo local: metrics_spec.json y log_converter.py.' 9
+    Citation $s '[1,5] Replicabilidad y registro. Ejemplo local: metrics_spec.json y log_converter.py.' 10
 
-    $s=$deck.Slides.Item(10); Header $s 'Resultados de desarrollo'
+    $s=$deck.Slides.Item(11); Header $s 'Resultados de desarrollo'
     $null=Text $s 131 135 750 43 'Demostración técnica con datos sintéticos' 26 $true $navy
     $tableRows=@(@('Generación','Tres escenarios de 900 s: LOW, MEDIUM y HIGH.'),@('Reproducción','Archivos idénticos al repetir parámetros y semillas.'),@('Integridad y conversión','Hashes SHA-256 verificados; tres archivos CSV sintéticos convertidos.'))
     for($k=0;$k -lt 3;$k++){
@@ -223,18 +226,18 @@ try {
         $null=Text $s 145 ($y+7) 220 58 $tableRows[$k][0] 24 $true $navy
         $null=Text $s 380 ($y+11) 481 55 $tableRows[$k][1] 23
     }
-    Citation $s 'Ejecución local: 21-09-2026 · commit fd5e1318 · evidencia/verificacion_tecnica/.' 10
+    Citation $s 'Ejecución local: 21-09-2026 · commit fd5e1318 · evidencia/verificacion_tecnica/.' 11
 
-    $s=$deck.Slides.Item(11); Header $s 'Análisis de medidas repetidas'
+    $s=$deck.Slides.Item(12); Header $s 'Análisis de medidas repetidas'
     $null=Text $s 131 143 740 41 'Unidad de seguimiento: la persona' 28 $true $navy
     $null=Box $s 131 213 442 108
     $null=Text $s 146 242 412 43 'Persona → visita → bloque' 30 $true $navy 2
     $null=Text $s 132 350 441 102 "Trayectorias individuales`nContrastes entre condiciones`nCambios entre visitas" 24
     $null=Text $s 614 211 266 36 'Contexto de medición' 25 $true $navy
     $null=Text $s 614 261 265 178 "Orden de bloques`nHora y estación`nSueño previo`nDías desde V0" 24
-    Citation $s '[3,4] Pontiggia et al., 2024 (experimento); Tortello et al., 2020. Manual §4.7.' 11
+    Citation $s '[3,4] Pontiggia et al., 2024 (experimento); Tortello et al., 2020. Manual §4.7.' 12
 
-    $s=$deck.Slides.Item(12); Header $s 'Marco de calificación científica' 37
+    $s=$deck.Slides.Item(13); Header $s 'Marco de calificación científica' 37
     $scope=@(@('Reproducción','¿Se repite el escenario programado?'),@('Fidelidad temporal','¿Cuándo se presenta el estímulo físico?'),@('Respuesta humana','¿Cómo se relacionan demanda y respuesta?'),@('Estabilidad','¿Qué variación aparece al repetir la medición?'),@('Comparabilidad','¿Qué se conserva entre implementaciones?'))
     for($k=0;$k -lt 5;$k++){
         $y=141+$k*55
@@ -243,9 +246,9 @@ try {
         $null=Text $s 387 ($y+8) 481 34 $scope[$k][1] 22
     }
     $null=Text $s 132 433 749 30 'Cada pregunta se vincula con su procedimiento y evidencia específicos.' 22 $true $navy
-    Citation $s 'Marco del proyecto: resúmenes CEINNA y contratos locales; contexto metodológico [1,2,5].' 12
+    Citation $s 'Marco del proyecto: resúmenes CEINNA y contratos locales; contexto metodológico [1,2,5].' 13
 
-    $s=$deck.Slides.Item(13); Header $s 'Conclusiones y recomendaciones' 36
+    $s=$deck.Slides.Item(14); Header $s 'Conclusiones y recomendaciones' 36
     $conclusions=@('Describir la demanda hace interpretable la comparación entre condiciones.','La trazabilidad vincula escenario, evento y métrica en cada visita.','ASTRA sitúa la respuesta multitarea en la trayectoria de cada persona.')
     for($k=0;$k -lt 3;$k++){
         $y=143+$k*92
@@ -253,10 +256,10 @@ try {
         $null=Text $s 193 $y 684 72 $conclusions[$k] 27
     }
     $null=Text $s 133 432 749 35 'Siguiente etapa: ejecución protocolizada y análisis de las visitas.' 22 $true $navy
-    Citation $s 'Síntesis del diseño ASTRA y de la verificación técnica de MATB.' 13
+    Citation $s 'Síntesis del diseño ASTRA y de la verificación técnica de MATB.' 14
 
     for($page=0;$page -lt 2;$page++){
-        $s=$deck.Slides.Item(14+$page); Header $s $(if($page -eq 0){'Bibliografía I'}else{'Bibliografía II'})
+        $s=$deck.Slides.Item(15+$page); Header $s $(if($page -eq 0){'Bibliografía I'}else{'Bibliografía II'})
         $items=@($refs | Where-Object {$_.page -eq ($page+1)})
         $idx=0
         foreach($ref in $items){
@@ -264,7 +267,7 @@ try {
             $null=Text $s 130 $y 753 101 ('['+$ref.id+'] '+$ref.display) 18.5 $false $ink
             $idx++
         }
-        Citation $s 'Autorías abreviadas en pantalla. Referencias APA completas en notas y documento adjunto.' (14+$page)
+        Citation $s 'Autorías abreviadas en pantalla. Referencias APA completas en notas y documento adjunto.' (15+$page)
     }
 
     $checks=@(); $texts=@()
@@ -276,7 +279,7 @@ try {
         $note=@($notes | Where-Object {$_.slide -eq $i})
         $noteText="Diapositiva $i. $($titles[$i-1]). Tiempo previsto: $($times[$i-1]) segundos."
         if($note.Count -gt 0){$noteText+="`r`n`r`n"+$note[0].notes}
-        if($i -eq 14 -or $i -eq 15){$noteText+="`r`n`r`n"+(($refs|Where-Object{$_.page -eq ($i-13)}|ForEach-Object{$_.full}) -join "`r`n`r`n")}
+        if($i -eq 15 -or $i -eq 16){$noteText+="`r`n`r`n"+(($refs|Where-Object{$_.page -eq ($i-14)}|ForEach-Object{$_.full}) -join "`r`n`r`n")}
         try {$s.NotesPage.Shapes.Placeholders.Item(2).TextFrame.TextRange.Text=$noteText} catch {throw "No se pudieron insertar notas en la lámina $i : $_"}
         $slideText=@()
         foreach($shape in $s.Shapes){
@@ -292,10 +295,12 @@ try {
     }
     $checks|ConvertTo-Json -Depth 6|Set-Content (Join-Path $Root 'revision\geometria_texto.json') -Encoding UTF8
     $texts|ConvertTo-Json -Depth 6|Set-Content (Join-Path $Root 'construccion\diapositivas_texto.json') -Encoding UTF8
-    $final=Join-Path $out 'ASTRA_MATB_III_CEINNA_es.pptx'
+    $final=Join-Path $out 'ASTRA_MATB_III_CEINNA_es_visual.pptx'
     $deck.SaveAs($final,24)
-    $deck.Export($renders,'PNG',1600,900)
-    $deck.SaveAs((Join-Path $out 'ASTRA_MATB_III_CEINNA_es.pdf'),32)
+    $visualRenders=Join-Path $Root 'revision\diapositivas_visual'
+    New-Item -ItemType Directory -Force -Path $visualRenders | Out-Null
+    $deck.Export($visualRenders,'PNG',1600,900)
+    $deck.SaveAs((Join-Path $out 'ASTRA_MATB_III_CEINNA_es_visual.pdf'),32)
     Write-Output ('PPTX/PDF y '+$deck.Slides.Count+' diapositivas exportadas. Tiempo previsto: '+(($times|Measure-Object -Sum).Sum)+' s.')
     Write-Output ('Cajas con posible desbordamiento: '+@($checks|Where-Object{$_.overflow}).Count)
 } finally {
