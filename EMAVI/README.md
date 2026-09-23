@@ -1,5 +1,9 @@
 # EMAVI — MATB y ASTRA
 
+## Edición visual preparada · 23 de septiembre de 2026
+
+El manifiesto FAC ahora contempla 24 láminas: una ilustración conceptual de atención dividida en la pregunta de investigación y una lámina nueva de adquisición fisiológica. Ambas imágenes PNG conservan alfa transparente y su procedencia está en [visuales/PROMPTS_IMAGEGEN.md](visuales/PROMPTS_IMAGEGEN.md). Las siete capturas reales de la aplicación permanecen documentales. El guion actualizado dura 11:15. El PowerPoint y el PDF finales siguen sujetos a la aprobación de la política gráfica de clasificación ya registrada en `fuentes/aprobacion_politica.json`.
+
 **Pública clasificada · contenido preparado; exportación FAC pendiente de aprobación gráfica.**
 
 La clasificación fue declarada por el usuario como «Publica clasificada». El campo literal de la plantilla es **Público Clasificado**. La plantilla instalada bloquea esta rama hasta disponer de una política aprobada para su propagación y cierre. No se ha convertido el material a información pública.
@@ -10,9 +14,9 @@ La clasificación fue declarada por el usuario como «Publica clasificada». El 
 - **[Video MP4](entregables/EMAVI_recorrido_es.mp4)**: 8:34 aproximadamente, Full HD, 30 fps, 18 capítulos y 75 subtítulos por frase en español. Versión continua para proyectar después de la presentación.
 - [Alcance de la grabación y verificación](video/ALCANCE_Y_VERIFICACION.md): identifica las pruebas ejecutadas, las vistas de preparación y los datos sintéticos.
 
-- [Contenido de las diapositivas](entregables/Contenido_diapositivas.md): 17 láminas de contenido; secuencia FAC prevista de 23 láminas.
+- [Contenido de las diapositivas](entregables/Contenido_diapositivas.md): 18 láminas de contenido; secuencia FAC prevista de 24 láminas.
 - [Demostración de la aplicación](entregables/Demostracion_app.html): siete capturas focales y enlaces a sus originales completos.
-- [Notas del ponente](entregables/Notas_del_ponente_es.md): 10:45 de discurso programado; sin ensayo humano. El tiempo del evento EMAVI no fue especificado.
+- [Notas del ponente](entregables/Notas_del_ponente_es.md): 11:15 de discurso programado; sin ensayo humano. El tiempo del evento EMAVI no fue especificado.
 - [Referencias](entregables/Referencias_APA.md): seis referencias heredadas del paquete CEINNA y su verificación del 21-09-2026.
 - [Política gráfica propuesta](fuentes/politica_clasificacion.md).
 - [Vista previa del aviso y cierre](entregables/Propuesta_aviso_y_cierre.pdf).
@@ -39,7 +43,7 @@ Las capturas muestran catálogo, diseñador de experimentos, vista previa de Ope
 
 Los scripts locales `New-FacPresentation.ps1`, `Test-FacPresentation.ps1` y `Fac-Raster.ps1` proceden de `C:/Users/User/.codex/skills/fac-template/scripts`. Los dos primeros se han preparado para la política propuesta: aviso de la lámina 4, rótulo de clasificación en contenido, reiteración del aviso y cierre intacto. La skill instalada no fue modificada. Estas adaptaciones siguen pendientes de ejecución y revisión final.
 
-La skill enumera los modelos Sol/Terra/Luna; no están disponibles en esta sesión. La síntesis y preparación fueron realizadas por el asistente actual y la automatización local. No se invocaron ni se atribuyeron revisiones a esos modelos. Las imágenes solicitadas son capturas documentales, sin generación de imágenes ni envío a proveedores.
+La skill enumera los modelos Sol/Terra/Luna; no están disponibles en esta sesión. La síntesis y preparación fueron realizadas por el asistente actual y la automatización local. No se invocaron ni se atribuyeron revisiones a esos modelos. Las siete capturas de aplicación son documentales. Las dos ilustraciones conceptuales nuevas se generaron con la herramienta integrada imagegen y se identifican por separado; no se enviaron registros de participantes.
 
 Una vez recibida y registrada la aprobación de la política:
 
