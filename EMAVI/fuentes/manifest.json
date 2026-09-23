@@ -19,7 +19,7 @@
   "content": [
     {
       "type": "image_text",
-      "title": "Pregunta y diseño de investigación",
+      "title": "Pregunta y diseño",
       "body": "Demanda programada; desempeño y carga percibida por separado.\n\nSeguimiento de cada persona entre visitas.",
       "image": {
         "path": "../visuales/imagegen/operador_atencion_conceptual.png",
@@ -59,7 +59,7 @@
     },
     {
       "type": "image_text",
-      "title": "Fisiología: adquisición y calidad",
+      "title": "Adquisición fisiológica",
       "body": "Polar H10: intervalos R–R, si la ruta se verifica.\n\nActiGraph: movimiento. HRV: descriptor derivado.\n\nSin señales humanas adquiridas en la demostración.",
       "image": {
         "path": "../visuales/imagegen/sensores_fisiologia_conceptual-v2.png",

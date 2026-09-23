@@ -28,7 +28,7 @@ El recorrido conecta la pregunta científica con las medidas, la preparación de
 
 Apoyo y fuentes: Estructura de la presentación EMAVI.
 
-## 5. Pregunta y diseño de investigación — 45 s
+## 5. Pregunta y diseño — 45 s
 
 La pregunta central es cómo varían el desempeño multitarea y la carga percibida entre condiciones de demanda y a lo largo de ASTRA. La unidad de seguimiento es la persona, observada en varias visitas y bloques. Separar demanda, desempeño y percepción permite interpretar respuestas diferentes ante una misma tarea. Presentaré el diseño y un recorrido de la aplicación. Las capturas corresponden a una demostración local con registros sintéticos; los datos humanos de las misiones se obtendrán mediante la ejecución del protocolo.
 
@@ -52,7 +52,7 @@ Las cuatro tareas aportan medidas específicas. La supervisión de sistemas regi
 
 Apoyo y fuentes: [1] Cegarra et al., 2020; [6] Laverde-López et al., 2022; CEINNA/evidencia/auditoria_matb.md; matb_integration/metrics_spec.json.
 
-## 9. Fisiología: adquisición y calidad — 30 s
+## 9. Adquisición fisiológica — 30 s
 
 ASTRA incluye una línea fisiológica propia. Polar H10 puede aportar intervalos R–R cuando se verifica la ruta de captura; ActiGraph registra movimiento y actividad. La variabilidad cardíaca se calcula después de revisar calidad, cobertura y sincronización. La demostración de EMAVI solo presenta preparación y requisitos; no conectó sensores ni registró señales humanas.
 

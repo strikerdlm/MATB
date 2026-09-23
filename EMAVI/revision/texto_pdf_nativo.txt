@@ -1,0 +1,258 @@
+Políticas de Privacidad
+Información Calificada
+El contenido de ésta presentación es propiedad de la Fuerza Aérea Colombiana. Es para
+uso exclusivo del destinatario y puede contener información que goza de reserva legal.
+Por lo tanto, no es de carácter público. Se informa que, cualquier uso, difusión,
+distribución, duplicado, copiado, revisión, retransmisión o diseminación de esta
+comunicación, así como, cualquier acción que se tome respecto a la información
+contenida, por personas o entidades diferentes al propósito original de la misma, no
+esta autorizado.
+Público Clasificado
+MATB Y ASTRA
+INVESTIGACIÓN EN EMAVI
+Smsm DIEGO L MALPICA
+Especialista En Medicina Aeroespacial
+Público Clasificado
+AGENDA
+1.   Pregunta y diseño
+2.   Medición y trazabilidad
+3.   Demostración de la aplicación
+4.   Análisis y siguiente etapa
+Público Clasificado
+5
+Demanda programada; desempeño y
+carga percibida por separado.
+Seguimiento de cada persona entre
+visitas.
+Pregunta y
+diseño
+Público Clasificado
+6
+Fundamento y
+reproducibilidad
+OpenMATB:
+personalización
+y
+replicabilidad [1].
+USAARL:
+transiciones
+y
+automatización [5].
+7/19
+estudios
+describieron
+su
+configuración con detalle suficiente [2].
+Público Clasificado
+7
+ASTRA: seguimiento
+longitudinal
+2 misiones; hasta 6 participantes por
+misión.
+8
+visitas:
+basal,
+6
+intramisión
+y
+posegreso.
+3 condiciones × 900 s de escenario.
+Orden contrabalanceado; reserva de 90
+min.
+Público Clasificado
+8
+Qué se mide en cada
+bloque
+SYSMON: detecciones, omisiones y
+latencias.
+TRACK:
+desviación
+respecto
+al
+objetivo.
+COMM
+y
+RESMAN:
+respuestas
+y
+regulación.
+KSS antes; ISA durante; NASA-TLX
+después.
+Público Clasificado
+9
+Polar H10: intervalos R–R, si la ruta se
+verifica.
+ActiGraph: movimiento. HRV: descriptor
+derivado.
+Sin señales humanas adquiridas en la
+demostración.
+Adquisición
+fisiológica
+Público Clasificado
+Demostración
+Público Clasificado
+11
+El catálogo presenta las tareas y sus
+requisitos.
+La
+selección
+distingue
+práctica
+y
+participación en un estudio.
+Captura local de demostración.
+Elegir una
+actividad
+Público Clasificado
+12
+La línea temporal organiza tareas y
+eventos.
+Duración
+y
+semilla
+definen
+una
+configuración reproducible.
+La
+compilación
+materializa
+su
+procedencia.
+Diseñar el
+escenario
+Público Clasificado
+13
+La consola configura el entorno de cuatro
+tareas.
+La
+vista
+previa
+permite
+revisar
+la
+presentación antes de ejecutar.
+El entorno de tareas se ejecuta en
+OpenMATB.
+Preparar
+OpenMATB
+Público Clasificado
+14
+KSS precede a las instrucciones del PVT.
+La
+secuencia
+enlaza
+preparación,
+actividad y cierre.
+Participante de demostración; sin datos
+humanos.
+Somnolencia y
+vigilancia
+Público Clasificado
+15
+El módulo sUAS integra mapa, flota,
+alertas y controles.
+La captura procede de una prueba
+técnica sintética.
+El
+registro
+conserva
+eventos
+para
+revisión posterior.
+Supervisar una
+misión
+Público Clasificado
+16
+La carga pareada reúne manifiestos,
+eventos y observaciones temporales.
+La consola enlaza cada métrica con su
+evidencia.
+Ejemplo sintético de referencia.
+Revisar la
+evidencia
+Público Clasificado
+17
+La revisión conserva el evento y su base
+temporal.
+Los motivos de elegibilidad permanecen
+visibles.
+La evidencia puede exportarse para
+recomputación.
+Del evento al
+resultado
+Público Clasificado
+18
+Del registro al análisis
+longitudinal
+Escenario → eventos → métricas
+versionadas.
+Persona
+→
+visita
+→
+bloque
+→
+condición.
+RTLX: media de 6 respuestas (0–10) ×
+10.
+Revisar calidad antes de comparar
+trayectorias.
+Público Clasificado
+19
+Estado de la evidencia y
+siguiente etapa
+CEINNA:
+verificaciones
+con
+datos
+sintéticos.
+EMAVI: recorrido de interfaces reales.
+Calificar tiempo físico y respuesta
+humana.
+Siguiente etapa: ejecutar y analizar
+visitas.
+Público Clasificado
+20
+Conclusiones
+Documentar la demanda experimental.
+Vincular
+configuración,
+evento
+y
+métrica.
+Revisar calidad y procedencia del
+registro.
+Seguir la trayectoria de cada persona.
+Público Clasificado
+21
+Referencias I
+[1] Cegarra et al. (2020). OpenMATB.
+[2] Pontiggia, Gomez-Mérino et al.
+(2024). MATB y niveles de carga
+mental.
+[3] Pontiggia, Fabries et al. (2024).
+Hipoxia, restricción de sueño y carga.
+Público Clasificado
+22
+Referencias II
+[4] Tortello et al. (2020). Estimación
+temporal en la Antártida.
+[5] Vogl et al. (2024). USAARL MATB.
+[6]
+Laverde-López
+et
+al.
+(2022).
+Validación colombiana de KSS.
+Público Clasificado
+Políticas de Privacidad
+Información Calificada
+El contenido de ésta presentación es propiedad de la Fuerza Aérea Colombiana. Es para
+uso exclusivo del destinatario y puede contener información que goza de reserva legal.
+Por lo tanto, no es de carácter público. Se informa que, cualquier uso, difusión,
+distribución, duplicado, copiado, revisión, retransmisión o diseminación de esta
+comunicación, así como, cualquier acción que se tome respecto a la información
+contenida, por personas o entidades diferentes al propósito original de la misma, no
+esta autorizado.
+Público Clasificado
+
