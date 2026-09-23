@@ -24,7 +24,7 @@
     "sources": "Estructura de la presentación EMAVI."
   },
   {
-    "title": "Pregunta y diseño de investigación",
+    "title": "Pregunta y diseño",
     "seconds": 45,
     "oral": "La pregunta central es cómo varían el desempeño multitarea y la carga percibida entre condiciones de demanda y a lo largo de ASTRA. La unidad de seguimiento es la persona, observada en varias visitas y bloques. Separar demanda, desempeño y percepción permite interpretar respuestas diferentes ante una misma tarea. Presentaré el diseño y un recorrido de la aplicación. Las capturas corresponden a una demostración local con registros sintéticos; los datos humanos de las misiones se obtendrán mediante la ejecución del protocolo.",
     "sources": "CEINNA/guion/diapositivas.md, láminas 4, 11; Manual ASTRA §4.7."
@@ -48,7 +48,7 @@
     "sources": "[1] Cegarra et al., 2020; [6] Laverde-López et al., 2022; CEINNA/evidencia/auditoria_matb.md; matb_integration/metrics_spec.json."
   },
   {
-    "title": "Fisiología: adquisición y calidad",
+    "title": "Adquisición fisiológica",
     "seconds": 30,
     "oral": "ASTRA incluye una línea fisiológica propia. Polar H10 puede aportar intervalos R–R cuando se verifica la ruta de captura; ActiGraph registra movimiento y actividad. La variabilidad cardíaca se calcula después de revisar calidad, cobertura y sincronización. La demostración de EMAVI solo presenta preparación y requisitos; no conectó sensores ni registró señales humanas.",
     "sources": "Manual ASTRA v2.5, adquisición fisiológica; matb_integration/physiology/contracts.py y analysis.py; EMAVI/video/ALCANCE_Y_VERIFICACION.md, Polar H10. Ilustración conceptual generada con IA, no evidencia."

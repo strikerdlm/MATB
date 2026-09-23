@@ -2,7 +2,7 @@
 
 Pública clasificada. Texto condensado para los cuadros de la plantilla FAC. Los detalles y las referencias completas se conservan en las notas y en Referencias_APA.md. Exportación pendiente de aprobación gráfica.
 
-## 5. Pregunta y diseño de investigación
+## 5. Pregunta y diseño
 
 Demanda programada; desempeño y carga percibida por separado.
 
@@ -32,7 +32,7 @@ Ilustración conceptual generada con IA; sin datos ni captura de MATB.
 - COMM y RESMAN: respuestas y regulación.
 - KSS antes; ISA durante; NASA-TLX después.
 
-## 9. Fisiología: adquisición y calidad
+## 9. Adquisición fisiológica
 
 Polar H10: intervalos R–R, si la ruta se verifica.
 

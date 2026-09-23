@@ -3,7 +3,8 @@
 ## Edición visual · 23 de septiembre de 2026
 
 - [PowerPoint visual editable, 17 láminas](entregables/ASTRA_MATB_III_CEINNA_es_visual.pptx): ilustraciones conceptuales en las láminas 5, 8 y 9; la captura documental de OpenMATB permanece en la 7.
-- [Vista previa PDF de 17 páginas](entregables/ASTRA_MATB_III_CEINNA_es_visual_preview.pdf): raster de revisión; la exportación PDF nativa de PowerPoint sigue pendiente de ejecutarse en Windows.
+- [PDF nativo de PowerPoint, 17 páginas](entregables/ASTRA_MATB_III_CEINNA_es_visual.pdf): exportado en Windows el 23-09-2026, con texto seleccionable. La [vista previa raster anterior](entregables/ASTRA_MATB_III_CEINNA_es_visual_preview.pdf) se conserva como antecedente.
+- [Verificación de la exportación nativa](revision/verificacion_exportacion_nativa.json) y [revisión visual](revision/revision_exportacion_nativa.md).
 - [Notas de la edición visual](entregables/Notas_del_ponente_visual_es.md), [mapa](guion/mapa_diapositivas_visual.csv), [procedencia de activos](visuales/registro_activos_visual.csv) y [prompts](visuales/PROMPTS_IMAGEGEN_2026-09-23.md).
 
 La nueva lámina distingue la adquisición fisiológica del protocolo MATB. Polar H10 puede aportar R–R cuando se verifica la ruta; ActiGraph registra movimiento; HRV es derivada y depende de calidad. Las imágenes no representan participantes, señales ni resultados de misión. La exposición visual suma 720 segundos previstos. La documentación y el PDF sin sufijo `_visual` conservan el paquete original de 16 láminas.

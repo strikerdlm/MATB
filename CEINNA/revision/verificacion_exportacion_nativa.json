@@ -1,0 +1,16 @@
+{
+  "date": "2026-09-23",
+  "export_engine": "Microsoft® PowerPoint® for Microsoft 365",
+  "pptx_slides": 17,
+  "pdf_pages": 17,
+  "embedded_notes_verified": 17,
+  "native_pdf_text_verified": true,
+  "broken_internal_relationships": 0,
+  "planned_seconds": 720,
+  "human_rehearsal_performed": false,
+  "source_manifest_hash_mismatches": [
+    "fuentes/Manual_de_Operaciones_ASTRA_2026.md"
+  ],
+  "pptx_sha256": "49978faecd4314ea9b2e44535bd08a1c01eb9b473210fb26a172e3acb1a650f8",
+  "pdf_sha256": "bf4ca9c38436b1b5d7170d9e170b92a1c6013f1aa4fbeb2121e1f36fab8b31d4"
+}

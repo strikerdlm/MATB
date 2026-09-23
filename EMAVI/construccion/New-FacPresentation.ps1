@@ -127,6 +127,25 @@ foreach ($item in @($manifest.content | Where-Object { $_.type -eq 'image_text' 
 $outputFullPath = [System.IO.Path]::GetFullPath($OutputPath); [System.IO.Directory]::CreateDirectory((Split-Path -Parent $outputFullPath)) | Out-Null
 Copy-Item -LiteralPath $templateFullPath -Destination $outputFullPath -Force
 
+# Set metadata in the package: PowerShell 7 cannot reliably bind Office property COM types.
+$archive=[IO.Compression.ZipFile]::Open($outputFullPath,[IO.Compression.ZipArchiveMode]::Update)
+try {
+    $entry=$archive.GetEntry('docProps/core.xml')
+    $reader=[IO.StreamReader]::new($entry.Open())
+    try { [xml]$core=$reader.ReadToEnd() } finally { $reader.Dispose() }
+    $ns=[Xml.XmlNamespaceManager]::new($core.NameTable)
+    $ns.AddNamespace('dc','http://purl.org/dc/elements/1.1/')
+    foreach($pair in @(@('title','MATB y ASTRA - EMAVI'),@('creator','SMSM DIEGO L MALPICA'),@('subject','Público Clasificado - Investigación y demostración'))) {
+        $node=$core.SelectSingleNode('//dc:'+$pair[0],$ns)
+        if(-not $node){$node=$core.CreateElement('dc',$pair[0],$ns.LookupNamespace('dc'));[void]$core.DocumentElement.AppendChild($node)}
+        $node.InnerText=$pair[1]
+    }
+    $entry.Delete()
+    $writer=[IO.StreamWriter]::new($archive.CreateEntry('docProps/core.xml').Open())
+    try {$core.Save($writer)} finally {$writer.Dispose()}
+} finally {$archive.Dispose()}
+
+
 $app = $null; $presentation = $null
 try {
     $app = Assert-Dependencies
@@ -213,9 +232,6 @@ try {
             }
         }
     }
-    $presentation.BuiltInDocumentProperties.Item('Title').Value='MATB y ASTRA - EMAVI'
-    $presentation.BuiltInDocumentProperties.Item('Author').Value='SMSM DIEGO L MALPICA'
-    $presentation.BuiltInDocumentProperties.Item('Subject').Value='Público Clasificado - Investigación y demostración'
     $presentation.Save()
     $presentation.SaveAs([IO.Path]::ChangeExtension($outputFullPath,'.pdf'),32)
 
