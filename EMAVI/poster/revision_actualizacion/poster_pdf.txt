@@ -1,0 +1,91 @@
+                                                MATB-FAC: PLATAFORMA DE INVESTIGACIÓN
+                                               DEL DESEMPEÑO HUMANO Y LA CARGA MENTAL
+                                                                                Diego Leonel Malpica Hincapié
+                                                                diego.malpica@fac.mil.co · ORCID: 0000-0002-2257-4940
+                                                   Fuerza Aeroespacial Colombiana · Dirección de Medicina Aeroespacial · Bogotá, Colombia
+
+
+
+
+           RESUMEN
+Resumen. Se revisaron la implementación y los artefactos técnicos de MATB-FAC. La plataforma reúne tareas OpenMATB, carga percibida, simulación y adquisición fisiológica
+experimental con trazabilidad por evento. Una verificación sintética documenta 11 métricas recomputadas; la calificación del entorno y la validación humana permanecen
+pendientes.
+Abstract. MATB-FAC combines multitask performance, perceived workload, simulation and experimental physiology with event-level provenance. A documented synthetic
+verification recomputed 11 metrics; environment qualification and human validation remain pending.
+Palabras clave / Keywords: carga mental / mental workload; desempeño humano / human performance; simulación / simulation.
+MATB: batería multitarea de atributos múltiples. FAC: Fuerza Aeroespacial Colombiana.
+
+
+
+           INTRODUCCIÓN                                                                                                      METODOLOGÍA
+ El estudio de la multitarea exige documentar la demanda programada y                                          Revisión técnica del código, contratos de medición y artefactos de
+ separar desempeño, carga percibida y fisiología. OpenMATB permite                                             verificación [4]. Se distinguen capacidades implementadas, comprobaciones
+ configurar tareas reproducibles [1]; la diversidad de configuraciones limita                                  sintéticas y validación pendiente. Esta revisión no incorpora datos de
+ las comparaciones entre estudios [2,3]. Objetivo: describir las                                               participantes.
+ capacidades actuales y el alcance de su evidencia técnica.
+
+                                                                                                                        1     ESCENARIO
+                                                                                                                              Tareas, eventos, duración y semilla
+
+
+       DESEMPEÑO                    CARGA PERCIBIDA                       FISIOLOGÍA                                    2     CAPTURA
+                                                                                                                              Práctica o estudio; eventos y manifiesto
+    respuestas y control                  autoinforme                 contexto descriptivo
+                                                                                                                        3     CALIDAD
+                                                                                                                              Integridad, procedencia y exclusiones
+
+                 Dominios relacionados, analizados por separado.                                                              MÉTRICAS
+                                                                                                                        4
+                                                                                                                              Definición versionada y enlace al evento
+
+
+                                                                                                                        5     ANÁLISIS LONGITUDINAL
+                                                                                                                              Persona, visita, bloque y condición
+
+         RESULTADOS
+  CAPACIDADES IMPLEMENTADAS [4]
+
+  OpenMATB: vigilancia, seguimiento, comunicaciones y gestión de                                                                  DISCUSIÓN
+  recursos; escenarios y métricas versionadas.
+  Consola: práctica/estudio, evidencia por evento y seguimiento entre visitas.                                  La trazabilidad permite revisar cómo se obtuvo cada métrica. La
+  Módulos opcionales: supervisión sUAS sintética, simulación FPV y                                              disponibilidad de software y la recomputación sintética no establecen
+  adquisición Polar H10 experimental.                                                                           por sí solas validez de medición en personas [4,5].
+
+
+
+                                                                                                                                       ALCANCE DE LA EVIDENCIA ACTUAL
+                           MÉTRICAS RECOMPUTADAS
+         11                Valores y enlaces coincidentes
+                           en un paquete sintético [5].
+                                                                                                                    VERIFICACIÓN DE SOFTWARE
+                                                                                                                    Evidencia técnica y sintética documentada
+
+    Informe revisado: 23-09-2026. Dependencias sin
+    coincidencia con el archivo de bloqueo;                                                                         TIEMPO FÍSICO
+    entorno de publicación aún no calificado.                                                                       Calificación pendiente en el equipo utilizado
+
+
+                                                                                                                    CALIBRACIÓN HUMANA
+                                                                                                                    Demanda experimental pendiente de calibración
+
+            CONCLUSIONES                                                                                            CONFIABILIDAD Y VALIDEZ
+                                                                                                                    Evaluación con participantes pendiente
+  La contribución es vincular configuración, evento, calidad y métrica en
+  un flujo auditable.                                                                                               TRANSFERENCIA EXTERNA
+  El seguimiento longitudinal conserva separados desempeño, carga                                                   Sin evidencia de transferencia operacional
+  percibida y fisiología.
+  La siguiente etapa requiere calificar el equipo y evaluar calibración,
+  confiabilidad y validez con participantes.                                                                                Uso de investigación; sin diagnóstico ni calificación de aptitud.
+
+
+
+
+         REFERENCIAS
+[1] Cegarra J. et al. OpenMATB. Behav Res Methods. 2020;52:1980–1990. doi:10.3758/s13428-020-01364-w.
+[2] Pontiggia A. et al. MATB for assessing different mental workload levels. Front Physiol. 2024;15:1408242. doi:10.3389/fphys.2024.1408242.
+[3] Vogl J. et al. The USAARL Multi-Attribute Task Battery. Front Neuroergon. 2024;5:1435588. doi:10.3389/fnrgo.2024.1435588.
+[4] MATB-FAC. Código y documentación técnica. Revisión e7173321ac85, 23-09-2026.
+[5] MATB-FAC. Verificación sintética de exportación EMAVI. Código de origen 24d37b52da71; informe revisado el 23-09-2026.
+sUAS: sistema de aeronave pequeña no tripulada. FPV: visión en primera persona. Fuentes y límites: auditoría adjunta.
+

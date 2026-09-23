@@ -1,0 +1,31 @@
+{
+  "date": "2026-09-23",
+  "checks": {
+    "original_unchanged": true,
+    "no_text_overflow": true,
+    "zip_crc_ok": true,
+    "single_slide": true,
+    "dimensions_80x120cm": true,
+    "all_editable_paragraphs_in_pdf": true,
+    "no_superseded_claims_or_commercial_name": true,
+    "internal_relationships_resolve": true,
+    "pdf_single_page": true,
+    "pdf_metadata_updated": true,
+    "pdf_dimensions_match": true,
+    "pdf_has_selectable_text": true
+  },
+  "passed": true,
+  "dimensions_cm": [
+    80.00118055555555,
+    120.00177222222223
+  ],
+  "text_paragraphs": 73,
+  "missing_pdf_paragraphs": [],
+  "broken_relationships": [],
+  "minimum_font_pt": 20.0,
+  "sha256": {
+    "EMAVI_2026_poster_Malpica_actualizado.pptx": "c437cf392162f32f1a6385b4d899e913b658e6b362799a82037eec345be8b70a",
+    "EMAVI_2026_poster_Malpica_actualizado.pdf": "ac69c187ee5faa643362bce2e5e4112aca70a1ab7d3bbf267b29700e08fe7a7e",
+    "EMAVI_2026_poster_Malpica.pptx": "f417ce73dbff8f12901d8cb071ab5306eceeaf44245fa7b6fbde6a692717c5fd"
+  }
+}
