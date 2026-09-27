@@ -1,72 +1,66 @@
 # EMAVI — MATB y ASTRA
 
-## Edición visual exportada · 23 de septiembre de 2026
+## Edición ampliada · 27 de septiembre de 2026
 
-El manifiesto FAC ahora contempla 24 láminas: una ilustración conceptual de atención dividida en la pregunta de investigación y una lámina nueva de adquisición fisiológica. Ambas imágenes PNG conservan alfa transparente y su procedencia está en [visuales/PROMPTS_IMAGEGEN.md](visuales/PROMPTS_IMAGEGEN.md). Las siete capturas reales de la aplicación permanecen documentales. El guion actualizado dura 11:15. El PowerPoint y el PDF nativo se exportaron en Windows tras registrar la aprobación del usuario en `fuentes/aprobacion_politica.json`.
+La presentación ampliada contiene **40 diapositivas**, con guion programado de **29:00**. El video de 8:34 y las preguntas son independientes. La duración es estimada; no se ha realizado un ensayo humano.
 
-**Público Clasificado · PPTX y PDF nativo exportados y verificados.**
+El rótulo **Público Clasificado** aparece únicamente en la diapositiva 2, según la instrucción del usuario. Se conserva la clasificación del material y el aviso institucional; la política gráfica anterior queda documentada en `fuentes/historico_20260923/`.
 
-La clasificación fue declarada por el usuario como «Publica clasificada». El campo literal de la plantilla es **Público Clasificado**. La política gráfica aprobada conserva ese rótulo en el contenido y los avisos antes y después de la exposición. No se ha convertido el material a información pública.
+- [PowerPoint editable ampliado](entregables/ASTRA_MATB_EMAVI_es_ampliada.pptx).
+- [PDF nativo ampliado](entregables/ASTRA_MATB_EMAVI_es_ampliada.pdf).
+- [Contenido de las diapositivas](entregables/Contenido_diapositivas.md) y [notas del ponente](entregables/Notas_del_ponente_es.md).
+- [Revisión crítica del corpus](entregables/Revision_evidencia_MATB_ASTRA.md) y [24 referencias numeradas](entregables/Referencias_APA.md).
+- [Verificación del archivo exportado](revision/verificacion_ampliada.json) y [revisión visual](revision/revision_ampliada.md).
 
-## Material preparado
+## Contenido científico
 
-- [PowerPoint editable, 24 láminas](entregables/ASTRA_MATB_EMAVI_es.pptx).
-- [PDF nativo, 24 páginas](entregables/ASTRA_MATB_EMAVI_es.pdf).
-- [Verificación nativa](revision/verificacion_exportacion_nativa.json) y [revisión visual](revision/revision_exportacion_nativa.md).
+Las diapositivas 6–15 explican las tareas MATB, su evolución, la comparación entre NASA MATB/MATB-II, AF_MATB, OpenMATB, USAARL y MATB-FAC, las aplicaciones de NASA, USAF y US Army y la evidencia de sensibilidad, memoria prospectiva, interfaces y medición multimodal. La tabla comparativa es nativa y editable. Se distingue documentación técnica, resultados de estudios específicos y aspectos que requieren validación local.
 
-- **[Abrir demostración interactiva](Abrir_demostracion.cmd)**: video en español, capítulos, preguntas y estación 3D. Requiere Node.js; sirve el contenido localmente.
-- **[Video MP4](entregables/EMAVI_recorrido_es.mp4)**: 8:34 aproximadamente, Full HD, 30 fps, 18 capítulos y 75 subtítulos por frase en español. Versión continua para proyectar después de la presentación.
-- [Alcance de la grabación y verificación](video/ALCANCE_Y_VERIFICACION.md): identifica las pruebas ejecutadas, las vistas de preparación y los datos sintéticos.
+Las diapositivas 16–23 desarrollan ASTRA: fundamentos NASA, hábitat terrestre, tripulación y MCC, calendario previsto, jornada y EVA simuladas, medición multimodal, ocho visitas MATB y análisis longitudinal. Se prioriza el manual v2.6 del 25 de septiembre. Las fechas corresponden a planificación, no a misiones o resultados ya realizados.
 
-- [Contenido de las diapositivas](entregables/Contenido_diapositivas.md): 18 láminas de contenido; secuencia FAC de 24 láminas.
-- [Demostración de la aplicación](entregables/Demostracion_app.html): siete capturas focales y enlaces a sus originales completos.
-- [Notas del ponente](entregables/Notas_del_ponente_es.md): 11:15 de discurso programado; sin ensayo humano. El tiempo del evento EMAVI no fue especificado.
-- [Referencias](entregables/Referencias_APA.md): seis referencias heredadas del paquete CEINNA y su verificación del 21-09-2026.
-- [Política gráfica aprobada](fuentes/politica_clasificacion.md).
-- [Vista previa del aviso y cierre](entregables/Propuesta_aviso_y_cierre.pdf).
-- [Procedencia de las capturas](capturas/procedencia.json).
+Las siete capturas de la aplicación ocupan las diapositivas 24–30. Las diapositivas 31–36 presentan aplicaciones locales en aviación convencional, UAS y otros dominios, una ruta de desarrollo y el estado de preparación. Se explicita la diferencia entre las ocho visitas del manual y los tres hitos del perfil actual del software; esta ampliación no modifica el protocolo de la aplicación.
 
-El contenido conserva la estructura científica de CEINNA: pregunta, diseño, medición, trazabilidad, análisis y siguiente etapa. Los detalles particulares del congreso CEINNA no se presentan como programación de EMAVI.
+La revisión incluye 16 documentos MATB, seis PDF NASA, ocho documentos operativos y cinco registros externos de contraste. Las síntesis narrativas y duplicados se identifican para evitar contarlos como evidencia primaria adicional. El [registro de fuentes](fuentes/registro_fuentes.json) conserva ubicaciones, hashes y localizadores; la [matriz de afirmaciones](fuentes/matriz_afirmaciones.json) vincula el contenido con sus fuentes. Es una revisión narrativa estructurada del corpus solicitado, no una revisión sistemática exhaustiva ni un metaanálisis.
 
-Las capturas muestran catálogo, diseñador de experimentos, vista previa de OpenMATB, KSS, mapa sUAS, inspector de evidencia y revisión de un evento. El catálogo se recapturó con la etiqueta «Pruebas»; las demás son pantallas reales del checkout `24d37b52da7196e5c69f9a8cfc9481c04fd1221d`, ejecutado localmente con una base aislada. El mapa corresponde a una sesión técnica sintética; el inspector utiliza `synthetic_capture`. No se consultaron grabaciones reales de participantes.
+## Ilustraciones y material documental
 
-## Estado de verificación
+Se incorporan seis ilustraciones conceptuales de estilo didáctico: cuatro tareas MATB, hábitat, tripulación y MCC, EVA terrestre, medición y sueño, y aviación convencional/UAS. Fueron creadas con la herramienta integrada imagegen. [Prompts, revisión y límites](visuales/AMPLIACION_IMAGEGEN.md) · [procedencia y hashes](assets/fac-visuals/procedencia.json).
 
-- Video: decodificación completa de audio y video sin errores. El reproductor superó navegación, preguntas y reanudación, pantalla completa, vista móvil sin desbordamiento y movimiento reducido. Cero errores de consola y solicitudes externas. [Informe de entrega y hashes](revision/entrega-video.json) · [Revisión visual de los 18 capítulos](revision/storyboard-video.png).
-- Modelo 3D: TypeScript estricto sin errores, geometría finita y reensamblaje exacto después de diez ciclos. Estación de seis componentes con el dron REDLINE importado: 17 conjuntos y cuatro rotores. La escena del dron registra 97 llamadas de dibujo y 129.996 triángulos; mediana de 16,8 ms y percentil 95 de 33,5 ms por cuadro. Mediciones de Chrome automatizado; no representan una validación en todos los dispositivos.
+Las imágenes no son fotografías de participantes, planos verificados ni resultados experimentales. Se conserva el alfa de los PNG originales y su inclusión sin recorte. La primera variante de medición no está seleccionada; la versión corregida muestra el cinturón torácico en contacto con la piel.
 
-- Compilación de producción y TypeScript del frontend completados con éxito en `.next/emavi-hd` para esta revisión.
-- Siete imágenes inspeccionadas, en PNG con margen alfa transparente; originales completos conservados. El margen se añadió mediante una composición de Chromium sin cambiar píxeles, texto o valores de la captura focal.
-- Exportación sintética: 11 métricas recomputadas y vínculos coincidentes. [Informe](revision/verificacion_exportacion.json). La huella de dependencias no coincide con el archivo de bloqueo; el resultado no certifica un entorno de publicación calificado.
-- La [auditoría previa de texto](revision/auditoria_texto_previa.json) comprobó 33 cuadros de contenido mediante PowerPoint COM, sin desbordamientos; no reemplaza la revisión visual del PPTX final.
-- PowerPoint y PDF finales: 24 láminas/páginas, 24 notas verificadas, texto PDF seleccionable y relaciones internas íntegras. Validación FAC completa y revisión visual de todas las láminas; aprobación registrada el 23-09-2026.
+Las siete capturas de la aplicación conservan sus archivos y [procedencia original](capturas/procedencia.json). Muestran catálogo, diseñador, OpenMATB, KSS, sUAS, inspector de evidencia y revisión de un evento. El mapa utiliza una sesión técnica sintética y el inspector utiliza `synthetic_capture`; no se consultaron registros reales de participantes.
 
-## Plantilla y construcción
+## Demostración y edición anterior
 
-`fuentes/FAC-template.pptx` es una copia intacta de la plantilla de la skill FAC-template, SHA-256 `147312eaac5e5c164b9433b072c36c104be8f8e090405539bb4e0bdbf4fc6959`.
+- [Abrir demostración interactiva](Abrir_demostracion.cmd): video en español, capítulos, preguntas y estación 3D; requiere Node.js.
+- [Video MP4](entregables/EMAVI_recorrido_es.mp4): 8:34 aproximadamente, Full HD, 30 fps, 18 capítulos.
+- [Demostración de la aplicación](entregables/Demostracion_app.html).
+- [Alcance y verificación previa del video](video/ALCANCE_Y_VERIFICACION.md) y [registro de entrega](revision/entrega-video.json).
+- Edición anterior del 23 de septiembre, conservada: [PPTX de 24 diapositivas](entregables/ASTRA_MATB_EMAVI_es.pptx) y [PDF](entregables/ASTRA_MATB_EMAVI_es.pdf).
 
-Los scripts locales `New-FacPresentation.ps1`, `Test-FacPresentation.ps1` y `Fac-Raster.ps1` proceden de `C:/Users/User/.codex/skills/fac-template/scripts`. Los dos primeros se han preparado para la política propuesta: aviso de la lámina 4, rótulo de clasificación en contenido, reiteración del aviso y cierre intacto. La skill instalada no fue modificada. Estas adaptaciones se ejecutaron y superaron la validación FAC y la revisión visual final.
+La ampliación conserva la edición anterior, las capturas, el video, el póster y el funcionamiento de la aplicación. Las verificaciones previas de esos materiales no se presentan como pruebas nuevas. La recomputación sintética anterior de once métricas conserva la limitación sobre la huella de dependencias descrita en su [informe](revision/verificacion_exportacion.json).
 
-La skill enumera los modelos Sol/Terra/Luna; no están disponibles en esta sesión. La síntesis y preparación fueron realizadas por el asistente actual y la automatización local. No se invocaron ni se atribuyeron revisiones a esos modelos. Las siete capturas de aplicación son documentales. Las dos ilustraciones conceptuales nuevas se generaron con la herramienta integrada imagegen y se identifican por separado; no se enviaron registros de participantes.
+## Construcción y comprobación
 
-Para reproducir la exportación con la aprobación registrada:
+`fuentes/FAC-template.pptx` permanece intacta, con SHA-256 `147312eaac5e5c164b9433b072c36c104be8f8e090405539bb4e0bdbf4fc6959`. Se mantienen apertura, cierre, marcas, fondos y líneas institucionales. Los scripts locales adaptan el aviso inicial único y añaden tablas editables dentro del área libre; la skill instalada no se modifica. La [política gráfica](fuentes/politica_clasificacion.md) y su [registro de aprobación](fuentes/aprobacion_politica.json) documentan la instrucción del usuario.
 
 ```powershell
+python .\EMAVI\construccion\preparar_ampliacion.py
+python .\EMAVI\construccion\revisar_fuentes.py
+pwsh -NoProfile -File .\EMAVI\construccion\Confirmar-Ilustraciones.ps1
 pwsh -NoProfile -File .\EMAVI\construccion\New-FacPresentation.ps1 `
   -ManifestPath .\EMAVI\fuentes\manifest.json `
-  -OutputPath .\EMAVI\entregables\ASTRA_MATB_EMAVI_es.pptx `
-  -RenderDirectory .\EMAVI\revision\diapositivas
-pwsh -NoProfile -File .\EMAVI\construccion\Test-FacPresentation.ps1 `
-  -DeckPath .\EMAVI\entregables\ASTRA_MATB_EMAVI_es.pptx `
-  -ManifestPath .\EMAVI\fuentes\manifest.json
+  -OutputPath .\EMAVI\entregables\ASTRA_MATB_EMAVI_es_ampliada.pptx `
+  -RenderDirectory .\EMAVI\revision\diapositivas_ampliada
+python .\EMAVI\construccion\verificar_ampliacion.py
 ```
 
-Después deben revisarse todas las diapositivas renderizadas, el número de páginas PDF, las notas, los avisos, la geometría y las imágenes incrustadas. No usar `-SkipDeckValidation` para la entrega.
+La exportación requiere Windows, PowerPoint de escritorio y fuentes Arial/Times New Roman. La revisión bibliográfica usa los directorios locales solicitados; la comprobación del PDF usa Poppler. El generador ejecuta el validador nativo de geometría, tipografía, tablas e imágenes. Después se revisan visualmente las 40 diapositivas. Los programas cierran únicamente las presentaciones que abren para construir o validar.
 
 ## Reproducir la demostración
 
 Los scripts `capture_*.js` son funciones para `playwright-cli run-code --filename` y requieren navegar primero al estado indicado. `recapture_design.js` prepara el diseñador directamente. Son recetas de captura, no una suite de pruebas de la aplicación.
 
-El lanzador `construccion/run_demo.mjs` utiliza los puertos 8018/3118 y guarda sus datos en `construccion/runtime/`, excluido del control de versiones. En esta ejecución se utilizó un entorno local con acceso a los paquetes del entorno Conda `matb` y las versiones fijadas `fastapi==0.141.1`, `starlette==1.6.0` y `anyio==4.14.2`. No se modificó el entorno Conda compartido. Para iniciar, definir `MATB_PYTHON` con la ruta del Python preparado y ejecutar el lanzador. El frontend requiere construir previamente con `MATB_NEXT_DIST_DIR=.next/emavi-hd` y usar esa misma variable al iniciar el lanzador.
+El lanzador `construccion/run_demo.mjs` utiliza los puertos 8018/3118 y guarda sus datos en `construccion/runtime/`, excluido del control de versiones. La edición anterior utilizó un entorno local con acceso a los paquetes Conda `matb` y las versiones fijadas `fastapi==0.141.1`, `starlette==1.6.0` y `anyio==4.14.2`. Para iniciar, definir `MATB_PYTHON` con la ruta del Python preparado y ejecutar el lanzador. El frontend requiere construir previamente con `MATB_NEXT_DIST_DIR=.next/emavi-hd` y usar esa misma variable al iniciar el lanzador.
 
-Durante la captura se observó que un intento de compilar mientras la estación estaba ocupada podía producir un error de interfaz (`compiled.manifest.spec`); recargar y compilar con la estación libre permitió obtener la captura final. No se modificó el software para esta presentación. La recuperación de la práctica KSS y el cierre de las misiones se registraron explícitamente en la base sintética.
+Durante aquella captura, compilar con la estación ocupada produjo un error de interfaz (`compiled.manifest.spec`); recargar y compilar con la estación libre permitió obtener la captura final. La recuperación de la práctica KSS y el cierre de las misiones se registraron en la base sintética. No se modifica el software para esta ampliación.

@@ -1,0 +1,121 @@
+{
+  "date": "2026-09-27",
+  "slides": 40,
+  "notes": 40,
+  "scheduled_seconds": 1740,
+  "spoken_words": 3292,
+  "human_rehearsal": false,
+  "images": [
+    {
+      "slide": 6,
+      "file": "assets\\fac-visuals\\01_cuatro_tareas.png",
+      "sha256": "51a23f4be04ae782f9fdad265ba613f0cf78a919a6a0e4427f111c7fa509d5a1"
+    },
+    {
+      "slide": 16,
+      "file": "assets\\fac-visuals\\02_habitat.png",
+      "sha256": "9c8cc1ef938b45c6cca227e9329295a8593f256a42ef6679608b15de8063328f"
+    },
+    {
+      "slide": 18,
+      "file": "assets\\fac-visuals\\03_tripulacion_mcc.png",
+      "sha256": "765fa4479f7f8aed39479c325688385205bd053ec1fbe20e52a71d74a09a938b"
+    },
+    {
+      "slide": 20,
+      "file": "assets\\fac-visuals\\04_eva.png",
+      "sha256": "4a1ab245e67fd4410f635df748eee1bc39b1a7de9920de2f4b96aef26e86d78b"
+    },
+    {
+      "slide": 21,
+      "file": "assets\\fac-visuals\\05_medicion-v2.png",
+      "sha256": "13132f9c58d134398ad56725df86f2573bff585ff408578dd499c6a9363cc410"
+    },
+    {
+      "slide": 24,
+      "file": "capturas\\01_catalogo.png",
+      "sha256": "2c36f9b8fa27a51f5daf57a11c9dcf1fe77dbd4c3c45256fae17413a327009ec"
+    },
+    {
+      "slide": 25,
+      "file": "capturas\\02_diseno.png",
+      "sha256": "a30d96aa9ecf256d87edbee8a720777c985ae97eba1b216e67df8e07eca8f441"
+    },
+    {
+      "slide": 26,
+      "file": "capturas\\03_openmatb.png",
+      "sha256": "93eee6f05805251687d9eba20b2f9ca8a5c08b7933dc351e6cff29ac558318c0"
+    },
+    {
+      "slide": 27,
+      "file": "capturas\\04_kss.png",
+      "sha256": "9fcf3088a353ea5656179f3a887777d07e7191df40de36f70ee56c081ce565ba"
+    },
+    {
+      "slide": 28,
+      "file": "capturas\\05_suas.png",
+      "sha256": "e47a3ec64b0a8850214767c2e72ad895127012b32660c6877ae1d05a53d93247"
+    },
+    {
+      "slide": 29,
+      "file": "capturas\\06_evidencia.png",
+      "sha256": "60eee168bf174b86fb88f64fd2cf6313592266336efec939367a2895f63c02e2"
+    },
+    {
+      "slide": 30,
+      "file": "capturas\\07_evento.png",
+      "sha256": "82ce9e3ec205e739e57168bb350f5259aee4c80a91f1952ead552792ea34d436"
+    },
+    {
+      "slide": 31,
+      "file": "assets\\fac-visuals\\06_aviacion_uas.png",
+      "sha256": "52734d0f04fa6dd404269d18c258fa17c9f178f35f320bb3d6771b4f4ee06a03"
+    }
+  ],
+  "tables": [
+    7,
+    8,
+    11,
+    12,
+    14,
+    17,
+    19,
+    22,
+    33,
+    34,
+    37,
+    38,
+    39
+  ],
+  "internal_relationships": "passed",
+  "classification_visible_slides": [
+    2
+  ],
+  "pdf": {
+    "pages": 40,
+    "native_export": true,
+    "text_selectable": true,
+    "classification_visible_pages": [
+      2
+    ]
+  },
+  "artifacts": [
+    {
+      "file": "entregables\\ASTRA_MATB_EMAVI_es_ampliada.pptx",
+      "bytes": 22734776,
+      "sha256": "895f608c9ee67eddf244d234c74d54ca7cb62449d2766f5933899c313e6f40c7"
+    },
+    {
+      "file": "entregables\\ASTRA_MATB_EMAVI_es_ampliada.pdf",
+      "bytes": 3613541,
+      "sha256": "e4b9a4f3f3bd26c9c6734c79b7ab445c9c7bcc2dca1a14b22c044ace20a2d290"
+    }
+  ],
+  "native_layout_validation": {
+    "result": "passed",
+    "record": "revision\\verificacion_fac_ampliada.json",
+    "checked_at": "2026-09-27T13:31:32.3993252Z",
+    "deck_sha256": "895f608c9ee67eddf244d234c74d54ca7cb62449d2766f5933899c313e6f40c7"
+  },
+  "result": "passed"
+}

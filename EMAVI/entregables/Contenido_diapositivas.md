@@ -1,151 +1,416 @@
-# Contenido de la presentación EMAVI
+# Presentación EMAVI ampliada
 
-Pública clasificada. Texto condensado para los cuadros de la plantilla FAC. Los detalles y las referencias completas se conservan en las notas y en Referencias_APA.md. Exportación pendiente de aprobación gráfica.
+40 diapositivas. Guion programado: 29:00; sin ensayo humano. Fecha: 2026-09-27.
 
-## 5. Pregunta y diseño
+## 1. Apertura institucional
 
-Demanda programada; desempeño y carga percibida por separado.
+## 2. Aviso inicial
 
-Seguimiento de cada persona entre visitas.
+Única diapositiva con el aviso Público Clasificado.
 
-![Operadora en estación de investigación multitarea; ilustración conceptual](../visuales/imagegen/operador_atencion_conceptual.png)
+## 3. MATB y ASTRA
 
-Ilustración conceptual generada con IA; sin datos ni captura de MATB.
+## 4. Agenda
 
-## 6. Fundamento y reproducibilidad
+## 5. La pregunta de investigación
 
-- OpenMATB: personalización y replicabilidad [1].
-- USAARL: transiciones y automatización [5].
-- 7/19 estudios describieron su configuración con detalle suficiente [2].
+- Relacionar demanda, desempeño y fisiología.
+- Comparar cambios dentro de cada persona.
+- Estudiar aviación, UAS y misión análoga.
+- Conservar condiciones y calidad del registro.
 
-## 7. ASTRA: seguimiento longitudinal
+Fuentes: [4], [8], [21]
 
-- 2 misiones; hasta 6 participantes por misión.
-- 8 visitas: basal, 6 intramisión y posegreso.
-- 3 condiciones × 900 s de escenario.
-- Orden contrabalanceado; reserva de 90 min.
+## 6. Cuatro tareas concurrentes
 
-## 8. Qué se mide en cada bloque
+SYSMON: detectar cambios.
 
-- SYSMON: detecciones, omisiones y latencias.
-- TRACK: desviación respecto al objetivo.
-- COMM y RESMAN: respuestas y regulación.
-- KSS antes; ISA durante; NASA-TLX después.
+TRACK: mantener el seguimiento.
 
-## 9. Adquisición fisiológica
+COMM: atender comunicaciones.
 
-Polar H10: intervalos R–R, si la ruta se verifica.
+RESMAN: regular recursos. [1, 2]
 
-ActiGraph: movimiento. HRV: descriptor derivado.
+Imagen: ../assets/fac-visuals/01_cuatro_tareas.png
 
-Sin señales humanas adquiridas en la demostración.
+Fuentes: [1], [2], [4]
 
-![Banda pectoral y monitor de muñeca; ilustración conceptual](../visuales/imagegen/sensores_fisiologia_conceptual-v2.png)
+## 7. Evolución de MATB
 
-Ilustración conceptual generada con IA; equipos no conectados.
+| Año | Implementación | Desarrollo documentado |
+| --- | --- | --- |
+| 1992 | NASA MATB | Tareas aeronáuticas controlables |
+| 2010–2011 | AF_MATB / NASA MATB-II | Configuración y modernización |
+| 2020 | OpenMATB | Plugins, scripts y replicabilidad |
+| 2024–2025 | USAARL MATB | Demanda dinámica y automatización |
 
-## 10. Demostración
+Fuentes: [1], [2], [3], [4], [5], [6]
 
+## 8. Comparación de plataformas
 
-## 11. Elegir una actividad
+| Plataforma | Aporte técnico | Aplicación documentada | Alcance |
+| --- | --- | --- | --- |
+| NASA MATB / II | Cuatro tareas y registro | Carga y desempeño | Referencia experimental |
+| AF_MATB | Scripts y configuración | Estrategias de atención | Manual técnico |
+| OpenMATB | Código y plugins | Experimentos replicables | Plataforma extensible |
+| USAARL MATB | Automatización y LSL | Control, confianza, carga | Estudios específicos |
+| MATB-FAC | Diseño y procedencia | Investigación local | Validación humana pendiente |
+
+Fuentes: [1], [2], [3], [4], [5], [6]
+
+## 9. NASA: tareas y autonomía
+
+- NASA: referencia para carga y desempeño. [1, 2]
+- Control de eventos y registro por subtarea.
+- HATTB estudia coordinación humano–UAS. [15]
+- Su diseño retoma la filosofía experimental MATB.
+
+Fuentes: [1], [2], [15]
+
+## 10. USAF: demanda y estrategia
+
+- AFRL documentó AF_MATB en 2010. [3]
+- Scripts y parámetros configurables.
+- Programación de demandas y estrategias.
+- Aplicación: investigación de factores humanos.
+
+Fuentes: [3]
+
+## 11. US Army: control compartido
+
+| Diseño | Resultado publicado | Interpretación |
+| --- | --- | --- |
+| 24 aviadores; 2 × 2 | Transparencia × transferencia | Cada piloto probó cuatro condiciones |
+| Más transparencia | Mayor carga; p = 0,002; η² = 0,35 | Efecto de esta configuración |
+| Control voluntario | Mejor perfil de confianza | Control y confianza se estudian juntos |
+| Límite | Muestra pequeña; entorno de escritorio | Transferencia operacional por estudiar |
+
+Fuentes: [5], [6], [7]
+
+## 12. Evidencia de sensibilidad
+
+| Evidencia | Hallazgo | Condición de interpretación |
+| --- | --- | --- |
+| Revisión: 19 estudios | Sensibilidad a demanda y solapamiento | Configuraciones heterogéneas |
+| Descripción suficiente: 7/19 | Dificultad para reproducir escenarios | Publicar parámetros y entrenamiento |
+| Li et al.: n = 26 | Mayor carga, FC y activación prefrontal | Tarea distinta de MATB; universitarios |
+
+Fuentes: [8], [10]
+
+## 13. Memoria prospectiva en vuelo
+
+- 51 pilotos; vuelo visual simulado. [9]
+- MATB-II se asoció con memoria prospectiva.
+- Monitoreo y demanda modifican la relación.
+- Falta validación externa para uso selectivo.
+
+Fuentes: [9]
+
+## 14. Aplicaciones internacionales
+
+| Dominio | Ejemplo | Aprendizaje para investigación |
+| --- | --- | --- |
+| Interfaces de control | Rupp et al.: dispositivos y práctica | Controlar familiaridad y entrenamiento |
+| Realidad virtual | Che et al.: 49 participantes | La profundidad puede añadir demanda |
+| Formación sanitaria | Kennedy y Parker: 10 estudiantes | Separar carga percibida y estrés |
+
+Fuentes: [12], [13], [14]
+
+## 15. Integrar medidas
+
+- Demanda → eventos programados.
+- Desempeño → errores, latencias y seguimiento.
+- Percepción → NASA-TLX; fisiología → señales.
+- HRV: resultados heterogéneos en 29 estudios. [11]
+
+Fuentes: [10], [11], [23]
+
+## 16. ASTRA: misión análoga
+
+Dos misiones independientes de 15 días.
+
+Hábitat Cydonia, Tocancipá; ~120 m².
+
+Meta nominal: seis tripulantes por misión.
+
+Plan previsto; esquema conceptual. [21]
+
+Imagen: ../assets/fac-visuals/02_habitat.png
+
+Fuentes: [21]
+
+## 17. Fundamentos de ASTRA
+
+| Dominio NASA | Pregunta en el análogo | Medición relacionada |
+| --- | --- | --- |
+| Conducta y cognición | ¿Cómo evoluciona la adaptación? | Evaluaciones y bitácoras |
+| Sueño y carga | ¿Cómo se relacionan descanso y tareas? | Actigrafía, KSS y desempeño |
+| Equipos | ¿Cómo cambia la coordinación? | Roles, comunicaciones y debriefing |
+| Integración humano–sistema | ¿Cómo influye el diseño del trabajo? | MATB, interfaces y procedimientos |
+
+Fuentes: [16], [17], [18], [19], [20]
+
+## 18. Tripulación y control
+
+Seis funciones con apoyos cruzados.
+
+MCC: planificación, apoyo y seguimiento.
+
+CAPCOM organiza la comunicación.
+
+Decisiones operativas humanas. [21]
+
+Imagen: ../assets/fac-visuals/03_tripulacion_mcc.png
+
+Fuentes: [18], [19], [21]
+
+## 19. Calendario previsto
+
+| Fase | ASTRA 1 | ASTRA 2 |
+| --- | --- | --- |
+| Basal experimental | 29 septiembre | 28 septiembre |
+| Ingreso / DM1 | 5 octubre | 21 octubre |
+| Egreso / DM15 | 19 octubre | 4 noviembre |
+| Postmisión / D+1 | 20 octubre | 5 noviembre |
+
+Fuentes: [21]
+
+## 20. La jornada de misión
+
+Sueño protegido: 22:30–06:30.
+
+Ciencia, ejercicio y mantenimiento.
+
+EVA simuladas: DM6 y DM12.
+
+Debriefing y bitácora diaria. [21]
+
+Imagen: ../assets/fac-visuals/04_eva.png
+
+Fuentes: [17], [21]
+
+## 21. Medición multimodal
+
+H10: intervalos R–R.
+
+ActiGraph: movimiento y recepción R–R.
+
+ActiLife: verificar la descarga.
+
+Psicología, cognición y bitácoras. [21]
+
+Imagen: ../assets/fac-visuals/05_medicion-v2.png
+
+Fuentes: [11], [21]
+
+## 22. Ocho visitas MATB previstas
+
+| Momento | Visitas del manual | Organización de la sesión |
+| --- | --- | --- |
+| Antes de misión | V0: basal | Familiarización y referencia |
+| Durante la misión | V1–V6: DM2, 4, 7, 10, 13, 15 | Tres bloques × 15 min |
+| Después del egreso | V7: D+1 | Mismo esquema de medición |
+| Cada visita | Reserva de 90 min | Demanda contrabalanceada |
+
+Fuentes: [8], [21]
+
+## 23. Relacionar las trayectorias
+
+- Persona → visita → bloque → condición.
+- Fechas reales, sueño y contexto de actividad.
+- Controlar práctica y calidad de las señales.
+- Análisis exploratorio e incertidumbre explícita.
+
+Fuentes: [8], [11], [21]
+
+## 24. Elegir una actividad
 
 El catálogo presenta las tareas y sus requisitos.
 
-La selección distingue práctica y participación en un estudio.
+Distingue práctica y participación en un estudio.
 
 Captura local de demostración.
 
-![Elegir una actividad](../capturas/01_catalogo.png)
+Imagen: ../capturas/01_catalogo.png
 
-## 12. Diseñar el escenario
+Fuentes: Procedencia de capturas e informes técnicos locales.
+
+## 25. Diseñar el escenario
 
 La línea temporal organiza tareas y eventos.
 
-Duración y semilla definen una configuración reproducible.
+Duración y semilla definen la configuración.
 
-La compilación materializa su procedencia.
+El registro conserva su procedencia.
 
-![Diseñar el escenario](../capturas/02_diseno.png)
+Imagen: ../capturas/02_diseno.png
 
-## 13. Preparar OpenMATB
+Fuentes: Procedencia de capturas e informes técnicos locales.
 
-La consola configura el entorno de cuatro tareas.
+## 26. Preparar OpenMATB
 
-La vista previa permite revisar la presentación antes de ejecutar.
+La consola configura las cuatro tareas.
 
-El entorno de tareas se ejecuta en OpenMATB.
+La vista previa apoya la preparación.
 
-![Preparar OpenMATB](../capturas/03_openmatb.png)
+La ejecución de tareas corresponde a OpenMATB.
 
-## 14. Somnolencia y vigilancia
+Imagen: ../capturas/03_openmatb.png
 
-KSS precede a las instrucciones del PVT.
+Fuentes: Procedencia de capturas e informes técnicos locales.
 
-La secuencia enlaza preparación, actividad y cierre.
+## 27. Somnolencia y vigilancia
 
-Participante de demostración; sin datos humanos.
+KSS registra somnolencia subjetiva.
 
-![Somnolencia y vigilancia](../capturas/04_kss.png)
+PVT evalúa vigilancia en una tarea específica.
 
-## 15. Supervisar una misión
+Ejemplo local con participante de demostración.
 
-El módulo sUAS integra mapa, flota, alertas y controles.
+Imagen: ../capturas/04_kss.png
 
-La captura procede de una prueba técnica sintética.
+Fuentes: Procedencia de capturas e informes técnicos locales.
 
-El registro conserva eventos para revisión posterior.
+## 28. Supervisar una misión UAS
 
-![Supervisar una misión](../capturas/05_suas.png)
+Mapa, flota, alertas y controles.
 
-## 16. Revisar la evidencia
+Registro de eventos para revisión.
 
-La carga pareada reúne manifiestos, eventos y observaciones temporales.
+La captura procede de una prueba sintética.
 
-La consola enlaza cada métrica con su evidencia.
+Imagen: ../capturas/05_suas.png
+
+Fuentes: Procedencia de capturas e informes técnicos locales.
+
+## 29. Revisar la evidencia
+
+La carga reúne manifiestos y eventos.
+
+Cada métrica conserva su evidencia.
 
 Ejemplo sintético de referencia.
 
-![Revisar la evidencia](../capturas/06_evidencia.png)
+Imagen: ../capturas/06_evidencia.png
 
-## 17. Del evento al resultado
+Fuentes: Procedencia de capturas e informes técnicos locales.
 
-La revisión conserva el evento y su base temporal.
+## 30. Del evento al resultado
 
-Los motivos de elegibilidad permanecen visibles.
+Evento y base temporal permanecen vinculados.
 
-La evidencia puede exportarse para recomputación.
+Se conservan motivos de elegibilidad.
 
-![Del evento al resultado](../capturas/07_evento.png)
+La exportación permite recomputar.
 
-## 18. Del registro al análisis longitudinal
+Imagen: ../capturas/07_evento.png
 
-- Escenario → eventos → métricas versionadas.
-- Persona → visita → bloque → condición.
-- RTLX: media de 6 respuestas (0–10) × 10.
-- Revisar calidad antes de comparar trayectorias.
+Fuentes: Procedencia de capturas e informes técnicos locales.
 
-## 19. Estado de la evidencia y siguiente etapa
+## 31. Aviación convencional
 
-- CEINNA: verificaciones con datos sintéticos.
-- EMAVI: recorrido de interfaces reales.
-- Calificar tiempo físico y respuesta humana.
-- Siguiente etapa: ejecutar y analizar visitas.
+Atención entre instrumentos y comunicaciones.
 
-## 20. Conclusiones
+Seguimiento manual y detección de anomalías.
 
-- Documentar la demanda experimental.
-- Vincular configuración, evento y métrica.
-- Revisar calidad y procedencia del registro.
-- Seguir la trayectoria de cada persona.
+Contraste posterior con tareas de vuelo. [2, 9]
 
-## 21. Referencias I
+Imagen: ../assets/fac-visuals/06_aviacion_uas.png
 
-- [1] Cegarra et al. (2020). OpenMATB.
-- [2] Pontiggia, Gomez-Mérino et al. (2024). MATB y niveles de carga mental.
-- [3] Pontiggia, Fabries et al. (2024). Hipoxia, restricción de sueño y carga.
+Fuentes: [2], [9], [13]
 
-## 22. Referencias II
+## 32. Operación UAS
 
-- [4] Tortello et al. (2020). Estimación temporal en la Antártida.
-- [5] Vogl et al. (2024). USAARL MATB.
-- [6] Laverde-López et al. (2022). Validación colombiana de KSS.
+- Supervisión de vehículos y alertas concurrentes.
+- Transferencias entre persona y automatización.
+- Conciencia situacional y confianza.
+- Diseño experimental inspirado en HATTB. [15]
+
+Fuentes: [5], [7], [15]
+
+## 33. Beneficios entre dominios
+
+| Dominio | Pregunta local | Producto verificable |
+| --- | --- | --- |
+| Factores humanos | ¿Qué interfaz facilita la tarea? | Comparación de errores y tiempos |
+| Medicina aeroespacial | ¿Cómo influye el contexto fisiológico? | Registros sincronizados y calidad |
+| Psicología y cognición | ¿Qué estrategias cambian? | Patrones por tarea y condición |
+| Formación | ¿Qué práctica produce transferencia? | Estudios de aprendizaje y retención |
+
+Fuentes: [8], [11], [13], [14], [21], [22]
+
+## 34. Desarrollo por etapas
+
+| Etapa | Pregunta de verificación | Resultado esperado |
+| --- | --- | --- |
+| 1. Técnica | ¿Qué se presenta y registra? | Tiempo y adquisición calificados |
+| 2. Humana | ¿Es sensible y reproducible? | Factibilidad, fiabilidad y efectos |
+| 3. Transferencia | ¿Se relaciona con tareas aeronáuticas? | Validación externa e incertidumbre |
+| 4. Aplicación específica | ¿Sirve para entrenar o seleccionar? | Utilidad, normas y evaluación de sesgos |
+
+Fuentes: [8], [9], [20]
+
+## 35. Estado y conciliación
+
+- Funciones disponibles y verificación sintética.
+- Manual v2.6: ocho visitas V0–V7.
+- Perfil astra-2026: T0 / DM8 / DM15.
+- Conciliar antes de ejecutar el protocolo humano.
+
+Fuentes: [21]
+
+## 36. Conclusiones
+
+- MATB permite controlar preguntas de multitarea.
+- ASTRA aporta seguimiento y contexto operativo.
+- La integración exige trazabilidad y calidad.
+- El desarrollo avanza con evidencia humana.
+
+Fuentes: [4], [8], [21]
+
+## 37. Referencias: plataformas
+
+| Fuente | Documento o contribución |
+| --- | --- |
+| [1] Comstock y Arnegard (1992) | MATB original; NASA-TM-104174 |
+| [2] Santiago-Espada et al. (2011) | Guía MATB-II; NASA/TM-2011-217164 |
+| [3] Miller (2010) | AF_MATB; AFRL-RH-WP-TR-2010-0133 |
+| [4] Cegarra et al. (2020) | OpenMATB; doi: 10.3758/s13428-020-01364-w |
+| [5] Vogl et al. (2024) | USAARL; doi: 10.3389/fnrgo.2024.1435588 |
+| [6] Vogl et al. (2025a) | Desarrollos USAARL; IEEE RAPID 2025 |
+| [7] Vogl et al. (2025b) | Automatización; USAARL-TECH-TR--2026-02 |
+| [15] Chancey et al., NASA (2023) | HATTB; NASA NTRS 20220017200 |
+
+Fuentes: [1], [2], [3], [4], [5], [6], [7], [15]
+
+## 38. Referencias: evidencia
+
+| Fuente | Documento o contribución |
+| --- | --- |
+| [8] Pontiggia et al. (2024) | Configuración y demanda; revisión de 19 estudios |
+| [9] Van Benthem et al. (2019) | Memoria prospectiva; ISAP 2019, 67–72 |
+| [10] Li et al. (2022) | Multitarea, fNIRS y ECG; doi: 10.1002/brb3.2489 |
+| [11] Wang et al. (2024) | HRV del piloto; doi: 10.3390/s24123723 |
+| [12] Che et al. (2025) | Profundidad y carga; doi: 10.1016/j.bbr.2024.115322 |
+| [13] Rupp et al. (2015) | Dispositivos de control; Ergonomics 58, 722–735 |
+| [14] Kennedy y Parker (2017) | Adaptación médica; piloto de 10 estudiantes |
+| [23] Daviaux et al. (2019) | Control cognitivo y límites de estandarización |
+
+Fuentes: [8], [9], [10], [11], [12], [13], [14], [23]
+
+## 39. Referencias: ASTRA
+
+| Fuente | Documento o contribución |
+| --- | --- |
+| [16] NASA, BMed (2025) | Cambios cognitivos y conductuales |
+| [17] NASA, Sleep (2016) | Sueño, desincronización y sobrecarga |
+| [18] NASA, Team (2022) | Cooperación, coordinación y comunicación |
+| [19] NASA, HSIA (2021) | Integración humano–sistema |
+| [20] NASA, cargas dinámicas (2022) | Riesgo por cargas dinámicas; Rev. A |
+| [21] ASTRA, manual v2.6 (2026) | Manual v2.6 y documentos operativos |
+| [22] Liu y Nam (2018) | Modelado de desempeño multitarea |
+| [24] Feltman y Kelley (2024) | Simulador Black Hawk; evidencia indirecta |
+
+Fuentes: [16], [17], [18], [19], [20], [21], [22], [24]
+
+## 40. Cierre institucional
