@@ -1,0 +1,201 @@
+{
+  "schema_version": "1.0.0",
+  "privacy": {
+    "branch": "qualified",
+    "value": "Público Clasificado"
+  },
+  "title_page": {
+    "title": "MATB Y ASTRA\nINVESTIGACIÓN EN EMAVI",
+    "rank": "Smsm",
+    "presenter_name": "DIEGO L MALPICA",
+    "role": "Especialista en Medicina Aeroespacial"
+  },
+  "agenda": [
+    "Pregunta y diseño",
+    "Medición y trazabilidad",
+    "Demostración de la aplicación",
+    "Análisis y siguiente etapa"
+  ],
+  "content": [
+    {
+      "type": "image_text",
+      "title": "Pregunta y diseño",
+      "body": "Demanda programada; desempeño y carga percibida por separado.\n\nSeguimiento de cada persona entre visitas.",
+      "image": {
+        "path": "../visuales/imagegen/operador_atencion_conceptual.png",
+        "approved": true,
+        "source": "Ilustración conceptual generada con imagegen; no fotografía de ASTRA ni captura de MATB. EMAVI/visuales/PROMPTS_IMAGEGEN.md.",
+        "alt": "Operadora en estación de investigación multitarea; ilustración conceptual, sin datos."
+      }
+    },
+    {
+      "type": "text",
+      "title": "Fundamento y reproducibilidad",
+      "bullets": [
+        "OpenMATB: personalización y replicabilidad [1].",
+        "USAARL: transiciones y automatización [5].",
+        "7/19 estudios describieron su configuración con detalle suficiente [2]."
+      ]
+    },
+    {
+      "type": "text",
+      "title": "ASTRA: seguimiento longitudinal",
+      "bullets": [
+        "2 misiones; hasta 6 participantes por misión.",
+        "8 visitas: basal, 6 intramisión y posegreso.",
+        "3 condiciones × 900 s de escenario.",
+        "Orden contrabalanceado; reserva de 90 min."
+      ]
+    },
+    {
+      "type": "text",
+      "title": "Qué se mide en cada bloque",
+      "bullets": [
+        "SYSMON: detecciones, omisiones y latencias.",
+        "TRACK: desviación respecto al objetivo.",
+        "COMM y RESMAN: respuestas y regulación.",
+        "KSS antes; ISA durante; NASA-TLX después."
+      ]
+    },
+    {
+      "type": "image_text",
+      "title": "Adquisición fisiológica",
+      "body": "Polar H10: intervalos R–R, si la ruta se verifica.\n\nActiGraph: movimiento. HRV: descriptor derivado.\n\nSin señales humanas adquiridas en la demostración.",
+      "image": {
+        "path": "../visuales/imagegen/sensores_fisiologia_conceptual-v2.png",
+        "approved": true,
+        "source": "Ilustración conceptual generada con imagegen; dispositivos no conectados. EMAVI/visuales/PROMPTS_IMAGEGEN.md.",
+        "alt": "Banda pectoral y monitor de actividad de muñeca, como concepto de adquisición fisiológica."
+      }
+    },
+    {
+      "type": "section",
+      "title": "Demostración"
+    },
+    {
+      "type": "image_text",
+      "title": "Elegir una actividad",
+      "body": "El catálogo presenta las tareas y sus requisitos.\n\nLa selección distingue práctica y participación en un estudio.\n\nCaptura local de demostración.",
+      "image": {
+        "path": "../capturas/01_catalogo.png",
+        "approved": true,
+        "source": "Captura local de MATB; demostración sintética. Véase capturas/procedencia.json, 01_catalogo.",
+        "alt": "Elegir una actividad — captura real de la aplicación con datos de demostración."
+      }
+    },
+    {
+      "type": "image_text",
+      "title": "Diseñar el escenario",
+      "body": "La línea temporal organiza tareas y eventos.\n\nDuración y semilla definen una configuración reproducible.\n\nLa compilación materializa su procedencia.",
+      "image": {
+        "path": "../capturas/02_diseno.png",
+        "approved": true,
+        "source": "Captura local de MATB; demostración sintética. Véase capturas/procedencia.json, 02_diseno.",
+        "alt": "Diseñar el escenario — captura real de la aplicación con datos de demostración."
+      }
+    },
+    {
+      "type": "image_text",
+      "title": "Preparar OpenMATB",
+      "body": "La consola configura el entorno de cuatro tareas.\n\nLa vista previa permite revisar la presentación antes de ejecutar.\n\nEl entorno de tareas se ejecuta en OpenMATB.",
+      "image": {
+        "path": "../capturas/03_openmatb.png",
+        "approved": true,
+        "source": "Captura local de MATB; demostración sintética. Véase capturas/procedencia.json, 03_openmatb.",
+        "alt": "Preparar OpenMATB — captura real de la aplicación con datos de demostración."
+      }
+    },
+    {
+      "type": "image_text",
+      "title": "Somnolencia y vigilancia",
+      "body": "KSS precede a las instrucciones del PVT.\n\nLa secuencia enlaza preparación, actividad y cierre.\n\nParticipante de demostración; sin datos humanos.",
+      "image": {
+        "path": "../capturas/04_kss.png",
+        "approved": true,
+        "source": "Captura local de MATB; demostración sintética. Véase capturas/procedencia.json, 04_kss.",
+        "alt": "Somnolencia y vigilancia — captura real de la aplicación con datos de demostración."
+      }
+    },
+    {
+      "type": "image_text",
+      "title": "Supervisar una misión",
+      "body": "El módulo sUAS integra mapa, flota, alertas y controles.\n\nLa captura procede de una prueba técnica sintética.\n\nEl registro conserva eventos para revisión posterior.",
+      "image": {
+        "path": "../capturas/05_suas.png",
+        "approved": true,
+        "source": "Captura local de MATB; demostración sintética. Véase capturas/procedencia.json, 05_suas.",
+        "alt": "Supervisar una misión — captura real de la aplicación con datos de demostración."
+      }
+    },
+    {
+      "type": "image_text",
+      "title": "Revisar la evidencia",
+      "body": "La carga pareada reúne manifiestos, eventos y observaciones temporales.\n\nLa consola enlaza cada métrica con su evidencia.\n\nEjemplo sintético de referencia.",
+      "image": {
+        "path": "../capturas/06_evidencia.png",
+        "approved": true,
+        "source": "Captura local de MATB; demostración sintética. Véase capturas/procedencia.json, 06_evidencia.",
+        "alt": "Revisar la evidencia — captura real de la aplicación con datos de demostración."
+      }
+    },
+    {
+      "type": "image_text",
+      "title": "Del evento al resultado",
+      "body": "La revisión conserva el evento y su base temporal.\n\nLos motivos de elegibilidad permanecen visibles.\n\nLa evidencia puede exportarse para recomputación.",
+      "image": {
+        "path": "../capturas/07_evento.png",
+        "approved": true,
+        "source": "Captura local de MATB; demostración sintética. Véase capturas/procedencia.json, 07_evento.",
+        "alt": "Del evento al resultado — captura real de la aplicación con datos de demostración."
+      }
+    },
+    {
+      "type": "text",
+      "title": "Del registro al análisis longitudinal",
+      "bullets": [
+        "Escenario → eventos → métricas versionadas.",
+        "Persona → visita → bloque → condición.",
+        "RTLX: media de 6 respuestas (0–10) × 10.",
+        "Revisar calidad antes de comparar trayectorias."
+      ]
+    },
+    {
+      "type": "text",
+      "title": "Estado de la evidencia y siguiente etapa",
+      "bullets": [
+        "CEINNA: verificaciones con datos sintéticos.",
+        "EMAVI: recorrido de interfaces reales.",
+        "Calificar tiempo físico y respuesta humana.",
+        "Siguiente etapa: ejecutar y analizar visitas."
+      ]
+    },
+    {
+      "type": "text",
+      "title": "Conclusiones",
+      "bullets": [
+        "Documentar la demanda experimental.",
+        "Vincular configuración, evento y métrica.",
+        "Revisar calidad y procedencia del registro.",
+        "Seguir la trayectoria de cada persona."
+      ]
+    },
+    {
+      "type": "text",
+      "title": "Referencias I",
+      "bullets": [
+        "[1] Cegarra et al. (2020). OpenMATB.",
+        "[2] Pontiggia, Gomez-Mérino et al. (2024). MATB y niveles de carga mental.",
+        "[3] Pontiggia, Fabries et al. (2024). Hipoxia, restricción de sueño y carga."
+      ]
+    },
+    {
+      "type": "text",
+      "title": "Referencias II",
+      "bullets": [
+        "[4] Tortello et al. (2020). Estimación temporal en la Antártida.",
+        "[5] Vogl et al. (2024). USAARL MATB.",
+        "[6] Laverde-López et al. (2022). Validación colombiana de KSS."
+      ]
+    }
+  ]
+}

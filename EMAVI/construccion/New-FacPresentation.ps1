@@ -100,9 +100,50 @@ function Add-ApprovedImage($Slide, $Image, [switch]$AllowTemplatePlaceholder) {
     $picture.Tags.Add('fac.source',[string]$Image.source); $picture.Tags.Add('fac.alt',[string]$Image.alt)
     Assert-Geometry $picture $left $top $width $height 'imagen FAC contain'
 }
+function Add-EditableTable($Slide, $Item) {
+    $columns=@($Item.columns); $rows=@($Item.rows)
+    if($columns.Count -lt 2 -or $columns.Count -gt 4 -or $rows.Count -lt 1 -or $rows.Count -gt 8){Fail 'La tabla debe tener 2–4 columnas y 1–8 filas de datos.'}
+    foreach($row in $rows){if(@($row).Count -ne $columns.Count){Fail 'Tabla no rectangular.'}}
+    (Get-ShapeById $Slide 17).Delete()
+    $shape=$Slide.Shapes.AddTable($rows.Count+1,$columns.Count,60,120,840,324)
+    $shape.Name='EMAVI_TABLE'; $table=$shape.Table
+    if(@($Item.widths).Count -ne $columns.Count){Fail 'La tabla debe declarar el ancho de cada columna.'}
+    $total=($Item.widths | Measure-Object -Sum).Sum
+    for($c=1;$c -le $columns.Count;$c++){$table.Columns.Item($c).Width=[single](840*$Item.widths[$c-1]/$total)}
+    $table.Rows.Item(1).Height=32
+    for($r=2;$r -le $rows.Count+1;$r++){$table.Rows.Item($r).Height=[single](292/$rows.Count)}
+    for($r=1;$r -le $rows.Count+1;$r++){
+        for($c=1;$c -le $columns.Count;$c++){
+            $cell=$table.Cell($r,$c).Shape
+            $cell.TextFrame.MarginLeft=8; $cell.TextFrame.MarginRight=8
+            $cell.TextFrame.MarginTop=3; $cell.TextFrame.MarginBottom=3
+            $cell.TextFrame.VerticalAnchor=3
+            $text=if($r -eq 1){[string]$columns[$c-1]}else{[string]$rows[$r-2][$c-1]}
+            $cell.TextFrame.TextRange.Text=$text
+            $cell.TextFrame.TextRange.Font.Name='Arial'
+            $cell.TextFrame.TextRange.Font.Size=14
+            $cell.TextFrame.TextRange.Font.Bold=$(if($r -eq 1){$msoTrue}else{$msoFalse})
+            $cell.TextFrame.TextRange.Font.Color.RGB=$(if($r -eq 1){$color.White}else{$color.Gray})
+            $cell.TextFrame.TextRange.ParagraphFormat.Alignment=1
+            $cell.TextFrame.TextRange.ParagraphFormat.SpaceBefore=0
+            $cell.TextFrame.TextRange.ParagraphFormat.SpaceAfter=0
+            $cell.Fill.ForeColor.RGB=$(if($r -eq 1){$color.Blue}elseif($r%2 -eq 0){0xF8F5F1}else{0xFFFFFF})
+            $cell.Fill.Visible=$msoTrue
+            $tr=$cell.TextFrame.TextRange
+            if($tr.BoundHeight -gt $cell.Height-5 -or $tr.BoundWidth -gt $cell.Width-15){Fail "Tabla '$($Item.title)', celda $r/$($c): texto demasiado largo."}
+        }
+    }
+    $caption=$Slide.Shapes.AddTextbox(1,60,449,840,20);$caption.Name='EMAVI_TABLE_SOURCE'
+    $caption.TextFrame.AutoSize=$msoAutoSizeNone
+    $caption.TextFrame.MarginTop=0;$caption.TextFrame.MarginBottom=0
+    $caption.Left=60;$caption.Top=449;$caption.Width=840;$caption.Height=20
+    Set-Text $caption ([string]$Item.source) 'Arial' 10 $color.Gray $false 1
+    Assert-Fits $caption 'fuente de tabla'
+}
 function Assert-Manifest($Manifest) {
     foreach ($key in @('schema_version','privacy','title_page','agenda','content')) { if (-not $Manifest.PSObject.Properties.Name.Contains($key)) { Fail "Manifest sin '$key'." } }
-    if ($Manifest.schema_version -ne '1.0.0') { Fail 'schema_version debe ser 1.0.0.' }
+    if ($Manifest.schema_version -ne '1.1.0-emavi') { Fail 'Use el manifiesto EMAVI 1.1.0-emavi con aviso inicial único.' }
+    if ($Manifest.privacy.notice_placement -ne 'opening_only') { Fail 'La política EMAVI exige un aviso inicial único.' }
     if (@($Manifest.privacy).Count -ne 1 -or [string]::IsNullOrWhiteSpace([string]$Manifest.privacy.branch)) { Fail 'Debe declarar exactamente una rama de privacidad.' }
     switch ([string]$Manifest.privacy.branch) {
         'public' { }
@@ -155,8 +196,8 @@ try {
     [void]$sourceIndexes.Add(1); [void]$sourceIndexes.Add(4); [void]$sourceIndexes.Add(5)
     $agendaChunks = @($manifest.agenda | ForEach-Object -Begin {$n=0} -Process { $n++; [PSCustomObject]@{N=$n;Text=[string]$_} } | Group-Object { [Math]::Floor(($_.N-1)/5) })
     foreach ($chunk in $agendaChunks) { [void]$sourceIndexes.Add(6) }
-    foreach ($item in $manifest.content) { switch ($item.type) { 'section' {[void]$sourceIndexes.Add(7)} 'image_text' {[void]$sourceIndexes.Add(8)} 'text' {[void]$sourceIndexes.Add(10)} default { Fail "content.type no permitido: $($item.type)" } } }
-    [void]$sourceIndexes.Add(4); [void]$sourceIndexes.Add(12)
+    foreach ($item in $manifest.content) { switch ($item.type) { 'section' {[void]$sourceIndexes.Add(7)} 'image_text' {[void]$sourceIndexes.Add(8)} 'text' {[void]$sourceIndexes.Add(10)} 'table' {[void]$sourceIndexes.Add(10)} default { Fail "content.type no permitido: $($item.type)" } } }
+    [void]$sourceIndexes.Add(12)
     foreach ($sourceIndex in $sourceIndexes) { $copy = $presentation.Slides.Item($sourceIndex).Duplicate(); $copy.Item(1).MoveTo($presentation.Slides.Count) }
     for ($i=12; $i -ge 1; $i--) { $presentation.Slides.Item($i).Delete() }
 
@@ -204,21 +245,15 @@ try {
                 if ($renderedLines -gt 2) { Fail 'Título de texto excede dos líneas; divida la diapositiva.' }
                 if ($renderedLines -gt 1) { $requiredHeight=[single]$titleShape.TextFrame.TextRange.BoundHeight; $titleShape.Top=[single]($baseBottom-$requiredHeight); $titleShape.Height=[single]$requiredHeight }
                 if (($titleShape.Top+$titleShape.TextFrame.TextRange.BoundHeight) -gt $baseBottom+0.2) { Fail 'Título de texto cruza la línea inmutable; acórtelo o divida la diapositiva.' }
+                if($item.type -eq 'table') { Add-EditableTable $slide $item }
+                else {
                 $body=Get-ShapeById $slide 17; Prepare-TextSlot $body; $body.TextFrame.TextRange.Text=''
                 if ($item.PSObject.Properties.Name.Contains('bullets')) {
                     foreach ($line in @($item.bullets)) { if ([string]::IsNullOrWhiteSpace([string]$line) -or [string]$line -match '[•◦▪◾]') { Fail 'Las listas no pueden incluir viñetas Unicode.' }; $p=$body.TextFrame.TextRange.Paragraphs($body.TextFrame.TextRange.Paragraphs().Count+1); $p.Text="$line`r"; $p.Font.Name='Arial';$p.Font.Size=14;$p.Font.Color.RGB=$color.Gray; $body.TextFrame.TextRange.Font.Name='Arial'; $body.TextFrame.TextRange.Font.Size=14; $body.TextFrame.TextRange.Font.Color.RGB=$color.Gray }
                 } elseif ($item.PSObject.Properties.Name.Contains('body')) { Set-Text $body ([string]$item.body) 'Arial' 14 $color.Gray $false 4 } else { Fail 'text exige body o bullets.' }
                 Assert-Fits (Get-ShapeById $slide 9) 'título texto'; Assert-Fits $body 'cuerpo texto'
+                }
             }
-        }
-        if($sourceIndex -notin @(1,4,12)) {
-            $label=$slide.Shapes.AddTextbox(1,640,10,220,20)
-            $label.Name='EMAVI_CLASSIFICATION'
-            $label.TextFrame.MarginLeft=0; $label.TextFrame.MarginRight=0; $label.TextFrame.MarginTop=0; $label.TextFrame.MarginBottom=0
-            $label.TextFrame.TextRange.Text='Público Clasificado'
-            $label.TextFrame.TextRange.Font.Name='Arial';$label.TextFrame.TextRange.Font.Size=12
-            $label.TextFrame.TextRange.Font.Color.RGB=255;$label.TextFrame.TextRange.Font.Bold=-1
-            $label.TextFrame.TextRange.ParagraphFormat.Alignment=2
         }
         if ($protected.Count -and (Get-Signature $slide $protected) -ne $baseline) { Fail "Se alteró una forma inmutable en arquetipo $sourceIndex." }
     }
@@ -236,11 +271,11 @@ try {
     $presentation.SaveAs([IO.Path]::ChangeExtension($outputFullPath,'.pdf'),32)
 
     if ($RenderDirectory) { $renderFull=[System.IO.Path]::GetFullPath($RenderDirectory); [System.IO.Directory]::CreateDirectory($renderFull)|Out-Null; $presentation.SaveAs($renderFull,$ppSaveAsPNG) }
-    $presentation.Close(); $presentation=$null; $app.Quit(); $app=$null
+    $presentation.Close(); $presentation=$null; if($app.Presentations.Count -eq 0){$app.Quit()}; $app=$null
     if (-not $SkipDeckValidation) { & (Join-Path $PSScriptRoot 'Test-FacPresentation.ps1') -DeckPath $outputFullPath -ManifestPath $manifestFullPath }
     Write-Host "FAC-template created: $outputFullPath"
 } finally {
     if ($presentation) { try {$presentation.Close()} catch {} }
-    if ($app) { try {$app.Quit()} catch {} }
+    if ($app) { try {if($app.Presentations.Count -eq 0){$app.Quit()}} catch {} }
     [GC]::Collect(); [GC]::WaitForPendingFinalizers()
 }

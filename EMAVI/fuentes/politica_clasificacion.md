@@ -1,15 +1,13 @@
-# Política gráfica aprobada para EMAVI
+# Política gráfica EMAVI · revisión 27-09-2026
 
-Declaración del usuario: «Publica clasificada».
-Rama FAC: `qualified`; opción literal de la plantilla: `Público Clasificado`.
+Clasificación conservada: **Público Clasificado**, rama `qualified`.
 
-Aprobada por instrucción del usuario el 23-09-2026: «Export them, commit, push and open pr». Registro: `aprobacion_politica.json`.
+El usuario solicitó retirar el rótulo de las diapositivas y conservarlo únicamente en una lámina inicial; aprobó la implementación del plan ampliado. Esta instrucción sustituye la propagación gráfica del 23 de septiembre.
 
-1. Usar la diapositiva 4 de la plantilla como aviso inicial. Conservar íntegros el título, el aviso y las marcas. Seleccionar únicamente `Público Clasificado` en el campo que actualmente ofrece dos opciones.
-2. En las diapositivas de contenido, incorporar `Público Clasificado` como etiqueta discreta superior, sin desplazar elementos existentes. La portada, agenda y separadores conservarán también esta etiqueta.
-3. Repetir el mismo aviso antes del cierre. Conservar las láminas institucionales de apertura y cierre íntegras, sin superponer etiquetas a sus gráficos.
-4. Aplicar esta excepción mediante scripts locales de EMAVI; mantener intactos la skill instalada y su generador público. Verificar el texto del aviso y los elementos originales frente al archivo fuente.
+1. Conservar íntegro el aviso de la diapositiva 4 de la plantilla, como diapositiva 2 de la presentación. Seleccionar únicamente Público Clasificado.
+2. No añadir etiquetas a portada, agenda o contenido. No repetir el aviso antes del cierre.
+3. Conservar apertura, cierre, marcas, fondos y líneas institucionales.
+4. El arquetipo local `table` usa el área libre, con tabla editable dentro de x=60–900 y y=120–444 pt, más fuente en y=449–470 pt. Mantiene título y línea del arquetipo 10. Es la extensión local necesaria para la tabla comparativa aprobada.
+5. Verificar exactamente una diapositiva con el rótulo visible en PPTX y PDF: la 2. Metadatos y registro de clasificación se conservan.
 
-Vista previa nativa de PowerPoint: `../entregables/Propuesta_aviso_y_cierre.pdf`.
-
-La clasificación fue elegida por el usuario. Esta política resuelve el tratamiento gráfico de la presentación; no es una certificación jurídica ni una autorización para publicar o distribuir.
+La política anterior y sus fuentes se conservan en `historico_20260923/`. La plantilla y la habilidad instalada permanecen intactas. Esta decisión gráfica no reclasifica el material ni autoriza su distribución.

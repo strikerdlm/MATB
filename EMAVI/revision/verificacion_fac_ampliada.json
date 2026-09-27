@@ -1,0 +1,23 @@
+{
+  "result": "passed",
+  "checked_at": "2026-09-27T13:31:32.3993252Z",
+  "deck": "ASTRA_MATB_EMAVI_es_ampliada.pptx",
+  "deck_sha256": "895f608c9ee67eddf244d234c74d54ca7cb62449d2766f5933899c313e6f40c7",
+  "template_sha256": "147312eaac5e5c164b9433b072c36c104be8f8e090405539bb4e0bdbf4fc6959",
+  "slides": 40,
+  "classification_visible_slides": [
+    2
+  ],
+  "native_checks": [
+    "institutional opening and closing",
+    "initial notice geometry and exact label",
+    "no repeated visible classification",
+    "title and body typography",
+    "protected geometry",
+    "text overflow",
+    "native table cells and bounds",
+    "PNG alpha",
+    "embedded image SHA-256",
+    "contain scaling and image provenance"
+  ]
+}

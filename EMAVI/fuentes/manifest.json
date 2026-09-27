@@ -1,201 +1,768 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0-emavi",
   "privacy": {
     "branch": "qualified",
-    "value": "Público Clasificado"
+    "value": "Público Clasificado",
+    "notice_placement": "opening_only"
   },
   "title_page": {
-    "title": "MATB Y ASTRA\nINVESTIGACIÓN EN EMAVI",
+    "title": "MATB Y ASTRA\nINVESTIGACIÓN AERONÁUTICA",
     "rank": "Smsm",
     "presenter_name": "DIEGO L MALPICA",
     "role": "Especialista en Medicina Aeroespacial"
   },
   "agenda": [
-    "Pregunta y diseño",
-    "Medición y trazabilidad",
-    "Demostración de la aplicación",
-    "Análisis y siguiente etapa"
+    "MATB: evidencia y aplicaciones",
+    "ASTRA: fundamentos y misión",
+    "Preparación y trazabilidad",
+    "Desarrollo de investigación local"
   ],
   "content": [
     {
+      "title": "La pregunta de investigación",
+      "type": "text",
+      "bullets": [
+        "Relacionar demanda, desempeño y fisiología.",
+        "Comparar cambios dentro de cada persona.",
+        "Estudiar aviación, UAS y misión análoga.",
+        "Conservar condiciones y calidad del registro."
+      ]
+    },
+    {
+      "title": "Cuatro tareas concurrentes",
       "type": "image_text",
-      "title": "Pregunta y diseño",
-      "body": "Demanda programada; desempeño y carga percibida por separado.\n\nSeguimiento de cada persona entre visitas.",
+      "body": "SYSMON: detectar cambios.\n\nTRACK: mantener el seguimiento.\n\nCOMM: atender comunicaciones.\n\nRESMAN: regular recursos. [1, 2]",
       "image": {
-        "path": "../visuales/imagegen/operador_atencion_conceptual.png",
+        "path": "../assets/fac-visuals/01_cuatro_tareas.png",
         "approved": true,
-        "source": "Ilustración conceptual generada con imagegen; no fotografía de ASTRA ni captura de MATB. EMAVI/visuales/PROMPTS_IMAGEGEN.md.",
-        "alt": "Operadora en estación de investigación multitarea; ilustración conceptual, sin datos."
+        "source": "Ilustración conceptual imagegen; ficha y revisión en visuales/AMPLIACION_IMAGEGEN.md. No fotografía documental ni resultado experimental.",
+        "alt": "Cuatro tareas concurrentes; esquema conceptual de investigación."
       }
     },
     {
+      "title": "Evolución de MATB",
+      "type": "table",
+      "columns": [
+        "Año",
+        "Implementación",
+        "Desarrollo documentado"
+      ],
+      "rows": [
+        [
+          "1992",
+          "NASA MATB",
+          "Tareas aeronáuticas controlables"
+        ],
+        [
+          "2010–2011",
+          "AF_MATB / NASA MATB-II",
+          "Configuración y modernización"
+        ],
+        [
+          "2020",
+          "OpenMATB",
+          "Plugins, scripts y replicabilidad"
+        ],
+        [
+          "2024–2025",
+          "USAARL MATB",
+          "Demanda dinámica y automatización"
+        ]
+      ],
+      "widths": [
+        100,
+        240,
+        490
+      ],
+      "source": "Fuentes: [1], [2], [3], [4], [5], [6]. Referencias completas en las notas y el archivo bibliográfico."
+    },
+    {
+      "title": "Comparación de plataformas",
+      "type": "table",
+      "columns": [
+        "Plataforma",
+        "Aporte técnico",
+        "Aplicación documentada",
+        "Alcance"
+      ],
+      "rows": [
+        [
+          "NASA MATB / II",
+          "Cuatro tareas y registro",
+          "Carga y desempeño",
+          "Referencia experimental"
+        ],
+        [
+          "AF_MATB",
+          "Scripts y configuración",
+          "Estrategias de atención",
+          "Manual técnico"
+        ],
+        [
+          "OpenMATB",
+          "Código y plugins",
+          "Experimentos replicables",
+          "Plataforma extensible"
+        ],
+        [
+          "USAARL MATB",
+          "Automatización y LSL",
+          "Control, confianza, carga",
+          "Estudios específicos"
+        ],
+        [
+          "MATB-FAC",
+          "Diseño y procedencia",
+          "Investigación local",
+          "Validación humana pendiente"
+        ]
+      ],
+      "widths": [
+        155,
+        205,
+        255,
+        215
+      ],
+      "source": "Fuentes: [1], [2], [3], [4], [5], [6]. Referencias completas en las notas y el archivo bibliográfico."
+    },
+    {
+      "title": "NASA: tareas y autonomía",
       "type": "text",
-      "title": "Fundamento y reproducibilidad",
       "bullets": [
-        "OpenMATB: personalización y replicabilidad [1].",
-        "USAARL: transiciones y automatización [5].",
-        "7/19 estudios describieron su configuración con detalle suficiente [2]."
+        "NASA: referencia para carga y desempeño. [1, 2]",
+        "Control de eventos y registro por subtarea.",
+        "HATTB estudia coordinación humano–UAS. [15]",
+        "Su diseño retoma la filosofía experimental MATB."
       ]
     },
     {
+      "title": "USAF: demanda y estrategia",
       "type": "text",
-      "title": "ASTRA: seguimiento longitudinal",
       "bullets": [
-        "2 misiones; hasta 6 participantes por misión.",
-        "8 visitas: basal, 6 intramisión y posegreso.",
-        "3 condiciones × 900 s de escenario.",
-        "Orden contrabalanceado; reserva de 90 min."
+        "AFRL documentó AF_MATB en 2010. [3]",
+        "Scripts y parámetros configurables.",
+        "Programación de demandas y estrategias.",
+        "Aplicación: investigación de factores humanos."
       ]
     },
     {
+      "title": "US Army: control compartido",
+      "type": "table",
+      "columns": [
+        "Diseño",
+        "Resultado publicado",
+        "Interpretación"
+      ],
+      "rows": [
+        [
+          "24 aviadores; 2 × 2",
+          "Transparencia × transferencia",
+          "Cada piloto probó cuatro condiciones"
+        ],
+        [
+          "Más transparencia",
+          "Mayor carga; p = 0,002; η² = 0,35",
+          "Efecto de esta configuración"
+        ],
+        [
+          "Control voluntario",
+          "Mejor perfil de confianza",
+          "Control y confianza se estudian juntos"
+        ],
+        [
+          "Límite",
+          "Muestra pequeña; entorno de escritorio",
+          "Transferencia operacional por estudiar"
+        ]
+      ],
+      "widths": [
+        215,
+        305,
+        310
+      ],
+      "source": "Fuentes: [5], [6], [7]. Referencias completas en las notas y el archivo bibliográfico."
+    },
+    {
+      "title": "Evidencia de sensibilidad",
+      "type": "table",
+      "columns": [
+        "Evidencia",
+        "Hallazgo",
+        "Condición de interpretación"
+      ],
+      "rows": [
+        [
+          "Revisión: 19 estudios",
+          "Sensibilidad a demanda y solapamiento",
+          "Configuraciones heterogéneas"
+        ],
+        [
+          "Descripción suficiente: 7/19",
+          "Dificultad para reproducir escenarios",
+          "Publicar parámetros y entrenamiento"
+        ],
+        [
+          "Li et al.: n = 26",
+          "Mayor carga, FC y activación prefrontal",
+          "Tarea distinta de MATB; universitarios"
+        ]
+      ],
+      "widths": [
+        240,
+        300,
+        290
+      ],
+      "source": "Fuentes: [8], [10]. Referencias completas en las notas y el archivo bibliográfico."
+    },
+    {
+      "title": "Memoria prospectiva en vuelo",
       "type": "text",
-      "title": "Qué se mide en cada bloque",
       "bullets": [
-        "SYSMON: detecciones, omisiones y latencias.",
-        "TRACK: desviación respecto al objetivo.",
-        "COMM y RESMAN: respuestas y regulación.",
-        "KSS antes; ISA durante; NASA-TLX después."
+        "51 pilotos; vuelo visual simulado. [9]",
+        "MATB-II se asoció con memoria prospectiva.",
+        "Monitoreo y demanda modifican la relación.",
+        "Falta validación externa para uso selectivo."
       ]
     },
     {
+      "title": "Aplicaciones internacionales",
+      "type": "table",
+      "columns": [
+        "Dominio",
+        "Ejemplo",
+        "Aprendizaje para investigación"
+      ],
+      "rows": [
+        [
+          "Interfaces de control",
+          "Rupp et al.: dispositivos y práctica",
+          "Controlar familiaridad y entrenamiento"
+        ],
+        [
+          "Realidad virtual",
+          "Che et al.: 49 participantes",
+          "La profundidad puede añadir demanda"
+        ],
+        [
+          "Formación sanitaria",
+          "Kennedy y Parker: 10 estudiantes",
+          "Separar carga percibida y estrés"
+        ]
+      ],
+      "widths": [
+        190,
+        280,
+        360
+      ],
+      "source": "Fuentes: [12], [13], [14]. Referencias completas en las notas y el archivo bibliográfico."
+    },
+    {
+      "title": "Integrar medidas",
+      "type": "text",
+      "bullets": [
+        "Demanda → eventos programados.",
+        "Desempeño → errores, latencias y seguimiento.",
+        "Percepción → NASA-TLX; fisiología → señales.",
+        "HRV: resultados heterogéneos en 29 estudios. [11]"
+      ]
+    },
+    {
+      "title": "ASTRA: misión análoga",
       "type": "image_text",
-      "title": "Adquisición fisiológica",
-      "body": "Polar H10: intervalos R–R, si la ruta se verifica.\n\nActiGraph: movimiento. HRV: descriptor derivado.\n\nSin señales humanas adquiridas en la demostración.",
+      "body": "Dos misiones independientes de 15 días.\n\nHábitat Cydonia, Tocancipá; ~120 m².\n\nMeta nominal: seis tripulantes por misión.\n\nPlan previsto; esquema conceptual. [21]",
       "image": {
-        "path": "../visuales/imagegen/sensores_fisiologia_conceptual-v2.png",
+        "path": "../assets/fac-visuals/02_habitat.png",
         "approved": true,
-        "source": "Ilustración conceptual generada con imagegen; dispositivos no conectados. EMAVI/visuales/PROMPTS_IMAGEGEN.md.",
-        "alt": "Banda pectoral y monitor de actividad de muñeca, como concepto de adquisición fisiológica."
+        "source": "Ilustración conceptual imagegen; ficha y revisión en visuales/AMPLIACION_IMAGEGEN.md. No fotografía documental ni resultado experimental.",
+        "alt": "ASTRA: misión análoga; esquema conceptual de investigación."
       }
     },
     {
-      "type": "section",
-      "title": "Demostración"
+      "title": "Fundamentos de ASTRA",
+      "type": "table",
+      "columns": [
+        "Dominio NASA",
+        "Pregunta en el análogo",
+        "Medición relacionada"
+      ],
+      "rows": [
+        [
+          "Conducta y cognición",
+          "¿Cómo evoluciona la adaptación?",
+          "Evaluaciones y bitácoras"
+        ],
+        [
+          "Sueño y carga",
+          "¿Cómo se relacionan descanso y tareas?",
+          "Actigrafía, KSS y desempeño"
+        ],
+        [
+          "Equipos",
+          "¿Cómo cambia la coordinación?",
+          "Roles, comunicaciones y debriefing"
+        ],
+        [
+          "Integración humano–sistema",
+          "¿Cómo influye el diseño del trabajo?",
+          "MATB, interfaces y procedimientos"
+        ]
+      ],
+      "widths": [
+        245,
+        320,
+        265
+      ],
+      "source": "Fuentes: [16], [17], [18], [19], [20]. Referencias completas en las notas y el archivo bibliográfico."
     },
     {
+      "title": "Tripulación y control",
       "type": "image_text",
+      "body": "Seis funciones con apoyos cruzados.\n\nMCC: planificación, apoyo y seguimiento.\n\nCAPCOM organiza la comunicación.\n\nDecisiones operativas humanas. [21]",
+      "image": {
+        "path": "../assets/fac-visuals/03_tripulacion_mcc.png",
+        "approved": true,
+        "source": "Ilustración conceptual imagegen; ficha y revisión en visuales/AMPLIACION_IMAGEGEN.md. No fotografía documental ni resultado experimental.",
+        "alt": "Tripulación y control; esquema conceptual de investigación."
+      }
+    },
+    {
+      "title": "Calendario previsto",
+      "type": "table",
+      "columns": [
+        "Fase",
+        "ASTRA 1",
+        "ASTRA 2"
+      ],
+      "rows": [
+        [
+          "Basal experimental",
+          "29 septiembre",
+          "28 septiembre"
+        ],
+        [
+          "Ingreso / DM1",
+          "5 octubre",
+          "21 octubre"
+        ],
+        [
+          "Egreso / DM15",
+          "19 octubre",
+          "4 noviembre"
+        ],
+        [
+          "Postmisión / D+1",
+          "20 octubre",
+          "5 noviembre"
+        ]
+      ],
+      "widths": [
+        250,
+        290,
+        290
+      ],
+      "source": "Fuentes: [21]. Referencias completas en las notas y el archivo bibliográfico."
+    },
+    {
+      "title": "La jornada de misión",
+      "type": "image_text",
+      "body": "Sueño protegido: 22:30–06:30.\n\nCiencia, ejercicio y mantenimiento.\n\nEVA simuladas: DM6 y DM12.\n\nDebriefing y bitácora diaria. [21]",
+      "image": {
+        "path": "../assets/fac-visuals/04_eva.png",
+        "approved": true,
+        "source": "Ilustración conceptual imagegen; ficha y revisión en visuales/AMPLIACION_IMAGEGEN.md. No fotografía documental ni resultado experimental.",
+        "alt": "La jornada de misión; esquema conceptual de investigación."
+      }
+    },
+    {
+      "title": "Medición multimodal",
+      "type": "image_text",
+      "body": "H10: intervalos R–R.\n\nActiGraph: movimiento y recepción R–R.\n\nActiLife: verificar la descarga.\n\nPsicología, cognición y bitácoras. [21]",
+      "image": {
+        "path": "../assets/fac-visuals/05_medicion-v2.png",
+        "approved": true,
+        "source": "Ilustración conceptual imagegen; ficha y revisión en visuales/AMPLIACION_IMAGEGEN.md. No fotografía documental ni resultado experimental.",
+        "alt": "Medición multimodal; esquema conceptual de investigación."
+      }
+    },
+    {
+      "title": "Ocho visitas MATB previstas",
+      "type": "table",
+      "columns": [
+        "Momento",
+        "Visitas del manual",
+        "Organización de la sesión"
+      ],
+      "rows": [
+        [
+          "Antes de misión",
+          "V0: basal",
+          "Familiarización y referencia"
+        ],
+        [
+          "Durante la misión",
+          "V1–V6: DM2, 4, 7, 10, 13, 15",
+          "Tres bloques × 15 min"
+        ],
+        [
+          "Después del egreso",
+          "V7: D+1",
+          "Mismo esquema de medición"
+        ],
+        [
+          "Cada visita",
+          "Reserva de 90 min",
+          "Demanda contrabalanceada"
+        ]
+      ],
+      "widths": [
+        205,
+        325,
+        300
+      ],
+      "source": "Fuentes: [8], [21]. Referencias completas en las notas y el archivo bibliográfico."
+    },
+    {
+      "title": "Relacionar las trayectorias",
+      "type": "text",
+      "bullets": [
+        "Persona → visita → bloque → condición.",
+        "Fechas reales, sueño y contexto de actividad.",
+        "Controlar práctica y calidad de las señales.",
+        "Análisis exploratorio e incertidumbre explícita."
+      ]
+    },
+    {
       "title": "Elegir una actividad",
-      "body": "El catálogo presenta las tareas y sus requisitos.\n\nLa selección distingue práctica y participación en un estudio.\n\nCaptura local de demostración.",
+      "type": "image_text",
+      "body": "El catálogo presenta las tareas y sus requisitos.\n\nDistingue práctica y participación en un estudio.\n\nCaptura local de demostración.",
       "image": {
         "path": "../capturas/01_catalogo.png",
         "approved": true,
-        "source": "Captura local de MATB; demostración sintética. Véase capturas/procedencia.json, 01_catalogo.",
-        "alt": "Elegir una actividad — captura real de la aplicación con datos de demostración."
+        "source": "Captura documental local, 2026-09-21; capturas/procedencia.json. Datos de demostración o sintéticos; sin registros de participantes.",
+        "alt": "Elegir una actividad; captura documental de la aplicación."
       }
     },
     {
-      "type": "image_text",
       "title": "Diseñar el escenario",
-      "body": "La línea temporal organiza tareas y eventos.\n\nDuración y semilla definen una configuración reproducible.\n\nLa compilación materializa su procedencia.",
+      "type": "image_text",
+      "body": "La línea temporal organiza tareas y eventos.\n\nDuración y semilla definen la configuración.\n\nEl registro conserva su procedencia.",
       "image": {
         "path": "../capturas/02_diseno.png",
         "approved": true,
-        "source": "Captura local de MATB; demostración sintética. Véase capturas/procedencia.json, 02_diseno.",
-        "alt": "Diseñar el escenario — captura real de la aplicación con datos de demostración."
+        "source": "Captura documental local, 2026-09-21; capturas/procedencia.json. Datos de demostración o sintéticos; sin registros de participantes.",
+        "alt": "Diseñar el escenario; captura documental de la aplicación."
       }
     },
     {
-      "type": "image_text",
       "title": "Preparar OpenMATB",
-      "body": "La consola configura el entorno de cuatro tareas.\n\nLa vista previa permite revisar la presentación antes de ejecutar.\n\nEl entorno de tareas se ejecuta en OpenMATB.",
+      "type": "image_text",
+      "body": "La consola configura las cuatro tareas.\n\nLa vista previa apoya la preparación.\n\nLa ejecución de tareas corresponde a OpenMATB.",
       "image": {
         "path": "../capturas/03_openmatb.png",
         "approved": true,
-        "source": "Captura local de MATB; demostración sintética. Véase capturas/procedencia.json, 03_openmatb.",
-        "alt": "Preparar OpenMATB — captura real de la aplicación con datos de demostración."
+        "source": "Captura documental local, 2026-09-21; capturas/procedencia.json. Datos de demostración o sintéticos; sin registros de participantes.",
+        "alt": "Preparar OpenMATB; captura documental de la aplicación."
       }
     },
     {
-      "type": "image_text",
       "title": "Somnolencia y vigilancia",
-      "body": "KSS precede a las instrucciones del PVT.\n\nLa secuencia enlaza preparación, actividad y cierre.\n\nParticipante de demostración; sin datos humanos.",
+      "type": "image_text",
+      "body": "KSS registra somnolencia subjetiva.\n\nPVT evalúa vigilancia en una tarea específica.\n\nEjemplo local con participante de demostración.",
       "image": {
         "path": "../capturas/04_kss.png",
         "approved": true,
-        "source": "Captura local de MATB; demostración sintética. Véase capturas/procedencia.json, 04_kss.",
-        "alt": "Somnolencia y vigilancia — captura real de la aplicación con datos de demostración."
+        "source": "Captura documental local, 2026-09-21; capturas/procedencia.json. Datos de demostración o sintéticos; sin registros de participantes.",
+        "alt": "Somnolencia y vigilancia; captura documental de la aplicación."
       }
     },
     {
+      "title": "Supervisar una misión UAS",
       "type": "image_text",
-      "title": "Supervisar una misión",
-      "body": "El módulo sUAS integra mapa, flota, alertas y controles.\n\nLa captura procede de una prueba técnica sintética.\n\nEl registro conserva eventos para revisión posterior.",
+      "body": "Mapa, flota, alertas y controles.\n\nRegistro de eventos para revisión.\n\nLa captura procede de una prueba sintética.",
       "image": {
         "path": "../capturas/05_suas.png",
         "approved": true,
-        "source": "Captura local de MATB; demostración sintética. Véase capturas/procedencia.json, 05_suas.",
-        "alt": "Supervisar una misión — captura real de la aplicación con datos de demostración."
+        "source": "Captura documental local, 2026-09-21; capturas/procedencia.json. Datos de demostración o sintéticos; sin registros de participantes.",
+        "alt": "Supervisar una misión UAS; captura documental de la aplicación."
       }
     },
     {
-      "type": "image_text",
       "title": "Revisar la evidencia",
-      "body": "La carga pareada reúne manifiestos, eventos y observaciones temporales.\n\nLa consola enlaza cada métrica con su evidencia.\n\nEjemplo sintético de referencia.",
+      "type": "image_text",
+      "body": "La carga reúne manifiestos y eventos.\n\nCada métrica conserva su evidencia.\n\nEjemplo sintético de referencia.",
       "image": {
         "path": "../capturas/06_evidencia.png",
         "approved": true,
-        "source": "Captura local de MATB; demostración sintética. Véase capturas/procedencia.json, 06_evidencia.",
-        "alt": "Revisar la evidencia — captura real de la aplicación con datos de demostración."
+        "source": "Captura documental local, 2026-09-21; capturas/procedencia.json. Datos de demostración o sintéticos; sin registros de participantes.",
+        "alt": "Revisar la evidencia; captura documental de la aplicación."
       }
     },
     {
-      "type": "image_text",
       "title": "Del evento al resultado",
-      "body": "La revisión conserva el evento y su base temporal.\n\nLos motivos de elegibilidad permanecen visibles.\n\nLa evidencia puede exportarse para recomputación.",
+      "type": "image_text",
+      "body": "Evento y base temporal permanecen vinculados.\n\nSe conservan motivos de elegibilidad.\n\nLa exportación permite recomputar.",
       "image": {
         "path": "../capturas/07_evento.png",
         "approved": true,
-        "source": "Captura local de MATB; demostración sintética. Véase capturas/procedencia.json, 07_evento.",
-        "alt": "Del evento al resultado — captura real de la aplicación con datos de demostración."
+        "source": "Captura documental local, 2026-09-21; capturas/procedencia.json. Datos de demostración o sintéticos; sin registros de participantes.",
+        "alt": "Del evento al resultado; captura documental de la aplicación."
       }
     },
     {
+      "title": "Aviación convencional",
+      "type": "image_text",
+      "body": "Atención entre instrumentos y comunicaciones.\n\nSeguimiento manual y detección de anomalías.\n\nContraste posterior con tareas de vuelo. [2, 9]",
+      "image": {
+        "path": "../assets/fac-visuals/06_aviacion_uas.png",
+        "approved": true,
+        "source": "Ilustración conceptual imagegen; ficha y revisión en visuales/AMPLIACION_IMAGEGEN.md. No fotografía documental ni resultado experimental.",
+        "alt": "Aviación convencional; esquema conceptual de investigación."
+      }
+    },
+    {
+      "title": "Operación UAS",
       "type": "text",
-      "title": "Del registro al análisis longitudinal",
       "bullets": [
-        "Escenario → eventos → métricas versionadas.",
-        "Persona → visita → bloque → condición.",
-        "RTLX: media de 6 respuestas (0–10) × 10.",
-        "Revisar calidad antes de comparar trayectorias."
+        "Supervisión de vehículos y alertas concurrentes.",
+        "Transferencias entre persona y automatización.",
+        "Conciencia situacional y confianza.",
+        "Diseño experimental inspirado en HATTB. [15]"
       ]
     },
     {
+      "title": "Beneficios entre dominios",
+      "type": "table",
+      "columns": [
+        "Dominio",
+        "Pregunta local",
+        "Producto verificable"
+      ],
+      "rows": [
+        [
+          "Factores humanos",
+          "¿Qué interfaz facilita la tarea?",
+          "Comparación de errores y tiempos"
+        ],
+        [
+          "Medicina aeroespacial",
+          "¿Cómo influye el contexto fisiológico?",
+          "Registros sincronizados y calidad"
+        ],
+        [
+          "Psicología y cognición",
+          "¿Qué estrategias cambian?",
+          "Patrones por tarea y condición"
+        ],
+        [
+          "Formación",
+          "¿Qué práctica produce transferencia?",
+          "Estudios de aprendizaje y retención"
+        ]
+      ],
+      "widths": [
+        205,
+        310,
+        315
+      ],
+      "source": "Fuentes: [8], [11], [13], [14], [21], [22]. Referencias completas en las notas y el archivo bibliográfico."
+    },
+    {
+      "title": "Desarrollo por etapas",
+      "type": "table",
+      "columns": [
+        "Etapa",
+        "Pregunta de verificación",
+        "Resultado esperado"
+      ],
+      "rows": [
+        [
+          "1. Técnica",
+          "¿Qué se presenta y registra?",
+          "Tiempo y adquisición calificados"
+        ],
+        [
+          "2. Humana",
+          "¿Es sensible y reproducible?",
+          "Factibilidad, fiabilidad y efectos"
+        ],
+        [
+          "3. Transferencia",
+          "¿Se relaciona con tareas aeronáuticas?",
+          "Validación externa e incertidumbre"
+        ],
+        [
+          "4. Aplicación específica",
+          "¿Sirve para entrenar o seleccionar?",
+          "Utilidad, normas y evaluación de sesgos"
+        ]
+      ],
+      "widths": [
+        170,
+        345,
+        315
+      ],
+      "source": "Fuentes: [8], [9], [20]. Referencias completas en las notas y el archivo bibliográfico."
+    },
+    {
+      "title": "Estado y conciliación",
       "type": "text",
-      "title": "Estado de la evidencia y siguiente etapa",
       "bullets": [
-        "CEINNA: verificaciones con datos sintéticos.",
-        "EMAVI: recorrido de interfaces reales.",
-        "Calificar tiempo físico y respuesta humana.",
-        "Siguiente etapa: ejecutar y analizar visitas."
+        "Funciones disponibles y verificación sintética.",
+        "Manual v2.6: ocho visitas V0–V7.",
+        "Perfil astra-2026: T0 / DM8 / DM15.",
+        "Conciliar antes de ejecutar el protocolo humano."
       ]
     },
     {
-      "type": "text",
       "title": "Conclusiones",
+      "type": "text",
       "bullets": [
-        "Documentar la demanda experimental.",
-        "Vincular configuración, evento y métrica.",
-        "Revisar calidad y procedencia del registro.",
-        "Seguir la trayectoria de cada persona."
+        "MATB permite controlar preguntas de multitarea.",
+        "ASTRA aporta seguimiento y contexto operativo.",
+        "La integración exige trazabilidad y calidad.",
+        "El desarrollo avanza con evidencia humana."
       ]
     },
     {
-      "type": "text",
-      "title": "Referencias I",
-      "bullets": [
-        "[1] Cegarra et al. (2020). OpenMATB.",
-        "[2] Pontiggia, Gomez-Mérino et al. (2024). MATB y niveles de carga mental.",
-        "[3] Pontiggia, Fabries et al. (2024). Hipoxia, restricción de sueño y carga."
-      ]
+      "title": "Referencias: plataformas",
+      "type": "table",
+      "columns": [
+        "Fuente",
+        "Documento o contribución"
+      ],
+      "rows": [
+        [
+          "[1] Comstock y Arnegard (1992)",
+          "MATB original; NASA-TM-104174"
+        ],
+        [
+          "[2] Santiago-Espada et al. (2011)",
+          "Guía MATB-II; NASA/TM-2011-217164"
+        ],
+        [
+          "[3] Miller (2010)",
+          "AF_MATB; AFRL-RH-WP-TR-2010-0133"
+        ],
+        [
+          "[4] Cegarra et al. (2020)",
+          "OpenMATB; doi: 10.3758/s13428-020-01364-w"
+        ],
+        [
+          "[5] Vogl et al. (2024)",
+          "USAARL; doi: 10.3389/fnrgo.2024.1435588"
+        ],
+        [
+          "[6] Vogl et al. (2025a)",
+          "Desarrollos USAARL; IEEE RAPID 2025"
+        ],
+        [
+          "[7] Vogl et al. (2025b)",
+          "Automatización; USAARL-TECH-TR--2026-02"
+        ],
+        [
+          "[15] Chancey et al., NASA (2023)",
+          "HATTB; NASA NTRS 20220017200"
+        ]
+      ],
+      "widths": [
+        305,
+        525
+      ],
+      "source": "Fuentes: [1], [2], [3], [4], [5], [6], [7], [15]. Referencias completas en las notas y el archivo bibliográfico."
     },
     {
-      "type": "text",
-      "title": "Referencias II",
-      "bullets": [
-        "[4] Tortello et al. (2020). Estimación temporal en la Antártida.",
-        "[5] Vogl et al. (2024). USAARL MATB.",
-        "[6] Laverde-López et al. (2022). Validación colombiana de KSS."
-      ]
+      "title": "Referencias: evidencia",
+      "type": "table",
+      "columns": [
+        "Fuente",
+        "Documento o contribución"
+      ],
+      "rows": [
+        [
+          "[8] Pontiggia et al. (2024)",
+          "Configuración y demanda; revisión de 19 estudios"
+        ],
+        [
+          "[9] Van Benthem et al. (2019)",
+          "Memoria prospectiva; ISAP 2019, 67–72"
+        ],
+        [
+          "[10] Li et al. (2022)",
+          "Multitarea, fNIRS y ECG; doi: 10.1002/brb3.2489"
+        ],
+        [
+          "[11] Wang et al. (2024)",
+          "HRV del piloto; doi: 10.3390/s24123723"
+        ],
+        [
+          "[12] Che et al. (2025)",
+          "Profundidad y carga; doi: 10.1016/j.bbr.2024.115322"
+        ],
+        [
+          "[13] Rupp et al. (2015)",
+          "Dispositivos de control; Ergonomics 58, 722–735"
+        ],
+        [
+          "[14] Kennedy y Parker (2017)",
+          "Adaptación médica; piloto de 10 estudiantes"
+        ],
+        [
+          "[23] Daviaux et al. (2019)",
+          "Control cognitivo y límites de estandarización"
+        ]
+      ],
+      "widths": [
+        305,
+        525
+      ],
+      "source": "Fuentes: [8], [9], [10], [11], [12], [13], [14], [23]. Referencias completas en las notas y el archivo bibliográfico."
+    },
+    {
+      "title": "Referencias: ASTRA",
+      "type": "table",
+      "columns": [
+        "Fuente",
+        "Documento o contribución"
+      ],
+      "rows": [
+        [
+          "[16] NASA, BMed (2025)",
+          "Cambios cognitivos y conductuales"
+        ],
+        [
+          "[17] NASA, Sleep (2016)",
+          "Sueño, desincronización y sobrecarga"
+        ],
+        [
+          "[18] NASA, Team (2022)",
+          "Cooperación, coordinación y comunicación"
+        ],
+        [
+          "[19] NASA, HSIA (2021)",
+          "Integración humano–sistema"
+        ],
+        [
+          "[20] NASA, cargas dinámicas (2022)",
+          "Riesgo por cargas dinámicas; Rev. A"
+        ],
+        [
+          "[21] ASTRA, manual v2.6 (2026)",
+          "Manual v2.6 y documentos operativos"
+        ],
+        [
+          "[22] Liu y Nam (2018)",
+          "Modelado de desempeño multitarea"
+        ],
+        [
+          "[24] Feltman y Kelley (2024)",
+          "Simulador Black Hawk; evidencia indirecta"
+        ]
+      ],
+      "widths": [
+        305,
+        525
+      ],
+      "source": "Fuentes: [16], [17], [18], [19], [20], [21], [22], [24]. Referencias completas en las notas y el archivo bibliográfico."
     }
   ]
 }
