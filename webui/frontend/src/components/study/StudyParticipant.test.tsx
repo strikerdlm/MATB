@@ -20,6 +20,7 @@ vi.mock("@/lib/study", () => ({
   assignmentDetail: vi.fn(),
   studyCall: vi.fn(),
 }));
+vi.mock("@/lib/astra", () => ({ astraCall: vi.fn().mockResolvedValue({ participants: [] }) }));
 vi.mock("@/lib/openmatb/api", () => ({
   getOpenMatbSession: vi.fn(),
   abortOpenMatbSession: vi.fn(),
@@ -29,6 +30,21 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   controls.identity = "A";
+});
+it("keeps ASTRA recovery ahead of opening the next block's native preparation", async () => {
+  const detail = {
+    assignment: { id: "A", participant_id: "P01", visit_id: 1, arm: "ORDER-1" },
+    version: { actor: "Investigadora", study: { study_id: "astra-matb-field-2026", title: "ASTRA",
+      occasions: [{ key: "block2", instrument: "openmatb", order: 3, locale: "es-419", condition_by_arm: { "ORDER-1": "MEDIUM" } }],
+      recovery_intervals: [{ key: "rest1", before_key: "block2", anchor_key: "ratings1", duration_seconds: 180 }] } },
+    occasions: { block2: "occasion-2" }, attempts: { block2: [], ratings1: [{ id: "ratings-1", acquisition_state: "finished" }] },
+  };
+  vi.mocked(assignmentDetail).mockResolvedValue(detail as never);
+  vi.mocked(studyCall).mockResolvedValue({ requirements: { block2: [{ occasion_key: "block2", state: "required" }] }, preparations: [] } as never);
+  render(<FixedLocaleProvider locale="es-419"><StudyParticipant /></FixedLocaleProvider>);
+  await screen.findByRole("button", { name: "Iniciar pausa" });
+  expect(screen.queryByRole("button", { name: /^Preparar ·/ })).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Volver a tripulantes ASTRA" })).toHaveAttribute("href", "/astra");
 });
 it("a pending A readiness response cannot create an active stop target under assignment B", async () => {
   const detail = (id: string) => ({

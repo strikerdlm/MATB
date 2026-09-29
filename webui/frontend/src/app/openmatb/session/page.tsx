@@ -16,7 +16,7 @@ import { withExecutionPurpose } from "@/lib/execution-purpose";
 import { useReportExperimentFlow, type ExperimentFlowStage } from "@/lib/experiment-flow";
 import { useSerializedPolling } from "@/lib/serialized-polling";
 import { abortOpenMatbSession, controllerAction, getOpenMatbSession, getOpenMatbReceipt, getOpenMatbDisplays,
-  readOpenMatbController, readOpenMatbParticipant, retryOpenMatbEvidence } from "@/lib/openmatb/api";
+  readOpenMatbController, readOpenMatbParticipant, retryOpenMatbEvidence, recoverPendingOpenMatbSession, storeOpenMatbCredentials } from "@/lib/openmatb/api";
 import { openMatbErrorMessage } from "@/lib/openmatb/errors";
 import { openMatbStage, OPENMATB_TERMINAL } from "@/lib/openmatb/progress";
 import { readParticipantWindowState, saveParticipantWindowState, type ParticipantWindowState } from "@/lib/openmatb/participant-window";
@@ -61,6 +61,17 @@ function Content() {
     setWindowState(stored === "unknown" && blockedParam ? "blocked" : stored);
   }, [id, blockedParam]);
   const lease = credentials?.id === id ? credentials.lease : null;
+  async function recover() {
+    if (!id || busy) return;
+    setBusy(true); setActionError(null);
+    try {
+      const prepared = await recoverPendingOpenMatbSession(id);
+      storeOpenMatbCredentials(prepared);
+      setCredentials({ id, lease: prepared.controller_lease, participant: prepared.participant_token });
+      sessionPoll.acceptActionValue(prepared.session);
+    } catch (reason) { setActionError(openMatbErrorMessage(reason, copy)); }
+    finally { setBusy(false); }
+  }
 
   async function action(value: "start" | "pause" | "resume" | "repeat-practice") {
     if (!id || !session || !lease || busy) return;
@@ -132,7 +143,7 @@ function Content() {
     {session.native_recovery_required && <p role="alert" className="rounded border border-warning/40 p-3 text-warning">{openMatbErrorMessage("openmatb_native_recovery_required", copy)}</p>}
     <Card className="border-info/40 bg-info/5"><CardHeader><CardTitle className="text-xl">{copy("Acción siguiente", "Next action")}</CardTitle></CardHeader>
       <CardContent className="space-y-4">
-        {!lease && !terminal && <p className="text-sm text-warning">{copy("Esta pestaña no conserva la credencial de control. Use la pestaña donde preparó la sesión.", "This tab does not hold the controller credential. Use the tab where the session was prepared.")}</p>}
+        {!lease && !terminal && <div className="space-y-2"><p className="text-sm text-warning">{copy("Esta pestaña no conserva la credencial de control.", "This tab does not hold the controller credential.")}</p>{["INSTRUCTIONS", "READY"].includes(session.lifecycle) && !session.started_at && !session.active_pid ? <Button disabled={busy} onClick={() => void recover()}>{copy("Recuperar sesión pendiente", "Recover pending session")}</Button> : <p className="text-sm">{copy("Use la pestaña donde inició la tarea.", "Use the tab where the task was started.")}</p>}</div>}
         {session.lifecycle === "INSTRUCTIONS" && <><p>{copy("El participante debe leer y confirmar las instrucciones.", "The participant needs to read and confirm the instructions.")}</p><Button onClick={openParticipant}>{copy("Abrir instrucciones del participante", "Open participant instructions")}</Button></>}
         {canStart && <><p>{copy(`Siguiente bloque: ${nextBlockLabel}. Abra la tarea cuando el participante esté listo.`, `Next block: ${nextBlockLabel}. Open the task when the participant is ready.`)}</p>
           {session.evidence_processing && <p role="status">{openMatbErrorMessage("openmatb_evidence_processing_active", copy)}</p>}
@@ -153,6 +164,7 @@ function Content() {
       {receipt && <SessionReceipt receipt={receipt} onRetry={lease ? blockId => void retry(blockId) : undefined} retrying={retrying} />}
     </>}
     <div className="flex flex-wrap gap-3">
+      <Button asChild variant="outline"><Link href="/astra">{copy("Volver a tripulantes ASTRA", "Back to ASTRA crew")}</Link></Button>
       {session.lifecycle === "BETWEEN_BLOCKS" && session.current_block_index === 1 && <Button variant="outline" disabled={busy || !lease} onClick={() => void action("repeat-practice")}>{copy("Repetir práctica", "Repeat practice")}</Button>}
       {!terminal && <Button variant="destructive" disabled={busy || !lease} onClick={() => void abort()}><StopCircle className="mr-2 h-4 w-4" />{copy("Abortar sesión", "Abort session")}</Button>}
       <Button variant="outline" onClick={refresh}><RefreshCw className="mr-2 h-4 w-4" />{copy("Actualizar", "Refresh")}</Button>

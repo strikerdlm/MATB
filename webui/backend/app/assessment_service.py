@@ -18,6 +18,8 @@ def get_attempt(db, identity):
 def create_occasion(db, body):
     if db.get(Participant, body.participant_id) is None:
         raise HTTPException(404, 'participant not found')
+    from app.astra_roster import require_active
+    require_active(db, body.participant_id)
     visit = db.get(Visit, body.visit_id)
     if visit is None or visit.participant_id != body.participant_id:
         raise HTTPException(422, 'occasion requires an assigned participant visit')
@@ -38,6 +40,8 @@ def create_attempt(db, occasion_id, body, *, repeat_of=None, reason=None):
     occasion = db.get(AssessmentOccasion, occasion_id)
     if occasion is None:
         raise HTTPException(404, 'assessment occasion not found')
+    from app.astra_roster import require_active
+    require_active(db, occasion.participant_id)
     if occasion.visit_id is None or occasion.phase is None:
         raise HTTPException(422, 'Create a new assigned occasion before acquiring; historical context remains unknown')
     context = None

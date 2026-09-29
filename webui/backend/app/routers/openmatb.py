@@ -34,6 +34,8 @@ _CONTROLLER = "X-OpenMATB-Controller"
 _PARTICIPANT = "X-OpenMATB-Participant"
 
 _ERROR_MESSAGES = {
+    "openmatb_active_session": "A session is already prepared on this station. Resume or close it before creating another.",
+    "openmatb_recovery_not_pending": "Only a session that has not started can be recovered from another tab. Use the original control tab for an active task.",
     "openmatb_dependency_missing": "OpenMATB dependencies are missing. Run the Windows preparation launcher, then try again.",
     "openmatb_launch_failed": "OpenMATB closed before its participant window was ready. Review the station checks and service logs.",
     "openmatb_ready_timeout": "OpenMATB did not report a ready participant window within 20 seconds.",
@@ -234,6 +236,16 @@ async def start_visual_profile_preview(
 @router.post("/sessions", response_model=PreparedOpenMatbSession, status_code=201)
 async def create_session(body: CreateOpenMatbSession, runtime: OpenMatbManager = Depends(manager)):
     return await _managed_async(lambda: runtime.create_session(body))
+
+
+@router.get("/sessions/active", response_model=OpenMatbSessionView | None)
+def active_session(runtime: OpenMatbManager = Depends(manager)):
+    return _managed(runtime.active_session)
+
+
+@router.post("/sessions/{session_id}/recover", response_model=PreparedOpenMatbSession)
+async def recover_pending_session(session_id: str, body: EmptyRequest, runtime: OpenMatbManager = Depends(manager)):
+    return await _managed_async(lambda: runtime.recover_pending_session(session_id))
 
 
 @router.get("/sessions/{session_id}", response_model=OpenMatbSessionView)

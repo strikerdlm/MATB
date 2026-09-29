@@ -870,6 +870,8 @@ class OpenMatbManager:
                 participant = db.get(Participant, request.participant_id)
                 if participant is None:
                     raise OpenMatbRuntimeError("participant_not_found")
+                from app.astra_roster import require_active
+                require_active(db, request.participant_id)
                 visit = db.exec(select(Visit).where(Visit.participant_id == request.participant_id, Visit.visit_ordinal == request.visit_ordinal)).first()
                 if visit is None or visit.id is None:
                     raise OpenMatbRuntimeError("visit_not_found")
@@ -974,6 +976,39 @@ class OpenMatbManager:
                 raise OpenMatbRuntimeError("openmatb_session_not_found")
             return self._view(db, row)
 
+    def active_session(self) -> OpenMatbSessionView | None:
+        """Expose the station owner without exposing either control credential."""
+        with Session(self.engine) as db:
+            row = db.exec(select(OpenMatbSuiteSession).where(
+                OpenMatbSuiteSession.lifecycle.not_in(("COMPLETE", "ABORTED", "FAILED", "INTERRUPTED"))
+            ).order_by(OpenMatbSuiteSession.created_at)).first()
+            return self._view(db, row) if row else None
+
+    async def recover_pending_session(self, session_id: str) -> PreparedOpenMatbSession:
+        """Recover a lost tab only before native acquisition has ever started.
+
+        Running tasks and collected responses still require their original lease.
+        Rotating both credentials invalidates any abandoned instruction window.
+        """
+        async with self._lock:
+            with Session(self.engine) as db:
+                row = db.get(OpenMatbSuiteSession, session_id)
+                if row is None:
+                    raise OpenMatbRuntimeError("openmatb_session_not_found")
+                if (row.lifecycle not in {"INSTRUCTIONS", "READY"}
+                        or row.started_at is not None or row.active_pid is not None
+                        or session_id in self._handles):
+                    raise OpenMatbRuntimeError("openmatb_recovery_not_pending")
+                controller = secrets.token_urlsafe(32)
+                participant = secrets.token_urlsafe(32)
+                row.controller_lease_hash = _token_hash(controller)
+                row.participant_token_hash = _token_hash(participant)
+                db.add(row)
+                db.commit()
+                db.refresh(row)
+                return PreparedOpenMatbSession(session=self._view(db, row),
+                    controller_lease=controller, participant_token=participant)
+
     def _view(self, db: Session, row: OpenMatbSuiteSession) -> OpenMatbSessionView:
         visit = db.get(Visit, row.visit_id)
         instruction = db.exec(select(OpenMatbInstructionProtocol).where(OpenMatbInstructionProtocol.protocol_id == row.instruction_protocol_id, OpenMatbInstructionProtocol.version == row.instruction_version)).one()
@@ -994,7 +1029,8 @@ class OpenMatbManager:
             from app.study_protocol import VisitDefinition
             protocol_visit = VisitDefinition(**visit_context['assigned_visit'])
         else:
-            protocol_visit = next(item for item in selected_protocol().visits if item.ordinal == row.visit_ordinal)
+            from app.astra_roster import visit_definition
+            protocol_visit = visit_definition(db, row.participant_id, row.visit_ordinal) or next(item for item in selected_protocol().visits if item.ordinal == row.visit_ordinal)
         instruction_view = self._instruction_view(instruction)
         order = json.loads(row.block_order_json)
         active = order[row.current_block_index] if row.current_block_index < len(order) and row.lifecycle in {"STARTING", "RUNNING", "PAUSED", "AWAITING_SCALE"} else None

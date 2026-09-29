@@ -29,7 +29,8 @@ export default function ParticipantsPage() {
       />
       {error && <p className="rounded-[4px] border border-danger/40 bg-danger/10 px-4 py-2 text-sm text-danger">{error}</p>}
       <StudyAssignment participants={participants} />
-      <ParticipantTable participants={participants} tracker={tracker} />
+      <p className="text-sm text-muted-foreground">{copy("Retirar un participante lo oculta de las nuevas pruebas y conserva sus resultados.", "Removing a participant hides them from new tests and retains their results.")}</p>
+      <ParticipantTable participants={participants} tracker={tracker} onRemoved={() => void refreshAll()} />
     </div>
   );
 }

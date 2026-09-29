@@ -13,6 +13,8 @@ export function AddParticipantDialog({ onCreated }: { onCreated: () => void }) {
   const { copy } = useAppLocale();
   const [open, setOpen] = useState(false);
   const [id, setId] = useState("");
+  const [callsign, setCallsign] = useState("");
+  const [mission, setMission] = useState<"" | "ASTRA-1" | "ASTRA-2">("");
   const [date, setDate] = useState("");
   const [sex, setSex] = useState("");
   const [ageBand, setAgeBand] = useState("");
@@ -28,8 +30,8 @@ export function AddParticipantDialog({ onCreated }: { onCreated: () => void }) {
     }
     setBusy(true); setErr(null);
     try {
-      await createParticipant({ id: normalizedId, enrollment_date: date, sex: sex || undefined, age_band: ageBand || undefined });
-      setOpen(false); setId(""); setDate(""); setSex(""); setAgeBand("");
+      await createParticipant({ id: normalizedId, enrollment_date: date, sex: sex || undefined, age_band: ageBand || undefined, callsign: callsign.trim() || undefined, mission: mission || undefined });
+      setOpen(false); setId(""); setCallsign(""); setMission(""); setDate(""); setSex(""); setAgeBand("");
       onCreated();
     } catch (e) { setErr((e as Error).message); }
     finally { setBusy(false); }
@@ -41,6 +43,8 @@ export function AddParticipantDialog({ onCreated }: { onCreated: () => void }) {
       <DialogContent>
         <DialogHeader><DialogTitle>{copy("Agregar participante", "Add participant")}</DialogTitle></DialogHeader>
         <div className="space-y-3">
+          <div><Label htmlFor="pcallsign">{copy("Indicativo (opcional)", "Callsign (optional)")}</Label><Input id="pcallsign" value={callsign} onChange={e => setCallsign(e.target.value)} maxLength={60} /></div>
+          <div><Label htmlFor="pmission">{copy("Misión", "Mission")}</Label><select id="pmission" className="native-select mt-1 w-full" value={mission} onChange={e => setMission(e.target.value as typeof mission)}><option value="">{copy("Protocolo general", "General protocol")}</option><option>ASTRA-1</option><option>ASTRA-2</option></select></div>
           <div>
             <Label htmlFor="pid">{copy("Código seudonimizado", "Pseudonymous code")}</Label>
             <Input
@@ -64,7 +68,7 @@ export function AddParticipantDialog({ onCreated }: { onCreated: () => void }) {
           <div><Label htmlFor="page">{copy("Grupo de edad (opcional)", "Age band (optional)")}</Label><Input id="page" value={ageBand} onChange={(e) => setAgeBand(e.target.value)} /></div>
           {err && <p className="text-sm text-danger">{err}</p>}
           <Button onClick={submit} disabled={busy || !idIsValid || !date} className="w-full">
-            {busy ? copy("Guardando…", "Saving...") : copy("Crear (genera visitas T0, DM8 y DM15)", "Create (generates T0, DM8, and DM15 visits)")}
+            {busy ? copy("Guardando…", "Saving...") : mission ? copy("Crear con visitas V0–V7", "Create with V0–V7 visits") : copy("Crear participante", "Create participant")}
           </Button>
         </div>
       </DialogContent>
