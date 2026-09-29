@@ -9,7 +9,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 vi.mock("@/lib/astra", () => ({ astraCall: vi.fn() }));
 vi.mock("@/lib/openmatb/api", () => ({ getActiveOpenMatbSession: vi.fn(), getOpenMatbDisplays: vi.fn(),
   getOpenMatbReadiness: vi.fn(), createOpenMatbSession: vi.fn(), storeOpenMatbCredentials: vi.fn() }));
-const names = ["CUELLAR", "ICEMAN", "COLORADO", "WHITE", "PIRATA", "BART", "CHUCKY", "VOLCANO", "ALFA-1", "ALFA-2", "ALFA-3", "ALFA-4"];
+const names = ["CUELLAR", "ICEMAN", "COLORADO", "WHITE", "PIRATA", "BART", "CHUCKY", "VOLCANO", "K-FIR", "Irving", "Midas", "Meteoro"];
 const people = names.map((callsign, i) => ({ id: `P${String(i + 1).padStart(2, "0")}`, callsign,
   mission: i < 5 ? "ASTRA-1" : "ASTRA-2", position: i < 5 ? i + 1 : i - 4, station: 1,
   time_slot: i === 11 ? "15:45–17:15" : "08:30–10:00", block_order: ["LOW", "MEDIUM", "HIGH"],
@@ -28,13 +28,13 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 const mount = () => render(<FixedLocaleProvider locale="es-419"><AstraPage /></FixedLocaleProvider>);
-it("shows exactly five and seven crew and preserves ALFA-4 identity when launching V7", async () => {
+it("shows exactly five and seven crew and preserves Meteoro identity when launching V7", async () => {
   mount();
   await screen.findByRole("button", { name: /^CUELLAR/ });
   expect(screen.getByRole("button", { name: /ASTRA-1 5/ })).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: /ASTRA-2 7/ }));
-  expect(screen.getByRole("button", { name: /^ALFA-4/ }).textContent).toContain("15:45–17:15");
-  fireEvent.click(screen.getByRole("button", { name: /^ALFA-4/ }));
+  expect(screen.getByRole("button", { name: /^Meteoro/ }).textContent).toContain("15:45–17:15");
+  fireEvent.click(screen.getByRole("button", { name: /^Meteoro/ }));
   fireEvent.change(screen.getByLabelText("Visita"), { target: { value: "8" } });
   const launch = screen.getByRole("button", { name: /Aplicar visita V7/ });
   expect(launch).toBeDisabled();

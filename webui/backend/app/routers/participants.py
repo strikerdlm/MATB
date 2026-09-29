@@ -8,7 +8,7 @@ from sqlmodel import Session, select
 from app.constants import protocol_visits
 from app.db import get_session
 from app.models import Participant, ParticipantRoster, Visit
-from app.astra_roster import participant_view
+from app.astra_roster import participant_view, display_callsign, callsign_exists
 from app.schemas import (
     ParticipantCreate,
     ParticipantOut,
@@ -39,8 +39,8 @@ def create_participant(body: ParticipantCreate, session: Session = Depends(get_s
     participant = Participant(**body.model_dump(exclude={"callsign", "mission"}))
     session.add(participant)
     if body.callsign:
-        callsign = body.callsign.strip().upper()
-        if not callsign or session.exec(select(ParticipantRoster).where(ParticipantRoster.callsign == callsign)).first():
+        callsign = display_callsign(body.callsign.strip().upper())
+        if not callsign or callsign_exists(session, callsign):
             raise HTTPException(409, "El indicativo ya existe o está vacío.")
         session.flush()
         session.add(ParticipantRoster(participant_id=body.id, callsign=callsign))

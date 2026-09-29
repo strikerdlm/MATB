@@ -25,16 +25,35 @@ CREW = (
     ("ASTRA-2", "BART", "ST", "CETIA-COFAC", "Ingeniero electrónico", "20–29"),
     ("ASTRA-2", "CHUCKY", "ST", "CACOM 1", "COP ECN 235", "20–29"),
     ("ASTRA-2", "VOLCANO", "T1", "CACOM 3", "Seguridad y defensa de bases", "40–49"),
-    ("ASTRA-2", "ALFA-1", None, None, None, None),
-    ("ASTRA-2", "ALFA-2", None, None, None, None),
-    ("ASTRA-2", "ALFA-3", None, None, None, None),
-    ("ASTRA-2", "ALFA-4", None, None, None, None),
+    ("ASTRA-2", "K-FIR", None, None, None, None),
+    ("ASTRA-2", "Irving", None, None, None, None),
+    ("ASTRA-2", "Midas", None, None, None, None),
+    ("ASTRA-2", "Meteoro", None, None, None, None),
 )
+
+# Presentation aliases preserve existing database rows and historical seed keys.
+CALLSIGN_UPDATES = {"ALFA-1": "K-FIR", "ALFA-2": "Irving",
+                    "ALFA-3": "Midas", "ALFA-4": "Meteoro"}
+
+
+def display_callsign(callsign):
+    normalized = callsign.strip().upper()
+    legacy = normalized.replace(" ", "-")
+    if legacy in CALLSIGN_UPDATES:
+        return CALLSIGN_UPDATES[legacy]
+    return next((name for name in CALLSIGN_UPDATES.values()
+                 if name.upper() == normalized), callsign)
+
+
+def callsign_exists(db, callsign):
+    identity = display_callsign(callsign).upper()
+    return any(display_callsign(value).upper() == identity
+               for value in db.exec(select(ParticipantRoster.callsign)).all())
 
 
 def participant_view(db, person):
     roster = db.get(ParticipantRoster, person.id)
-    return dict(**person.model_dump(), callsign=roster.callsign if roster else None,
+    return dict(**person.model_dump(), callsign=display_callsign(roster.callsign) if roster else None,
                 mission=roster.mission if roster else None, archived=bool(roster and roster.archived_at))
 
 
@@ -54,8 +73,8 @@ def next_id(db):
 
 
 def add_person(db, *, callsign, mission, participant_id=None, **details):
-    callsign = callsign.strip().upper()
-    if db.exec(select(ParticipantRoster).where(ParticipantRoster.callsign == callsign)).first():
+    callsign = display_callsign(callsign.strip().upper())
+    if callsign_exists(db, callsign):
         raise HTTPException(409, "El indicativo ya existe; puede restaurarlo si fue retirado.")
     identity = participant_id or next_id(db)
     if db.get(Participant, identity):
@@ -76,12 +95,13 @@ def add_person(db, *, callsign, mission, participant_id=None, **details):
 def initialize(db):
     """Idempotent bootstrap; archived seed rows remain archived on every restart."""
     for mission, callsign, rank, unit, role, age_band in CREW:
-        source = f"astra-2026-09-29:{callsign}"
+        seed_callsign = next((old for old, new in CALLSIGN_UPDATES.items() if new == callsign), callsign)
+        source = f"astra-2026-09-29:{seed_callsign}"
         existing = db.exec(select(ParticipantRoster).where(ParticipantRoster.source_key == source)).first()
         if existing:
             continue
         # Never silently attach a nominal alias to an existing scientific ID.
-        if db.exec(select(ParticipantRoster).where(ParticipantRoster.callsign == callsign)).first():
+        if callsign_exists(db, callsign):
             raise HTTPException(409, f"Revise el registro existente de {callsign} antes de cargar el grupo.")
         add_person(db, callsign=callsign, mission=mission, rank=rank, unit=unit, role=role,
                    age_band=age_band, source_key=source)

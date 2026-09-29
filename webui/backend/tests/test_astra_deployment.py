@@ -19,14 +19,14 @@ def test_astra_roster_has_five_seven_and_eight_unacquired_visits(engine):
         astra_roster.initialize(db)
         people = astra_roster.dashboard(db)['participants']
         assert [p['callsign'] for p in people if p['mission'] == 'ASTRA-1'] == ['CUELLAR','ICEMAN','COLORADO','WHITE','PIRATA']
-        assert [p['callsign'] for p in people if p['mission'] == 'ASTRA-2'] == ['BART','CHUCKY','VOLCANO','ALFA-1','ALFA-2','ALFA-3','ALFA-4']
+        assert [p['callsign'] for p in people if p['mission'] == 'ASTRA-2'] == ['BART','CHUCKY','VOLCANO','K-FIR','Irving','Midas','Meteoro']
         assert len(db.exec(select(Participant)).all()) == 12
         assert len(db.exec(select(Visit)).all()) == 96
         assert all(len(p['visits']) == 8 and all(v['actual_date'] is None and v['completed_blocks'] == 0 for v in p['visits']) for p in people)
         assert people[-1]['time_slot'] == '15:45–17:15'
         assert people[-1]['visits'][-1]['planned_date'].isoformat() == '2026-11-05'
         assert people[0]['visits'][1]['planned_date'].isoformat() == '2026-10-06'
-        assert all(p['unit'] is None and p['age_band'] is None for p in people if p['callsign'].startswith('ALFA'))
+        assert all(p['unit'] is None and p['age_band'] is None for p in people if p['callsign'] in {'K-FIR', 'Irving', 'Midas', 'Meteoro'})
         assert len({tuple(p['block_order']) for p in people}) == 6
 
 
@@ -42,6 +42,40 @@ def test_removal_is_reversible_and_bootstrap_does_not_readd(engine):
         restore_participant('P01', db)
         assert len(list_participants(session=db)) == 12
         assert db.get(ParticipantRoster, 'P01').callsign == 'CUELLAR'
+
+
+def test_callsign_display_preserves_legacy_database_and_prevents_duplicates(engine):
+    from app.routers.participants import create_participant
+    from app.schemas import ParticipantCreate
+    from datetime import date
+
+    with Session(engine) as db:
+        astra_roster.initialize(db)
+        for old, new in astra_roster.CALLSIGN_UPDATES.items():
+            row = db.exec(select(ParticipantRoster).where(ParticipantRoster.callsign == new)).one()
+            row.callsign = old
+            db.add(row)
+        db.commit()
+        remove_participant('P12', db)
+        # Compare every stored table, including visits, sessions and results.
+        connection = db.connection().connection.driver_connection
+        before = list(connection.iterdump())
+        astra_roster.initialize(db)
+        people = astra_roster.dashboard(db, include_archived=True)['participants']
+        assert [(p['id'], p['callsign']) for p in people[-4:]] == [
+            ('P09', 'K-FIR'), ('P10', 'Irving'), ('P11', 'Midas'), ('P12', 'Meteoro')]
+        assert people[-1]['archived']
+        assert [p['callsign'] for p in list_participants(include_archived=True, session=db)][-4:] == [
+            'K-FIR', 'Irving', 'Midas', 'Meteoro']
+        assert list(connection.iterdump()) == before
+        for callsign in ('K-FIR', 'irving', 'MIDAS', 'Meteoro', 'Alfa 1', 'ALFA-4'):
+            with pytest.raises(HTTPException) as error:
+                astra_roster.add_person(db, callsign=callsign, mission='ASTRA-2')
+            assert error.value.status_code == 409
+        with pytest.raises(HTTPException) as error:
+            create_participant(ParticipantCreate(id='P99', callsign='Irving', enrollment_date=date.today()), db)
+        assert error.value.status_code == 409
+        db.rollback()
 
 
 def test_new_member_does_not_reuse_removed_identity(engine):
