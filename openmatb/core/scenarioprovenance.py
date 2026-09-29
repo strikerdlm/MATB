@@ -58,6 +58,12 @@ _BUILDER_PARAMETER_KEYS = {
     "openmatb_sysmon_lights",
     "openmatb_sysmon_scales",
 }
+_BUILDER_VISUAL_PROFILE_KEYS = {
+    "visual_profile_id",
+    "visual_profile_version",
+    "visual_profile_schema_version",
+    "visual_profile_sha256",
+}
 _BUILDER_QUESTIONNAIRE_KEYS = {
     "isa",
     "nasatlx",
@@ -155,6 +161,38 @@ class BoundScenarioManifest:
     content: bytes | None
 
 
+def _validate_builder_visual_parameters(parameters: dict[str, Any]) -> None:
+    # Console manifests record presentation provenance alongside workload
+    # settings. Older builder artifacts may omit it; a versioned identity must
+    # be complete when present. Scenario regeneration below still binds every
+    # executable byte independently of these presentation-only fields.
+    if "visual_theme" in parameters and parameters["visual_theme"] not in (
+        "classic", "cockpit", "fac_modern",
+    ):
+        raise ScenarioProvenanceError("scenario-builder visual theme is malformed")
+    present = _BUILDER_VISUAL_PROFILE_KEYS.intersection(parameters)
+    if not present:
+        return
+    if present != _BUILDER_VISUAL_PROFILE_KEYS:
+        raise ScenarioProvenanceError("scenario-builder visual profile identity is incomplete")
+
+    from matb_integration.openmatb_visual_profiles import (
+        PROFILE_ID_PATTERN,
+        SCHEMA_VERSION,
+        SEMVER_PATTERN,
+    )
+
+    for key, pattern in (
+        ("visual_profile_id", PROFILE_ID_PATTERN),
+        ("visual_profile_version", SEMVER_PATTERN),
+        ("visual_profile_sha256", _SHA256),
+    ):
+        if not isinstance(parameters[key], str) or pattern.fullmatch(parameters[key]) is None:
+            raise ScenarioProvenanceError(f"scenario-builder parameter {key} is malformed")
+    if parameters["visual_profile_schema_version"] != SCHEMA_VERSION:
+        raise ScenarioProvenanceError("scenario-builder visual profile schema is unsupported")
+
+
 def _validate_builder_payload(
     payload: dict[str, Any],
     *,
@@ -217,9 +255,10 @@ def _validate_builder_payload(
     parameters = _require_exact_keys(
         payload.get("parameters"),
         required=_BUILDER_PARAMETER_KEYS,
-        optional={"suite_profile_name"},
+        optional={"suite_profile_name", "visual_theme"} | _BUILDER_VISUAL_PROFILE_KEYS,
         label="scenario-builder parameters",
     )
+    _validate_builder_visual_parameters(parameters)
     if parameters.get("suite_profile_name", workload_level) not in {"PRACTICE", "LOW", "MEDIUM", "HIGH"}:
         raise ScenarioProvenanceError("scenario-builder suite profile name is malformed")
     for key in ("difficulty", "track_target_proportion", "communications_own_callsign_ratio"):
