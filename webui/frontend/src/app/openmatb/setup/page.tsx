@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, AlertCircle } from "lucide-react";
 import { ExperimentGuide } from "@/components/experiments/ExperimentGuide";
+import { ActiveSessionNotice } from "@/components/openmatb/ActiveSessionNotice";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -111,6 +112,7 @@ function SetupContent() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stationError, setStationError] = useState<string | null>(null);
+  const [activeRevision, setActiveRevision] = useState(0);
 
   useEffect(() => {
     if (assigned.context) setParticipantId(assigned.context.participant_id);
@@ -413,6 +415,7 @@ function SetupContent() {
       );
     } catch (reason) {
       participantWindow?.close();
+      setActiveRevision(value => value + 1);
       setError(openMatbErrorMessage(reason, copyRef.current));
     } finally {
       setBusy(false);
@@ -421,6 +424,7 @@ function SetupContent() {
 
   return (
     <div className="min-w-0 space-y-6 text-base [&_button]:text-sm [&_button]:normal-case [&_button]:tracking-normal">
+      <ActiveSessionNotice revision={activeRevision} />
       <div id="om-purpose" tabIndex={-1}>
         <Link className="underline" href="/study/assignments">
           {copy("Evaluaciones asignadas", "Assigned assessments")}
@@ -603,7 +607,7 @@ function SetupContent() {
             >
               <option value="">—</option>
               {participants.map((person) => (
-                <option key={person.id}>{person.id}</option>
+                <option key={person.id} value={person.id}>{person.callsign ? `${person.callsign} · ${person.id}` : person.id}</option>
               ))}
             </select>
             {!loading && !participants.length && (

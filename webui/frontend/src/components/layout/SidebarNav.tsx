@@ -33,6 +33,7 @@ export function SidebarNav() {
   const researcherActive = researcher.some(([href]) => isRouteActive(path, href));
   const catalogHref = purpose ? withExecutionPurpose("/start", purpose) : "/start";
   return <nav aria-label={copy("Navegación de experimentos", "Experiment navigation")} className="p-4">
+    <Link href="/astra" className="mb-3 block rounded bg-info/15 px-3 py-3 text-sm font-semibold text-info" aria-current={path === "/astra" ? "page" : undefined}>{copy("Aplicar MATB · ASTRA", "Run MATB · ASTRA")}</Link>
     <Link href={catalogHref} className="block rounded border border-info/30 px-3 py-3 text-sm font-semibold text-info" aria-current={path === "/start" ? "page" : undefined}>{copy("Todos los experimentos", "All experiments")}</Link>
     {experiment && <p className="mt-4 text-sm font-semibold">{copy(...experiment.title)}</p>}
     {(experiment || path === "/start") && <ol className="my-4 flex flex-wrap gap-2 md:block md:space-y-2" aria-label={copy("Pasos del experimento", "Experiment steps")}>

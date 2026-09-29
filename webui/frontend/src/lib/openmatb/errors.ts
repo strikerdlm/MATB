@@ -3,6 +3,7 @@ import { OpenMatbApiError } from "@/lib/openmatb/api";
 type Copy = (spanish: string, english: string) => string;
 
 const MESSAGES: Record<string, [string, string]> = {
+  openmatb_recovery_not_pending: ["La prueba ya comenzó. Use la pestaña que controla esa sesión.", "The test has already started. Use the tab controlling that session."],
   openmatb_native_recovery_required: ["Una tarea de la conexión anterior sigue abierta. Cierre esa ventana nativa y actualice la consola antes de continuar.", "A task from the previous connection is still open. Close that native window and refresh the console before continuing."],
   openmatb_display_discovery_failed: ["No se pudieron detectar las pantallas. Compruebe que la estación tenga una sesión gráfica activa y vuelva a comprobar.", "Displays could not be detected. Check that the station has an active desktop session, then check again."],
   openmatb_display_unavailable: ["La pantalla seleccionada ya no está conectada. Vuelva a Preparar y seleccione una pantalla disponible.", "The selected display is no longer connected. Return to Prepare and select an available display."],
@@ -14,8 +15,8 @@ const MESSAGES: Record<string, [string, string]> = {
   openmatb_station_not_ready: ["La estación dejó de estar lista. Revise pantalla y dependencias en Preparar.", "The station is no longer ready. Review display and dependencies in Prepare."],
   assigned_liftoff_first: ["Su protocolo requiere completar Liftoff antes de OpenMATB en esta visita.", "Your protocol requires Liftoff before OpenMATB for this visit."],
   openmatb_active_session: [
-    "Ya existe una sesión OpenMATB activa. Termine o aborte esa sesión antes de crear otra.",
-    "An OpenMATB session is already active. Finish or abort it before creating another.",
+    "Hay una sesión preparada en esta estación. Use Retomar sesión o Cerrar sesión pendiente antes de abrir otra.",
+    "A session is already prepared on this station. Use Resume session or Close pending session before opening another.",
   ],
   openmatb_dependency_missing: [
     "Faltan dependencias de OpenMATB. Cierre la consola y vuelva a abrirla con “01 - Abrir consola UAS”.",

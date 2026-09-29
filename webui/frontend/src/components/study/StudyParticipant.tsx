@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { AstraVisitHeader, AstraRecovery } from "./AstraVisitSupport";
 import { Button } from "@/components/ui/button";
 import { FixedLocaleProvider, useAppLocale } from "@/lib/i18n";
 import {
@@ -100,6 +101,19 @@ export function StudyParticipant() {
 }
 
 function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
+  const query = useSearchParams();
+  const astra = initial.version.study.study_id === "astra-matb-field-2026";
+  const [displayIndex, setDisplayIndex] = useState(0);
+  const displayQuery = query.get("display");
+  useEffect(() => {
+    const key = `astra.display.${initial.assignment.id}`;
+    let saved: string | null = null;
+    try { saved = sessionStorage.getItem(key); } catch { /* Use the primary display. */ }
+    const requested = Number(displayQuery ?? saved ?? "0");
+    const index = Number.isInteger(requested) && requested >= 0 && requested <= 15 ? requested : 0;
+    setDisplayIndex(index);
+    if (astra) { try { sessionStorage.setItem(key, String(index)); } catch { /* The URL still selects this visit's display. */ } }
+  }, [astra, displayQuery, initial.assignment.id]);
   const preferred = useAppLocale();
   const router = useRouter();
   const [detail, setDetail] = useState(initial);
@@ -167,6 +181,14 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
       ? run.presentation.locale
       : next?.locale) ?? preferred.locale;
   const copy = (es: string, en: string) => (locale === "en" ? en : es);
+  const occasionLabel = (key: string) => {
+    if (!astra) return key;
+    const occasion = occasions.find(item => item.key === key);
+    if (!occasion) return key;
+    const level = occasion.condition_by_arm[detail.assignment.arm];
+    const workload = ({ LOW: copy("baja", "low"), MEDIUM: copy("media", "medium"), HIGH: copy("alta", "high") })[level] ?? level;
+    return `${copy("Bloque", "Block")} ${Math.ceil(occasion.order / 2)}/3 · ${copy("carga", "workload")} ${workload}`;
+  };
   const missing = next
     ? readiness?.requirements[next.key]?.find((r) => r.state !== "prepared")
     : null;
@@ -325,6 +347,7 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
   }
   return (
     <section className="mx-auto max-w-3xl space-y-5">
+      {astra ? <AstraVisitHeader detail={detail} /> : <>
       <h1 className="text-2xl font-semibold">
         {copy("Visita del participante", "Participant visit")}:{" "}
         {detail.assignment.participant_id}
@@ -334,6 +357,7 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
         {detail.version.study.title}
       </p>
       <p className="break-all text-xs">{detail.assignment.version_id}</p>
+      </>}
       <div className="flex gap-3">
         <Button variant="outline" onClick={() => setHelp(!help)}>
           {copy("Ayuda", "Help")}
@@ -420,7 +444,7 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
           {run && run.next_action !== "ready" ? (
             <fieldset disabled={busy} className="space-y-4 rounded border p-4">
               <h2>
-                {stageLabel(run.next_action)} · {run.occasion_key}
+                {stageLabel(run.next_action)} · {occasionLabel(run.occasion_key)}
               </h2>
               {Object.entries(
                 run.presentation.resolved_task_instructions ?? {},
@@ -550,7 +574,7 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
                         instruction_version: native.instructions.version,
                         visual_profile_id: native.visual.id,
                         visual_profile_version: native.visual.version,
-                        display_index: 0,
+                        display_index: displayIndex,
                       });
                       storeOpenMatbCredentials(prepared);
                       nativeRequests.current.set(run.id, {
@@ -622,6 +646,8 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
                 </pre>
               </details>
             </fieldset>
+          ) : astra && recovery ? (
+            <AstraRecovery key={recovery.key} detail={detail} interval={recovery} onComplete={refresh} />
           ) : missing ? (
             <Button
               disabled={busy}
@@ -644,7 +670,7 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
                 })
               }
             >
-              {copy("Preparar", "Prepare")} · {missing.occasion_key}
+              {copy("Preparar", "Prepare")} · {occasionLabel(missing.occasion_key)}
             </Button>
           ) : recovery ? (
             <section className="space-y-3">
@@ -669,11 +695,11 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
                 {next.instrument === "questionnaire"
                   ? copy("Valoraciones", "Ratings")
                   : copy("Listo para realizar", "Ready to perform")}{" "}
-                · {next.key}
+                · {occasionLabel(next.key)}
               </h2>
-              <p>
+              {!astra && <p>
                 {next.phase} · {next.instrument}
-              </p>
+              </p>}
               <Button
                 disabled={busy}
                 onClick={() =>
@@ -796,8 +822,8 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
         </>
       )}
       {error && <p role="alert">{error}</p>}
-      <Link href="/study/assignments" className="block underline">
-        {copy("Volver al investigador", "Return to researcher")}
+      <Link href={astra || query.get("return") === "astra" ? "/astra" : "/study/assignments"} className="block underline">
+        {astra ? copy("Volver a tripulantes ASTRA", "Return to ASTRA crew") : copy("Volver al investigador", "Return to researcher")}
       </Link>
     </section>
   );

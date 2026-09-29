@@ -31,7 +31,7 @@ class OpenMatbComponentProvider:
         license_expression="CECILL-2.1",
     )
     model_modules = ("app.openmatb_models",)
-    router_modules = ("app.routers.openmatb",)
+    router_modules = ("app.routers.openmatb", "app.routers.astra")
 
     async def startup(self, app: FastAPI) -> None:
         root = _repo_root()

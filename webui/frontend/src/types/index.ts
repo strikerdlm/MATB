@@ -1,5 +1,8 @@
 export interface Participant {
   id: string;
+  callsign?: string | null;
+  mission?: string | null;
+  archived?: boolean;
   enrollment_date: string;
   sex?: string | null;
   age_band?: string | null;
@@ -153,6 +156,8 @@ export interface BlockProvenance {
 
 export interface ParticipantCreate {
   id: string;
+  callsign?: string;
+  mission?: "ASTRA-1" | "ASTRA-2";
   enrollment_date: string;
   sex?: string;
   age_band?: string;

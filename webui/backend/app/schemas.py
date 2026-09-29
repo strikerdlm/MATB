@@ -18,6 +18,8 @@ class ParticipantCreate(BaseModel):
     sex: str | None = None
     age_band: str | None = None
     notes: str | None = None
+    callsign: str | None = Field(default=None, min_length=1, max_length=60)
+    mission: Literal["ASTRA-1", "ASTRA-2"] | None = None
 
 
 class ParticipantOut(BaseModel):
@@ -28,6 +30,9 @@ class ParticipantOut(BaseModel):
     sex: str | None = None
     age_band: str | None = None
     notes: str | None = None
+    callsign: str | None = None
+    mission: str | None = None
+    archived: bool = False
 
 
 class VisitOut(BaseModel):

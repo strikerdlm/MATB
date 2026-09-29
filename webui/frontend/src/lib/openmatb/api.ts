@@ -53,6 +53,8 @@ export const listOpenMatbInstructions = () => call<OpenMatbInstructionProtocol[]
 export const listOpenMatbVisualProfiles = () => call<OpenMatbVisualProfile[]>("/openmatb/visual-profiles");
 export const getOpenMatbVisualPreview = () => call<OpenMatbVisualPreview>("/openmatb/visual-profiles/preview");
 export const getOpenMatbSession = (id: string) => call<OpenMatbSession>(`/openmatb/sessions/${encodeURIComponent(id)}`);
+export const getActiveOpenMatbSession = () => call<OpenMatbSession | null>("/openmatb/sessions/active");
+export const recoverPendingOpenMatbSession = (id: string) => call<PreparedOpenMatbSession>(`/openmatb/sessions/${encodeURIComponent(id)}/recover`, json({}));
 
 export function createOpenMatbSession(body: {
   preparation_only?: boolean;

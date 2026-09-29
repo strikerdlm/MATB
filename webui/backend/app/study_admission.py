@@ -36,6 +36,8 @@ def for_occasion(db, occasion_id):
 
 
 def resolve_assignment(db, *, attempt_id, instrument, participant_id, visit_id=None, purpose, config=None, require_started=False):
+    from app.astra_roster import require_active
+    require_active(db, participant_id)
     if purpose != 'study': return None
     if not attempt_id: _required()
     attempt = db.get(AssessmentAttempt, attempt_id)

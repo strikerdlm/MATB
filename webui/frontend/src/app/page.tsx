@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Microscope, UserRound } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -18,6 +19,7 @@ export default function HomePage() {
   }
 
   return <div className="mx-auto max-w-5xl space-y-7 py-4 sm:py-8">
+    <Link href="/astra" className="block rounded-xl border border-info/40 bg-info/10 p-6 hover:bg-info/20"><span className="block text-2xl font-semibold">{copy("Aplicar MATB · ASTRA", "Run MATB · ASTRA")}</span><span className="mt-2 block text-sm">{copy("ASTRA-1 y ASTRA-2 · Seleccionar tripulante y visita", "ASTRA-1 and ASTRA-2 · Select crew member and visit")}</span></Link>
     <PageHeader
       kicker="MATB - FAC"
       title={copy("Elija su espacio de trabajo", "Choose your workspace")}

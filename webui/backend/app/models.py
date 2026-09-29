@@ -21,6 +21,19 @@ class Participant(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
 
 
+class ParticipantRoster(SQLModel, table=True):
+    """Editable station roster; research identities and acquired data stay fixed."""
+    participant_id: str = Field(foreign_key="participant.id", primary_key=True)
+    callsign: str = Field(index=True, unique=True)
+    mission: str | None = None
+    position: int | None = None
+    rank: str | None = None
+    unit: str | None = None
+    role: str | None = None
+    source_key: str | None = Field(default=None, unique=True)
+    archived_at: datetime | None = None
+
+
 class Visit(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("participant_id", "visit_ordinal"),)
     id: int | None = Field(default=None, primary_key=True)
