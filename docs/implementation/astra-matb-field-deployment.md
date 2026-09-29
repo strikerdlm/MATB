@@ -23,7 +23,12 @@ Entrada de operación: `http://127.0.0.1:3100/astra`.
 | Misión | Indicativos |
 | --- | --- |
 | ASTRA-1 | CUELLAR, ICEMAN, COLORADO, WHITE, PIRATA |
-| ASTRA-2 | BART, CHUCKY, VOLCANO, ALFA-1, ALFA-2, ALFA-3, ALFA-4 |
+| ASTRA-2 | BART, CHUCKY, VOLCANO, K-FIR, Irving, Midas, Meteoro |
+
+Los indicativos actuales se muestran también sobre registros anteriores sin
+modificar la base de datos. Se conservan los códigos de participante, las claves
+originales de carga, las visitas, las sesiones, los resultados y los retiros.
+Volver a cargar el grupo no crea participantes adicionales por este cambio.
 
 V0 PRE; V1 DM2; V2 DM4; V3 DM7; V4 DM10; V5 DM13; V6 DM15; V7 POST D+1.
 Fechas y turnos son **planificados**. No se crean resultados, basales completados
@@ -34,7 +39,7 @@ Si existen basales externos, revisar su correspondencia antes de adquirir datos.
 Las fuentes son el registro de candidatos actualizado el 29 de septiembre de
 2026, la guía y hoja de campo v2 de esa fecha y el Manual de Operaciones ASTRA
 2026, sección 4.7.6. Solo se incorporan indicativo, grado, unidad, función y
-franja de edad disponibles. Los datos no disponibles de ALFA-1 a ALFA-4 quedan
+franja de edad disponibles. Los datos no disponibles de K-FIR, Irving, Midas y Meteoro quedan
 vacíos. Las políticas descriptivas y de repetición técnica se muestran para
 su revisión explícita al activar; no constituyen un resultado de validación.
 
