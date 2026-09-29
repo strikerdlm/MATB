@@ -13,6 +13,7 @@ from app.openmatb_schemas import (
     CloneVisualProfileRequest,
     CreateOpenMatbSession,
     EmptyRequest,
+    ParticipantReadyRequest,
     ImportVisualProfileRequest,
     InstructionProtocolView,
     OpenMatbReadiness,
@@ -35,6 +36,7 @@ _PARTICIPANT = "X-OpenMATB-Participant"
 
 _ERROR_MESSAGES = {
     "openmatb_active_session": "A session is already prepared on this station. Resume or close it before creating another.",
+    "openmatb_ready_block_changed": "The displayed block changed. Refresh the session before starting.",
     "openmatb_recovery_not_pending": "Only a session that has not started can be recovered from another tab. Use the original control tab for an active task.",
     "openmatb_dependency_missing": "OpenMATB dependencies are missing. Run the Windows preparation launcher, then try again.",
     "openmatb_launch_failed": "OpenMATB closed before its participant window was ready. Review the station checks and service logs.",
@@ -283,6 +285,21 @@ async def start(session_id: str, body: EmptyRequest, request: Request, lease: st
     result = await _managed_async(lambda: runtime.start_block(session_id, _required(lease, "openmatb_controller_required")))
     physiology = getattr(request.app.state, "polar_manager", None)
     if physiology is not None and result.active_block is not None:
+        await physiology.system_marker_for_session(
+            "openmatb", session_id, result.active_block,
+            {"block_index": result.current_block_index, "automatic": True},
+        )
+    return result
+
+
+@router.post("/sessions/{session_id}/participant-ready", response_model=OpenMatbSessionView)
+async def participant_ready(session_id: str, body: ParticipantReadyRequest, request: Request,
+                            token: str | None = Header(default=None, alias=_PARTICIPANT),
+                            runtime: OpenMatbManager = Depends(manager)):
+    result, changed = await _managed_async(lambda: runtime.participant_ready(
+        session_id, _required(token, "openmatb_participant_token_required"), body.block_index))
+    physiology = getattr(request.app.state, "polar_manager", None)
+    if physiology is not None and changed and result.active_block is not None:
         await physiology.system_marker_for_session(
             "openmatb", session_id, result.active_block,
             {"block_index": result.current_block_index, "automatic": True},

@@ -8,6 +8,10 @@ Entrada de operación: `http://127.0.0.1:3100/astra`.
    la versión de las reglas. Una base con otro estudio activo no se sustituye.
 3. Seleccionar misión, indicativo, visita y pantalla. Comprobar identidad,
    audio, controles y pantalla. En V0, realizar la familiarización de 5 min.
+   Con una sola pantalla, las instrucciones se abren en la misma pestaña.
+   **He leído las instrucciones. Estoy listo: iniciar** abre directamente la
+   tarea nativa. Una preparación que ya estaba en READY ofrece **Estoy listo:
+   iniciar**; no necesita una orden adicional desde otra pestaña.
 4. Aplicar la visita. El recorrido usa el entorno nativo, reconocimiento de
    controles, tres bloques de 15 min, valoraciones tras cada bloque y dos
    pausas registradas de 3 min. Las pausas se controlan en el mismo recorrido.

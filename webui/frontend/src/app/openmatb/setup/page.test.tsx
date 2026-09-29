@@ -23,6 +23,7 @@ vi.mock("@/lib/api", () => ({
 }));
 vi.mock("@/lib/openmatb/api", () => ({
   getOpenMatbReadiness: vi.fn(),
+  getActiveOpenMatbSession: vi.fn(async () => null),
   getOpenMatbDisplays: vi.fn(),
   createOpenMatbSession: vi.fn(),
   storeOpenMatbCredentials: vi.fn(),
@@ -79,6 +80,23 @@ describe("routine OpenMATB preparation", () => {
     ] as never);
     nav.push.mockReset();
     sessionStorage.clear();
+  });
+  it("keeps a single-display session in this tab without opening a popup or starting early", async () => {
+    const popup = vi.spyOn(window, "open").mockReturnValue(null);
+    vi.mocked(api.getOpenMatbDisplays).mockResolvedValue(displays.slice(0, 1));
+    vi.mocked(api.createOpenMatbSession).mockResolvedValue({ session: { id: "single" }, participant_token: "token", controller_lease: "lease" } as never);
+    render(<SetupPage />);
+    await waitFor(() => expect(screen.getByLabelText("Participant")).toBeEnabled());
+    fireEvent.change(screen.getByLabelText("Participant"), { target: { value: "P01" } });
+    await waitFor(() => expect(screen.getByLabelText("Assigned visit")).toHaveValue("1"));
+    fireEvent.click(screen.getByRole("checkbox"));
+    const prepare = screen.getByRole("button", { name: "Create session and open instructions" });
+    await waitFor(() => expect(prepare).toBeEnabled());
+    fireEvent.click(prepare);
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/openmatb/participant?session=single"));
+    expect(popup).not.toHaveBeenCalled();
+    expect(api.storeOpenMatbCredentials).toHaveBeenCalled();
+    expect(api.controllerAction).not.toHaveBeenCalled();
   });
   it("puts readiness first, labels real displays and explains unmet requirements", async () => {
     render(<SetupPage />);

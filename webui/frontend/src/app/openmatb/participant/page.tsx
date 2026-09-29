@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Check, Monitor } from "lucide-react";
@@ -13,7 +13,7 @@ import { useReportExperimentFlow } from "@/lib/experiment-flow";
 import { withExecutionPurpose } from "@/lib/execution-purpose";
 import { FixedLocaleProvider, useAppLocale } from "@/lib/i18n";
 import {
-  acknowledgeOpenMatbInstructions,
+  startOpenMatbAsParticipant,
   getOpenMatbSession,
   readOpenMatbParticipant,
   submitOpenMatbScales,
@@ -30,6 +30,7 @@ function ParticipantContent() {
   const id = params.get("session");
   const [token, setToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const starting = useRef(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [draftClearFailureSessionId, setDraftClearFailureSessionId] = useState<string | null>(null);
 
@@ -71,16 +72,18 @@ function ParticipantContent() {
   useReportExperimentFlow("openmatb", openMatbStage(session?.lifecycle), session?.execution_purpose);
 
 
-  async function acknowledge() {
-    if (!id || !token) return;
+  async function startWhenReady() {
+    if (!id || !token || !session || starting.current) return;
+    starting.current = true;
     setBusy(true);
     setActionError(null);
     try {
-      acceptActionValue(await acknowledgeOpenMatbInstructions(id, token));
+      acceptActionValue(await startOpenMatbAsParticipant(id, token, session.current_block_index));
     } catch (reason: unknown) {
-      setActionError(openMatbErrorMessage(reason, copy, ["No se pudo confirmar.", "Acknowledgement failed."]));
+      setActionError(openMatbErrorMessage(reason, copy, ["No se pudo abrir la tarea. Vuelva a intentarlo.", "The task could not open. Try again."]));
     } finally {
       setBusy(false);
+      starting.current = false;
     }
   }
 
@@ -101,6 +104,7 @@ function ParticipantContent() {
   }
 
   const Ratings = session.study_assignment_id ? AssignedWorkloadQuestionnaire : WorkloadQuestionnaire;
+  const startBlocked = !token || busy || session.evidence_processing || session.native_recovery_required;
   const savedBlock = Object.values(session.scores).find(score => typeof score.block_instance_id === "string")?.block_instance_id;
   const title = session.lifecycle === "INSTRUCTIONS"
     ? session.instruction_protocol.title
@@ -118,6 +122,8 @@ function ParticipantContent() {
 
       {pollingError && <p role="alert" className="border border-warning/40 bg-warning/10 p-3 text-sm text-warning">{pollingError}</p>}
       {actionError && <p role="alert" className="border border-danger/40 bg-danger/10 p-3 text-sm text-danger">{actionError}</p>}
+      {session.evidence_processing && <p role="status">{copy("Guardando los datos anteriores. El inicio se habilitará al terminar.", "Saving previous data. Start will be available when saving finishes.")}</p>}
+      {session.native_recovery_required && <p role="alert">{copy("Cierre la ventana nativa de la sesión anterior para poder iniciar.", "Close the previous native session window before starting.")}</p>}
       {draftClearFailureSessionId === session.id && <p role="alert" className="border border-warning/40 bg-warning/10 p-3 text-sm text-warning">{copy("Las respuestas se guardaron, pero no se pudo eliminar el borrador de esta pestaña.", "Ratings were saved, but the draft could not be removed from this tab.")}</p>}
 
       {session.lifecycle === "INSTRUCTIONS" && <section className="space-y-6">
@@ -137,9 +143,9 @@ function ParticipantContent() {
             <p className="mt-2 text-sm leading-6 text-muted-foreground">{text}</p>
           </div>)}
         </div>
-        <Button className="h-auto min-h-11 max-w-full whitespace-normal px-5 py-3 text-sm normal-case tracking-normal" size="lg" disabled={!token || busy} onClick={() => void acknowledge()}>
+        <Button className="h-auto min-h-11 max-w-full whitespace-normal px-5 py-3 text-sm normal-case tracking-normal" size="lg" disabled={startBlocked} onClick={() => void startWhenReady()}>
           <Check className="mr-2 h-4 w-4" />
-          {busy ? copy("Confirmando…", "Acknowledging…") : copy("He leído y comprendido las instrucciones", "I have read and understood the instructions")}
+          {busy ? copy("Abriendo la tarea…", "Opening the task…") : copy("He leído las instrucciones. Estoy listo: iniciar", "I have read the instructions. I am ready: start")}
         </Button>
       </section>}
 
@@ -147,7 +153,8 @@ function ParticipantContent() {
         <div>
           <Monitor className="mx-auto h-12 w-12 text-info" />
           <h2 className="mt-5 font-display text-3xl uppercase">{copy("Listo para continuar", "Ready to continue")}</h2>
-          <p className="mt-3 text-muted-foreground">{copy("Espere la indicación del investigador. El siguiente bloque se abrirá en esta pantalla.", "Wait for the researcher. The next block will open on this display.")}</p>
+          <p className="mt-3 text-muted-foreground">{copy("Cuando esté listo, pulse iniciar. La tarea se abrirá en la pantalla seleccionada y volverá aquí al terminar.", "When you are ready, press start. The task will open on the selected display and return here when it ends.")}</p>
+          <Button size="lg" className="mt-5 h-auto whitespace-normal" disabled={startBlocked} onClick={() => void startWhenReady()}>{busy ? copy("Abriendo la tarea…", "Opening the task…") : copy("Estoy listo: iniciar", "I am ready: start")}</Button>
         </div>
       </section>}
 

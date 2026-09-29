@@ -3,6 +3,7 @@ import { OpenMatbApiError } from "@/lib/openmatb/api";
 type Copy = (spanish: string, english: string) => string;
 
 const MESSAGES: Record<string, [string, string]> = {
+  openmatb_ready_block_changed: ["El bloque cambió. Actualice la sesión antes de iniciar.", "The block changed. Refresh the session before starting."],
   openmatb_recovery_not_pending: ["La prueba ya comenzó. Use la pestaña que controla esa sesión.", "The test has already started. Use the tab controlling that session."],
   openmatb_native_recovery_required: ["Una tarea de la conexión anterior sigue abierta. Cierre esa ventana nativa y actualice la consola antes de continuar.", "A task from the previous connection is still open. Close that native window and refresh the console before continuing."],
   openmatb_display_discovery_failed: ["No se pudieron detectar las pantallas. Compruebe que la estación tenga una sesión gráfica activa y vuelva a comprobar.", "Displays could not be detected. Check that the station has an active desktop session, then check again."],

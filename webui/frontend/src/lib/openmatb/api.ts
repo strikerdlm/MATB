@@ -79,6 +79,10 @@ export function acknowledgeOpenMatbInstructions(id: string, token: string) {
   return call<OpenMatbSession>(`/openmatb/sessions/${encodeURIComponent(id)}/instructions/acknowledge`, json({}, { "X-OpenMATB-Participant": token }));
 }
 
+export function startOpenMatbAsParticipant(id: string, token: string, blockIndex: number) {
+  return call<OpenMatbSession>(`/openmatb/sessions/${encodeURIComponent(id)}/participant-ready`, json({ block_index: blockIndex }, { "X-OpenMATB-Participant": token }));
+}
+
 export function submitOpenMatbScales(id: string, token: string, body: WorkloadScaleSubmission) {
   return call<OpenMatbSession>(`/openmatb/sessions/${encodeURIComponent(id)}/scales`, json(body, { "X-OpenMATB-Participant": token }));
 }

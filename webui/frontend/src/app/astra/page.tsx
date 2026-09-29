@@ -52,7 +52,7 @@ export default function AstraPage() {
   }
   async function practice() {
     if (!person || !visit || !ready || !checked || busy || activeSession) return;
-    const participantWindow = window.open("about:blank", "matb-fac-participant");
+    const participantWindow = displays.length === 1 ? null : window.open("about:blank", "matb-fac-participant");
     await run(async () => {
       try {
         sessionStorage.setItem("openmatb.storage-check", "ok");
@@ -62,6 +62,10 @@ export default function AstraPage() {
           instruction_protocol_id: "matb-fac-es-419", instruction_version: "1.0.0",
           visual_profile_id: "matb-fac-modern", visual_profile_version: "1.0.0", display_index: display });
         storeOpenMatbCredentials(prepared);
+        if (displays.length === 1) {
+          router.push(`/openmatb/participant?session=${encodeURIComponent(prepared.session.id)}`);
+          return;
+        }
         const windowState = participantWindow ? "opened" : "blocked";
         saveParticipantWindowState(prepared.session.id, windowState);
         if (participantWindow) participantWindow.location.href = `/openmatb/participant?session=${encodeURIComponent(prepared.session.id)}#token=${encodeURIComponent(prepared.participant_token)}`;
