@@ -364,7 +364,7 @@ function SetupContent() {
       displayIndex === null
     )
       return;
-    const participantWindow = window.open(
+    const participantWindow = displays.length === 1 ? null : window.open(
       "about:blank",
       "matb-fac-participant",
     );
@@ -406,6 +406,11 @@ function SetupContent() {
         display_index: displayIndex,
       });
       storeOpenMatbCredentials(prepared);
+      if (current.screens.length === 1) {
+        participantWindow?.close();
+        router.push(`/openmatb/participant?session=${encodeURIComponent(prepared.session.id)}`);
+        return;
+      }
       const windowState = participantWindow ? "opened" : "blocked";
       saveParticipantWindowState(prepared.session.id, windowState);
       if (participantWindow)
@@ -435,8 +440,8 @@ function SetupContent() {
         kicker={copy("Preparación", "Preparation")}
         title={copy("Suite OpenMATB", "OpenMATB suite")}
         description={copy(
-          "Compruebe la estación, confirme la visita y abra las instrucciones. La tarea se inicia después desde el panel del investigador.",
-          "Check the station, confirm the visit, and open the instructions. The researcher starts the task afterward from the controller.",
+          "Compruebe la estación, confirme la visita y abra las instrucciones. El participante inicia la tarea con Estoy listo. Con una pantalla, todo continúa en esta pestaña.",
+          "Check the station, confirm the visit, and open the instructions. The participant starts with I am ready. With one display, everything continues in this tab.",
         )}
       />
       {error && (

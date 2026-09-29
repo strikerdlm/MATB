@@ -9,8 +9,8 @@ import { ExperimentFlowProvider, useExperimentFlowProgress } from "@/lib/experim
 import { OpenMatbApiError } from "@/lib/openmatb/api";
 import type { OpenMatbLifecycle, OpenMatbProfile, OpenMatbSession } from "@/types/openmatb";
 
-const { mockAcknowledge, mockGetSession, mockReadParticipant, mockSubmit } = vi.hoisted(() => ({
-  mockAcknowledge: vi.fn(),
+const { mockStart, mockGetSession, mockReadParticipant, mockSubmit } = vi.hoisted(() => ({
+  mockStart: vi.fn(),
   mockGetSession: vi.fn(),
   mockReadParticipant: vi.fn(),
   mockSubmit: vi.fn(),
@@ -25,7 +25,7 @@ vi.mock("@/lib/openmatb/api", async () => {
   const actual = await vi.importActual<typeof import("@/lib/openmatb/api")>("@/lib/openmatb/api");
   return {
     ...actual,
-    acknowledgeOpenMatbInstructions: mockAcknowledge,
+    startOpenMatbAsParticipant: mockStart,
     getOpenMatbSession: mockGetSession,
     readOpenMatbParticipant: mockReadParticipant,
     submitOpenMatbScales: mockSubmit,
@@ -103,6 +103,7 @@ describe("OpenMATB participant page", () => {
   beforeEach(() => {
     vi.useRealTimers();
     vi.clearAllMocks();
+    mockStart.mockReset();
     window.localStorage.setItem("matb-fac.locale", "en");
     window.sessionStorage.clear();
     mockReadParticipant.mockReturnValue("participant-token");
@@ -119,6 +120,32 @@ describe("OpenMATB participant page", () => {
     expect(screen.getByText(/Use the code and visit assigned for this study/)).toBeInTheDocument();
     expect(screen.getByText(/MATB - FAC · T0 · P01/)).toBeInTheDocument();
     await waitFor(() => expect(screen.getByLabelText("flow-stage")).toHaveTextContent("openmatb:instructions:study"));
+  });
+
+  it.each(["INSTRUCTIONS", "READY", "BETWEEN_BLOCKS"] as const)("starts directly from %s only when the participant is ready", async lifecycle => {
+    const waiting = makeSession(lifecycle, "PRACTICE", { execution_purpose: "practice" });
+    const running = makeSession("RUNNING", "PRACTICE", { execution_purpose: "practice" });
+    mockGetSession.mockResolvedValue(waiting);
+    let finish!: (value: OpenMatbSession) => void;
+    mockStart.mockReturnValue(new Promise<OpenMatbSession>(resolve => { finish = resolve; }));
+    const user = userEvent.setup();
+    renderPage();
+    const button = await screen.findByRole("button", { name: /I am ready: start/ });
+    expect(mockStart).not.toHaveBeenCalled();
+    await user.click(button);
+    expect(mockStart).toHaveBeenCalledExactlyOnceWith("session-123", "participant-token", 0);
+    expect(screen.getByRole("button", { name: "Opening the task…" })).toBeDisabled();
+    mockGetSession.mockResolvedValue(running);
+    finish(running);
+    expect(await screen.findByRole("heading", { name: "OpenMATB running" })).toBeInTheDocument();
+  });
+
+  it("does not start without a participant credential", async () => {
+    mockGetSession.mockResolvedValue(makeSession("READY"));
+    mockReadParticipant.mockReturnValue(null);
+    renderPage();
+    expect(await screen.findByRole("button", { name: "I am ready: start" })).toBeDisabled();
+    expect(mockStart).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -196,10 +223,10 @@ describe("OpenMATB participant page", () => {
 
   it("keeps action failures after a successful poll and translates known API errors", async () => {
     mockGetSession.mockResolvedValue(makeSession("INSTRUCTIONS"));
-    mockAcknowledge.mockRejectedValue(new OpenMatbApiError(409, "openmatb_block_mismatch", "raw"));
+    mockStart.mockRejectedValue(new OpenMatbApiError(409, "openmatb_block_mismatch", "raw"));
     const user = userEvent.setup();
     renderPage();
-    await user.click(await screen.findByRole("button", { name: "I have read and understood the instructions" }));
+    await user.click(await screen.findByRole("button", { name: "I have read the instructions. I am ready: start" }));
 
     expect(await screen.findByText("These ratings belong to a different block. Refresh the session; ratings cannot transfer between blocks.")).toBeInTheDocument();
     await waitFor(() => expect(mockGetSession.mock.calls.length).toBeGreaterThanOrEqual(2), { timeout: 2_000 });

@@ -1106,167 +1106,194 @@ class OpenMatbManager:
             raise OpenMatbRuntimeError("openmatb_visual_profile_tampered")
         return profile_path
 
+    async def participant_ready(self, session_id: str, token: str, block_index: int) -> tuple[OpenMatbSessionView, bool]:
+        """The participant can acknowledge and start the visible block, not control other tasks.
+
+        Serialize with operator starts and bind retries to the displayed block.
+        The same native launch and frozen study admission checks still apply.
+        """
+        async with self._lock:
+            with Session(self.engine) as db:
+                row = self._participant_row(db, session_id, token)
+                from app.astra_roster import require_active
+                require_active(db, row.participant_id)
+                if row.current_block_index != block_index:
+                    raise OpenMatbRuntimeError("openmatb_ready_block_changed")
+                if row.lifecycle in {"STARTING", "RUNNING"}:
+                    return self._view(db, row), False
+                if row.lifecycle not in {"INSTRUCTIONS", "READY", "BETWEEN_BLOCKS", "PREFLIGHT_HELD"}:
+                    raise OpenMatbRuntimeError("openmatb_invalid_transition")
+                if row.lifecycle == "INSTRUCTIONS":
+                    row.lifecycle = "READY"
+                    db.add(row); db.commit()
+            result = await self._start_block_locked(session_id, None, participant_token=token)
+            return result, True
+
     async def start_block(self, session_id: str, lease: str, *, preparation_only: bool = False) -> OpenMatbSessionView:
         async with self._lock:
-            if self._native_recovery_required():
-                raise OpenMatbRuntimeError("openmatb_native_recovery_required")
-            if self._processing_evidence:
-                raise OpenMatbRuntimeError("openmatb_evidence_processing_active")
-            if self._preview.handle is not None:
-                raise OpenMatbRuntimeError("openmatb_visual_preview_active")
-            with Session(self.engine) as db:
-                row = self._controller_row(db, session_id, lease)
-                if row.lifecycle == "PREFLIGHT_HELD" and not preparation_only:
-                    return await self._release_preflight(db, row)
-                if row.lifecycle not in ({"PREFLIGHT_READY"} if preparation_only else {"READY", "BETWEEN_BLOCKS"}):
-                    raise OpenMatbRuntimeError("openmatb_invalid_transition")
-                if not self.readiness().ready:
-                    raise OpenMatbRuntimeError("openmatb_station_not_ready")
-                self._validate_display(row.display_index)
-                from app.study_native import native_context, storage_key
-                from app.study_admission import guard_source
-                assigned_context = guard_source(db, row)
-                if not preparation_only:
-                    from app.study_preflight import require_held_launch
-                    require_held_launch(assigned_context)
-                if row.execution_purpose == "study" and not preparation_only:
-                    from app.experiment_catalog import require_task_order
-                    try:
-                        selected_source = selected_task_source(db, row)
-                        if selected_source:
-                            require_task_order(db, row.participant_id, row.visit_id, "openmatb", source_session_id=selected_source)
-                    except ValueError as exc:
-                        raise OpenMatbRuntimeError(str(exc)) from exc
-                order = json.loads(row.block_order_json)
-                if row.current_block_index >= len(order):
-                    raise OpenMatbRuntimeError("openmatb_suite_complete")
-                block = order[row.current_block_index]
-                instance_key = storage_key(db, row, block)
-                scenario = resolve_artifact(json.loads(row.scenario_paths_json)[instance_key]).resolve()
-                if scenario.parent != resolve_artifact(row.artifact_root).resolve() / "scenarios" or not scenario.is_file():
-                    raise OpenMatbRuntimeError("openmatb_scenario_missing")
-                visual_profile_path = self._verified_session_visual_profile_path(row)
-                from app.station_resources import admit_source
-                admit_source(db, row, held=preparation_only, initializing=preparation_only)
-                if preparation_only:
-                    from types import SimpleNamespace
-                    attempt = SimpleNamespace(id=str(uuid4()))
-                else:
-                    attempt = self.records.begin(db, row, block)
-                db.commit()
-                command = [
-                    str(self.python_executable), str(self.openmatb_root / "main.py"), "--scenario", str(scenario),
-                    "--session-dir", str(resolve_artifact(row.artifact_root) / "sessions" / instance_key), "--language", "en_EN" if row.locale == "en" else "es_CO",
-                ]
-                if visual_profile_path is None:
-                    command.extend(("--visual-theme", row.visual_theme))
-                else:
-                    command.extend(("--theme-file", str(visual_profile_path)))
-                command.extend(("--display-index", str(row.display_index), "--control-stdio"))
-                session_path = resolve_artifact(row.artifact_root) / "sessions" / instance_key
-                session_path.mkdir(parents=True, exist_ok=True)
-                kwargs: dict[str, Any] = {"cwd": str(self.openmatb_root), "stdin": asyncio.subprocess.PIPE, "stdout": asyncio.subprocess.PIPE, "stderr": asyncio.subprocess.PIPE}
-                visit = db.get(Visit, row.visit_id) if row.visit_id is not None else None
-                kwargs["env"] = {**os.environ, "MATB_EVIDENCE_IDENTITY": json.dumps({
-                    "parent_session_id": row.id,
-                    "block_instance_id": attempt.id,
-                    "participant_id": row.participant_id,
-                    "visit_ordinal": visit.visit_ordinal if visit is not None else None,
-                    "condition": block,
-                    "execution_purpose": "practice" if block == "PRACTICE" else row.execution_purpose,
-                })}
-                if preparation_only:
-                    kwargs["env"]["MATB_PREPARATION_HOLD"] = "1"
-                if os.name == "nt":
-                    kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-                else:
-                    kwargs["start_new_session"] = True
+            return await self._start_block_locked(session_id, lease, preparation_only=preparation_only)
+
+    async def _start_block_locked(self, session_id: str, lease: str | None, *, preparation_only: bool = False,
+                                  participant_token: str | None = None) -> OpenMatbSessionView:
+        if self._native_recovery_required():
+            raise OpenMatbRuntimeError("openmatb_native_recovery_required")
+        if self._processing_evidence:
+            raise OpenMatbRuntimeError("openmatb_evidence_processing_active")
+        if self._preview.handle is not None:
+            raise OpenMatbRuntimeError("openmatb_visual_preview_active")
+        with Session(self.engine) as db:
+            row = self._participant_row(db, session_id, participant_token) if participant_token is not None else self._controller_row(db, session_id, lease)
+            if row.lifecycle == "PREFLIGHT_HELD" and not preparation_only:
+                return await self._release_preflight(db, row)
+            if row.lifecycle not in ({"PREFLIGHT_READY"} if preparation_only else {"READY", "BETWEEN_BLOCKS"}):
+                raise OpenMatbRuntimeError("openmatb_invalid_transition")
+            if not self.readiness().ready:
+                raise OpenMatbRuntimeError("openmatb_station_not_ready")
+            self._validate_display(row.display_index)
+            from app.study_native import native_context, storage_key
+            from app.study_admission import guard_source
+            assigned_context = guard_source(db, row)
+            if not preparation_only:
+                from app.study_preflight import require_held_launch
+                require_held_launch(assigned_context)
+            if row.execution_purpose == "study" and not preparation_only:
+                from app.experiment_catalog import require_task_order
                 try:
-                    process = await asyncio.create_subprocess_exec(*command, **kwargs)
-                except OSError as exc:
-                    from app.station_resources import finish
-                    finish(db,"openmatb_suite_session:"+session_id)
-                    row.lifecycle = "FAILED"; row.active_pid = None; row.last_error = "openmatb_launch_failed"
-                    row.finished_at = _utcnow()
-                    self.records.finish(db, row, outcome="failed", csv=None)
-                    db.add(row); db.commit()
-                    self.schedule_evidence_processing()
-                    raise OpenMatbRuntimeError("openmatb_launch_failed") from exc
-                try:
-                    windows_job = _WindowsJob(process.pid) if os.name == "nt" else None
-                except OSError as exc:
-                    process.terminate()
-                    await process.wait()
-                    from app.station_resources import finish
-                    finish(db,"openmatb_suite_session:"+session_id)
-                    row.lifecycle = "FAILED"; row.active_pid = None; row.last_error = "openmatb_job_assignment_failed"
-                    row.finished_at = _utcnow()
-                    self.records.finish(db, row, outcome="failed", csv=None)
-                    db.add(row); db.commit()
-                    self.schedule_evidence_processing()
-                    raise OpenMatbRuntimeError("openmatb_job_assignment_failed") from exc
-                handle = _ProcessHandle(session_id=session_id, block=block, process=process, windows_job=windows_job, block_instance_id=attempt.id)
-                self._handles[session_id] = handle
-                row.lifecycle = "PREFLIGHT_STARTING" if preparation_only else "STARTING"
-                row.active_pid = process.pid
-                from app.station_resources import admit_source
-                admit_source(db, row, held=preparation_only, pid=process.pid, initializing=preparation_only)
-                if not preparation_only: row.started_at = row.started_at or _utcnow()
-                row.last_error = None
-                db.add(row); db.commit()
-                handle.monitor = asyncio.create_task(self._monitor(handle))
-            ready_wait = asyncio.create_task(handle.ready.wait())
-            exited_wait = asyncio.create_task(handle.exited.wait())
+                    selected_source = selected_task_source(db, row)
+                    if selected_source:
+                        require_task_order(db, row.participant_id, row.visit_id, "openmatb", source_session_id=selected_source)
+                except ValueError as exc:
+                    raise OpenMatbRuntimeError(str(exc)) from exc
+            order = json.loads(row.block_order_json)
+            if row.current_block_index >= len(order):
+                raise OpenMatbRuntimeError("openmatb_suite_complete")
+            block = order[row.current_block_index]
+            instance_key = storage_key(db, row, block)
+            scenario = resolve_artifact(json.loads(row.scenario_paths_json)[instance_key]).resolve()
+            if scenario.parent != resolve_artifact(row.artifact_root).resolve() / "scenarios" or not scenario.is_file():
+                raise OpenMatbRuntimeError("openmatb_scenario_missing")
+            visual_profile_path = self._verified_session_visual_profile_path(row)
+            from app.station_resources import admit_source
+            admit_source(db, row, held=preparation_only, initializing=preparation_only)
+            if preparation_only:
+                from types import SimpleNamespace
+                attempt = SimpleNamespace(id=str(uuid4()))
+            else:
+                attempt = self.records.begin(db, row, block)
+            db.commit()
+            command = [
+                str(self.python_executable), str(self.openmatb_root / "main.py"), "--scenario", str(scenario),
+                "--session-dir", str(resolve_artifact(row.artifact_root) / "sessions" / instance_key), "--language", "en_EN" if row.locale == "en" else "es_CO",
+            ]
+            if visual_profile_path is None:
+                command.extend(("--visual-theme", row.visual_theme))
+            else:
+                command.extend(("--theme-file", str(visual_profile_path)))
+            command.extend(("--display-index", str(row.display_index), "--control-stdio"))
+            session_path = resolve_artifact(row.artifact_root) / "sessions" / instance_key
+            session_path.mkdir(parents=True, exist_ok=True)
+            kwargs: dict[str, Any] = {"cwd": str(self.openmatb_root), "stdin": asyncio.subprocess.PIPE, "stdout": asyncio.subprocess.PIPE, "stderr": asyncio.subprocess.PIPE}
+            visit = db.get(Visit, row.visit_id) if row.visit_id is not None else None
+            kwargs["env"] = {**os.environ, "MATB_EVIDENCE_IDENTITY": json.dumps({
+                "parent_session_id": row.id,
+                "block_instance_id": attempt.id,
+                "participant_id": row.participant_id,
+                "visit_ordinal": visit.visit_ordinal if visit is not None else None,
+                "condition": block,
+                "execution_purpose": "practice" if block == "PRACTICE" else row.execution_purpose,
+            })}
+            if preparation_only:
+                kwargs["env"]["MATB_PREPARATION_HOLD"] = "1"
+            if os.name == "nt":
+                kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+            else:
+                kwargs["start_new_session"] = True
             try:
-                done, _ = await asyncio.wait(
-                    {ready_wait, exited_wait}, timeout=20, return_when=asyncio.FIRST_COMPLETED,
-                )
-                if not done:
+                process = await asyncio.create_subprocess_exec(*command, **kwargs)
+            except OSError as exc:
+                from app.station_resources import finish
+                finish(db,"openmatb_suite_session:"+session_id)
+                row.lifecycle = "FAILED"; row.active_pid = None; row.last_error = "openmatb_launch_failed"
+                row.finished_at = _utcnow()
+                self.records.finish(db, row, outcome="failed", csv=None)
+                db.add(row); db.commit()
+                self.schedule_evidence_processing()
+                raise OpenMatbRuntimeError("openmatb_launch_failed") from exc
+            try:
+                windows_job = _WindowsJob(process.pid) if os.name == "nt" else None
+            except OSError as exc:
+                process.terminate()
+                await process.wait()
+                from app.station_resources import finish
+                finish(db,"openmatb_suite_session:"+session_id)
+                row.lifecycle = "FAILED"; row.active_pid = None; row.last_error = "openmatb_job_assignment_failed"
+                row.finished_at = _utcnow()
+                self.records.finish(db, row, outcome="failed", csv=None)
+                db.add(row); db.commit()
+                self.schedule_evidence_processing()
+                raise OpenMatbRuntimeError("openmatb_job_assignment_failed") from exc
+            handle = _ProcessHandle(session_id=session_id, block=block, process=process, windows_job=windows_job, block_instance_id=attempt.id)
+            self._handles[session_id] = handle
+            row.lifecycle = "PREFLIGHT_STARTING" if preparation_only else "STARTING"
+            row.active_pid = process.pid
+            from app.station_resources import admit_source
+            admit_source(db, row, held=preparation_only, pid=process.pid, initializing=preparation_only)
+            if not preparation_only: row.started_at = row.started_at or _utcnow()
+            row.last_error = None
+            db.add(row); db.commit()
+            handle.monitor = asyncio.create_task(self._monitor(handle))
+        ready_wait = asyncio.create_task(handle.ready.wait())
+        exited_wait = asyncio.create_task(handle.exited.wait())
+        try:
+            done, _ = await asyncio.wait(
+                {ready_wait, exited_wait}, timeout=20, return_when=asyncio.FIRST_COMPLETED,
+            )
+            if not done:
+                await self._terminate(handle)
+                self._set_failure(session_id, "openmatb_ready_timeout")
+                raise OpenMatbRuntimeError("openmatb_ready_timeout")
+            if handle.exited.is_set() and not handle.ready.is_set():
+                failure = self._launch_failure_code(handle)
+                self._set_failure(session_id, failure)
+                raise OpenMatbRuntimeError(failure)
+            if handle.process.returncode not in {None, 0}:
+                failure = self._launch_failure_code(handle)
+                self._set_failure(session_id, failure)
+                raise OpenMatbRuntimeError(failure)
+        finally:
+            for waiter in (ready_wait, exited_wait):
+                if not waiter.done():
+                    waiter.cancel()
+            await asyncio.gather(ready_wait, exited_wait, return_exceptions=True)
+        with Session(self.engine) as db:
+            row = db.get(OpenMatbSuiteSession, session_id)
+            assert row is not None
+            if preparation_only:
+                from app.study_preflight import retain_snapshot
+                if not handle.preflight_snapshot or not handle.session_csv:
                     await self._terminate(handle)
-                    self._set_failure(session_id, "openmatb_ready_timeout")
-                    raise OpenMatbRuntimeError("openmatb_ready_timeout")
-                if handle.exited.is_set() and not handle.ready.is_set():
-                    failure = self._launch_failure_code(handle)
-                    self._set_failure(session_id, failure)
-                    raise OpenMatbRuntimeError(failure)
-                if handle.process.returncode not in {None, 0}:
-                    failure = self._launch_failure_code(handle)
-                    self._set_failure(session_id, failure)
-                    raise OpenMatbRuntimeError(failure)
-            finally:
-                for waiter in (ready_wait, exited_wait):
-                    if not waiter.done():
-                        waiter.cancel()
-                await asyncio.gather(ready_wait, exited_wait, return_exceptions=True)
-            with Session(self.engine) as db:
-                row = db.get(OpenMatbSuiteSession, session_id)
-                assert row is not None
-                if preparation_only:
-                    from app.study_preflight import retain_snapshot
-                    if not handle.preflight_snapshot or not handle.session_csv:
-                        await self._terminate(handle)
-                        self._set_failure(session_id, 'openmatb_preflight_snapshot_missing')
-                        raise OpenMatbRuntimeError('openmatb_preflight_snapshot_missing')
+                    self._set_failure(session_id, 'openmatb_preflight_snapshot_missing')
+                    raise OpenMatbRuntimeError('openmatb_preflight_snapshot_missing')
+                retain_snapshot(db, row, handle)
+                from app.station_resources import admit_source
+                admit_source(db,row,held=True,pid=handle.process.pid)
+                row.lifecycle = "PREFLIGHT_HELD"
+                db.add(row); db.commit(); db.refresh(row)
+            else:
+                from app.study_preflight import retain_snapshot
+                if handle.preflight_snapshot and handle.session_csv:
                     retain_snapshot(db, row, handle)
-                    from app.station_resources import admit_source
-                    admit_source(db,row,held=True,pid=handle.process.pid)
-                    row.lifecycle = "PREFLIGHT_HELD"
-                    db.add(row); db.commit(); db.refresh(row)
-                else:
-                    from app.study_preflight import retain_snapshot
-                    if handle.preflight_snapshot and handle.session_csv:
-                        retain_snapshot(db, row, handle)
-                        db.commit()
-                # A short block can finish between ready and this refresh.
-                if row.lifecycle == "STARTING":
-                    row.lifecycle = "RUNNING"
-                    attempt = db.get(OpenMatbBlockAttempt, row.active_block_instance_id)
-                    if attempt:
-                        attempt.task_status = "running"
-                        attempt.session_csv = str(handle.session_csv) if handle.session_csv else None
-                        db.add(attempt)
-                    db.add(row); db.commit(); db.refresh(row)
-                return self._view(db, row)
+                    db.commit()
+            # A short block can finish between ready and this refresh.
+            if row.lifecycle == "STARTING":
+                row.lifecycle = "RUNNING"
+                attempt = db.get(OpenMatbBlockAttempt, row.active_block_instance_id)
+                if attempt:
+                    attempt.task_status = "running"
+                    attempt.session_csv = str(handle.session_csv) if handle.session_csv else None
+                    db.add(attempt)
+                db.add(row); db.commit(); db.refresh(row)
+            return self._view(db, row)
 
     async def _release_preflight(self, db, row):
         from app.study_preflight import validate_release

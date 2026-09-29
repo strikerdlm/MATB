@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import AstraPage from "./page";
 import { FixedLocaleProvider } from "@/lib/i18n";
 import { astraCall } from "@/lib/astra";
-import { getActiveOpenMatbSession, getOpenMatbDisplays, getOpenMatbReadiness } from "@/lib/openmatb/api";
+import { createOpenMatbSession, getActiveOpenMatbSession, getOpenMatbDisplays, getOpenMatbReadiness } from "@/lib/openmatb/api";
 const push = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 vi.mock("@/lib/astra", () => ({ astraCall: vi.fn() }));
@@ -51,4 +51,15 @@ it("adds a crew member in the selected mission without requiring a numeric code"
   fireEvent.change(screen.getByLabelText("Nuevo indicativo"), { target: { value: "NUEVO" } });
   fireEvent.submit(screen.getByLabelText("Nuevo indicativo").closest("form")!);
   await waitFor(() => expect(astraCall).toHaveBeenCalledWith("/astra/participants", { callsign: "NUEVO", mission: "ASTRA-2" }));
+});
+
+it("opens ASTRA familiarization in the current tab when only one display is connected", async () => {
+  const popup = vi.spyOn(window, "open").mockReturnValue(null);
+  vi.mocked(createOpenMatbSession).mockResolvedValue({ session: { id: "practice" }, participant_token: "token", controller_lease: "lease" } as never);
+  mount();
+  fireEvent.click(await screen.findByRole("button", { name: /^CUELLAR/ }));
+  fireEvent.click(screen.getByRole("checkbox"));
+  fireEvent.click(screen.getByRole("button", { name: "Familiarización · 5 min" }));
+  await waitFor(() => expect(push).toHaveBeenCalledWith("/openmatb/participant?session=practice"));
+  expect(popup).not.toHaveBeenCalled();
 });

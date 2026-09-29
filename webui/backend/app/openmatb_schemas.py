@@ -414,6 +414,11 @@ class EmptyRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class ParticipantReadyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    block_index: int = Field(ge=0)
+
+
 class AbortRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     reason: str = Field(default="operator_abort", pattern=r"^[a-z0-9_-]{3,64}$")
