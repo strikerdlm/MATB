@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 import json
+import shutil
 from hashlib import sha256
 from pathlib import Path
 
 import pytest
+from matb_integration.contracts import ExperimentSpecV1, TimelineEventV1
+from matb_integration.experiment_compiler import compile_experiment_spec
+from matb_integration.openmatb_visual_profiles import load_visual_profile, profile_sha256
 
 import core.scenarioprovenance as provenance_module
 from core.scenarioprovenance import (
     ScenarioProvenanceError,
     load_adjacent_scenario_manifest,
 )
-from matb_integration.contracts import ExperimentSpecV1, TimelineEventV1
-from matb_integration.experiment_compiler import compile_experiment_spec
 
 
 def _verified_builder_artifact(tmp_path: Path) -> tuple[Path, str, dict[str, object]]:
@@ -113,6 +115,124 @@ def test_missing_adjacent_manifest_is_explicitly_provisional(tmp_path):
     bound = load_adjacent_scenario_manifest(scenario_path, scenario_sha256="a" * 64)
     assert bound.content is None
     assert bound.evidence["status"] == "provisional_missing_scenario_manifest"
+
+
+def _visual_parameters(theme: str = "fac_modern") -> dict[str, str]:
+    profile = load_visual_profile(
+        Path(__file__).resolve().parents[1] / "themes" / f"{theme}.json"
+    )
+    return {
+        "visual_theme": theme,
+        "visual_profile_id": profile["profile_id"],
+        "visual_profile_version": profile["version"],
+        "visual_profile_schema_version": profile["schema_version"],
+        "visual_profile_sha256": profile_sha256(profile),
+    }
+
+
+@pytest.mark.parametrize("theme", ["classic", "cockpit", "fac_modern"])
+@pytest.mark.parametrize("locale", ["en", "es"])
+@pytest.mark.parametrize("block", ["PRACTICE", "LOW", "MEDIUM", "HIGH"])
+def test_relocated_console_manifest_loads_with_visual_profile(
+    tmp_path, monkeypatch, theme, locale, block,
+):
+    from aircraft_monitor.research.protocol import WorkloadLevel
+    from matb_integration.scenario_builder import (
+        _write_scenario_with_manifest,
+        build_block_scenario,
+    )
+
+    profiles = {
+        "PRACTICE": (0.15, 0.9, 100, 90),
+        "LOW": (0.2, 0.8, 200, 90),
+        "MEDIUM": (0.5, 0.5, 600, 60),
+        "HIGH": (0.8, 0.2, 1000, 45),
+    }
+    settings = dict(zip(
+        ("difficulty", "track_target_proportion", "resman_loss_per_min", "isa_probe_interval_sec"),
+        profiles[block],
+    ))
+    options = dict(
+        level=WorkloadLevel.LOW if block == "PRACTICE" else WorkloadLevel[block],
+        block_duration_sec=180 if block == "PRACTICE" else 900, seed=52,
+        isa_questionnaire=f"isa_{locale}.txt", include_nasatlx=False, include_bedford=False,
+        workload_settings=settings,
+    )
+    text = build_block_scenario(**options)
+    generated_dir = tmp_path / "generated"
+    generated_dir.mkdir()
+    scenario_path = generated_dir / f"0_{block}.txt"
+    _write_scenario_with_manifest(
+        scenario_path, text, **options,
+        nasatlx_questionnaire=f"nasatlx_{locale}.txt",
+        bedford_questionnaire=f"bedford_{locale}.txt",
+        participant_id="P01", block_num=1, visit_ordinal=1, profile_name=block,
+        source_commit="c" * 40, source_dirty=False, **_visual_parameters(theme),
+    )
+    relocated_dir = tmp_path / "Estación ñ con espacios"
+    relocated_dir.mkdir()
+    for source in generated_dir.iterdir():
+        shutil.copyfile(source, relocated_dir / source.name)
+    scenario_path = relocated_dir / scenario_path.name
+    unrelated_dir = tmp_path / "unrelated working directory"
+    unrelated_dir.mkdir()
+    monkeypatch.chdir(unrelated_dir)
+
+    bound = load_adjacent_scenario_manifest(
+        scenario_path, scenario_sha256=sha256(scenario_path.read_bytes()).hexdigest()
+    )
+
+    assert bound.evidence["status"] == "verified"
+    assert json.loads(bound.content)["parameters"]["visual_profile_sha256"] == (
+        _visual_parameters(theme)["visual_profile_sha256"]
+    )
+
+
+@pytest.mark.parametrize("parameters", [
+    {"visual_theme": "cockpit"},
+    {**_visual_parameters(), "visual_profile_id": "custom-profile", "visual_profile_version": "2.1.0"},
+    {key: value for key, value in _visual_parameters().items() if key != "visual_theme"},
+])
+def test_legacy_theme_and_custom_profile_metadata_are_supported(tmp_path, parameters):
+    scenario_path, digest, payload = _verified_builder_artifact(tmp_path)
+    payload["parameters"].update(parameters)
+    scenario_path.with_suffix(".txt.manifest.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    bound = load_adjacent_scenario_manifest(scenario_path, scenario_sha256=digest)
+
+    assert bound.evidence["status"] == "verified"
+
+
+@pytest.mark.parametrize("field,value", [
+    ("visual_theme", "unknown"), ("visual_theme", []),
+    ("visual_profile_id", "../profile"), ("visual_profile_id", None),
+    ("visual_profile_version", "v1"), ("visual_profile_version", 1),
+    ("visual_profile_schema_version", "unsupported"),
+    ("visual_profile_sha256", "invalid"), ("visual_profile_sha256", None),
+    ("unexpected_parameter", True),
+])
+def test_visual_metadata_does_not_allow_malformed_or_unknown_parameters(tmp_path, field, value):
+    scenario_path, digest, payload = _verified_builder_artifact(tmp_path)
+    payload["parameters"].update(_visual_parameters())
+    payload["parameters"][field] = value
+    scenario_path.with_suffix(".txt.manifest.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ScenarioProvenanceError):
+        load_adjacent_scenario_manifest(scenario_path, scenario_sha256=digest)
+
+
+@pytest.mark.parametrize("missing", [
+    "visual_profile_id", "visual_profile_version",
+    "visual_profile_schema_version", "visual_profile_sha256",
+])
+def test_partial_visual_profile_identity_fails_closed(tmp_path, missing):
+    scenario_path, digest, payload = _verified_builder_artifact(tmp_path)
+    payload["parameters"].update(_visual_parameters())
+    del payload["parameters"][missing]
+    scenario_path.with_suffix(".txt.manifest.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ScenarioProvenanceError, match="visual profile"):
+        load_adjacent_scenario_manifest(scenario_path, scenario_sha256=digest)
 
 
 def test_present_manifest_with_wrong_scenario_hash_fails_closed(tmp_path):
@@ -216,14 +336,17 @@ def test_minimal_builder_manifest_cannot_be_upgraded_to_verified(tmp_path):
         "scenario": {"filename": scenario_path.name, "sha256": digest},
     }))
 
-    with pytest.raises(ScenarioProvenanceError, match="fields|structure|parameters"):
+    with pytest.raises(ScenarioProvenanceError, match=r"fields|structure|parameters"):
         load_adjacent_scenario_manifest(scenario_path, scenario_sha256=digest)
 
 
+@pytest.mark.parametrize("with_visual_profile", [False, True])
 def test_builder_manifest_rejects_parameter_tampering_even_when_hash_is_updated(
-    tmp_path,
+    tmp_path, with_visual_profile,
 ):
     scenario_path, _, payload = _verified_builder_artifact(tmp_path)
+    if with_visual_profile:
+        payload["parameters"].update(_visual_parameters())
     tampered = scenario_path.read_text(encoding="utf-8").replace(
         "0:00:00;track;targetproportion;0.8",
         "0:00:00;track;targetproportion;0.2",
