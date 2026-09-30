@@ -74,6 +74,31 @@ npm ci
 Set-Location $RepoRoot
 ```
 
+Si aparece `No module named sqlmodel`, `pytest` o `pip`, el entorno de la
+consola no terminó de instalarse o se está usando otro Python. Repárelo desde
+la raíz del repositorio con el mismo ejecutable que usa el backend:
+
+```powershell
+& .\.venv-console\Scripts\python.exe -m ensurepip --upgrade
+if ($LASTEXITCODE -ne 0) { throw "No se pudo preparar pip" }
+& .\.venv-console\Scripts\python.exe -m pip install -r .\requirements-dev.txt
+if ($LASTEXITCODE -ne 0) { throw "La instalación de dependencias no terminó" }
+& .\.venv-console\Scripts\python.exe -m pip check
+if ($LASTEXITCODE -ne 0) { throw "Hay dependencias incompatibles" }
+```
+
+No basta con instalar el paquete en el Python global: los comandos de
+arranque y de prueba deben utilizar `.venv-console\Scripts\python.exe`.
+
+Para exportaciones descriptivas y restauración sin conexión, prepare también
+las ruedas de las versiones instaladas (repita este paso si actualiza las
+dependencias). La ejecución del análisis no descarga paquetes:
+
+```powershell
+& .\.venv-console\Scripts\python.exe .\tools\prepare_study_wheels.py .\.test-tmp\repeatable-study\descriptive-wheels
+if ($LASTEXITCODE -ne 0) { throw "No se pudo preparar el kit de reproducción sin conexión" }
+```
+
 ### Configuración del entorno
 
 En la terminal desde la que se lanzará el backend:

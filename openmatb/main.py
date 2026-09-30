@@ -70,8 +70,7 @@ configured_language = ARGS.language
 if configured_language is None:
     with (OPENMATB_ROOT / "config.ini").open("r", encoding="utf-8") as handle:
         configured_language = [line for line in handle if "language=" in line][0].split("=")[-1].strip()
-catalog_language = "en_EN" if configured_language.lower().startswith("es") else configured_language
-gettext.translation("openmatb", LOCALE_PATH, [catalog_language], fallback=True).install()
+gettext.translation("openmatb", LOCALE_PATH, [configured_language], fallback=True).install()
 
 from core import ReplayScheduler, Scheduler
 from core.constants import PATHS, REPLAY_MODE
@@ -79,6 +78,15 @@ from core.controlbridge import StdioControlBridge
 from core.selector import FileSelector
 from core.utils import get_conf_value
 from core.window import Window
+
+
+def _release_audio_driver() -> None:
+    """Stop native audio workers before interpreter/COM garbage collection."""
+    from pyglet.media import get_audio_driver
+
+    driver = get_audio_driver()
+    if driver is not None:
+        driver.delete()
 
 
 class OpenMATB:
@@ -100,10 +108,13 @@ class OpenMATB:
             ).run()
             if selected is None:
                 sys.exit(0)
-        Scheduler(
-            scenario_path=selected,
-            control_bridge=StdioControlBridge() if ARGS.control_stdio else None,
-        )
+        try:
+            Scheduler(
+                scenario_path=selected,
+                control_bridge=StdioControlBridge() if ARGS.control_stdio else None,
+            )
+        finally:
+            _release_audio_driver()
 
 
 if __name__ == "__main__":

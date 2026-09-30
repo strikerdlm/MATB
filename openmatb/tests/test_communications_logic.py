@@ -15,6 +15,7 @@ def _make_comms_with_radios():
     """Create a minimal Communications object for testing radio helper methods."""
     c = object.__new__(Communications)
     c.alias = "communications"
+    c.paused = False
     c.parameters = {
         "automaticsolver": False,
         "taskupdatetime": 80,
@@ -69,6 +70,30 @@ def _make_comms_with_radios():
     c.scenario_time = 0.5
     c.logger = MagicMock()
     return c
+
+
+def test_audio_and_response_timing_are_checked_between_radio_control_updates():
+    from plugins.abstractplugin import AbstractPlugin
+
+    communications = _make_comms_with_radios()
+    communications._complete_presentation_if_ready = MagicMock()
+    communications._update_active_response_timing = MagicMock()
+    communications.modulate_frequency = MagicMock()
+    with patch.object(AbstractPlugin, "compute_next_plugin_state", return_value=False):
+        communications.compute_next_plugin_state()
+    communications._complete_presentation_if_ready.assert_called_once_with()
+    communications._update_active_response_timing.assert_called_once_with()
+    communications.modulate_frequency.assert_not_called()
+
+
+def test_paused_communications_does_not_advance_audio_or_response_timing():
+    communications = _make_comms_with_radios()
+    communications.paused = True
+    communications._complete_presentation_if_ready = MagicMock()
+    communications._update_active_response_timing = MagicMock()
+    communications.compute_next_plugin_state()
+    communications._complete_presentation_if_ready.assert_not_called()
+    communications._update_active_response_timing.assert_not_called()
 
 
 class TestGetSDTValue:
@@ -259,6 +284,78 @@ def test_audio_failure_invalidates_opportunity_before_target_assignment():
     payloads = [json.loads(call.args[1]) for call in communications.log_performance.call_args_list]
     assert [payload["phase"] for payload in payloads] == ["opened", "invalidated"]
     assert payloads[-1]["reason"] == "presentation_failed"
+
+
+def test_audio_completion_excludes_synchronous_preparation_time():
+    communications = _make_comms_with_radios()
+    communications.parameters.update({
+        "owncallsign": "FAC123", "airbandminvariationMhz": 5,
+        "airbandmaxvariationMhz": 6, "radioprompt": "own",
+    })
+    communications.scenario_time = 2.0
+    communications.log_performance = MagicMock()
+    communications.get_rand_frequency = MagicMock(return_value=115.5)
+    communications.group_audio_files = MagicMock()
+    communications._last_prompt_duration_s = 17.0
+    opportunity = communications._new_opportunity("own")
+    communications._active_comm_opportunity = opportunity
+    with patch("plugins.communications.perf_counter_ns", side_effect=[1_000_000_000, 1_250_000_000]):
+        assert communications.prompt_for_a_new_target("own", "NAV_1", opportunity)
+    assert opportunity["presentation_started_scenario_time_s"] == 2.25
+    assert opportunity["presentation_expected_end_scenario_time_s"] == 19.25
+    communications.player.source = None
+    communications.scenario_time = 19.27
+    communications._complete_presentation_if_ready()
+    assert opportunity["response_window_open"] is True
+    payloads = [json.loads(call.args[1]) for call in communications.log_performance.call_args_list]
+    assert [payload["phase"] for payload in payloads] == [
+        "opened", "presentation_started", "response_window_opened",
+    ]
+    assert payloads[1]["preparation_duration_s"] == 0.25
+    assert payloads[1]["physical_onset_measured"] is False
+    assert payloads[2]["opening_lateness_ms"] == 20
+
+
+def test_own_prompt_with_live_widgets_records_serializable_radio_selection(tmp_path, monkeypatch):
+    """Exercise the real random-choice logger and strict scientific writer."""
+    import random
+
+    from core.constants import PATHS
+    from core.logger import Logger
+
+    monkeypatch.setitem(PATHS, "SESSIONS", tmp_path)
+    logger = Logger()
+    logger.configure_scientific_context(
+        scenario_sha256="a" * 64, profile_id="comm-regression",
+        source_commit="b" * 40, source_dirty=False, component_version="test",
+        scenario_manifest_evidence={"status": "provisional_missing_scenario_manifest"},
+    )
+    logger.configure_evidence_tasks(["communications"])
+    communications = _make_comms_with_radios()
+    communications.logger = logger
+    communications._active_comm_opportunity = None
+    communications.prompt_for_a_new_target = MagicMock(return_value=True)
+    for radio in communications.parameters["radios"].values():
+        radio["widget"] = object()  # The GUI attaches a non-JSON widget here.
+    eligible_names = [radio["name"] for radio in communications.get_non_target_radios_list()]
+    seed = logger.session_id + int(communications.scenario_time) + 1
+    expected_radio = random.Random(seed).choice(eligible_names)
+
+    try:
+        with patch("core.pseudorandom.get_logger", return_value=logger):
+            communications._handle_radioprompt("own")
+        logger.finalize_evidence("completed")
+        records = [json.loads(line) for line in logger.path.with_suffix(
+            ".scientific.events.jsonl"
+        ).read_text(encoding="utf-8").splitlines()]
+        selected = [record["payload"]["value"] for record in records
+                    if record["payload"].get("record_type") == "seed_output"]
+        assert selected == [expected_radio]
+        communications.prompt_for_a_new_target.assert_called_once_with(
+            "own", expected_radio, communications._active_comm_opportunity,
+        )
+    finally:
+        logger.close()
 
 
 def test_stop_invalidates_an_open_comm_opportunity():
