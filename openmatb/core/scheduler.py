@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import os
-import sys
 from collections import deque
 from math import isfinite
 from pathlib import Path
@@ -78,7 +77,7 @@ class Scheduler:
         self.event_loop.run()
 
     def _poll_control_bridge(self, _dt: float) -> None:
-        if self.control_bridge is None:
+        if self.control_bridge is None or getattr(self, "_exiting", False):
             return
         for message in self.control_bridge.drain():
             command = message["command"].strip().lower()
@@ -110,6 +109,7 @@ class Scheduler:
             elif command == "abort":
                 self.control_bridge.emit("aborted", scenario_time_seconds=round(self.scenario_time, 3))
                 self.exit(completion="aborted")
+                return
             else:
                 self.control_bridge.emit("command_rejected", command=command, reason="unsupported_command")
 
@@ -218,6 +218,8 @@ class Scheduler:
         return None
 
     def update(self, dt: float) -> None:
+        if getattr(self, "_exiting", False):
+            return
         if getattr(self, "preflight_held", False):
             return
         # A failed scenario command invalidates the complete session. Hosts that
@@ -376,6 +378,7 @@ class Scheduler:
             and not unfinished_events
         ):
             self.exit()
+            return
 
         # If the windows has been killed, exit the program
         if not Window.MainWindow.alive:
@@ -649,6 +652,9 @@ class Scheduler:
         return None
 
     def exit(self, *, completion: str = "completed") -> None:
+        if getattr(self, "_exiting", False):
+            return
+        self._exiting = True
         get_logger().log_manual_entry("end")
         get_logger().finalize_evidence(completion)
         if self.control_bridge is not None:
@@ -660,4 +666,5 @@ class Scheduler:
             )
         self.event_loop.exit()
         Window.MainWindow.close()  # needed for windows clean exit
-        sys.exit(0)
+        # Return through EventLoop.run so its platform stop/on_exit cleanup runs.
+        # Raising SystemExit here interrupts that cleanup inside a clock callback.

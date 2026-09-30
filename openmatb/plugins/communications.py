@@ -8,6 +8,7 @@ import json
 from math import copysign, isfinite
 from pathlib import Path
 from string import ascii_lowercase, ascii_uppercase, digits
+from time import perf_counter_ns
 from typing import Any, Callable
 
 from pyglet.media import Player, SourceGroup, load
@@ -475,6 +476,7 @@ class Communications(AbstractPlugin):
         radio_name: str,
         opportunity: dict[str, Any],
     ) -> bool:
+        preparation_started_ns = perf_counter_ns()
         self.parameters["radioprompt"] = ""
         radio: dict[str, Any] = self.get_radios_by_key_value("name", radio_name)[0]
         radio_n: int = self.get_radios_number_by_key_value("name", radio_name)[0]
@@ -503,6 +505,7 @@ class Communications(AbstractPlugin):
             self.player: Any = Player()
             self.player.queue(sound_group)
             self.player.play()
+            play_returned_ns = perf_counter_ns()
         except Exception as exc:  # noqa: BLE001 - evidence must survive media backend failures
             self.logger.log_manual_entry(f"Audio prompt playback failed: {type(exc).__name__}: {exc}")
             self._invalidate_opportunity(opportunity, "presentation_failed")
@@ -511,11 +514,16 @@ class Communications(AbstractPlugin):
         if destination == "own":
             radio["targetfreq"] = random_frequency
             radio["is_prompting"] = True
+        # WAV decoding and backend creation happen synchronously within this
+        # scheduler tick. Anchor playback after that preparation, otherwise the
+        # first prompt's load time is mistaken for late audio completion.
+        preparation_duration_s = (play_returned_ns - preparation_started_ns) / 1_000_000_000
+        presentation_start_s = self.scenario_time + preparation_duration_s
         opportunity["presentation_started"] = True
         opportunity["radio"] = radio
-        opportunity["presentation_started_scenario_time_s"] = self.scenario_time
+        opportunity["presentation_started_scenario_time_s"] = presentation_start_s
         opportunity["presentation_expected_end_scenario_time_s"] = (
-            self.scenario_time + prompt_duration_s
+            presentation_start_s + prompt_duration_s
         )
         self._log_opportunity(
             opportunity,
@@ -524,8 +532,10 @@ class Communications(AbstractPlugin):
             software_play_invoked=True,
             physical_onset_measured=False,
             expected_duration_s=prompt_duration_s,
-            started_scenario_time_s=self.scenario_time,
-            expected_end_scenario_time_s=self.scenario_time + prompt_duration_s,
+            started_scenario_time_s=presentation_start_s,
+            expected_end_scenario_time_s=presentation_start_s + prompt_duration_s,
+            preparation_duration_s=preparation_duration_s,
+            play_returned_monotonic_ns=play_returned_ns,
             completion_lateness_tolerance_ms=int(self.parameters["taskupdatetime"]),
         )
         return True
@@ -570,9 +580,13 @@ class Communications(AbstractPlugin):
         if destination == "own":
             non_target_radios: list[dict[str, Any]] = self.get_non_target_radios_list()
             if len(non_target_radios) > 0:
+                # Random choices are written to the scientific JSONL stream.
+                # Select the stable name, not a dict containing a live Radio widget.
+                # Retaining candidate order and seed preserves the selected radio.
                 radio_name_to_prompt = choice(
-                    non_target_radios, self.alias, self.scenario_time, 1
-                )["name"]
+                    [radio["name"] for radio in non_target_radios],
+                    self.alias, self.scenario_time, 1,
+                )
         elif destination == "other":
             radio_name_to_prompt = choice(
                 self.parameters["promptlist"], self.alias, self.scenario_time, 1
@@ -653,6 +667,13 @@ class Communications(AbstractPlugin):
             self.get_active_radio_dict()["currentfreq"] += self.frequency_modulation
 
     def compute_next_plugin_state(self) -> None:
+        if self.is_paused():
+            return
+        # Audio completion and response deadlines must be observed every frame.
+        # Throttling these to the radio-control update can consume the entire
+        # lateness allowance before the next ordinary update is even due.
+        self._complete_presentation_if_ready()
+        self._update_active_response_timing()
         if not super().compute_next_plugin_state():
             return
 
@@ -682,8 +703,6 @@ class Communications(AbstractPlugin):
             self.modulate_frequency()
 
         active: dict[str, Any] = self.get_active_radio_dict()
-        self._complete_presentation_if_ready()
-        self._update_active_response_timing()
 
         # If multiple radios must be modified
         # The automatic solver sticks to the first one (until it is tuned)
