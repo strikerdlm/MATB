@@ -86,6 +86,42 @@ def test_scientific_timing_sink_failure_stops_native_recording(tmp_path):
     lg.finalize_evidence()
 
 
+@pytest.mark.parametrize("value,expected,paths", [
+    (float("nan"), None, ["value"]),
+    (float("inf"), None, ["value"]),
+    (float("-inf"), None, ["value"]),
+    ({"samples": [1.234567891, float("nan")]},
+     {"samples": [1.234567891, None]}, ["value.samples[1]"]),
+])
+def test_scientific_capture_preserves_missing_values_and_normalization_evidence(
+    tmp_path, value, expected, paths,
+):
+    from matb_integration.contracts import ScientificEventV3
+
+    path = tmp_path / "native.csv"
+    path.write_text("", encoding="utf-8")
+    events = io.StringIO()
+    logger = _make_logger(path=path, events_path=tmp_path / "native.events.jsonl", events_file=events,
+                         _scientific_session_uuid=UUID("12345678-1234-5678-1234-567812345678"))
+    logger.configure_scientific_context(
+        scenario_sha256="a" * 64, profile_id="test-profile", source_commit="b" * 40,
+        source_dirty=False, component_version="test",
+        scenario_manifest_evidence={"status": "verified", "scenario_manifest_sha256": "c" * 64},
+    )
+    logger.log_performance("sysmon", "response_time", value)
+    logger.finalize_evidence("completed")
+
+    envelope = next(json.loads(line) for line in events.getvalue().splitlines()
+                    if json.loads(line).get("address") == "response_time")
+    records = [ScientificEventV3.from_record(json.loads(line))
+               for line in path.with_suffix(".scientific.events.jsonl").read_text().splitlines()]
+    sample = next(record for record in records if record.payload["address"] == "response_time")
+    assert sample.to_record()["payload"]["value"] == expected
+    assert sample.payload["runtime_event_id"] == envelope["event_id"]
+    assert envelope["nonfinite_fields_normalized"] == paths
+    assert json.loads(path.with_suffix(".capture.manifest.json").read_text())["completion"] == "completed"
+
+
 # ── round_row ────────────────────────────────────
 
 

@@ -1,1 +1,1 @@
-Bedford;Seleccione la categoría que mejor represente la carga de trabajo experimentada.;Capacidad sobrante/Abandono de la tarea;1/10/5
+Bedford;Evalúe su carga de trabajo. (1 = capacidad sobrante para otras tareas, 10 = abandonar la tarea).;Capacidad sobrante/Abandonar tarea;1/10/5

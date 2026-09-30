@@ -66,15 +66,21 @@ def test_participant_instructions_are_spanish_and_define_task_abbreviations():
 
 
 def test_spanish_questionnaires_use_openmatb_four_field_format():
-    questionnaire_dir = ROOT / "includes" / "questionnaires"
-    for path in questionnaire_dir.glob("*_es.txt"):
-        rows = [
-            line
-            for line in path.read_text(encoding="utf-8").splitlines()
-            if line and not line.startswith("#")
-        ]
-        assert rows, f"No questionnaire rows in {path.name}"
-        assert all(len(row.split(";")) == 4 for row in rows), path.name
+    # The installer also copies SAGAT probe banks, which have their own format.
+    # Check the actual MATB-FAC scales in both the runtime and install source.
+    for questionnaire_dir in (
+        ROOT / "includes" / "questionnaires",
+        ROOT.parent / "matb_integration" / "questionnaires",
+    ):
+        for name in ("isa_es.txt", "nasatlx_es.txt", "bedford_es.txt"):
+            path = questionnaire_dir / name
+            rows = [
+                line
+                for line in path.read_text(encoding="utf-8").splitlines()
+                if line and not line.startswith("#")
+            ]
+            assert rows, f"No questionnaire rows in {path}"
+            assert all(len(row.split(";")) == 4 for row in rows), str(path)
 
 
 def test_spanish_comm_audio_manifest_and_pcm_format():

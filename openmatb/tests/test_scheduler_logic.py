@@ -659,3 +659,46 @@ class TestBatchEventDispatch:
         scheduler.update(0.1)
         plugin.start.assert_called_once_with()
         plugin.stop.assert_not_called()
+
+
+@pytest.mark.parametrize("participant_prompt", [False, True])
+def test_operator_pause_survives_event_dispatch_until_explicit_resume(participant_prompt):
+    from core.scheduler import Scheduler
+
+    scheduler = object.__new__(Scheduler)
+    scheduler.scenario_time = 5.0
+    scheduler.pause_scenario_time = False
+    scheduler.paused_plugins = []
+    scheduler.events = []
+    scheduler.events_queue = deque()
+    scheduler.control_bridge = MagicMock()
+    plugin = MagicMock(alive=True, paused=False, blocking=False)
+    plugin.pause.side_effect = lambda: setattr(plugin, "paused", True)
+    plugin.resume.side_effect = lambda: setattr(plugin, "paused", False)
+    scheduler.plugins = {"sysmon": plugin}
+    if participant_prompt:
+        prompt = MagicMock(alive=True, paused=False, blocking=True)
+        scheduler.plugins["questionnaire"] = prompt
+        scheduler._pause_for_blocking_plugin(prompt)
+    with patch("core.scheduler.Window.MainWindow", MagicMock(modal_dialog=None)):
+        scheduler._operator_pause()
+        if participant_prompt:
+            scheduler._operator_resume()
+            scheduler.control_bridge.emit.assert_called_with(
+                "command_rejected", command="resume", reason="participant_prompt_active",
+            )
+            prompt.alive = False
+        for _ in range(3):
+            scheduler.execute_events()
+            scheduler.update_timers(1.0)
+        assert scheduler.is_scenario_time_paused() is True
+        assert scheduler.scenario_time == 5.0
+        assert plugin.paused is True
+        scheduler._operator_resume()
+        scheduler.update_timers(1.0)
+    assert scheduler.is_scenario_time_paused() is False
+    assert scheduler.scenario_time == 6.0
+    assert plugin.paused is False
+    assert scheduler.paused_plugins == []
+    if participant_prompt:
+        plugin.show.assert_called_once_with()

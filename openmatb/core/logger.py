@@ -728,7 +728,12 @@ class Logger:
                             evidence_metadata["compatibility_row"] = {
                                 key: "" if row_dict[key] is None else str(row_dict[key])
                                 for key in ("scenario_time", "type", "module", "address", "value")}
-                            evidence_writer.record(this_row._asdict(), evidence_metadata,
+                            native_row = this_row._asdict()
+                            # Missing task measurements use the same JSON null as
+                            # the linked runtime envelope, which records their paths.
+                            # Preserve native timing and finite measurement precision.
+                            native_row["value"] = _normalize_nonfinite_json(native_row["value"])[0]
+                            evidence_writer.record(native_row, evidence_metadata,
                                                    runtime_event_id=event_payload["event_id"])
                     except Exception as exc:  # noqa: BLE001 - enter explicit fail-stop state
                         self.queue.pop(0)

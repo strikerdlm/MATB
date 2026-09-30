@@ -14,7 +14,7 @@ from core.constants import BFLIM, PLUGIN_TITLE_HEIGHT_PROPORTION, REPLAY_MODE, V
 from core.constants import FONT_SIZES as F
 from core.container import Container
 from core.logger import get_logger
-from core.widgets import Frame, SimpleHTML, Simpletext
+from core.widgets import AbstractWidget, Frame, SimpleHTML, Simpletext
 from core.window import Window
 
 
@@ -401,6 +401,11 @@ class AbstractPlugin:
 
     def log_all_parameters(self, search_dict: dict[str, Any], key_prefix: str = "") -> None:
         for key, value in search_dict.items():
+            # Widgets are live presentation objects inserted by create_widgets,
+            # not task settings. Their state/AOI records have dedicated logging.
+            # Keep other values unchanged so invalid evidence still fails closed.
+            if isinstance(value, AbstractWidget):
+                continue
             new_key_prefix: str = str(key) if len(key_prefix) == 0 else key_prefix + "-" + str(key)
             if isinstance(value, dict):  # Recursion search
                 self.log_all_parameters(value, new_key_prefix)

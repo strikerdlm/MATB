@@ -2,6 +2,10 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+from matb_integration.evidence.contracts import RuntimePayloadV1
+
+from core.widgets import Frame, Light, Pump, Radio, Scale, Tank
 from plugins.abstractplugin import AbstractPlugin
 
 
@@ -224,3 +228,56 @@ class TestPluginStates:
         assert p.alive is False
         assert p.paused is True
         assert p.visible is False
+
+
+@pytest.mark.parametrize("widget_type", [Frame, Light, Scale, Radio, Tank, Pump])
+def test_start_logs_task_parameters_without_runtime_widgets(widget_type):
+    plugin = _make_plugin()
+    widget = object.__new__(widget_type)
+    records = []
+
+    def record_parameter(module, address, value):
+        records.append(RuntimePayloadV1(
+            block_instance_id="00000000-0000-0000-0000-000000000001",
+            record_type="parameter", module=module, address=address, value=value,
+        ))
+
+    def create_widgets():
+        plugin.parameters["taskfeedback"]["overdue"]["widget"] = widget
+        plugin.parameters["instruments"] = {
+            "1": {"widget": widget, "target": 0.8, "enabled": True, "key": "F1"},
+        }
+
+    plugin.logger.record_parameter.side_effect = record_parameter
+    plugin.create_widgets = MagicMock(side_effect=create_widgets)
+    plugin.show = MagicMock()
+    with patch("plugins.abstractplugin.get_logger", return_value=plugin.logger):
+        plugin.start()
+        plugin.stop()
+        plugin.start()  # Restarting also retains live widget references.
+
+    values = {record.address: record.value for record in records}
+    assert values["instruments-1-target"] == 0.8
+    assert values["instruments-1-enabled"] is True
+    assert values["instruments-1-key"] == "F1"
+    assert values["taskfeedback-overdue-color"] == (241, 100, 100, 255)
+    assert not any(address.endswith("-widget") for address in values)
+    assert plugin.parameters["instruments"]["1"]["widget"] is widget
+
+
+def test_non_widget_parameter_errors_still_propagate():
+    plugin = _make_plugin()
+    plugin.parameters = {"invalid_parameter": object()}
+
+    def record_parameter(module, address, value):
+        RuntimePayloadV1(
+            block_instance_id="00000000-0000-0000-0000-000000000001",
+            record_type="parameter", module=module, address=address, value=value,
+        )
+
+    plugin.logger.record_parameter.side_effect = record_parameter
+    with (
+        patch("plugins.abstractplugin.get_logger", return_value=plugin.logger),
+        pytest.raises(TypeError, match="not JSON serializable"),
+    ):
+        plugin.log_all_parameters(plugin.parameters)

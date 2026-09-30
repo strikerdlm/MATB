@@ -116,6 +116,7 @@ class Scheduler:
     def _operator_pause(self) -> None:
         if self.control_bridge is None:
             return
+        self._operator_paused = True
         if not self.is_scenario_time_paused():
             self.pause_scenario()
             self.execute_plugins_methods(self.get_active_non_blocking_plugins(), methods="pause")
@@ -130,6 +131,10 @@ class Scheduler:
         if self.get_active_blocking_plugin() is not None or Window.MainWindow.modal_dialog is not None:
             self.control_bridge.emit("command_rejected", command="resume", reason="participant_prompt_active")
             return
+        self._operator_paused = False
+        if self.paused_plugins:
+            self.execute_plugins_methods(self.paused_plugins, methods=["show", "resume"])
+            self.paused_plugins = []
         self.execute_plugins_methods(
             self.get_plugins_by_states([("alive", True), ("paused", True)]),
             methods="resume",
@@ -196,6 +201,7 @@ class Scheduler:
 
         # Track whether plugins have been paused due to a modal dialog (e.g. pause prompt)
         self._dialog_paused: bool = False
+        self._operator_paused: bool = False
         self._dispatch_failed: bool = False
         self._dispatch_failure: dict[str, Any] | None = None
 
@@ -229,7 +235,8 @@ class Scheduler:
 
             failure_phase = "modal_dialog_resume"
             if self._dialog_paused:
-                self.execute_plugins_methods(self.get_active_plugins(), ["resume"])
+                if not getattr(self, "_operator_paused", False):
+                    self.execute_plugins_methods(self.get_active_plugins(), ["resume"])
                 self._dialog_paused = False
 
             failure_phase = "runtime_error_display"
@@ -383,6 +390,9 @@ class Scheduler:
     def execute_events(self) -> None:
         if getattr(self, "preflight_held", False):
             return
+        # Operator holds survive the automatic release of participant prompts.
+        if getattr(self, "_operator_paused", False):
+            return
         if getattr(self, "_dispatch_failed", False):
             return
         # Detect a potential blocking plugin
@@ -424,7 +434,7 @@ class Scheduler:
         return self.is_scenario_time_paused()
 
     def resume_scenario(self) -> bool:
-        if getattr(self, "preflight_held", False):
+        if getattr(self, "preflight_held", False) or getattr(self, "_operator_paused", False):
             return True
         self.pause_scenario_time = False
         return self.is_scenario_time_paused()
