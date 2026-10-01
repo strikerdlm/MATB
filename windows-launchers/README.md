@@ -1,8 +1,12 @@
 # MATB UAS Windows launchers
 
+For a new computer, use the top-level `Install MATB.cmd`, then `Start MATB.cmd`
+for the full Console or `Start OpenMATB.cmd` for the desktop.
+See [Windows setup](../WINDOWS.md) for automatic prerequisites and offline exports.
+
 These Explorer-friendly launchers start the native sUAS console or run a
 deterministic technical workload profile without changing study scenarios.
-They require PowerShell 7, Python 3.12+, Node.js 20+, and npm.
+They require PowerShell 7, Python 3.12+, Node.js 20.9+, and npm.
 
 Run `01 - Abrir consola UAS.cmd` for the interactive mouse-enabled console.
 It now checks and repairs dependencies, refreshes a stale production build,

@@ -122,6 +122,7 @@ $env:MATB_SIMULATION_OUTPUT_DIR = $artifactRoot
 $env:MATB_SIMULATION_SCENARIO_DIR = Join-Path $repoRoot "scenarios\suas"
 $env:MATB_OPENMATB_PYTHON = $pythonPath
 $env:MATB_OPENMATB_OUTPUT_DIR = $artifactRoot
+$env:MATB_DESCRIPTIVE_WHEELHOUSE = Join-Path $serviceRoot "wheels"
 $env:MATB_FRONTEND_ORIGINS = "http://127.0.0.1:$FrontendPort,http://localhost:$FrontendPort"
 $env:MATB_BACKEND_PORT = [string]$BackendPort
 $env:API_URL = "http://127.0.0.1:$BackendPort"

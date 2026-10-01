@@ -2,6 +2,10 @@
 
 [English](README.md) | [Español](README.es.md)
 
+**Instalación en Windows:** extraiga el repositorio y abra `Install MATB.cmd`
+con doble clic; luego `Start MATB.cmd` (consola) o `Start OpenMATB.cmd`
+(escritorio). Consulte la [guía de Windows](WINDOWS.es.md).
+
 > Software exclusivo para investigación y aseguramiento de la seguridad operacional. MATB no es un dispositivo clínico,
 > un sistema operacional certificado, un canal de control de aeronaves, un sistema de armas ni un
 > sustituto de la aprobación humana responsable.

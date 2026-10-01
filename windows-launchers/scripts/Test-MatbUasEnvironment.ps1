@@ -49,8 +49,7 @@ try {
         throw "version check failed"
     }
     Write-DiagnosticLine -Label "Python" -Value ("{0} ({1})" -f $pythonVersion, $pythonPath) -Kind ok
-    & $pythonPath -c "import fastapi, pydantic, sqlmodel, uvicorn, yaml" 2>$null
-    if ($LASTEXITCODE -ne 0) {
+    if (-not (Test-MatbUasPythonDependencies -RepoRoot $repoRoot -PythonPath $pythonPath)) {
         Add-DiagnosticIssue -Message "MATB Python dependencies are incomplete; run shortcut 00."
     } else {
         Write-DiagnosticLine -Label "Python packages" -Value "available" -Kind ok
