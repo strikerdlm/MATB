@@ -127,6 +127,14 @@ def test_astra_protocol_materializes_real_assignments_without_results(engine, tm
         astra_roster.initialize(db)
         from app.study_registry import install_registry_guards
         install_registry_guards(engine)
+        from app.components import is_component_active
+        if not is_component_active('matb-openmatb'):
+            with pytest.raises(HTTPException) as rejected:
+                astra_deployment.configure(db, manager, 'Investigadora de prueba')
+            assert rejected.value.status_code == 409
+            assert 'OpenMATB' in rejected.value.detail
+            assert not astra_deployment.status(db)['active']
+            return
         current = astra_deployment.configure(db, manager, 'Investigadora de prueba')
         assert current['active']
         assert astra_deployment.configure(db, manager, 'Investigadora de prueba') == current
