@@ -44,8 +44,15 @@ try {
         (Join-Path $PSScriptRoot "Initialize-MatbUas.ps1"), "-BasePython", $python)
     if ($SkipTests) { $prepare += "-SkipTests" }
     if ($DataRoot) { $prepare += @("-DataRoot", $DataRoot) }
-    & $powerShell @prepare
-    if ($LASTEXITCODE -ne 0) { throw "MATB preparation failed (exit $LASTEXITCODE). See $logPath" }
+    # PS 5.1 transcripts omit native child output unless it is sent to the host.
+    # Native stderr can also be harmless progress; the process exit code decides
+    # success while both streams remain visible and are retained in the transcript.
+    $preparationExit = & {
+        $ErrorActionPreference = "Continue"
+        & $powerShell @prepare 2>&1 | Out-Host
+        $LASTEXITCODE
+    }
+    if ($preparationExit -ne 0) { throw "MATB preparation failed (exit $preparationExit). See $logPath" }
     Write-Host "Setup completed. Double-click Start MATB.cmd or Start OpenMATB.cmd." -ForegroundColor Green
 } catch {
     Write-Host ("Setup failed: " + $_.Exception.Message) -ForegroundColor Red

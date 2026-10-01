@@ -44,6 +44,10 @@ jobs:
         run: |
           $repo = Join-Path $env:GITHUB_WORKSPACE 'MATB install ñ'
           $python = Join-Path $repo '.venv-suas\Scripts\python.exe'
+          $setupLog = Get-Content "$repo\exports\windows-install\setup-*.log" -Raw
+          if ($setupLog -notmatch 'Python:' -or $setupLog -notmatch 'MATB Research Console and desktop OpenMATB are ready') {
+            throw 'Setup log did not retain preparation diagnostics.'
+          }
           & $python -c "import sys; assert sys.prefix != sys.base_prefix"
           if ($LASTEXITCODE -ne 0) { throw 'Setup did not isolate Python.' }
           & $python -m pytest "$repo\tests\test_python_environment.py" "$repo\tests\test_study_wheel_preparation.py" -q
