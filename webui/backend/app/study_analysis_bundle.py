@@ -5,10 +5,29 @@ import json
 import os
 import platform
 import sys
+import zipfile
 from pathlib import Path
+from packaging.tags import sys_tags
+from packaging.utils import InvalidWheelFilename, canonicalize_name, parse_wheel_filename
+from packaging.version import Version
 from app.hcf_derivations import canonical
 
 ROOT=Path(__file__).resolve().parents[3]
+
+
+def compatible_wheels(wheelhouse, name, version):
+    """Select the pinned inventory for this interpreter, ABI and platform."""
+    supported=set(sys_tags())
+    matches=[]
+    for path in sorted(Path(wheelhouse).glob('*.whl')):
+        try:
+            distribution, wheel_version, _build, tags=parse_wheel_filename(path.name)
+        except InvalidWheelFilename:
+            continue
+        if (distribution==canonicalize_name(name) and wheel_version==Version(version)
+                and tags & supported and zipfile.is_zipfile(path)):
+            matches.append(path)
+    return matches
 
 
 def dependency_versions(instruments):
@@ -43,8 +62,7 @@ def implementation_artifacts(instruments):
     if versions:
         wheelhouse=Path(os.getenv('MATB_DESCRIPTIVE_WHEELHOUSE',str(ROOT/'.test-tmp/repeatable-study/descriptive-wheels')))
         for name,version in versions.items():
-            normalized=name.lower().replace('-','_')
-            matches=[p for p in wheelhouse.glob('*.whl') if p.name.lower().startswith(normalized+'-'+version.replace('-','_')+'-')]
+            matches=compatible_wheels(wheelhouse, name, version)
             if len(matches)!=1: raise ValueError(f'Pinned offline wheel missing/ambiguous for {name}=={version}; prepare MATB_DESCRIPTIVE_WHEELHOUSE before execution.')
             files['wheels/'+matches[0].name]=matches[0].read_bytes()
     files['README.txt']=b'Offline descriptive replay only. Extract this archive, create a fresh Python venv of the recorded version/platform, install with: python -m pip install --no-index --find-links wheels -r requirements.lock\nThen run: python verify.py .\nChecksums detect modification; they are not an external signature. Local plan attestation does not establish absence of prior result inspection. This analysis export is not full-workspace restoration.\n'

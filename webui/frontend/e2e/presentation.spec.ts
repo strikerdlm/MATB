@@ -37,8 +37,9 @@ async function activateInteractiveButton({
       .toBe(true);
   };
 
-  await settle();
   try {
+    // click already scrolls and checks actionability. A duplicate trial/scroll
+    // sequence consumes the input deadline on Windows software-rendered WebGL.
     // Reserve part of the same deadline for state to arrive after real input.
     await button.click({ timeout: Math.min(8000, Math.ceil(remaining() / 2)) });
   } catch (error) {
@@ -167,13 +168,12 @@ for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
         try {
           await activateInteractiveButton({
             button: traffic,
-            completed: async (remaining) =>
-              (await traffic.getAttribute("aria-pressed", {
-                timeout: remaining(),
-              })) === "true" &&
-              (
-                (await observedTraffic.textContent({ timeout: remaining() })) ?? ""
-              ).includes("a12345"),
+            completed: async (remaining) => traffic.evaluate(
+              (button) => button.getAttribute("aria-pressed") === "true"
+                && Boolean(button.closest("section")?.textContent?.includes("a12345")),
+              undefined,
+              { timeout: remaining() },
+            ),
             spaceFallback: async (remaining) =>
               (await traffic.getAttribute("aria-pressed", {
                 timeout: remaining(),

@@ -44,9 +44,10 @@ function Get-MatbBootstrapPython {
 
 function Get-MatbBootstrapNode {
     $ErrorActionPreference = "Continue"
-    $command = Get-Command node.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     $candidates = @()
-    if ($command) { $candidates += $command.Source }
+    foreach ($command in @(Get-Command node.exe -CommandType Application -All -ErrorAction SilentlyContinue)) {
+        $candidates += $command.Source
+    }
     if ($env:ProgramFiles) { $candidates += Join-Path $env:ProgramFiles "nodejs/node.exe" }
     foreach ($candidate in $candidates) {
         if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) { continue }

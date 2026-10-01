@@ -1,5 +1,6 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "Common-MatbBootstrap.ps1")
 
 function Get-MatbUasRepoRoot {
     $candidate = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
@@ -105,18 +106,18 @@ function Test-MatbUasNodeVersion {
 }
 
 function Get-MatbUasNode {
-    $nodeCommand = Get-Command node.exe -ErrorAction SilentlyContinue
-    if (-not $nodeCommand) {
-        throw "Node.js was not found. Run Install MATB.cmd or install Node.js 22 LTS."
+    $nodePath = Get-MatbBootstrapNode
+    if (-not $nodePath) { throw "Node.js 20.9 or newer was not found. Run Install MATB.cmd." }
+    return $nodePath
+}
+
+function Get-MatbUasNpm {
+    param([Parameter(Mandatory)][string]$NodePath)
+    $npmPath = Join-Path (Split-Path -Parent $NodePath) "npm.cmd"
+    if (-not (Test-Path -LiteralPath $npmPath -PathType Leaf)) {
+        throw "npm.cmd is missing from the selected Node installation. Repair Node.js, then run Install MATB.cmd."
     }
-    $versionText = (& $nodeCommand.Source --version 2>$null | Select-Object -Last 1)
-    if ($LASTEXITCODE -ne 0 -or -not $versionText) {
-        throw "The Node.js version could not be determined."
-    }
-    if (-not (Test-MatbUasNodeVersion -VersionText $versionText)) {
-        throw "Node.js 20.9 or newer is required; found $versionText. Run Install MATB.cmd."
-    }
-    return $nodeCommand.Source
+    return $npmPath
 }
 
 function Get-MatbUasRequirements {

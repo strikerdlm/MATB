@@ -84,10 +84,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $nodePath = Get-MatbUasNode
-$npmCommand = Get-Command npm.cmd -ErrorAction SilentlyContinue
-if (-not $npmCommand) {
-    throw "npm.cmd was not found. Install npm and run setup again."
-}
+$npmPath = Get-MatbUasNpm -NodePath $nodePath
 Write-Host "Node: $nodePath"
 
 $frontendRoot = Join-Path $repoRoot "webui\frontend"
@@ -107,7 +104,7 @@ if (-not $frontendDependenciesReady) {
     Write-Host "Installing frontend dependencies..."
     Push-Location $frontendRoot
     try {
-        & $npmCommand.Source ci
+        & $npmPath ci
         if ($LASTEXITCODE -ne 0) {
             throw "Frontend dependency installation failed."
         }
@@ -156,7 +153,7 @@ if (-not $SkipBuild) {
         $env:NEXT_PUBLIC_API_URL = "http://127.0.0.1:8000"
         Push-Location $frontendRoot
         try {
-            & $npmCommand.Source run build
+            & $npmPath run build
             if ($LASTEXITCODE -ne 0) {
                 throw "MATB frontend build failed."
             }
