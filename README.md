@@ -2,6 +2,10 @@
 
 [English](README.md) | [Español](README.es.md)
 
+**Windows installation:** extract the repository, double-click `Install MATB.cmd`,
+then open `Start MATB.cmd` (Research Console) or `Start OpenMATB.cmd` (desktop).
+See the [Windows setup guide](WINDOWS.md).
+
 > Research and safety-assurance software only. MATB is not a clinical device,
 > certified operational system, aircraft-control channel, weapon system, or a
 > substitute for accountable human approval.

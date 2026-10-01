@@ -16,6 +16,9 @@ webui/frontend/playwright-report/
 
 # Local geography environments, preparation jobs and captures
 /.venv-geography/
+/.venv-suas/
+/.venv-console/
+/.venv-openmatb/
 /.matb-managed-e2e/
 /outputs/geography/
 webui/frontend/public/scenes/.pending/

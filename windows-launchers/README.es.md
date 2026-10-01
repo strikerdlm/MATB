@@ -1,8 +1,12 @@
 # Lanzadores de MATB UAS para Windows
 
+En un equipo nuevo, abra `Install MATB.cmd` en la raíz. Después use
+`Start MATB.cmd` para la consola completa o `Start OpenMATB.cmd` para el
+escritorio. Consulte la [guía de Windows](../WINDOWS.es.md).
+
 Estos accesos ejecutan la consola sUAS y las simulaciones técnicas desde el
 Explorador de archivos sin modificar los escenarios del estudio. Requieren
-PowerShell 7, Python 3.12 o posterior, Node.js 20 o posterior y npm.
+PowerShell 7, Python 3.12 o posterior, Node.js 20.9 o posterior y npm.
 
 ## Primer uso
 

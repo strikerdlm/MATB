@@ -3,7 +3,8 @@ param(
     [switch]$SkipInstall,
     [switch]$SkipBuild,
     [switch]$SkipTests,
-    [string]$DataRoot = ""
+    [string]$DataRoot = "",
+    [string]$BasePython = ""
 )
 
 Set-StrictMode -Version Latest
@@ -19,17 +20,27 @@ $resolvedDataRoot = Get-MatbUasDataRoot -RepoRoot $repoRoot -DataRoot $DataRoot
 $localPython = Join-Path $repoRoot ".venv-suas\Scripts\python.exe"
 
 try {
+    if (-not $env:MATB_PYTHON -and -not $env:MATB_VENV -and
+        -not (Test-MatbUasPythonVersion -PythonPath $localPython)) {
+        throw "A repository-local environment must be created."
+    }
     $pythonPath = Get-MatbUasPython -RepoRoot $repoRoot
 } catch {
     if ($SkipInstall) {
         throw
     }
-    $pyLauncher = Get-Command py.exe -ErrorAction SilentlyContinue
-    if (-not $pyLauncher) {
-        throw "Python 3.12+ was not found. Install it or define MATB_PYTHON, then run setup again."
+    if ($env:MATB_PYTHON -or $env:MATB_VENV) {
+        throw "The explicitly selected MATB_PYTHON/MATB_VENV is incompatible. Correct it before running setup."
+    }
+    . (Join-Path $PSScriptRoot "Common-MatbBootstrap.ps1")
+    $basePythonPath = if ($BasePython) {
+        Resolve-MatbUasExecutable -Candidate $BasePython -RepoRoot $repoRoot
+    } else { Get-MatbBootstrapPython }
+    if (-not $basePythonPath -or -not (Test-MatbUasPythonVersion -PythonPath $basePythonPath)) {
+        throw "Python 3.12 64-bit was not found. Run Install MATB.cmd."
     }
     Write-Host "Creating the repository-local Python 3.12 environment..."
-    & $pyLauncher.Source -3.12 -m venv (Join-Path $repoRoot ".venv-suas")
+    & $basePythonPath -m venv (Join-Path $repoRoot ".venv-suas")
     if ($LASTEXITCODE -ne 0) {
         throw "Python 3.12 environment creation failed."
     }
@@ -41,17 +52,35 @@ $env:PYTHONDONTWRITEBYTECODE = "1"
 Write-Host "Python: $pythonPath"
 Write-Host "Data:   $resolvedDataRoot"
 
-& $pythonPath -c "import fastapi, pydantic, pyglet, pylsl, rstr, sqlmodel, uvicorn, yaml" 2>$null
-$pythonDependenciesReady = ($LASTEXITCODE -eq 0)
+$pythonDependenciesReady = Test-MatbUasPythonDependencies -RepoRoot $repoRoot -PythonPath $pythonPath
 if (-not $pythonDependenciesReady) {
     if ($SkipInstall) {
         throw "MATB Python dependencies are missing and -SkipInstall was selected."
     }
     Write-Host "Installing MATB Python dependencies..."
-    & $pythonPath -m pip install -r (Join-Path $repoRoot "requirements-dev.txt")
+    $pythonRequirements = Get-MatbUasRequirements -RepoRoot $repoRoot -PythonPath $pythonPath
+    & $pythonPath -m pip install -r $pythonRequirements -r (Join-Path $repoRoot "requirements-dev.txt")
     if ($LASTEXITCODE -ne 0) {
         throw "MATB Python dependency installation failed."
     }
+}
+if (-not (Test-MatbUasPythonDependencies -RepoRoot $repoRoot -PythonPath $pythonPath)) {
+    throw "Python packages remain incompatible after installation. Inspect pip's diagnostic output."
+}
+& $pythonPath -c "import fastapi, pydantic, pyglet, pylsl, rstr, sqlmodel, uvicorn, yaml"
+if ($LASTEXITCODE -ne 0) { throw "A required MATB runtime package could not be imported." }
+
+# Exports replay offline only when wheels match the selected interpreter.
+$wheelRoot = Join-Path $resolvedDataRoot "service/wheels"
+$wheelTool = Join-Path $repoRoot "tools/prepare_study_wheels.py"
+& $pythonPath $wheelTool $wheelRoot --check
+if ($LASTEXITCODE -ne 0) {
+    if ($SkipInstall) { throw "Offline export wheels are missing. Run Install MATB.cmd." }
+    Write-Host "Preparing offline calculator wheels for study exports..."
+    & $pythonPath $wheelTool $wheelRoot
+    if ($LASTEXITCODE -ne 0) { throw "Offline calculator wheel preparation failed." }
+    & $pythonPath $wheelTool $wheelRoot --check
+    if ($LASTEXITCODE -ne 0) { throw "Offline calculator wheels did not pass verification." }
 }
 
 $nodePath = Get-MatbUasNode
@@ -163,4 +192,4 @@ try {
 }
 
 Write-Host ""
-Write-Host "MATB UAS is ready for the Windows launchers." -ForegroundColor Green
+Write-Host "MATB Research Console and desktop OpenMATB are ready for the Windows launchers." -ForegroundColor Green

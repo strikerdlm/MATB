@@ -98,19 +98,44 @@ function Get-MatbUasPython {
     throw "No compatible MATB Python was found. Run '00 - Preparar MATB UAS.cmd' first."
 }
 
+function Test-MatbUasNodeVersion {
+    param([Parameter(Mandatory)][string]$VersionText)
+    if ($VersionText -notmatch '^v(?<version>\d+\.\d+\.\d+)$') { return $false }
+    return ([version]$Matches.version -ge [version]"20.9.0")
+}
+
 function Get-MatbUasNode {
     $nodeCommand = Get-Command node.exe -ErrorAction SilentlyContinue
     if (-not $nodeCommand) {
-        throw "Node.js was not found. Install Node.js 20 or newer and run setup again."
+        throw "Node.js was not found. Run Install MATB.cmd or install Node.js 22 LTS."
     }
     $versionText = (& $nodeCommand.Source --version 2>$null | Select-Object -Last 1)
-    if ($LASTEXITCODE -ne 0 -or $versionText -notmatch '^v(?<major>\d+)\.') {
+    if ($LASTEXITCODE -ne 0 -or -not $versionText) {
         throw "The Node.js version could not be determined."
     }
-    if ([int]$Matches.major -lt 20) {
-        throw "Node.js 20 or newer is required; found $versionText."
+    if (-not (Test-MatbUasNodeVersion -VersionText $versionText)) {
+        throw "Node.js 20.9 or newer is required; found $versionText. Run Install MATB.cmd."
     }
     return $nodeCommand.Source
+}
+
+function Get-MatbUasRequirements {
+    param([Parameter(Mandatory)][string]$RepoRoot, [Parameter(Mandatory)][string]$PythonPath)
+    $target = & $PythonPath -c "import sys; print('locked' if sys.platform == 'win32' and sys.version_info[:2] == (3, 12) and sys.maxsize > 2**32 else 'source')"
+    if ($LASTEXITCODE -ne 0) { throw "Could not inspect the selected Python interpreter." }
+    if ($target -eq "locked") { return Join-Path $RepoRoot "release/requirements-windows-py312.lock" }
+    return Join-Path $RepoRoot "requirements-dev.txt"
+}
+
+function Test-MatbUasPythonDependencies {
+    param([Parameter(Mandatory)][string]$RepoRoot, [Parameter(Mandatory)][string]$PythonPath)
+    $requirements = Get-MatbUasRequirements -RepoRoot $RepoRoot -PythonPath $PythonPath
+    & $PythonPath (Join-Path $RepoRoot "scripts/check_python_environment.py") --requirements $requirements | Out-Host
+    if ($LASTEXITCODE -ne 0) { return $false }
+    & $PythonPath (Join-Path $RepoRoot "scripts/check_python_environment.py") --requirements (Join-Path $RepoRoot "requirements-dev.txt") | Out-Host
+    if ($LASTEXITCODE -ne 0) { return $false }
+    & $PythonPath -m pip check | Out-Host
+    return ($LASTEXITCODE -eq 0)
 }
 
 function Get-MatbUasDataRoot {

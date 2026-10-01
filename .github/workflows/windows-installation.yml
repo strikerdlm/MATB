@@ -1,0 +1,60 @@
+name: MATB Windows installation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '*.cmd'
+      - 'windows-launchers/**'
+      - 'scripts/check_python_environment.py'
+      - 'tools/prepare_study_wheels.py'
+      - 'release/requirements-windows-py312.lock'
+      - 'tests/windows/**'
+      - '.github/workflows/windows-installation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  native-windows-setup:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: MATB install ñ
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.2
+      - name: Run installer through Windows PowerShell 5.1
+        working-directory: ${{ runner.temp }}
+        run: |
+          Remove-Item Env:MATB_PYTHON, Env:MATB_VENV -ErrorAction SilentlyContinue
+          & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$env:GITHUB_WORKSPACE\MATB install ñ\windows-launchers\scripts\Install-MatbWindows.ps1" -NoPrerequisiteInstall
+          if ($LASTEXITCODE -ne 0) { throw 'Windows installer failed.' }
+      - name: Verify isolation, dependency checks, and launchers
+        working-directory: ${{ runner.temp }}
+        run: |
+          $repo = Join-Path $env:GITHUB_WORKSPACE 'MATB install ñ'
+          $python = Join-Path $repo '.venv-suas\Scripts\python.exe'
+          & $python -c "import sys; assert sys.prefix != sys.base_prefix"
+          if ($LASTEXITCODE -ne 0) { throw 'Setup did not isolate Python.' }
+          & $python -m pytest "$repo\tests\test_python_environment.py" "$repo\tests\test_study_wheel_preparation.py" -q
+          if ($LASTEXITCODE -ne 0) { throw 'Installer regression checks failed.' }
+          & "$repo\tests\windows\test_matb_installer.ps1"
+          & "$repo\tests\windows\test_matb_launchers.ps1"
+          & "$repo\tests\windows\test_matb_relocation.ps1"
+      - name: Keep installation diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-installation-logs
+          path: MATB install ñ/exports/windows-install/
+          retention-days: 14

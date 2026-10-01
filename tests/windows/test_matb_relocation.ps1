@@ -18,7 +18,7 @@ if ($BackendPort -eq $FrontendPort) {
 
 try {
     & (Join-Path $launcherRoot "Initialize-MatbUas.ps1") `
-        -SkipInstall -SkipTests -DataRoot $dataRoot
+        -SkipTests -DataRoot $dataRoot
     if ($LASTEXITCODE -ne 0) { throw "MATB relocation preparation failed." }
 
     & (Join-Path $launcherRoot "Test-MatbUasEnvironment.ps1") `
