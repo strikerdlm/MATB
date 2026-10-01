@@ -189,6 +189,7 @@ export async function createMissionScene(
   const renderTimes: number[] = [];
   const submission = renderScheduler(submitFrame);
   let renderCount = 0, lastFrameAt = 0;
+  let renderedMemory = { ...renderer.info.memory };
   const frameIntervals: number[] = [];
   const gl = renderer.getContext(),
     debug = gl.getExtension("WEBGL_debug_renderer_info");
@@ -269,6 +270,9 @@ export async function createMissionScene(
       poseRacingDrone(object, options.snapshot.simulation_time_ms, camera.position.distanceTo(object.position), !!aircraft && !["RECOVERED", "MISSION_FAILED"].includes(aircraft.mode));
     }
     renderer.render(scene, camera);
+    // Updates can dispose geometry before the next deferred render registers
+    // its replacement. Keep memory and draw counts on the same submitted frame.
+    renderedMemory = { ...renderer.info.memory };
     updateLabels();
     renderCount++;
     renderTimes.push(performance.now() - started);
@@ -524,7 +528,7 @@ export async function createMissionScene(
       frameSamples: frameIntervals.length,
       calls: renderer.info.render.calls,
       triangles: renderer.info.render.triangles,
-      memory: { ...renderer.info.memory },
+      memory: { ...renderedMemory },
       renderCount,
       objectLifecycle: operational.metrics(),
       gpuCompletionMs: null,

@@ -200,6 +200,7 @@ for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
       await page.screenshot({
         path: testInfo.outputPath(`${block}-overview.png`),
         fullPage: false,
+        timeout: 30_000,
       });
       await page
         .getByRole("combobox", { name: "Camera", exact: true })
@@ -207,6 +208,7 @@ for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
       await page.screenshot({
         path: testInfo.outputPath(`${block}-follow.png`),
         fullPage: false,
+        timeout: 30_000,
       });
       await page
         .getByRole("combobox", { name: "Camera", exact: true })
@@ -214,12 +216,17 @@ for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
       await page.screenshot({
         path: testInfo.outputPath(`${block}-drone.png`),
         fullPage: false,
+        timeout: 30_000,
       });
       await page
         .getByRole("combobox", { name: "Camera", exact: true })
         .selectOption("overview");
       const state = await (
-        await request.get(`${api}/simulation/sessions/${prepared.id}/state`)
+        await request.get(`${api}/simulation/sessions/${prepared.id}/state`, {
+          // Captures can outlive the API connection's keep-alive window.
+          // Retry only a connection reset on this read-only request.
+          maxRetries: 1,
+        })
       ).json();
       expect(Object.keys(state.aircraft)).toHaveLength(
         { LOW: 2, MEDIUM: 4, HIGH: 8 }[block],
@@ -288,6 +295,7 @@ for (const block of ["LOW", "MEDIUM", "HIGH"] as const)
       await page.screenshot({
         path: testInfo.outputPath(`${block}-mobile.png`),
         fullPage: true,
+        timeout: 30_000,
       });
       expect(errors).toEqual([]);
     } finally {
