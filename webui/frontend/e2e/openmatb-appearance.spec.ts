@@ -1,17 +1,24 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+
+async function expectDaylightDefault(profile: Locator): Promise<void> {
+  await expect(profile).toHaveValue("matb-daylight-avionics@1.0.0");
+  for (const legacyProfile of ["matb-fac-modern", "classic", "cockpit"]) {
+    await expect(profile.locator(`option[value="${legacyProfile}@1.0.0"]`)).toHaveCount(1);
+  }
+}
 
 async function openAppearance(page: Page): Promise<void> {
   await page.goto("/openmatb/appearance");
   await page.locator("#app-language").selectOption("en");
-  await expect(page.getByRole("heading", { name: "MATB - FAC" })).toBeVisible();
-  await expect(page.getByRole("combobox", { name: "Visual profile" })).toHaveValue("matb-fac-modern@1.0.0");
+  await expect(page.locator(".fac-workbench").getByRole("heading", { name: "MATB - FAC" })).toBeVisible();
+  await expectDaylightDefault(page.getByRole("combobox", { name: "Visual profile" }));
 }
 
 test("appearance workbench follows the console Spanish default", async ({ page }) => {
   await page.goto("/openmatb/appearance");
-  await expect(page.getByRole("heading", { name: "MATB - FAC" })).toBeVisible();
-  await expect(page.getByRole("combobox", { name: "Perfil visual" })).toHaveValue("matb-fac-modern@1.0.0");
+  await expect(page.locator(".fac-workbench").getByRole("heading", { name: "MATB - FAC" })).toBeVisible();
+  await expectDaylightDefault(page.getByRole("combobox", { name: "Perfil visual" }));
   await expect(page.getByRole("button", { name: /^clonar$/i })).toBeVisible();
   await expect(page.getByText("Configuración del investigador")).toBeVisible();
   await expect(page.getByText(/Solo lectura aquí/)).toBeVisible();
