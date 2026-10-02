@@ -1269,6 +1269,7 @@ class SimulationManager:
 
         async with self._lock:
             handle = self._require(session_id, None, check_lease=False)
+            protocol = handle.protocol.status() if handle.protocol is not None else {}
             snapshot = dict(handle.engine.snapshot()) if handle.engine is not None else {
                 "session_id": session_id, "lifecycle": handle.lifecycle,
                 "simulation_time_ms": 0, "state_version": 0,
@@ -1279,6 +1280,7 @@ class SimulationManager:
                 {
                     **snapshot,
                     "lifecycle": handle.lifecycle,
+                    "active_probe": protocol.get("active_probe"),
                     "resynchronizes_after_sequence": max(0, int(after_sequence)),
                 },
                 self._time(handle),

@@ -13,6 +13,7 @@ from app.models import Participant, PvtAssessment, Visit
 from app.simulation_persistence import InMemorySimulationPersistence
 from app.simulation_runtime import InvalidLease, SimulationConflict, SimulationManager
 from app.simulation_schemas import CommandRequest, CreateSimulationSession
+from matb_integration.suas.research.protocol import ActiveProbe
 from tests.study_fixtures import mission_request
 
 
@@ -63,6 +64,36 @@ async def test_prepare_start_tick_snapshot_and_lease(manager, runtime_db):
     first = await manager.snapshot_once()
     second = await manager.snapshot_once()
     assert first["state_version"] == second["state_version"]
+    await manager.shutdown()
+
+
+@pytest.mark.anyio
+async def test_stream_snapshot_includes_active_probe(manager, runtime_db):
+    with Session(runtime_db) as db:
+        prepared = await manager.prepare(request(runtime_db), db)
+    await manager.start(prepared.id, "PRACTICE", prepared.controller_lease)
+    probe = {
+        "kind": "SAGAT",
+        "probe_id": "sagat-1",
+        "sa_level": 1,
+        "domain": "perception",
+        "question": "Which aircraft has the lowest battery?",
+        "options": ["UAS-01"],
+        "timeout_ms": 15_000,
+        "conceal_operational_state": True,
+    }
+    handle = manager.active
+    assert handle is not None and handle.protocol is not None
+    handle.protocol.active_probe = ActiveProbe(
+        kind="SAGAT",
+        probe_id="sagat-1",
+        public_payload=probe,
+        timeout_ms=15_000,
+    )
+
+    envelope = await manager.snapshot_envelope(prepared.id)
+
+    assert envelope.payload["active_probe"] == probe
     await manager.shutdown()
 
 
