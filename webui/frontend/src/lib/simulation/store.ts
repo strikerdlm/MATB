@@ -90,6 +90,7 @@ function snapshotPayload(envelope: StreamEnvelope): WorldSnapshot | null {
   const raw = { ...envelope.payload };
   delete raw.resynchronizes_after_sequence;
   delete raw.authoritative_event_sequence;
+  delete raw.active_probe;
   // A malformed snapshot is rejected by state application rather than
   // allowing partial payloads to overwrite authoritative data.
   if (!isRecord(raw.aircraft) || typeof raw.state_version !== "number") return null;
@@ -275,6 +276,7 @@ export function createSimulationStore() {
       const isSnapshot = envelope.kind === "snapshot";
       const isResync = resynchronizesAfter(envelope) !== undefined;
       const hasInitialSnapshot = isSnapshot && current.snapshot === null;
+      const snapshotData = isSnapshot && isRecord(envelope.payload) ? envelope.payload : null;
       const expected = current.lastSequence + 1;
       if (!hasInitialSnapshot && !isResync && envelope.sequence > expected) {
         set({ connection: "reconnecting" });
@@ -307,7 +309,16 @@ export function createSimulationStore() {
             // A prepared session has no engine world yet. Preserve the
             // transport boundary so the first block lifecycle envelope is
             // contiguous; do not invent an empty authoritative fleet.
-            set({ lastSequence: envelope.sequence, transportError: null });
+            const activeProbe = snapshotData && Object.prototype.hasOwnProperty.call(snapshotData, "active_probe")
+              ? snapshotData.active_probe as ActiveProbePayload | null
+              : undefined;
+            set({
+              lastSequence: envelope.sequence,
+              transportError: null,
+              ...(activeProbe !== undefined
+                ? { activeProbe, concealOperationalState: activeProbe?.kind === "SAGAT" }
+                : {}),
+            });
             return;
           }
           set({ transportError: "invalid simulation snapshot payload" });
@@ -319,6 +330,10 @@ export function createSimulationStore() {
           set({ lastSequence: envelope.sequence });
         } else {
           replaceState(snapshot, envelope.sequence);
+        }
+        if (snapshotData && Object.prototype.hasOwnProperty.call(snapshotData, "active_probe")) {
+          const activeProbe = snapshotData.active_probe as ActiveProbePayload | null;
+          set({ activeProbe, concealOperationalState: activeProbe?.kind === "SAGAT" });
         }
         const snapshotLifecycle = isRecord(envelope.payload) ? lifecycleValue(envelope.payload.lifecycle) : null;
         if (snapshotLifecycle && get().session) {
@@ -385,6 +400,8 @@ export function createSimulationStore() {
           snapshot: input.snapshot ? cloneSnapshot(input.snapshot) : null,
           locale: input.locale ?? input.session.locale,
           connection: input.session.lifecycle === "PAUSED" ? "paused" : "disconnected",
+          activeProbe: input.session.active_probe ?? null,
+          concealOperationalState: input.session.active_probe?.kind === "SAGAT",
         });
       }) as SimulationStoreState["initialize"],
       applyEnvelope: apply,

@@ -34,6 +34,16 @@ const session: SessionView = {
   interrupted_at: null,
 };
 
+const sagatProbe = {
+  kind: "SAGAT" as const,
+  probe_id: "sagat-1",
+  sa_level: 1 as const,
+  domain: "perception",
+  question: "Which aircraft has the lowest battery?",
+  options: ["UAS-01"],
+  timeout_ms: 15_000,
+};
+
 function snapshot(stateVersion: number, x_mm = 0, y_mm = 0, blockId = "PRACTICE"): WorldSnapshot {
   return {
     scenario_id: "reference_area_search",
@@ -121,6 +131,25 @@ describe("simulation store", () => {
     await store.getState().applyEnvelope(envelope(1, "snapshot", snapshot(0, 0, 0, "LOW") as unknown as Record<string, JsonValue>));
     expect(store.getState().snapshot?.block_id).toBe("LOW");
     expect(store.getState().snapshot?.state_version).toBe(0);
+  });
+
+  it("restores an active probe from an authoritative stream snapshot", async () => {
+    const store = createSimulationStore();
+    store.getState().initialize(session);
+    await store.getState().applyEnvelope(envelope(1, "snapshot", {
+      ...(snapshot(1) as unknown as Record<string, JsonValue>),
+      active_probe: sagatProbe,
+      resynchronizes_after_sequence: 0,
+    }));
+    expect(store.getState().activeProbe).toEqual(sagatProbe);
+    expect(store.getState().concealOperationalState).toBe(true);
+  });
+
+  it("initializes an in-progress session with its active probe", () => {
+    const store = createSimulationStore();
+    store.getState().initialize({ ...session, active_probe: sagatProbe });
+    expect(store.getState().activeProbe).toEqual(sagatProbe);
+    expect(store.getState().concealOperationalState).toBe(true);
   });
 
   it("accepts a jump only for a marked resynchronizing snapshot", async () => {
