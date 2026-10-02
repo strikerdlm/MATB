@@ -16,7 +16,9 @@ for(const probe of [false,true]) test(`swarm v3 ${probe?"SAGAT concealment":"gro
     await page.getByRole("button",{name:/start block/i}).click();
     if(probe){
       const {visibleProbe,resolveVisibleProbe}=await import("./fixtures");
-      await expect.poll(()=>visibleProbe(page)).toBe("SAGAT");
+      // Software-rendered Windows runners can reach the probe after the default
+      // 20s wall-clock budget; keep the concealment assertions below unchanged.
+      await expect.poll(()=>visibleProbe(page),{timeout:60_000}).toBe("SAGAT");
       await expect(page.getByTestId("mission-three-view")).toHaveCount(0);
       await expect(page.getByRole("figure",{name:"North-up swarm overview"})).toHaveCount(0);
       await expect(page.getByRole("region",{name:"Swarm control"})).toHaveCount(0);
