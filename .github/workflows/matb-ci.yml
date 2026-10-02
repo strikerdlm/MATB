@@ -165,6 +165,13 @@ jobs:
           MATB_SOURCE_COMMIT: ${{ github.sha }}
           MATB_SOURCE_DIRTY: "false"
         run: npm run test:e2e:core -- --fail-on-flaky-tests --output=test-results/core
+      - name: OpenMATB appearance browser verification
+        working-directory: MATB relocation ñ/webui/frontend
+        env:
+          MATB_PYTHON: python
+          MATB_SOURCE_COMMIT: ${{ github.sha }}
+          MATB_SOURCE_DIRTY: "false"
+        run: npm run test:e2e:appearance -- --fail-on-flaky-tests --output=test-results/appearance
       - name: Colombia geography and sUAS browser verification
         working-directory: MATB relocation ñ/webui/frontend
         env:
