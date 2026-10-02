@@ -8,6 +8,7 @@ import { Check, Monitor } from "lucide-react";
 import { ExecutionPurposeBadge } from "@/components/experiments/ExperimentGuide";
 import { AssignedWorkloadQuestionnaire } from "@/components/openmatb/AssignedWorkloadQuestionnaire";
 import { WorkloadQuestionnaire } from "@/components/openmatb/WorkloadQuestionnaire";
+import { OpenMatbAudioBriefing } from "@/components/openmatb/OpenMatbAudioBriefing";
 import { Button } from "@/components/ui/button";
 import { useReportExperimentFlow } from "@/lib/experiment-flow";
 import { withExecutionPurpose } from "@/lib/execution-purpose";
@@ -30,6 +31,7 @@ function ParticipantContent() {
   const id = params.get("session");
   const [token, setToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [briefingPlaying, setBriefingPlaying] = useState(false);
   const starting = useRef(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [draftClearFailureSessionId, setDraftClearFailureSessionId] = useState<string | null>(null);
@@ -73,7 +75,7 @@ function ParticipantContent() {
 
 
   async function startWhenReady() {
-    if (!id || !token || !session || starting.current) return;
+    if (!id || !token || !session || starting.current || briefingPlaying) return;
     starting.current = true;
     setBusy(true);
     setActionError(null);
@@ -104,7 +106,7 @@ function ParticipantContent() {
   }
 
   const Ratings = session.study_assignment_id ? AssignedWorkloadQuestionnaire : WorkloadQuestionnaire;
-  const startBlocked = !token || busy || session.evidence_processing || session.native_recovery_required;
+  const startBlocked = !token || busy || briefingPlaying || session.evidence_processing || session.native_recovery_required;
   const savedBlock = Object.values(session.scores).find(score => typeof score.block_instance_id === "string")?.block_instance_id;
   const title = session.lifecycle === "INSTRUCTIONS"
     ? session.instruction_protocol.title
@@ -125,6 +127,10 @@ function ParticipantContent() {
       {session.evidence_processing && <p role="status">{copy("Guardando los datos anteriores. El inicio se habilitará al terminar.", "Saving previous data. Start will be available when saving finishes.")}</p>}
       {session.native_recovery_required && <p role="alert">{copy("Cierre la ventana nativa de la sesión anterior para poder iniciar.", "Close the previous native session window before starting.")}</p>}
       {draftClearFailureSessionId === session.id && <p role="alert" className="border border-warning/40 bg-warning/10 p-3 text-sm text-warning">{copy("Las respuestas se guardaron, pero no se pudo eliminar el borrador de esta pestaña.", "Ratings were saved, but the draft could not be removed from this tab.")}</p>}
+
+      {locale !== "en" && ["INSTRUCTIONS", "READY", "BETWEEN_BLOCKS"].includes(session.lifecycle) &&
+        <OpenMatbAudioBriefing key={session.id} onPlayingChange={setBriefingPlaying} />}
+      {briefingPlaying && <p role="status">Espere a que termine la explicación o pause el audio antes de iniciar la tarea.</p>}
 
       {session.lifecycle === "INSTRUCTIONS" && <section className="space-y-6">
         <div className="border border-info/40 bg-info/5 p-4">

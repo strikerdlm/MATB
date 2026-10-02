@@ -11,6 +11,7 @@ from pathlib import Path
 from time import perf_counter_ns
 from typing import Any
 
+from pyglet import app as pyglet_app
 from pyglet.app import EventLoop
 
 from core.clock import Clock
@@ -35,6 +36,7 @@ class Scheduler:
         self,
         scenario_path: Path | None = None,
         control_bridge: StdioControlBridge | None = None,
+        participant_briefing: bool = False,
     ) -> None:
         with open("VERSION", "r") as f:
             self.runtime_version = f.read().strip()
@@ -49,6 +51,8 @@ class Scheduler:
         # Create the event loop
         self.clock.schedule(self.update)
         self.event_loop: EventLoop = EventLoop()
+        # Win32 window callbacks address pyglet's global event loop.
+        pyglet_app.event_loop = self.event_loop
 
         self.joystick: Any = joystick
         self.set_scenario()
@@ -58,6 +62,8 @@ class Scheduler:
             self.preflight_snapshot = snapshot(self)
         if self.preflight_held:
             Window.MainWindow.set_visible(False)
+        else:
+            Window.MainWindow.activate()
         if self.control_bridge is not None:
             self.control_bridge.start()
             self.clock.schedule(self._poll_control_bridge)
@@ -73,7 +79,11 @@ class Scheduler:
                 visual_profile_sha256=VISUAL_THEME.sha256,
             )
 
-        Window.MainWindow.display_session_id()
+        if participant_briefing:
+            from core.briefing import ParticipantBriefing
+            Window.MainWindow.modal_dialog = ParticipantBriefing(Window.MainWindow)
+        else:
+            Window.MainWindow.display_session_id()
         self.event_loop.run()
 
     def _poll_control_bridge(self, _dt: float) -> None:
@@ -101,6 +111,7 @@ class Scheduler:
                 self.preflight_held = False
                 self.pause_scenario_time = False
                 Window.MainWindow.set_visible(True)
+                Window.MainWindow.activate()
                 self.control_bridge.emit("preflight_released", snapshot_sha256=self.preflight_snapshot['sha256'])
             elif command == "pause":
                 self._operator_pause()
@@ -219,6 +230,9 @@ class Scheduler:
 
     def update(self, dt: float) -> None:
         if getattr(self, "_exiting", False):
+            return
+        if Window.MainWindow is not None and Window.MainWindow.alive is False:
+            self.check_if_must_exit()
             return
         if getattr(self, "preflight_held", False):
             return
@@ -655,6 +669,7 @@ class Scheduler:
         if getattr(self, "_exiting", False):
             return
         self._exiting = True
+        Window.MainWindow.alive = False
         get_logger().log_manual_entry("end")
         get_logger().finalize_evidence(completion)
         if self.control_bridge is not None:

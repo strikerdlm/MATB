@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "asset_id": "openmatb-es",
+  "provider": "OpenAI",
+  "model": "gpt-4o-mini-tts-2025-12-15",
+  "voice": "marin",
+  "language": "es-CO",
+  "format": "wav",
+  "encoding": "PCM signed 16-bit",
+  "sample_rate_hz": 24000,
+  "channels": 1,
+  "duration_seconds": 180.85,
+  "runtime_network_required": false,
+  "generated_at_utc": "2026-10-02T07:52:04.319136+00:00",
+  "source_documentation": "https://developers.openai.com/api/docs/guides/text-to-speech",
+  "generation_tool": "speech/scripts/text_to_speech.py",
+  "container_processing": "WAV streaming header finalized with FFmpeg; no sample-rate conversion",
+  "files": {
+    "openmatb-es.wav": {
+      "sha256": "a892574d768763fa70ddcca5019b903063ea6a2f7981d7d38e72b67cbd16c1af",
+      "bytes": 8680878
+    },
+    "openmatb-es.txt": {
+      "sha256": "202fe11177118beab716c18f00aa6c5695634df42aa7db933ccc0892eb60ea98",
+      "bytes": 2913
+    },
+    "openmatb-es-directions.txt": {
+      "sha256": "5341975e772538f0476d88776691ecd8d84dd0386337684e540b6b823e20ee1e",
+      "bytes": 561
+    }
+  },
+  "signal_checks": {
+    "sample_peak": 0.62408447265625,
+    "rms_dbfs": -21.73,
+    "clipped_sample_fraction": 0
+  },
+  "transcription_qc": {
+    "model": "gpt-4o-transcribe",
+    "review": "All task/control paragraphs retained; acronym in title transcribed imperfectly. Not a human listening test."
+  },
+  "disclosure": "Voz generada por IA."
+}

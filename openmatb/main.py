@@ -23,6 +23,9 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--display-index", type=int, default=None)
     parser.add_argument("--windowed", action="store_true")
     parser.add_argument("--control-stdio", action="store_true")
+    parser.add_argument(
+        "--skip-briefing", action="store_true", help="Skip the standalone Spanish briefing for synthetic diagnostics"
+    )
     args, _unknown = parser.parse_known_args()
     if args.display_index is not None and args.display_index < 0:
         parser.error("--display-index must be non-negative")
@@ -112,6 +115,9 @@ class OpenMATB:
             Scheduler(
                 scenario_path=selected,
                 control_bridge=StdioControlBridge() if ARGS.control_stdio else None,
+                participant_briefing=(
+                    not ARGS.control_stdio and not ARGS.skip_briefing and configured_language.startswith("es")
+                ),
             )
         finally:
             _release_audio_driver()

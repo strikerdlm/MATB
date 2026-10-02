@@ -1,0 +1,19 @@
+Instrucciones para la prueba MATB FAC.
+
+Antes de comenzar, preste mucha atención a estas instrucciones y a todas las indicaciones que reciba durante la prueba. Escuche la explicación completa. Si algo no está claro, consulte al investigador antes de iniciar.
+
+En esta prueba atenderá varias tareas al mismo tiempo. Distribuya su atención entre seguimiento, comunicaciones, vigilancia de sistemas y gestión de recursos. Complete primero la práctica y compruebe los controles configurados para su sesión.
+
+En seguimiento, mantenga el cursor dentro del objetivo con el joystick indicado. En vigilancia de sistemas, detecte las luces y las escalas que presenten una falla y responda con la tecla indicada en cada elemento. La configuración habitual utiliza las teclas de función F uno a F seis. En algunos portátiles debe activar el bloqueo de funciones o utilizar la tecla función.
+
+En gestión de recursos, controle las bombas para mantener los niveles de los depósitos cerca de sus objetivos. Use las teclas indicadas en las bombas. La configuración habitual utiliza los números del uno al ocho del teclado numérico. Compruebe que el bloqueo numérico esté activado; los números de la fila superior no sustituyen automáticamente al teclado numérico.
+
+En comunicaciones, identifique primero su indicativo en la pantalla. Escuche cada mensaje completo. Atienda únicamente las llamadas dirigidas a su indicativo. Las llamadas dirigidas a otros indicativos no requieren respuesta. El mensaje le indicará una radio de navegación o de comunicación y una frecuencia.
+
+Con los controles habituales, las flechas arriba y abajo seleccionan la radio. Las flechas izquierda y derecha ajustan la frecuencia. Verifique la radio y la frecuencia solicitadas. Cuando termine el mensaje, confirme con Enter. Puede usar también Enter del teclado numérico. Si su sesión muestra una asignación diferente de controles, siga la configuración indicada por el investigador.
+
+Compruebe durante la práctica que escucha claramente las llamadas de navegación y de comunicación en los audífonos o altavoces seleccionados. Escuchar esta explicación no confirma por sí solo que el audio de la ventana de la prueba esté funcionando. Si no escucha las llamadas, si una tecla no responde o si pierde el control del cursor, avise al investigador antes de continuar. No adivine una frecuencia que no haya escuchado.
+
+Cuando se abra la ventana de la prueba, manténgala activa. Puede hacer clic dentro de ella para recuperar el control del teclado. Si necesita una pausa, pulse la letra P y avise al investigador. Espere su indicación antes de reanudar con la barra espaciadora.
+
+Responda las preguntas de carga de trabajo cuando aparezcan. Manténgase muy atento a las instrucciones durante todo el bloque. Cuando haya comprendido las indicaciones y comprobado los controles, indique que está listo para iniciar.

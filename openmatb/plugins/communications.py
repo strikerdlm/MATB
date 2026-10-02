@@ -11,7 +11,7 @@ from string import ascii_lowercase, ascii_uppercase, digits
 from time import perf_counter_ns
 from typing import Any, Callable
 
-from pyglet.media import Player, SourceGroup, load
+from pyglet.media import Player, SourceGroup, get_audio_driver, load
 
 from core import validation
 from core.constants import PATHS as P
@@ -142,10 +142,9 @@ class Communications(AbstractPlugin):
             return
 
         if not new_path.exists():
-            self.logger.log_manual_entry(
-                _("Warning: sound path %s does not exist. Check voiceidiom/voicegender combination.") % new_path
-            )
-            return
+            # Do not keep the previous language bank after an invalid selection.
+            self.sound_path = None
+            raise RuntimeError(f"COMM voice bank unavailable: {new_path}. Check voiceidiom/voicegender.")
 
         self.sound_path = new_path
         self.samples_path: list[Path] = [
@@ -155,9 +154,10 @@ class Communications(AbstractPlugin):
             + ["radio", "point", "frequency", "empty"]
         ]
 
-        for sample_needed in self.samples_path:
-            if not sample_needed.exists():
-                self.logger.log_manual_entry(f"{sample_needed}" + _(" does not exist"))
+        missing = [sample for sample in self.samples_path if not sample.is_file()]
+        if missing:
+            self.sound_path = None
+            raise RuntimeError(f"COMM audio samples unavailable: {', '.join(str(p) for p in missing[:3])}")
 
     def regenerate_callsigns(self) -> None:
         self.parameters["owncallsign"] = self.get_callsign()
@@ -494,6 +494,9 @@ class Communications(AbstractPlugin):
             random_frequency = self.get_rand_frequency(radio_n)
 
         try:
+            driver = get_audio_driver()
+            if driver is None or type(driver).__name__ == "SilentDriver":
+                raise RuntimeError("No audible output device is available (silent audio backend)")
             sound_group: Any = self.group_audio_files(callsign, radio_name, random_frequency)
             prompt_duration_s = float(getattr(self, "_last_prompt_duration_s"))
             if (
@@ -509,7 +512,12 @@ class Communications(AbstractPlugin):
         except Exception as exc:  # noqa: BLE001 - evidence must survive media backend failures
             self.logger.log_manual_entry(f"Audio prompt playback failed: {type(exc).__name__}: {exc}")
             self._invalidate_opportunity(opportunity, "presentation_failed")
-            return False
+            # Continuing would score unheard calls as participant omissions.
+            # The scheduler records the failure and stops the session.
+            raise RuntimeError(
+                "COMM audio unavailable. Check the Windows output device, application volume "
+                "and headphones before starting a new practice block."
+            ) from exc
 
         if destination == "own":
             radio["targetfreq"] = random_frequency
@@ -530,6 +538,7 @@ class Communications(AbstractPlugin):
             "presentation_started",
             radio_name=radio_name,
             software_play_invoked=True,
+            audio_driver=type(driver).__name__,
             physical_onset_measured=False,
             expected_duration_s=prompt_duration_s,
             started_scenario_time_s=presentation_start_s,
@@ -911,6 +920,8 @@ class Communications(AbstractPlugin):
 
     def do_on_key(self, key: str, state: str, emulate: bool) -> None:
         """Check for radio change and frequency validation"""
+        if key == "NUM_ENTER" and self.parameters["keys"]["validateresponse"] == "ENTER":
+            key = "ENTER"
         key = super().do_on_key(key, state, emulate)
         if key is None:
             return

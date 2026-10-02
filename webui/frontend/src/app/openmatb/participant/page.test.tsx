@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -146,6 +146,35 @@ describe("OpenMATB participant page", () => {
     renderPage();
     expect(await screen.findByRole("button", { name: "I am ready: start" })).toBeDisabled();
     expect(mockStart).not.toHaveBeenCalled();
+  });
+
+  it.each(["INSTRUCTIONS", "READY", "BETWEEN_BLOCKS"] as const)("offers Spanish instructions before %s and prevents overlapping playback", async lifecycle => {
+    mockGetSession.mockResolvedValue(makeSession(lifecycle, "PRACTICE", { locale: "es-419" }));
+    const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+    const view = renderPage();
+    const audio = await screen.findByLabelText("Instrucciones MATB en español");
+    expect(audio).toHaveAttribute("src", "/audio/instructions/openmatb-es.wav");
+    const start = screen.getByRole("button", { name: /Estoy listo: iniciar/ });
+    fireEvent.play(audio);
+    expect(start).toBeDisabled();
+    expect(mockStart).not.toHaveBeenCalled();
+    fireEvent.ended(audio);
+    expect(start).toBeEnabled();
+    view.unmount();
+    expect(pause).toHaveBeenCalled();
+    pause.mockRestore();
+  });
+
+  it("provides a readable fallback when the Spanish audio is unavailable", async () => {
+    mockGetSession.mockResolvedValue(makeSession("INSTRUCTIONS", "PRACTICE", { locale: "es-419" }));
+    const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+    const view = renderPage();
+    const audio = await screen.findByLabelText("Instrucciones MATB en español");
+    fireEvent.error(audio);
+    expect(screen.getByRole("alert")).toHaveTextContent("No se pudo reproducir la explicación");
+    expect(screen.getByRole("link", { name: "Leer la transcripción completa" })).toBeInTheDocument();
+    view.unmount();
+    pause.mockRestore();
   });
 
   it.each([

@@ -1,0 +1,40 @@
+{
+  "passed": true,
+  "language": "en_EN",
+  "synthetic": true,
+  "physical_speaker_or_key_actuation_measured": false,
+  "checks": {
+    "radio_selection": true,
+    "pump_numeric_keyboard": true,
+    "focus_loss_clears_held_key": true,
+    "pause_clears_held_key": true,
+    "pause_can_resume": true,
+    "sysmon_function_key": true,
+    "held_arrow_tunes_frequency": true,
+    "keypad_enter_confirms": true
+  },
+  "audio": [
+    {
+      "destination": "own",
+      "audio_driver": "XAudio2Driver",
+      "playing": true,
+      "duration_s": 17.77884353741497,
+      "voice_path": "openmatb/includes/sounds/english/male",
+      "radio": "COM_1"
+    },
+    {
+      "destination": "other",
+      "audio_driver": "XAudio2Driver",
+      "playing": true,
+      "duration_s": 18.37183673469388,
+      "voice_path": "openmatb/includes/sounds/english/male",
+      "radio": "NAV_1"
+    }
+  ],
+  "outcomes": [
+    "HIT",
+    "CR"
+  ],
+  "invalidations": [],
+  "error": null
+}

@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "language": "es_CO",
+  "synthetic": true,
+  "physical_speaker_or_key_actuation_measured": false,
+  "checks": {
+    "briefing_visible_before_task": true,
+    "narration_playing": true,
+    "cannot_start_over_narration": true,
+    "exit_stops_narration": true
+  },
+  "audio": [],
+  "outcomes": [],
+  "invalidations": [],
+  "error": null
+}
