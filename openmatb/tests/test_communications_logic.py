@@ -276,9 +276,8 @@ def test_audio_failure_invalidates_opportunity_before_target_assignment():
     communications.get_rand_frequency = MagicMock(return_value=115.5)
     communications.group_audio_files = MagicMock(side_effect=RuntimeError("bad wav"))
 
-    presented = communications.prompt_for_a_new_target("own", "NAV_1", opportunity)
-
-    assert presented is False
+    with pytest.raises(RuntimeError, match="COMM audio unavailable"):
+        communications.prompt_for_a_new_target("own", "NAV_1", opportunity)
     assert communications.parameters["radios"][0]["targetfreq"] is None
     assert communications._active_comm_opportunity is None
     payloads = [json.loads(call.args[1]) for call in communications.log_performance.call_args_list]
@@ -314,6 +313,27 @@ def test_audio_completion_excludes_synchronous_preparation_time():
     assert payloads[1]["preparation_duration_s"] == 0.25
     assert payloads[1]["physical_onset_measured"] is False
     assert payloads[2]["opening_lateness_ms"] == 20
+
+
+@pytest.mark.parametrize("driver", [None, type("SilentDriver", (), {})()])
+def test_inaudible_driver_stops_before_playback_or_scoring(driver):
+    comm = _make_comms_with_radios()
+    comm.parameters.update({"owncallsign": "FAC123", "airbandminvariationMhz": 5,
+                            "airbandmaxvariationMhz": 6, "radioprompt": "own"})
+    comm.get_rand_frequency = MagicMock(return_value=115.5)
+    comm.group_audio_files = MagicMock()
+    comm.log_performance = MagicMock()
+    opportunity = comm._new_opportunity("own")
+    comm._active_comm_opportunity = opportunity
+    with patch("plugins.communications.get_audio_driver", return_value=driver), pytest.raises(
+        RuntimeError, match="COMM audio unavailable"
+    ):
+        comm.prompt_for_a_new_target("own", "NAV_1", opportunity)
+    comm.group_audio_files.assert_not_called()
+    assert comm._active_comm_opportunity is None
+    assert comm.parameters["radios"][0]["targetfreq"] is None
+    phases = [json.loads(call.args[1])["phase"] for call in comm.log_performance.call_args_list]
+    assert phases == ["opened", "invalidated"]
 
 
 def test_own_prompt_with_live_widgets_records_serializable_radio_selection(tmp_path, monkeypatch):
@@ -724,20 +744,25 @@ class TestVoiceSwitching:
         assert c.sound_path == fake_path
         assert not hasattr(c, "samples_path")
 
-    def test_set_sample_sounds_skips_invalid_path(self, tmp_path):
-        """set_sample_sounds() warns and bails for non-existent idiom/gender combo."""
+    def test_set_sample_sounds_rejects_invalid_path_without_previous_language_fallback(self, tmp_path):
         c = _make_comms_for_voice()
+        c.sound_path = tmp_path / "spanish" / "female"
         nonexistent = tmp_path / "english" / "female"  # Does not exist
 
-        with patch.object(Communications, "get_sounds_path", return_value=nonexistent):
+        with patch.object(Communications, "get_sounds_path", return_value=nonexistent), pytest.raises(
+            RuntimeError, match="COMM voice bank unavailable"
+        ):
             c.set_sample_sounds()
 
-        # sound_path should NOT be updated
         assert c.sound_path is None
-        c.logger.log_manual_entry.assert_called_once()
-        logged_msg = c.logger.log_manual_entry.call_args[0][0]
-        assert "Warning" in logged_msg
-        assert "does not exist" in logged_msg
+
+    def test_incomplete_voice_bank_is_rejected_before_any_prompt(self, tmp_path):
+        c = _make_comms_for_voice()
+        with patch.object(Communications, "get_sounds_path", return_value=tmp_path), pytest.raises(
+            RuntimeError, match="COMM audio samples unavailable"
+        ):
+            c.set_sample_sounds()
+        assert c.sound_path is None
 
     def test_prompt_sound_ids_prefer_contextual_radio_fragment(self, tmp_path):
         c = _make_comms_for_voice()

@@ -30,6 +30,18 @@ def test_exiting_scheduler_never_advances_another_frame():
     scheduler.update_timers.assert_not_called()
 
 
+def test_cancelling_briefing_never_starts_due_tasks():
+    scheduler = object.__new__(Scheduler)
+    scheduler.check_if_must_exit = MagicMock()
+    scheduler.update_timers = MagicMock()
+    scheduler.execute_events = MagicMock()
+    with patch("core.scheduler.Window.MainWindow", MagicMock(alive=False)):
+        scheduler.update(0.1)
+    scheduler.check_if_must_exit.assert_called_once()
+    scheduler.update_timers.assert_not_called()
+    scheduler.execute_events.assert_not_called()
+
+
 def test_completed_scenario_does_not_also_finalize_as_window_closed():
     scheduler = object.__new__(Scheduler)
     scheduler.events = []

@@ -178,6 +178,9 @@ class Window(Window):
             get_logger().record_input("keyboard", keystr, "press")
 
     def on_key_release(self, symbol: int, modifiers: int) -> None:
+        if not REPLAY_MODE:
+            keystr: str = winkey.symbol_string(symbol)
+            self.keyboard[keystr] = False
         if self.modal_dialog is not None:
             self.modal_dialog.on_key_release(symbol, modifiers)
             return
@@ -185,14 +188,32 @@ class Window(Window):
         if REPLAY_MODE:
             return
 
-        keystr: str = winkey.symbol_string(symbol)
-        self.keyboard[keystr] = False  # KeyStateHandler
         get_logger().record_input("keyboard", keystr, "release")
 
+    def clear_held_keys(self, reason: str = "focus_lost") -> None:
+        # A release may be delivered to another window or swallowed by a modal.
+        keyboard = getattr(self, "keyboard", {})
+        can_log = not REPLAY_MODE and getattr(self, "alive", False)
+        held = [keystr for keystr, pressed in keyboard.items() if pressed]
+        if held and can_log:
+            get_logger().log_manual_entry(
+                f"Software key-state reset ({reason}): {', '.join(held)}", key="keyboard_state_reset"
+            )
+        for keystr, pressed in list(keyboard.items()):
+            if pressed:
+                keyboard[keystr] = False
+                if can_log:
+                    get_logger().record_input("keyboard", keystr, "release")
+
+    def on_deactivate(self) -> None:
+        self.clear_held_keys("focus_lost")
+
     def exit_prompt(self) -> None:
+        self.clear_held_keys("exit_dialog")
         self.modal_dialog = ModalDialog(self, _("You hit the Escape key"), title=_("Exit OpenMATB?"), exit_key="q")
 
     def pause_prompt(self) -> None:
+        self.clear_held_keys("pause_dialog")
         self.modal_dialog = ModalDialog(self, _("Pause"))
 
     def exit(self) -> None:

@@ -11,3 +11,6 @@ webui/frontend/public/geography/** -text
 
 # Retained measurement hashes cover the exact artifact bytes.
 docs/reports/evidence-performance-2026-09-09/*.json -text
+
+# Instruction transcripts are hashed in the distributed audio manifest.
+webui/frontend/public/audio/instructions/openmatb-es*.txt text eol=lf
