@@ -154,11 +154,12 @@ ENGLISH_INSTRUCTIONS = {
     "visit_instructions": {"DEFAULT": "Complete practice first. Study blocks follow the order assigned by the application."},
 }
 
-DEFAULT_VISUAL_PROFILE = ("matb-fac-modern", "1.0.0")
+DEFAULT_VISUAL_PROFILE = ("matb-daylight-avionics", "1.0.0")
 LEGACY_THEME_PROFILE = {
     "classic": ("classic", "1.0.0"),
     "cockpit": ("cockpit", "1.0.0"),
-    "fac_modern": DEFAULT_VISUAL_PROFILE,
+    "fac_modern": ("matb-fac-modern", "1.0.0"),
+    "daylight_avionics": DEFAULT_VISUAL_PROFILE,
 }
 BUNDLED_VISUAL_PROFILE_IDENTITIES = frozenset(LEGACY_THEME_PROFILE.values())
 
@@ -297,7 +298,7 @@ class OpenMatbManager:
                     protocol_id="matb-fac-es-419", version="1.0.0", locale="es-419", status="published",
                     content_json=_canonical(DEFAULT_INSTRUCTIONS), sha256=_sha(DEFAULT_INSTRUCTIONS), published_at=_utcnow(),
                 ))
-            for bundled_name in ("classic", "cockpit", "fac_modern"):
+            for bundled_name in LEGACY_THEME_PROFILE:
                 payload = load_visual_profile(self.openmatb_root / "themes" / f"{bundled_name}.json")
                 existing = db.exec(
                     select(OpenMatbVisualProfile).where(

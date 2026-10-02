@@ -86,6 +86,18 @@ describe("AppearanceWorkbench", () => {
     expect(screen.getByText(/Participant CVD/).closest("div")).toHaveTextContent("Not enabled");
   });
 
+  it("prefers the approved daylight profile when both bundled profiles are available", async () => {
+    const daylight = makeProfile();
+    daylight.profile_id = "matb-daylight-avionics";
+    daylight.payload.profile_id = daylight.profile_id;
+    daylight.label = "MATB — Daylight Avionics";
+    daylight.payload.palette.app_background = "#EFF3F7";
+    mocks.list.mockResolvedValue([makeProfile(), daylight]);
+    render(<AppearanceWorkbench />);
+    await screen.findByRole("heading", { name: "MATB - FAC" });
+    await waitFor(() => expect(screen.getByLabelText("Application")).toHaveValue("#EFF3F7"));
+  });
+
   it("clones before editing and saves the resulting draft", async () => {
     const user = userEvent.setup();
     const cloned = makeProfile("draft");

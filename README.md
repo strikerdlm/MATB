@@ -245,12 +245,14 @@ setting in `openmatb/config.ini`:
 ```ini
 [Openmatb]
 language=es_CO
-visual_theme=fac_modern
+visual_theme=daylight_avionics
 ```
 
-OpenMATB includes three bundled presentation conditions: `classic` preserves
+OpenMATB includes four bundled presentation conditions: `classic` preserves
 the historical light interface, `cockpit` applies a generic dark glass-cockpit
-theme, and the default `fac_modern` applies the light MATB-FAC presentation.
+theme, `fac_modern` retains the light MATB-FAC presentation, and the default
+`daylight_avionics` applies the approved daylight instrument framing. All four
+profiles remain selectable; frozen sessions retain their original appearance.
 Researchers can clone, edit, validate, preview, publish, import, and export
 strict profiles at **Settings → Appearance** (`/openmatb/appearance`). Only a
 published profile can be selected for a controlled session. Its ID, semantic

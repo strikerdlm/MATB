@@ -1,0 +1,91 @@
+{
+  "schema_version": "openmatb-visual-profile-v1",
+  "profile_id": "matb-daylight-avionics",
+  "version": "1.0.0",
+  "label": "MATB — Daylight Avionics",
+  "geometry_policy": "preserve_openmatb_v1",
+  "palette": {
+    "accent": "#1E63D6",
+    "app_background": "#EFF3F7",
+    "border": "#61758A",
+    "control_background": "#1E63D6",
+    "control_foreground": "#FFFFFF",
+    "critical": "#D92D20",
+    "disabled": "#D9E1EB",
+    "grid": "#D9E1EB",
+    "instrument_background": "#FFFFFF",
+    "muted_text": "#667085",
+    "panel_background": "#F8FAFC",
+    "panel_header": "#61758A",
+    "panel_header_text": "#FFFFFF",
+    "safe": "#27C840",
+    "text": "#222222",
+    "warning": "#C58A00"
+  },
+  "metrics": {
+    "line_width": 2.0,
+    "panel_radius": 2.0,
+    "corner_mark_ratio": 0.0
+  },
+  "modules": {
+    "tracking": {
+      "axis": "#286EF3",
+      "closed_target_border": true,
+      "cursor": "#165CD6",
+      "cursor_outside": "#D92D20",
+      "grid": "#D9E1EB",
+      "panel": "#FFFFFF",
+      "show_grid": true,
+      "show_panel": true,
+      "target": "#286EF3",
+      "target_fill": "#FFFFFF"
+    },
+    "system_monitoring": {
+      "feedback_negative": "#D92D20",
+      "feedback_positive": "#27C840",
+      "lamp_1": "#FFD60A",
+      "lamp_2": "#FFD60A",
+      "lamp_3": "#FFD60A",
+      "lamp_4": "#FFD60A",
+      "lamp_border": "#61758A",
+      "lamp_off": "#E6F0FF",
+      "lamp_shape": "circle",
+      "panel": "#FFFFFF",
+      "pointer": "#165CD6",
+      "scale": "#61758A"
+    },
+    "communications": {
+      "active": "#1E63D6",
+      "display_background": "#FFFFFF",
+      "display_border": "#61758A",
+      "inactive": "#8A9CB0",
+      "negative": "#D92D20",
+      "panel": "#F8FAFC",
+      "positive": "#27C840",
+      "show_display_bezel": true
+    },
+    "resource_management": {
+      "fluid": "#1683E8",
+      "meter": "#165CD6",
+      "panel": "#F8FAFC",
+      "pipe_off": "#8B92A0",
+      "pipe_on": "#27C840",
+      "pump_failure": "#D92D20",
+      "pump_off": "#D9E1EB",
+      "pump_on": "#27C840",
+      "show_pump_ring": true,
+      "tank_1": "#FFFFFF",
+      "tank_2": "#FFFFFF",
+      "tank_3": "#FFFFFF",
+      "tank_4": "#FFFFFF",
+      "tank_5": "#FFFFFF",
+      "tank_6": "#FFFFFF",
+      "tolerance": "#C58A00"
+    },
+    "workload": {
+      "marker": "#1E63D6",
+      "panel": "#F8FAFC",
+      "scale": "#8A9CB0"
+    }
+  }
+}

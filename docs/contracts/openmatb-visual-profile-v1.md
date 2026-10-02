@@ -15,6 +15,7 @@ The authoritative validator is
 and unknown fields are rejected, colors use only `#RRGGBB`, numbers must be
 finite and bounded, and the only geometry policy is
 `preserve_openmatb_v1`. The bundled
+[`daylight_avionics`](../../openmatb/themes/daylight_avionics.json),
 [`fac_modern`](../../openmatb/themes/fac_modern.json),
 [`classic`](../../openmatb/themes/classic.json), and
 [`cockpit`](../../openmatb/themes/cockpit.json) documents are complete examples.
@@ -81,7 +82,7 @@ El validador autoritativo está en
 `matb_integration/openmatb_visual_profiles.py`. Todos los objetos son cerrados:
 se rechazan campos faltantes o desconocidos, los colores usan únicamente
 `#RRGGBB`, los números deben ser finitos y acotados y la única política de
-geometría es `preserve_openmatb_v1`. Los tres JSON distribuidos enlazados en la
+geometría es `preserve_openmatb_v1`. Los cuatro JSON distribuidos enlazados en la
 sección inglesa son ejemplos completos.
 
 ## Identidad, ciclo de vida e integridad
@@ -113,3 +114,33 @@ La invariancia del software y la coincidencia de hashes no demuestran
 equivalencia perceptual, psicométrica, de carga, clínica, aeromédica u
 operacional. Cada apariencia debe tratarse como condición experimental hasta
 demostrar equivalencia mediante un protocolo prerregistrado.
+
+
+## Approved Daylight Avionics default / Predeterminado aprobado
+
+`matb-daylight-avionics@1.0.0` is the default for new standalone and unbound
+console launches. Classic, Cockpit and FAC Modern remain selectable; existing
+sessions and study bindings retain their frozen profile identity. Select it
+explicitly using `--visual-theme daylight_avionics`, or select a versioned JSON
+with `--theme-file`. No existing published profile payload is overwritten.
+
+The approved appearance uses light panel surfaces, slate headers, stronger
+neutral instrument/radio borders and existing pump rings. It preserves TRACK
+geometry, all eleven SYSMON scale positions, state colors, controls, events,
+timing, difficulty and scoring. COMM uses two aligned labels separated by
+24 pixels so radio identifiers are distinct from frequency values.
+
+Actual lamp-label contrast is 11.27:1 on and 13.84:1 off; pump-number contrast
+is 7.14:1 on, 12.06:1 off, and 3.29:1 failed. These pairs match FAC Modern. The
+failed-pump label remains below a 4.5:1 small-text target; v1 cannot select a
+per-state pump text color. Existing stimulus-separation warnings remain.
+Software invariance does not establish perceptual or psychometric equivalence;
+record the new profile identity/hash and qualify it as an experimental condition.
+
+El perfil aprobado es el predeterminado para nuevos lanzamientos independientes
+y sesiones sin perfil asignado. Los perfiles anteriores siguen disponibles;
+las sesiones y asignaciones del estudio conservan su identidad visual congelada.
+El espacio COMM de 24 píxeles separa el identificador completo de la frecuencia.
+El contraste de números sobre bombas en falla sigue siendo 3,29:1, heredado de
+FAC Modern; no se modificaron colores de señal ni la puntuación. La invariancia
+de software no demuestra equivalencia perceptual ni psicométrica.

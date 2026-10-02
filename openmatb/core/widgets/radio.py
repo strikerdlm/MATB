@@ -34,14 +34,26 @@ class Radio(AbstractWidget):
             self.add_line_loop("display_bezel", G(self.m_draw + 1), display_vertices, border * 4)
             self.add_corner_marks()
 
-        # Radio label #
+        # Keep the complete radio identifier separate from the frequency.
+        self.vertex["radio_identifier"] = Label(
+            self.label.replace("_", " "),
+            font_size=F["SMALL"],
+            x=self.container.cx - 12,
+            y=self.container.cy,
+            font_name=self.font_name,
+            anchor_x="right",
+            anchor_y="center",
+            color=VISUAL_THEME.palette["text"],
+            batch=Window.MainWindow.batch,
+            group=G(self.m_draw + 1),
+        )
         self.vertex["radio_frequency"] = Label(
             self.get_frequency_string(frequency),
             font_size=F["SMALL"],
-            x=self.container.cx,
+            x=self.container.cx + 12,
             y=self.container.cy,
             font_name=self.font_name,
-            anchor_x="center",
+            anchor_x="left",
             anchor_y="center",
             color=VISUAL_THEME.palette["text"],
             batch=Window.MainWindow.batch,
@@ -67,7 +79,7 @@ class Radio(AbstractWidget):
             self.show_arrows()
 
     def get_frequency_string(self, frequency: float) -> str:
-        return f"{self.label.replace('_', ' ')}\t\t\t\t\t\t\t{round(frequency, 1)}"
+        return str(round(frequency, 1))
 
     def get_position(self) -> Any:
         return self.pos

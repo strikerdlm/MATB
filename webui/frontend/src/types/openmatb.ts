@@ -1,5 +1,5 @@
 export type OpenMatbProfile = "PRACTICE" | "LOW" | "MEDIUM" | "HIGH";
-export type OpenMatbVisualTheme = "classic" | "cockpit" | "fac_modern";
+export type OpenMatbVisualTheme = "classic" | "cockpit" | "fac_modern" | "daylight_avionics";
 export type OpenMatbLifecycle = "INSTRUCTIONS" | "READY" | "PREFLIGHT_READY" | "PREFLIGHT_STARTING" | "PREFLIGHT_HELD" | "STARTING" | "RUNNING" | "PAUSED" | "AWAITING_SCALE" | "BETWEEN_BLOCKS" | "COMPLETE" | "ABORTED" | "FAILED" | "INTERRUPTED";
 
 export interface OpenMatbProfileSettings {

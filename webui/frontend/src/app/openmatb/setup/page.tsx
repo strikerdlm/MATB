@@ -197,7 +197,7 @@ function SetupContent() {
         const preferred =
           approvedVisuals.find(
             (row) =>
-              row.profile_id === "matb-fac-modern" && row.version === "1.0.0",
+              row.profile_id === "matb-daylight-avionics" && row.version === "1.0.0",
           ) ?? approvedVisuals[0];
         if (preferred)
           setVisualProfileKey(`${preferred.profile_id}@${preferred.version}`);

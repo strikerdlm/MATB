@@ -76,7 +76,7 @@ class OpenMatbSuiteSession(SQLModel, table=True):
     instruction_sha256: str
     locale: str = "es-419"
     # Legacy bundled-theme selector is retained for historical sessions.
-    visual_theme: str = "fac_modern"
+    visual_theme: str = "daylight_avionics"
     visual_profile_id: str | None = None
     visual_profile_version: str | None = None
     visual_profile_schema_version: str | None = None
