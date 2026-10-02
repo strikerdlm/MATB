@@ -345,7 +345,7 @@ class CreateOpenMatbSession(BaseModel):
     preset_version: str = "1.0.0"
     instruction_protocol_id: str = "matb-fac-es-419"
     instruction_version: str = "1.0.0"
-    visual_theme: Literal["classic", "cockpit", "fac_modern"] | None = None
+    visual_theme: Literal["classic", "cockpit", "fac_modern", "daylight_avionics"] | None = None
     visual_profile_id: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9-]{2,63}$")
     visual_profile_version: str | None = Field(default=None, pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
     display_index: int = Field(default=1, ge=0, le=15)

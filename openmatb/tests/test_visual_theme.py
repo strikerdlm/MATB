@@ -15,9 +15,9 @@ from matb_integration.openmatb_visual_profiles import (
 )
 
 
-def test_visual_theme_contract_is_closed_and_fac_modern_is_default():
-    assert VISUAL_THEME_NAMES == ("classic", "cockpit", "fac_modern")
-    assert normalize_visual_theme(None) == "fac_modern"
+def test_visual_theme_contract_is_closed_and_daylight_is_default():
+    assert VISUAL_THEME_NAMES == ("classic", "cockpit", "fac_modern", "daylight_avionics")
+    assert normalize_visual_theme(None) == "daylight_avionics"
     assert normalize_visual_theme(" Cockpit ") == "cockpit"
     assert set(THEMES) == set(VISUAL_THEME_NAMES)
 
@@ -67,6 +67,36 @@ def test_fac_modern_has_light_fac_semantics_with_presentation_only_geometry():
     assert modern.module_color("tracking", "axis") == (40, 110, 243, 255)
     assert modern.module_flag("resource_management", "show_pump_ring")
     assert modern.schema_version == "openmatb-visual-profile-v1"
+
+
+def test_daylight_preserves_tracking_state_colors_and_actual_label_contrast():
+    from matb_integration.openmatb_visual_profiles import assess_visual_profile, contrast_ratio
+
+    root = Path(__file__).resolve().parents[1] / "themes"
+    original = load_visual_profile(root / "fac_modern.json")
+    daylight = load_visual_profile(root / "daylight_avionics.json")
+    assert daylight["profile_id"] == "matb-daylight-avionics"
+    assert daylight["version"] == "1.0.0"
+    assert daylight["geometry_policy"] == original["geometry_policy"]
+    assert daylight["modules"]["tracking"] == original["modules"]["tracking"]
+    assert daylight["palette"]["text"] == original["palette"]["text"]
+    pairs = {
+        "system_monitoring": ("lamp_1", "lamp_2", "lamp_3", "lamp_4", "lamp_off", "pointer", "feedback_positive", "feedback_negative"),
+        "communications": ("active", "inactive", "positive", "negative"),
+        "resource_management": ("fluid", "pipe_on", "pipe_off", "pump_on", "pump_off", "pump_failure", "tolerance", "meter"),
+    }
+    for module, keys in pairs.items():
+        for key in keys:
+            assert daylight["modules"][module][key] == original["modules"][module][key]
+    for module, keys in {
+        "system_monitoring": ("lamp_1", "lamp_2", "lamp_off"),
+        "resource_management": ("pump_on", "pump_off", "pump_failure"),
+    }.items():
+        for key in keys:
+            assert contrast_ratio(daylight["palette"]["text"], daylight["modules"][module][key]) == contrast_ratio(original["palette"]["text"], original["modules"][module][key])
+    assert not assess_visual_profile(daylight)["errors"]
+    assert assess_visual_profile(daylight)["warnings"] == assess_visual_profile(original)["warnings"]
+    assert get_theme("daylight_avionics").sha256 == profile_sha256(daylight)
 
 
 def test_visual_profile_hash_is_stable_across_json_formatting(tmp_path: Path):

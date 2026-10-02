@@ -60,7 +60,7 @@ export default function AstraPage() {
         const prepared = await createOpenMatbSession({ participant_id: person.id, visit_ordinal: visit.visit_ordinal,
           execution_purpose: "practice", preset_id: "astra-matb-field", preset_version: "1.0.0",
           instruction_protocol_id: "matb-fac-es-419", instruction_version: "1.0.0",
-          visual_profile_id: "matb-fac-modern", visual_profile_version: "1.0.0", display_index: display });
+          visual_profile_id: "matb-daylight-avionics", visual_profile_version: "1.0.0", display_index: display });
         storeOpenMatbCredentials(prepared);
         if (displays.length === 1) {
           router.push(`/openmatb/participant?session=${encodeURIComponent(prepared.session.id)}`);

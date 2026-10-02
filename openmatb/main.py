@@ -18,7 +18,7 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--session-dir", type=Path)
     parser.add_argument("--language", default=None)
     theme = parser.add_mutually_exclusive_group()
-    theme.add_argument("--visual-theme", choices=("classic", "cockpit", "fac_modern"), default=None)
+    theme.add_argument("--visual-theme", choices=("classic", "cockpit", "fac_modern", "daylight_avionics"), default=None)
     theme.add_argument("--theme-file", type=Path, default=None)
     parser.add_argument("--display-index", type=int, default=None)
     parser.add_argument("--windowed", action="store_true")

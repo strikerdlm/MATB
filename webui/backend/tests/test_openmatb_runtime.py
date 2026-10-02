@@ -52,11 +52,26 @@ def test_english_practice_has_one_block_and_preserves_locale(engine, tmp_path):
         instruction_protocol_id="matb-fac-en", instruction_version="1.0.0")))
     assert prepared.session.locale == "en"
     assert prepared.session.execution_purpose == "practice"
+    assert prepared.session.visual_profile_id == "matb-daylight-avionics"
+    assert prepared.session.visual_theme == "daylight_avionics"
     assert prepared.session.block_order == ["PRACTICE"]
     assert prepared.session.instruction_protocol.locale == "en"
     assert "practice" in prepared.session.visit_instruction.lower()
     scenario = next((Path(manager.artifact_root) / prepared.session.id / "scenarios").glob("*.txt"))
     assert ";genericscales;filename;isa_en.txt" in scenario.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("theme,profile_id", [("classic", "classic"), ("cockpit", "cockpit"), ("fac_modern", "matb-fac-modern"), ("daylight_avionics", "matb-daylight-avionics")])
+def test_explicit_bundled_theme_keeps_its_identity(engine, tmp_path, theme, profile_id):
+    _seed_visit(engine)
+    manager = _manager(engine, tmp_path)
+    prepared = asyncio.run(manager.create_session(CreateOpenMatbSession(
+        participant_id="P01", visit_ordinal=1, execution_purpose="practice", visual_theme=theme)))
+    assert prepared.session.visual_theme == theme
+    assert prepared.session.visual_profile_id == profile_id
+    snapshot = json.loads((Path(manager.artifact_root) / prepared.session.id / "visual-profile.json").read_text())
+    assert snapshot["profile_id"] == profile_id
+    assert prepared.session.visual_profile_sha256
 
 
 def test_create_session_generates_versioned_spanish_assigned_condition(engine, tmp_path):

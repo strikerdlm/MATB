@@ -32,7 +32,7 @@ from matb_integration.openmatb_visual_profiles import (  # noqa: E402
 )
 
 Color = tuple[int, int, int, int]
-VISUAL_THEME_NAMES = ("classic", "cockpit", "fac_modern")
+VISUAL_THEME_NAMES = ("classic", "cockpit", "fac_modern", "daylight_avionics")
 _THEME_ROOT = Path(__file__).resolve().parents[1] / "themes"
 
 # These public names predate visual profiles and remain available to scenario
@@ -174,7 +174,7 @@ THEMES: Mapping[str, ThemeSpec] = MappingProxyType(
 
 
 def normalize_visual_theme(value: str | None) -> str:
-    normalized = (value or "fac_modern").strip().lower()
+    normalized = (value or "daylight_avionics").strip().lower()
     if normalized not in THEMES:
         allowed = ", ".join(VISUAL_THEME_NAMES)
         raise ValueError(f"visual_theme must be one of: {allowed}")

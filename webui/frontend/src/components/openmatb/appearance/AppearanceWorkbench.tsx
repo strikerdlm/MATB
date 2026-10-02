@@ -46,7 +46,7 @@ const EMPTY_PREVIEW: OpenMatbVisualPreview = {
   last_error: null,
 };
 
-const PROFILE_ORDER = ["matb-fac-modern", "classic", "cockpit"];
+const PROFILE_ORDER = ["matb-daylight-avionics", "matb-fac-modern", "classic", "cockpit"];
 
 type Modules = OpenMatbVisualProfileDocument["modules"];
 type ModuleName = keyof Modules;
@@ -151,7 +151,7 @@ export function AppearanceWorkbench() {
       .then(([loadedProfiles, loadedPreview]) => {
         if (!active) return;
         const ordered = sortedProfiles(loadedProfiles);
-        const preferred = ordered.find((profile) => profile.profile_id === "matb-fac-modern") ?? ordered[0];
+        const preferred = ordered.find((profile) => profile.profile_id === "matb-daylight-avionics") ?? ordered[0];
         setProfiles(ordered);
         setSelected(preferred ? deepCopy(preferred) : null);
         setPreview(loadedPreview);

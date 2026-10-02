@@ -250,13 +250,14 @@ radiotelefónico OACI. Confirme este ajuste en `openmatb/config.ini`:
 ```ini
 [Openmatb]
 language=es_CO
-visual_theme=fac_modern
+visual_theme=daylight_avionics
 ```
 
-OpenMATB incluye tres condiciones de presentación distribuidas: `classic`
+OpenMATB incluye cuatro condiciones de presentación distribuidas: `classic`
 conserva la interfaz clara histórica, `cockpit` aplica un tema genérico de
-cabina de cristal oscura y `fac_modern`, el valor predeterminado, aplica la
-presentación clara MATB-FAC. El investigador puede clonar, editar, validar,
+cabina de cristal oscura, `fac_modern` conserva la presentación clara MATB-FAC
+y `daylight_avionics` es el predeterminado aprobado para nuevos lanzamientos.
+El investigador puede clonar, editar, validar,
 previsualizar, publicar, importar y exportar perfiles estrictos en
 **Configuración → Apariencia** (`/openmatb/appearance`). Solo un perfil
 publicado puede seleccionarse para una sesión controlada. Su ID, versión

@@ -52,7 +52,7 @@ VISUAL_THEME = resolve_theme(
     visual_theme=(
         _environment_theme
         if _environment_theme is not None
-        else None if _theme_file is not None else CONFIG.get("Openmatb", "visual_theme", fallback="fac_modern")
+        else None if _theme_file is not None else CONFIG.get("Openmatb", "visual_theme", fallback="daylight_avionics")
     ),
 )
 COLORS: dict[str, tuple[int, int, int, int]] = dict(VISUAL_THEME.colors)
