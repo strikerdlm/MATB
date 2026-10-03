@@ -167,8 +167,15 @@ def test_astra_practice_uses_v7_label_without_changing_legacy_protocol(engine, t
         asyncio.run(manager.create_session(CreateOpenMatbSession(participant_id='P01', visit_ordinal=8, execution_purpose='practice')))
 
 
+@pytest.fixture
+def astra_polar_components():
+    from app.components import is_component_active
+    if not all(is_component_active(name) for name in ('matb-openmatb', 'matb-physiology')):
+        pytest.skip('Requires OpenMATB and Polar; exercised by full-component tests')
+
+
 @pytest.mark.parametrize('minutes', [5, 10])
-def test_astra_polar_is_assigned_to_exact_participant_visit_and_block(engine, tmp_path, minutes):
+def test_astra_polar_is_assigned_to_exact_participant_visit_and_block(engine, tmp_path, minutes, astra_polar_components):
     from app import study_registry
     manager = _manager(engine, tmp_path)
     with Session(engine) as db:
@@ -194,7 +201,7 @@ def test_astra_polar_is_assigned_to_exact_participant_visit_and_block(engine, tm
             assert native['order'] < companion['order']
 
 
-def test_polar_cannot_silently_change_frozen_astra_protocol(engine, tmp_path):
+def test_polar_cannot_silently_change_frozen_astra_protocol(engine, tmp_path, astra_polar_components):
     manager = _manager(engine, tmp_path)
     with Session(engine) as db:
         astra_roster.initialize(db)

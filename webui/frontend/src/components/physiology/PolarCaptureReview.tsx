@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { EChart } from "@/components/charts/EChart";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,37 +20,55 @@ function lineOption(data: Array<[number, number | null]>, x: string, y: string) 
   };
 }
 
-export function PolarCaptureReview({ capture, lease, copy }: { capture: PolarCapture; lease: string; copy: Copy }) {
+type ReviewProps = { capture: PolarCapture; lease: string; copy: Copy };
+
+export function PolarCaptureReview(props: ReviewProps) {
+  if (!props.lease || !["finalized", "incomplete"].includes(props.capture.artifact_state)) return null;
+  // Remount before painting another identity or authority, including cached results.
+  return <CaptureReview key={JSON.stringify([props.capture.capture_id, props.lease])} {...props} />;
+}
+
+function CaptureReview({ capture, lease, copy }: ReviewProps) {
   const [rr, setRR] = useState<PolarRRExport | null>(null);
   const [review, setReview] = useState<PolarReview | null>(null);
   const [failure, setFailure] = useState(false);
   const [retry, setRetry] = useState(0);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState(false);
-  const finalized = ["finalized", "incomplete"].includes(capture.artifact_state);
+  const request = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    if (!finalized || !lease) return;
-    let active = true;
+    const controller = new AbortController();
+    request.current = controller;
+    const { signal } = controller;
     setFailure(false);
+    setDownloading(false);
+    setDownloadError(false);
     setRR(null);
     setReview(null);
-    void getPolarRRExport(capture.capture_id, lease).then((value) => { if (active) setRR(value); })
-      .catch(() => { if (active) setFailure(true); });
-    void getPolarReview(capture.capture_id, lease).then((value) => { if (active) setReview(value); })
-      .catch(() => { if (active) setFailure(true); });
-    return () => { active = false; };
-  }, [capture.capture_id, finalized, lease, retry]);
+    void getPolarRRExport(capture.capture_id, lease, signal).then((value) => {
+      if (signal.aborted) return;
+      if (value.capture_id !== capture.capture_id) { setFailure(true); return; }
+      setRR(value);
+    }).catch(() => { if (!signal.aborted) setFailure(true); });
+    void getPolarReview(capture.capture_id, lease, signal).then((value) => {
+      if (signal.aborted) return;
+      if (value.capture_id !== capture.capture_id) { setFailure(true); return; }
+      setReview(value);
+    }).catch(() => { if (!signal.aborted) setFailure(true); });
+    return () => { controller.abort(); };
+  }, [capture.capture_id, lease, retry]);
 
   async function download(filename: string) {
+    const signal = request.current?.signal;
+    if (!signal || signal.aborted) return;
     setDownloading(true);
     setDownloadError(false);
-    try { await downloadPolarRRFile(capture.capture_id, lease, filename); }
-    catch { setDownloadError(true); }
-    finally { setDownloading(false); }
+    try { await downloadPolarRRFile(capture.capture_id, lease, filename, signal); }
+    catch { if (!signal.aborted) setDownloadError(true); }
+    finally { if (!signal.aborted) setDownloading(false); }
   }
 
-  if (!finalized) return null;
   const metrics = review?.metrics;
   const respiration = review?.respiration;
   const traceFile = rr?.files.find((file) => file.kind === "trace_csv");

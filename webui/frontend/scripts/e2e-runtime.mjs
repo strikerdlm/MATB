@@ -59,10 +59,24 @@ export function frontendCommand(frontendRoot, platform = process.platform) {
   );
 }
 
+// The hosted Windows runner exited during scenario staging. Avoid native copy
+// helpers for these small fixtures; preserve their bytes through explicit I/O.
+function stageFiles(source, destination) {
+  fs.mkdirSync(destination, { recursive: true });
+  for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+    const from = path.join(source, entry.name);
+    const to = path.join(destination, entry.name);
+    if (entry.isDirectory()) stageFiles(from, to);
+    else if (entry.isFile()) fs.writeFileSync(to, fs.readFileSync(from));
+    else throw new Error(`unsupported scenario fixture: ${from}`);
+  }
+}
+
 /** Install browser fixtures and the real LOW/HIGH fleet scenario in an isolated run. */
 export function prepareScenarioDirectory(repoRoot, runRoot) {
   const directory = path.join(runRoot, "scenarios");
-  fs.cpSync(path.join(repoRoot, "tests", "suas", "fixtures"), directory, { recursive: true });
-  fs.copyFileSync(path.join(repoRoot, "scenarios", "suas", "reference_area_search.yaml"), path.join(directory, "reference_area_search.yaml"));
+  stageFiles(path.join(repoRoot, "tests", "suas", "fixtures"), directory);
+  fs.writeFileSync(path.join(directory, "reference_area_search.yaml"),
+    fs.readFileSync(path.join(repoRoot, "scenarios", "suas", "reference_area_search.yaml")));
   return directory;
 }
