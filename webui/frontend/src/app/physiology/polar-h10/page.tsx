@@ -354,6 +354,15 @@ export default function PolarH10Page() {
   };
   const capturing = capture?.lifecycle === "capturing";
   const participantAvailable = Boolean(participants?.some((person) => person.id === participant));
+  const prepareBlocker = restoring ? copy("Comprobando el estado de la captura…", "Checking recording status…")
+    : !statusKnown ? copy("Pulse Actualizar estado para comprobar que puede preparar una captura.", "Press Refresh status to check whether you can prepare a recording.")
+    : !purpose ? copy("Elija Práctica o Estudio en la parte superior de esta página.", "Choose Practice or Study at the top of this page.")
+    : !connection.connected ? copy("Falta conectar el H10. Pulse Buscar y conectar H10.", "Connect the H10 first. Press Find and connect H10.")
+    : participants === null ? copy("Espere a que cargue la lista de participantes; si falla, pulse Recargar participantes.", "Wait for the participant list; if loading fails, press Reload participants.")
+    : !participantAvailable ? copy("Seleccione el participante en Pseudónimo para habilitar Preparar.", "Select the participant under Pseudonym to enable Prepare.")
+    : purpose === "study" && !assigned.context ? copy("Abra la evaluación Polar desde la visita asignada para registrar datos de estudio.", "Open the Polar assessment from the assigned visit to record study data.")
+    : sessionKind !== "generic" && !sessionId ? copy("Seleccione la sesión MATB acompañada, o Grabación independiente si corresponde.", "Select the accompanying MATB session, or Standalone recording when appropriate.")
+    : null;
   const activeCapture = !!capture && ["starting", "capturing", "stopping"].includes(capture.lifecycle);
   const settings = capture?.resolved_settings ?? capture?.requested_settings;
   const phaseResponses = analysis?.valid ? analysis.workload_responses.filter((response) => response.valid) : [];
@@ -436,7 +445,11 @@ export default function PolarH10Page() {
           </div>
           <div className="flex flex-wrap gap-2">
             {assigned.context?.accompanying_key && !capture && <label>{copy('Sesión acompañada exacta','Exact accompanying session')}<select className="native-select block" value={sessionId} onChange={e=>{const source=companionSources.find(s=>s.id===e.target.value);setSessionId(e.target.value);setSessionKind(source?.table==='openmatb_suite_session'?'openmatb':source?.table==='liftoff_session'?'liftoff':'suas');}}><option value="">—</option>{companionSources.map(s=><option key={s.id} value={s.id}>{s.table} · {s.id}</option>)}</select></label>}
-            {!capture && <Button disabled={!purpose || busy || restoring || !statusKnown || !connection.connected || (sessionKind !== "generic" && !sessionId) || !participantAvailable || (purpose === "study" && !assigned.context)} onClick={() => void prepare()}>{copy("Preparar", "Prepare")}</Button>}
+            {!capture && <div className="space-y-2">
+              <Button disabled={busy || Boolean(prepareBlocker)} aria-describedby={prepareBlocker ? "polar-prepare-requirement" : undefined} onClick={() => void prepare()}>{copy("Preparar", "Prepare")}</Button>
+              {prepareBlocker && <p id="polar-prepare-requirement" role="status" className="text-sm text-info">{prepareBlocker}</p>}
+              {purpose === 'study' && !assigned.context && <Link className="block text-sm underline" href="/astra">{copy("Abrir visita ASTRA", "Open ASTRA visit")}</Link>}
+            </div>}
             {capture && capture.execution_purpose !== "practice" && ["finalized", "incomplete"].includes(capture.artifact_state) && <Button variant="outline" disabled={busy || !lease} onClick={() => void run(() => downloadPolarBundle(capture.capture_id, lease))}><Download className="mr-2 h-4 w-4" />{copy("Descargar paquete", "Download bundle")}</Button>}
             {capture?.artifact_state === "finalized" && capture.matb_session_kind !== "generic" && purpose && <Button asChild><Link href={withExecutionPurpose("/mission/setup#briefing", purpose)}>{copy("Continuar a instrucciones de misión", "Continue to mission briefing")}</Link></Button>}
           </div>

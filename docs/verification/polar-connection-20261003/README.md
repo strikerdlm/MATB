@@ -37,6 +37,11 @@ Verification (2026-10-03):
   prepare/start/stop, switch to a single new device, verify empty participant
   selection and retained previous review. No page/console errors.
 - Adjacent screenshot contains only synthetic state, no physiological samples.
+- Live local smoke: one connectable H10 was discovered and connected; capability
+  negotiation returned HR/RR, ECG and ACC. No recording was started by this check.
+- Disabled Prepare now states the missing requirement beside the button (device,
+  participant, purpose, assignment, session or status); accessibility assertions
+  cover progression from disconnected to connected but without a participant.
 
 No live H10-to-H10 handover was verified in this change. These checks establish
 software behavior, not radio reliability or correct physical participant matching.

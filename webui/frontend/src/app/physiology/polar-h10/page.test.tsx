@@ -140,6 +140,7 @@ async function disconnectedPage() {
   render(<Page />);
   const find = screen.getByRole("button", { name: "Find and connect H10" });
   await waitFor(() => expect(find).toBeEnabled());
+  expect(screen.getByRole("button", { name: "Prepare" })).toHaveAccessibleDescription("Connect the H10 first. Press Find and connect H10.");
   return find;
 }
 
@@ -152,6 +153,7 @@ it("connects a single discovered strap without starting or preparing a recording
   expect(api.connectPolar).toHaveBeenCalledWith("fresh");
   expect(api.createPolarCapture).not.toHaveBeenCalled();
   expect(api.startPolarCapture).not.toHaveBeenCalled();
+  expect(screen.getByRole("button", { name: "Prepare" })).toHaveAccessibleDescription("Select the participant under Pseudonym to enable Prepare.");
 });
 
 it("requires a choice when several straps are visible, including occupied ones", async () => {
