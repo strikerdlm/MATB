@@ -81,3 +81,41 @@ export interface PolarAnalysis {
   }>;
   interpretation: "descriptive_only_no_workload_classification";
 }
+
+export interface PolarRRExport {
+  capture_id: string;
+  execution_purpose: "practice" | "study";
+  units: "ms";
+  row_count: number;
+  rr_count: number;
+  excluded_nonpositive_or_nonfinite: number;
+  contact_not_detected_count: number;
+  segment_count: number;
+  segments: Array<{ segment_id: number; rr_count: number; first_beat_index: number; last_beat_index: number; txt_filename: string; csv_filename: string }>;
+  preview: Array<{ beat_index: number; rr_ms: number; segment_id: number }>;
+  files: Array<{ filename: string; kind: "kubios_txt" | "rr_csv" | "trace_csv"; row_count: number; segment_id: number | null; sha256: string; size_bytes: number }>;
+  incomplete_reasons: string[];
+}
+
+export interface PolarReview {
+  schema_version: "1.0";
+  capture_id: string;
+  execution_purpose: "practice" | "study";
+  metrics: {
+    valid: boolean; reason: string | null; window_kind: "five_minute" | "short_exploratory";
+    duration_s: number; sqi: number | null; n_intervals: number;
+    mean_instantaneous_hr_bpm: number | null; rmssd_ms: number | null;
+    sdnn_ms: number | null; ln_rmssd: number | null; pnn50_percent: number | null;
+    spectrum?: Array<[number, number]>;
+  } | null;
+  rr_tachogram: Array<[number, number | null]>;
+  poincare: Array<[number, number]>;
+  respiration: {
+    status: "unavailable" | "estimated"; respiratory_rate_bpm: number | null;
+    accuracy_bpm: null; validated_against_reference: false;
+    accepted_windows: number; evaluated_windows: number; accepted_window_percent: number;
+    windows: Array<{ time_s: number; rate_bpm: number | null; accepted: boolean }>;
+    waveform: Array<[number, number]>;
+  };
+  incomplete_reasons: string[];
+}

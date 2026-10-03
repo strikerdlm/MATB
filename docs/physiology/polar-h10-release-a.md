@@ -36,15 +36,28 @@ default is ignored `exports/physiology/`.
 3. Scan and connect. Windows scanning deliberately has no HRS UUID prefilter;
    the connection verifies HRS and PMD characteristics afterward. A raw
    `is_connectable=False` advertisement fails before GATT.
-4. Link a pseudonym and MATB session. OpenMATB capture start is accepted only
-   while that session is `READY`.
+4. For a standalone recording, choose **Practice**, select a participant
+   pseudonym, and press **Prepare**. No active test or session ID is required;
+   the backend creates a unique recording context. Press **Start recording**.
+   Assigned study recordings retain their authored baseline or linked-task
+   context. Linked OpenMATB starts require `READY`, `PREFLIGHT_HELD`, `STARTING`,
+   `RUNNING`, or `PAUSED`.
 5. Start the default five-minute seated baseline. Release A requires HRS,
    ECG 130 Hz/14 bit, and the exact selected ACC rate/range. Default ACC is
    50 Hz and ±2G. No requested setting is silently substituted.
 6. OpenMATB starts automatically insert PRACTICE/LOW/MEDIUM/HIGH markers. Suite
    completion inserts RECOVERY; retain five minutes before stopping.
-7. Stop and inspect gap/incomplete reasons before downloading the controller-
-   authorized bundle.
+7. Stop to finalize the local Parquet files and inspect gap/incomplete reasons.
+   Practice recordings remain separate from study data and research-bundle
+   export. Eligible study bundles retain controller authorization.
+
+A standalone practice recording can run by itself or alongside one separate
+standalone practice task, including a paused sUAS task. Their identities and
+recordings remain separate. Either may finish first; station ownership remains
+with the other until it finishes. Assigned study visits, a second physiology
+capture, maintenance, heavy processing, and uncertain station ownership retain
+their admission checks. Standalone capture does not auto-link to another task
+or obtain its automatic phase markers.
 
 ## Storage and time bases
 
@@ -87,3 +100,11 @@ stable path surface but return `501 polar_internal_recording_not_qualified`.
 They must not be enabled until the Polar license assessment and every physical-
 hardware acceptance row are approved. Deletion will additionally require a
 previously fetched SHA-256 and explicit confirmation.
+
+## RR export and ASTRA workflow
+
+Finalized captures now offer exact RR milliseconds as TXT and CSV, descriptive
+HRV figures and an experimental ACC respiratory estimate when usable. See
+[format and methods](rr-export-and-review.md), the
+[ASTRA baseline procedure](astra-baseline-polar.md) and
+[verification evidence](../verification/polar-rr-review-20261002/README.md).

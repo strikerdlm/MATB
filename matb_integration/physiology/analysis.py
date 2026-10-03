@@ -120,7 +120,7 @@ def _null_metrics(reason: str, n: int, duration_s: float) -> dict[str, Any]:
     }
 
 
-def _frequency(rr: np.ndarray) -> dict[str, Any]:
+def _frequency(rr: np.ndarray, *, include_spectrum: bool = False) -> dict[str, Any]:
     duration_s = float(np.sum(rr) / 1000.0)
     if duration_s < 60.0 or rr.size < 3:
         return {"lf_power_ms2": None, "hf_power_ms2": None, "lf_hf_ratio": None,
@@ -166,6 +166,7 @@ def _frequency(rr: np.ndarray) -> dict[str, Any]:
     hf_resolved = hf > max(np.finfo(float).eps, float(np.var(detrended)) * 1e-12)
     ratio = lf / hf if lf_available and hf_resolved else None
     return {
+        **({"spectrum": [[float(f), float(p)] for f, p in zip(freqs, psd) if f <= 0.5]} if include_spectrum else {}),
         "lf_power_ms2": lf if lf_available else None,
         "hf_power_ms2": hf,
         "lf_hf_ratio": ratio,
@@ -187,6 +188,7 @@ def analyze_rr_window(
     external_valid: Sequence[bool] | None = None,
     minimum_duration_s: float = 300.0,
     minimum_sqi: float = 0.8,
+    include_spectrum: bool = False,
 ) -> dict[str, Any]:
     """Analyze one RR window, returning null-with-reason when gates fail."""
 
@@ -261,7 +263,7 @@ def analyze_rr_window(
     # PSD is only defensible when every beat in the window is accepted and no
     # acquisition boundary is crossed; excluded beats are never bridged.
     if bool(np.all(valid)) and bool(np.all(base_continuity)):
-        result.update(_frequency(raw))
+        result.update(_frequency(raw, include_spectrum=include_spectrum))
     else:
         result.update({"lf_power_ms2": None, "hf_power_ms2": None, "lf_hf_ratio": None,
                        "spectral_reason": "discontinuous_or_artifact_affected_window"})

@@ -82,6 +82,9 @@ def test_polar_http_workflow_uses_tokens_leases_and_no_address(tmp_path, purpose
                     headers={"X-Polar-Controller": lease},
                 )
                 assert started.status_code == 200
+                prefix = f"/physiology/polar-h10/v1/captures/{capture_id}"
+                assert (await client.get(prefix + "/rr-export")).status_code == 403
+                assert (await client.get(prefix + "/rr-export", headers={"X-Polar-Controller": lease})).status_code == 409
                 active = await client.get("/physiology/polar-h10/v1/captures/active")
                 assert active.json()["capture_id"] == capture_id
                 control = f"/physiology/polar-h10/v1/captures/{capture_id}/control"
@@ -101,6 +104,24 @@ def test_polar_http_workflow_uses_tokens_leases_and_no_address(tmp_path, purpose
                     headers={"X-Polar-Controller": lease},
                 )
                 assert stopped.status_code == 200
+                exports = await client.get(prefix + "/rr-export", headers={"X-Polar-Controller": lease})
+                assert exports.status_code == 200, exports.text
+                assert exports.json()["rr_count"] == 1
+                assert exports.json()["execution_purpose"] == purpose
+                filename = exports.json()["segments"][0]["txt_filename"]
+                downloaded = await client.get(prefix + "/rr-export/files/" + filename, headers={"X-Polar-Controller": lease})
+                assert downloaded.status_code == 200 and downloaded.text == "1000\n"
+                assert "attachment" in downloaded.headers["content-disposition"]
+                assert (await client.get(prefix + "/rr-export/files/manifest.json", headers={"X-Polar-Controller": lease})).status_code == 404
+                assert (await client.get(prefix + "/review")).status_code == 403
+                reviewed = await client.get(prefix + "/review", headers={"X-Polar-Controller": lease})
+                assert reviewed.status_code == 200, reviewed.text
+                assert reviewed.json()["respiration"]["respiratory_rate_bpm"] is None
+                context = await client.get(prefix + '/rr-export/files/capture_context.json', headers={"X-Polar-Controller": lease})
+                assert context.status_code == 200
+                assert context.json()['participant_pseudonym'] == 'P01'
+                assert context.json()['execution_purpose'] == purpose
+                assert context.json()['alias_is_persistent_device_id'] is False
                 assert (await client.get("/physiology/polar-h10/v1/captures/active")).json() is None
                 inventory = await client.get(
                     f"/physiology/polar-h10/v1/captures/{capture_id}/artifacts",

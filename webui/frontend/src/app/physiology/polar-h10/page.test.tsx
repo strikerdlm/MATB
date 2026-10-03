@@ -2,6 +2,7 @@ import React from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import Page from "./page";
+import { listParticipants } from "@/lib/api";
 import * as api from "@/lib/physiology/api";
 import type { PolarCapture } from "@/types/physiology";
 vi.mock("@/lib/assigned-attempt", () => ({ useAssignedAttempt: () => ({ context: null, attempt: null }) }));
@@ -10,6 +11,8 @@ vi.mock("@/lib/execution-purpose", () => ({ useExecutionPurpose: () => "practice
 vi.mock("@/lib/experiment-flow", () => ({ useReportExperimentFlow: vi.fn() }));
 vi.mock("@/lib/i18n", () => ({ useAppLocale: () => ({ locale: "en", copy: (_es: string, en: string) => en }) }));
 vi.mock("@/components/experiments/ExperimentGuide", () => ({ ExperimentGuide: () => null }));
+vi.mock("@/lib/api", () => ({ listParticipants: vi.fn() }));
+vi.mock("@/components/physiology/PolarCaptureReview", () => ({ PolarCaptureReview: () => null }));
 vi.mock("@/lib/physiology/api", () => ({
   getPolarConnection: vi.fn(), getActivePolarCapture: vi.fn(), getPolarCapture: vi.fn(), validatePolarControl: vi.fn(),
   openPolarStream: vi.fn(), createPolarCapture: vi.fn(), startPolarCapture: vi.fn(), stopPolarCapture: vi.fn(),
@@ -19,6 +22,7 @@ vi.mock("@/lib/physiology/api", () => ({
 const active = { capture_id: "capture-current", participant_pseudonym: "P02", execution_purpose: "practice", matb_session_kind: "generic", matb_session_id: "capture-current", lifecycle: "capturing", requested_settings: {}, artifact_state: "partial", incomplete_reasons: [] } as unknown as PolarCapture;
 beforeEach(() => {
   vi.resetAllMocks(); sessionStorage.clear();
+  vi.mocked(listParticipants).mockResolvedValue(["P01", "P02", "P03", "P99"].map(id => ({ id, enrollment_date: "2026-10-02" })));
   vi.mocked(api.getPolarConnection).mockResolvedValue({ connected: true, device_alias: "Polar", capabilities: null });
   vi.mocked(api.getActivePolarCapture).mockResolvedValue(null);
   vi.mocked(api.openPolarStream).mockResolvedValue({ close: vi.fn() } as unknown as WebSocket);
@@ -30,6 +34,7 @@ it("prepares standalone without a MATB session or automatic baseline marker", as
   vi.mocked(api.startPolarCapture).mockResolvedValue(active);
   render(<Page />);
   expect(screen.getByRole("button", { name: "Prepare" })).toBeDisabled();
+  await screen.findByRole("option", { name: "P01" });
   fireEvent.change(screen.getByLabelText("Pseudonym"), { target: { value: "P01" } });
   await waitFor(() => expect(screen.getByRole("button", { name: "Prepare" })).toBeEnabled());
   expect(screen.queryByLabelText("MATB session ID")).not.toBeInTheDocument();
@@ -37,7 +42,7 @@ it("prepares standalone without a MATB session or automatic baseline marker", as
   fireEvent.click(await screen.findByRole("button", { name: "Start recording" }));
   await screen.findByRole("button", { name: "Stop and finalize" });
   expect(api.createPolarCapture).toHaveBeenCalledWith(expect.objectContaining({ matb_session_kind: "generic", matb_session_id: undefined, execution_purpose: "practice" }));
-  expect(api.addPolarMarker).not.toHaveBeenCalled();
+  expect(api.addPolarMarker).toHaveBeenCalledWith("capture-current", "valid", "TASK_PRE");
 });
 it("restores actual active identity and valid lease, then finalizes despite analysis failure", async () => {
   sessionStorage.setItem("polar.selected", "old-capture");
@@ -77,7 +82,7 @@ it("keeps the prepared capture and explains a station-blocked start", async () =
   const start = await screen.findByRole("button", { name: "Start recording" });
   await waitFor(() => expect(start).toBeEnabled());
   fireEvent.click(start);
-  await screen.findByText(/Another visit owns the station/);
+  await screen.findByText(/An assigned visit reserves the station/);
   expect(screen.getByText(active.capture_id)).toBeInTheDocument();
   expect(api.stopPolarCapture).not.toHaveBeenCalled();
 });
@@ -107,7 +112,8 @@ it("clears previous phase analysis when another capture becomes active", async (
   const stop = await screen.findByRole("button", { name: "Stop and finalize" });
   await waitFor(() => expect(stop).toBeEnabled());
   fireEvent.click(stop);
-  await screen.findByText("Five-minute phase response");
+  await waitFor(() => expect(api.getPolarAnalysis).toHaveBeenCalled());
+  expect(screen.queryByText("Five-minute phase response")).not.toBeInTheDocument();
   vi.mocked(api.getActivePolarCapture).mockResolvedValue({ ...active, capture_id: "other-capture", participant_pseudonym: "P03" });
   fireEvent.click(screen.getByRole("button", { name: "Refresh status" }));
   await screen.findByText("other-capture");
@@ -116,11 +122,12 @@ it("clears previous phase analysis when another capture becomes active", async (
 it("explains an unregistered pseudonym without suggesting a connection problem", async () => {
   vi.mocked(api.createPolarCapture).mockRejectedValue({ code: "participant_not_found" });
   render(<Page />);
+  await screen.findByRole("option", { name: "P01" });
   fireEvent.change(screen.getByLabelText("Pseudonym"), { target: { value: "P99" } });
   const prepare = screen.getByRole("button", { name: "Prepare" });
   await waitFor(() => expect(prepare).toBeEnabled());
   fireEvent.click(prepare);
-  await screen.findByText(/pseudonym is not registered/);
+  await screen.findByText(/participant is not registered/);
   expect(screen.queryByRole("button", { name: "Start recording" })).not.toBeInTheDocument();
   expect(api.startPolarCapture).not.toHaveBeenCalled();
 });

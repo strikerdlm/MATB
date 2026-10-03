@@ -43,6 +43,18 @@ describe("Polar H10 API", () => {
     expect(init.headers["X-Polar-Controller"]).toBe("lease");
     expect(JSON.parse((global.fetch as any).mock.calls[0][1].body).settings.acc_range_g).toBe(8);
   });
+
+  it.each([
+    [404, { detail: { code: "participant_not_found", message: "participant not found" } }, "participant_not_found"],
+    [422, { detail: [{ loc: ["body", "participant_pseudonym"], type: "string_pattern_mismatch" }] }, "polar_request_invalid"],
+    [422, { detail: { code: "exact_stream_settings_unavailable" } }, "exact_stream_settings_unavailable"],
+  ])("retains a usable preparation error for HTTP %s", async (status, body, code) => {
+    global.fetch = vi.fn().mockResolvedValue(response(status as number, body));
+    await expect(createPolarCapture({
+      execution_purpose: "practice", participant_pseudonym: "P99", matb_session_kind: "generic",
+      settings: { ecg_sample_rate_hz: 130, ecg_resolution_bits: 14, acc_sample_rate_hz: 50, acc_resolution_bits: 16, acc_range_g: 2 },
+    })).rejects.toMatchObject({ status, code });
+  });
 });
 
 it("distinguishes schema validation from a connection failure", async () => {

@@ -17,6 +17,7 @@ from app.physiology_schemas import (
     PhysiologyAnalysisView,
     PolarDeviceView,
     PreparedCapture,
+    RRExportView,
     ScanRequest,
 )
 from matb_integration.physiology.contracts import PolarCaptureV1, PolarDeviceCapabilitiesV1
@@ -224,6 +225,36 @@ def analysis(
     runtime: PolarCaptureManager = Depends(manager),
 ):
     return _managed_sync(lambda: runtime.analyze_capture(capture_id, _lease(controller)))
+
+
+@router.get("/captures/{capture_id}/rr-export", response_model=RRExportView)
+def rr_export(
+    capture_id: str,
+    controller: str | None = Header(default=None, alias=_CONTROLLER),
+    runtime: PolarCaptureManager = Depends(manager),
+):
+    return _managed_sync(lambda: runtime.rr_export(capture_id, _lease(controller)))
+
+
+@router.get("/captures/{capture_id}/review")
+def capture_review(
+    capture_id: str,
+    controller: str | None = Header(default=None, alias=_CONTROLLER),
+    runtime: PolarCaptureManager = Depends(manager),
+):
+    return _managed_sync(lambda: runtime.review_capture(capture_id, _lease(controller)))
+
+
+@router.get("/captures/{capture_id}/rr-export/files/{filename}")
+def rr_export_file(
+    capture_id: str,
+    filename: str,
+    controller: str | None = Header(default=None, alias=_CONTROLLER),
+    runtime: PolarCaptureManager = Depends(manager),
+):
+    path = _managed_sync(lambda: runtime.rr_export_file(capture_id, _lease(controller), filename))
+    media_type = {".csv": "text/csv", ".txt": "text/plain", ".json": "application/json"}[path.suffix]
+    return FileResponse(path, filename=path.name, media_type=media_type)
 
 
 @router.websocket("/captures/{capture_id}/stream")

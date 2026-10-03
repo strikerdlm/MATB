@@ -45,11 +45,13 @@ def protocol(db: Session = Depends(get_session)):
 class ActivationIn(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     actor: str = Field(min_length=3, max_length=150)
+    include_polar: bool = False
+    baseline_minutes: Literal[5, 10] = 5
 
 
 @router.post("/protocol/activate")
 def activate(body: ActivationIn, db: Session = Depends(get_session), runtime: OpenMatbManager = Depends(manager)):
-    return astra_deployment.configure(db, runtime, body.actor)
+    return astra_deployment.configure(db, runtime, body.actor, include_polar=body.include_polar, baseline_minutes=body.baseline_minutes)
 
 
 class VisitIn(BaseModel):
