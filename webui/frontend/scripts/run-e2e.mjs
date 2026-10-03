@@ -29,6 +29,19 @@ const playwrightCli = path.join(
   "cli.js",
 );
 const selectedConfig = process.argv[2];
+const diagnosticRoot = path.join(frontendRoot, "test-results", "runner");
+fs.mkdirSync(diagnosticRoot, { recursive: true });
+const diagnosticFile = path.join(diagnosticRoot, `${path.basename(selectedConfig ?? "unknown")}-${process.pid}.log`);
+function diagnostic(message) {
+  const line = `[managed-e2e ${new Date().toISOString()}] ${message}\n`;
+  fs.appendFileSync(diagnosticFile, line);
+  process.stderr.write(line);
+}
+process.on("uncaughtExceptionMonitor", (error) => diagnostic(error.stack ?? String(error)));
+process.on("exit", (code) => diagnostic(`runner exit code=${code}`));
+diagnostic(`starting node=${process.version} platform=${process.platform} config=${selectedConfig}`);
+
+async function main() {
 
 if (
   !selectedConfig ||
@@ -47,6 +60,7 @@ for (const required of [
 }
 
 function portOpen(port) {
+  diagnostic(`checking port ${port}`);
   return new Promise((resolve) => {
     const socket = net.createConnection({ host: "127.0.0.1", port });
     socket.setTimeout(500);
@@ -63,16 +77,18 @@ function portOpen(port) {
 }
 
 async function waitForUrl(url, processes) {
+  diagnostic(`waiting for ${url}`);
   const deadline = Date.now() + 120_000;
   while (Date.now() < deadline) {
     for (const child of processes) {
+      if (spawnErrors.has(child)) throw spawnErrors.get(child);
       if (child.exitCode !== null || child.signalCode !== null) {
         throw new Error(`${child.spawnfile} exited before ${url} was ready`);
       }
     }
     try {
       const response = await fetch(url, { signal: AbortSignal.timeout(1_000) });
-      if (response.ok) return;
+      if (response.ok) { diagnostic(`ready ${url}`); return; }
     } catch {
       // Expected while the local service starts.
     }
@@ -132,6 +148,9 @@ if ((await portOpen(8000)) || (await portOpen(3100))) {
 
 const runRoot = path.join(repoRoot, ".matb-managed-e2e", String(process.pid));
 fs.mkdirSync(runRoot, { recursive: true });
+diagnostic(`staging scenarios in ${runRoot}`);
+const scenarioDirectory = prepareScenarioDirectory(repoRoot, runRoot);
+diagnostic("scenarios staged");
 const serviceEnvironment = {
   ...process.env,
   PYTHONDONTWRITEBYTECODE: "1",
@@ -141,7 +160,7 @@ const serviceEnvironment = {
     : (process.env.MATB_COMPONENTS ?? "auto"),
   MATB_DB_PATH: path.join(runRoot, "matb-e2e.db"),
   MATB_SIMULATION_OUTPUT_DIR: path.join(runRoot, "exports"),
-  MATB_SIMULATION_SCENARIO_DIR: prepareScenarioDirectory(repoRoot, runRoot),
+  MATB_SIMULATION_SCENARIO_DIR: scenarioDirectory,
   MATB_SIMULATION_TEST_MODE: "1",
   MATB_SIMULATION_WALL_TIME_SCALE:
     process.env.MATB_SIMULATION_WALL_TIME_SCALE ?? "0.5",
@@ -157,6 +176,20 @@ if (serviceEnvironment.NO_COLOR !== undefined) {
 }
 
 const children = [];
+const spawnErrors = new WeakMap();
+function launch(name, executable, args, options) {
+  diagnostic(`spawning ${name}: ${executable} cwd=${options.cwd}`);
+  const child = spawn(executable, args, options);
+  children.push(child);
+  child.once("spawn", () => diagnostic(`${name} spawned pid=${child.pid}`));
+  child.once("error", (error) => {
+    spawnErrors.set(child, error);
+    diagnostic(`${name} spawn error: ${error.stack ?? error}`);
+  });
+  child.once("exit", (code, signal) => diagnostic(`${name} exit code=${code} signal=${signal}`));
+  return child;
+}
+let succeeded = false;
 let interrupted = false;
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.once(signal, () => {
@@ -165,8 +198,8 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 }
 
 try {
-  const backend = spawn(
-    resolvePythonExecutable(),
+  const backend = launch(
+    "backend", resolvePythonExecutable(),
     [
       "-m",
       "uvicorn",
@@ -185,9 +218,8 @@ try {
       windowsHide: true,
     },
   );
-  children.push(backend);
-  const frontend = spawn(
-    process.execPath,
+  const frontend = launch(
+    "frontend", process.execPath,
     [nextCli, "start", "--hostname", "127.0.0.1", "--port", "3100"],
     {
       cwd: frontendRoot,
@@ -196,7 +228,6 @@ try {
       windowsHide: true,
     },
   );
-  children.push(frontend);
   await waitForUrl("http://127.0.0.1:8000/health", children);
   await waitForUrl(
     selectedConfig.includes("core")
@@ -205,8 +236,8 @@ try {
     children,
   );
 
-  const playwright = spawn(
-    process.execPath,
+  const playwright = launch(
+    "playwright", process.execPath,
     [
       playwrightCli,
       "test",
@@ -220,16 +251,28 @@ try {
       windowsHide: true,
     },
   );
-  children.push(playwright);
   const [code] = await once(playwright, "exit");
+  succeeded = code === 0 && !interrupted;
   if (interrupted) process.exitCode = 130;
   else if (code !== 0) process.exitCode = typeof code === "number" ? code : 1;
 } finally {
   for (const child of children.reverse()) await terminate(child);
+  if (!succeeded) {
+    diagnostic(`failure artifacts retained at ${runRoot}`);
+  } else {
   fs.rmSync(runRoot, { recursive: true, force: true });
   try {
     fs.rmdirSync(path.dirname(runRoot));
   } catch (error) {
     if (error?.code !== "ENOENT" && error?.code !== "ENOTEMPTY") throw error;
   }
+  }
+}
+
+}
+try {
+  await main();
+} catch (error) {
+  diagnostic(`failed: ${error.stack ?? error}`);
+  process.exitCode = 1;
 }
