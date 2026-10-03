@@ -39,8 +39,9 @@ Un resultado de la ventana rápida de 60 s no reemplaza el basal de cinco minuto
    congelado sin Polar requiere una revisión explícita en Configuración del
    estudio; no se modifica automáticamente.
 4. Rotular físicamente las bandas K01–K05 y guardar la correspondencia
-   participante–banda–estación–hora. Los alias «Polar H10 1» cambian entre
-   búsquedas: **no son números de serie**. Identificar cada banda con las otras
+   participante–banda–estación–hora. Los alias «Polar H10 1» se conservan entre
+   búsquedas durante la misma ejecución del servicio; **no son números de serie**
+   y pueden cambiar al reiniciarlo. Identificar cada banda con las otras
    desconectadas/inactivas, antes de colocarlas simultáneamente. No identificar
    personas por RSSI o frecuencia cardíaca. Evitar receptores competidores;
    verificar la configuración real si se usa también ActiGraph.
@@ -52,7 +53,9 @@ Un resultado de la ventana rápida de 60 s no reemplaza el basal de cinco minuto
 
 1. Seleccionar tripulante y **V0 PRE → Aplicar visita → Basal PRE sentado**.
    Abrir la captura desde esa evaluación asignada, en modo **Estudio**.
-2. Humedecer y ajustar la banda; **Buscar H10 → Conectar** al sensor comprobado.
+2. Humedecer y ajustar la banda; **Buscar y conectar H10**. Si aparece una sola
+   banda disponible, se conecta automáticamente. Si aparecen varias, elegir la
+   banda físicamente comprobada; no se inicia la grabación automáticamente.
    Verificar persona seleccionada, contacto y recepción real de RR. BPM emitidos
    por sí solos no sirven para HRV. Conservar ECG 130 Hz y ACC 50 Hz ±2 g del
    protocolo, salvo una configuración prescrita y verificada diferente.
@@ -90,7 +93,11 @@ Un resultado de la ventana rápida de 60 s no reemplaza el basal de cinco minuto
    pausas. No añadir cinco minutos de referencia a cada bloque por defecto.
 6. Finalizar las capturas y cerrar la recolección de la visita en Estación
    antes de cambiar de participante. Desconectar el H10 y conectar la siguiente
-   banda verificada. Nunca reutilizar una captura cambiando el pseudónimo.
+   banda verificada con **Cambiar de banda**. En práctica independiente, este
+   botón también libera la captura terminada, conserva su revisión en
+   **Última captura guardada** y limpia la selección de persona. En estudio,
+   abrir la asignación de la siguiente persona desde su visita. Nunca reutilizar
+   una captura cambiando el pseudónimo.
 
 ## Kubios, HRV y respiración
 

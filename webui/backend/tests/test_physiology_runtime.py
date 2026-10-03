@@ -11,7 +11,7 @@ from sqlmodel.pool import StaticPool
 from tests.study_fixtures import h10_arguments
 from app.models import Participant
 from app.physiology_models import PolarCaptureRecord  # noqa: F401
-from app.physiology_runtime import PolarCaptureManager
+from app.physiology_runtime import PolarCaptureManager, PolarRuntimeError
 from matb_integration.physiology.artifacts import ParquetCaptureWriter
 from matb_integration.physiology.transport import SimulatedPolarTransport
 
@@ -94,6 +94,45 @@ def test_nonconnectable_advertisement_is_rejected_before_gatt(tmp_path) -> None:
     asyncio.run(exercise())
 
 
+def test_idle_disconnected_strap_can_be_replaced_without_restarting_backend(tmp_path):
+    async def exercise():
+        transport = SimulatedPolarTransport()
+        manager = PolarCaptureManager(engine=_engine(), artifact_root=tmp_path, transport=transport)
+        token, _ = (await manager.scan(0.25))[0]
+        await manager.connect(token)
+        transport.trigger_disconnect()
+        assert manager.connection() == (None, None)
+        token, _ = (await manager.scan(0.25))[0]
+        await manager.connect(token)
+        assert manager.connection()[0] == "Simulated Polar H10"
+        await manager.shutdown()
+    asyncio.run(exercise())
+
+
+def test_connection_timeout_releases_transport_for_a_fresh_scan(tmp_path):
+    class TimeoutOnce(SimulatedPolarTransport):
+        fail = True
+
+        async def capabilities(self):
+            if self.fail:
+                self.fail = False
+                raise TimeoutError()
+            return await super().capabilities()
+
+    async def exercise():
+        transport = TimeoutOnce()
+        manager = PolarCaptureManager(engine=_engine(), artifact_root=tmp_path, transport=transport)
+        token, _ = (await manager.scan(0.25))[0]
+        with pytest.raises(PolarRuntimeError, match="polar_connection_timeout"):
+            await manager.connect(token)
+        assert not transport.connected
+        token, _ = (await manager.scan(0.25))[0]
+        await manager.connect(token)
+        assert manager.connection()[0] is not None
+        await manager.shutdown()
+    asyncio.run(exercise())
+
+
 def test_queue_pressure_and_disconnect_are_never_silent(tmp_path) -> None:
     async def exercise() -> None:
         transport = SimulatedPolarTransport()
@@ -112,6 +151,11 @@ def test_queue_pressure_and_disconnect_are_never_silent(tmp_path) -> None:
             transport.emit_ecg(10_000_000_000 + index * 10_000_000, (index,))
         transport.trigger_disconnect()
         await asyncio.sleep(0.05)
+        assert manager.connection() == (None, None)
+        with pytest.raises(PolarRuntimeError, match="capture_active"):
+            await manager.scan(0.25)
+        with pytest.raises(PolarRuntimeError, match="capture_active"):
+            await manager.connect("another-strap-token")
         final = await manager.stop_capture(capture.capture_id, lease)
         assert final.artifact_state == "incomplete"
         assert final.connection_epoch == 1

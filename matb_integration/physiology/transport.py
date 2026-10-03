@@ -163,6 +163,9 @@ class PolarBleakTransport:
 
     def __init__(self) -> None:
         self._client: Any = None
+        # Session-only aliases stay attached to the same scanned device when
+        # advertisement order changes. Addresses never leave this transport.
+        self._scan_aliases: dict[str, str] = {}
         self._control_queue: asyncio.Queue[bytearray] = asyncio.Queue()
         self._factors: dict[Any, float] = {}
         self._hr_callback: HrCallback | None = None
@@ -195,9 +198,11 @@ class PolarBleakTransport:
                     broadcast = parse_polar_hr_manufacturer_data(manufacturer[POLAR_COMPANY_ID])
                 except ValueError:
                     broadcast = None
+            identity = str(getattr(native_device, "address", None) or name)
+            alias = self._scan_aliases.setdefault(identity, f"Polar H10 {len(self._scan_aliases) + 1}")
             candidates.append(
                 DeviceCandidate(
-                    alias=f"Polar H10 {len(candidates) + 1}",
+                    alias=alias,
                     name=name,
                     connectable=_connectability(native_device, advertisement),
                     rssi=getattr(advertisement, "rssi", None),

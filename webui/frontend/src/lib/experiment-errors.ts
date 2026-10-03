@@ -1,5 +1,14 @@
 type Copy = (spanish: string, english: string) => string;
 const messages: Record<string, [string, string]> = {
+  bluetooth_unavailable: ["Active Bluetooth en este equipo y vuelva a buscar la banda.", "Enable Bluetooth on this computer and search for the strap again."],
+  polar_scan_failed: ["No se pudo buscar la banda. Compruebe Bluetooth, cierre otras apps que usen el sensor y vuelva a buscar.", "The strap search failed. Check Bluetooth, close other apps using the sensor and search again."],
+  polar_connection_failed: ["El H10 apareció, pero no pudo conectar. Cierre otras apps o receptores que lo usen, ajuste la banda humedecida y pulse Buscar y conectar H10 otra vez.", "H10 was found but could not connect. Close other apps or receivers using it, fit the wet strap and press Find and connect H10 again."],
+  polar_connection_timeout: ["El H10 no respondió a tiempo. Cierre otros receptores, acerque la banda y vuelva a buscar.", "H10 did not respond in time. Close other receivers, bring the strap closer and search again."],
+  device_not_connectable: ["La banda está visible, pero no acepta conexión. Cierre otras apps que la usen y vuelva a buscar.", "The strap is visible but not accepting a connection. Close other apps using it and search again."],
+  invalid_or_expired_device_token: ["La búsqueda caducó. Pulse Buscar y conectar H10 para actualizar las bandas disponibles.", "The search expired. Press Find and connect H10 to refresh available straps."],
+  scan_unavailable_while_connected: ["Ya hay una banda conectada. Use Cambiar de banda después de finalizar la captura.", "A strap is already connected. Use Change strap after finalizing the recording."],
+  polar_device_already_connected: ["Ya hay una banda conectada. Actualice el estado para verla.", "A strap is already connected. Refresh status to view it."],
+  capture_active: ["Finalice la captura en curso antes de cambiar de banda.", "Finalize the current recording before changing straps."],
   participant_not_found: ["El participante no está registrado. Selecciónelo en la lista o regístrelo en Participantes antes de preparar la captura.", "The participant is not registered. Select one from the list or register them in Participants before preparing the recording."],
   participant_archived: ["El participante está archivado. Restáurelo en Participantes antes de preparar la captura.", "The participant is archived. Restore them in Participants before preparing the recording."],
   study_assignment_required: ["Seleccione la evaluación asignada en Asignaciones antes de preparar una captura de estudio.", "Select the assigned assessment in Assignments before preparing a study recording."],

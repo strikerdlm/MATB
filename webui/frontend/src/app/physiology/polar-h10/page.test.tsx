@@ -131,3 +131,98 @@ it("explains an unregistered pseudonym without suggesting a connection problem",
   expect(screen.queryByRole("button", { name: "Start recording" })).not.toBeInTheDocument();
   expect(api.startPolarCapture).not.toHaveBeenCalled();
 });
+
+const strap = (token: string, alias = "Polar H10 1") => ({ device_token: token, alias, connectable: true, rssi: -55, broadcast_hr_bpm: null, broadcast_contact: null, token_expires_in_seconds: 60 });
+const caps = { device_alias: "Polar H10 1", battery_percent: 85, firmware: "test" } as Awaited<ReturnType<typeof api.connectPolar>>;
+
+async function disconnectedPage() {
+  vi.mocked(api.getPolarConnection).mockResolvedValue({ connected: false, device_alias: null, capabilities: null });
+  render(<Page />);
+  const find = screen.getByRole("button", { name: "Find and connect H10" });
+  await waitFor(() => expect(find).toBeEnabled());
+  return find;
+}
+
+it("connects a single discovered strap without starting or preparing a recording", async () => {
+  vi.mocked(api.scanPolar).mockResolvedValue([strap("fresh")]);
+  vi.mocked(api.connectPolar).mockResolvedValue(caps);
+  fireEvent.click(await disconnectedPage());
+  await screen.findByRole("button", { name: "Change strap" });
+  expect(api.scanPolar).toHaveBeenCalledWith(8);
+  expect(api.connectPolar).toHaveBeenCalledWith("fresh");
+  expect(api.createPolarCapture).not.toHaveBeenCalled();
+  expect(api.startPolarCapture).not.toHaveBeenCalled();
+});
+
+it("requires a choice when several straps are visible, including occupied ones", async () => {
+  vi.mocked(api.scanPolar).mockResolvedValue([strap("one"), { ...strap("two", "Polar H10 2"), connectable: false }]);
+  vi.mocked(api.connectPolar).mockResolvedValue(caps);
+  fireEvent.click(await disconnectedPage());
+  const first = await screen.findByRole("button", { name: "Connect Polar H10 1" });
+  expect(screen.getByRole("button", { name: "Connect Polar H10 2" })).toBeDisabled();
+  expect(api.connectPolar).not.toHaveBeenCalled();
+  fireEvent.click(first);
+  await waitFor(() => expect(api.connectPolar).toHaveBeenCalledWith("one"));
+});
+
+it("explains an empty scan and retries discovery after a consumed connection token", async () => {
+  vi.mocked(api.scanPolar).mockResolvedValueOnce([]).mockResolvedValueOnce([strap("first")]).mockResolvedValueOnce([strap("retry")]);
+  vi.mocked(api.connectPolar).mockRejectedValueOnce({ code: "polar_connection_failed" }).mockResolvedValue(caps);
+  const find = await disconnectedPage();
+  fireEvent.click(find);
+  await screen.findByText(/No H10 appeared/);
+  expect(api.connectPolar).not.toHaveBeenCalled();
+  fireEvent.click(find);
+  await screen.findByText(/H10 was found but could not connect/);
+  fireEvent.click(find);
+  await screen.findByRole("button", { name: "Change strap" });
+  expect(vi.mocked(api.connectPolar).mock.calls.map(args => args[0])).toEqual(["first", "retry"]);
+});
+
+it("changes a finished strap in one action and requires selecting the next participant", async () => {
+  const finished = { ...active, lifecycle: "complete" as const, artifact_state: "finalized" as const };
+  sessionStorage.setItem("polar.selected", active.capture_id);
+  sessionStorage.setItem(`polar.controller.${active.capture_id}`, "valid");
+  vi.mocked(api.getPolarCapture).mockResolvedValue(finished);
+  vi.mocked(api.validatePolarControl).mockResolvedValue(finished);
+  vi.mocked(api.disconnectPolar).mockResolvedValue({ connected: false, device_alias: null, capabilities: null });
+  vi.mocked(api.scanPolar).mockResolvedValue([strap("next")]);
+  vi.mocked(api.connectPolar).mockResolvedValue(caps);
+  render(<Page />);
+  const change = await screen.findByRole("button", { name: "Change strap" });
+  await waitFor(() => expect(change).toBeEnabled());
+  fireEvent.click(change);
+  await screen.findByText(/Last saved recording.*P02/);
+  await waitFor(() => expect(api.connectPolar).toHaveBeenCalledWith("next"));
+  expect(vi.mocked(api.disconnectPolar).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(api.scanPolar).mock.invocationCallOrder[0]);
+  expect(screen.getByLabelText("Pseudonym")).toHaveValue("");
+  expect(screen.getByRole("button", { name: "Prepare" })).toBeDisabled();
+  expect(sessionStorage.getItem(`polar.controller.${active.capture_id}`)).toBe("valid");
+});
+
+it("does not disconnect an active recording to switch straps", async () => {
+  vi.mocked(api.getActivePolarCapture).mockResolvedValue(active);
+  sessionStorage.setItem(`polar.controller.${active.capture_id}`, "valid");
+  render(<Page />);
+  await screen.findByRole("button", { name: "Stop and finalize" });
+  expect(screen.getByRole("button", { name: "Change strap" })).toBeDisabled();
+  expect(api.disconnectPolar).not.toHaveBeenCalled();
+  expect(api.scanPolar).not.toHaveBeenCalled();
+});
+
+it("keeps the finished capture selected if disconnecting the previous strap fails", async () => {
+  const finished = { ...active, lifecycle: "complete" as const, artifact_state: "finalized" as const };
+  sessionStorage.setItem("polar.selected", active.capture_id);
+  sessionStorage.setItem(`polar.controller.${active.capture_id}`, "valid");
+  vi.mocked(api.getPolarCapture).mockResolvedValue(finished);
+  vi.mocked(api.validatePolarControl).mockResolvedValue(finished);
+  vi.mocked(api.disconnectPolar).mockRejectedValue({ code: "capture_active" });
+  render(<Page />);
+  const change = await screen.findByRole("button", { name: "Change strap" });
+  await waitFor(() => expect(change).toBeEnabled());
+  fireEvent.click(change);
+  await screen.findByText(/Finalize the current recording before changing straps/);
+  expect(sessionStorage.getItem("polar.selected")).toBe(active.capture_id);
+  expect(screen.getByLabelText("Pseudonym")).toHaveValue("P02");
+  expect(api.scanPolar).not.toHaveBeenCalled();
+});
