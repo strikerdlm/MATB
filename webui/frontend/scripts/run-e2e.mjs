@@ -198,7 +198,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 }
 
 try {
-  const backend = launch(
+  launch(
     "backend", resolvePythonExecutable(),
     [
       "-m",
@@ -218,7 +218,7 @@ try {
       windowsHide: true,
     },
   );
-  const frontend = launch(
+  launch(
     "frontend", process.execPath,
     [nextCli, "start", "--hostname", "127.0.0.1", "--port", "3100"],
     {
