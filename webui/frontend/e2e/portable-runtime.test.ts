@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
-import { quoteShellArgument, resolvePythonExecutable, shellCommand } from "../scripts/e2e-runtime.mjs";
+import { prepareScenarioDirectory, quoteShellArgument, resolvePythonExecutable, shellCommand } from "../scripts/e2e-runtime.mjs";
 
 describe("portable Playwright runtime", () => {
   it("uses the native virtual-environment layout on each platform", () => {
@@ -29,4 +32,26 @@ describe("portable Playwright runtime", () => {
     expect(() => quoteShellArgument("bad\npath", "linux")).toThrow(/NUL or newline/);
     expect(() => quoteShellArgument('bad"path', "win32")).toThrow(/double quote/);
   });
+});
+
+it("stages byte-identical independent scenarios in relocated Unicode paths", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "MATB relocation ñ "));
+  try {
+    const fixtures = path.join(root, "tests", "suas", "fixtures");
+    fs.mkdirSync(path.join(fixtures, "nested"), { recursive: true });
+    fs.mkdirSync(path.join(root, "scenarios", "suas"), { recursive: true });
+    const bytes = Buffer.from("label: misión\r\nvalue: 123\n", "utf8");
+    fs.writeFileSync(path.join(fixtures, "fixture.yaml"), bytes);
+    fs.writeFileSync(path.join(fixtures, "nested", "extra.yaml"), bytes);
+    fs.writeFileSync(path.join(root, "scenarios", "suas", "reference_area_search.yaml"), bytes);
+    const first = prepareScenarioDirectory(root, path.join(root, "run one ñ"));
+    const second = prepareScenarioDirectory(root, path.join(root, "run two ñ"));
+    for (const name of ["fixture.yaml", "nested/extra.yaml", "reference_area_search.yaml"]) {
+      expect(fs.readFileSync(path.join(first, name))).toEqual(bytes);
+      expect(fs.readFileSync(path.join(second, name))).toEqual(bytes);
+    }
+    fs.writeFileSync(path.join(first, "fixture.yaml"), "changed");
+    expect(fs.readFileSync(path.join(fixtures, "fixture.yaml"))).toEqual(bytes);
+    expect(fs.readFileSync(path.join(second, "fixture.yaml"))).toEqual(bytes);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

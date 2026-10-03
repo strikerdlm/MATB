@@ -260,12 +260,12 @@ try {
   if (!succeeded) {
     diagnostic(`failure artifacts retained at ${runRoot}`);
   } else {
-  fs.rmSync(runRoot, { recursive: true, force: true });
-  try {
-    fs.rmdirSync(path.dirname(runRoot));
-  } catch (error) {
-    if (error?.code !== "ENOENT" && error?.code !== "ENOTEMPTY") throw error;
-  }
+    fs.rmSync(runRoot, { recursive: true, force: true });
+    try {
+      fs.rmdirSync(path.dirname(runRoot));
+    } catch (error) {
+      if (error?.code !== "ENOENT" && error?.code !== "ENOTEMPTY") throw error;
+    }
   }
 }
 
