@@ -357,6 +357,8 @@ management:
 Scheduling is display-only and needs no control channel. Resource management is
 not included in this layout because its pump bindings remain keyboard-only.
 
+With the default RESMAN bindings, use the **numeric keypad keys 1–8** (`NUM_1`–`NUM_8`) to toggle the correspondingly numbered pumps. The top-row number keys are different inputs and do not substitute for the keypad. Enable Num Lock and check every pump during practice. An external or embedded keypad works only if it emits the configured `NUM_1`–`NUM_8` events; follow any custom bindings configured for the session.
+
 Before starting OpenMATB, press Win+R, run `joy.cpl`, select the controller, and
 open **Properties > Test**. The hardware passes only if:
 

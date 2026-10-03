@@ -1,4 +1,5 @@
 import path from "node:path";
+import fs from "node:fs";
 
 function nonEmpty(value) {
   const selected = value?.trim();
@@ -56,4 +57,12 @@ export function frontendCommand(frontendRoot, platform = process.platform) {
     [nextCli, "start", "--hostname", "127.0.0.1", "--port", "3100"],
     platform,
   );
+}
+
+/** Install browser fixtures and the real LOW/HIGH fleet scenario in an isolated run. */
+export function prepareScenarioDirectory(repoRoot, runRoot) {
+  const directory = path.join(runRoot, "scenarios");
+  fs.cpSync(path.join(repoRoot, "tests", "suas", "fixtures"), directory, { recursive: true });
+  fs.copyFileSync(path.join(repoRoot, "scenarios", "suas", "reference_area_search.yaml"), path.join(directory, "reference_area_search.yaml"));
+  return directory;
 }

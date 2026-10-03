@@ -23,7 +23,7 @@ export function FleetPanel({ snapshot, locale, selectedAircraftId, onSelect }: F
   const aircraft = Object.values(snapshot?.aircraft ?? {}).sort((left, right) => left.aircraft_id.localeCompare(right.aircraft_id));
   const alerts = Object.values(snapshot?.alerts ?? {});
   return (
-    <aside className="mission-panel flex min-h-0 flex-col" aria-label={t(locale, "fleet.aircraft")}>
+    <aside className="mission-panel flex max-h-[32rem] min-h-0 flex-col xl:max-h-none" aria-label={t(locale, "fleet.aircraft")}>
       <div className="border-b border-white/10 px-4 py-3"><div className="page-kicker">{t(locale, "mission.fleet")} / {aircraft.length.toString().padStart(2, "0")}</div><h2 className="mt-1 font-display text-lg uppercase tracking-wide">{t(locale, "fleet.aircraft")}</h2></div>
       <div className="min-h-0 flex-1 overflow-y-auto p-2" role="list">
         {aircraft.length === 0 && <p className="p-4 text-sm text-muted-foreground">{t(locale, "mission.start_block_for_telemetry")}</p>}

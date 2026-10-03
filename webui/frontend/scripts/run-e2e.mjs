@@ -5,7 +5,7 @@ import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { resolvePythonExecutable } from "./e2e-runtime.mjs";
+import { resolvePythonExecutable, prepareScenarioDirectory } from "./e2e-runtime.mjs";
 
 const frontendRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -141,12 +141,7 @@ const serviceEnvironment = {
     : (process.env.MATB_COMPONENTS ?? "auto"),
   MATB_DB_PATH: path.join(runRoot, "matb-e2e.db"),
   MATB_SIMULATION_OUTPUT_DIR: path.join(runRoot, "exports"),
-  MATB_SIMULATION_SCENARIO_DIR: path.join(
-    repoRoot,
-    "tests",
-    "suas",
-    "fixtures",
-  ),
+  MATB_SIMULATION_SCENARIO_DIR: prepareScenarioDirectory(repoRoot, runRoot),
   MATB_SIMULATION_TEST_MODE: "1",
   MATB_SIMULATION_WALL_TIME_SCALE:
     process.env.MATB_SIMULATION_WALL_TIME_SCALE ?? "0.5",

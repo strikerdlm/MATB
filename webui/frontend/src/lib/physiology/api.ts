@@ -27,7 +27,7 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
     let message = response.statusText;
     try {
       const payload = await response.json();
-      code = payload?.detail?.code ?? code;
+      code = response.status === 422 && Array.isArray(payload?.detail) ? "polar_request_invalid" : payload?.detail?.code ?? code;
       message = payload?.detail?.message ?? message;
     } catch { /* retain HTTP fallback */ }
     throw new PolarApiError(response.status, code, message);
@@ -47,6 +47,9 @@ export const listenPolarBroadcast = (timeoutSeconds = 5) =>
   call<PolarDevice[]>("/broadcast/scan", post({ timeout_seconds: timeoutSeconds }));
 export const connectPolar = (deviceToken: string) =>
   call<PolarCapabilities>("/connect", post({ device_token: deviceToken }));
+export const getActivePolarCapture = () => call<PolarCapture | null>("/captures/active");
+export const getPolarCapture = (id: string) => call<PolarCapture>(`/captures/${encodeURIComponent(id)}`);
+export const validatePolarControl = (id: string, lease: string) => call<PolarCapture>(`/captures/${encodeURIComponent(id)}/control`, { headers: { "X-Polar-Controller": lease } });
 export const getPolarConnection = () => call<PolarConnection>("/connection");
 export const disconnectPolar = () => call<PolarConnection>("/connection", { method: "DELETE" });
 
@@ -55,7 +58,7 @@ export function createPolarCapture(body: {
   execution_purpose: "practice" | "study";
   participant_pseudonym: string;
   matb_session_kind: PolarCapture["matb_session_kind"];
-  matb_session_id: string;
+  matb_session_id?: string;
   settings: {
     ecg_sample_rate_hz: 130;
     ecg_resolution_bits: 14;

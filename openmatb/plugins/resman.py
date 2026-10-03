@@ -197,6 +197,11 @@ class Resman(AbstractPlugin):
                 color=C["WHITE"],
             )
 
+            for name, text, x in (("pump", _("Pump"), 0.175), ("route", _("Source → destination"), 0.36), ("flow", _("Flow"), 0.672)):
+                self.add_widget(f"flow_heading_{name}", Simpletext,
+                    container=Container(f"flow_heading_{name}", status_container.l + (x - 0.1) * status_container.w, status_container.b + 0.865 * status_container.h, 0.2 * status_container.w, 0.04 * status_container.h),
+                    text=text, font_size=F["SMALL"] - 3, color=C["TEXT"])
+
             # Add pump flows
             for pump_number, this_pump in self.parameters["pump"].items():
                 pos: int = int(pump_number) - 1
@@ -214,7 +219,14 @@ class Resman(AbstractPlugin):
                     container=flow_container,
                     label=pump_number,
                     flow=this_pump["flow"],
+                    route=f"{this_pump['_fromtank'].upper()} → {this_pump['_totank'].upper()}",
                 )
+
+        self.add_widget("flow_legend", Simpletext,
+            container=self.task_container.reduce_and_translate(height=0.12, y=0),
+            text=_("Fixed arrow = possible direction; color = pump state.") + "\n" +
+                 _("Keypad 1–8: on / off. Flow does not reverse."),
+            font_size=F["SMALL"] - 2, color=C["TEXT"], draw_order=6)
 
         tanks: dict[str, dict[str, Any]] = self.parameters["tank"]
         for tank_letter, this_tank in tanks.items():
