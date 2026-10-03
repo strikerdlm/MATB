@@ -114,7 +114,19 @@ def _run(db, identity):
 
 
 def _events(db, identity):
-    return db.exec(select(StudyPreparationEvent).where(StudyPreparationEvent.preparation_id == identity).order_by(StudyPreparationEvent.created_at, StudyPreparationEvent.id)).all()
+    events = db.exec(select(StudyPreparationEvent).where(StudyPreparationEvent.preparation_id == identity).order_by(StudyPreparationEvent.created_at, StudyPreparationEvent.id)).all()
+    # Legacy events retain their historical order. New append ordinals survive
+    # clock ties/regressions, reloads and backup without rewriting observed times.
+    return sorted(events, key=lambda event: json.loads(event.payload_json).get('event_sequence', 0))
+
+
+def _append_event(db, event):
+    # All callers hold lock_registry, serializing the per-preparation append.
+    events = _events(db, event.preparation_id)
+    payload = json.loads(event.payload_json)
+    payload['event_sequence'] = len(events) + 1
+    event.payload_json = canonical(payload)
+    db.add(event); db.flush(); return event
 
 
 def _next(row, events):
@@ -165,7 +177,7 @@ def record_stage(db, identity, stage, responses):
         outcomes = _grade(json.loads(row.requirement_json)['comprehension'], observations)
     event = StudyPreparationEvent(preparation_id=identity, stage=stage, passed=all(o['passed'] for o in outcomes),
         payload_json=canonical(dict(responses=responses, criteria=outcomes)))
-    db.add(event); db.flush(); return event
+    return _append_event(db, event)
 
 
 def begin_practice(db, identity):
@@ -236,7 +248,7 @@ def finish_practice(db, identity, attempt_id):
         passed=passed, duration_seconds=duration, payload_json=canonical(dict(observations=observations, criteria=outcomes,
         practice_configuration=dict(fast_mode=payload.get('fast_mode', False), locale=payload.get('locale'), duration_ms=payload.get('duration_ms')) if source and row.instrument in {'pvt','screen'} else None,
         source_table=(source.__tablename__ if row.instrument == 'openmatb' else 'practiceresult') if source else None, source_id=source.id if source else None, source_sha256=source_hash, source_evidence=source_evidence, outcome=attempt.acquisition_state)))
-    db.add(event); db.flush(); return event
+    return _append_event(db, event)
 
 
 def required_preparation(db, context, *, native_session_id=None):
@@ -353,7 +365,7 @@ def bind_native_presentation(db, identity, session_id):
     if value['issues']:
         event = StudyPreparationEvent(preparation_id=identity, stage='native_preflight_failure', passed=False,
             payload_json=canonical(dict(session_id=session_id, snapshot=value, recovery='Stop the held runtime, resolve the controller/mapping, and explicitly repeat preparation.')))
-        db.add(event); db.flush(); return event
+        return _append_event(db, event)
     existing = next((e for e in _events(db, identity) if e.stage == 'native_presentation'), None)
     if existing:
         if json.loads(existing.payload_json)['session_id'] != session_id: fail('This preparation belongs to a different runtime. Start new preparation explicitly.')
@@ -372,7 +384,7 @@ def bind_native_presentation(db, identity, session_id):
     event = StudyPreparationEvent(preparation_id=identity, stage='native_presentation', passed=True,
         payload_json=canonical(dict(session_id=session_id, native_attempt_id=attempt.id, session_csv=snapshot.session_csv,
             presentation=presented, presentation_sha256=digest(presented))))
-    db.add(event); db.flush(); return event
+    return _append_event(db, event)
 
 
 def _practice_compatible(current, prior):
@@ -405,7 +417,7 @@ def reuse_practice(db, identity, event_id, actor, reason):
     payload.update(reused_from_event_id=original.id, reused_from_preparation_id=original.preparation_id, actor=actor, reason=reason)
     event = StudyPreparationEvent(preparation_id=identity, stage='practice', attempt_id=original.attempt_id,
         passed=True, duration_seconds=None, payload_json=canonical(payload))
-    db.add(event); db.flush(); return event
+    return _append_event(db, event)
 
 
 def stop_preparation(db, identity):
@@ -414,7 +426,7 @@ def stop_preparation(db, identity):
     if existing: return existing
     event = StudyPreparationEvent(preparation_id=row.id, stage='stopped', passed=None,
         payload_json=canonical(dict(reason='Participant or operator stopped preparation; prior responses and exposure retained.')))
-    db.add(event); db.flush(); return event
+    return _append_event(db, event)
 
 
 def require_preflight_practice(db, context):
