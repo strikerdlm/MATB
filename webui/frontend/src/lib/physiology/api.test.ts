@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createPolarCapture, scanPolar, startPolarCapture } from "@/lib/physiology/api";
+import { createPolarCapture, downloadPolarRRFile, scanPolar, startPolarCapture } from "@/lib/physiology/api";
 
 
 function response(status: number, body: unknown) {
@@ -60,4 +60,20 @@ describe("Polar H10 API", () => {
 it("distinguishes schema validation from a connection failure", async () => {
   global.fetch = vi.fn().mockResolvedValue(response(422, { detail: [{ loc: ["body", "matb_session_id"], type: "missing", msg: "Field required" }] }));
   await expect(startPolarCapture("capture-1", "lease")).rejects.toMatchObject({ code: "polar_request_invalid" });
+});
+
+it("does not publish a download canceled while reading its body", async () => {
+  let finish!: (value: Blob) => void;
+  const blob = new Promise<Blob>((resolve) => { finish = resolve; });
+  const read = vi.fn().mockReturnValue(blob);
+  global.fetch = vi.fn().mockResolvedValue({ ok: true, blob: read });
+  const controller = new AbortController();
+  const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  const pending = downloadPolarRRFile("capture-1", "lease", "rr.txt", controller.signal);
+  const rejected = expect(pending).rejects.toMatchObject({ name: "AbortError" });
+  await vi.waitFor(() => expect(read).toHaveBeenCalled());
+  controller.abort();
+  finish(new Blob(["1000"]));
+  await rejected;
+  expect(click).not.toHaveBeenCalled();
 });

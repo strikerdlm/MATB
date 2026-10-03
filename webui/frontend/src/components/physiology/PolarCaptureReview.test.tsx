@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PolarCaptureReview } from "./PolarCaptureReview";
 import * as api from "@/lib/physiology/api";
@@ -33,7 +33,7 @@ describe("finalized Polar review", () => {
   it("downloads exact RR milliseconds even for standalone practice", async () => {
     render(<PolarCaptureReview capture={capture} lease="secret-lease" copy={copy} />);
     fireEvent.click(await screen.findByRole("button", { name: "TXT Kubios · ms" }));
-    await waitFor(() => expect(api.downloadPolarRRFile).toHaveBeenCalledWith("capture-1", "secret-lease", "practice_rr_ms.txt"));
+    await waitFor(() => expect(api.downloadPolarRRFile).toHaveBeenCalledWith("capture-1", "secret-lease", "practice_rr_ms.txt", expect.any(AbortSignal)));
     expect(screen.getByText("1000.977")).toBeInTheDocument();
     expect(screen.queryByText(/Estimated respiratory rate/)).not.toBeInTheDocument();
   });
@@ -56,4 +56,76 @@ describe("finalized Polar review", () => {
     expect(api.getPolarReview).not.toHaveBeenCalled();
     expect(api.getPolarRRExport).not.toHaveBeenCalled();
   });
+});
+
+it("review regression: clears previous capture data after identity changes without a lease", async () => {
+  const view = render(<PolarCaptureReview capture={capture} lease="lease-A" copy={copy} />);
+  await screen.findByRole("button", { name: "TXT Kubios · ms" });
+  view.rerender(<PolarCaptureReview capture={{ ...capture, capture_id: "capture-B" }} lease="" copy={copy} />);
+  expect(screen.queryByText("1000.977")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "TXT Kubios · ms" })).not.toBeInTheDocument();
+});
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+it.each(["lease", "unfinished"])("removes existing review on %s change", async (change) => {
+  const view = render(<PolarCaptureReview capture={capture} lease="lease-A" copy={copy} />);
+  await screen.findByText("1000.977");
+  view.rerender(<PolarCaptureReview capture={{ ...capture, artifact_state: change === "unfinished" ? "partial" : "finalized" }} lease={change === "lease" ? "" : "lease-A"} copy={copy} />);
+  expect(screen.queryByText("1000.977")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "TXT Kubios · ms" })).not.toBeInTheDocument();
+});
+
+it("ignores late responses after switching to another authorized capture", async () => {
+  const oldExport = deferred<PolarRRExport>();
+  const oldReview = deferred<PolarReview>();
+  vi.mocked(api.getPolarRRExport).mockReturnValueOnce(oldExport.promise).mockResolvedValueOnce({ ...exported, capture_id: "capture-B", preview: [] });
+  vi.mocked(api.getPolarReview).mockReturnValueOnce(oldReview.promise).mockResolvedValueOnce({ ...review, capture_id: "capture-B", rr_tachogram: [] });
+  const view = render(<PolarCaptureReview capture={capture} lease="lease-A" copy={copy} />);
+  view.rerender(<PolarCaptureReview capture={{ ...capture, capture_id: "capture-B" }} lease="lease-B" copy={copy} />);
+  await screen.findByRole("button", { name: "TXT Kubios · ms" });
+  await act(async () => { oldExport.resolve(exported); oldReview.resolve(review); });
+  expect(screen.queryByText("1000.977")).not.toBeInTheDocument();
+  expect(screen.queryByText("Signal figure")).not.toBeInTheDocument();
+});
+
+it("rejects response identities that differ from the selected capture", async () => {
+  vi.mocked(api.getPolarRRExport).mockResolvedValue({ ...exported, capture_id: "wrong-capture" });
+  vi.mocked(api.getPolarReview).mockResolvedValue({ ...review, capture_id: "wrong-capture" });
+  render(<PolarCaptureReview capture={capture} lease="lease" copy={copy} />);
+  await screen.findByRole("button", { name: "Reload" });
+  expect(screen.queryByText("1000.977")).not.toBeInTheDocument();
+  expect(screen.queryByText("Signal figure")).not.toBeInTheDocument();
+});
+
+it("aborts pending downloads when control is lost", async () => {
+  const pending = deferred<void>();
+  vi.mocked(api.downloadPolarRRFile).mockReturnValue(pending.promise);
+  const view = render(<PolarCaptureReview capture={capture} lease="lease" copy={copy} />);
+  fireEvent.click(await screen.findByRole("button", { name: "TXT Kubios · ms" }));
+  const signal = vi.mocked(api.downloadPolarRRFile).mock.calls[0][3];
+  view.rerender(<PolarCaptureReview capture={capture} lease="" copy={copy} />);
+  expect(signal?.aborted).toBe(true);
+  await act(async () => pending.resolve());
+  expect(screen.queryByRole("button", { name: "TXT Kubios · ms" })).not.toBeInTheDocument();
+});
+
+it("allows downloads after retry cancels an older download", async () => {
+  const pending = deferred<void>();
+  vi.mocked(api.downloadPolarRRFile).mockReturnValueOnce(pending.promise).mockResolvedValueOnce();
+  vi.mocked(api.getPolarReview).mockRejectedValueOnce(new Error("retry review"));
+  render(<PolarCaptureReview capture={capture} lease="lease" copy={copy} />);
+  fireEvent.click(await screen.findByRole("button", { name: "TXT Kubios · ms" }));
+  const oldSignal = vi.mocked(api.downloadPolarRRFile).mock.calls[0][3];
+  fireEvent.click(await screen.findByRole("button", { name: "Reload" }));
+  expect(oldSignal?.aborted).toBe(true);
+  await waitFor(() => expect(screen.getByRole("button", { name: "TXT Kubios · ms" })).toBeEnabled());
+  await act(async () => pending.resolve());
+  fireEvent.click(screen.getByRole("button", { name: "TXT Kubios · ms" }));
+  await waitFor(() => expect(api.downloadPolarRRFile).toHaveBeenCalledTimes(2));
+  expect(vi.mocked(api.downloadPolarRRFile).mock.calls[1][3]?.aborted).toBe(false);
 });

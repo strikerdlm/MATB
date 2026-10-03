@@ -15,10 +15,17 @@ from app.station_resources import admit, finish, snapshot
 from matb_integration.physiology.transport import SimulatedPolarTransport
 
 
+@pytest.fixture
+def physiology_routes():
+    from app.components import is_component_active
+    if not is_component_active('matb-physiology'):
+        pytest.skip('Requires Polar routes; exercised by full-component tests')
+
+
 @pytest.mark.parametrize("foreground_first", [True, False])
 @pytest.mark.parametrize("stop_first", ["foreground", "physiology"])
 def test_standalone_recording_and_practice_task_keep_separate_ownership(
-    engine, tmp_path, monkeypatch, foreground_first, stop_first,
+    engine, tmp_path, monkeypatch, foreground_first, stop_first, physiology_routes,
 ):
     async def exercise():
         with Session(engine) as db:
