@@ -414,6 +414,7 @@ def test_new_event_sequence_preserves_legacy_payload_and_survives_reload(engine,
         legacy = StudyPreparationEvent(preparation_id=run.id, stage='demonstration',
             passed=True, payload_json='{"responses":{},"criteria":[]}')
         db.add(legacy); db.flush()
+        db.refresh(legacy)  # Compare persisted SQLite values across reloads.
         legacy_id, legacy_payload, legacy_time = legacy.id, legacy.payload_json, legacy.created_at
         acknowledgement = record_stage(db, run.id, 'acknowledgement', {})
         comprehension = record_stage(db, run.id, 'comprehension', {'response': 'SPACE'})

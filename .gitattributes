@@ -1,6 +1,8 @@
 # Scenario artifacts are hashed byte-for-byte; keep their canonical LF encoding.
 scenarios/military_aviation/*.txt text eol=lf
 scenarios/military_aviation/*.json text eol=lf
+openmatb/includes/scenarios/military_aviation/*.txt text eol=lf
+openmatb/includes/scenarios/military_aviation/*.json text eol=lf
 
 # The browser recognizes console profiles by their exact published byte hash.
 matb_integration/suas/presentation/console-profile.v*.json text eol=lf

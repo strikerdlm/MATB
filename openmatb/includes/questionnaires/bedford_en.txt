@@ -1,0 +1,1 @@
+Bedford;Rate your workload on the Bedford scale. (1 = spare capacity for extra tasks, 10 = abort task);Spare capacity/Abort task;1/10/5

@@ -1,6 +1,7 @@
 # Optional dependencies for scripts/package_suas_scene.py (Python 3.12).
 # Keep separate from the MATB experiment runtime.
-numpy==2.5.3
+# Match the Windows release lock; Numba 0.65.1 requires NumPy <2.5.
+numpy==2.4.6
 rasterio==1.5.1
 pyproj==3.8.0
 Pillow==12.3.0

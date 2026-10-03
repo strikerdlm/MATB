@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from sys import platform
 from typing import Any
 
 from pyglet import image
@@ -23,6 +24,29 @@ from core.rendering import get_group, get_program, polygon_indices
 from core.utils import get_conf_value
 
 
+def _windows_work_area(screen: Any) -> tuple[int, int, int, int] | None:
+    """Read the selected monitor's usable rectangle; retain bounds if unavailable."""
+    handle = getattr(screen, "_handle", None)
+    if handle is None:
+        return None
+    from ctypes import byref, sizeof
+
+    from pyglet.libs.win32 import _user32
+    from pyglet.libs.win32.types import MONITORINFOEX
+
+    info = MONITORINFOEX()
+    info.cbSize = sizeof(info)
+    if not _user32.GetMonitorInfoW(handle, byref(info)):
+        return None
+    left = max(int(screen.x), info.rcWork.left)
+    top = max(int(screen.y), info.rcWork.top)
+    right = min(int(screen.x + screen.width), info.rcWork.right)
+    bottom = min(int(screen.y + screen.height), info.rcWork.bottom)
+    if right <= left or bottom <= top:
+        return None
+    return left, top, right - left, bottom - top
+
+
 class Window(Window):
     # Static variable
     MainWindow: Window | None = None
@@ -32,12 +56,32 @@ class Window(Window):
 
         screen: Any = self.get_screen()
 
-        self._width: int = int(screen.width)
-        self._height: int = int(screen.height)
+        self._width: int = max(1, int(screen.width))
+        self._height: int = max(1, int(screen.height))
         self._fullscreen: bool = get_conf_value("Openmatb", "fullscreen")
+        self._presentation_position = (int(screen.x), int(screen.y))
+
+        # A whole-display window can enter the same unstable presentation path
+        # as exclusive fullscreen on Windows. Leave one row for composition;
+        # plugin geometry and input coordinates use the resulting client size.
+        if platform == "win32" and self._fullscreen:
+            self._fullscreen = False
+            work_area = _windows_work_area(screen)
+            if work_area is not None:
+                x, y, self._width, self._height = work_area
+                self._presentation_position = (x, y)
+            self._height = max(1, self._height - 1)
+            kwargs["style"] = self.WINDOW_STYLE_BORDERLESS
+            kwargs["resizable"] = False
 
         super().__init__(
-            fullscreen=self._fullscreen, width=self._width, height=self._height, vsync=True, *args, **kwargs
+            fullscreen=self._fullscreen,
+            screen=screen,
+            width=self._width,
+            height=self._height,
+            vsync=True,
+            *args,
+            **kwargs,
         )
 
         img_path: Any = P["IMG"]
@@ -92,8 +136,7 @@ class Window(Window):
 
     def set_size_and_location(self, screen: Any) -> None:
         self.switch_to()  # The Window must be active before setting the location
-        target_x: float = (screen.x + screen.width / 2) - screen.width / 2
-        target_y: float = (screen.y + screen.height / 2) - screen.height / 2
+        target_x, target_y = getattr(self, "_presentation_position", (screen.x, screen.y))
         self.set_location(int(target_x), int(target_y))
 
     def create_MATB_background(self) -> None:

@@ -4,7 +4,7 @@ import type { PresentationConfig } from "@/lib/simulation/presentation/contracts
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Check, Gauge, Loader2, Play, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Gauge, Loader2, Play, ShieldCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -216,7 +216,6 @@ export function TechnicalTestForm({ scenarios, loading = false, loadError = null
             <dl className="space-y-3 font-mono text-xs">
               <div className="flex justify-between gap-3 border-b border-white/10 pb-2"><dt className="text-muted-foreground">{tr("technical.duration")}</dt><dd>{durationLabel(details?.duration_seconds)}</dd></div>
               <div className="flex justify-between gap-3 border-b border-white/10 pb-2"><dt className="text-muted-foreground">{tr("technical.fleet")}</dt><dd>{details?.aircraft_count ?? scenario?.aircraft_count ?? "—"}</dd></div>
-              <div className="space-y-2"><dt className="text-muted-foreground">{tr("technical.calibration")}</dt><dd className="flex items-start gap-2 text-warning"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />{tr("technical.pending_calibration")}</dd></div>
             </dl>
           </CardContent>
         </Card>

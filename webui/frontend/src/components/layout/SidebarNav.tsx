@@ -43,6 +43,7 @@ export function SidebarNav() {
       <summary className="cursor-pointer text-sm font-medium">{copy("Cambiar experimento", "Change experiment")}</summary>
       <div className="mt-3 grid gap-1">{EXPERIMENTS.map((item) => {
         const href = `/start?experiment=${item.id}`;
+        if (item.unavailableReason) return <span key={item.id} aria-disabled="true" title={copy(...item.unavailableReason)} className="cursor-not-allowed rounded px-3 py-2 text-sm text-muted-foreground opacity-45 grayscale">{copy(...item.title)}</span>;
         return <Link key={item.id} href={purpose ? withExecutionPurpose(href, purpose) : href} className="rounded px-3 py-2 text-sm text-muted-foreground hover:bg-white/5 hover:text-foreground">{copy(...item.title)}</Link>;
       })}</div>
     </details>
