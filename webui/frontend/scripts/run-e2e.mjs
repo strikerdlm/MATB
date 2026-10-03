@@ -29,7 +29,7 @@ const playwrightCli = path.join(
   "cli.js",
 );
 const selectedConfig = process.argv[2];
-const diagnosticRoot = path.join(frontendRoot, "test-results", "runner");
+const diagnosticRoot = path.join(repoRoot, "verification", "managed-e2e-logs");
 fs.mkdirSync(diagnosticRoot, { recursive: true });
 const diagnosticFile = path.join(diagnosticRoot, `${path.basename(selectedConfig ?? "unknown")}-${process.pid}.log`);
 function diagnostic(message) {
