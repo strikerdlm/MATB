@@ -341,7 +341,24 @@ def test_later_browser_practice_can_be_frozen(engine):
         assert prepared_assignment(db,later=True).id
 
 
-def test_measurement_admission_freezes_exact_preparation_frontier_across_later_restart(engine):
+@pytest.fixture(params=[False, True], ids=['normal-clock', 'equal-clock-reverse-ids'])
+def preparation_clock(request):
+    from datetime import datetime, timezone
+    from itertools import count
+    from sqlalchemy import event
+    from app.study_registry_models import StudyPreparationEvent
+    counter = count(1)
+    def tie(mapper, connection, target):
+        target.created_at = datetime(2026, 10, 3, tzinfo=timezone.utc)
+        target.id = f'00000000-0000-0000-0000-{999999 - next(counter):012d}'
+    if request.param:
+        event.listen(StudyPreparationEvent, 'before_insert', tie)
+    yield request.param
+    if request.param:
+        event.remove(StudyPreparationEvent, 'before_insert', tie)
+
+
+def test_measurement_admission_freezes_exact_preparation_frontier_across_later_restart(engine, preparation_clock):
     from app.study_registry_models import StudyPreparationAdmission
     from app.study_preparation import begin, record_stage, begin_practice, finish_practice, stop_preparation, required_preparation
     from app.assessment_service import create_attempt, transition, attempt_view
@@ -385,3 +402,27 @@ def test_measurement_admission_freezes_exact_preparation_frontier_across_later_r
         with pytest.raises(Exception, match='immutable'):
             db.execute(text('UPDATE study_preparation_admission SET snapshot_sha256=:value WHERE attempt_id=:id'), {'value':'changed','id':measurement.id})
         db.rollback()
+
+
+def test_new_event_sequence_preserves_legacy_payload_and_survives_reload(engine, preparation_clock):
+    from app.study_registry_models import StudyPreparationEvent
+    from app.study_preparation import begin, record_stage, _events
+    with Session(engine) as db:
+        seed(db); assignment = prepared_assignment(db, later=True)
+        run = begin(db, assignment.id, 'pre')
+        # An existing ledger entry has no ordinal; preserve it byte-for-byte.
+        legacy = StudyPreparationEvent(preparation_id=run.id, stage='demonstration',
+            passed=True, payload_json='{"responses":{},"criteria":[]}')
+        db.add(legacy); db.flush()
+        legacy_id, legacy_payload, legacy_time = legacy.id, legacy.payload_json, legacy.created_at
+        acknowledgement = record_stage(db, run.id, 'acknowledgement', {})
+        comprehension = record_stage(db, run.id, 'comprehension', {'response': 'SPACE'})
+        expected = [legacy.id, acknowledgement.id, comprehension.id]
+        run_id = run.id
+        db.commit()
+    with Session(engine) as db:
+        events = _events(db, run_id)
+        assert [item.id for item in events] == expected
+        assert [json.loads(item.payload_json).get('event_sequence') for item in events] == [None, 2, 3]
+        old = db.get(StudyPreparationEvent, legacy_id)
+        assert (old.payload_json, old.created_at) == (legacy_payload, legacy_time)
