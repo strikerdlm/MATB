@@ -49,8 +49,11 @@ readiness. No runtime fallback to remote tiles is implemented.
 Rebuild a *new version* in an isolated Python 3.12 environment:
 
 ```powershell
-python -m pip install -r requirements-suas-scene.txt
-python scripts/package_suas_scene.py --end-date 2026-09-08 --product-id S2B_18NXK_20260810_0_L2A --output webui/frontend/public/scenes/villavicencio-rebuild
+# From the repository root, using Python 3.12
+python -m venv .venv-geography
+.\.venv-geography\Scripts\python.exe -m pip install -r requirements-suas-scene.txt
+.\.venv-geography\Scripts\python.exe -m pip check
+.\.venv-geography\Scripts\python.exe scripts/package_suas_scene.py --end-date 2026-09-08 --product-id S2B_18NXK_20260810_0_L2A --output webui/frontend/public/scenes/villavicencio-rebuild
 ```
 
 The packager refuses to overwrite an existing directory. Automatic selection

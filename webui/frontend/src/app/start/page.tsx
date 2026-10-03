@@ -26,7 +26,7 @@ function Catalog() {
   }, [search]);
   const info = EXPERIMENTS.find((item) => item.id === selected);
   const entry = catalog.find((item) => item.id === selected);
-  const available = status === "online" && entry?.component_available;
+  const available = status === "online" && entry?.component_available && !info?.unavailableReason;
   function choose(id: ExperimentId) {
     setSelected(id);
     const href = purpose
@@ -55,11 +55,12 @@ function Catalog() {
         const Icon = icons[item.id];
         const active = item.id === selected;
         const installed = catalog.find((row) => row.id === item.id)?.component_available;
-        return <button key={item.id} type="button" aria-pressed={active} onClick={() => choose(item.id)}
-          className={"min-h-44 rounded-lg border p-5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info " + (active ? "border-info bg-info/10" : "border-white/15 bg-black/25 hover:border-white/40")}>
+        return <button key={item.id} type="button" aria-pressed={active} disabled={Boolean(item.unavailableReason)} onClick={() => choose(item.id)}
+          className={"min-h-44 rounded-lg border p-5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-45 disabled:grayscale " + (active ? "border-info bg-info/10" : "border-white/15 bg-black/25 enabled:hover:border-white/40")}>
           <Icon className="mb-3 h-6 w-6 text-info" aria-hidden="true" />
           <span className="block text-base font-semibold">{copy(...item.title)}</span>
           <span className="mt-2 block text-sm leading-6 text-muted-foreground">{copy(...item.summary)}</span>
+          {item.unavailableReason && <span className="mt-3 block text-xs text-muted-foreground">{copy(...item.unavailableReason)}</span>}
           {status === "online" && !installed && <span className="mt-3 block text-xs text-warning">{copy("Requiere habilitar el componente", "Component must be enabled")}</span>}
         </button>;
       })}
@@ -88,7 +89,7 @@ function Catalog() {
       <div className="mt-5 flex flex-wrap items-center gap-4">
         {available && destination && purpose ? <Button asChild><Link href={withExecutionPurpose(destination, purpose)}>{copy("Preparar experimento", "Prepare experiment")}<ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
           : available && destination ? <p role="status" className="text-sm text-warning">{copy("Elija práctica o estudio para continuar.", "Choose practice or study to continue.")}</p>
-          : <p className="text-sm text-warning">{status !== "online" ? copy("Conecte la consola para preparar esta actividad.", "Connect the console to prepare this activity.") : copy("Este componente no está habilitado. Solicite al investigador que lo active y revise el equipo indicado arriba.", "This component is not enabled. Ask the researcher to enable it and check the equipment listed above.")}</p>}
+          : <p className="text-sm text-warning">{info.unavailableReason ? copy(...info.unavailableReason) : status !== "online" ? copy("Conecte la consola para preparar esta actividad.", "Connect the console to prepare this activity.") : copy("Este componente no está habilitado. Solicite al investigador que lo active y revise el equipo indicado arriba.", "This component is not enabled. Ask the researcher to enable it and check the equipment listed above.")}</p>}
         <span className="text-sm text-muted-foreground">{copy("Antes de iniciar se verifican los requisitos del experimento.", "Experiment requirements are checked before starting.")}</span>
       </div>
     </section>}

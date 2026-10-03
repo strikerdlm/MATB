@@ -15,6 +15,7 @@ from core.scenarioprovenance import (
     ScenarioProvenanceError,
     load_adjacent_scenario_manifest,
 )
+from core.theme import VISUAL_THEME_NAMES
 
 
 def _verified_builder_artifact(tmp_path: Path) -> tuple[Path, str, dict[str, object]]:
@@ -130,7 +131,7 @@ def _visual_parameters(theme: str = "fac_modern") -> dict[str, str]:
     }
 
 
-@pytest.mark.parametrize("theme", ["classic", "cockpit", "fac_modern"])
+@pytest.mark.parametrize("theme", VISUAL_THEME_NAMES)
 @pytest.mark.parametrize("locale", ["en", "es"])
 @pytest.mark.parametrize("block", ["PRACTICE", "LOW", "MEDIUM", "HIGH"])
 def test_relocated_console_manifest_loads_with_visual_profile(

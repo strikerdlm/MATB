@@ -167,7 +167,7 @@ def _validate_builder_visual_parameters(parameters: dict[str, Any]) -> None:
     # be complete when present. Scenario regeneration below still binds every
     # executable byte independently of these presentation-only fields.
     if "visual_theme" in parameters and parameters["visual_theme"] not in (
-        "classic", "cockpit", "fac_modern",
+        "classic", "cockpit", "fac_modern", "daylight_avionics",
     ):
         raise ScenarioProvenanceError("scenario-builder visual theme is malformed")
     present = _BUILDER_VISUAL_PROFILE_KEYS.intersection(parameters)

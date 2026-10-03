@@ -4,6 +4,7 @@ type Bilingual = readonly [string, string];
 export interface ExperimentInfo {
   id: ExperimentId; route: string; title: Bilingual; summary: Bilingual;
   actions: Bilingual; duration: Bilingual; equipment: Bilingual; results: Bilingual;
+  unavailableReason?: Bilingual;
 }
 export const EXPERIMENTS: readonly ExperimentInfo[] = [
   { id: "openmatb", route: "/openmatb/setup", title: ["OpenMATB · Cuatro tareas", "OpenMATB · Four tasks"],
@@ -19,6 +20,7 @@ export const EXPERIMENTS: readonly ExperimentInfo[] = [
     equipment: ["Computador, navegador, teclado y mouse. La misión utiliza aeronaves simuladas.", "Computer, browser, keyboard, and mouse. The mission uses simulated aircraft."],
     results: ["Cobertura, contactos, respuesta a alertas y cuestionarios. Los valores describen esta misión simulada.", "Coverage, contacts, alert responses, and questionnaires. Values describe this simulated mission."] },
   { id: "liftoff", route: "/liftoff/setup", title: ["Liftoff · Vuelo simulado", "Liftoff · Simulated flight"],
+    unavailableReason: ["No disponible por ahora: simulador FPV pendiente.", "Unavailable for now: FPV simulator pending."],
     summary: ["Desempeño de vuelo en primera persona (FPV) dentro del simulador.", "First-person view (FPV) flight performance within the simulator."],
     actions: ["Siga el circuito con su controlador. La consola lo guía por la línea basal, el vuelo y la recuperación; después se registran los resultados visibles.", "Fly the course using your controller. The console guides baseline, flight, and recovery; visible results are then recorded."],
     duration: ["Según el protocolo y circuito seleccionados, con línea basal y recuperación.", "According to the selected protocol and course, including baseline and recovery."],

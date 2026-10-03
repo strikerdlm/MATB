@@ -91,6 +91,17 @@ separate from the experiment environment to keep GDAL and NumPy upgrades scoped:
 # From the repository root, using Python 3.12
 python -m venv .venv-geography
 .\.venv-geography\Scripts\python.exe -m pip install -r requirements-suas-scene.txt
+.\.venv-geography\Scripts\python.exe -m pip check
+```
+
+The scene requirements pin NumPy 2.4.6, matching the Windows release lock and
+Numba 0.65.1's `numpy<2.5` requirement. If an earlier scene installation upgraded
+NumPy to 2.5.3 in the MATB environment, activate that affected environment and
+restore the compatible version:
+
+```powershell
+python -m pip install "numpy==2.4.6"
+python -m pip check
 ```
 
 Restart the backend if changing its environment configuration. It automatically
