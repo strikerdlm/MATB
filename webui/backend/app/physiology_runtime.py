@@ -113,6 +113,7 @@ class PolarCaptureManager:
         self._sequence: dict[str, int] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
         self._intentional_disconnect = False
+        self._connection_lost = False
 
     async def startup(self) -> None:
         self.artifact_root.mkdir(parents=True, exist_ok=True)
@@ -139,6 +140,13 @@ class PolarCaptureManager:
 
     async def scan(self, timeout_s: float) -> list[tuple[str, DeviceCandidate]]:
         async with self._lock:
+            if self._capture is not None:
+                raise PolarRuntimeError("capture_active")
+            if self._device is not None and self._connection_lost:
+                # Release a dead client before looking for the next strap.
+                await self.transport.disconnect()
+                self._device = None
+                self._capabilities = None
             if self._device is not None:
                 raise PolarRuntimeError("scan_unavailable_while_connected")
             try:
@@ -161,6 +169,8 @@ class PolarCaptureManager:
 
     async def connect(self, token: str) -> PolarDeviceCapabilitiesV1:
         async with self._lock:
+            if self._capture is not None:
+                raise PolarRuntimeError("capture_active")
             if self._device is not None:
                 raise PolarRuntimeError("polar_device_already_connected")
             entry = self._device_tokens.pop(token, None)
@@ -169,13 +179,18 @@ class PolarCaptureManager:
             candidate = entry[1]
             if candidate.connectable is False:
                 raise PolarRuntimeError("device_not_connectable")
+            self._connection_lost = False
             try:
-                await self.transport.connect(candidate, self._on_disconnect)
-                raw = await self.transport.capabilities()
+                async with asyncio.timeout(30):
+                    await self.transport.connect(candidate, self._on_disconnect)
+                    raw = await self.transport.capabilities()
+                if self._connection_lost:
+                    raise ConnectionError("disconnected_during_connection")
             except Exception as exc:
                 await self.transport.disconnect()
                 raise PolarRuntimeError(
-                    "polar_connection_failed", context={"error_type": type(exc).__name__}
+                    "polar_connection_timeout" if isinstance(exc, TimeoutError) else "polar_connection_failed",
+                    context={"error_type": type(exc).__name__}
                 ) from exc
             self._device = candidate
             self._capabilities = self._capability_contract(candidate, raw)
@@ -207,6 +222,8 @@ class PolarCaptureManager:
         )
 
     def connection(self) -> tuple[str | None, PolarDeviceCapabilitiesV1 | None]:
+        if self._connection_lost:
+            return None, None
         return (self._device.alias if self._device else None, self._capabilities)
 
     async def disconnect(self, *, force: bool = False) -> None:
@@ -220,6 +237,7 @@ class PolarCaptureManager:
                 self._intentional_disconnect = False
                 self._device = None
                 self._capabilities = None
+                self._connection_lost = False
 
     def create_capture(
         self,
@@ -231,7 +249,7 @@ class PolarCaptureManager:
         execution_purpose: str = "study",
         attempt_id: str | None = None,
     ) -> tuple[PolarCaptureV1, str]:
-        if self._device is None or self._capabilities is None:
+        if self._device is None or self._capabilities is None or self._connection_lost:
             raise PolarRuntimeError("polar_device_not_connected")
         if self._capture is not None:
             raise PolarRuntimeError("polar_capture_already_active")
@@ -359,7 +377,7 @@ class PolarCaptureManager:
         async with self._lock:
             if self._capture is not None:
                 raise PolarRuntimeError("polar_capture_already_active")
-            if self._device is None:
+            if self._device is None or self._connection_lost:
                 raise PolarRuntimeError("polar_device_not_connected")
             row = self._row(capture_id, lease=lease)
             with Session(self.engine) as db:
@@ -774,6 +792,8 @@ class PolarCaptureManager:
             db.commit()
 
     def _on_disconnect(self) -> None:
+        if not self._intentional_disconnect:
+            self._connection_lost = True
         if self._intentional_disconnect or self._capture is None or self._loop is None:
             return
         context = self._capture

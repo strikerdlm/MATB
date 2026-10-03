@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Activity, Battery, Bluetooth, Download, Play, Radio, Square, WifiOff } from "lucide-react";
+import { Activity, Download, Play, Square } from "lucide-react";
 
 import {useAssignedAttempt} from '@/lib/assigned-attempt';
 import {useAssessmentAdmission} from '@/lib/assessment-admission';
@@ -13,7 +13,6 @@ import { useExecutionPurpose, withExecutionPurpose } from "@/lib/execution-purpo
 import { useReportExperimentFlow } from "@/lib/experiment-flow";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { InstructionAudio } from "@/components/instructions/InstructionAudio";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -21,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { useAppLocale } from "@/lib/i18n";
 import { listParticipants } from "@/lib/api";
 import type { Participant } from "@/types";
+import { PolarDevicePanel } from "@/components/physiology/PolarDevicePanel";
 import { PolarCaptureReview } from "@/components/physiology/PolarCaptureReview";
 import {
   addPolarMarker,
@@ -33,7 +33,6 @@ import {
   getPolarCapture,
   validatePolarControl,
   getPolarAnalysis,
-  listenPolarBroadcast,
   openPolarStream,
   scanPolar,
   startPolarCapture,
@@ -88,6 +87,8 @@ export default function PolarH10Page() {
   const purpose = useExecutionPurpose();
   const [connection, setConnection] = useState<PolarConnection>({ connected: false, device_alias: null, capabilities: null });
   const [devices, setDevices] = useState<PolarDevice[]>([]);
+  const [connectionStep, setConnectionStep] = useState<"searching" | "connecting" | "switching" | null>(null);
+  const [previousCapture, setPreviousCapture] = useState<{ capture: PolarCapture; lease: string } | null>(null);
   const [capture, setCapture] = useState<PolarCapture | null>(null);
   const [lease, setLease] = useState("");
   const [participant, setParticipant] = useState("");
@@ -134,10 +135,6 @@ export default function PolarH10Page() {
   }, [participantReload]);
 
   useEffect(() => {
-    void getPolarConnection().then(setConnection).catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
     if (capture?.lifecycle !== 'capturing') return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
@@ -161,7 +158,7 @@ export default function PolarH10Page() {
     if (actionPending.current) return;
     const generation = ++restoreGeneration.current;
     try {
-      const active = await getActivePolarCapture();
+      const [active, currentConnection] = await Promise.all([getActivePolarCapture(), getPolarConnection()]);
       const saved = sessionStorage.getItem("polar.selected");
       const legacy = Object.keys(sessionStorage).filter(key => key.startsWith("polar.controller."));
       const assignedCapture = assigned.attempt?.sources?.find(source => source.source_table === 'polar_capture')?.source_id
@@ -175,6 +172,7 @@ export default function PolarH10Page() {
         catch { restoredLease = ""; }
       }
       if (generation !== restoreGeneration.current) return;
+      setConnection(currentConnection);
       setStatusKnown(true);
       setCapture(verified);
       setLease(restoredLease);
@@ -243,27 +241,57 @@ export default function PolarH10Page() {
   }, [captureId, lease, report]);
 
   async function run(action: () => Promise<void>) {
+    if (actionPending.current) return;
     actionPending.current = true; restoreGeneration.current += 1;
     setBusy(true); setError(null); setNotice(null);
     try { await action(); }
     catch (reason: unknown) { setError(experimentErrorMessage(reason, copy)); }
-    finally { actionPending.current = false; setBusy(false); }
+    finally { actionPending.current = false; setBusy(false); setConnectionStep(null); }
   }
 
-  async function scan(broadcastOnly: boolean) {
+  function clearFinishedCapture(clearParticipant = false) {
+    restoreGeneration.current += 1;
+    if (capture) setPreviousCapture({ capture, lease });
+    sessionStorage.setItem("polar.selected", "");
+    setCapture(null); setLease(""); setAnalysis(null); setOwnershipNotice(null);
+    setSessionId(""); setSessionKind("generic");
+    if (clearParticipant) setParticipant("");
+  }
+
+  async function connectDevice(device: PolarDevice) {
+    setConnectionStep("connecting");
+    setDevices([]); // A connection attempt consumes the discovery token.
+    const capabilities = await connectPolar(device.device_token);
+    setConnection({ connected: true, device_alias: capabilities.device_alias, capabilities });
+    setNotice(copy("H10 conectado. Compruebe la persona seleccionada y pulse Preparar.", "H10 connected. Check the selected participant and press Prepare."));
+  }
+
+  async function findAndConnect() {
+    if (!statusKnown || restoring || (capture && !["complete", "failed"].includes(capture.lifecycle))) return;
     await run(async () => {
-      const found = await (broadcastOnly ? listenPolarBroadcast(5) : scanPolar(5));
+      if (connection.connected) {
+        setConnectionStep("switching");
+        setConnection(await disconnectPolar());
+        if (!assigned.context) setParticipant("");
+      }
+      if (capture && !assigned.context) clearFinishedCapture(true);
+      setDevices([]);
+      setConnectionStep("searching");
+      const found = await scanPolar(8);
       setDevices(found);
-      setNotice(found.length ? copy("Polar H10 encontrado.", "Polar H10 found.") : copy("No se encontró un H10 durante la búsqueda.", "No H10 was found during the scan."));
+      if (found.length === 1 && found[0].connectable !== false) {
+        await connectDevice(found[0]);
+      } else {
+        setNotice(found.length
+          ? copy("Se encontraron bandas. Elija la que ha identificado para esta persona; si no está seguro, deje activa solo esa banda y vuelva a buscar.", "Straps found. Choose the one identified for this participant; if unsure, leave only that strap active and search again.")
+          : copy("No apareció ningún H10. Humedezca los electrodos, ajuste la banda al pecho y cierre otras apps que la usen. Acerque la banda y vuelva a buscar.", "No H10 appeared. Wet the electrodes, fit the chest strap and close other apps using it. Bring it closer and search again."));
+      }
     });
   }
 
   async function connect(device: PolarDevice) {
-    await run(async () => {
-      const capabilities = await connectPolar(device.device_token);
-      setConnection({ connected: true, device_alias: capabilities.device_alias, capabilities });
-      setDevices([]);
-    });
+    if (!statusKnown || restoring || connection.connected || (capture && !["complete", "failed"].includes(capture.lifecycle))) return;
+    await run(() => connectDevice(device));
   }
 
   async function prepare() {
@@ -326,6 +354,15 @@ export default function PolarH10Page() {
   };
   const capturing = capture?.lifecycle === "capturing";
   const participantAvailable = Boolean(participants?.some((person) => person.id === participant));
+  const prepareBlocker = restoring ? copy("Comprobando el estado de la captura…", "Checking recording status…")
+    : !statusKnown ? copy("Pulse Actualizar estado para comprobar que puede preparar una captura.", "Press Refresh status to check whether you can prepare a recording.")
+    : !purpose ? copy("Elija Práctica o Estudio en la parte superior de esta página.", "Choose Practice or Study at the top of this page.")
+    : !connection.connected ? copy("Falta conectar el H10. Pulse Buscar y conectar H10.", "Connect the H10 first. Press Find and connect H10.")
+    : participants === null ? copy("Espere a que cargue la lista de participantes; si falla, pulse Recargar participantes.", "Wait for the participant list; if loading fails, press Reload participants.")
+    : !participantAvailable ? copy("Seleccione el participante en Pseudónimo para habilitar Preparar.", "Select the participant under Pseudonym to enable Prepare.")
+    : purpose === "study" && !assigned.context ? copy("Abra la evaluación Polar desde la visita asignada para registrar datos de estudio.", "Open the Polar assessment from the assigned visit to record study data.")
+    : sessionKind !== "generic" && !sessionId ? copy("Seleccione la sesión MATB acompañada, o Grabación independiente si corresponde.", "Select the accompanying MATB session, or Standalone recording when appropriate.")
+    : null;
   const activeCapture = !!capture && ["starting", "capturing", "stopping"].includes(capture.lifecycle);
   const settings = capture?.resolved_settings ?? capture?.requested_settings;
   const phaseResponses = analysis?.valid ? analysis.workload_responses.filter((response) => response.valid) : [];
@@ -355,7 +392,6 @@ export default function PolarH10Page() {
     {ownershipNotice && <p role="alert" className="border border-warning p-3">{ownershipNotice} <Link href="/station">{copy("Abrir Estación", "Open Station")}</Link></p>}
     <div className="flex flex-wrap items-center gap-3"><Button variant="outline" disabled={busy || restoring} onClick={() => void refreshCapture()}>{copy("Actualizar estado", "Refresh status")}</Button><Link href="/station">{copy("Estado y recuperación de Estación", "Station status and recovery")}</Link><span>{copy("Propósito", "Purpose")}: {capture?.execution_purpose ?? purpose ?? copy("Seleccione práctica o estudio", "Select practice or study")}</span></div>
     <div className="flex flex-wrap items-center gap-3">
-            {capture?.lifecycle === "created" && <Button disabled={busy || !lease} onClick={() => void start()}><Play className="mr-2 h-4 w-4" />{copy("Iniciar grabación", "Start recording")}</Button>}
             {activeCapture && <Button variant="destructive" disabled={busy || !lease || capture?.lifecycle === "stopping"} onClick={() => void stop()}><Square className="mr-2 h-4 w-4" />{copy("Detener y finalizar", "Stop and finalize")}</Button>}
           {capture && <div className="border border-white/10 p-3 font-mono text-xs text-muted-foreground"><p>{capture.capture_id}</p><p>{capture.participant_pseudonym} · {capture.execution_purpose} · {capture.matb_session_kind === "generic" ? copy("Independiente", "Standalone") : `${capture.matb_session_kind}: ${capture.matb_session_id}`}</p><p className="mt-1">{capture.lifecycle} · ECG {settings?.ecg_sample_rate_hz} Hz · ACC {settings?.acc_sample_rate_hz} Hz ±{settings?.acc_range_g}G</p></div>}
     </div>
@@ -377,29 +413,10 @@ export default function PolarH10Page() {
     </Card>
 
     <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 font-display text-xl uppercase tracking-wide"><Bluetooth className="h-5 w-5" />{copy("Dispositivo", "Device")}</CardTitle>
-          <CardDescription>{copy("La dirección Bluetooth nunca se muestra ni se guarda.", "The Bluetooth address is never shown or stored.")}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <Button disabled={busy || connection.connected} onClick={() => void scan(false)}><Bluetooth className="mr-2 h-4 w-4" />{copy("Buscar H10", "Scan for H10")}</Button>
-            <Button variant="outline" disabled={busy || connection.connected} onClick={() => void scan(true)}><Radio className="mr-2 h-4 w-4" />{copy("Escuchar HR emitida", "Listen for broadcast HR")}</Button>
-            <Button variant="outline" disabled={busy || restoring || !statusKnown || !connection.connected || !!capture} onClick={() => void run(async () => { setConnection(await disconnectPolar()); setCapture(null); setLease(""); })}><WifiOff className="mr-2 h-4 w-4" />{copy("Desconectar", "Disconnect")}</Button>
-          </div>
-          {devices.map((device) => <button key={device.device_token} type="button" disabled={device.connectable === false || busy} onClick={() => void connect(device)} className="w-full border border-white/10 p-4 text-left transition hover:border-white/30 disabled:opacity-50">
-            <div className="flex items-center justify-between gap-3"><span className="font-semibold">{device.alias}</span><Badge variant={device.connectable === false ? "danger" : "success"}>{device.connectable === false ? copy("No conectable", "Not connectable") : copy("Disponible", "Available")}</Badge></div>
-            <div className="mt-2 flex gap-4 font-mono text-xs text-muted-foreground"><span>RSSI {device.rssi ?? "—"}</span><span>HR broadcast {device.broadcast_hr_bpm ?? "—"}</span></div>
-          </button>)}
-          {connection.capabilities && <div className="grid gap-3 border border-white/10 p-4 sm:grid-cols-2">
-            <div><p className="page-kicker">{connection.device_alias}</p><p className="mt-2 text-sm">Firmware {connection.capabilities.firmware ?? "—"}</p></div>
-            <div className="flex items-center gap-2"><Battery className="h-5 w-5" /><span className="font-display text-2xl">{connection.capabilities.battery_percent ?? "—"}%</span></div>
-            <p className="text-xs text-muted-foreground">ECG {connection.capabilities.ecg_sample_rates_hz.join("/")} Hz · ACC {connection.capabilities.acc_sample_rates_hz.join("/")} Hz · ±{connection.capabilities.acc_ranges_g.join("/±")}G</p>
-            <p className="text-xs text-warning">{copy("Memoria interna: pendiente de cualificación.", "Internal recording: qualification pending.")}</p>
-          </div>}
-        </CardContent>
-      </Card>
+      <PolarDevicePanel connection={connection} devices={devices} busy={busy} step={connectionStep}
+        locked={restoring || !statusKnown || Boolean(capture && !["complete", "failed"].includes(capture.lifecycle))}
+        copy={copy} onSearch={() => void findAndConnect()} onConnect={(device) => void connect(device)}
+        onDisconnect={() => void run(async () => { setConnection(await disconnectPolar()); setDevices([]); })} />
 
       <Card>
         <CardHeader><CardTitle className="font-display text-xl uppercase tracking-wide">{copy("Preparar captura", "Prepare capture")}</CardTitle><CardDescription>{copy("La grabación independiente no requiere una prueba MATB. El modo estudio conserva la evaluación de fisiología asignada.", "Standalone recording needs no MATB test. Study mode retains the assigned physiology assessment.")}</CardDescription></CardHeader>
@@ -427,11 +444,18 @@ export default function PolarH10Page() {
           </div>
           <div className="flex flex-wrap gap-2">
             {assigned.context?.accompanying_key && !capture && <label>{copy('Sesión acompañada exacta','Exact accompanying session')}<select className="native-select block" value={sessionId} onChange={e=>{const source=companionSources.find(s=>s.id===e.target.value);setSessionId(e.target.value);setSessionKind(source?.table==='openmatb_suite_session'?'openmatb':source?.table==='liftoff_session'?'liftoff':'suas');}}><option value="">—</option>{companionSources.map(s=><option key={s.id} value={s.id}>{s.table} · {s.id}</option>)}</select></label>}
-            {!capture && <Button disabled={!purpose || busy || restoring || !statusKnown || !connection.connected || (sessionKind !== "generic" && !sessionId) || !participantAvailable || (purpose === "study" && !assigned.context)} onClick={() => void prepare()}>{copy("Preparar", "Prepare")}</Button>}
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant={capture ? "outline" : "default"} disabled={Boolean(capture) || busy || Boolean(prepareBlocker)} aria-describedby={!capture && prepareBlocker ? "polar-prepare-requirement" : undefined} onClick={() => void prepare()}>{copy("Preparar", "Prepare")}</Button>
+                <Button disabled={capture?.lifecycle !== "created" || busy || !lease} onClick={() => void start()}><Play className="mr-2 h-4 w-4" />{copy("Iniciar grabación", "Start recording")}</Button>
+              </div>
+              {!capture && prepareBlocker && <p id="polar-prepare-requirement" role="status" className="text-sm text-info">{prepareBlocker}</p>}
+              {!capture && purpose === 'study' && !assigned.context && <Link className="block text-sm underline" href="/astra">{copy("Abrir visita ASTRA", "Open ASTRA visit")}</Link>}
+            </div>
             {capture && capture.execution_purpose !== "practice" && ["finalized", "incomplete"].includes(capture.artifact_state) && <Button variant="outline" disabled={busy || !lease} onClick={() => void run(() => downloadPolarBundle(capture.capture_id, lease))}><Download className="mr-2 h-4 w-4" />{copy("Descargar paquete", "Download bundle")}</Button>}
             {capture?.artifact_state === "finalized" && capture.matb_session_kind !== "generic" && purpose && <Button asChild><Link href={withExecutionPurpose("/mission/setup#briefing", purpose)}>{copy("Continuar a instrucciones de misión", "Continue to mission briefing")}</Link></Button>}
           </div>
-          {!assigned.context && capture && ["complete", "failed"].includes(capture.lifecycle) && <Button variant="outline" disabled={busy} onClick={() => { restoreGeneration.current += 1; sessionStorage.setItem("polar.selected", ""); setCapture(null); setLease(""); setAnalysis(null); setOwnershipNotice(null); setSessionId(""); setSessionKind("generic"); }}>{copy("Preparar otra grabación", "Prepare another recording")}</Button>}
+          {!assigned.context && capture && ["complete", "failed"].includes(capture.lifecycle) && <Button variant="outline" disabled={busy} onClick={() => clearFinishedCapture()}>{copy("Preparar otra grabación", "Prepare another recording")}</Button>}
           {!assigned.context && !capture && <label className="block text-sm">{copy('Condición de reposo', 'Rest condition')}<select className="native-select mt-2 block" value={restContext} onChange={event => setRestContext(event.target.value as typeof restContext)}><option value="TASK_PRE">{copy('Referencia pre-tarea · 5 min', 'Pre-task reference · 5 min')}</option><option value="PRE_REST_SEATED_5MIN">{copy('Basal PRE abreviado · 5 min tras ≥5 min de adaptación', 'Abbreviated PRE baseline · 5 min after ≥5 min adaptation')}</option><option value="PRE_REST_SEATED">{copy('Basal PRE sentado · 10 min tras ≥5 min de adaptación', 'Seated PRE baseline · 10 min after ≥5 min adaptation')}</option></select></label>}
           {capture && <div className="border border-white/10 p-3 text-sm">{startedAt && <p role="timer" className="mt-3 text-3xl tabular-nums">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</p>}{preRest && <p>PRE: {baselineMinutes} min. {baselineMinutes === 5 ? copy('Modalidad abreviada; sin segundo segmento de respaldo.', 'Abbreviated protocol; no second backup segment.') : 'A = 0–5 min; B = 5–10 min.'} {copy('El reloj indica duración, no calidad de señal. Detenga el registro al terminar.', 'The timer indicates duration, not signal quality. Stop recording when finished.')}</p>}</div>}
         </CardContent>
@@ -455,6 +479,10 @@ export default function PolarH10Page() {
         <p className="text-xs leading-5 text-muted-foreground">{copy("LOW, MEDIUM, HIGH y RECOVERY se insertan automáticamente desde el ciclo de vida OpenMATB cuando la captura está vinculada. Los botones permiten marcas supervisadas. Ninguna marca de software se presenta como inicio físico exacto del estímulo.", "LOW, MEDIUM, HIGH, and RECOVERY are inserted automatically from the OpenMATB lifecycle when the capture is linked. Buttons allow supervised markers. No software marker is presented as exact physical stimulus onset.")}</p>
       </CardContent>
     </Card>
+    {!capture && previousCapture && <details className="rounded border border-white/10 p-4">
+      <summary className="cursor-pointer">{copy("Última captura guardada", "Last saved recording")} · {previousCapture.capture.participant_pseudonym}</summary>
+      <PolarCaptureReview capture={previousCapture.capture} lease={previousCapture.lease} copy={copy} />
+    </details>}
     {capture && <PolarCaptureReview capture={capture} lease={lease} copy={copy} />}
     {phaseResponses.length > 0 && <Card>
       <CardHeader><CardTitle className="font-display text-xl uppercase tracking-wide">{copy("Respuesta por fase de cinco minutos", "Five-minute phase response")}</CardTitle><CardDescription>{copy("Comparación descriptiva contra línea base.", "Descriptive comparison with baseline.")}</CardDescription></CardHeader>

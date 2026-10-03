@@ -52,7 +52,7 @@ def _translate(exc: PolarRuntimeError) -> HTTPException:
     elif exc.code.endswith("_not_found") or exc.code == "participant_not_found":
         code = status.HTTP_404_NOT_FOUND
     elif exc.code in {
-        "polar_component_unavailable", "polar_connection_failed", "polar_scan_failed",
+        "polar_component_unavailable", "polar_connection_failed", "polar_connection_timeout", "polar_scan_failed",
         "bluetooth_unavailable",
     }:
         code = status.HTTP_503_SERVICE_UNAVAILABLE
