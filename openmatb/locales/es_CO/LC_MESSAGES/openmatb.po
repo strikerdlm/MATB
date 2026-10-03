@@ -493,3 +493,18 @@ msgstr "💾 Guardar configuración"
 
 msgid "📂 Load config"
 msgstr "📂 Cargar configuración"
+
+msgid "Fixed arrow = possible direction; color = pump state."
+msgstr "Flecha fija = dirección posible; color = estado de la bomba."
+
+msgid "Keypad 1–8: on / off. Flow does not reverse."
+msgstr "Teclado numérico 1–8: activar / desactivar. No invierte el flujo."
+
+msgid "Pump"
+msgstr "Bomba"
+
+msgid "Source → destination"
+msgstr "Origen → destino"
+
+msgid "Flow"
+msgstr "Caudal"

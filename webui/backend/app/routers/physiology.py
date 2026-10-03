@@ -171,6 +171,21 @@ async def stop_capture(
     return await _managed(lambda: runtime.stop_capture(capture_id, _lease(controller)))
 
 
+@router.get("/captures/active", response_model=PolarCaptureV1 | None)
+def active_capture(runtime: PolarCaptureManager = Depends(manager)):
+    return _managed_sync(runtime.active_capture)
+
+
+@router.get("/captures/{capture_id}/control", response_model=PolarCaptureV1)
+def controller_state(
+    capture_id: str,
+    controller: str | None = Header(default=None, alias=_CONTROLLER),
+    runtime: PolarCaptureManager = Depends(manager),
+):
+    _managed_sync(lambda: runtime.validate_lease(capture_id, _lease(controller)))
+    return _managed_sync(lambda: runtime.capture_view(capture_id))
+
+
 @router.get("/captures/{capture_id}", response_model=PolarCaptureV1)
 def capture(capture_id: str, runtime: PolarCaptureManager = Depends(manager)):
     return _managed_sync(lambda: runtime.capture_view(capture_id))

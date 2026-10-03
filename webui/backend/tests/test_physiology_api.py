@@ -46,6 +46,12 @@ def test_polar_http_workflow_uses_tokens_leases_and_no_address(tmp_path, purpose
                     "/physiology/polar-h10/v1/connect", json={"device_token": token}
                 )
                 assert connected.status_code == 200
+                unregistered = await client.post("/physiology/polar-h10/v1/captures", json={
+                    "execution_purpose": purpose, "participant_pseudonym": "P99", "matb_session_kind": "generic",
+                })
+                assert unregistered.status_code == 404
+                assert unregistered.json()["detail"]["code"] == "participant_not_found"
+                assert (await client.get("/physiology/polar-h10/v1/captures/active")).json() is None
                 arguments = {}
                 session_context = 'api-test'
                 if purpose == 'study':
@@ -57,7 +63,7 @@ def test_polar_http_workflow_uses_tokens_leases_and_no_address(tmp_path, purpose
                 prepared = await client.post("/physiology/polar-h10/v1/captures", json={
                     **arguments, "execution_purpose": purpose,
                     "participant_pseudonym": "P01", "matb_session_kind": "generic",
-                    "matb_session_id": session_context, "settings": {
+                    "settings": {
                         "ecg_sample_rate_hz": 130, "ecg_resolution_bits": 14,
                         "acc_sample_rate_hz": 50, "acc_resolution_bits": 16,
                         "acc_range_g": 2,
@@ -65,6 +71,7 @@ def test_polar_http_workflow_uses_tokens_leases_and_no_address(tmp_path, purpose
                 })
                 assert prepared.status_code == 201
                 capture_id = prepared.json()["capture"]["capture_id"]
+                assert prepared.json()["capture"]["matb_session_id"] == (session_context if purpose == "study" else capture_id)
                 lease = prepared.json()["controller_lease"]
                 denied = await client.post(
                     f"/physiology/polar-h10/v1/captures/{capture_id}/start", json={}
@@ -75,6 +82,18 @@ def test_polar_http_workflow_uses_tokens_leases_and_no_address(tmp_path, purpose
                     headers={"X-Polar-Controller": lease},
                 )
                 assert started.status_code == 200
+                active = await client.get("/physiology/polar-h10/v1/captures/active")
+                assert active.json()["capture_id"] == capture_id
+                control = f"/physiology/polar-h10/v1/captures/{capture_id}/control"
+                assert (await client.get(control)).status_code == 403
+                assert (await client.get(control, headers={"X-Polar-Controller": "wrong"})).status_code == 403
+                assert (await client.get(control, headers={"X-Polar-Controller": lease})).json()["capture_id"] == capture_id
+                blocked = await client.post(f"/physiology/polar-h10/v1/captures/{capture_id}/start", json={}, headers={"X-Polar-Controller": lease})
+                assert blocked.status_code == 409
+                assert blocked.json()["detail"]["code"] == "polar_capture_already_active"
+                denied_stop = await client.post(f"/physiology/polar-h10/v1/captures/{capture_id}/stop", json={})
+                assert denied_stop.status_code == 403
+                assert (await client.get("/physiology/polar-h10/v1/captures/active")).json()["capture_id"] == capture_id
                 simulated.emit_hr(bytes.fromhex("16 3c 00 04"))
                 await asyncio.sleep(0.03)
                 stopped = await client.post(
@@ -82,6 +101,7 @@ def test_polar_http_workflow_uses_tokens_leases_and_no_address(tmp_path, purpose
                     headers={"X-Polar-Controller": lease},
                 )
                 assert stopped.status_code == 200
+                assert (await client.get("/physiology/polar-h10/v1/captures/active")).json() is None
                 inventory = await client.get(
                     f"/physiology/polar-h10/v1/captures/{capture_id}/artifacts",
                     headers={"X-Polar-Controller": lease},

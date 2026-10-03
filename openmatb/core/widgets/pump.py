@@ -21,6 +21,7 @@ class Pump(AbstractWidget):
         y_offset: float = 0,
     ) -> None:
         super().__init__(name, container)
+        direction_vertices = self.flow_arrow_vertices(from_cont, to_cont, pump_width, y_offset)
         width: float = pump_width
 
         # If from_container and to_container are aligned (x or y axis)
@@ -66,6 +67,8 @@ class Pump(AbstractWidget):
             self.pump_vertice = (x, y, x - w / 2, y - w, x + w / 2, y - w)
             self.num_location = (x, y - w / 2 - 3)
 
+        # Fixed destination arrow: pump activation changes color, never direction.
+        self.add_triangles("flow_direction", G(self.m_draw + 6), direction_vertices, C["TEXT"] * 3)
         self.add_triangles("triangle", G(self.m_draw + 1), self.pump_vertice, color * 3)
 
         pipe_color = VISUAL_THEME.module_color("resource_management", "pipe_off")
@@ -87,6 +90,13 @@ class Pump(AbstractWidget):
             color=VISUAL_THEME.palette["text"],
             group=G(self.m_draw + 2),
         )
+
+    @staticmethod
+    def flow_arrow_vertices(from_cont: Container, to_cont: Container, width: float, y_offset: float) -> tuple[float, ...]:
+        direction = 1 if from_cont.cx < to_cont.cx else -1
+        y = from_cont.cy + y_offset if from_cont.cy == to_cont.cy else to_cont.cy - y_offset - 20
+        x = to_cont.l - 7 if direction == 1 else to_cont.l + to_cont.w + 7
+        return (x, y, x - direction * 9, y + 4, x - direction * 9, y - 4)
 
     def set_color(self, color: tuple[int, int, int, int]) -> None:
         if color == self.get_color():

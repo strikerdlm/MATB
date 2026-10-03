@@ -2,7 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
-import { backendCommand, frontendCommand } from "./scripts/e2e-runtime.mjs";
+import { backendCommand, frontendCommand, prepareScenarioDirectory } from "./scripts/e2e-runtime.mjs";
 
 // Playwright loads TypeScript configs through its CommonJS transformer in
 // this Next.js package, so __dirname is the portable equivalent of resolving
@@ -14,7 +14,9 @@ const e2eRoot = path.join(repoRoot, ".suas-e2e", String(process.pid));
 if (!reuseExistingServer) fs.mkdirSync(e2eRoot, { recursive: true });
 
 const backendRoot = path.join(repoRoot, "webui", "backend");
-const scenarioRoot = path.join(repoRoot, "tests", "suas", "fixtures");
+const scenarioRoot = reuseExistingServer
+  ? (process.env.MATB_SIMULATION_SCENARIO_DIR ?? path.join(repoRoot, "tests", "suas", "fixtures"))
+  : prepareScenarioDirectory(repoRoot, e2eRoot);
 const chromiumExecutable = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
   ?? (fs.existsSync("/opt/google/chrome/chrome") ? "/opt/google/chrome/chrome" : undefined);
 const isolatedEnv = {

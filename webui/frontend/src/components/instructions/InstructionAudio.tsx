@@ -3,6 +3,8 @@
 import React, { useRef, useState } from "react";
 import { Headphones, Pause, Play, RotateCcw } from "lucide-react";
 
+import { useAppLocale } from "@/lib/i18n";
+
 import { Button } from "@/components/ui/button";
 
 export function InstructionAudio({ src, label, unavailableLabel }: {
@@ -10,6 +12,7 @@ export function InstructionAudio({ src, label, unavailableLabel }: {
   label: string;
   unavailableLabel: string;
 }) {
+  const { copy } = useAppLocale();
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
@@ -53,7 +56,7 @@ export function InstructionAudio({ src, label, unavailableLabel }: {
       <Button type="button" size="sm" variant="ghost" onClick={replay} disabled={unavailable} aria-label={`${label} — replay`}>
         <RotateCcw className="h-4 w-4" />
       </Button>
-      <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">AI / IA · offline</span>
+      <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">{copy("Instrucciones pregrabadas", "Prerecorded instructions")}</span>
     </div>
   );
 }

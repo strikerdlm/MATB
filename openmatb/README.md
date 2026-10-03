@@ -33,6 +33,8 @@ The last version requires Python 3.9 and only depends on the following third-par
 
 The program is compatible with Windows, Mac and Linux systems. To run perfectly, the software requires only a personal computer and a joystick for the tracking task.
 
+With the default RESMAN bindings, use the **numeric keypad keys 1–8** (`NUM_1`–`NUM_8`) to toggle the correspondingly numbered pumps. The top-row number keys are different inputs and do not substitute for the keypad. Enable Num Lock and check every pump during practice. An external or embedded keypad works only if it emits the configured `NUM_1`–`NUM_8` events; follow any custom bindings configured for the session.
+
 ## Cross-platform installation
 
 The first thing to do is to [install python 3.9](https://www.python.org/downloads/) (or above) on your computer.

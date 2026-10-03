@@ -46,6 +46,8 @@ en `requirements.txt`, entre ellas:
 El programa es compatible con Windows, macOS y Linux. Para la tarea TRACK se
 recomienda un joystick.
 
+Con las asignaciones predeterminadas de RESMAN, use las **teclas 1–8 del teclado numérico** (`NUM_1`–`NUM_8`) para activar o desactivar las bombas con el mismo número. Los números de la fila superior son entradas distintas y no sustituyen al teclado numérico. Active Bloq Num y compruebe cada bomba durante la práctica. Un teclado numérico externo o integrado solo funciona si emite los eventos `NUM_1`–`NUM_8` configurados; siga las asignaciones personalizadas de la sesión si las hay.
+
 ## Instalación multiplataforma
 
 Instale Python 3.9 o posterior, clone el repositorio y, desde la carpeta

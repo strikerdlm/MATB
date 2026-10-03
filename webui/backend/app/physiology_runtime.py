@@ -225,7 +225,7 @@ class PolarCaptureManager:
         *,
         participant_id: str,
         session_kind: str,
-        session_id: str,
+        session_id: str | None,
         settings: dict[str, int],
         execution_purpose: str = "study",
         attempt_id: str | None = None,
@@ -246,6 +246,8 @@ class PolarCaptureManager:
                 purpose=execution_purpose, require_started=False,
                 config=dict(binding_id='polar-h10-pmd-v1', input_mapping='rr-ecg-acc', settings=settings, scoring='raw-streams'))
             if context:
+                if session_kind == "generic" and session_id is None:
+                    session_id = context["occasion_id"]
                 self._validate_settings(settings)
                 if context['accompanying_key']:
                     from app.assessment_adapters import source_attempt
@@ -259,7 +261,11 @@ class PolarCaptureManager:
                         raise PolarRuntimeError('polar_assigned_accompaniment_mismatch')
                 elif session_kind != 'generic' or session_id != context['occasion_id']:
                     raise PolarRuntimeError('polar_assigned_baseline_context_required')
+            if session_kind == "generic" and session_id is None:
+                session_id = capture_id
             if session_kind != "generic":
+                if not session_id:
+                    raise PolarRuntimeError("polar_associated_session_required")
                 from sqlalchemy import text
                 # Fixed allowlist, never interpolate a caller-controlled table name.
                 table = {"openmatb": "openmatb_suite_session", "liftoff": "liftoff_session", "suas": "simulation_session"}.get(session_kind)
@@ -298,6 +304,9 @@ class PolarCaptureManager:
                 self._require_lease(row, lease)
             db.expunge(row)
             return row
+
+    def active_capture(self) -> PolarCaptureV1 | None:
+        return self.capture_view(self._capture.capture_id) if self._capture else None
 
     def capture_view(self, capture_id: str) -> PolarCaptureV1:
         return self._view(self._row(capture_id))

@@ -2,6 +2,8 @@
 
 <p>En la tarea de gestión de recursos (RESMAN), el participante debe mantener los depósitos principales A y B próximos a sus niveles objetivo mediante depósitos auxiliares y bombas con caudales diferentes.</p>
 
-<p>El participante debe activar o desactivar las bombas numeradas según sea necesario para compensar el consumo de los depósitos principales.</p>
+<p>Con la asignación predeterminada, use las teclas 1–8 del teclado numérico para activar o desactivar las bombas con el mismo número según sea necesario para compensar el consumo de los depósitos principales.</p>
 
 <p>Algunas bombas pueden presentar fallas durante el ejercicio.</p>
+
+<p>Active Bloq Num y compruebe las bombas durante la práctica. Los números de la fila superior no sustituyen al teclado numérico. Un teclado numérico externo o integrado solo funciona si emite los eventos NUM_1–NUM_8 configurados. Si la sesión utiliza otras asignaciones, siga esas indicaciones.</p>

@@ -44,3 +44,8 @@ describe("Polar H10 API", () => {
     expect(JSON.parse((global.fetch as any).mock.calls[0][1].body).settings.acc_range_g).toBe(8);
   });
 });
+
+it("distinguishes schema validation from a connection failure", async () => {
+  global.fetch = vi.fn().mockResolvedValue(response(422, { detail: [{ loc: ["body", "matb_session_id"], type: "missing", msg: "Field required" }] }));
+  await expect(startPolarCapture("capture-1", "lease")).rejects.toMatchObject({ code: "polar_request_invalid" });
+});
