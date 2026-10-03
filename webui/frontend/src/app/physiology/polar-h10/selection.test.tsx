@@ -54,6 +54,7 @@ describe("standalone Polar recording", () => {
     expect(screen.queryByLabelText("ID de sesión")).not.toBeInTheDocument();
     fireEvent.click(prepare);
     const start = await screen.findByRole("button", { name: "Start recording" });
+    await waitFor(() => expect(start).toBeEnabled());
     expect(api.createPolarCapture).toHaveBeenCalledWith(expect.objectContaining({ participant_pseudonym: "P99", execution_purpose: "practice", matb_session_kind: "generic" }));
     expect(vi.mocked(api.createPolarCapture).mock.calls[0][0].matb_session_id).toBeUndefined();
     fireEvent.click(start);

@@ -392,7 +392,6 @@ export default function PolarH10Page() {
     {ownershipNotice && <p role="alert" className="border border-warning p-3">{ownershipNotice} <Link href="/station">{copy("Abrir Estación", "Open Station")}</Link></p>}
     <div className="flex flex-wrap items-center gap-3"><Button variant="outline" disabled={busy || restoring} onClick={() => void refreshCapture()}>{copy("Actualizar estado", "Refresh status")}</Button><Link href="/station">{copy("Estado y recuperación de Estación", "Station status and recovery")}</Link><span>{copy("Propósito", "Purpose")}: {capture?.execution_purpose ?? purpose ?? copy("Seleccione práctica o estudio", "Select practice or study")}</span></div>
     <div className="flex flex-wrap items-center gap-3">
-            {capture?.lifecycle === "created" && <Button disabled={busy || !lease} onClick={() => void start()}><Play className="mr-2 h-4 w-4" />{copy("Iniciar grabación", "Start recording")}</Button>}
             {activeCapture && <Button variant="destructive" disabled={busy || !lease || capture?.lifecycle === "stopping"} onClick={() => void stop()}><Square className="mr-2 h-4 w-4" />{copy("Detener y finalizar", "Stop and finalize")}</Button>}
           {capture && <div className="border border-white/10 p-3 font-mono text-xs text-muted-foreground"><p>{capture.capture_id}</p><p>{capture.participant_pseudonym} · {capture.execution_purpose} · {capture.matb_session_kind === "generic" ? copy("Independiente", "Standalone") : `${capture.matb_session_kind}: ${capture.matb_session_id}`}</p><p className="mt-1">{capture.lifecycle} · ECG {settings?.ecg_sample_rate_hz} Hz · ACC {settings?.acc_sample_rate_hz} Hz ±{settings?.acc_range_g}G</p></div>}
     </div>
@@ -445,11 +444,14 @@ export default function PolarH10Page() {
           </div>
           <div className="flex flex-wrap gap-2">
             {assigned.context?.accompanying_key && !capture && <label>{copy('Sesión acompañada exacta','Exact accompanying session')}<select className="native-select block" value={sessionId} onChange={e=>{const source=companionSources.find(s=>s.id===e.target.value);setSessionId(e.target.value);setSessionKind(source?.table==='openmatb_suite_session'?'openmatb':source?.table==='liftoff_session'?'liftoff':'suas');}}><option value="">—</option>{companionSources.map(s=><option key={s.id} value={s.id}>{s.table} · {s.id}</option>)}</select></label>}
-            {!capture && <div className="space-y-2">
-              <Button disabled={busy || Boolean(prepareBlocker)} aria-describedby={prepareBlocker ? "polar-prepare-requirement" : undefined} onClick={() => void prepare()}>{copy("Preparar", "Prepare")}</Button>
-              {prepareBlocker && <p id="polar-prepare-requirement" role="status" className="text-sm text-info">{prepareBlocker}</p>}
-              {purpose === 'study' && !assigned.context && <Link className="block text-sm underline" href="/astra">{copy("Abrir visita ASTRA", "Open ASTRA visit")}</Link>}
-            </div>}
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant={capture ? "outline" : "default"} disabled={Boolean(capture) || busy || Boolean(prepareBlocker)} aria-describedby={!capture && prepareBlocker ? "polar-prepare-requirement" : undefined} onClick={() => void prepare()}>{copy("Preparar", "Prepare")}</Button>
+                <Button disabled={capture?.lifecycle !== "created" || busy || !lease} onClick={() => void start()}><Play className="mr-2 h-4 w-4" />{copy("Iniciar grabación", "Start recording")}</Button>
+              </div>
+              {!capture && prepareBlocker && <p id="polar-prepare-requirement" role="status" className="text-sm text-info">{prepareBlocker}</p>}
+              {!capture && purpose === 'study' && !assigned.context && <Link className="block text-sm underline" href="/astra">{copy("Abrir visita ASTRA", "Open ASTRA visit")}</Link>}
+            </div>
             {capture && capture.execution_purpose !== "practice" && ["finalized", "incomplete"].includes(capture.artifact_state) && <Button variant="outline" disabled={busy || !lease} onClick={() => void run(() => downloadPolarBundle(capture.capture_id, lease))}><Download className="mr-2 h-4 w-4" />{copy("Descargar paquete", "Download bundle")}</Button>}
             {capture?.artifact_state === "finalized" && capture.matb_session_kind !== "generic" && purpose && <Button asChild><Link href={withExecutionPurpose("/mission/setup#briefing", purpose)}>{copy("Continuar a instrucciones de misión", "Continue to mission briefing")}</Link></Button>}
           </div>

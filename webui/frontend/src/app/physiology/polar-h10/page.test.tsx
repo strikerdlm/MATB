@@ -39,7 +39,9 @@ it("prepares standalone without a MATB session or automatic baseline marker", as
   await waitFor(() => expect(screen.getByRole("button", { name: "Prepare" })).toBeEnabled());
   expect(screen.queryByLabelText("MATB session ID")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Prepare" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Start recording" }));
+  const start = screen.getByRole("button", { name: "Start recording" });
+  await waitFor(() => expect(start).toBeEnabled());
+  fireEvent.click(start);
   await screen.findByRole("button", { name: "Stop and finalize" });
   expect(api.createPolarCapture).toHaveBeenCalledWith(expect.objectContaining({ matb_session_kind: "generic", matb_session_id: undefined, execution_purpose: "practice" }));
   expect(api.addPolarMarker).toHaveBeenCalledWith("capture-current", "valid", "TASK_PRE");
@@ -128,7 +130,7 @@ it("explains an unregistered pseudonym without suggesting a connection problem",
   await waitFor(() => expect(prepare).toBeEnabled());
   fireEvent.click(prepare);
   await screen.findByText(/participant is not registered/);
-  expect(screen.queryByRole("button", { name: "Start recording" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Start recording" })).toBeDisabled();
   expect(api.startPolarCapture).not.toHaveBeenCalled();
 });
 
