@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { AstraVisitHeader, AstraRecovery } from "./AstraVisitSupport";
+import { StudyPolarAccompaniment } from '@/components/physiology/StudyPolarAccompaniment';
 import { Button } from "@/components/ui/button";
 import { FixedLocaleProvider, useAppLocale } from "@/lib/i18n";
 import {
@@ -121,6 +122,7 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
   const [run, setRun] = useState<Preparation | null>(null);
   const [responses, setResponses] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [polarReady, setPolarReady] = useState<{ key: string; ready: boolean } | null>(null);
   const [error, setError] = useState("");
   const [help, setHelp] = useState(false);
   const [stopped, setStopped] = useState(false);
@@ -176,6 +178,7 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
     (o) =>
       !detail.attempts[o.key]?.some((a) => a.acquisition_state === "finished"),
   );
+  const companion = next?.instrument === 'openmatb' ? occasions.find(o => o.accompanying_key === next.key) : undefined;
   const locale =
     (run && run.next_action !== "ready"
       ? run.presentation.locale
@@ -185,9 +188,11 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
     if (!astra) return key;
     const occasion = occasions.find(item => item.key === key);
     if (!occasion) return key;
+    if (occasion.instrument === 'physiology') return occasion.phase === 'PRE_REST_SEATED' ? `${copy('Basal PRE sentado', 'Seated PRE baseline')} · ${occasion.condition_by_arm[detail.assignment.arm]?.endsWith('_5MIN') ? 5 : 10} min` : copy('Polar del bloque · finalizar y guardar', 'Block Polar · finish and save');
     const level = occasion.condition_by_arm[detail.assignment.arm];
     const workload = ({ LOW: copy("baja", "low"), MEDIUM: copy("media", "medium"), HIGH: copy("alta", "high") })[level] ?? level;
-    return `${copy("Bloque", "Block")} ${Math.ceil(occasion.order / 2)}/3 · ${copy("carga", "workload")} ${workload}`;
+    const block = /_block([1-3])/.exec(occasion.key)?.[1] ?? Math.ceil(occasion.order / 2);
+    return `${copy("Bloque", "Block")} ${block}/3 · ${copy("carga", "workload")} ${workload}`;
   };
   const missing = next
     ? readiness?.requirements[next.key]?.find((r) => r.state !== "prepared")
@@ -700,8 +705,9 @@ function ParticipantVisit({ initial }: { initial: AssignmentDetail }) {
               {!astra && <p>
                 {next.phase} · {next.instrument}
               </p>}
+              {companion && <StudyPolarAccompaniment key={companion.key} detail={detail} companion={companion} onReady={setPolarReady} copy={copy} />}
               <Button
-                disabled={busy}
+                disabled={busy || Boolean(companion && !(polarReady?.key === companion.key && polarReady.ready))}
                 onClick={() =>
                   void act(async () => {
                     const rows = detail.attempts[next.key] ?? [];

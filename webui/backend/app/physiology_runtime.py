@@ -26,6 +26,7 @@ from app.models import Participant
 from app.physiology_models import PolarCaptureMarkerRecord, PolarCaptureRecord
 from matb_integration.physiology.analysis import HRV_ALGORITHM_VERSIONS, analyze_rr_window, workload_response
 from matb_integration.physiology.artifacts import ParquetCaptureWriter
+from matb_integration.physiology.rr_export import RRExportError, export_rr_capture
 from matb_integration.physiology.contracts import (
     PolarArtifactManifestV1,
     PolarCaptureEventV1,
@@ -744,6 +745,14 @@ class PolarCaptureManager:
                 incomplete_reasons_json=json.dumps(sorted(context.incomplete_reasons)),
             )
         self._capture = None
+        finalized = self._row(capture_id)
+        if finalized.manifest_json:
+            try:
+                await asyncio.to_thread(self._rr_exports, finalized)
+            except Exception as exc:
+                # A derived-format failure must not relabel successfully saved raw data.
+                import logging
+                logging.getLogger(__name__).warning("RR export unavailable: %s", type(exc).__name__)
         await self._emit(capture_id, "status", {
             "lifecycle": self.capture_view(capture_id).lifecycle,
             "artifact_state": self.capture_view(capture_id).artifact_state,
@@ -836,7 +845,73 @@ class PolarCaptureManager:
                     raise PolarRuntimeError("polar_artifact_checksum_failed")
                 archive.write(path, arcname=entry.relative_path)
             archive.write(root / "manifest.json", arcname="manifest.json")
+            exports = self._rr_exports(row)
+            for item in exports["files"]:
+                archive.write(root / "rr-export" / item["filename"], arcname="rr-export/" + item["filename"])
+            archive.write(root / "rr-export" / "rr_export_manifest.json", arcname="rr-export/rr_export_manifest.json")
+            archive.write(self.rr_export_file(capture_id, lease, "capture_context.json"), arcname="rr-export/capture_context.json")
         return target
+
+    def _rr_exports(self, row: PolarCaptureRecord) -> dict[str, Any]:
+        if not row.manifest_json or row.artifact_state not in {"finalized", "incomplete"}:
+            raise PolarRuntimeError("polar_artifacts_not_finalized")
+        root = resolve_artifact(row.artifact_root or "").resolve()
+        if root.parent != self.artifact_root:
+            raise PolarRuntimeError("polar_artifact_path_invalid")
+        manifest = PolarArtifactManifestV1.model_validate_json(row.manifest_json)
+        try:
+            return export_rr_capture(root, manifest)
+        except RRExportError as exc:
+            raise PolarRuntimeError(str(exc)) from exc
+
+    def rr_export(self, capture_id: str, lease: str) -> dict[str, Any]:
+        from app.physiology_schemas import RRExportView
+        result = self._rr_exports(self._row(capture_id, lease=lease))
+        return {key: result[key] for key in RRExportView.model_fields}
+
+    def rr_export_file(self, capture_id: str, lease: str, filename: str) -> Path:
+        row = self._row(capture_id, lease=lease)
+        result = self._rr_exports(row)
+        allowed = {item["filename"] for item in result["files"]} | {"rr_export_manifest.json", "capture_context.json"}
+        if filename not in allowed:
+            raise PolarRuntimeError("polar_rr_export_file_not_found")
+        root = (resolve_artifact(row.artifact_root) / "rr-export").resolve()
+        path = (root / filename).resolve()
+        if path.parent != root:
+            raise PolarRuntimeError("polar_artifact_path_invalid")
+        if filename == "capture_context.json":
+            with Session(self.engine) as db:
+                markers = db.exec(select(PolarCaptureMarkerRecord).where(
+                    PolarCaptureMarkerRecord.capture_id == capture_id).order_by(PolarCaptureMarkerRecord.sequence)).all()
+            context = dict(schema_id="matb.polar.capture-context.v1", capture_id=capture_id,
+                participant_pseudonym=row.participant_id, execution_purpose=row.execution_purpose,
+                matb_session_kind=row.matb_session_kind, matb_session_id=row.matb_session_id,
+                device_alias=row.device_alias, alias_is_persistent_device_id=False,
+                source_manifest_sha256=row.manifest_sha256,
+                markers=[dict(sequence=marker.sequence, label=marker.label, payload=json.loads(marker.payload_json),
+                    host_monotonic_ns=marker.host_monotonic_ns, occurred_at_utc=marker.occurred_at_utc.isoformat()) for marker in markers])
+            # Derived from durable metadata, not a change to the raw capture.
+            # Serialize into the same-directory temporary file before publication.
+            import os
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=root, suffix=".partial", delete=False) as handle:
+                json.dump(context, handle, indent=2, allow_nan=False)
+                temporary = handle.name
+            os.replace(temporary, path)
+        return path
+
+    def review_capture(self, capture_id: str, lease: str) -> dict[str, Any]:
+        from matb_integration.physiology.review import review_capture
+        row, manifest, partials = self.inventory(capture_id, lease)
+        if manifest is None or partials or row.artifact_state not in {"finalized", "incomplete"}:
+            raise PolarRuntimeError("polar_artifacts_not_finalized")
+        root = resolve_artifact(row.artifact_root or "").resolve()
+        if root.parent != self.artifact_root:
+            raise PolarRuntimeError("polar_artifact_path_invalid")
+        try:
+            return review_capture(root, manifest)
+        except RRExportError as exc:
+            raise PolarRuntimeError(str(exc)) from exc
 
     def analyze_capture(self, capture_id: str, lease: str) -> dict[str, Any]:
         """Compute standardized five-minute phase descriptors from finalized raw data."""
@@ -919,7 +994,7 @@ class PolarCaptureManager:
                     "n_acc_samples": len(magnitudes),
                 },
             })
-        baseline = next((phase for phase in phase_results if phase["label"] == "BASELINE"), None)
+        baseline = next((phase for phase in phase_results if phase["label"] in {"BASELINE", "TASK_PRE"}), None)
         responses: list[dict[str, Any]] = []
         for phase in phase_results:
             if phase["label"] not in {"PRACTICE", "LOW", "MEDIUM", "HIGH"}:

@@ -7,7 +7,7 @@ export interface AstraParticipant extends Participant {
   time_slot: string | null; station: number; block_order: string[]; visits: AstraVisit[];
 }
 export interface AstraRoster { participants: AstraParticipant[]; session_minutes: number; experimental_block_seconds: number }
-export interface AstraProtocol { active: boolean; version_id: string | null; title: string | null }
+export interface AstraProtocol { active: boolean; version_id: string | null; title: string | null; includes_polar?: boolean }
 export async function astraCall<T>(path: string, body?: object, method = body ? "POST" : "GET"): Promise<T> {
   const response = await fetch(`${await getApiBase()}${path}`, { method,
     headers: body ? { "Content-Type": "application/json" } : undefined,

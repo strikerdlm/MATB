@@ -8,6 +8,8 @@ import type {
   PolarDevice,
   PolarEvent,
   PreparedPolarCapture,
+  PolarRRExport,
+  PolarReview,
 } from "@/types/physiology";
 
 const PREFIX = "/physiology/polar-h10/v1";
@@ -23,7 +25,7 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   const base = await getApiBase();
   const response = await stationFetch(`${base}${PREFIX}${path}`, init);
   if (!response.ok) {
-    let code = "polar_request_failed";
+    let code = response.status === 422 ? "polar_request_invalid" : "polar_request_failed";
     let message = response.statusText;
     try {
       const payload = await response.json();
@@ -48,9 +50,9 @@ export const listenPolarBroadcast = (timeoutSeconds = 5) =>
 export const connectPolar = (deviceToken: string) =>
   call<PolarCapabilities>("/connect", post({ device_token: deviceToken }));
 export const getActivePolarCapture = () => call<PolarCapture | null>("/captures/active");
-export const getPolarCapture = (id: string) => call<PolarCapture>(`/captures/${encodeURIComponent(id)}`);
 export const validatePolarControl = (id: string, lease: string) => call<PolarCapture>(`/captures/${encodeURIComponent(id)}/control`, { headers: { "X-Polar-Controller": lease } });
 export const getPolarConnection = () => call<PolarConnection>("/connection");
+export const getPolarCapture = (id: string) => call<PolarCapture>(`/captures/${encodeURIComponent(id)}`);
 export const disconnectPolar = () => call<PolarConnection>("/connection", { method: "DELETE" });
 
 export function createPolarCapture(body: {
@@ -80,6 +82,28 @@ export const getPolarAnalysis = (id: string, lease: string) =>
   call<PolarAnalysis>(`/captures/${encodeURIComponent(id)}/analysis`, {
     headers: { "X-Polar-Controller": lease },
   });
+
+export const getPolarRRExport = (id: string, lease: string) =>
+  call<PolarRRExport>(`/captures/${encodeURIComponent(id)}/rr-export`, { headers: { "X-Polar-Controller": lease } });
+export const getPolarReview = (id: string, lease: string) =>
+  call<PolarReview>(`/captures/${encodeURIComponent(id)}/review`, { headers: { "X-Polar-Controller": lease } });
+
+export async function downloadPolarRRFile(id: string, lease: string, filename: string): Promise<void> {
+  const base = await getApiBase();
+  const response = await stationFetch(`${base}${PREFIX}/captures/${encodeURIComponent(id)}/rr-export/files/${encodeURIComponent(filename)}`, {
+    headers: { "X-Polar-Controller": lease },
+  });
+  if (!response.ok) throw new PolarApiError(response.status, "polar_rr_export_failed", response.statusText);
+  const objectUrl = URL.createObjectURL(await response.blob());
+  try {
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = filename;
+    anchor.click();
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
 
 export async function downloadPolarBundle(id: string, lease: string): Promise<void> {
   const base = await getApiBase();

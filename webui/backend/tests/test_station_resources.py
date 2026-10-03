@@ -182,6 +182,23 @@ def test_initializing_preflight_blocks_baseline_until_same_runtime_is_held(engin
         admit(db,'baseline',instrument='pvt',owner='assignment:A');db.commit()
 
 
+def test_same_visit_may_prepare_native_after_baseline_has_stopped(engine):
+    from app.station_resources import admit, finish, snapshot
+    with Session(engine) as db:
+        admit(db, 'pre', instrument='physiology', owner='assignment:A', participant='P01', visit=1); db.commit()
+        with pytest.raises(HTTPException):
+            admit(db, 'native', instrument='openmatb', owner='assignment:A', participant='P01', visit=1, held=True, initializing=True)
+        db.rollback()
+        finish(db, 'pre'); db.commit()
+        with pytest.raises(HTTPException):
+            admit(db, 'native', instrument='openmatb', owner='assignment:B', participant='P02', visit=2, held=True, initializing=True)
+        db.rollback()
+        admit(db, 'native', instrument='openmatb', owner='assignment:A', participant='P01', visit=1, held=True, initializing=True); db.commit()
+        # The second admission pins the same process; it must not conflict with itself.
+        admit(db, 'native', instrument='openmatb', owner='assignment:A', participant='P01', visit=1, held=True, initializing=True, pid=123); db.commit()
+        assert snapshot(db)['acquisitions']['native']['pid'] == 123
+
+
 
 def test_deferred_analysis_records_metadata_cutoff_without_raw_calculation(engine,monkeypatch):
     from app import study_analysis

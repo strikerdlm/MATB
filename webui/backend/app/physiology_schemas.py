@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from matb_integration.physiology.contracts import (
     PolarArtifactManifestV1,
@@ -57,6 +57,12 @@ class CreateCaptureRequest(StrictBody):
     matb_session_id: str | None = Field(default=None, min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$")
     settings: CaptureSettings = Field(default_factory=CaptureSettings)
 
+    @model_validator(mode="after")
+    def require_linked_session(self) -> CreateCaptureRequest:
+        if self.matb_session_id is None and self.matb_session_kind != "generic":
+            raise ValueError("Linked and assigned study captures require their session context")
+        return self
+
 
 class PreparedCapture(StrictBody):
     capture: PolarCaptureV1
@@ -95,6 +101,45 @@ class PhysiologyAnalysisView(StrictBody):
     phases: list[dict[str, Any]]
     workload_responses: list[dict[str, Any]]
     interpretation: Literal["descriptive_only_no_workload_classification"] = "descriptive_only_no_workload_classification"
+
+
+class RRExportFile(StrictBody):
+    filename: str
+    kind: Literal["kubios_txt", "rr_csv", "trace_csv"]
+    row_count: int
+    segment_id: int | None
+    sha256: str
+    size_bytes: int
+
+
+class RRExportSample(StrictBody):
+    beat_index: int
+    rr_ms: float
+    segment_id: int
+
+
+class RRExportSegment(StrictBody):
+    segment_id: int
+    rr_count: int
+    first_beat_index: int
+    last_beat_index: int
+    txt_filename: str
+    csv_filename: str
+
+
+class RRExportView(StrictBody):
+    capture_id: str
+    execution_purpose: Literal["practice", "study"]
+    units: Literal["ms"]
+    row_count: int
+    rr_count: int
+    excluded_nonpositive_or_nonfinite: int
+    contact_not_detected_count: int
+    segment_count: int
+    segments: list[RRExportSegment]
+    preview: list[RRExportSample]
+    files: list[RRExportFile]
+    incomplete_reasons: list[str]
 
 
 class InternalRecordingGate(StrictBody):

@@ -33,7 +33,9 @@ def ensure_preset(runtime):
     return runtime.publish_preset(PRESET_ID, VERSION)
 
 
-def payload(db):
+def payload(db, *, include_polar=False, baseline_minutes=5):
+    if baseline_minutes not in (5, 10):
+        raise HTTPException(422, 'El basal Polar debe ser de 5 o 10 minutos.')
     from app.study_bindings import binding_options
     from matb_integration.scenario_builder import block_order_for_participant
     options = binding_options(db).get("openmatb")
@@ -70,7 +72,7 @@ def payload(db):
                     rationale='Reconocer los controles y el indicativo del entorno nativo real antes de cada bloque; la familiarización V0 se registra por separado.'))
     native_keys = [o['key'] for o in occasions if o['instrument'] == 'openmatb']
     rating_keys = [o['key'] for o in occasions if o['instrument'] == 'questionnaire']
-    return dict(study=dict(study_id=STUDY_ID, title='ASTRA · MATB V0–V7 · grupos 5/7', template_family=selected_protocol().protocol_id,
+    result = dict(study=dict(study_id=STUDY_ID, title='ASTRA · MATB V0–V7', template_family=selected_protocol().protocol_id,
         synthetic=False, enabled_instruments=['openmatb', 'questionnaire'],
         visits=[dict(ordinal=v.ordinal, code=v.code, scheduled_day=v.scheduled_day) for v in VISITS],
         arms=list(orders), assignment_method='explicit_researcher_selection', occasions=occasions, recovery_intervals=recovery,
@@ -93,26 +95,57 @@ def payload(db):
                 participant_preparation_requirement='report_status', protocol_requirement='report_status', configuration_pooling='identical_only',
                 pooling_review=None, hcf_enabled=False, hcf_screen_keys=[], hcf_attempt_selection='explicit',
                 rationale='Registro descriptivo por intento con estados de evidencia explícitos; revisión humana antes de seleccionar resultados.')))
+    if include_polar:
+        polar = binding_options(db).get('physiology')
+        if not polar:
+            raise HTTPException(409, 'Active el componente Polar H10 en esta estación antes de incluirlo en el protocolo.')
+        result['study']['enabled_instruments'].append('physiology')
+        for occasion in occasions[:]:
+            # Keep the exact native/rating keys and counterbalanced order.
+            occasion['order'] = occasion['order'] * 2 + 2
+            if occasion['instrument'] != 'openmatb':
+                continue
+            occasion['collection_group'] = occasion['key'] + '_polar'
+            companion = dict(key=occasion['key'] + '_polar', visit_ordinal=occasion['visit_ordinal'],
+                instrument='physiology', phase='TASK_PRE' if occasion['phase'] == 'block1' else 'TASK',
+                order=occasion['order'] + 1, condition_by_arm=occasion['condition_by_arm'], locale='es-419',
+                config=polar[0], collection_group=occasion['collection_group'], accompanying_key=occasion['key'],
+                prerequisite_keys=occasion['prerequisite_keys'])
+            occasions.append(companion)
+        occasions.append(dict(key='v0_pre_rest', visit_ordinal=1, instrument='physiology', phase='PRE_REST_SEATED',
+            order=1, condition_by_arm={arm: f'PRE_REST_SEATED_{baseline_minutes}MIN' for arm in orders}, locale='es-419', config=polar[0], prerequisite_keys=[]))
+        for occasion in occasions:
+            if occasion['instrument'] == 'physiology':
+                preparation.append(dict(occasion_key=occasion['key'], placement='prescribed_later',
+                    demonstration_required=False, acknowledgement_required=False, comprehension=[], practice=[],
+                    rationale=f'El operador comprueba identidad, banda y señal; PRE sentado: adaptación ≥5 min y registro {baseline_minutes} min. TASK_PRE: reposo contextual 5 min antes del primer bloque.'))
+        result['study']['rules']['preparation'] += f' Polar opcional asignado: PRE_REST_SEATED de {baseline_minutes} min tras ≥5 min de adaptación en V0, separado de TASK_PRE de 5 min. Una captura vinculada por bloque, con originales y marcas de tiempo; confirmar sensores físicamente por persona.'
+        if baseline_minutes == 5:
+            result['study']['rules']['preparation'] += ' Modalidad abreviada solicitada el 2 octubre de 2026: omite el segundo segmento de respaldo de 5 min previsto por el manual ASTRA v2.8; conservar fecha real y desviación del calendario basal.'
+    return result
 
 
 def status(db):
     identity = registry.active_version(db)
     version = registry.get_version(db, identity) if identity else None
     return dict(active=bool(version and version.study_id == STUDY_ID), version_id=identity,
-                title=json.loads(version.study_json)['title'] if version else None)
+                title=json.loads(version.study_json)['title'] if version else None,
+                includes_polar=bool(version and 'physiology' in json.loads(version.study_json)['enabled_instruments']))
 
 
-def configure(db, runtime, actor):
+def configure(db, runtime, actor, *, include_polar=False, baseline_minutes=5):
     registry.named(actor)
     existing = status(db)
     if existing['active']:
+        if include_polar and not existing['includes_polar']:
+            raise HTTPException(409, 'El protocolo activo no incluye Polar. Cree una revisión en Configuración del estudio; la versión congelada se conserva.')
         return existing
     if existing['version_id']:
         raise HTTPException(409, 'Esta base ya tiene otro estudio activo. Conserve su configuración y use una base de estación ASTRA separada.')
     ensure_preset(runtime)
-    draft = registry.create_draft(db, payload(db))
+    draft = registry.create_draft(db, payload(db, include_polar=include_polar, baseline_minutes=baseline_minutes))
     rehearsal = registry.rehearse(db, draft.id)
-    version = registry.freeze(db, draft.id, dict(actor=actor, reason='Activación explícita del protocolo de aplicación ASTRA 5/7 y sus políticas operativas/descriptivas.',
+    version = registry.freeze(db, draft.id, dict(actor=actor, reason='Activación explícita del protocolo de aplicación ASTRA y sus políticas operativas/descriptivas.',
         sha256=draft.sha256, rehearsal_id=rehearsal.id))
     registry.activate(db, version.id, actor=actor, reason='Aplicación MATB ASTRA V0–V7')
     db.commit()

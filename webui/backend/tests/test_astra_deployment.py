@@ -165,3 +165,40 @@ def test_astra_practice_uses_v7_label_without_changing_legacy_protocol(engine, t
         remove_participant('P01', db)
     with pytest.raises(HTTPException):
         asyncio.run(manager.create_session(CreateOpenMatbSession(participant_id='P01', visit_ordinal=8, execution_purpose='practice')))
+
+
+@pytest.mark.parametrize('minutes', [5, 10])
+def test_astra_polar_is_assigned_to_exact_participant_visit_and_block(engine, tmp_path, minutes):
+    from app import study_registry
+    manager = _manager(engine, tmp_path)
+    with Session(engine) as db:
+        astra_roster.initialize(db)
+        current = astra_deployment.configure(db, manager, 'Investigadora Polar', include_polar=True, baseline_minutes=minutes)
+        assert current['includes_polar']
+        view = study_registry.version_view(db, current['version_id'])
+        occasions = view['study']['occasions']
+        baseline = next(o for o in occasions if o['key'] == 'v0_pre_rest')
+        assert set(baseline['condition_by_arm'].values()) == {f'PRE_REST_SEATED_{minutes}MIN'}
+        if minutes == 5:
+            assert 'omite el segundo segmento' in view['study']['rules']['preparation']
+        first = astra_deployment.assign_visit(db, 'P01', 1)
+        other = astra_deployment.assign_visit(db, 'P02', 1)
+        later = astra_deployment.assign_visit(db, 'P01', 2)
+        assert len(json.loads(first.occasions_json)) == 10
+        assert len(json.loads(later.occasions_json)) == 9
+        assert not set(json.loads(first.occasions_json).values()) & set(json.loads(other.occasions_json).values())
+        for companion in (o for o in occasions if o.get('accompanying_key')):
+            native = next(o for o in occasions if o['key'] == companion['accompanying_key'])
+            assert native['collection_group'] == companion['collection_group']
+            assert native['visit_ordinal'] == companion['visit_ordinal']
+            assert native['order'] < companion['order']
+
+
+def test_polar_cannot_silently_change_frozen_astra_protocol(engine, tmp_path):
+    manager = _manager(engine, tmp_path)
+    with Session(engine) as db:
+        astra_roster.initialize(db)
+        original = astra_deployment.configure(db, manager, 'Investigadora original')
+        with pytest.raises(HTTPException):
+            astra_deployment.configure(db, manager, 'Investigadora Polar', include_polar=True)
+        assert astra_deployment.status(db) == original

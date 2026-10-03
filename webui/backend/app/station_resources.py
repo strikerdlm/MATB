@@ -81,19 +81,35 @@ def running(db):
     return db.exec(select(StationJob).where(StationJob.status.in_(['running','cancelling','uncertain']))).first()
 
 
-def admit(db, source, *, instrument, owner, participant=None, visit=None, occasion_key=None, group=None, accompanying=None, attempt_id=None, held=False, pid=None, initializing=False):
+def _independent_physiology_pair(left, right):
+    """An unlinked practice recording may coexist with one standalone task."""
+    if not all(item['owner'].startswith('standalone:') for item in (left, right)):
+        return False
+    if bool(left.get('independent_physiology')) == bool(right.get('independent_physiology')):
+        return False
+    physiology, foreground = (left, right) if left.get('independent_physiology') else (right, left)
+    return physiology['instrument'] == 'physiology' and foreground['instrument'] != 'physiology'
+
+
+def admit(db, source, *, instrument, owner, participant=None, visit=None, occasion_key=None, group=None, accompanying=None, attempt_id=None, held=False, pid=None, initializing=False, independent_physiology=False):
     row = lock(db)
     if row.maintenance or running(db): blocked('station_heavy_work_active', 'Heavy work or maintenance owns the station.')
     reservation = json.loads(row.reservation_json)
     lanes = json.loads(row.lanes_json)
+    proposed = dict(initializing=initializing,instrument=instrument,owner=owner,participant=participant,visit=visit,occasion_key=occasion_key,group=group,accompanying=accompanying,attempt_id=attempt_id,held=held,pid=pid)
+    if independent_physiology:
+        proposed['independent_physiology'] = True
     if reservation and reservation.get('uncertain'): blocked('station_recovery_required', 'Lost acquisition ownership requires explicit idle recovery.')
     if reservation and (reservation['owner'],reservation.get('participant'),reservation.get('visit')) != (owner,participant,visit):
-        blocked('station_visit_reserved', 'Another participant visit owns the station.')
-    if held and initializing and reservation:
+        reserved = [other for other in lanes.values() if other['owner'] == reservation['owner']]
+        if not reserved or not all(_independent_physiology_pair(proposed, other) for other in reserved):
+            blocked('station_visit_reserved', 'Another participant visit owns the station.')
+    if held and initializing and reservation and any(key != source for key in lanes):
         blocked('station_preflight_requires_idle','Complete native preparation before opening the protected visit.')
-    proposed = dict(initializing=initializing,instrument=instrument,owner=owner,participant=participant,visit=visit,occasion_key=occasion_key,group=group,accompanying=accompanying,attempt_id=attempt_id,held=held,pid=pid)
     for key, other in lanes.items():
         if key == source: continue
+        if _independent_physiology_pair(proposed, other) and not other.get('initializing'):
+            continue
         if (other['owner'],other['participant'],other['visit']) != (owner,participant,visit):
             blocked('station_visit_reserved','A held or active runtime belongs to another visit.')
         if other.get('initializing'):
@@ -112,7 +128,7 @@ def admit(db, source, *, instrument, owner, participant=None, visit=None, occasi
     db.add(row); db.flush()
 
 
-def admit_attempt(db, attempt, *, source=None, held=False, pid=None, initializing=False):
+def admit_attempt(db, attempt, *, source=None, held=False, pid=None, initializing=False, independent_physiology=False):
     from .assessment_models import AssessmentOccasion
     occasion = db.get(AssessmentOccasion, attempt.occasion_id)
     context = {}
@@ -131,7 +147,8 @@ def admit_attempt(db, attempt, *, source=None, held=False, pid=None, initializin
           owner='assignment:'+context['assignment_id'] if context else 'standalone:'+(source or attempt.id),
           participant=occasion.participant_id,visit=occasion.visit_id,
           occasion_key=context.get('occasion_key',context.get('key')),group=context.get('collection_group'),
-          accompanying=context.get('accompanying_key'),attempt_id=attempt.id,held=held,pid=pid,initializing=initializing)
+          accompanying=context.get('accompanying_key'),attempt_id=attempt.id,held=held,pid=pid,initializing=initializing,
+          independent_physiology=independent_physiology and attempt.execution_purpose == 'practice' and not context)
 
 
 def admit_source(db, source, *, held=False, pid=None, initializing=False):
@@ -139,7 +156,10 @@ def admit_source(db, source, *, held=False, pid=None, initializing=False):
     require_new_acquisition(db, source.__tablename__, source.id)
     from .assessment_adapters import source_attempt
     attempt = source_attempt(db, source.__tablename__, source.id)
-    admit_attempt(db,attempt,source=source.__tablename__+':'+str(source.id),held=held,pid=pid,initializing=initializing)
+    independent = (source.__tablename__ == 'polar_capture'
+                   and source.execution_purpose == 'practice' and source.matb_session_kind == 'generic')
+    admit_attempt(db,attempt,source=source.__tablename__+':'+str(source.id),held=held,pid=pid,initializing=initializing,
+                  independent_physiology=independent)
     if not held and attempt.acquisition_state == 'created':
         from .assessment_service import transition
         transition(db,attempt.id,'started',native_session_id=source.id if source.__tablename__ == 'openmatb_suite_session' else None)
@@ -157,7 +177,12 @@ def finish(db, source, *, uncertain=False):
         reservation['uncertain']=True
     else:
         for key in affected: del lanes[key]
-        if reservation and reservation['owner'].startswith('standalone:') and not lanes: reservation=None
+        if reservation and reservation['owner'].startswith('standalone:'):
+            if not lanes:
+                reservation = None
+            elif not any(value['owner'] == reservation['owner'] for value in lanes.values()):
+                remaining = next(iter(lanes.values()))
+                reservation = {**reservation, **{key: remaining[key] for key in ('owner', 'participant', 'visit')}}
     row.lanes_json=json.dumps(lanes);row.reservation_json=json.dumps(reservation);db.add(row);db.flush()
 
 

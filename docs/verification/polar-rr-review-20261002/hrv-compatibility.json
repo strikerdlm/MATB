@@ -1,0 +1,15 @@
+{
+  "hrv_revision": "e658af2b57ec07e60971d072ecd50673ba210508",
+  "valid_packets_compared": 8208,
+  "all_rr_uint16_values": true,
+  "exact_rr_ms_match": true,
+  "txt_and_trace_csv_import_match": true,
+  "single_column_csv_with_header_supported": false,
+  "files_sha256": {
+    "app/research_workspace/polar/hrs_parser.py": "b562706edb10036c60ffb4b6002097737cd0065d9f2a9e2a18b7f390b3d2300e",
+    "app/operational_clinical/polar_rr.py": "611512652109d8e27e373fcc0698ea91aee9a881655f9eb61b8839c9f4d889c8",
+    "app/research_workspace/polar/backend.py": "46abb3e1998ab189de8e9b981ec0bcb153e11c08a8442344cb3761f7f01a7373"
+  },
+  "scope": "software parser and text-import compatibility; physical acquisition and analysis equivalence not established",
+  "known_difference": "MATB rejects trailing bytes without the RR flag; HRV protected parser ignores them. HRV text reader rejects single-column CSV with a header; use the headerless TXT per continuous segment. HRV importer rejects RR outside 200-3000 ms; MATB exports positive raw RR unchanged."
+}

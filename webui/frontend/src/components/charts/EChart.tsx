@@ -150,7 +150,7 @@ export function ScientificChart({
         option={mergedOption}
         notMerge
         lazyUpdate
-        opts={{ renderer: "svg", width: "auto", height }}
+        opts={{ renderer: "svg", height }}
         style={{ height, width: "100%" }}
       />
       {caption && (

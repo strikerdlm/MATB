@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from dataclasses import dataclass, field
 import time
 from typing import Any, Callable, Protocol
@@ -76,6 +77,16 @@ class PolarTransport(Protocol):
 
 
 def _connectability(native_device: Any, advertisement: Any) -> bool | None:
+    direct = getattr(advertisement, "connectable", None)
+    if isinstance(direct, bool):
+        return direct
+    platform_data = getattr(advertisement, "platform_data", None)
+    if isinstance(platform_data, (tuple, list)) and len(platform_data) >= 2:
+        raw = platform_data[1]
+        for event in (getattr(raw, "adv", None), getattr(raw, "scan", None)):
+            value = getattr(event, "is_connectable", None)
+            if isinstance(value, bool):
+                return value
     for source in (advertisement, getattr(native_device, "details", None)):
         value = getattr(source, "is_connectable", None)
         if isinstance(value, bool):
@@ -89,6 +100,16 @@ def _connectability(native_device: Any, advertisement: Any) -> bool | None:
             if isinstance(value, bool):
                 return value
     return None
+
+
+def _prepare_windows_bleak_thread() -> None:
+    """Match the HRV native backend's WinRT apartment preparation."""
+    if sys.platform == "win32":
+        try:
+            from bleak.backends.winrt.util import uninitialize_sta
+            uninitialize_sta()
+        except (ImportError, RuntimeError):
+            pass
 
 
 def _setting_values(settings: Any, setting_type: Any) -> tuple[int, ...]:
@@ -155,6 +176,7 @@ class PolarBleakTransport:
             raise ValueError("scan timeout must be between 0.25 and 30 seconds")
         from bleak import BleakScanner
 
+        _prepare_windows_bleak_thread()
         discovered = await BleakScanner.discover(timeout=timeout_s, return_adv=True)
         pairs = discovered.values() if isinstance(discovered, dict) else discovered
         candidates: list[DeviceCandidate] = []
@@ -192,6 +214,7 @@ class PolarBleakTransport:
             raise RuntimeError("device_not_connectable")
         from bleak import BleakClient
 
+        _prepare_windows_bleak_thread()
         self._disconnect_callback = on_disconnect
         self._client = BleakClient(device.native_device, disconnected_callback=self._on_disconnect)
         try:
