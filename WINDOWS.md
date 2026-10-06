@@ -12,15 +12,16 @@
    installer requires it. Keep the setup window open until it finishes.
 3. Double-click **Start MATB.cmd**. The browser opens
    `http://127.0.0.1:3100/start`. Choose OpenMATB or another activity and select
-   practice or your assigned study session. Keep the supervisor window open.
+   practice or your assigned study session. Once startup finishes, you can close
+   the shortcut window; the application keeps running.
 
 | Shortcut | Action |
 | --- | --- |
 | `Install MATB.cmd` | Install or repair the research application |
-| `Start MATB.cmd` | Open the Research Console |
-| `Start OpenMATB.cmd` | Open desktop OpenMATB in Spanish, windowed on the first display |
+| `Start MATB.cmd` | Close the previous instance and reopen the Research Console |
+| `Start OpenMATB.cmd` | Close the previous instance and open desktop OpenMATB in Spanish, windowed on the first display |
 | `Diagnose MATB.cmd` | Check packages, build, scenario, processes, ports and logs |
-| `Stop MATB.cmd` | Stop tracked Console services |
+| `Stop MATB.cmd` | Close Console services and native windows, even without a process state file |
 
 The original shortcuts under `windows-launchers/` remain available. For a
 controlled study, use the Console's assigned-session workflow. Direct desktop
@@ -28,11 +29,26 @@ runs are a separate workflow. The installed local Console and bundled tasks
 work offline; optional online maps, live traffic and model providers need
 connectivity. Bluetooth acquisition needs compatible hardware.
 
+Each launch frees the MATB ports (8000 and 3100 by default), closes their child
+processes and this installation's OpenMATB windows before repairing packages or
+building. This also closes any application occupying those two ports: reserve
+them for MATB. Other Python and Node processes are not stopped by name. If a
+different installation needs those ports, pass `-BackendPort` and `-FrontendPort`
+to the Console shortcuts. An interrupted task is not marked complete; already
+written data is retained and a new attempt is required. Avoid restarting during
+an acquisition you want to keep active.
+
 Data defaults to `exports/windows-suas/`: desktop captures use `desktop/`,
 and the Console database, captures, calculator wheels and logs use `service/`.
 Set `MATB_DATA_ROOT` to a dedicated external directory to relocate data.
 Installation logs use `exports/windows-install/`. Preserve data when updating.
 Avoid Program Files and cloud-synchronized folders for the source and runtime.
+
+Without an explicit data root, an existing historical
+`webui/backend/matb_webui.db` from manual startup is reused to retain participants
+and results. `MATB_DB_PATH` takes precedence; `-DataRoot` or `MATB_DATA_ROOT`
+selects a separate database. The launcher prints the selected path and records
+it in `service/service-state.json`.
 
 The installer uses a local Python environment by default. Explicit
 `MATB_PYTHON` or `MATB_VENV` overrides allow installation into that selected
@@ -51,7 +67,9 @@ source provenance correctly remains provisional.
 | PowerShell policy blocks scripts | Shortcuts use a process-only policy and do not change machine policy. Institution-enforced policies still apply; ask IT to approve the scripts. |
 | Packages/build fail | Rerun `Install MATB.cmd` and read the timestamped installation log. |
 | npm `EPERM` on `node_modules/.vite/vitest/.../results.json` | Once the station is idle, close frontend tests, run `Stop MATB.cmd`, then `Install MATB.cmd` and `Start MATB.cmd`. Setup preserves the old test cache outside `node_modules` before reinstalling. See below if using an older launcher. |
-| Port 8000 or 3100 occupied | Stop the known service or pass `-BackendPort`/`-FrontendPort` to the existing PowerShell launcher. |
+| Port 8000 or 3100 occupied, or previous session still open | Run `Start MATB.cmd` again: it closes the previous instance and frees the ports before reopening. If Windows denies stopping a protected process, startup stops and identifies the process. |
+| Missing `maplibre-gl/package.json` or unrecognized `next` | Use `Start MATB.cmd`; it checks required packages and repairs an incomplete installation before opening. You do not need to run `npm start` separately. |
+| Fullscreen flicker in native OpenMATB | Update and reopen MATB. Windows uses a borderless work-area window with explicit compositor synchronization. A visual check of the display remains necessary; no driver or Windows registry settings are changed. |
 | Research export reports a missing wheel | Rerun setup using the same data root and Python interpreter as the Console. |
 | Repository moved | Stop the old Console and rerun setup in its new location. |
 

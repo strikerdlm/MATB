@@ -4,7 +4,8 @@
 
 **Instalación en Windows:** extraiga el repositorio y abra `Install MATB.cmd`
 con doble clic; luego `Start MATB.cmd` (consola) o `Start OpenMATB.cmd`
-(escritorio). Consulte la [guía de Windows](WINDOWS.es.md).
+(escritorio). Cada inicio cierra la instancia anterior y libera los puertos de
+MATB; los datos guardados se conservan. Consulte la [guía de Windows](WINDOWS.es.md).
 
 ### Tripulación ASTRA: cuatro jornadas completas
 

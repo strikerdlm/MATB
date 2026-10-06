@@ -4,7 +4,8 @@
 
 **Windows installation:** extract the repository, double-click `Install MATB.cmd`,
 then open `Start MATB.cmd` (Research Console) or `Start OpenMATB.cmd` (desktop).
-See the [Windows setup guide](WINDOWS.md).
+Each launch closes the previous instance and frees the MATB ports while retaining
+saved data. See the [Windows setup guide](WINDOWS.md).
 
 ### ASTRA crew: four complete test days
 

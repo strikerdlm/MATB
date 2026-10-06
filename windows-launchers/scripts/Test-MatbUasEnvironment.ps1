@@ -58,6 +58,7 @@ try {
     Add-DiagnosticIssue -Message $_.Exception.Message
 }
 
+$nodePath = $null
 try {
     $nodePath = Get-MatbUasNode
     $nodeVersion = & $nodePath --version 2>$null | Select-Object -Last 1
@@ -75,7 +76,7 @@ if (Test-Path -LiteralPath $buildRootStamp -PathType Leaf) {
     $stampedRoot = (Get-Content -LiteralPath $buildRootStamp -Raw).Trim()
     $buildMatchesLocation = $stampedRoot.Equals($frontendRoot, [System.StringComparison]::OrdinalIgnoreCase)
 }
-if ((Test-Path -LiteralPath $nextCli -PathType Leaf) -and
+if ($nodePath -and (Test-MatbFrontendDependencies -FrontendRoot $frontendRoot -NodePath $nodePath) -and
     (Test-Path -LiteralPath $buildId -PathType Leaf) -and $buildMatchesLocation) {
     Write-DiagnosticLine -Label "Frontend" -Value "dependencies and production build available" -Kind ok
 } else {

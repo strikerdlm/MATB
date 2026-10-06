@@ -54,6 +54,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Installer regression checks failed.' }
           & "$repo\tests\windows\test_matb_installer.ps1"
           & "$repo\tests\windows\test_matb_launchers.ps1"
+          & "$repo\tests\windows\test_matb_restart.ps1"
           & "$repo\tests\windows\test_matb_relocation.ps1"
       - name: Keep installation diagnostics
         if: always()

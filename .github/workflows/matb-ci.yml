@@ -240,4 +240,5 @@ jobs:
         shell: pwsh
         run: |
           & "$env:GITHUB_WORKSPACE\MATB relocation ñ\tests\windows\test_matb_launchers.ps1"
+          & "$env:GITHUB_WORKSPACE\MATB relocation ñ\tests\windows\test_matb_restart.ps1"
           & "$env:GITHUB_WORKSPACE\MATB relocation ñ\tests\windows\test_matb_relocation.ps1"

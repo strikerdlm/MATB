@@ -47,6 +47,13 @@ def _windows_work_area(screen: Any) -> tuple[int, int, int, int] | None:
     return left, top, right - left, bottom - top
 
 
+def _sync_windows_compositor() -> bool:
+    """Wait for a composed frame on Windows 8+, where pyglet skips DwmFlush."""
+    from pyglet.libs.win32 import _dwmapi
+
+    return _dwmapi.DwmFlush() == 0
+
+
 class Window(Window):
     # Static variable
     MainWindow: Window | None = None
@@ -199,6 +206,21 @@ class Window(Window):
         glClearColor(0, 0, 0, 1)
         self.clear()
         self.batch.draw()
+
+    def flip(self) -> None:
+        # pyglet 2.1 disables WGL swap synchronization in composed windows, but
+        # also skips DwmFlush on Windows 8+. Wait for the prior presentation
+        # before swapping the complete frame, as pyglet does on older Windows.
+        # Hidden preflight windows must never wait on a visible presentation.
+        if (platform == "win32" and getattr(self, "_always_dwm", False)
+                and not self.fullscreen and self.vsync and self.visible
+                and not getattr(self, "_compositor_sync_failed", False)):
+            if not _sync_windows_compositor():
+                # A compositor failure (e.g. desktop/session changes) must not
+                # interrupt acquisition or repeatedly block the event loop.
+                self._compositor_sync_failed = True
+                self.context.set_vsync(True)
+        super().flip()
 
     def is_mouse_necessary(self) -> bool:
         return self.slider_visible or REPLAY_MODE
