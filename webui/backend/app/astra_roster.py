@@ -111,7 +111,9 @@ def initialize(db):
 def visit_definition(db, participant_id, ordinal):
     row = db.get(ParticipantRoster, participant_id)
     if row and row.mission in MISSION_START:
-        return next((v for v in VISITS if v.ordinal == ordinal), None)
+        from app.crew_schedule import VISITS as crew_visits
+        definitions = (*VISITS, *crew_visits) if row.mission == "ASTRA-1" else VISITS
+        return next((v for v in definitions if v.ordinal == ordinal), None)
     return None
 
 

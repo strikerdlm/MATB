@@ -18,7 +18,7 @@ vi.mock("@/components/pvt/PvtRunner", () => ({ PvtRunner: ({ durationMs, onCompl
 vi.mock("next/dynamic", () => ({ default: () => ({ fast, onComplete }: { fast: boolean; onComplete: (value: object) => void }) => <button onClick={() => onComplete({ schema_version: 2, locale: "es-419", fast_mode: fast, marker: "synthetic screen evidence" })}>Finish synthetic screen</button> }));
 
 function setup(instrument: "pvt" | "screen" = "pvt") {
-  const context = { participant_id: "P01", visit_id: 1, assigned_visit: { ordinal: 1 }, instrument, locale: "es-419" };
+  const context = { participant_id: "P01", visit_id: 1, assigned_visit: { ordinal: 9, code: "DM3" }, instrument, locale: "es-419" };
   const attempt = { id: "attempt-one", acquisition_state: "created", execution_purpose: "study", assignment_context: context };
   vi.mocked(useAssignedAttempt).mockReturnValue({ identity: attempt.id, attempt, context, error: "" } as never);
   vi.mocked(startAttempt).mockResolvedValue({ ...attempt, acquisition_state: "started" } as never);
@@ -31,7 +31,7 @@ it("binds the actual participant and requires an explicit KSS response before PV
   setup();
   const next = await screen.findByRole("button", { name: "Continuar a PVT" });
   expect(next).toBeDisabled();
-  expect(screen.getByText(/CUELLAR · Sesión 1/)).toBeInTheDocument();
+  expect(screen.getByText(/CUELLAR · DM3/)).toBeInTheDocument();
   expect(screen.queryByText(/WHITE/)).not.toBeInTheDocument();
   expect(screen.getAllByRole("radio")).toHaveLength(9);
   expect(screen.getAllByRole("radio").every(radio => !(radio as HTMLInputElement).checked)).toBe(true);

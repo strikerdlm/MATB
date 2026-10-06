@@ -3,7 +3,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Check, Loader2 } from "lucide-react";
 import { CrewFrame } from "./CrewFrame";
-import { crewActivity, getCrewProgress, prepareCrewActivity, type CrewPreparation, type CrewProgress } from "@/lib/crew-workflow";
+import { CrewDaySummary, activityNames, testDate } from "./CrewDaySummary";
+import { crewActivity, crewHref, getCrewProgress, prepareCrewActivity, type CrewPreparation, type CrewProgress } from "@/lib/crew-workflow";
 import { EXPERIMENTS } from "@/lib/experiments";
 import { useAppLocale } from "@/lib/i18n";
 import { controllerAction, createOpenMatbSession, getOpenMatbDisplays, getOpenMatbReadiness, getOpenMatbSession, readOpenMatbController, readOpenMatbParticipant, recoverPendingOpenMatbSession, startOpenMatbAsParticipant, storeOpenMatbCredentials } from "@/lib/openmatb/api";
@@ -16,7 +17,7 @@ export function CrewSelector() {
   const activity = crewActivity(query.get("experiment"));
   const requestedCrew = query.get("crew") ?? "";
   const router = useRouter();
-  const { copy } = useAppLocale();
+  const { copy, locale } = useAppLocale();
   const [people, setPeople] = useState<CrewProgress[]>([]);
   const [selected, setSelected] = useState(requestedCrew);
   const [loading, setLoading] = useState(true);
@@ -87,13 +88,18 @@ export function CrewSelector() {
     try {
       // Check tab storage before creating a runtime whose control token must survive navigation.
       sessionStorage.setItem("crew.storage-check", "ok"); sessionStorage.removeItem("crew.storage-check");
-      const next = await prepareCrewActivity(person.callsign, activity, person.state === "interrupted");
+      const target = person.state === "activity_complete" ? person.next_activity ?? activity : activity;
+      const next = await prepareCrewActivity(person.callsign, target, person.state === "interrupted");
       if (next.action === "rest") {
         setRest(Math.ceil(next.remaining_seconds ?? 0));
         setMessage(copy("Pausa entre bloques. La siguiente prueba estará disponible al terminar.", "Rest between blocks. The next task will be available when it ends."));
-      } else if (next.action === "done_today" || next.action === "complete" || next.action === "needs_review") {
+      } else if (["scheduled", "activity_complete", "complete", "needs_review"].includes(next.action)) {
         await refresh(); setMessage("");
       } else if (next.action === "retry_required") {
+        if (target !== activity) {
+          router.push(crewHref(target, person.callsign));
+          return;
+        }
         await refresh(); setMessage(copy("La prueba anterior se interrumpió. Puedes reintentar la sesión pendiente.", "The previous test was interrupted. You can retry the pending session."));
       } else if (next.action === "native_session" || next.activity === "openmatb") {
         await openNative(next);
@@ -107,7 +113,7 @@ export function CrewSelector() {
         }
         router.push(`/mission?session=${encodeURIComponent(sessionId)}&crew=${encodeURIComponent(next.callsign)}`);
       } else {
-        const destination = new URLSearchParams({ attempt: next.attempt_id!, crew: next.callsign, return: activity });
+        const destination = new URLSearchParams({ attempt: next.attempt_id!, crew: next.callsign, return: target });
         router.push(`/study/run?${destination}`);
       }
     } catch (reason) {
@@ -116,7 +122,7 @@ export function CrewSelector() {
     } finally { locked.current = false; setBusy(false); }
   }
 
-  const done = person?.state === "done_today" || person?.state === "complete";
+  const done = person?.state === "scheduled" || person?.state === "complete";
   return <CrewFrame>
     <div className="crew-heading"><h1>{copy("¿Quién va a realizar la prueba?", "Who is taking the test?")}</h1><p>{copy(...experiment.title)}</p></div>
     {error && <div role="alert" className="crew-error"><p>{error}</p><button type="button" onClick={() => void refresh()} disabled={busy}>{copy("Volver a comprobar", "Check again")}</button></div>}
@@ -130,15 +136,15 @@ export function CrewSelector() {
         {!person ? <div className="crew-empty"><p>{copy("Elige tu callsign para continuar.", "Choose your callsign to continue.")}</p></div> : <>
           <h2>{person.callsign}</h2>
           <div className="crew-session">
-            <p className="crew-muted">{done ? copy("Prueba guardada", "Test saved") : copy("Siguiente prueba", "Next test")}</p>
-            <h3>{person.state === "complete" ? copy("Sesiones completadas", "Sessions complete") : person.state === "done_today" ? copy("Por hoy terminaste", "You are done for today") : `${copy("Sesión", "Session")} ${person.session_number}`}</h3>
-            <p>{person.state === "done_today" ? copy("Tu siguiente sesión estará disponible otro día de prueba.", "Your next session will be available on another test day.") : person.state === "complete" ? copy("Todas tus sesiones de esta actividad están guardadas.", "All your sessions for this activity have been saved.") : person.message ?? (person.state === "interrupted" ? copy("Retomarás la sesión pendiente; el intento anterior se conserva.", "You will return to the pending session; the previous attempt is retained.") : copy("Continuarás con la siguiente sesión pendiente.", "You will continue with your next pending session."))}</p>
+            <p className="crew-muted">{person.state === "scheduled" ? copy("Próxima jornada", "Next test day") : person.state === "complete" ? copy("Misión completada", "Mission complete") : copy("Tu jornada", "Your test day")}</p>
+            <h3>{person.state === "complete" ? copy("Todas las pruebas guardadas", "All tests saved") : `${person.day_label} · ${testDate(person.scheduled_date, locale)}`}</h3>
+            <p>{person.state === "scheduled" ? copy("Tus pruebas se abrirán en esta fecha.", "Your tests will open on this date.") : person.state === "complete" ? copy("Completaste las tres jornadas en misión y la postmisión.", "You completed all three mission test days and the post-mission test day.") : person.message ?? (person.state === "activity_complete" ? copy("Esta prueba ya está guardada. Continúa con la siguiente pendiente.", "This test is saved. Continue with the next pending test.") : person.state === "interrupted" ? copy("Retomarás la prueba pendiente; el intento anterior se conserva.", "You will return to the pending test; the previous attempt is retained.") : copy("Cada prueba se guarda a tu nombre.", "Every test is saved under your callsign."))}</p>
           </div>
           {!done && <button className="crew-primary" type="button" disabled={busy || loading || rest > 0 || person.state === "needs_review"} onClick={() => void begin()}>
-            {busy ? <><Loader2 className="animate-spin" aria-hidden="true" size={22} />{copy("Abriendo prueba…", "Opening test…")}</> : rest > 0 ? `${copy("Pausa", "Rest")} · ${Math.floor(rest / 60)}:${String(rest % 60).padStart(2, "0")}` : <>{person.state === "interrupted" ? copy("Reintentar sesión", "Retry session") : copy("Comenzar prueba", "Start test")}<ArrowRight aria-hidden="true" size={26} /></>}
+            {busy ? <><Loader2 className="animate-spin" aria-hidden="true" size={22} />{copy("Abriendo prueba…", "Opening test…")}</> : rest > 0 ? `${copy("Pausa", "Rest")} · ${Math.floor(rest / 60)}:${String(rest % 60).padStart(2, "0")}` : <>{person.state === "interrupted" ? copy("Reintentar prueba", "Retry test") : person.state === "activity_complete" && person.next_activity ? copy(`Continuar: ${activityNames[person.next_activity][0]}`, `Continue: ${activityNames[person.next_activity][1]}`) : copy("Comenzar prueba", "Start test")}<ArrowRight aria-hidden="true" size={26} /></>}
           </button>}
           {message ? <p role="status" className="crew-note">{message}</p> : !done && <p className="crew-note">{copy("La prueba se abrirá automáticamente.", "The test will open automatically.")}</p>}
-          <p className="crew-note">{copy("Una sesión por día de prueba.", "One session per test day.")}</p>
+          <CrewDaySummary person={person} />
         </>}
       </section>
     </div>}

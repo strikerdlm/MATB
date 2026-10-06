@@ -34,6 +34,18 @@
 .crew-page button:disabled { cursor:default; opacity:.55; }
 .crew-page :is(a,button,input):focus-visible { outline:3px solid #9fe8ff; outline-offset:5px; }
 .crew-note { color:#a1aab4; font-size:16px; margin:23px 0 0; line-height:1.5; }
+.crew-activities { list-style:none; margin:14px 0 22px; padding:0; }
+.crew-activities li+li { border-top:1px solid #30373d; }
+.crew-activities a { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px 0; font-size:16px; line-height:1.4; }
+.crew-activities a>span:last-child { display:inline-flex; align-items:center; gap:5px; font-size:14px; white-space:nowrap; }
+.crew-saved { color:#8ae3ca; }
+.crew-next-date { font-size:18px; line-height:1.6; color:#dce5eb; margin-top:22px; }
+.crew-next-date strong { color:#00baff; }
+.crew-calendar { display:flex; flex-wrap:wrap; list-style:none; gap:16px 24px; margin:14px 0 0; padding:0; }
+.crew-calendar li { display:flex; flex-direction:column; gap:4px; font-size:13px; color:#a1aab4; }
+.crew-calendar li>span:last-child { display:flex; align-items:center; gap:5px; }
+.crew-day-summary .crew-note { margin-top:18px; }
+.crew-day-summary~.crew-note { margin-top:12px; }
 .crew-back { display:inline-flex; align-items:center; gap:12px; margin-top:90px; }
 .crew-empty { display:flex; align-items:center; justify-content:center; min-height:300px; color:#a1aab4; font-size:21px; }
 .crew-error { padding:16px 20px; border:1px solid #df9274; border-radius:6px; margin-bottom:24px; color:#f5c5b3; }

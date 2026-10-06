@@ -14,11 +14,12 @@ from tests.test_openmatb_runtime import _manager
 
 
 @pytest.fixture(autouse=True)
-def crew_components():
+def crew_components(monkeypatch):
     from app.components import is_component_active
 
     if not all(is_component_active(name) for name in ("matb-openmatb", "matb-suas")):
         pytest.skip("Requires OpenMATB and sUAS; exercised by full-component tests")
+    monkeypatch.setattr(crew, "utcnow", lambda: datetime(2026, 10, 7, 17, tzinfo=timezone.utc))
 
 
 @pytest.fixture
@@ -35,6 +36,8 @@ def test_configuration_has_callsigns_no_polar_and_is_idempotent(station):
     assert [p["callsign"] for p in crew.roster(db, "openmatb")["participants"]] == list(crew.CALLSIGNS)
     study = json.loads(registry.get_version(db, result["version_id"]).study_json)
     assert set(study["enabled_instruments"]) == {"openmatb", "questionnaire", "pvt", "screen", "suas"}
+    assert [v["code"] for v in study["visits"]] == ["DM3", "DM7", "DM11", "POST"]
+    assert [v["scheduled_day"] for v in study["visits"]] == [3, 7, 11, 16]
     assert all(not p["acknowledgement_required"] and not p["practice"] for p in study["preparation_policy"])
     assert not db.exec(select(AssessmentAttempt)).all()
     assert crew.configure(db, runtime, actor="Investigadora de prueba", reason="Comprobación idempotente de la misma configuración.")["changed"] is False
@@ -68,9 +71,9 @@ def test_suas_opens_exact_visit_pvt_before_mission(station):
     assert crew.prepare(db, "ICEMAN", "suas", retry=True)["attempt_id"] != attempt.id
 
 
-def test_daily_limit_uses_bogota_midnight_and_keeps_other_activities_available(station):
+def test_finished_activity_waits_for_all_other_tests_in_the_same_day(station):
     db, _, _ = station
-    completed = datetime(2026, 10, 7, 4, 59, tzinfo=timezone.utc)
+    completed = datetime(2026, 10, 7, 17, 0, tzinfo=timezone.utc)
     result = crew.prepare(db, "WHITE", "screen", now=completed)
     attempt = db.get(AssessmentAttempt, result["attempt_id"])
     # A synthetic completed acquisition models a real source adapter's terminal event.
@@ -80,14 +83,56 @@ def test_daily_limit_uses_bogota_midnight_and_keeps_other_activities_available(s
     db.add(attempt)
     db.flush()
     blocked = crew.prepare(db, "WHITE", "screen", now=completed)
-    assert blocked["action"] == "done_today"
-    assert blocked["session_number"] == 2
+    assert blocked["action"] == "activity_complete"
+    assert blocked["session_number"] == 1
+    assert blocked["next_test_date"] == "2026-10-11"
+    assert blocked["days_until_next"] == 4
+    assert blocked["completed_days"] == 0
     assert crew.prepare(db, "WHITE", "pvt", now=completed)["action"] == "launch"
-    next_day = datetime(2026, 10, 7, 5, 0, tzinfo=timezone.utc)
+    next_day = datetime(2026, 10, 8, 5, 0, tzinfo=timezone.utc)
     next_session = crew.prepare(db, "WHITE", "screen", now=next_day)
-    assert next_session["action"] == "launch"
-    assert next_session["session_number"] == 2
-    assert next_session["attempt_id"] != attempt.id
+    assert next_session["action"] == "activity_complete"
+    assert next_session["session_number"] == 1
+
+
+def _complete_day(db, callsign, at):
+    from app.assessment_service import create_attempt
+    from app.assessment_schemas import AttemptIn
+    prepared = crew.prepare(db, callsign, "pvt", now=at)
+    _, state = crew.progress(db, callsign, "pvt", now=at)
+    assignment = state["assignment"]
+    identities = json.loads(assignment.occasions_json)
+    finished = {}
+    for spec in sorted((s for s in state["study"]["occasions"] if s["visit_ordinal"] == prepared["visit_ordinal"]), key=lambda s: s["order"]):
+        rows = crew._attempts(db, assignment, spec["key"])
+        attempt = rows[-1] if rows else create_attempt(db, identities[spec["key"]], AttemptIn(
+            execution_purpose="study", target_attempt_id=finished.get(spec.get("target_key"))))
+        attempt.acquisition_state = "finished"
+        attempt.started_at = at
+        attempt.finished_at = at
+        attempt.raw_saving = "saved"
+        db.add(attempt)
+        db.flush()
+        finished[spec["key"]] = attempt.id
+
+
+def test_all_four_days_are_date_gated_and_end_after_postmission(station):
+    db, _, _ = station
+    before = datetime(2026, 10, 7, 4, 59, tzinfo=timezone.utc)
+    assert crew.prepare(db, "WHITE", "pvt", now=before)["action"] == "scheduled"
+    assert not db.exec(select(AssessmentAttempt)).all()
+    for number, day in enumerate((7, 11, 15, 20), 1):
+        at = datetime(2026, 10, day, 5, 0, tzinfo=timezone.utc)
+        opened = crew.prepare(db, "WHITE", "pvt", now=at)
+        assert opened["action"] == "launch"
+        assert opened["session_number"] == number
+        _complete_day(db, "WHITE", at)
+        result = crew.prepare(db, "WHITE", "screen", now=at)
+        assert result["completed_days"] == number
+        assert result["action"] == ("complete" if number == 4 else "scheduled")
+        assert result["next_test_date"] == (None if number == 4 else f"2026-10-{(11, 15, 20)[number - 1]}")
+    assert crew.prepare(db, "WHITE", "openmatb", now=datetime(2026, 11, 1, tzinfo=timezone.utc))["action"] == "complete"
+    assert crew.progress(db, "CUELLAR", "pvt")[0]["completed_days"] == 0
 
 
 def test_interrupted_attempt_requires_recorded_retry_and_never_skips_session(station):
@@ -156,7 +201,7 @@ def test_native_blocks_and_ratings_stay_pending_with_real_elapsed_rest(station):
     from app.assessment_schemas import AttemptIn
     from app.study_registry_models import StudyRecoveryInterval
     db, _, _ = station
-    now = datetime(2026, 10, 6, 17, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 10, 7, 17, 0, tzinfo=timezone.utc)
     prepared = crew.prepare(db, "CUELLAR", "openmatb", now=now)
     task = db.get(AssessmentAttempt, prepared["attempt_id"])
     task.acquisition_state = "finished"

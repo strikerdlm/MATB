@@ -24,6 +24,9 @@ async def execute_internal(engine,job):
         elif job.kind=='mission_finalize':
             from app.station_mission import finalize
             await asyncio.to_thread(finalize,engine,payload)
+        elif job.kind=='crew_export':
+            from app.crew_exports import run_export
+            await asyncio.to_thread(run_export,engine,payload['attempt_id'])
         elif job.kind=='hcf_refresh':
             def refresh():
                 from app.hcf_refresh import refresh_fit_hcf
