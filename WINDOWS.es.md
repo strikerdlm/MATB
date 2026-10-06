@@ -51,9 +51,34 @@ ZIP, cuya procedencia conserva correctamente el estado provisional.
 | La institución bloquea instalaciones | Solicite los requisitos a TI: [PowerShell](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-windows), [Python 3.12](https://www.python.org/downloads/windows/), [Node.js 22](https://nodejs.org/en/download). |
 | PowerShell bloquea scripts | Los accesos usan una política limitada al proceso; no cambian la política del equipo. Las políticas institucionales siguen aplicándose. Consulte a TI. |
 | Fallan dependencias o compilación | Repita `Install MATB.cmd` y consulte su registro. |
+| npm `EPERM` en `node_modules/.vite/vitest/.../results.json` | Cuando la estación esté inactiva, cierre las pruebas de la interfaz, ejecute `Stop MATB.cmd`, luego `Install MATB.cmd` y `Start MATB.cmd`. La preparación conserva la caché anterior fuera de `node_modules` antes de reinstalar. Para un lanzador anterior, vea abajo. |
 | Puertos 8000 o 3100 ocupados | Detenga el servicio conocido o use `-BackendPort`/`-FrontendPort` en el lanzador PowerShell existente. |
 | Faltan dependencias de exportación | Repita setup con la misma carpeta de datos e intérprete que la consola. |
 | Movió el repositorio | Detenga la consola anterior y repita setup en la ubicación nueva. |
+
+Ese `results.json` es una caché de pruebas de software, ajena a los resultados
+de participantes. Windows puede impedir borrarla si la creó otra cuenta
+(incluida una cuenta de pruebas automáticas) o si un proceso la mantiene abierta.
+La preparación la conserva en `webui/frontend/.matb-cache-backup-*`; las nuevas
+pruebas usan una caché temporal separada por cuenta y copia del repositorio.
+Los datos de participantes permanecen en la carpeta de datos configurada.
+
+Con un lanzador anterior, cierre las pruebas y detenga MATB cuando la estación
+esté inactiva. Después ejecute esto en PowerShell desde la carpeta del
+repositorio, antes de repetir la instalación:
+
+```powershell
+$frontend = (Resolve-Path -LiteralPath '.\webui\frontend').Path
+$cache = Join-Path $frontend 'node_modules\.vite'
+$backup = Join-Path $frontend ('.matb-cache-backup-' + [guid]::NewGuid().ToString('N'))
+if (Test-Path -LiteralPath $cache) {
+    [System.IO.Directory]::Move($cache, $backup)
+}
+```
+
+Si tampoco permite moverla, reinicie Windows y repita antes de abrir MATB o las
+pruebas. Si persiste el error de acceso, revise los permisos de esa caché
+específica. Conserve los datos del estudio y la protección del antivirus.
 
 El trabajo CI de instalación Windows comprueba preparación, aislamiento,
 versiones, arranque, reproducción, diagnóstico y cierre con rutas que contienen

@@ -101,12 +101,13 @@ if (-not $frontendDependenciesReady) {
     if ($SkipInstall) {
         throw "Frontend dependencies are missing and -SkipInstall was selected."
     }
+    Move-MatbUasFrontendTestCache -FrontendRoot $frontendRoot
     Write-Host "Installing frontend dependencies..."
     Push-Location $frontendRoot
     try {
         & $npmPath ci
         if ($LASTEXITCODE -ne 0) {
-            throw "Frontend dependency installation failed."
+            throw "Frontend dependency installation failed. If npm reports EPERM, close MATB and frontend tests, then retry Install MATB.cmd. See WINDOWS.md."
         }
         $packageLockHash | Set-Content -LiteralPath $dependencyStamp -Encoding ascii -NoNewline
     } finally {

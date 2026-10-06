@@ -4,6 +4,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useAppLocale } from "@/lib/i18n";
 import { EXPERIMENTS, type ExecutionPurpose, type ExperimentId } from "@/lib/experiments";
 import { useExecutionPurpose, withExecutionPurpose } from "@/lib/execution-purpose";
+import { CREW_ACTIVITIES, crewHref, type CrewActivity } from "@/lib/crew-workflow";
 
 export function ExecutionPurposeBadge({ purpose }: { purpose: ExecutionPurpose }) {
   const { copy } = useAppLocale();
@@ -37,7 +38,7 @@ export function ExperimentGuide({ id }: { id: ExperimentId }) {
           <p className="mt-1 text-sm text-muted-foreground">{copy("Debe elegir práctica o estudio antes de preparar esta actividad.", "Choose practice or study before preparing this activity.")}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Link className="rounded border border-warning/50 px-3 py-2 text-sm font-semibold text-warning" href={withExecutionPurpose(currentHref, "practice")}>{copy("Practicar", "Practice")}</Link>
-            <Link className="rounded border border-info/50 px-3 py-2 text-sm font-semibold text-info" href={withExecutionPurpose(currentHref, "study")}>{copy("Participar en mi estudio", "Join my study")}</Link>
+            <Link className="rounded border border-info/50 px-3 py-2 text-sm font-semibold text-info" href={CREW_ACTIVITIES.includes(id as CrewActivity) ? crewHref(id as CrewActivity) : withExecutionPurpose(currentHref, "study")}>{copy("Participar en mi estudio", "Join my study")}</Link>
           </div>
         </div>}
       <Link href={catalogHref} className="text-sm underline underline-offset-4">{copy("Ver experimentos", "View experiments")}</Link>

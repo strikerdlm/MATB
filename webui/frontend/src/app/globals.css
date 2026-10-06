@@ -3,6 +3,45 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ASTRA participant workflow: one identity choice and one primary action. */
+.crew-page { min-height:100vh; background:#0b0c0d; color:#f5f5f5; font-family:Arial,Helvetica,sans-serif; }
+.crew-header { height:60px; padding:0 4%; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #272b30; }
+.crew-header a,.crew-back { color:#00baff; font-size:18px; }
+.crew-header .crew-brand { color:#f5f5f5; font-size:22px; font-weight:700; letter-spacing:2px; }
+.crew-main { max-width:1200px; margin:0 auto; padding:68px 40px 70px; }
+.crew-steps { display:flex; justify-content:center; gap:104px; margin:0 auto 56px; padding:0; list-style:none; }
+.crew-steps li { position:relative; display:flex; flex-direction:column; align-items:center; gap:9px; color:#a1aab4; font-size:16px; }
+.crew-steps li:not(:last-child)::after { content:""; position:absolute; top:18px; left:calc(50% + 34px); width:106px; height:1px; background:#59636e; }
+.crew-steps li>span { display:grid; place-items:center; border:1px solid #697581; border-radius:50%; width:36px; height:36px; font-size:19px; }
+.crew-steps li[aria-current=step] { color:white; }
+.crew-steps li[aria-current=step]>span { color:#071015; background:#00baff; border-color:#00baff; font-weight:700; }
+.crew-heading { text-align:center; margin-bottom:60px; }
+.crew-heading h1 { margin:0; font-size:40px; font-weight:700; line-height:1.2; letter-spacing:-1px; }
+.crew-heading>p { margin:16px 0 0; color:#a1aab4; font-size:21px; }
+.crew-columns { display:grid; grid-template-columns:374px minmax(0,1fr); gap:80px; }
+.crew-list { display:flex; flex-direction:column; gap:10px; }
+.crew-list>button { display:flex; align-items:center; justify-content:space-between; width:100%; min-height:74px; padding:18px 34px; border:1px solid #59616a; background:#121416; border-radius:9px; font-size:22px; text-align:left; }
+.crew-list>button:hover { border-color:#a1aab4; }
+.crew-list>button[aria-pressed=true] { border-color:#00baff; background:#0a1d26; box-shadow:inset 0 0 0 1px #00baff; }
+.crew-list>button[aria-pressed=true] svg { color:#00baff; }
+.crew-detail h2 { margin:0; border-bottom:1px solid #68727c; padding:0 0 16px; font-size:40px; line-height:1.2; font-weight:700; }
+.crew-session { padding:38px 0 40px; }
+.crew-session p { color:#a1aab4; font-size:19px; line-height:1.5; }
+.crew-session h3 { margin:6px 0 14px; font-size:36px; line-height:1.2; font-weight:700; }
+.crew-primary { display:flex; align-items:center; justify-content:center; position:relative; gap:12px; width:100%; min-height:66px; padding:16px 48px; border-radius:9px; background:#00baff; color:#041015; font-size:22px; font-weight:600; }
+.crew-primary>svg:last-child:not(.animate-spin) { position:absolute; right:24px; }
+.crew-primary:hover { background:#27c6fa; }
+.crew-page button:disabled { cursor:default; opacity:.55; }
+.crew-page :is(a,button,input):focus-visible { outline:3px solid #9fe8ff; outline-offset:5px; }
+.crew-note { color:#a1aab4; font-size:16px; margin:23px 0 0; line-height:1.5; }
+.crew-back { display:inline-flex; align-items:center; gap:12px; margin-top:90px; }
+.crew-empty { display:flex; align-items:center; justify-content:center; min-height:300px; color:#a1aab4; font-size:21px; }
+.crew-error { padding:16px 20px; border:1px solid #df9274; border-radius:6px; margin-bottom:24px; color:#f5c5b3; }
+.crew-error button { margin-top:10px; text-decoration:underline; }
+.crew-loading { text-align:center; padding:60px 0; color:#a1aab4; }
+@media(max-width:900px) { .crew-main{padding:40px 24px}.crew-columns{grid-template-columns:260px minmax(0,1fr);gap:35px}.crew-heading h1{font-size:32px}.crew-list>button{padding:16px 22px;font-size:19px}.crew-detail h2{font-size:32px}.crew-session{padding:28px 0}.crew-back{margin-top:56px}.crew-primary{font-size:19px} }
+@media(max-width:600px) { .crew-header{height:64px;padding:0 20px}.crew-header .crew-brand{font-size:17px}.crew-header a{font-size:14px}.crew-main{padding:32px 20px}.crew-steps{gap:60px;margin-bottom:36px}.crew-steps li{font-size:13px}.crew-steps li:not(:last-child)::after{width:65px}.crew-heading{margin-bottom:32px}.crew-heading h1{font-size:29px}.crew-heading>p{font-size:17px}.crew-columns{grid-template-columns:1fr;gap:34px}.crew-list>button{min-height:58px;padding:12px 20px}.crew-detail h2{font-size:30px}.crew-session h3{font-size:30px}.crew-session p{font-size:17px}.crew-primary{min-height:60px}.crew-back{margin-top:48px} }
+
 @layer base {
   :root {
     --background: 220 7% 4%;

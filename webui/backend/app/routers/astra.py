@@ -8,6 +8,7 @@ from app import astra_roster
 from app import astra_deployment
 from app.routers.openmatb import manager
 from app.openmatb_runtime import OpenMatbManager
+from app import crew_workflow
 
 router = APIRouter(prefix="/astra", tags=["ASTRA deployment"])
 
@@ -64,3 +65,38 @@ class VisitIn(BaseModel):
 def prepare(body: VisitIn, db: Session = Depends(get_session)):
     row = astra_deployment.assign_visit(db, body.participant_id, body.visit_ordinal)
     return dict(assignment_id=row.id, url=f"/study/participant?assignment={row.id}")
+
+
+CrewActivity = Literal["openmatb", "suas", "screen", "pvt"]
+
+
+class CrewConfigurationIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    actor: str = Field(min_length=3, max_length=150)
+    reason: str = Field(min_length=10, max_length=1000)
+
+
+class CrewStartIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    callsign: Literal["CUELLAR", "COLORADO", "ICEMAN", "WHITE", "PIRATA"]
+    instrument: CrewActivity
+    retry: bool = False
+
+
+@router.post("/crew/configure")
+def configure_crew(body: CrewConfigurationIn, db: Session = Depends(get_session), runtime: OpenMatbManager = Depends(manager)):
+    result = crew_workflow.configure(db, runtime, **body.model_dump())
+    db.commit()
+    return result
+
+
+@router.get("/crew")
+def crew(instrument: CrewActivity = "openmatb", db: Session = Depends(get_session)):
+    return crew_workflow.roster(db, instrument)
+
+
+@router.post("/crew/prepare")
+def prepare_crew(body: CrewStartIn, db: Session = Depends(get_session)):
+    result = crew_workflow.prepare(db, **body.model_dump())
+    db.commit()
+    return result

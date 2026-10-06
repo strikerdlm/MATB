@@ -29,6 +29,7 @@ export interface MissionConsoleProps {
   initialSession: SessionView;
   initialSnapshot?: WorldSnapshot | null;
   readOnly?: boolean;
+  autoStart?: boolean;
   onFinished?: (session: SessionView) => void;
 }
 
@@ -42,8 +43,9 @@ function commandId(): string {
   return `cmd-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-export function MissionConsole({ initialSession, initialSnapshot = null, readOnly = false, onFinished }: MissionConsoleProps) {
+export function MissionConsole({ initialSession, initialSnapshot = null, readOnly = false, autoStart = false, onFinished }: MissionConsoleProps) {
   const initialized = useRef(false);
+  const autoStarted = useRef(false);
   const cleanupTimer = useRef<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<MissionNotice | null>(null);
@@ -152,6 +154,14 @@ export function MissionConsole({ initialSession, initialSnapshot = null, readOnl
       setNotice({ severity: "error", source: "lifecycle", message: error instanceof Error ? error.message : t(locale, "error.unknown_error"), action: locale === "es-CO" ? "Revise el estado de la sesión antes de reintentar." : "Check the session state before trying again.", resolution: "pending" });
     } finally { setBusy(false); }
   }
+
+  useEffect(() => {
+    if (!autoStart || autoStarted.current || !canControl || connection !== "live" || currentSession.lifecycle !== "PREPARED") return;
+    autoStarted.current = true;
+    void lifecycle("start", { block_id: currentSession.next_block_id ?? "PRACTICE" });
+    // One explicit selector action starts once after controller ownership is established.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart, canControl, connection, currentSession.lifecycle, currentSession.next_block_id]);
 
   async function issueCommand(kind: CommandKind | ProtocolCommandKind, payload: Record<string, unknown>): Promise<boolean> {
     if (!currentSnapshot || !canControl) return false;

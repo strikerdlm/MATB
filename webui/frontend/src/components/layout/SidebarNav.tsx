@@ -33,7 +33,7 @@ export function SidebarNav() {
   const researcherActive = researcher.some(([href]) => isRouteActive(path, href));
   const catalogHref = purpose ? withExecutionPurpose("/start", purpose) : "/start";
   return <nav aria-label={copy("Navegación de experimentos", "Experiment navigation")} className="p-4">
-    <Link href="/astra" className="mb-3 block rounded bg-info/15 px-3 py-3 text-sm font-semibold text-info" aria-current={path === "/astra" ? "page" : undefined}>{copy("Aplicar MATB · ASTRA", "Run MATB · ASTRA")}</Link>
+    <Link href={role === "researcher" ? "/astra" : "/study/join?experiment=openmatb&purpose=study"} className="mb-3 block rounded bg-info/15 px-3 py-3 text-sm font-semibold text-info" aria-current={path === "/astra" ? "page" : undefined}>{copy("Aplicar MATB · ASTRA", "Run MATB · ASTRA")}</Link>
     <Link href={catalogHref} className="block rounded border border-info/30 px-3 py-3 text-sm font-semibold text-info" aria-current={path === "/start" ? "page" : undefined}>{copy("Todos los experimentos", "All experiments")}</Link>
     {experiment && <p className="mt-4 text-sm font-semibold">{copy(...experiment.title)}</p>}
     {(experiment || path === "/start") && <ol className="my-4 flex flex-wrap gap-2 md:block md:space-y-2" aria-label={copy("Pasos del experimento", "Experiment steps")}>
@@ -41,7 +41,7 @@ export function SidebarNav() {
     </ol>}
     <details className="mt-4 border-t border-white/10 pt-4">
       <summary className="cursor-pointer text-sm font-medium">{copy("Cambiar experimento", "Change experiment")}</summary>
-      <div className="mt-3 grid gap-1">{EXPERIMENTS.map((item) => {
+      <div className="mt-3 grid gap-1">{EXPERIMENTS.filter(item => item.id !== "physiology").map((item) => {
         const href = `/start?experiment=${item.id}`;
         if (item.unavailableReason) return <span key={item.id} aria-disabled="true" title={copy(...item.unavailableReason)} className="cursor-not-allowed rounded px-3 py-2 text-sm text-muted-foreground opacity-45 grayscale">{copy(...item.title)}</span>;
         return <Link key={item.id} href={purpose ? withExecutionPurpose(href, purpose) : href} className="rounded px-3 py-2 text-sm text-muted-foreground hover:bg-white/5 hover:text-foreground">{copy(...item.title)}</Link>;
