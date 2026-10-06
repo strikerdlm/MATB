@@ -13,15 +13,16 @@
    Mantenga abierta la ventana hasta que termine.
 3. Abra **Start MATB.cmd**. El navegador muestra
    `http://127.0.0.1:3100/start`. Seleccione OpenMATB u otra actividad y elija
-   práctica o la sesión asignada del estudio. Mantenga abierta la ventana supervisora.
+   práctica o la sesión asignada del estudio. Al finalizar el arranque puede cerrar
+   la ventana del acceso; la aplicación continúa funcionando.
 
 | Archivo | Función |
 | --- | --- |
 | `Install MATB.cmd` | Instalar o reparar la aplicación de investigación |
-| `Start MATB.cmd` | Abrir la consola de investigación |
-| `Start OpenMATB.cmd` | Abrir OpenMATB en español, en ventana y en la primera pantalla |
+| `Start MATB.cmd` | Cerrar la instancia anterior y abrir nuevamente la consola |
+| `Start OpenMATB.cmd` | Cerrar la instancia anterior y abrir OpenMATB en español, en ventana y en la primera pantalla |
 | `Diagnose MATB.cmd` | Revisar dependencias, compilación, escenario, procesos, puertos y registros |
-| `Stop MATB.cmd` | Detener los servicios registrados de la consola |
+| `Stop MATB.cmd` | Cerrar la consola y las ventanas nativas, incluso si falta el registro de procesos |
 
 Los accesos anteriores de `windows-launchers/` siguen disponibles. Para estudios
 controlados, use las sesiones asignadas de la consola; el escritorio directo es
@@ -29,11 +30,26 @@ un flujo independiente. La consola instalada y las tareas incluidas funcionan
 sin Internet; mapas en línea, tráfico en vivo y proveedores de modelos necesitan
 conectividad. Bluetooth necesita hardware compatible.
 
+Cada inicio libera los puertos de MATB (8000 y 3100 por defecto), cierra sus
+procesos secundarios y las ventanas OpenMATB de esta instalación antes de
+reparar dependencias o compilar. Esto también cierra cualquier aplicación que
+ocupe esos dos puertos: resérvelos para MATB. No cierra otros procesos Python o
+Node por su nombre. Si otra instalación necesita esos puertos, use
+`-BackendPort` y `-FrontendPort` en los accesos de consola. Una tarea interrumpida
+no se marca como completada; conserva los datos ya escritos y requiere un nuevo
+intento. Evite reiniciar durante una adquisición que desee conservar activa.
+
 Los datos se guardan en `exports/windows-suas/`: capturas de escritorio en
 `desktop/`; base de datos, capturas de consola, dependencias de exportación y
 registros en `service/`. Puede definir `MATB_DATA_ROOT` con una carpeta externa
 dedicada. Los registros de instalación están en `exports/windows-install/`.
 Conserve los datos al actualizar. Evite Program Files y carpetas sincronizadas.
+
+Al abrir sin una carpeta de datos explícita, si existe la base histórica
+`webui/backend/matb_webui.db` del arranque manual, se reutiliza para conservar
+los participantes y resultados. `MATB_DB_PATH` tiene prioridad; una carpeta
+seleccionada con `-DataRoot` o `MATB_DATA_ROOT` usa su propia base. El lanzador
+muestra la ruta elegida y la guarda en `service/service-state.json`.
 
 Por defecto se usa un entorno Python local aislado. Si define `MATB_PYTHON` o
 `MATB_VENV`, la instalación puede modificar ese entorno seleccionado; quite las
@@ -52,7 +68,9 @@ ZIP, cuya procedencia conserva correctamente el estado provisional.
 | PowerShell bloquea scripts | Los accesos usan una política limitada al proceso; no cambian la política del equipo. Las políticas institucionales siguen aplicándose. Consulte a TI. |
 | Fallan dependencias o compilación | Repita `Install MATB.cmd` y consulte su registro. |
 | npm `EPERM` en `node_modules/.vite/vitest/.../results.json` | Cuando la estación esté inactiva, cierre las pruebas de la interfaz, ejecute `Stop MATB.cmd`, luego `Install MATB.cmd` y `Start MATB.cmd`. La preparación conserva la caché anterior fuera de `node_modules` antes de reinstalar. Para un lanzador anterior, vea abajo. |
-| Puertos 8000 o 3100 ocupados | Detenga el servicio conocido o use `-BackendPort`/`-FrontendPort` en el lanzador PowerShell existente. |
+| Puertos 8000 o 3100 ocupados o sesión anterior abierta | Repita `Start MATB.cmd`: cierra la instancia anterior y libera los puertos antes de abrir. Si Windows impide cerrar un proceso protegido, el mensaje identifica el proceso y detiene el arranque. |
+| `maplibre-gl/package.json` ausente o `next` no reconocido | Use `Start MATB.cmd`; comprueba los paquetes requeridos y repara una instalación incompleta antes de abrir. No necesita ejecutar `npm start` por separado. |
+| Parpadeo en OpenMATB nativo a pantalla completa | Actualice y vuelva a abrir MATB. En Windows se usa una ventana sin bordes dentro del área de trabajo, con sincronización explícita del compositor. La comprobación visual de la pantalla sigue siendo necesaria; no se cambian el controlador ni el registro de Windows. |
 | Faltan dependencias de exportación | Repita setup con la misma carpeta de datos e intérprete que la consola. |
 | Movió el repositorio | Detenga la consola anterior y repita setup en la ubicación nueva. |
 

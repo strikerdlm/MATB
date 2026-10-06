@@ -1,6 +1,7 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "Common-MatbBootstrap.ps1")
+. (Join-Path $PSScriptRoot "Common-MatbLifecycle.ps1")
 
 function Get-MatbUasRepoRoot {
     $candidate = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
@@ -398,15 +399,9 @@ function Stop-MatbUasTrackedProcess {
         Write-Warning "Refusing to stop PID $ProcessId because it no longer matches the tracked MATB $Role process."
         return $false
     }
-    Stop-Process -Id $ProcessId -ErrorAction Stop
-    try {
-        Wait-Process -Id $ProcessId -Timeout 10 -ErrorAction Stop
-    } catch {
-        $remaining = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
-        if ($remaining) {
-            Stop-Process -Id $ProcessId -Force -ErrorAction Stop
-        }
-    }
+    $snapshot = @(Get-CimInstance Win32_Process -ErrorAction Stop)
+    $entry = $snapshot | Where-Object ProcessId -eq $ProcessId | Select-Object -First 1
+    if ($entry) { Stop-MatbProcessTree -RootProcess $entry -Snapshot $snapshot }
     return $true
 }
 
@@ -416,7 +411,21 @@ function Read-MatbUasState {
         return $null
     }
     try {
-        return Get-Content -LiteralPath $StatePath -Raw | ConvertFrom-Json
+        $state = Get-Content -LiteralPath $StatePath -Raw | ConvertFrom-Json
+        foreach ($field in @('repo_root', 'status', 'supervisor_pid', 'backend_pid', 'frontend_pid',
+            'backend_port', 'frontend_port', 'backend_executable', 'frontend_executable',
+            'backend_started_at_utc', 'frontend_started_at_utc')) {
+            if ($null -eq $state -or $field -notin $state.PSObject.Properties.Name -or $null -eq $state.$field) {
+                throw "Missing state field: $field"
+            }
+        }
+        foreach ($role in @('backend', 'frontend')) {
+            if ([int]$state."${role}_pid" -le 0 -or [int]$state."${role}_port" -notin 1..65535) {
+                throw 'Invalid process or port in service state.'
+            }
+            [void][DateTime]::Parse([string]$state."${role}_started_at_utc")
+        }
+        return $state
     } catch {
         Write-Warning "The MATB service state file is invalid: $StatePath"
         return $null

@@ -3,6 +3,9 @@ param(
     [switch]$SkipInstall,
     [switch]$SkipBuild,
     [switch]$SkipTests,
+    [switch]$ServicesStopped,
+    [ValidateRange(1, 65535)][int]$BackendPort = 8000,
+    [ValidateRange(1, 65535)][int]$FrontendPort = 3100,
     [string]$DataRoot = "",
     [string]$BasePython = ""
 )
@@ -17,6 +20,11 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
 
 $repoRoot = Get-MatbUasRepoRoot
 $resolvedDataRoot = Get-MatbUasDataRoot -RepoRoot $repoRoot -DataRoot $DataRoot
+$setupLock = Enter-MatbLauncherLock -RepoRoot $repoRoot
+try {
+if (-not $ServicesStopped) {
+    Stop-MatbConsoleInstance -RepoRoot $repoRoot -DataRoot $resolvedDataRoot -BackendPort $BackendPort -FrontendPort $FrontendPort
+}
 $localPython = Join-Path $repoRoot ".venv-suas\Scripts\python.exe"
 
 try {
@@ -92,11 +100,7 @@ $nextModule = Join-Path $frontendRoot "node_modules\next\dist\bin\next"
 $packageLock = Join-Path $frontendRoot "package-lock.json"
 $dependencyStamp = Join-Path $frontendRoot "node_modules\.matb-package-lock.sha256"
 $packageLockHash = (Get-FileHash -LiteralPath $packageLock -Algorithm SHA256).Hash.ToLowerInvariant()
-$frontendDependenciesReady = (
-    (Test-Path -LiteralPath $nextModule -PathType Leaf) -and
-    (Test-Path -LiteralPath $dependencyStamp -PathType Leaf) -and
-    ((Get-Content -LiteralPath $dependencyStamp -Raw).Trim().ToLowerInvariant() -eq $packageLockHash)
-)
+$frontendDependenciesReady = Test-MatbFrontendDependencies -FrontendRoot $frontendRoot -NodePath $nodePath
 if (-not $frontendDependenciesReady) {
     if ($SkipInstall) {
         throw "Frontend dependencies are missing and -SkipInstall was selected."
@@ -105,11 +109,15 @@ if (-not $frontendDependenciesReady) {
     Write-Host "Installing frontend dependencies..."
     Push-Location $frontendRoot
     try {
-        & $npmPath ci
+        & $npmPath ci --prefer-offline --maxsockets=4 --no-audit --no-fund
         if ($LASTEXITCODE -ne 0) {
             throw "Frontend dependency installation failed. If npm reports EPERM, close MATB and frontend tests, then retry Install MATB.cmd. See WINDOWS.md."
         }
         $packageLockHash | Set-Content -LiteralPath $dependencyStamp -Encoding ascii -NoNewline
+        if (-not (Test-MatbFrontendDependencies -FrontendRoot $frontendRoot -NodePath $nodePath)) {
+            Remove-Item -LiteralPath $dependencyStamp -Force
+            throw 'Frontend packages are still incomplete. See the npm output above.'
+        }
     } finally {
         Pop-Location
     }
@@ -141,7 +149,10 @@ if (-not $SkipBuild) {
             (Join-Path $frontendRoot "package.json"),
             (Join-Path $frontendRoot "package-lock.json"),
             (Join-Path $frontendRoot "next.config.mjs"),
-            (Join-Path $frontendRoot "next.config.js")
+            (Join-Path $frontendRoot "next.config.js"),
+            (Join-Path $frontendRoot "tsconfig.json"),
+            (Join-Path $frontendRoot "tailwind.config.ts"),
+            (Join-Path $frontendRoot "postcss.config.js")
         ) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | ForEach-Object { Get-Item -LiteralPath $_ }
         $newestMetadata = $metadataFiles | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
         if (($newestSource -and $newestSource.LastWriteTimeUtc -gt $buildTime) -or
@@ -191,3 +202,7 @@ try {
 
 Write-Host ""
 Write-Host "MATB Research Console and desktop OpenMATB are ready for the Windows launchers." -ForegroundColor Green
+} finally {
+    $setupLock.ReleaseMutex()
+    $setupLock.Dispose()
+}

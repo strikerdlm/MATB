@@ -1,6 +1,7 @@
 """Avoid whole-display presentation on Windows without changing task logic."""
 
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -71,3 +72,45 @@ def test_windows_tasks_fit_work_area_on_selected_monitor(monkeypatch):
     for container in window.get_container_list():
         assert container.b >= 0
         assert container.b + container.h <= 994
+
+
+@pytest.mark.parametrize(
+    "platform,modern_windows,exclusive,vsync,visible,should_sync",
+    [
+        ("win32", True, False, True, True, True),
+        ("win32", True, False, True, False, False),
+        ("win32", True, False, False, True, False),
+        ("win32", True, True, True, True, False),
+        ("win32", False, False, True, True, False),
+        ("linux", True, False, True, True, False),
+    ],
+)
+def test_windows_compositor_sync_precedes_the_single_buffer_swap(
+    monkeypatch, platform, modern_windows, exclusive, vsync, visible, should_sync
+):
+    calls = []
+    base = window_module.Window.__bases__[0]
+    monkeypatch.setattr(base, "flip", lambda self: calls.append("swap"), raising=False)
+    monkeypatch.setattr(window_module, "platform", platform)
+    monkeypatch.setattr(window_module, "_sync_windows_compositor", lambda: calls.append("sync") or True)
+    window = object.__new__(window_module.Window)
+    window._always_dwm = modern_windows
+    window.fullscreen, window.vsync, window.visible = exclusive, vsync, visible
+    window.flip()
+    assert calls == (["sync", "swap"] if should_sync else ["swap"])
+
+
+def test_failed_composition_falls_back_to_driver_sync_once(monkeypatch):
+    base = window_module.Window.__bases__[0]
+    monkeypatch.setattr(base, "flip", lambda self: None, raising=False)
+    monkeypatch.setattr(window_module, "platform", "win32")
+    sync = Mock(return_value=False)
+    monkeypatch.setattr(window_module, "_sync_windows_compositor", sync)
+    window = object.__new__(window_module.Window)
+    window._always_dwm = True
+    window.fullscreen, window.vsync, window.visible = False, True, True
+    window.context = SimpleNamespace(set_vsync=Mock())
+    window.flip()
+    window.flip()
+    sync.assert_called_once()
+    window.context.set_vsync.assert_called_once_with(True)

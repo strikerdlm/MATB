@@ -1,12 +1,6 @@
 @echo off
 setlocal
-where pwsh.exe >nul 2>&1
-if errorlevel 1 (
-  echo PowerShell 7 is required. Install it and run this shortcut again.
-  pause
-  exit /b 1
-)
-pwsh.exe -NoLogo -NoProfile -File "%~dp0scripts\Test-MatbUasRun.ps1"
+"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\Invoke-MatbWindows.ps1" -Action Verify %*
 set "MATB_EXIT=%ERRORLEVEL%"
-pause
+if not "%MATB_NO_PAUSE%"=="1" pause
 exit /b %MATB_EXIT%
