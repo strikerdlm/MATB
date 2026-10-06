@@ -6,6 +6,8 @@ import { MissionConsole } from "./MissionConsole";
 import { useSimulationStore } from "@/lib/simulation/store";
 import { MISSION_CONSOLE_PROFILE } from "@/lib/simulation/console-profile";
 import type { SessionView, WorldSnapshot } from "@/types/simulation";
+import { transitionSession } from "@/lib/simulation/api";
+vi.mock("@/lib/simulation/api", () => ({ getSimulationSession: vi.fn(), getSimulationState: vi.fn().mockResolvedValue({ aircraft: {}, contacts: {}, alerts: {} }), transitionSession: vi.fn() }));
 
 vi.mock("./presentation/MissionPresentation", () => ({ MissionPresentation: () => <div>Instrument unchanged</div>, preflightSnapshot: vi.fn() }));
 vi.mock("./MissionJourneyRail", () => ({ MissionJourneyRail: () => null }));
@@ -41,4 +43,15 @@ it("keeps a rejected command visible across reconnect; acceptance is receipt onl
   await user.click(screen.getByRole("button", { name: "Hold task" }));
   await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("does not evaluate performance"));
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
+it("starts a crew mission once after the controller connects", async () => {
+  vi.mocked(transitionSession).mockResolvedValue({ ...session, lifecycle: "RUNNING" });
+  render(<MissionConsole initialSession={{ ...session, lifecycle: "PREPARED", next_block_id: "PRACTICE" }} initialSnapshot={snapshot} autoStart />);
+  expect(transitionSession).not.toHaveBeenCalled();
+  act(() => useSimulationStore.setState({ connection: "live" }));
+  await waitFor(() => expect(transitionSession).toHaveBeenCalledExactlyOnceWith(session.id, "start", "test-lease", { block_id: "PRACTICE" }));
+  act(() => useSimulationStore.setState({ connection: "reconnecting" }));
+  act(() => useSimulationStore.setState({ connection: "live" }));
+  expect(transitionSession).toHaveBeenCalledTimes(1);
 });

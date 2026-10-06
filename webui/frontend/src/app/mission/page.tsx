@@ -6,6 +6,7 @@ import { getSimulationSession, getSimulationState } from "@/lib/simulation/api";
 import { MissionConsole } from "@/components/mission/MissionConsole";
 import type { SessionView, WorldSnapshot } from "@/types/simulation";
 import { useAppLocale } from "@/lib/i18n";
+import { crewHref } from "@/lib/crew-workflow";
 
 function MissionPageContent() {
   const { copy } = useAppLocale();
@@ -29,7 +30,7 @@ function MissionPageContent() {
 
   if (error) return <main className="grid min-h-screen place-items-center p-8"><div role="alert" className="mission-panel max-w-xl p-8 text-danger">{error}</div></main>;
   if (!session) return <main className="grid min-h-screen place-items-center p-8 text-muted-foreground">{copy("Cargando misión…", "Loading mission…")}</main>;
-  return <MissionConsole initialSession={session} initialSnapshot={snapshot} onFinished={() => router.push(`/mission/debrief?session=${encodeURIComponent(session.id)}`)} />;
+  return <MissionConsole initialSession={session} initialSnapshot={snapshot} autoStart={Boolean(params.get("crew"))} onFinished={() => router.push(params.get("crew") ? crewHref("suas", params.get("crew")!) : `/mission/debrief?session=${encodeURIComponent(session.id)}`)} />;
 }
 
 export default function MissionPage() {

@@ -14,6 +14,7 @@ _BROWSER_FILES = {
 
 def browser_binding(instrument):
     paths = [*_BROWSER_FILES[instrument], 'webui/backend/app/study_preparation.py', 'webui/backend/app/study_policies.py', 'webui/backend/app/routers/study_preparation.py', 'webui/frontend/src/components/study/StudyReturn.tsx', 'webui/frontend/src/components/study/StudyParticipant.tsx', 'webui/frontend/src/lib/assigned-attempt.ts', 'webui/frontend/src/lib/i18n.tsx', 'webui/frontend/src/components/instructions/InstructionAudio.tsx', f'webui/backend/app/routers/{instrument}.py', f'matb_integration/{instrument}.py']
+    paths += ['webui/frontend/src/components/crew/CrewBrowserRunner.tsx', 'webui/backend/app/crew_workflow.py']
     # Include all stimulus implementation and scoring files, preserving actual source bytes.
     files = {p for folder in [f'webui/frontend/src/components/{instrument}', f'matb_integration/{instrument}']
              for p in (_ROOT / folder).rglob('*') if p.is_file() and p.suffix in {'.py', '.ts', '.tsx'} and '.test.' not in p.name}
@@ -119,6 +120,7 @@ def implementation_binding(instrument):
         'suas': ['matb_integration/suas', 'webui/frontend/src/components/mission', 'webui/frontend/src/lib/simulation', 'webui/backend/app/simulation_runtime.py'],
         'physiology': ['matb_integration/physiology', 'webui/backend/app/physiology_runtime.py', 'webui/backend/app/physiology_schemas.py'],
     }.get(instrument, [])
+    roots += ['webui/backend/app/crew_workflow.py', 'webui/frontend/src/components/crew/CrewSelector.tsx'] if instrument in {'openmatb', 'suas'} else []
     files = set()
     for relative in roots:
         root = _ROOT / relative

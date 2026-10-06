@@ -120,6 +120,36 @@ function Get-MatbUasNpm {
     return $npmPath
 }
 
+function Move-MatbUasFrontendTestCache {
+    param([Parameter(Mandatory)][string]$FrontendRoot)
+
+    # npm ci removes node_modules. A test cache created by another Windows
+    # account can be readable but not deletable by the station operator.
+    # Move the directory without traversing or deleting its contents.
+    $root = (Get-Item -LiteralPath $FrontendRoot -ErrorAction Stop).FullName
+    $modules = Join-Path $root "node_modules"
+    $cache = Join-Path $modules ".vite"
+    if (-not (Test-Path -LiteralPath $cache)) { return }
+    foreach ($path in @($root, $modules, $cache)) {
+        $item = Get-Item -LiteralPath $path -Force -ErrorAction Stop
+        if (-not $item.PSIsContainer -or
+            ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+            throw "Cannot relocate frontend test cache through a file or directory link: $path"
+        }
+    }
+    $backup = Join-Path $root (".matb-cache-backup-{0}-{1}" -f (Get-Date -Format "yyyyMMdd-HHmmss"), [guid]::NewGuid().ToString("N"))
+    if ((Split-Path -Parent $cache) -ne $modules -or
+        (Split-Path -Parent $backup) -ne $root) {
+        throw "Frontend cache paths must stay inside the frontend directory."
+    }
+    try {
+        [System.IO.Directory]::Move($cache, $backup)
+    } catch {
+        throw "Cannot move frontend test cache '$cache'. Close MATB and frontend tests, then retry Install MATB.cmd. Details: $($_.Exception.Message)"
+    }
+    Write-Host "Previous frontend test cache preserved at: $backup"
+}
+
 function Get-MatbUasRequirements {
     param([Parameter(Mandatory)][string]$RepoRoot, [Parameter(Mandatory)][string]$PythonPath)
     $target = & $PythonPath -c "import sys; print('locked' if sys.platform == 'win32' and sys.version_info[:2] == (3, 12) and sys.maxsize > 2**32 else 'source')"

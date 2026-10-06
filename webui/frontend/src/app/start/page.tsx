@@ -10,6 +10,7 @@ import { useAppLocale } from "@/lib/i18n";
 import { EXPERIMENTS, type ExperimentId, type ExecutionPurpose } from "@/lib/experiments";
 import { useConsole } from "@/lib/console-context";
 import { resolveExecutionPurpose, withExecutionPurpose } from "@/lib/execution-purpose";
+import { CREW_ACTIVITIES, crewHref, type CrewActivity } from "@/lib/crew-workflow";
 
 const icons = { openmatb: MonitorPlay, suas: Radar, liftoff: Gamepad2, screen: Brain, pvt: Clock3, physiology: Activity };
 export default function StartPage() { return <Suspense><Catalog /></Suspense>; }
@@ -42,7 +43,9 @@ function Catalog() {
       nextPurpose,
     ));
   }
-  const destination = purpose === "study" ? "/study/assignments" : selected === "suas" && purpose === "practice" ? "/mission/test" : info?.route;
+  const destination = purpose === "study" && CREW_ACTIVITIES.includes(selected as CrewActivity)
+    ? crewHref(selected as CrewActivity)
+    : selected === "suas" && purpose === "practice" ? "/mission/test" : info?.route;
   return <div className="space-y-7">
     <PageHeader kicker={copy("Comenzar aquí", "Start here")} title={copy("Elija su experimento", "Choose your experiment")}
       description={copy("Explore una actividad, conozca sus pasos y elija práctica o una sesión de su estudio.", "Explore an activity, learn its steps, and choose practice or a session in your study.")} />
@@ -51,7 +54,7 @@ function Catalog() {
       {status === "offline" && <Button variant="outline" onClick={refresh}>{copy("Volver a comprobar", "Check again")}</Button>}
     </div>}
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label={copy("Experimentos", "Experiments")}>
-      {EXPERIMENTS.map((item) => {
+      {EXPERIMENTS.filter(item => item.id !== "physiology").map((item) => {
         const Icon = icons[item.id];
         const active = item.id === selected;
         const installed = catalog.find((row) => row.id === item.id)?.component_available;
@@ -71,7 +74,9 @@ function Catalog() {
         {([
           [copy("Qué mide", "What it measures"), info.summary],
           [copy("Qué hará", "What you will do"), info.actions],
-          [copy("Duración", "Duration"), info.duration],
+          [copy("Duración", "Duration"), info.id === "openmatb" && purpose === "study"
+            ? ["ASTRA: tres bloques de 15 minutos, cuestionarios y pausas de 3 minutos entre bloques.", "ASTRA: three 15-minute blocks, questionnaires and 3-minute rests between blocks."] as const
+            : info.duration],
           [copy("Equipo necesario", "Equipment needed"), info.equipment],
           [copy("Cómo leer el resultado", "Reading your result"), info.results],
         ] as const).map(([label, value]) => <div key={label}><dt className="font-semibold">{label}</dt><dd className="mt-1 text-sm leading-6 text-muted-foreground">{copy(...value)}</dd></div>)}
@@ -82,7 +87,7 @@ function Catalog() {
         <div className="mt-2 grid gap-3 sm:grid-cols-2">
           {(["practice", "study"] as const).map((mode) => <label key={mode} className={"flex cursor-pointer items-start gap-3 rounded border p-4 " + (purpose === mode ? "border-info bg-info/5" : "border-white/15")}>
             <input type="radio" name="execution-purpose" value={mode} checked={purpose === mode} onChange={() => choosePurpose(mode)} className="mt-1 accent-cyan-400" />
-            <span><strong>{mode === "practice" ? copy("Practicar", "Practice") : copy("Participar en mi estudio", "Join my study")}</strong><span className="mt-1 block text-sm text-muted-foreground">{mode === "practice" ? copy("Familiarícese con los controles. Los resultados se guardan aparte del estudio.", "Learn the controls. Results are saved separately from the study.") : copy("Use su código y visita asignados. Se conserva la secuencia del protocolo.", "Use your assigned code and visit. The protocol sequence is preserved.")}</span></span>
+            <span><strong>{mode === "practice" ? copy("Practicar", "Practice") : copy("Participar en mi estudio", "Join my study")}</strong><span className="mt-1 block text-sm text-muted-foreground">{mode === "practice" ? copy("Familiarícese con los controles. Los resultados se guardan aparte del estudio.", "Learn the controls. Results are saved separately from the study.") : copy("Elige tu callsign. Se abrirá tu siguiente sesión pendiente.", "Choose your callsign. Your next pending session will open.")}</span></span>
           </label>)}
         </div>
       </fieldset>
@@ -93,5 +98,6 @@ function Catalog() {
         <span className="text-sm text-muted-foreground">{copy("Antes de iniciar se verifican los requisitos del experimento.", "Experiment requirements are checked before starting.")}</span>
       </div>
     </section>}
+    <div className="border-t border-white/10 pt-5 text-sm"><Link href="/physiology/polar-h10" className="text-muted-foreground underline">{copy("Polar H10 · Registro opcional independiente", "Polar H10 · Separate optional recording")}</Link></div>
   </div>;
 }

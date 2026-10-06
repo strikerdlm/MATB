@@ -12,6 +12,7 @@ import { OpenMatbAudioBriefing } from "@/components/openmatb/OpenMatbAudioBriefi
 import { Button } from "@/components/ui/button";
 import { useReportExperimentFlow } from "@/lib/experiment-flow";
 import { withExecutionPurpose } from "@/lib/execution-purpose";
+import { crewHref } from "@/lib/crew-workflow";
 import { FixedLocaleProvider, useAppLocale } from "@/lib/i18n";
 import {
   startOpenMatbAsParticipant,
@@ -29,6 +30,7 @@ function ParticipantContent() {
   const preferred = useAppLocale();
   const initialCopy = preferred.copy;
   const id = params.get("session");
+  const crew = params.get("crew");
   const [token, setToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [briefingPlaying, setBriefingPlaying] = useState(false);
@@ -117,8 +119,8 @@ function ParticipantContent() {
   return <main className="min-h-screen bg-background p-5 sm:p-8">
     <div className="mx-auto max-w-5xl space-y-6">
       <header className="space-y-4 border-b border-white/15 pb-5">
-        <div className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">MATB - FAC · {session.visit_code} · {session.participant_id}</div>
-        <ExecutionPurposeBadge purpose={session.execution_purpose} />
+        <div className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">{crew ? `MATB · ASTRA · ${crew}` : `MATB - FAC · ${session.visit_code} · ${session.participant_id}`}</div>
+        {!crew && <ExecutionPurposeBadge purpose={session.execution_purpose} />}
         <h1 className="font-display text-3xl font-semibold uppercase tracking-wide">{title}</h1>
       </header>
 
@@ -205,7 +207,8 @@ function ParticipantContent() {
         {copy("No se puede identificar el bloque activo. Actualice esta página y avise al investigador si el mensaje continúa.", "The active block cannot be identified. Refresh this page and tell the researcher if the message remains.")}
       </p>}
 
-      {session.lifecycle === "COMPLETE" && session.study_assignment_id && <details className="space-y-4">
+      {crew && ["COMPLETE", "ABORTED", "FAILED", "INTERRUPTED"].includes(session.lifecycle) && <Button asChild size="lg"><Link href={crewHref("openmatb", crew)}>{copy("Continuar mi sesión", "Continue my session")}</Link></Button>}
+      {session.lifecycle === "COMPLETE" && session.study_assignment_id && !crew && <details className="space-y-4">
         <summary>{copy("Revisar o repetir cuestionario", "Review or repeat questionnaire")}</summary>
         <FixedLocaleProvider locale={locale}><AssignedWorkloadQuestionnaire
           sessionId={session.id}
@@ -220,7 +223,7 @@ function ParticipantContent() {
           <Check className="mx-auto h-14 w-14 text-success" />
           <h2 className="mt-5 font-display text-4xl uppercase">{session.execution_purpose === "practice" ? copy("Práctica completada", "Practice completed") : copy("Sesión completada", "Session completed")}</h2>
           <p className="mt-3 text-muted-foreground">{copy("Los datos de la sesión quedaron guardados.", "Session data has been saved.")}</p>
-          {(session.study_assignment_id || session.preparation_assignment_id) && <Link className="block underline" href={`/study/participant?assignment=${session.study_assignment_id ?? session.preparation_assignment_id}`}>{copy("Continuar visita: siguiente acción", "Continue visit: next action")}</Link>}
+          {!crew && (session.study_assignment_id || session.preparation_assignment_id) && <Link className="block underline" href={`/study/participant?assignment=${session.study_assignment_id ?? session.preparation_assignment_id}`}>{copy("Continuar visita: siguiente acción", "Continue visit: next action")}</Link>}
           <Link href={withExecutionPurpose("/start", session.execution_purpose)} className="mt-4 inline-block underline">{copy("Volver a los experimentos", "Back to experiments")}</Link>
         </div>
       </section>}

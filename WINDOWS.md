@@ -50,9 +50,33 @@ source provenance correctly remains provisional.
 | Institution blocks installation | Ask IT to install prerequisites. Manual downloads: [PowerShell](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-windows), [Python 3.12](https://www.python.org/downloads/windows/), [Node.js 22](https://nodejs.org/en/download). |
 | PowerShell policy blocks scripts | Shortcuts use a process-only policy and do not change machine policy. Institution-enforced policies still apply; ask IT to approve the scripts. |
 | Packages/build fail | Rerun `Install MATB.cmd` and read the timestamped installation log. |
+| npm `EPERM` on `node_modules/.vite/vitest/.../results.json` | Once the station is idle, close frontend tests, run `Stop MATB.cmd`, then `Install MATB.cmd` and `Start MATB.cmd`. Setup preserves the old test cache outside `node_modules` before reinstalling. See below if using an older launcher. |
 | Port 8000 or 3100 occupied | Stop the known service or pass `-BackendPort`/`-FrontendPort` to the existing PowerShell launcher. |
 | Research export reports a missing wheel | Rerun setup using the same data root and Python interpreter as the Console. |
 | Repository moved | Stop the old Console and rerun setup in its new location. |
+
+This `results.json` is a generated test cache. It is unrelated to participant
+results. Windows may prevent its deletion when it was created by another
+account (including an automated test account), or when a process holds it open.
+Setup preserves it in `webui/frontend/.matb-cache-backup-*`; new tests use a
+temporary cache scoped to the account and checkout. Participant data stays in
+the configured data root.
+
+For an older launcher, close tests and stop MATB while the station is idle,
+then run this in PowerShell from the repository folder before retrying setup:
+
+```powershell
+$frontend = (Resolve-Path -LiteralPath '.\webui\frontend').Path
+$cache = Join-Path $frontend 'node_modules\.vite'
+$backup = Join-Path $frontend ('.matb-cache-backup-' + [guid]::NewGuid().ToString('N'))
+if (Test-Path -LiteralPath $cache) {
+    [System.IO.Directory]::Move($cache, $backup)
+}
+```
+
+If the move is blocked too, restart Windows and retry before opening MATB or
+tests. A continuing access error requires checking permissions on that specific
+cache. Do not delete the study data or disable antivirus protection.
 
 The Windows installer CI job checks setup, isolation, versions, startup,
 replay, diagnostics and shutdown in paths containing spaces and Unicode.

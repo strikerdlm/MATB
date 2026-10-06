@@ -19,7 +19,7 @@ describe("ExperimentGuide", () => {
     expect(screen.getByRole("link", { name: "Practicar" }))
       .toHaveAttribute("href", "/screen?participant=P01&purpose=practice");
     expect(screen.getByRole("link", { name: "Participar en mi estudio" }))
-      .toHaveAttribute("href", "/screen?participant=P01&purpose=study");
+      .toHaveAttribute("href", "/study/join?experiment=screen&purpose=study");
   });
 
   it("keeps the selected purpose in the catalog link and explains practice separation", () => {
