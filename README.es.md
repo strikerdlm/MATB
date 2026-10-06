@@ -6,6 +6,52 @@
 con doble clic; luego `Start MATB.cmd` (consola) o `Start OpenMATB.cmd`
 (escritorio). Consulte la [guía de Windows](WINDOWS.es.md).
 
+### Tripulación ASTRA: cuatro jornadas completas
+
+Elija la actividad, **Participar en mi estudio → Preparar experimento**, y
+su callsign: **CUELLAR, COLORADO, ICEMAN, WHITE o PIRATA**. No necesita
+contraseña ni PIN. Cada tripulante realiza **OpenMATB, Misión sUAS · Supervisión,
+Pruebas y KSS + PVT en cada jornada**. Polar H10 es opcional y permanece
+fuera de esta secuencia.
+
+| Jornada | Fecha confirmada (Bogotá) |
+| --- | --- |
+| DM3 | 7 de octubre de 2026 |
+| DM7 | 11 de octubre de 2026 |
+| DM11 | 15 de octubre de 2026 |
+| Postmisión | 20 de octubre de 2026 |
+
+Son **tres oportunidades durante la misión, cada cuatro días, más postmisión**.
+Al elegir su callsign verá las pruebas guardadas y pendientes, la próxima
+fecha y los días que faltan. Complete todas las actividades antes de avanzar;
+las guardadas no se repiten. Si falta una prueba, sigue pendiente; las jornadas
+futuras no se abren antes de tiempo. OpenMATB conserva sus tres bloques,
+cuestionarios e intervalos de descanso.
+
+Los CSV se generan automáticamente después de la adquisición, cuando la
+estación puede exportar, por callsign y fecha real de prueba:
+
+```text
+exports/
+  CUELLAR/
+    2026-10-07_DM3/
+      CUELLAR_20261007T083000000000-0500_pvt_<id-intento>.csv
+    2026-10-11_DM7/
+    2026-10-15_DM11/
+    2026-10-20_POST/
+  COLORADO/
+  ICEMAN/
+  WHITE/
+  PIRATA/
+```
+
+Cada CSV es una tabla plana UTF-8 con callsign, fechas programada y real,
+prueba, intento y valores originales de respuestas y métricas. El identificador
+del intento evita sobrescribir los reintentos. Una prueba tardía usa la fecha
+real en su carpeta y conserva la programada dentro del archivo. Los originales
+se conservan; `exports/` es local y está excluida de Git. El operador aplica el
+calendario una vez después de actualizar: [configuración del flujo y las exportaciones ASTRA](docs/implementation/astra-crew-workflow.md).
+
 > Software exclusivo para investigación y aseguramiento de la seguridad operacional. MATB no es un dispositivo clínico,
 > un sistema operacional certificado, un canal de control de aeronaves, un sistema de armas ni un
 > sustituto de la aprobación humana responsable.

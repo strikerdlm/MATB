@@ -251,12 +251,15 @@ def enqueue_source(db,kind,payload):
 
 def claim_job(db, identity=None):
     row=lock(db)
-    if json.loads(row.reservation_json) or json.loads(row.lanes_json) or row.maintenance or running(db): return None
+    if json.loads(row.lanes_json) or row.maintenance or running(db): return None
     active=db.exec(select(StationJob).where(StationJob.status=='queued')).all()
     if len(active)<MAX_QUEUE:
         waiting=db.exec(select(StationJob).where(StationJob.status=='waiting_capacity').order_by(StationJob.created_at)).first()
         if waiting: waiting.status='queued';db.add(waiting);db.flush()
     query=select(StationJob).where(StationJob.status=='queued').order_by(StationJob.created_at,StationJob.id)
+    # Flat result copies may finish while the participant keeps an idle reservation.
+    # Acquisitions still block every job, and running work blocks new admission.
+    if json.loads(row.reservation_json): query=query.where(StationJob.kind=='crew_export')
     job=db.exec(query).first()
     if identity and job and job.id!=identity: return None
     if job is None or job.status!='queued': return None

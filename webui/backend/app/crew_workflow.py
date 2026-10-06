@@ -17,12 +17,12 @@ from app.assessment_schemas import AttemptIn
 from app.assessment_service import create_attempt
 from app.models import ParticipantRoster, Visit
 from app.study_registry_models import StudyAssignment, StudyRecoveryInterval
+from app import crew_schedule as schedule
+from app.crew_schedule import BOGOTA
 
 CALLSIGNS = ("CUELLAR", "COLORADO", "ICEMAN", "WHITE", "PIRATA")
 INSTRUMENTS = ("openmatb", "suas", "screen", "pvt")
-POLICY = "astra-crew-flow-v1"
-# Colombia has a fixed UTC-05:00 offset; no dependency on host time or tzdata.
-BOGOTA = timezone(timedelta(hours=-5), "America/Bogota")
+POLICY = "astra-crew-flow-v2"
 
 
 def utcnow():
@@ -78,7 +78,7 @@ def _configure_roster(db):
             row.position = position
             db.add(row)
         existing = {v.visit_ordinal: v for v in db.exec(select(Visit).where(Visit.participant_id == row.participant_id)).all()}
-        for definition in astra_roster.VISITS:
+        for definition in (*astra_roster.VISITS, *schedule.VISITS):
             if definition.ordinal not in existing:
                 db.add(Visit(participant_id=row.participant_id, visit_ordinal=definition.ordinal,
                              scheduled_day=definition.scheduled_day))
@@ -91,10 +91,22 @@ def configuration_payload(db):
     from app.study_bindings import binding_options, browser_binding
     payload = astra_deployment.payload(db, include_polar=False)
     study = payload["study"]
-    study["title"] = "ASTRA · sesiones de tripulación"
+    # New visit identities avoid changing the dates or meaning of prior V0-V7 records.
+    remap = {i + 1: v for i, v in enumerate(schedule.VISITS)}
+    study["visits"] = [dict(ordinal=v.ordinal, code=v.code, scheduled_day=v.scheduled_day) for v in schedule.VISITS]
+    study["occasions"] = [o for o in study["occasions"] if o["visit_ordinal"] in remap]
+    for spec in study["occasions"]:
+        spec["visit_ordinal"] = remap[spec["visit_ordinal"]].ordinal
+    keys = {o["key"] for o in study["occasions"]}
+    study["preparation_policy"] = [p for p in study["preparation_policy"] if p["occasion_key"] in keys]
+    study["recovery_intervals"] = [r for r in study["recovery_intervals"] if r["before_key"] in keys]
+    for outcome in payload["analysis"]["outcomes"]:
+        outcome["occasion_keys"] = [key for key in outcome["occasion_keys"] if key in keys]
+    study["title"] = "ASTRA · DM3, DM7, DM11 y postmisión"
     study["rules"]["preparation"] = (
-        POLICY + ": inicio por callsign solicitado el 2026-10-06. Una sesión completa por "
-        "actividad y día calendario de Bogotá; continuidad desde la primera sesión pendiente. "
+        POLICY + ": calendario confirmado el 2026-10-06: DM3 2026-10-07, DM7 2026-10-11, "
+        "DM11 2026-10-15 y postmisión 2026-10-20, hora de Bogotá. Todas las actividades "
+        "en cada jornada; continuar las pendientes antes de avanzar, sin repetir las guardadas. "
         "Comprobación automática de estación y preflight nativo real; instrucciones dentro de "
         "cada tarea. Sin formularios administrativos de preparación ni adquisición Polar "
         "obligatoria. No acredita consentimiento, familiarización previa ni competencia."
@@ -108,8 +120,8 @@ def configuration_payload(db):
         requirement["acknowledgement_required"] = False
         requirement["rationale"] = "Inicio solicitado por el participante; instrucciones en la tarea y comprobación automática del entorno."
     # Keep scientific timings and source bindings; only the entry procedure changes.
-    for visit in study["visits"]:
-        prefix = f"v{visit['ordinal'] - 1}"
+    for index, visit in enumerate(study["visits"]):
+        prefix = f"v{index}"
         for instrument, order in (("pvt", 20), ("screen", 21), ("suas", 22)):
             key = f"{prefix}_{instrument}"
             if instrument == "suas":
@@ -175,6 +187,7 @@ def configure(db, runtime, *, actor, reason):
     crew_ids = {_person(db, callsign).participant_id for callsign in CALLSIGNS}
     pending = [a.id for a in db.exec(select(StudyAssignment)).all()
                if a.participant_id in crew_ids and registry.assignment_is_current(db, a)
+               and db.get(Visit, a.visit_id).visit_ordinal in {v.ordinal for v in schedule.VISITS}
                and not registry.assignment_started(db, a)]
     if pending:
         registry.amend(db, version.id, pending, actor=actor, reason=reason)
@@ -240,23 +253,40 @@ def progress(db, callsign, instrument, *, now=None):
     now = aware(now or utcnow())
     person = _person(db, callsign)
     _, template = _version(db)
-    visits = db.exec(select(Visit).where(Visit.participant_id == person.participant_id).order_by(Visit.visit_ordinal)).all()
-    states = [_visit_state(db, visit, instrument, template) for visit in visits
-              if visit.visit_ordinal in {v["ordinal"] for v in template["visits"]}]
-    finished_today = any(s["finished_at"] and s["finished_at"].astimezone(BOGOTA).date() == now.astimezone(BOGOTA).date() for s in states)
-    pending = next((s for s in states if not s["complete"]), None)
+    today = now.astimezone(BOGOTA).date()
+    visits = db.exec(select(Visit).where(Visit.participant_id == person.participant_id,
+        Visit.visit_ordinal.in_([v.ordinal for v in schedule.VISITS])).order_by(Visit.visit_ordinal)).all()
+    if len(visits) != len(schedule.VISITS):
+        fail("crew_calendar_missing", "La estación necesita cargar las cuatro jornadas del tripulante.")
+    days = [{activity: _visit_state(db, visit, activity, template) for activity in INSTRUMENTS} for visit in visits]
+    current_index = next((i for i, day in enumerate(days) if not all(s["complete"] for s in day.values())), None)
+    day = days[current_index] if current_index is not None else days[-1]
+    pending = day[instrument] if current_index is not None else None
+    visit = day[instrument]["visit"]
+    due = schedule.planned_date(visit.visit_ordinal)
+    waiting = current_index is not None and today < due
+    next_activity = next((activity for activity in INSTRUMENTS if not day[activity]["complete"]), None)
+    next_date = (due if waiting else schedule.planned_date(visits[current_index + 1].visit_ordinal)
+                 if current_index is not None and current_index + 1 < len(visits) else None)
+    state_name = ("complete" if current_index is None else "scheduled" if waiting
+                  else "activity_complete" if pending["complete"] else "ready")
     public = dict(callsign=callsign, participant_id=person.participant_id, instrument=instrument,
-        state="complete" if pending is None else "done_today" if finished_today else "ready",
-        completed_sessions=sum(s["complete"] for s in states), total_sessions=len(states),
-        session_number=pending["visit"].visit_ordinal if pending else None,
+        state=state_name, completed_sessions=sum(d[instrument]["complete"] for d in days),
+        total_sessions=len(days), session_number=current_index + 1 if current_index is not None else None,
         completed_blocks=pending["completed_blocks"] if pending else 0,
-        date=now.astimezone(BOGOTA).date().isoformat())
+        date=today.isoformat(), day_label=schedule.label(visit.visit_ordinal), scheduled_date=due.isoformat(),
+        next_test_date=next_date.isoformat() if next_date else None,
+        days_until_next=(next_date - today).days if next_date else None,
+        next_activity=next_activity, completed_days=sum(all(s["complete"] for s in d.values()) for d in days),
+        activities=[dict(instrument=a, complete=day[a]["complete"]) for a in INSTRUMENTS],
+        schedule=[dict(label=schedule.label(v.visit_ordinal), date=schedule.planned_date(v.visit_ordinal).isoformat(),
+            complete=all(s["complete"] for s in d.values())) for v, d in zip(visits, days)])
     if pending and not pending["tasks"]:
         public.update(state="needs_review", message="Esta sesión previa no incluye la actividad; se conserva para revisión.")
     elif pending and pending["pending"]:
         spec = _next_spec(db, pending)
         rows = _attempts(db, pending["assignment"], spec["key"])
-        if rows and rows[-1].acquisition_state == "interrupted" and not finished_today:
+        if rows and rows[-1].acquisition_state == "interrupted" and not waiting:
             public["state"] = "interrupted"
     return public, pending
 
@@ -304,7 +334,7 @@ def prepare(db, callsign, instrument, *, retry=False, now=None):
     registry.lock_registry(db)
     now = aware(now or utcnow())
     public, state = progress(db, callsign, instrument, now=now)
-    if public["state"] in {"done_today", "complete", "needs_review"}:
+    if public["state"] in {"scheduled", "complete", "needs_review", "activity_complete"}:
         return dict(**public, action=public["state"])
     version, _ = _version(db)
     visit, assignment = state["visit"], state["assignment"]

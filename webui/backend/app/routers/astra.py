@@ -87,6 +87,8 @@ class CrewStartIn(BaseModel):
 def configure_crew(body: CrewConfigurationIn, db: Session = Depends(get_session), runtime: OpenMatbManager = Depends(manager)):
     result = crew_workflow.configure(db, runtime, **body.model_dump())
     db.commit()
+    from app.crew_exports import prepare_directories
+    prepare_directories()
     return result
 
 
@@ -100,3 +102,11 @@ def prepare_crew(body: CrewStartIn, db: Session = Depends(get_session)):
     result = crew_workflow.prepare(db, **body.model_dump())
     db.commit()
     return result
+
+
+@router.post("/crew/exports")
+def rebuild_crew_exports(db: Session = Depends(get_session)):
+    from app.crew_exports import queue_all
+    queued = queue_all(db)
+    db.commit()
+    return {"queued": queued}

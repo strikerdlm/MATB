@@ -36,3 +36,13 @@ def finalize(engine,payload):
         block_records=tuple(record for record in effective if record.block_id==block_id)
         metrics={**block_metric_summary(block_records,manifest),**derive_research_metrics(block_records).to_dict(),'calculation_version':'suas-debrief-v2'}
         persistence.update_block(payload['session_id'],block_id,metrics_json=canonical_json(metrics))
+    # Refresh the derived flat copy after the deferred mission metrics are available.
+    from sqlmodel import Session, select
+    from app.assessment_models import AssessmentAttempt, AssessmentSourceLink
+    from app.crew_exports import enqueue
+    with Session(engine) as db:
+        link = db.exec(select(AssessmentSourceLink).where(AssessmentSourceLink.source_table == 'simulation_session',
+            AssessmentSourceLink.source_id == payload['session_id'], AssessmentSourceLink.role == 'acquisition')).first()
+        if link:
+            enqueue(db, db.get(AssessmentAttempt, link.attempt_id))
+        db.commit()

@@ -121,6 +121,9 @@ def transition(db, identity, state, category=None, *, native_session_id=None):
         row.interruption_category = category
     db.add(row)
     db.flush()
+    if state in {'finished', 'interrupted'}:
+        from .crew_exports import enqueue
+        enqueue(db, row)
     return row
 
 

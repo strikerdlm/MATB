@@ -1,65 +1,47 @@
-# ASTRA participant workflow
+# ASTRA callsign workflow and confirmed test calendar
 
-Requested on 2026-10-06: participant → activity → study → prepare → callsign →
-start. Callsigns: CUELLAR, COLORADO, ICEMAN, WHITE, PIRATA. No participant
-passwords or PINs. Polar remains a separate optional activity.
+Choose an activity → participate in the study → prepare → callsign → start.
+CUELLAR, COLORADO, ICEMAN, WHITE and PIRATA share the same four test dates.
+There are no participant passwords, PINs or manual assignment forms.
 
-## Visual specification
+## Calendar confirmed on 2026-10-06
 
-The participant screen follows the generated desktop reference and uses a charcoal background
-(`#0b0c0d`), white text, muted gray (`#a1aab4`), cyan (`#00baff`), 6–10 px corner
-radii, a slim MATB · ASTRA header, and a centered 1120 px content area. A
-three-step indicator precedes a mixed-case question and the activity name.
-Five large callsign buttons occupy the left column; the right column presents
-the pending session and a single primary start action. On narrow screens the
-columns stack. No administrative sidebar, version IDs, assignment arms, or
-physiology controls appear in this participant surface.
+| Jornada | Bogotá date | Required activities |
+| --- | --- | --- |
+| DM3 | 2026-10-07 | OpenMATB, sUAS, Pruebas, KSS + PVT |
+| DM7 | 2026-10-11 | OpenMATB, sUAS, Pruebas, KSS + PVT |
+| DM11 | 2026-10-15 | OpenMATB, sUAS, Pruebas, KSS + PVT |
+| Postmisión | 2026-10-20 | OpenMATB, sUAS, Pruebas, KSS + PVT |
 
-The reference's CUELLAR / Sesión 2 is illustrative. Actual selection and
-progress come from persisted records; loading, interruption, saved-today,
-rest-interval, unavailable, and all-complete states use the same visual system.
-Selection is explicit; starting an activity requires the primary action.
+These are three mission opportunities, four days apart, plus post-mission.
+The earliest incomplete jornada remains current until all four activities are
+saved. Completing only one activity never advances the jornada. Future
+jornadas open at midnight Bogotá; late work stays pending on its original
+jornada instead of being silently skipped. Fixed calendar dates do not slide
+when work is late. After post-mission completion no fifth jornada is created.
 
-## Operational rules
+OpenMATB retains three 15-minute blocks, workload ratings and two 180-second
+intervals. KSS + PVT is shared with the same jornada's sUAS prerequisite and is
+never duplicated. Retries preserve the prior attempt, cause and frozen limits.
+Polar H10 is standalone and optional throughout.
 
-- Preserve participant IDs, results, prior assignments, and frozen versions.
-- Apply the simplified configuration prospectively through a named, recorded
-  configuration action. Started assignments retain their original version.
-- Choose the earliest incomplete session for each participant and activity.
-  Permit at most one completed session per activity per Bogotá calendar day.
-  Preparing, refreshing, or interrupting an attempt does not complete a day.
-- Reuse an unstarted attempt, preserve interrupted attempts, and record a
-  bounded retry according to the frozen repeat policy. Never skip an active
-  attempt or relabel practice as study evidence.
-- Keep the existing task durations, scoring, workload questionnaires and
-  between-block intervals. The native hardware preflight still runs before
-  releasing OpenMATB. Missing KSS + PVT for sUAS is opened directly.
-- Resolve visits, arms, prerequisites and internal session tokens automatically.
-  Participant codes and tokens are not login inputs.
-- Polar acquisition is never a prerequisite or automatically started by this
-  flow. Existing physiological recordings remain historical records.
+## Existing data and deployment
 
-Validation includes progression and midnight boundaries, repeat/concurrency
-guards, roster identity preservation, no Polar dependency, the selected
-activity's destination, browser task saving, and desktop/mobile rendering.
+The v2 calendar uses internal Visit ordinals 9–12, leaving historical V0–V7
+visits, dates, results, participant identities and assignments untouched. The
+participant sees DM3/DM7/DM11/Postmisión, never these internal numbers. Earlier
+practice or a different protocol is not relabeled as a completed test day.
 
-## Deployment and verification — 2026-10-06
-
-The station must enable `matb-openmatb` and `matb-suas`. A named operator calls
-`POST /astra/crew/configure` with `actor` and `reason` once when installing this
-workflow, and after executable bindings change. This creates a prospective
-version and amends only unstarted assignments; participant GET/start requests
-never freeze a study or attest to consent. The crew enters through `/start` or
-`/study/join?experiment=openmatb&purpose=study`. Other activity values are `suas`,
-`screen` and `pvt`. Internal session credentials are stored automatically in the
-current tab, with no participant password/PIN fields.
-
-For example, from PowerShell after the station is updated:
+Enable `matb-openmatb` and `matb-suas`. After updating source/build, a named
+operator applies the configuration once, and again after executable bindings
+change. No active acquisition can be interrupted by configuration. Started
+assignments retain their original frozen version; only unstarted assignments
+in this calendar may be amended.
 
 ```powershell
 $configuration = @{
     actor = 'Nombre del investigador responsable'
-    reason = 'Activación autorizada del recorrido ASTRA por callsign y sesión pendiente.'
+    reason = 'Calendario confirmado: DM3, DM7, DM11 y postmisión; todas las pruebas por jornada.'
 } | ConvertTo-Json
 Invoke-RestMethod 'http://127.0.0.1:8000/astra/crew/configure' -Method Post `
     -Headers @{ Origin = 'http://localhost:3100' } `
@@ -67,47 +49,87 @@ Invoke-RestMethod 'http://127.0.0.1:8000/astra/crew/configure' -Method Post `
     -Body ([Text.Encoding]::UTF8.GetBytes($configuration))
 ```
 
-Each daily OpenMATB session includes three 15-minute blocks, their workload
-ratings and two 180-second intervals. The day's limit applies after the entire
-activity session is complete, not after its first block. Practice never counts
-as a completed study session. Instructions and response timing remain in the
-canonical task components. Selecting another crew member closes an idle prior
-reservation automatically; it cannot stop an acquisition. An explicit retry can
-recover only this assignment's already-interrupted browser attempt. Native
-process ownership remains protected. Legacy practice attempts whose underlying
-native source is terminal do not block deployment; their records are untouched.
+This also creates the five callsign folders and their four planned day folders.
+The crew enters `/start` or `/study/join?experiment=openmatb&purpose=study`;
+other activities are `suas`, `screen` and `pvt`.
 
-Completed checks:
+## Flat local exports
 
-- 12 isolated backend tests: callsigns, identity preservation, prospective
-  configuration/idempotence, double-click reuse, Bogotá midnight, independent
-  activities, prerequisite retries, admission/ownership, native ratings/rest,
-  idle crew changes, preservation of terminal historical practice records and
-  creation/reuse of the assigned native session up to hardware preflight.
-- 16 frontend tests: activity routing, explicit callsign selection, daily limit,
-  native preflight/release sequencing, real-context KSS response, full-length
-  PVT/screen payloads, failed-save retry and one-time sUAS start on connection.
-- Production build, including TypeScript checking.
-- Playwright against the compiled application: requested participant entry,
-  real server roster, five callsigns, selection, desktop at 1506 × 1045 and
-  mobile at 390 × 844 without horizontal overflow. Browser acquisition was not
-  started against the operational database. All four activity selectors and the
-  home shortcut passed on the final build, with no browser JavaScript errors.
-- Local native readiness returned `ready: true`, with installed runtime,
-  Spanish questionnaires and graphical displays. A full physical acquisition
-  with audio/controller responses remains an operator check.
-- Verified an operational backup before local configuration and checked that
-  existing acquisition records were preserved. Verification generated no study
-  outcomes. Operational records and backups are excluded from this change.
+The default root is repository-relative `exports/`, independent of the launch
+directory. `MATB_CREW_EXPORT_ROOT` can select another local root.
 
-Visual comparison with the generated reference passed on: (1) charcoal surface
-and slim header, (2) centered three-step indicator with cyan active state,
-(3) title/activity hierarchy, (4) five large left-column callsign buttons with
-visible selection, (5) right-column session details and one cyan primary action,
-and (6) consistent spacing and readable contrast. Mobile stacks the same two
-columns. The reference's illustrative “Sesión 2” is replaced by the persisted
-pending session, rather than a fixed demonstration value.
+`exports/CUELLAR/2026-10-07_DM3/CUELLAR_20261007T083000000000-0500_pvt_<attempt-id>.csv`
 
-The design reference and final desktop/mobile captures were opened and
-inspected, and are retained locally as verification artifacts. They are not
-participant study outcomes.
+The folder uses the observed acquisition day in Bogotá and the jornada code;
+the timestamp contains UTC offset -0500. Attempt IDs prevent collisions and
+keep retries separate. UTF-8 BOM supports Windows spreadsheet programs.
+If preparation is cancelled before acquisition, the folder uses the cancellation
+date and `started_at` remains empty; interruption is never counted as completion.
+The long-form CSV columns are callsign, participant_id, jornada, planned_date,
+test_date, started_at, instrument, attempt_id, attempt_number,
+acquisition_state, source_type, source_id, field and value. Arrays and metrics
+are flattened to paths such as `raw_trials[0].rt_ms`; they are not JSON blobs.
+Native CSV cells are preserved with their original row/column positions;
+workload ratings have their own questionnaire attempt CSV. The immutable
+native evidence bundles and sUAS recordings remain in their original stores.
+
+A durable export job is recorded in the same transaction as acquisition
+completion/interruption. The worker writes only after commit and when no
+acquisition is active. A reserved but idle station can export. Deferred sUAS
+metrics refresh the derived CSV after finalization. Files are written
+atomically; a failed refresh preserves the previous CSV and source records.
+Errors appear in station job status. Only whitelisted evidence fields are
+exported, excluding credentials and host paths. Practice and legacy visits
+remain in their original stores; no outcomes are fabricated for empty folders.
+
+To regenerate copies after a local export failure:
+
+```powershell
+Invoke-RestMethod 'http://127.0.0.1:8000/astra/crew/exports' -Method Post `
+    -Headers @{ Origin = 'http://localhost:3100' }
+```
+
+Exports, operational databases, backups and verification captures remain local
+and excluded from Git.
+
+## Interface specification
+
+Retain the accepted charcoal background (#0b0c0d), white/gray typography, cyan
+accent (#00baff), slim header, three-step indicator, five callsign buttons and
+two-column selector. Stack the columns on mobile. This is a functional update
+inside the existing design system; a new visual concept is unnecessary.
+
+Intentional copy/content changes requested by the user: the jornada and date
+replace the generic session number; four activity rows show saved/pending
+status; one primary action continues the pending activity; the next date,
+days remaining and four-date calendar appear below. No new administrative
+form, password, PIN, Polar prerequisite or participant identifier is exposed.
+
+## Verification — 2026-10-06
+
+- 13 isolated crew ledger tests: all four dates, Bogotá midnight, completion of
+  every activity before advancing, no fifth jornada, independent participants,
+  retries, prerequisite sharing, identity/history preservation and native preflight.
+- 7 export tests: flat PVT/raw values, actual versus planned dates, atomic refresh,
+  durable commit/rollback, acquisition exclusion, all callsign folders, native
+  source boundaries and mission event/rating/metric copies.
+- 32 station admission and request-validation regression tests; 18 frontend tests.
+- Production build/TypeScript, ESLint and bilingual documentation checks.
+- Playwright Chromium fallback (no local Browser/IAB tool available): all five
+  callsigns across four activity routes against an isolated real backend; the
+  four-day notice and callsign-preserving navigation in a synthetic future state.
+  No operational acquisition was started for verification.
+- Desktop 1506 × 1045 (the accepted reference size) and mobile 390 × 844;
+  no horizontal overflow or browser JavaScript errors. Full-page captures retain
+  the additional requested content below the first viewport.
+
+Visual fidelity review used view_image on the accepted reference and final
+browser captures. The comparison covered (1) charcoal/white/cyan palette,
+(2) heading and callsign typography, (3) slim header and three-step indicator,
+(4) two-column spacing, selector and single primary action, (5) open activity
+rows without nested cards, and (6) mobile stacking and readable date wrapping.
+The next-date notice was moved above the activity list to remain visible in
+the active desktop viewport. The copy differences are the requested dated
+jornadas, completion list and next-date notice; the existing design system is
+retained. No material visual mismatch remains. Physical full-length acquisition
+and participant outcomes were not simulated as real study evidence.

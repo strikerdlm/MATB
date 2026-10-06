@@ -6,6 +6,51 @@
 then open `Start MATB.cmd` (Research Console) or `Start OpenMATB.cmd` (desktop).
 See the [Windows setup guide](WINDOWS.md).
 
+### ASTRA crew: four complete test days
+
+Choose your activity, **Participate in my study → Prepare experiment**, then
+your callsign: **CUELLAR, COLORADO, ICEMAN, WHITE or PIRATA**. No participant
+password or PIN is needed. Every crew member completes **OpenMATB, sUAS
+supervision, Pruebas and KSS + PVT on each test day**. Polar H10 is optional
+and stays outside this sequence.
+
+| Test day | Confirmed date (Bogotá) |
+| --- | --- |
+| DM3 | October 7, 2026 |
+| DM7 | October 11, 2026 |
+| DM11 | October 15, 2026 |
+| Post-mission | October 20, 2026 |
+
+There are **three opportunities during the mission, four days apart, plus
+post-mission**. The callsign screen shows saved/pending activities, the next
+date and the days remaining. Finish every activity before advancing; saved
+tests are not repeated. A missed test remains pending, and future days cannot
+start early. OpenMATB keeps its three blocks, ratings and rest intervals.
+
+CSV copies are written automatically after acquisition, when the station is
+free to export, under each callsign and actual test date:
+
+```text
+exports/
+  CUELLAR/
+    2026-10-07_DM3/
+      CUELLAR_20261007T083000000000-0500_pvt_<attempt-id>.csv
+    2026-10-11_DM7/
+    2026-10-15_DM11/
+    2026-10-20_POST/
+  COLORADO/
+  ICEMAN/
+  WHITE/
+  PIRATA/
+```
+
+Each CSV is a flat UTF-8 table of source values, including callsign, planned
+and actual dates, test, attempt and raw-trial/metric fields. Separate attempt
+IDs preserve retries. A late test uses its actual date and retains the planned
+date inside the file. Original evidence is retained; `exports/` is local and
+excluded from Git. The station operator applies the calendar once after an
+update; see [ASTRA workflow and export setup](docs/implementation/astra-crew-workflow.md).
+
 > Research and safety-assurance software only. MATB is not a clinical device,
 > certified operational system, aircraft-control channel, weapon system, or a
 > substitute for accountable human approval.

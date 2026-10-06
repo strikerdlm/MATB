@@ -4,11 +4,12 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { CrewFrame } from "./CrewFrame";
+import { CrewDaySummary } from "./CrewDaySummary";
 import { PvtRunner } from "@/components/pvt/PvtRunner";
 import { InstructionAudio } from "@/components/instructions/InstructionAudio";
 import { useAssignedAttempt } from "@/lib/assigned-attempt";
 import { useAssessmentAdmission } from "@/lib/assessment-admission";
-import { getCrewProgress, crewActivity, crewHref } from "@/lib/crew-workflow";
+import { getCrewProgress, crewActivity, crewHref, type CrewProgress } from "@/lib/crew-workflow";
 import { postPvt, postScreen } from "@/lib/api";
 import { FixedLocaleProvider, useAppLocale } from "@/lib/i18n";
 import { PVT_PROTOCOL_DURATION_MS, type PvtRunResult } from "@/lib/pvt";
@@ -34,6 +35,7 @@ export function CrewBrowserRunner() {
   const locale = context?.locale ?? preferred.locale;
   const copy = (es: string, en: string) => locale === "en" ? en : es;
   const [callsign, setCallsign] = useState("");
+  const [progress, setProgress] = useState<CrewProgress | null>(null);
   const [verified, setVerified] = useState(false);
   const [stage, setStage] = useState<"loading" | "kss" | "pvt" | "screen" | "saving" | "saved" | "save_error">("loading");
   const [error, setError] = useState("");
@@ -51,7 +53,7 @@ export function CrewBrowserRunner() {
     void getCrewProgress(context.instrument as "pvt" | "screen").then(result => {
       const person = result.participants.find(row => row.participant_id === context.participant_id);
       if (!person) throw new Error("El intento no corresponde a un tripulante activo.");
-      if (active) { setCallsign(person.callsign); setVerified(true); }
+      if (active) { setCallsign(person.callsign); setVerified(true); setProgress(person); }
     }).catch(reason => { if (active) setError(reason instanceof Error ? reason.message : String(reason)); });
     return () => { active = false; };
   }, [context, assigned.attempt?.execution_purpose]);
@@ -87,13 +89,17 @@ export function CrewBrowserRunner() {
         await postScreen(acquired.participantId, raw as ScreenPayload, false, "study", acquired.attemptId);
       }
       setStage("saved");
+      // Saving has succeeded even if the schedule refresh temporarily fails.
+      void getCrewProgress(requestedReturn).then(result => {
+        setProgress(result.participants.find(row => row.participant_id === context.participant_id) ?? null);
+      }).catch(() => setProgress(null));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason)); setStage("save_error");
     }
   }
   const returnHref = crewHref(requestedReturn, callsign || undefined);
   return <FixedLocaleProvider locale={locale}><CrewFrame step={3}>
-    <div className="crew-heading"><h1>{context?.instrument === "screen" ? copy("Pruebas", "Tests") : "KSS + PVT"}</h1><p>{callsign}{context ? ` · ${copy("Sesión", "Session")} ${context.assigned_visit.ordinal}` : ""}</p></div>
+    <div className="crew-heading"><h1>{context?.instrument === "screen" ? copy("Pruebas", "Tests") : "KSS + PVT"}</h1><p>{callsign}{context ? ` · ${context.assigned_visit.code}` : ""}</p></div>
     {(error || assigned.error) && <div role="alert" className="crew-error">{error || assigned.error}</div>}
     {stage === "loading" && !error && <p role="status">{copy("Abriendo tu prueba…", "Opening your test…")}</p>}
     {stage === "kss" && <section className="mx-auto max-w-3xl space-y-6">
@@ -108,6 +114,7 @@ export function CrewBrowserRunner() {
     {stage === "saving" && <p role="status">{copy("Guardando la prueba…", "Saving the test…")}</p>}
     {stage === "save_error" && pending && <div className="space-y-4"><p>{copy("Conservamos los datos en esta pestaña. Vuelve a intentar el guardado.", "The data remains in this tab. Retry saving.")}</p><button className="crew-primary" onClick={() => void save(pending)}>{copy("Reintentar guardado", "Retry saving")}</button></div>}
     {stage === "saved" && <div className="mx-auto max-w-2xl space-y-6 text-center"><h2 className="text-3xl font-semibold">{copy("Prueba guardada", "Test saved")}</h2><p className="text-muted-foreground">{copy("Tu registro quedó guardado. La aplicación continuará con lo que sigue pendiente.", "Your record was saved. The app will continue with the next pending activity.")}</p><Link className="crew-primary" href={returnHref}>{requestedReturn === "suas" ? copy("Continuar a la misión", "Continue to the mission") : copy("Volver a mi sesión", "Back to my session")}</Link></div>}
+    {stage === "saved" && progress?.schedule && <div className="mx-auto max-w-2xl"><CrewDaySummary person={progress} /></div>}
     {stage === "loading" && error && <Link className="underline text-info" href={returnHref}>{copy("Volver a mi sesión", "Back to my session")}</Link>}
   </CrewFrame></FixedLocaleProvider>;
 }

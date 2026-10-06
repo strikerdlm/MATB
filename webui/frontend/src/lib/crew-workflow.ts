@@ -16,16 +16,24 @@ export interface CrewProgress {
   callsign: string;
   participant_id: string;
   instrument: CrewActivity;
-  state: "ready" | "interrupted" | "done_today" | "complete" | "needs_review";
+  state: "ready" | "interrupted" | "scheduled" | "activity_complete" | "complete" | "needs_review";
   session_number: number | null;
   completed_sessions: number;
   completed_blocks: number;
   total_sessions: number;
   date: string;
+  day_label: string;
+  scheduled_date: string;
+  next_test_date: string | null;
+  days_until_next: number | null;
+  next_activity: CrewActivity | null;
+  completed_days: number;
+  activities: { instrument: CrewActivity; complete: boolean }[];
+  schedule: { label: string; date: string; complete: boolean }[];
   message?: string;
 }
 export interface CrewPreparation extends CrewProgress {
-  action: "launch" | "native_session" | "rest" | "retry_required" | "done_today" | "complete" | "needs_review";
+  action: "launch" | "native_session" | "rest" | "retry_required" | "scheduled" | "activity_complete" | "complete" | "needs_review";
   activity?: CrewActivity;
   attempt_id?: string;
   visit_id?: number;
